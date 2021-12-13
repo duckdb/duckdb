@@ -18,6 +18,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
                                             unordered_map<string, Value> &named_parameters,
                                             vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                             vector<LogicalType> &return_types, vector<string> &names) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.enable_external_access) {
+		throw PermissionException("Scanning CSV files is disabled through configuration");
+	}
 	auto result = make_unique<ReadCSVData>();
 	auto &options = result->options;
 
@@ -33,8 +37,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 		if (kv.first == "auto_detect") {
 			options.auto_detect = kv.second.value_.boolean;
 		} else if (kv.first == "sep" || kv.first == "delim") {
-			options.delimiter = kv.second.str_value;
-			options.has_delimiter = true;
+			options.SetDelimiter(kv.second.str_value);
 		} else if (kv.first == "header") {
 			options.header = kv.second.value_.boolean;
 			options.has_header = true;
@@ -114,7 +117,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
 		} else if (kv.first == "compression") {
-			options.compression = kv.second.str_value;
+			options.compression = FileCompressionTypeFromString(kv.second.str_value);
 		} else if (kv.first == "filename") {
 			result->include_file_name = kv.second.value_.boolean;
 		} else if (kv.first == "skip") {
@@ -124,10 +127,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 	if (!options.auto_detect && return_types.empty()) {
 		throw BinderException("read_csv requires columns to be specified. Use read_csv_auto or set read_csv(..., "
 		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
-	}
-	if (!(options.compression == "infer" || options.compression == "gzip" || options.compression == "none" ||
-	      options.compression.empty())) {
-		throw BinderException("read_csv currently only supports 'gzip' compression.");
 	}
 	if (options.auto_detect) {
 		options.file_path = result->files[0];
@@ -145,7 +144,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 		D_ASSERT(return_types.size() == names.size());
 	}
 	if (result->include_file_name) {
-		return_types.push_back(LogicalType::VARCHAR);
+		return_types.emplace_back(LogicalType::VARCHAR);
 		names.emplace_back("filename");
 	}
 	return move(result);
@@ -255,8 +254,14 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 }
 
 unique_ptr<TableFunctionRef> ReadCSVReplacement(const string &table_name, void *data) {
-	if (!StringUtil::EndsWith(table_name, ".csv") && !StringUtil::EndsWith(table_name, ".tsv") &&
-	    !StringUtil::EndsWith(table_name, ".csv.gz")) {
+	auto lower_name = StringUtil::Lower(table_name);
+	// remove any compression
+	if (StringUtil::EndsWith(lower_name, ".gz")) {
+		lower_name = lower_name.substr(0, lower_name.size() - 3);
+	} else if (StringUtil::EndsWith(lower_name, ".zst")) {
+		lower_name = lower_name.substr(0, lower_name.size() - 4);
+	}
+	if (!StringUtil::EndsWith(lower_name, ".csv") && !StringUtil::EndsWith(lower_name, ".tsv")) {
 		return nullptr;
 	}
 	auto table_function = make_unique<TableFunctionRef>();

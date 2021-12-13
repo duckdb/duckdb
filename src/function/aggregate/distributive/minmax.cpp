@@ -27,10 +27,13 @@ static AggregateFunction GetUnaryAggregate(LogicalType type) {
 	case LogicalTypeId::SMALLINT:
 		return AggregateFunction::UnaryAggregate<MinMaxState<int16_t>, int16_t, int16_t, OP>(type, type);
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 	case LogicalTypeId::INTEGER:
 		return AggregateFunction::UnaryAggregate<MinMaxState<int32_t>, int32_t, int32_t, OP>(type, type);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::BIGINT:
 		return AggregateFunction::UnaryAggregate<MinMaxState<int64_t>, int64_t, int64_t, OP>(type, type);
 	case LogicalTypeId::UTINYINT:

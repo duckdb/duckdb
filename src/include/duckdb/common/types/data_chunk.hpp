@@ -38,27 +38,27 @@ class VectorCache;
 class DataChunk {
 public:
 	//! Creates an empty DataChunk
-	DataChunk();
-	~DataChunk();
+	DUCKDB_API DataChunk();
+	DUCKDB_API ~DataChunk();
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
 
 public:
-	DUCKDB_API idx_t size() const {
+	inline idx_t size() const { // NOLINT
 		return count;
 	}
-	DUCKDB_API idx_t ColumnCount() const {
+	inline idx_t ColumnCount() const {
 		return data.size();
 	}
-	void SetCardinality(idx_t count_p) {
+	inline void SetCardinality(idx_t count_p) {
 		D_ASSERT(count_p <= capacity);
 		this->count = count_p;
 	}
-	void SetCardinality(const DataChunk &other) {
+	inline void SetCardinality(const DataChunk &other) {
 		this->count = other.size();
 	}
-	void SetCapacity(const DataChunk &other) {
+	inline void SetCapacity(const DataChunk &other) {
 		this->capacity = other.capacity;
 	}
 
@@ -74,9 +74,9 @@ public:
 	//! This will create one vector of the specified type for each LogicalType in the
 	//! types list. The vector will be referencing vector to the data owned by
 	//! the DataChunk.
-	void Initialize(const vector<LogicalType> &types);
+	DUCKDB_API void Initialize(const vector<LogicalType> &types);
 	//! Initializes an empty DataChunk with the given types. The vectors will *not* have any data allocated for them.
-	void InitializeEmpty(const vector<LogicalType> &types);
+	DUCKDB_API void InitializeEmpty(const vector<LogicalType> &types);
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
 	//! is not enough space in the chunk and resize is not allowed.

@@ -5,6 +5,8 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb_python/pyresult.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -215,6 +217,46 @@ struct BlobConvert {
 	}
 };
 
+struct UUIDConvert {
+	template <class DUCKDB_T, class NUMPY_T>
+	static PyObject *ConvertValue(hugeint_t val) {
+		py::handle h = py::module::import("uuid").attr("UUID")(UUID::ToString(val)).release();
+		return h.ptr();
+	}
+
+	template <class NUMPY_T>
+	static NUMPY_T NullValue() {
+		return nullptr;
+	}
+};
+
+struct ListConvert {
+	static py::list ConvertValue(Vector &input, idx_t chunk_offset) {
+		auto val = input.GetValue(chunk_offset);
+		py::list list;
+		for (auto &list_elem : val.list_value) {
+			list.append(DuckDBPyResult::GetValueToPython(list_elem, ListType::GetChildType(input.GetType())));
+		}
+		return list;
+	}
+};
+
+struct StructMapConvert {
+	static py::dict ConvertValue(Vector &input, idx_t chunk_offset) {
+		py::dict py_struct;
+		auto val = input.GetValue(chunk_offset);
+		auto &child_types = StructType::GetChildTypes(input.GetType());
+
+		for (idx_t i = 0; i < val.struct_value.size(); i++) {
+			auto &child_entry = child_types[i];
+			auto &child_name = child_entry.first;
+			auto &child_type = child_entry.second;
+			py_struct[child_name.c_str()] = DuckDBPyResult::GetValueToPython(val.struct_value[i], child_type);
+		}
+		return py_struct;
+	}
+};
+
 struct IntegralConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static NUMPY_T ConvertValue(DUCKDB_T val) {
@@ -291,6 +333,33 @@ static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t tar
 	}
 	// Null values are encoded in the data itself
 	return false;
+}
+
+template <class NUMPY_T, class CONVERT>
+static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &input,
+                          VectorData &idata, idx_t count) {
+	auto out_ptr = (NUMPY_T *)target_data;
+	if (!idata.validity.AllValid()) {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i);
+			idx_t offset = target_offset + i;
+			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
+				target_mask[offset] = true;
+			} else {
+				out_ptr[offset] = CONVERT::ConvertValue(input, src_idx);
+				target_mask[offset] = false;
+			}
+		}
+		return true;
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i);
+			idx_t offset = target_offset + i;
+			out_ptr[offset] = CONVERT::ConvertValue(input, src_idx);
+			target_mask[offset] = false;
+		}
+		return false;
+	}
 }
 
 template <class NUMPY_T>
@@ -406,12 +475,19 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::DATE_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		type_width = sizeof(int64_t);
 		break;
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::ENUM:
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UUID:
 		type_width = sizeof(PyObject *);
 		break;
 	default:
@@ -458,18 +534,25 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 		dtype = "float64";
 		break;
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 		dtype = "datetime64[ns]";
 		break;
 	case LogicalTypeId::INTERVAL:
 		dtype = "timedelta64[ns]";
 		break;
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UUID:
 		dtype = "object";
 		break;
 	case LogicalTypeId::ENUM: {
@@ -492,7 +575,7 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 }
 
 void RawArrayWrapper::Resize(idx_t new_capacity) {
-	vector<ssize_t> new_shape {ssize_t(new_capacity)};
+	vector<py::ssize_t> new_shape {py::ssize_t(new_capacity)};
 	array.resize(new_shape, false);
 	data = (data_ptr_t)array.mutable_data();
 }
@@ -577,6 +660,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertDecimal(input.GetType(), current_offset, dataptr, maskptr, idata, count);
 		break;
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvert>(
 		    current_offset, dataptr, maskptr, idata, count);
 		break;
@@ -593,10 +677,12 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		    current_offset, dataptr, maskptr, idata, count);
 		break;
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 		may_have_null = ConvertColumn<date_t, int64_t, duckdb_py_convert::DateConvert>(current_offset, dataptr, maskptr,
 		                                                                               idata, count);
 		break;
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 		may_have_null = ConvertColumn<dtime_t, PyObject *, duckdb_py_convert::TimeConvert>(current_offset, dataptr,
 		                                                                                   maskptr, idata, count);
 		break;
@@ -612,6 +698,20 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BlobConvert>(current_offset, dataptr,
 		                                                                                    maskptr, idata, count);
 		break;
+	case LogicalTypeId::LIST:
+		may_have_null = ConvertNested<py::list, duckdb_py_convert::ListConvert>(current_offset, dataptr, maskptr, input,
+		                                                                        idata, count);
+		break;
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::STRUCT:
+		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructMapConvert>(current_offset, dataptr, maskptr,
+		                                                                             input, idata, count);
+		break;
+	case LogicalTypeId::UUID:
+		may_have_null = ConvertColumn<hugeint_t, PyObject *, duckdb_py_convert::UUIDConvert>(current_offset, dataptr,
+		                                                                                     maskptr, idata, count);
+		break;
+
 	default:
 		throw std::runtime_error("unsupported type " + input.GetType().ToString());
 	}
@@ -671,8 +771,11 @@ void NumpyResultConversion::Append(DataChunk &chunk, unordered_map<idx_t, py::li
 			D_ASSERT(categories);
 			// It's an ENUM type, in addition to converting the codes we must convert the categories
 			if (categories->find(col_idx) == categories->end()) {
-				auto categories_list = EnumType::GetValuesInsertOrder(chunk.data[col_idx].GetType());
-				(*categories)[col_idx] = py::cast(categories_list);
+				auto &categories_list = EnumType::GetValuesInsertOrder(chunk.data[col_idx].GetType());
+				auto categories_size = EnumType::GetSize(chunk.data[col_idx].GetType());
+				for (idx_t i = 0; i < categories_size; i++) {
+					(*categories)[col_idx].append(py::cast(categories_list.GetValue(i).ToString()));
+				}
 			}
 		}
 	}

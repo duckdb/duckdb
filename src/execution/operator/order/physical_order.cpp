@@ -48,7 +48,7 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 	payload_layout.Initialize(types);
 	auto state = make_unique<OrderGlobalState>(BufferManager::GetBufferManager(context), *this, payload_layout);
 	// Set external (can be force with the PRAGMA)
-	state->global_sort_state.external = context.force_external;
+	state->global_sort_state.external = ClientConfig::GetConfig(context).force_external;
 	// Memory usage per thread should scale with max mem / num threads
 	// We take 1/4th of this, to be conservative
 	idx_t max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
@@ -191,7 +191,7 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, Event &event, OrderGl
 class PhysicalOrderOperatorState : public GlobalSourceState {
 public:
 	//! Payload scanner
-	unique_ptr<SortedDataScanner> scanner;
+	unique_ptr<PayloadScanner> scanner;
 };
 
 unique_ptr<GlobalSourceState> PhysicalOrder::GetGlobalSourceState(ClientContext &context) const {
@@ -210,7 +210,7 @@ void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 			return;
 		}
 		state.scanner =
-		    make_unique<SortedDataScanner>(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
+		    make_unique<PayloadScanner>(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 	}
 
 	// Scan the next data chunk

@@ -17,6 +17,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "ORDER_BY";
 	case PhysicalOperatorType::LIMIT:
 		return "LIMIT";
+	case PhysicalOperatorType::LIMIT_PERCENT:
+		return "LIMIT_PERCENT";
 	case PhysicalOperatorType::RESERVOIR_SAMPLE:
 		return "RESERVOIR_SAMPLE";
 	case PhysicalOperatorType::STREAMING_SAMPLE:
@@ -71,6 +73,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "CREATE_INDEX";
 	case PhysicalOperatorType::EXPLAIN:
 		return "EXPLAIN";
+	case PhysicalOperatorType::EXPLAIN_ANALYZE:
+		return "EXPLAIN_ANALYZE";
 	case PhysicalOperatorType::EXECUTE:
 		return "EXECUTE";
 	case PhysicalOperatorType::VACUUM:

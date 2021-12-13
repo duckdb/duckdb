@@ -1,12 +1,15 @@
 comment: false
 coverage:
+  precision: 2
+  round: down
+  range: "94...100"
   status:
     project:
       default:
         # basic
         # for now
         target: number
-        threshold: 95%
+        threshold: 0%
          # advanced settings
         if_not_found: failure
         if_ci_failed: failure

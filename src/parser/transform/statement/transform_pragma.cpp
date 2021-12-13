@@ -3,10 +3,12 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/statement/set_statement.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
-unique_ptr<PragmaStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode *node) {
+unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGPragmaStmt *>(node);
 
 	auto result = make_unique<PragmaStatement>();
@@ -32,26 +34,36 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNo
 	}
 	// now parse the pragma type
 	switch (stmt->kind) {
-	case duckdb_libpgquery::PG_PRAGMA_TYPE_NOTHING:
+	case duckdb_libpgquery::PG_PRAGMA_TYPE_NOTHING: {
 		if (!info.parameters.empty() || !info.named_parameters.empty()) {
-			throw ParserException("PRAGMA statement that is not a call or assignment cannot contain parameters");
+			throw InternalException("PRAGMA statement that is not a call or assignment cannot contain parameters");
 		}
 		break;
 	case duckdb_libpgquery::PG_PRAGMA_TYPE_ASSIGNMENT:
 		if (info.parameters.size() != 1) {
-			throw ParserException("PRAGMA statement with assignment should contain exactly one parameter");
+			throw InternalException("PRAGMA statement with assignment should contain exactly one parameter");
 		}
 		if (!info.named_parameters.empty()) {
-			throw ParserException("PRAGMA statement with assignment cannot have named parameters");
+			throw InternalException("PRAGMA statement with assignment cannot have named parameters");
 		}
-		break;
+		// SQLite does not distinguish between:
+		// "PRAGMA table_info='integers'"
+		// "PRAGMA table_info('integers')"
+		// for compatibility, any pragmas that match the SQLite ones are parsed as calls
+		case_insensitive_set_t sqlite_compat_pragmas {"table_info"};
+		if (sqlite_compat_pragmas.find(info.name) != sqlite_compat_pragmas.end()) {
+			break;
+		}
+		auto set_statement = make_unique<SetStatement>(info.name, info.parameters[0], SetScope::AUTOMATIC);
+		return move(set_statement);
+	}
 	case duckdb_libpgquery::PG_PRAGMA_TYPE_CALL:
 		break;
 	default:
-		throw ParserException("Unknown pragma type");
+		throw InternalException("Unknown pragma type");
 	}
 
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb

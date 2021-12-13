@@ -7,7 +7,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb_python/array_wrapper.hpp"
-
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/arrow_wrapper.hpp"
 
 namespace duckdb {
@@ -22,8 +22,10 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	    .def("fetchdf", &DuckDBPyResult::FetchDF)
 	    .def("fetch_df", &DuckDBPyResult::FetchDF)
 	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk)
-	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable)
-	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader)
+	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch Result as an Arrow Table",
+	         py::arg("stream") = false, py::arg("num_of_vectors") = 1, py::arg("return_table") = true)
+	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader,
+	         "Fetch Result as an Arrow Record Batch Reader", py::arg("approx_batch_size"))
 	    .def("fetch_arrow_chunk", &DuckDBPyResult::FetchArrowTableChunk)
 	    .def("arrow", &DuckDBPyResult::FetchArrowTable)
 	    .def("df", &DuckDBPyResult::FetchDF);
@@ -31,7 +33,7 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	PyDateTime_IMPORT;
 }
 
-py::object GetValueToPython(Value &val, const LogicalType &type) {
+py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type) {
 	if (val.is_null) {
 		return py::none();
 	}
@@ -73,7 +75,8 @@ py::object GetValueToPython(Value &val, const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_SEC: {
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_TZ: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
 		auto timestamp = val.GetValueUnsafe<timestamp_t>();
 		if (type.id() == LogicalTypeId::TIMESTAMP_MS) {
@@ -91,7 +94,8 @@ py::object GetValueToPython(Value &val, const LogicalType &type) {
 		Time::Convert(time, hour, min, sec, micros);
 		return py::cast<py::object>(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
 	}
-	case LogicalTypeId::TIME: {
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
 
 		int32_t hour, min, sec, microsec;
@@ -99,7 +103,8 @@ py::object GetValueToPython(Value &val, const LogicalType &type) {
 		duckdb::Time::Convert(time, hour, min, sec, microsec);
 		return py::cast<py::object>(PyTime_FromTime(hour, min, sec, microsec));
 	}
-	case LogicalTypeId::DATE: {
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT32);
 
 		auto date = val.GetValueUnsafe<date_t>();
@@ -126,6 +131,18 @@ py::object GetValueToPython(Value &val, const LogicalType &type) {
 		}
 		return std::move(py_struct);
 	}
+	case LogicalTypeId::UUID: {
+		auto uuid_value = val.GetValueUnsafe<hugeint_t>();
+		return py::cast<py::object>(py::module::import("uuid").attr("UUID")(UUID::ToString(uuid_value)));
+	}
+	case LogicalTypeId::INTERVAL: {
+		auto interval_value = val.GetValueUnsafe<interval_t>();
+		uint64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
+		return py::cast<py::object>(
+		    py::module::import("datetime")
+		        .attr("timedelta")(py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
+	}
+
 	default:
 		throw NotImplementedException("unsupported type: " + type.ToString());
 	}
@@ -148,13 +165,17 @@ unique_ptr<DataChunk> FetchNextRaw(QueryResult &result) {
 }
 
 py::object DuckDBPyResult::Fetchone() {
-	if (!result) {
-		throw std::runtime_error("result closed");
+	{
+		py::gil_scoped_release release;
+		if (!result) {
+			throw std::runtime_error("result closed");
+		}
+		if (!current_chunk || chunk_offset >= current_chunk->size()) {
+			current_chunk = FetchNext(*result);
+			chunk_offset = 0;
+		}
 	}
-	if (!current_chunk || chunk_offset >= current_chunk->size()) {
-		current_chunk = FetchNext(*result);
-		chunk_offset = 0;
-	}
+
 	if (!current_chunk || current_chunk->size() == 0) {
 		return py::none();
 	}
@@ -227,7 +248,11 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	} else {
 		if (!stream) {
 			while (true) {
-				auto chunk = FetchNextRaw(*result);
+				unique_ptr<DataChunk> chunk;
+				{
+					py::gil_scoped_release release;
+					chunk = FetchNextRaw(*result);
+				}
 				if (!chunk || chunk->size() == 0) {
 					//! finished
 					break;
@@ -240,7 +265,11 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 				if (!stream_result->is_open) {
 					break;
 				}
-				auto chunk = FetchNextRaw(*stream_result);
+				unique_ptr<DataChunk> chunk;
+				{
+					py::gil_scoped_release release;
+					chunk = FetchNextRaw(*stream_result);
+				}
 				if (!chunk || chunk->size() == 0) {
 					//! finished
 					break;
@@ -379,15 +408,18 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::BLOB:
 		return py::str("BINARY");
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC: {
 		return py::str("DATETIME");
 	}
-	case LogicalTypeId::TIME: {
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ: {
 		return py::str("Time");
 	}
-	case LogicalTypeId::DATE: {
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ: {
 		return py::str("Date");
 	}
 	case LogicalTypeId::MAP:

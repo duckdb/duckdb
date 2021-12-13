@@ -1,6 +1,8 @@
 #include "duckdb_odbc.hpp"
 #include "odbc_fetch.hpp"
-#include "parameter_wrapper.hpp"
+#include "odbc_interval.hpp"
+#include "descriptor.hpp"
+#include "parameter_descriptor.hpp"
 
 using duckdb::OdbcHandleDbc;
 using duckdb::OdbcHandleDesc;
@@ -38,14 +40,13 @@ OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
 	D_ASSERT(dbc_p);
 	D_ASSERT(dbc_p->conn);
 
-	param_wrapper = make_unique<ParameterWrapper>(&error_messages);
 	odbc_fetcher = make_unique<OdbcFetch>();
 	dbc->vec_stmt_ref.emplace_back(this);
 
-	apd = make_unique<OdbcHandleDesc>();
-	ipd = make_unique<OdbcHandleDesc>();
-	ard = make_unique<OdbcHandleDesc>();
-	ird = make_unique<OdbcHandleDesc>();
+	param_desc = make_unique<ParameterDescriptor>(this);
+
+	ard = make_unique<OdbcHandleDesc>(DescType::ARD, this);
+	ird = make_unique<OdbcHandleDesc>(DescType::IRD, this);
 }
 
 OdbcHandleStmt::~OdbcHandleStmt() {
@@ -55,10 +56,10 @@ void OdbcHandleStmt::Close() {
 	open = false;
 	res.reset();
 	odbc_fetcher->ClearChunks();
-	param_wrapper->Reset();
+	// the parameter values can be reused after
+	param_desc->Reset();
 	// stmt->stmt.reset(); // the statment can be reuse in prepared statement
 	bound_cols.clear();
-	// stmt->param_wrapper->Clear(); // the parameter values can be reused after
 	error_messages.clear();
 }
 

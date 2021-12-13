@@ -86,108 +86,6 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
     : PhysicalOperator(type, move(types), estimated_cardinality), select_list(move(select_list)) {
 }
 
-template <typename W>
-class BitArray {
-public:
-	using bits_t = std::vector<W>;
-
-	static const auto BITS_PER_WORD = std::numeric_limits<W>::digits;
-	static const auto ZEROS = std::numeric_limits<W>::min();
-	static const auto ONES = std::numeric_limits<W>::max();
-
-	class reference { // NOLINT
-	public:
-		friend BitArray;
-
-		reference(const reference &r) = default;
-
-		reference &operator=(bool x) noexcept {
-			auto b = parent.Block(pos);
-			auto s = parent.Shift(pos);
-			auto w = parent.GetBlock(b);
-			if (parent.TestBit(w, s) != x) {
-				parent.SetBlock(b, parent.FlipBit(w, s));
-			}
-			return *this;
-		}
-
-		reference &operator=(const reference &r) noexcept {
-			return *this = bool(r);
-		}
-
-		explicit operator bool() const noexcept {
-			return parent[pos];
-		}
-
-		bool operator~() const noexcept {
-			return !parent[pos];
-		}
-
-	private:
-		explicit reference(BitArray &parent_p, size_t pos_p) : parent(parent_p), pos(pos_p) {
-		}
-
-		BitArray &parent;
-		size_t pos;
-	};
-
-	static size_t Block(const size_t &pos) {
-		return pos / BITS_PER_WORD;
-	}
-
-	static unsigned Shift(const size_t &pos) {
-		return pos % BITS_PER_WORD;
-	}
-
-	static bool TestBit(W w, unsigned s) {
-		return (w >> s) & 0x01;
-	}
-
-	static W SetBit(W w, unsigned s) {
-		return w | (W(1) << s);
-	}
-
-	static W ClearBit(W w, unsigned s) {
-		return w & ~(W(1) << s);
-	}
-
-	static W FlipBit(W w, unsigned s) {
-		return w ^ (W(1) << s);
-	}
-
-	explicit BitArray(const size_t &count, const W &init = 0)
-	    : bits(count ? Block(count - 1) + 1 : 0, init), count(count) {
-	}
-
-	size_t Count() const {
-		return count;
-	}
-
-	const W &GetBlock(size_t b) const {
-		return bits[b];
-	}
-
-	W &GetBlock(size_t b) {
-		return bits[b];
-	}
-
-	void SetBlock(size_t b, const W &block) {
-		GetBlock(b) = block;
-	}
-
-	bool operator[](size_t pos) const {
-		return TestBit(GetBlock(Block(pos)), Shift(pos));
-	}
-
-	reference operator[](size_t pos) {
-		return reference(*this, pos);
-	}
-
-private:
-	bits_t bits;
-	size_t count;
-};
-
 template <typename INPUT_TYPE>
 struct ChunkIterator {
 
@@ -197,7 +95,7 @@ struct ChunkIterator {
 		Update(0);
 	}
 
-	void Update(idx_t r) {
+	inline void Update(idx_t r) {
 		if (r >= chunk_end) {
 			ch_idx = collection.LocateChunk(r);
 			auto &ch = collection.GetChunk(ch_idx);
@@ -209,11 +107,11 @@ struct ChunkIterator {
 		}
 	}
 
-	bool IsValid(idx_t r) {
+	inline bool IsValid(idx_t r) {
 		return validity->RowIsValid(r - chunk_begin);
 	}
 
-	INPUT_TYPE GetValue(idx_t r) {
+	inline INPUT_TYPE GetValue(idx_t r) {
 		return data[r - chunk_begin];
 	}
 
@@ -227,115 +125,89 @@ private:
 	ValidityMask *validity;
 };
 
-template <typename MASK_TYPE, typename INPUT_TYPE>
-static void MaskTypedColumn(MASK_TYPE &mask, ChunkCollection &over_collection, const idx_t c) {
+template <typename INPUT_TYPE>
+static void MaskTypedColumn(ValidityMask &mask, ChunkCollection &over_collection, const idx_t c) {
 	ChunkIterator<INPUT_TYPE> ci(over_collection, c);
 
 	//	Record the first value
 	idx_t r = 0;
 	auto prev_valid = ci.IsValid(r);
 	auto prev = ci.GetValue(r);
-	++r;
 
 	//	Process complete blocks
-	const auto row_count = over_collection.Count();
-	const auto complete_block_count = mask.Block(row_count);
-	for (idx_t b = mask.Block(r); b < complete_block_count; ++b) {
-		auto block = mask.GetBlock(b);
+	const auto count = over_collection.Count();
+	const auto entry_count = mask.EntryCount(count);
+	for (idx_t entry_idx = 0; entry_idx < entry_count; ++entry_idx) {
+		auto validity_entry = mask.GetValidityEntry(entry_idx);
 
 		//	Skip the block if it is all boundaries.
-		if (block == mask.ONES) {
-			r -= (r % mask.BITS_PER_WORD);
-			r += mask.BITS_PER_WORD;
+		idx_t next = MinValue<idx_t>(r + ValidityMask::BITS_PER_VALUE, count);
+		if (ValidityMask::AllValid(validity_entry)) {
+			r = next;
 			continue;
 		}
 
 		//	Scan the rows in the complete block
-		for (unsigned shift = mask.Shift(r); shift < mask.BITS_PER_WORD; ++shift, ++r) {
+		idx_t start = r;
+		for (; r < next; ++r) {
 			//	Update the chunk for this row
 			ci.Update(r);
 
 			auto curr_valid = ci.IsValid(r);
 			auto curr = ci.GetValue(r);
-			if (!mask.TestBit(block, shift)) {
+			if (!ValidityMask::RowIsValid(validity_entry, r - start)) {
 				if (curr_valid != prev_valid || (curr_valid && !Equals::Operation(curr, prev))) {
-					block = mask.SetBit(block, shift);
+					mask.SetValidUnsafe(r);
 				}
 			}
 			prev_valid = curr_valid;
 			prev = curr;
 		}
-		mask.SetBlock(b, block);
-	}
-
-	// Finish last ragged block
-	if (r < row_count) {
-		auto block = mask.GetBlock(complete_block_count);
-		if (block != mask.ONES) {
-			for (unsigned shift = mask.Shift(r); r < row_count; ++shift, ++r) {
-				//	Update the chunk for this row
-				ci.Update(r);
-
-				auto curr_valid = ci.IsValid(r);
-				auto curr = ci.GetValue(r);
-				if (!mask.TestBit(block, shift)) {
-					if (curr_valid != prev_valid || (curr_valid && !Equals::Operation(curr, prev))) {
-						block = mask.SetBit(block, shift);
-					}
-				}
-				prev_valid = curr_valid;
-				prev = curr;
-			}
-			mask.SetBlock(complete_block_count, block);
-		}
 	}
 }
 
-template <typename W>
-static void MaskColumn(BitArray<W> &mask, ChunkCollection &over_collection, const idx_t c) {
-	using MASK_TYPE = BitArray<W>;
-
+static void MaskColumn(ValidityMask &mask, ChunkCollection &over_collection, const idx_t c) {
 	auto &vector = over_collection.GetChunk(0).data[c];
 	switch (vector.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		MaskTypedColumn<MASK_TYPE, int8_t>(mask, over_collection, c);
+		MaskTypedColumn<int8_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::INT16:
-		MaskTypedColumn<MASK_TYPE, int16_t>(mask, over_collection, c);
+		MaskTypedColumn<int16_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::INT32:
-		MaskTypedColumn<MASK_TYPE, int32_t>(mask, over_collection, c);
+		MaskTypedColumn<int32_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::INT64:
-		MaskTypedColumn<MASK_TYPE, int64_t>(mask, over_collection, c);
+		MaskTypedColumn<int64_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::UINT8:
-		MaskTypedColumn<MASK_TYPE, uint8_t>(mask, over_collection, c);
+		MaskTypedColumn<uint8_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::UINT16:
-		MaskTypedColumn<MASK_TYPE, uint16_t>(mask, over_collection, c);
+		MaskTypedColumn<uint16_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::UINT32:
-		MaskTypedColumn<MASK_TYPE, uint32_t>(mask, over_collection, c);
+		MaskTypedColumn<uint32_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::UINT64:
-		MaskTypedColumn<MASK_TYPE, uint64_t>(mask, over_collection, c);
+		MaskTypedColumn<uint64_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::INT128:
-		MaskTypedColumn<MASK_TYPE, hugeint_t>(mask, over_collection, c);
+		MaskTypedColumn<hugeint_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::FLOAT:
-		MaskTypedColumn<MASK_TYPE, float>(mask, over_collection, c);
+		MaskTypedColumn<float>(mask, over_collection, c);
 		break;
 	case PhysicalType::DOUBLE:
-		MaskTypedColumn<MASK_TYPE, double>(mask, over_collection, c);
+		MaskTypedColumn<double>(mask, over_collection, c);
 		break;
 	case PhysicalType::VARCHAR:
-		MaskTypedColumn<MASK_TYPE, string_t>(mask, over_collection, c);
+		MaskTypedColumn<string_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::INTERVAL:
-		MaskTypedColumn<MASK_TYPE, interval_t>(mask, over_collection, c);
+		MaskTypedColumn<interval_t>(mask, over_collection, c);
 		break;
 	default:
 		throw NotImplementedException("Type for comparison");
@@ -343,20 +215,28 @@ static void MaskColumn(BitArray<W> &mask, ChunkCollection &over_collection, cons
 	}
 }
 
-template <typename W>
-static idx_t FindNextStart(const BitArray<W> &mask, idx_t l, const idx_t r) {
+static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r, idx_t &n) {
+	if (mask.AllValid()) {
+		auto start = MinValue(l + n - 1, r);
+		n -= MinValue(n, r - l);
+		return start;
+	}
+
 	while (l < r) {
 		//	If l is aligned with the start of a block, and the block is blank, then skip forward one block.
-		const auto block = mask.GetBlock(mask.Block(l));
-		auto shift = mask.Shift(l);
-		if (!block && !shift) {
-			l += mask.BITS_PER_WORD;
+		idx_t entry_idx;
+		idx_t shift;
+		mask.GetEntryIndex(l, entry_idx, shift);
+
+		const auto block = mask.GetValidityEntry(entry_idx);
+		if (mask.NoneValid(block) && !shift) {
+			l += ValidityMask::BITS_PER_VALUE;
 			continue;
 		}
 
 		// Loop over the block
-		for (; shift < mask.BITS_PER_WORD; ++shift, ++l) {
-			if (mask.TestBit(block, shift)) {
+		for (; shift < ValidityMask::BITS_PER_VALUE && l < r; ++shift, ++l) {
+			if (mask.RowIsValid(block, shift) && --n == 0) {
 				return MinValue(l, r);
 			}
 		}
@@ -366,23 +246,31 @@ static idx_t FindNextStart(const BitArray<W> &mask, idx_t l, const idx_t r) {
 	return r;
 }
 
-template <typename W>
-static idx_t FindPrevStart(const BitArray<W> &mask, const idx_t l, idx_t r) {
+static idx_t FindPrevStart(const ValidityMask &mask, const idx_t l, idx_t r, idx_t &n) {
+	if (mask.AllValid()) {
+		auto start = (r <= l + n) ? l : r - n;
+		n -= r - start;
+		return start;
+	}
+
 	while (l < r) {
 		// If r is aligned with the start of a block, and the previous block is blank,
 		// then skip backwards one block.
-		const auto block = mask.GetBlock(mask.Block(r - 1));
-		auto shift = mask.Shift(r);
-		if (!block && !shift) {
+		idx_t entry_idx;
+		idx_t shift;
+		mask.GetEntryIndex(r - 1, entry_idx, shift);
+
+		const auto block = mask.GetValidityEntry(entry_idx);
+		if (mask.NoneValid(block) && (shift + 1 == ValidityMask::BITS_PER_VALUE)) {
 			// r is nonzero (> l) and word aligned, so this will not underflow.
-			r -= mask.BITS_PER_WORD;
+			r -= ValidityMask::BITS_PER_VALUE;
 			continue;
 		}
 
 		// Loop backwards over the block
 		// shift is probing r-1 >= l >= 0
-		for (shift = mask.Shift(r - 1) + 1; shift-- > 0; --r) {
-			if (mask.TestBit(block, shift)) {
+		for (++shift; shift-- > 0; --r) {
+			if (mask.RowIsValid(block, shift) && --n == 0) {
 				return MaxValue(l, r - 1);
 			}
 		}
@@ -538,7 +426,7 @@ static void ScanSortedPartition(WindowOperatorState &state, ChunkCollection &inp
 	payload_types.insert(payload_types.end(), over_types.begin(), over_types.end());
 
 	// scan the sorted row data
-	SortedDataScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
+	PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 	for (;;) {
 		DataChunk payload_chunk;
 		payload_chunk.Initialize(payload_types);
@@ -804,8 +692,8 @@ static idx_t FindOrderedRangeBound(ChunkCollection &over, const idx_t order_col,
 
 static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t input_size, const idx_t row_idx,
                                    ChunkCollection &over_collection, ChunkCollection &boundary_start_collection,
-                                   ChunkCollection &boundary_end_collection, const BitArray<uint64_t> &partition_mask,
-                                   const BitArray<uint64_t> &order_mask) {
+                                   ChunkCollection &boundary_end_collection, const ValidityMask &partition_mask,
+                                   const ValidityMask &order_mask) {
 
 	// RANGE sorting parameters
 	const auto order_col = bounds.partition_count;
@@ -813,8 +701,8 @@ static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t in
 	if (bounds.partition_count + bounds.order_count > 0) {
 
 		// determine partition and peer group boundaries to ultimately figure out window size
-		bounds.is_same_partition = !partition_mask[row_idx];
-		bounds.is_peer = !order_mask[row_idx];
+		bounds.is_same_partition = !partition_mask.RowIsValidUnsafe(row_idx);
+		bounds.is_peer = !order_mask.RowIsValidUnsafe(row_idx);
 
 		// when the partition changes, recompute the boundaries
 		if (!bounds.is_same_partition) {
@@ -824,7 +712,8 @@ static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t in
 			// find end of partition
 			bounds.partition_end = input_size;
 			if (bounds.partition_count) {
-				bounds.partition_end = FindNextStart(partition_mask, bounds.partition_start + 1, input_size);
+				idx_t n = 1;
+				bounds.partition_end = FindNextStart(partition_mask, bounds.partition_start + 1, input_size, n);
 			}
 
 			// Find valid ordering values for the new partition
@@ -835,14 +724,16 @@ static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t in
 			if ((bounds.valid_start < bounds.valid_end) && bounds.has_preceding_range) {
 				// Exclude any leading NULLs
 				if (CellIsNull(over_collection, order_col, bounds.valid_start)) {
-					bounds.valid_start = FindNextStart(order_mask, bounds.valid_start + 1, bounds.valid_end);
+					idx_t n = 1;
+					bounds.valid_start = FindNextStart(order_mask, bounds.valid_start + 1, bounds.valid_end, n);
 				}
 			}
 
 			if ((bounds.valid_start < bounds.valid_end) && bounds.has_following_range) {
 				// Exclude any trailing NULLs
 				if (CellIsNull(over_collection, order_col, bounds.valid_end - 1)) {
-					bounds.valid_end = FindPrevStart(order_mask, bounds.valid_start, bounds.valid_end);
+					idx_t n = 1;
+					bounds.valid_end = FindPrevStart(order_mask, bounds.valid_start, bounds.valid_end, n);
 				}
 			}
 
@@ -853,7 +744,8 @@ static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t in
 		if (bounds.needs_peer) {
 			bounds.peer_end = bounds.partition_end;
 			if (bounds.order_count) {
-				bounds.peer_end = FindNextStart(order_mask, bounds.peer_start + 1, bounds.partition_end);
+				idx_t n = 1;
+				bounds.peer_end = FindNextStart(order_mask, bounds.peer_start + 1, bounds.partition_end, n);
 			}
 		}
 
@@ -975,8 +867,8 @@ static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t in
 }
 
 static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
-                                    ChunkCollection &over, const BitArray<uint64_t> &partition_mask,
-                                    const BitArray<uint64_t> &order_mask, WindowAggregationMode mode) {
+                                    ChunkCollection &over, const ValidityMask &partition_mask,
+                                    const ValidityMask &order_mask, WindowAggregationMode mode) {
 
 	// TODO we could evaluate those expressions in parallel
 
@@ -1011,6 +903,42 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	ChunkCollection boundary_end_collection;
 	if (wexpr->end_expr) {
 		MaterializeExpression(wexpr->end_expr.get(), input, boundary_end_collection, wexpr->end_expr->IsScalar());
+	}
+
+	// Set up a validity mask for IGNORE NULLS
+	ValidityMask ignore_nulls;
+	if (wexpr->ignore_nulls) {
+		switch (wexpr->type) {
+		case ExpressionType::WINDOW_LEAD:
+		case ExpressionType::WINDOW_LAG:
+		case ExpressionType::WINDOW_FIRST_VALUE:
+		case ExpressionType::WINDOW_LAST_VALUE:
+		case ExpressionType::WINDOW_NTH_VALUE: {
+			idx_t pos = 0;
+			for (auto &chunk : payload_collection.Chunks()) {
+				const auto count = chunk->size();
+				VectorData vdata;
+				chunk->data[0].Orrify(count, vdata);
+				if (!vdata.validity.AllValid()) {
+					//	Lazily materialise the contents when we find the first NULL
+					if (ignore_nulls.AllValid()) {
+						ignore_nulls.Initialize(payload_collection.Count());
+					}
+					// Write to the current position
+					// Chunks in a collection are full, so we don't have to worry about raggedness
+					auto dst = ignore_nulls.GetData() + ignore_nulls.EntryCount(pos);
+					auto src = vdata.validity.GetData();
+					for (auto entry_count = vdata.validity.EntryCount(count); entry_count-- > 0;) {
+						*dst++ = *src++;
+					}
+				}
+				pos += count;
+			}
+			break;
+		}
+		default:
+			break;
+		}
 	}
 
 	// build a segment tree for frame-adhering aggregates
@@ -1140,7 +1068,18 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 				val_idx -= offset;
 			}
 
-			if (val_idx >= int64_t(bounds.partition_start) && val_idx < int64_t(bounds.partition_end)) {
+			idx_t delta = 0;
+			if (val_idx < (int64_t)row_idx) {
+				// Count backwards
+				delta = idx_t(row_idx - val_idx);
+				val_idx = FindPrevStart(ignore_nulls, bounds.partition_start, row_idx, delta);
+			} else if (val_idx > (int64_t)row_idx) {
+				delta = idx_t(val_idx - row_idx);
+				val_idx = FindNextStart(ignore_nulls, row_idx + 1, bounds.partition_end, delta);
+			}
+			// else offset is zero, so don't move.
+
+			if (!delta) {
 				payload_collection.CopyCell(0, val_idx, result, output_offset);
 			} else if (wexpr->default_expr) {
 				const auto source_row = wexpr->default_expr->IsScalar() ? 0 : row_idx;
@@ -1150,12 +1089,18 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			}
 			break;
 		}
-		case ExpressionType::WINDOW_FIRST_VALUE:
-			payload_collection.CopyCell(0, bounds.window_start, result, output_offset);
+		case ExpressionType::WINDOW_FIRST_VALUE: {
+			idx_t n = 1;
+			const auto first_idx = FindNextStart(ignore_nulls, bounds.window_start, bounds.window_end, n);
+			payload_collection.CopyCell(0, first_idx, result, output_offset);
 			break;
-		case ExpressionType::WINDOW_LAST_VALUE:
-			payload_collection.CopyCell(0, bounds.window_end - 1, result, output_offset);
+		}
+		case ExpressionType::WINDOW_LAST_VALUE: {
+			idx_t n = 1;
+			payload_collection.CopyCell(0, FindPrevStart(ignore_nulls, bounds.window_start, bounds.window_end, n),
+			                            result, output_offset);
 			break;
+		}
 		case ExpressionType::WINDOW_NTH_VALUE: {
 			D_ASSERT(payload_collection.ColumnCount() == 2);
 			// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);
@@ -1164,11 +1109,16 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 				FlatVector::SetNull(result, output_offset, true);
 			} else {
 				auto n_param = GetCell<int64_t>(payload_collection, 1, row_idx);
-				int64_t n_total = bounds.window_end - bounds.window_start;
-				if (0 < n_param && n_param <= n_total) {
-					payload_collection.CopyCell(0, bounds.window_start + n_param - 1, result, output_offset);
-				} else {
+				if (n_param < 1) {
 					FlatVector::SetNull(result, output_offset, true);
+				} else {
+					auto n = idx_t(n_param);
+					const auto nth_index = FindNextStart(ignore_nulls, bounds.window_start, bounds.window_end, n);
+					if (!n) {
+						payload_collection.CopyCell(0, nth_index, result, output_offset);
+					} else {
+						FlatVector::SetNull(result, output_offset, true);
+					}
 				}
 			}
 			break;
@@ -1195,25 +1145,26 @@ static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkColle
 	auto over_expr = window_exprs[0];
 
 	//	Set bits for the start of each partition
-	BitArray<uint64_t> partition_bits(input.Count());
-	partition_bits[0] = true;
+	vector<validity_t> partition_bits(ValidityMask::EntryCount(input.Count()), 0);
+	ValidityMask partition_mask(partition_bits.data());
+	partition_mask.SetValid(0);
 
 	for (idx_t c = 0; c < over_expr->partitions.size(); ++c) {
-		MaskColumn(partition_bits, over, c);
+		MaskColumn(partition_mask, over, c);
 	}
 
 	//	Set bits for the start of each peer group.
 	//	Partitions also break peer groups, so start with the partition bits.
 	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
-	auto order_bits = partition_bits;
+	ValidityMask order_mask(partition_mask, input.Count());
 	for (idx_t c = over_expr->partitions.size(); c < sort_col_count; ++c) {
-		MaskColumn(order_bits, over, c);
+		MaskColumn(order_mask, over, c);
 	}
 
 	//	Compute the functions columnwise
 	for (idx_t expr_idx = 0; expr_idx < window_exprs.size(); ++expr_idx) {
 		ChunkCollection output;
-		ComputeWindowExpression(window_exprs[expr_idx], input, output, over, partition_bits, order_bits, mode);
+		ComputeWindowExpression(window_exprs[expr_idx], input, output, over, partition_mask, order_mask, mode);
 		window_results.Fuse(output);
 	}
 }

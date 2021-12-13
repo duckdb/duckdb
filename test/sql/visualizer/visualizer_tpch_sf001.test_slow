@@ -2,7 +2,6 @@
 # description: Test Visualizer for TPC-H SF0.1
 # group: [visualizer]
 
-
 require visualizer
 
 require tpch
@@ -12,7 +11,7 @@ statement ok
 PRAGMA enable_profiling
 
 statement ok
-Pragma visualize_last_profiling_output ='__TEST_DIR__/test.html'
+Pragma visualize_last_profiling_output('__TEST_DIR__/test.html')
 
 statement ok
 PRAGMA profiling_output='__TEST_DIR__/test.json'
@@ -33,7 +32,7 @@ PRAGMA tpch(${i})
 <FILE>:extension/tpch/dbgen/answers/sf0.1/q0${i}.csv
 
 statement ok
-Pragma visualize_last_profiling_output ='__TEST_DIR__/test.html'
+Pragma visualize_last_profiling_output('__TEST_DIR__/test.html')
 
 endloop
 
@@ -46,7 +45,7 @@ PRAGMA tpch(${i})
 <FILE>:extension/tpch/dbgen/answers/sf0.1/q${i}.csv
 
 statement ok
-Pragma visualize_last_profiling_output ='__TEST_DIR__/test.html'
+Pragma visualize_last_profiling_output('__TEST_DIR__/test.html')
 
 endloop
 

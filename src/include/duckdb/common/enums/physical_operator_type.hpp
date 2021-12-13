@@ -19,6 +19,7 @@ enum class PhysicalOperatorType : uint8_t {
 	INVALID,
 	ORDER_BY,
 	LIMIT,
+	LIMIT_PERCENT,
 	TOP_N,
 	WINDOW,
 	UNNEST,
@@ -82,6 +83,7 @@ enum class PhysicalOperatorType : uint8_t {
 	// Helpers
 	// -----------------------------
 	EXPLAIN,
+	EXPLAIN_ANALYZE,
 	EMPTY_RESULT,
 	EXECUTE,
 	PREPARE,

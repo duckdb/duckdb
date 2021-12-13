@@ -42,6 +42,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "TOP_N";
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		return "SAMPLE";
+	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
+		return "LIMIT_PERCENT";
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return "COPY_TO_FILE";
 	case LogicalOperatorType::LOGICAL_JOIN:

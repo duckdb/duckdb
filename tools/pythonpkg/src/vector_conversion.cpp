@@ -88,11 +88,6 @@ void ScanPandasFpColumn(T *src_ptr, idx_t count, idx_t offset, Vector &out) {
 	}
 }
 
-struct PyStringGIL {
-	py::gil_scoped_acquire acquire;
-	py::str str_val;
-};
-
 template <class T>
 static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector &out) {
 	// first figure out how many bytes to allocate
@@ -196,8 +191,8 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		auto src_ptr = (PyObject **)numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
 		auto &out_mask = FlatVector::Validity(out);
+		unique_ptr<PythonGILWrapper> gil;
 		for (idx_t row = 0; row < count; row++) {
-			unique_ptr<PyStringGIL> py_str;
 			auto source_idx = offset + row;
 			PyObject *val = src_ptr[source_idx];
 			if (bind_data.pandas_type == PandasType::OBJECT && !PyUnicode_CheckExact(val)) {
@@ -210,10 +205,16 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 					continue;
 				}
 				if (!py::isinstance<py::str>(val)) {
-					py_str = make_unique<PyStringGIL>();
-					py::handle object_handle = val;
-					py_str->str_val = py::str(object_handle);
-					val = py_str->str_val.ptr();
+					if (!gil) {
+						gil = bind_data.object_str_val.GetLock();
+					}
+					bind_data.object_str_val.AssignInternal<PyObject>(
+					    [](py::str &obj, PyObject &new_val) {
+						    py::handle object_handle = &new_val;
+						    obj = py::str(object_handle);
+					    },
+					    *val, *gil);
+					val = (PyObject *)bind_data.object_str_val.GetPointerTop()->ptr();
 				}
 			}
 			// Python 3 string representation:
@@ -395,8 +396,14 @@ void VectorConversion::BindPandas(py::handle original_df, vector<PandasColumnBin
 					bind_data.pandas_type = PandasType::CATEGORY;
 					auto enum_name = string(py::str(df_columns[col_idx]));
 					vector<string> enum_entries = py::cast<vector<string>>(categories);
+					idx_t size = enum_entries.size();
+					Vector enum_entries_vec(LogicalType::VARCHAR, size);
+					auto enum_entries_ptr = FlatVector::GetData<string_t>(enum_entries_vec);
+					for (idx_t i = 0; i < size; i++) {
+						enum_entries_ptr[i] = StringVector::AddStringOrBlob(enum_entries_vec, enum_entries[i]);
+					}
 					D_ASSERT(py::hasattr(column.attr("cat"), "codes"));
-					duckdb_col_type = LogicalType::ENUM(enum_name, enum_entries);
+					duckdb_col_type = LogicalType::ENUM(enum_name, enum_entries_vec, size);
 					bind_data.numpy_col = py::array(column.attr("cat").attr("codes"));
 					bind_data.mask = nullptr;
 					D_ASSERT(py::hasattr(bind_data.numpy_col, "dtype"));

@@ -149,7 +149,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 
 	// bind the aggregate
 	idx_t best_function = Function::BindFunction(func->name, func->functions, types, error);
-	if (best_function == INVALID_INDEX) {
+	if (best_function == DConstants::INVALID_INDEX) {
 		throw BinderException(binder.FormatError(aggr, error));
 	}
 	// found a matching function!
@@ -157,7 +157,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
 	auto order_bys = make_unique<BoundOrderModifier>();
-	if (bound_function.order_sensitive && !aggr.order_bys->orders.empty()) {
+	if (!aggr.order_bys->orders.empty()) {
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = (BoundExpression &)*order.expression;

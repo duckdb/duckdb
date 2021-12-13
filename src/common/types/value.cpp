@@ -24,6 +24,7 @@
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
 
@@ -93,60 +94,47 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Minimum());
 	case LogicalTypeId::DATE:
-		return Value::DATE(date_t(NumericLimits<int32_t>::Minimum()));
+		return Value::DATE(Date::FromDate(Date::DATE_MIN_YEAR, Date::DATE_MIN_MONTH, Date::DATE_MIN_DAY));
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(0));
 	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Minimum()));
+		return Value::TIMESTAMP(Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY),
+		                        dtime_t(0));
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TimestampSec(timestamp_t(NumericLimits<int64_t>::Minimum()));
+		return MinimumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_S);
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TimestampMs(timestamp_t(NumericLimits<int64_t>::Minimum()));
+		return MinimumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_MS);
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TimestampNs(timestamp_t(NumericLimits<int64_t>::Minimum()));
+		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
+	case LogicalTypeId::DATE_TZ:
+		return Value::DATETZ(date_t(NumericLimits<int32_t>::Minimum()));
+	case LogicalTypeId::TIME_TZ:
+		return Value::TIMETZ(dtime_t(0));
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Value::TIMESTAMPTZ(Timestamp::FromDatetime(
+		    Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY), dtime_t(0)));
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Minimum());
 	case LogicalTypeId::DOUBLE:
 		return Value::DOUBLE(NumericLimits<double>::Minimum());
 	case LogicalTypeId::DECIMAL: {
-		Value result;
+		auto width = DecimalType::GetWidth(type);
+		auto scale = DecimalType::GetScale(type);
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			result = Value::MinimumValue(LogicalType::SMALLINT);
-			break;
+			return Value::DECIMAL(int16_t(-NumericHelper::POWERS_OF_TEN[width] + 1), width, scale);
 		case PhysicalType::INT32:
-			result = Value::MinimumValue(LogicalType::INTEGER);
-			break;
+			return Value::DECIMAL(int32_t(-NumericHelper::POWERS_OF_TEN[width] + 1), width, scale);
 		case PhysicalType::INT64:
-			result = Value::MinimumValue(LogicalType::BIGINT);
-			break;
+			return Value::DECIMAL(int64_t(-NumericHelper::POWERS_OF_TEN[width] + 1), width, scale);
 		case PhysicalType::INT128:
-			result = Value::MinimumValue(LogicalType::HUGEINT);
-			break;
+			return Value::DECIMAL(-Hugeint::POWERS_OF_TEN[width] + 1, width, scale);
 		default:
 			throw InternalException("Unknown decimal type");
 		}
-		result.type_ = type;
-		return result;
 	}
-	case LogicalTypeId::ENUM: {
-		Value result;
-		switch (type.InternalType()) {
-		case PhysicalType::UINT8:
-			result = Value::MinimumValue(LogicalType::UTINYINT);
-			break;
-		case PhysicalType::UINT16:
-			result = Value::MinimumValue(LogicalType::USMALLINT);
-			break;
-		case PhysicalType::UINT32:
-			result = Value::MinimumValue(LogicalType::UINTEGER);
-			break;
-		default:
-			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
-		}
-		result.type_ = type;
-		return result;
-	}
+	case LogicalTypeId::ENUM:
+		return Value::ENUM(0, type);
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
 	}
@@ -155,7 +143,7 @@ Value Value::MinimumValue(const LogicalType &type) {
 Value Value::MaximumValue(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return Value::BOOLEAN(false);
+		return Value::BOOLEAN(true);
 	case LogicalTypeId::TINYINT:
 		return Value::TINYINT(NumericLimits<int8_t>::Maximum());
 	case LogicalTypeId::SMALLINT:
@@ -178,60 +166,45 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Maximum());
 	case LogicalTypeId::DATE:
-		return Value::DATE(date_t(NumericLimits<int32_t>::Maximum()));
+		return Value::DATE(Date::FromDate(Date::DATE_MAX_YEAR, Date::DATE_MAX_MONTH, Date::DATE_MAX_DAY));
 	case LogicalTypeId::TIME:
-		return Value::TIME(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC));
+		return Value::TIME(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum()));
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TimestampMs(timestamp_t(NumericLimits<int64_t>::Maximum()));
+		return MaximumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_MS);
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TimestampNs(timestamp_t(NumericLimits<int64_t>::Maximum()));
+		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Maximum()));
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TimestampSec(timestamp_t(NumericLimits<int64_t>::Maximum()));
+		return MaximumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_S);
+	case LogicalTypeId::DATE_TZ:
+		return Value::DATETZ(date_t(NumericLimits<int32_t>::Maximum()));
+	case LogicalTypeId::TIME_TZ:
+		return Value::TIMETZ(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Value::TIMESTAMPTZ(timestamp_t(NumericLimits<int64_t>::Maximum()));
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Maximum());
 	case LogicalTypeId::DOUBLE:
 		return Value::DOUBLE(NumericLimits<double>::Maximum());
 	case LogicalTypeId::DECIMAL: {
-		Value result;
+		auto width = DecimalType::GetWidth(type);
+		auto scale = DecimalType::GetScale(type);
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			result = Value::MaximumValue(LogicalType::SMALLINT);
-			break;
+			return Value::DECIMAL(int16_t(NumericHelper::POWERS_OF_TEN[width] - 1), width, scale);
 		case PhysicalType::INT32:
-			result = Value::MaximumValue(LogicalType::INTEGER);
-			break;
+			return Value::DECIMAL(int32_t(NumericHelper::POWERS_OF_TEN[width] - 1), width, scale);
 		case PhysicalType::INT64:
-			result = Value::MaximumValue(LogicalType::BIGINT);
-			break;
+			return Value::DECIMAL(int64_t(NumericHelper::POWERS_OF_TEN[width] - 1), width, scale);
 		case PhysicalType::INT128:
-			result = Value::MaximumValue(LogicalType::HUGEINT);
-			break;
+			return Value::DECIMAL(Hugeint::POWERS_OF_TEN[width] - 1, width, scale);
 		default:
 			throw InternalException("Unknown decimal type");
 		}
-		result.type_ = type;
-		return result;
 	}
-	case LogicalTypeId::ENUM: {
-		Value result;
-		switch (type.InternalType()) {
-		case PhysicalType::UINT8:
-			result = Value::MaximumValue(LogicalType::UTINYINT);
-			break;
-		case PhysicalType::UINT16:
-			result = Value::MaximumValue(LogicalType::USMALLINT);
-			break;
-		case PhysicalType::UINT32:
-			result = Value::MaximumValue(LogicalType::UINTEGER);
-			break;
-		default:
-			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
-		}
-		result.type_ = type;
-		return result;
-	}
+	case LogicalTypeId::ENUM:
+		return Value::ENUM(EnumType::GetSize(type) - 1, type);
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
 	}
@@ -421,12 +394,26 @@ Value Value::DATE(date_t value) {
 	return result;
 }
 
+Value Value::DATETZ(date_t value) {
+	Value result(LogicalType::DATE_TZ);
+	result.value_.date = value;
+	result.is_null = false;
+	return result;
+}
+
 Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 	return Value::DATE(Date::FromDate(year, month, day));
 }
 
 Value Value::TIME(dtime_t value) {
 	Value result(LogicalType::TIME);
+	result.value_.time = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::TIMETZ(dtime_t value) {
+	Value result(LogicalType::TIME_TZ);
 	result.value_.time = value;
 	result.is_null = false;
 	return result;
@@ -443,21 +430,28 @@ Value Value::TIMESTAMP(timestamp_t value) {
 	return result;
 }
 
-Value Value::TimestampNs(timestamp_t timestamp) {
+Value Value::TIMESTAMPTZ(timestamp_t value) {
+	Value result(LogicalType::TIMESTAMP_TZ);
+	result.value_.timestamp = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::TIMESTAMPNS(timestamp_t timestamp) {
 	Value result(LogicalType::TIMESTAMP_NS);
 	result.value_.timestamp = timestamp;
 	result.is_null = false;
 	return result;
 }
 
-Value Value::TimestampMs(timestamp_t timestamp) {
+Value Value::TIMESTAMPMS(timestamp_t timestamp) {
 	Value result(LogicalType::TIMESTAMP_MS);
 	result.value_.timestamp = timestamp;
 	result.is_null = false;
 	return result;
 }
 
-Value Value::TimestampSec(timestamp_t timestamp) {
+Value Value::TIMESTAMPSEC(timestamp_t timestamp) {
 	Value result(LogicalType::TIMESTAMP_S);
 	result.value_.timestamp = timestamp;
 	result.is_null = false;
@@ -516,6 +510,16 @@ Value Value::LIST(vector<Value> values) {
 	result.list_value = move(values);
 	result.is_null = false;
 	return result;
+}
+
+Value Value::LIST(LogicalType child_type, vector<Value> values) {
+	if (values.empty()) {
+		return Value::EMPTYLIST(move(child_type));
+	}
+	for (auto &val : values) {
+		val = val.CastAs(child_type);
+	}
+	return Value::LIST(move(values));
 }
 
 Value Value::EMPTYLIST(LogicalType child_type) {
@@ -697,10 +701,13 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::UUID:
 		return Cast::Operation<hugeint_t, T>(value_.hugeint);
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 		return Cast::Operation<date_t, T>(value_.date);
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 		return Cast::Operation<dtime_t, T>(value_.time);
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return Cast::Operation<timestamp_t, T>(value_.timestamp);
 	case LogicalTypeId::UTINYINT:
 		return Cast::Operation<uint8_t, T>(value_.utinyint);
@@ -749,12 +756,18 @@ int32_t Value::GetValue() const {
 }
 template <>
 int64_t Value::GetValue() const {
-	if (type_.id() == LogicalTypeId::TIMESTAMP || type_.id() == LogicalTypeId::TIME ||
-	    type_.id() == LogicalTypeId::TIMESTAMP_SEC || type_.id() == LogicalTypeId::TIMESTAMP_NS ||
-	    type_.id() == LogicalTypeId::TIMESTAMP_MS) {
+	switch (type_.id()) {
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return value_.bigint;
+	default:
+		return GetValueInternal<int64_t>();
 	}
-	return GetValueInternal<int64_t>();
 }
 template <>
 hugeint_t Value::GetValue() const {
@@ -852,11 +865,17 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(value));
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TimestampNs(timestamp_t(value));
+		return Value::TIMESTAMPNS(timestamp_t(value));
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TimestampMs(timestamp_t(value));
+		return Value::TIMESTAMPMS(timestamp_t(value));
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TimestampSec(timestamp_t(value));
+		return Value::TIMESTAMPSEC(timestamp_t(value));
+	case LogicalTypeId::DATE_TZ:
+		return Value::DATETZ(date_t(value));
+	case LogicalTypeId::TIME_TZ:
+		return Value::TIMETZ(dtime_t(value));
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Value::TIMESTAMPTZ(timestamp_t(value));
 	case LogicalTypeId::ENUM:
 		switch (type.InternalType()) {
 		case PhysicalType::UINT8:
@@ -1032,6 +1051,12 @@ string Value::ToString() const {
 		return Time::ToString(value_.time);
 	case LogicalTypeId::TIMESTAMP:
 		return Timestamp::ToString(value_.timestamp);
+	case LogicalTypeId::DATE_TZ:
+		return Date::ToString(value_.date) + Time::ToUTCOffset(0, 0);
+	case LogicalTypeId::TIME_TZ:
+		return Time::ToString(value_.time) + Time::ToUTCOffset(0, 0);
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Timestamp::ToString(value_.timestamp) + Time::ToUTCOffset(0, 0);
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Timestamp::ToString(Timestamp::FromEpochSeconds(value_.timestamp.value));
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -1103,7 +1128,7 @@ string Value::ToString() const {
 		default:
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
-		return values_insert_order[enum_idx];
+		return values_insert_order.GetValue(enum_idx).ToString();
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString());

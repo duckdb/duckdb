@@ -7,10 +7,20 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 
 namespace duckdb {
 
 TableFunctionRelation::TableFunctionRelation(ClientContext &context, string name_p, vector<Value> parameters_p,
+                                             unordered_map<string, Value> named_parameters,
+                                             shared_ptr<Relation> input_relation_p)
+    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(move(name_p)), parameters(move(parameters_p)),
+      named_parameters(move(named_parameters)), input_relation(move(input_relation_p)) {
+	context.TryBindRelation(*this, this->columns);
+}
+TableFunctionRelation::TableFunctionRelation(ClientContext &context, string name_p, vector<Value> parameters_p,
+
                                              shared_ptr<Relation> input_relation_p)
     : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(move(name_p)), parameters(move(parameters_p)),
       input_relation(move(input_relation_p)) {
@@ -35,6 +45,17 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 	}
 	for (auto &parameter : parameters) {
 		children.push_back(make_unique<ConstantExpression>(parameter));
+	}
+
+	for (auto &parameter : named_parameters) {
+		// Hackity-hack some comparisons with column refs
+		// This is all but pretty, basically the named parameter is the column, the table is empty because that's what
+		// the function binder likes
+		auto column_ref = make_unique<ColumnRefExpression>(parameter.first);
+		auto constant_value = make_unique<ConstantExpression>(parameter.second);
+		auto comparison =
+		    make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(column_ref), move(constant_value));
+		children.push_back(move(comparison));
 	}
 
 	auto table_function = make_unique<TableFunctionRef>();

@@ -33,8 +33,11 @@ bool AreMatchesPossible(LogicalType &left, LogicalType &right) {
 		small_enum = &right;
 		big_enum = &left;
 	}
-	auto string_vec = EnumType::GetValuesInsertOrder(*small_enum);
-	for (auto &key : string_vec) {
+	auto &string_vec = EnumType::GetValuesInsertOrder(*small_enum);
+	auto string_vec_ptr = FlatVector::GetData<string_t>(string_vec);
+	auto size = EnumType::GetSize(*small_enum);
+	for (idx_t i = 0; i < size; i++) {
+		auto key = string_vec_ptr[i].GetString();
 		if (EnumType::GetPos(*big_enum, key) != -1) {
 			return true;
 		}

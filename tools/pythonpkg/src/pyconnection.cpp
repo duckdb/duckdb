@@ -16,8 +16,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
-#include "extension/extension_helper.hpp"
-
 #include "datetime.h" // from Python
 
 #include <random>
@@ -57,13 +55,11 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction")
 	    .def("append", &DuckDBPyConnection::Append, "Append the passed Data.Frame to the named table",
 	         py::arg("table_name"), py::arg("df"))
-	    .def("register", &DuckDBPyConnection::RegisterDF,
-	         "Register the passed Data.Frame value for querying with a view", py::arg("view_name"), py::arg("df"))
+	    .def("register", &DuckDBPyConnection::RegisterPythonObject,
+	         "Register the passed Python Object value for querying with a view", py::arg("view_name"),
+	         py::arg("python_object"), py::arg("rows_per_thread") = 1000000)
 	    .def("unregister", &DuckDBPyConnection::UnregisterPythonObject, "Unregister the view name",
 	         py::arg("view_name"))
-	    .def("register_arrow", &DuckDBPyConnection::RegisterArrow,
-	         "Register the passed Arrow Table for querying with a view", py::arg("view_name"), py::arg("arrow_object"),
-	         py::arg("rows_per_thread") = 1000000)
 	    .def("table", &DuckDBPyConnection::Table, "Create a relation object for the name'd table",
 	         py::arg("table_name"))
 	    .def("view", &DuckDBPyConnection::View, "Create a relation object for the name'd view", py::arg("view_name"))
@@ -85,7 +81,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
 	         "Create a relation object from the CSV file in file_name", py::arg("file_name"))
 	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
-	         "Create a relation object from the Parquet file in file_name", py::arg("file_name"))
+	         "Create a relation object from the Parquet file in file_name", py::arg("file_name"),
+	         py::arg("binary_as_string") = false)
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names");
 
@@ -101,25 +98,34 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
+	if (std::this_thread::get_id() != thread_id) {
+		throw std::runtime_error("DuckDB objects created in a thread can only be used in that same thread. The object "
+		                         "was created in thread id " +
+		                         to_string(std::hash<std::thread::id> {}(thread_id)) + " and this is thread id " +
+		                         to_string(std::hash<std::thread::id> {}(std::this_thread::get_id())));
+	}
 	result = nullptr;
-
-	auto statements = connection->ExtractStatements(query);
-	if (statements.empty()) {
-		// no statements to execute
-		return this;
-	}
-	// if there are multiple statements, we directly execute the statements besides the last one
-	// we only return the result of the last statement to the user, unless one of the previous statements fails
-	for (idx_t i = 0; i + 1 < statements.size(); i++) {
-		auto res = connection->Query(move(statements[i]));
-		if (!res->success) {
-			throw std::runtime_error(res->error);
+	unique_ptr<PreparedStatement> prep;
+	{
+		py::gil_scoped_release release;
+		auto statements = connection->ExtractStatements(query);
+		if (statements.empty()) {
+			// no statements to execute
+			return this;
 		}
-	}
+		// if there are multiple statements, we directly execute the statements besides the last one
+		// we only return the result of the last statement to the user, unless one of the previous statements fails
+		for (idx_t i = 0; i + 1 < statements.size(); i++) {
+			auto res = connection->Query(move(statements[i]));
+			if (!res->success) {
+				throw std::runtime_error(res->error);
+			}
+		}
 
-	auto prep = connection->Prepare(move(statements.back()));
-	if (!prep->success) {
-		throw std::runtime_error(prep->error);
+		prep = connection->Prepare(move(statements.back()));
+		if (!prep->success) {
+			throw std::runtime_error(prep->error);
+		}
 	}
 
 	// this is a list of a list of parameters in executemany
@@ -141,10 +147,11 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		{
 			py::gil_scoped_release release;
 			res->result = prep->Execute(args);
+			if (!res->result->success) {
+				throw std::runtime_error(res->result->error);
+			}
 		}
-		if (!res->result->success) {
-			throw std::runtime_error(res->result->error);
-		}
+
 		if (!many) {
 			result = move(res);
 		}
@@ -153,36 +160,45 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 }
 
 DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, py::object value) {
-	RegisterDF("__append_df", std::move(value));
+	RegisterPythonObject("__append_df", std::move(value));
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 }
 
-DuckDBPyConnection *DuckDBPyConnection::RegisterDF(const string &name, py::object value) {
+DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name, py::object python_object,
+                                                             const idx_t rows_per_tuple) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)value.ptr())})->CreateView(name, true, true);
-	// keep a reference
-	auto object = make_unique<RegisteredObject>(value);
-	registered_objects[name] = move(object);
-	return this;
-}
+	auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
 
-DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::object &table,
-                                                      const idx_t rows_per_tuple) {
-	if (!connection) {
-		throw std::runtime_error("connection closed");
+	if (py_object_type == "DataFrame") {
+		{
+			py::gil_scoped_release release;
+			connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)python_object.ptr())})
+			    ->CreateView(name, true, true);
+		}
+
+		// keep a reference
+		auto object = make_unique<RegisteredObject>(python_object);
+		registered_objects[name] = move(object);
+	} else if (py_object_type == "Table" || py_object_type == "FileSystemDataset" ||
+	           py_object_type == "InMemoryDataset") {
+		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr());
+
+		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
+		{
+			py::gil_scoped_release release;
+			connection
+			    ->TableFunction("arrow_scan",
+			                    {Value::POINTER((uintptr_t)stream_factory.get()),
+			                     Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)})
+			    ->CreateView(name, true, true);
+		}
+		auto object = make_unique<RegisteredArrow>(move(stream_factory), move(python_object));
+		registered_objects[name] = move(object);
+	} else {
+		throw std::runtime_error("Python Object " + py_object_type + " not suitable to be registered as a view");
 	}
-	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
-
-	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
-	connection
-	    ->TableFunction("arrow_scan",
-	                    {Value::POINTER((uintptr_t)stream_factory.get()),
-	                     Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)})
-	    ->CreateView(name, true, true);
-	auto object = make_unique<RegisteredArrow>(move(stream_factory), move(table));
-	registered_objects[name] = move(object);
 	return this;
 }
 
@@ -258,13 +274,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filen
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filename) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filename, bool binary_as_string) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
 	vector<Value> params;
 	params.emplace_back(filename);
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
+	unordered_map<string, Value> named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
+	return make_unique<DuckDBPyRelation>(
+	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(filename));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &table, const idx_t rows_per_tuple) {
@@ -289,7 +307,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 
 DuckDBPyConnection *DuckDBPyConnection::UnregisterPythonObject(const string &name) {
 	registered_objects.erase(name);
-
+	py::gil_scoped_release release;
 	if (connection) {
 		connection->Query("DROP VIEW \"" + name + "\"");
 	}
@@ -395,37 +413,56 @@ py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t approx_batch_s
 	}
 	return result->FetchRecordBatchReader(approx_batch_size);
 }
-
-static unique_ptr<TableFunctionRef> TryPandasReplacement(py::dict &dict, py::str &table_name) {
+static unique_ptr<TableFunctionRef>
+TryReplacement(py::dict &dict, py::str &table_name,
+               unordered_map<string, unique_ptr<RegisteredObject>> &registered_objects) {
 	if (!dict.contains(table_name)) {
 		// not present in the globals
 		return nullptr;
 	}
 	auto entry = dict[table_name];
-
-	// check if there is a local or global variable
+	auto py_object_type = string(py::str(entry.get_type().attr("__name__")));
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)entry.ptr())));
-	table_function->function = make_unique<FunctionExpression>("pandas_scan", move(children));
+	if (py_object_type == "DataFrame") {
+		string name = "df_" + GenerateRandomName();
+		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)entry.ptr())));
+		table_function->function = make_unique<FunctionExpression>("pandas_scan", move(children));
+		// keep a reference
+		auto object = make_unique<RegisteredObject>(entry);
+		registered_objects[name] = move(object);
+	} else if (py_object_type == "Table" || py_object_type == "FileSystemDataset" ||
+	           py_object_type == "InMemoryDataset") {
+		string name = "arrow_" + GenerateRandomName();
+		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr());
+		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
+		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory.get())));
+		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_produce)));
+		children.push_back(make_unique<ConstantExpression>(Value::UBIGINT(1000000)));
+		table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
+		registered_objects[name] = make_unique<RegisteredArrow>(move(stream_factory), entry);
+	} else {
+		throw std::runtime_error("Python Object " + py_object_type + " not suitable for replacement scans");
+	}
 	return table_function;
 }
 
-static unique_ptr<TableFunctionRef> PandasScanReplacement(const string &table_name, void *data) {
+static unique_ptr<TableFunctionRef> ScanReplacement(const string &table_name, void *data) {
 	py::gil_scoped_acquire acquire;
+	auto registered_objects = (unordered_map<string, unique_ptr<RegisteredObject>> *)data;
 	// look in the locals first
 	PyObject *p = PyEval_GetLocals();
 	auto py_table_name = py::str(table_name);
 	if (p) {
 		auto local_dict = py::reinterpret_borrow<py::dict>(p);
-		auto result = TryPandasReplacement(local_dict, py_table_name);
+		auto result = TryReplacement(local_dict, py_table_name, *registered_objects);
 		if (result) {
 			return result;
 		}
 	}
 	// otherwise look in the globals
 	auto global_dict = py::globals();
-	return TryPandasReplacement(global_dict, py_table_name);
+	return TryReplacement(global_dict, py_table_name, *registered_objects);
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
@@ -445,11 +482,11 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		config.SetOption(*config_property, Value(val));
 	}
 	if (config.enable_external_access) {
-		config.replacement_scans.emplace_back(PandasScanReplacement);
+		//		ReplacementScan replacement_scan(ScanReplacement, (void *) &res->registered_objects);
+		config.replacement_scans.emplace_back(ScanReplacement, (void *)&res->registered_objects);
 	}
 
 	res->database = make_unique<DuckDB>(database, &config);
-	ExtensionHelper::LoadAllExtensions(*res->database);
 	res->connection = make_unique<Connection>(*res->database);
 
 	PandasScanFunction scan_fun;

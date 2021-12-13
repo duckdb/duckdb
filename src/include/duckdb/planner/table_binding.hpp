@@ -41,8 +41,11 @@ struct Binding {
 
 public:
 	bool TryGetBindingIndex(const string &column_name, column_t &column_index);
+	column_t GetBindingIndex(const string &column_name);
 	bool HasMatchingBinding(const string &column_name);
+	virtual string ColumnNotFoundError(const string &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
+	virtual TableCatalogEntry *GetTableEntry();
 };
 
 //! TableBinding is exactly like the Binding, except it keeps track of which columns were bound in the linked LogicalGet
@@ -56,11 +59,16 @@ struct TableBinding : public Binding {
 
 public:
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
+	TableCatalogEntry *GetTableEntry() override;
+	string ColumnNotFoundError(const string &column_name) const override;
 };
 
 //! MacroBinding is like the Binding, except the alias and index are set by default. Used for binding Macro
 //! Params/Arguments.
 struct MacroBinding : public Binding {
+	static constexpr const char *MACRO_NAME = "0_macro_parameters";
+
+public:
 	MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name);
 
 	//! Arguments

@@ -107,12 +107,15 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 			WriteData<double>(out, result->collection, col);
 			break;
 		case LogicalTypeId::DATE:
+		case LogicalTypeId::DATE_TZ:
 			WriteData<date_t>(out, result->collection, col);
 			break;
 		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIME_TZ:
 			WriteData<dtime_t>(out, result->collection, col);
 			break;
 		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
 			WriteData<timestamp_t>(out, result->collection, col);
 			break;
 		case LogicalTypeId::VARCHAR: {
@@ -221,7 +224,7 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 
 } // namespace duckdb
 
-static void duckdb_destroy_column(duckdb_column column, idx_t count) {
+static void DuckdbDestroyColumn(duckdb_column column, idx_t count) {
 	if (column.data) {
 		if (column.type == DUCKDB_TYPE_VARCHAR) {
 			// varchar, delete individual strings
@@ -256,7 +259,7 @@ void duckdb_destroy_result(duckdb_result *result) {
 	}
 	if (result->columns) {
 		for (idx_t i = 0; i < result->column_count; i++) {
-			duckdb_destroy_column(result->columns[i], result->row_count);
+			DuckdbDestroyColumn(result->columns[i], result->row_count);
 		}
 		duckdb_free(result->columns);
 	}

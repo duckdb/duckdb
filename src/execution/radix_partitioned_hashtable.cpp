@@ -19,7 +19,7 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 
 	if (grouping_set.empty()) {
 		// fake a single group with a constant value for aggregation without groups
-		group_types.push_back(LogicalType::TINYINT);
+		group_types.emplace_back(LogicalType::TINYINT);
 	}
 	for (auto &entry : grouping_set) {
 		D_ASSERT(entry < op.group_types.size());

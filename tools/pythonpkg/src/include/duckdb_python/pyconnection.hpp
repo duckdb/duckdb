@@ -13,6 +13,7 @@
 #include "arrow_array_stream.hpp"
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
+#include <thread>
 
 namespace duckdb {
 
@@ -45,6 +46,7 @@ public:
 	unordered_map<string, unique_ptr<RegisteredObject>> registered_objects;
 	unique_ptr<DuckDBPyResult> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
+	std::thread::id thread_id = std::this_thread::get_id();
 
 public:
 	static void Initialize(py::handle &m);
@@ -58,10 +60,10 @@ public:
 
 	DuckDBPyConnection *Append(const string &name, py::object value);
 
-	DuckDBPyConnection *RegisterDF(const string &name, py::object value);
+	DuckDBPyConnection *RegisterPythonObject(const string &name, py::object python_object,
+	                                         const idx_t rows_per_tuple = 100000);
 
 	unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation");
-	DuckDBPyConnection *RegisterArrow(const string &name, py::object &value, const idx_t rows_per_tuple = 100000);
 
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 
@@ -75,7 +77,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename);
 
-	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename);
+	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename, bool binary_as_string);
 
 	unique_ptr<DuckDBPyRelation> FromArrowTable(py::object &table, const idx_t rows_per_tuple = 1000000);
 
@@ -114,7 +116,6 @@ public:
 
 	static vector<Value> TransformPythonParamList(py::handle params);
 
-private:
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;
 };

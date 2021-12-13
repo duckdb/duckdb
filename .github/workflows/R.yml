@@ -19,6 +19,7 @@ jobs:
 
     env:
       LIBARROW_BINARY : 'true'
+      DUCKDB_BUILD_UNITY: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -78,6 +79,9 @@ jobs:
       runs-on: windows-latest
       needs: rstats-linux
 
+      env:
+        DUCKDB_BUILD_UNITY: 1
+
       steps:
       - uses: actions/checkout@v2
         with:
@@ -105,13 +109,11 @@ jobs:
           R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
           if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
-
-
-
    rubsan:
       name: R UBSAN
       runs-on: ubuntu-latest
       needs: rstats-linux
+
       steps:
       - uses: actions/checkout@v2
         with:

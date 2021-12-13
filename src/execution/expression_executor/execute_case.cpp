@@ -17,9 +17,11 @@ struct CaseExpressionState : public ExpressionState {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<CaseExpressionState>(expr, root);
-	result->AddChild(expr.check.get());
-	result->AddChild(expr.result_if_true.get());
-	result->AddChild(expr.result_if_false.get());
+	for (auto &case_check : expr.case_checks) {
+		result->AddChild(case_check.when_expr.get());
+		result->AddChild(case_check.then_expr.get());
+	}
+	result->AddChild(expr.else_expr.get());
 	result->Finalize();
 	return move(result);
 }
@@ -29,39 +31,64 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 	auto state = (CaseExpressionState *)state_p;
 
 	state->intermediate_chunk.Reset();
-	auto &res_true = state->intermediate_chunk.data[1];
-	auto &res_false = state->intermediate_chunk.data[2];
-
-	auto check_state = state->child_states[0].get();
-	auto res_true_state = state->child_states[1].get();
-	auto res_false_state = state->child_states[2].get();
 
 	// first execute the check expression
-	auto &true_sel = state->true_sel;
-	auto &false_sel = state->false_sel;
-	idx_t tcount = Select(*expr.check, check_state, sel, count, &true_sel, &false_sel);
-	idx_t fcount = count - tcount;
-	if (fcount == 0) {
-		// everything is true, only execute TRUE side
-		Execute(*expr.result_if_true, res_true_state, sel, count, result);
-	} else if (tcount == 0) {
-		// everything is false, only execute FALSE side
-		Execute(*expr.result_if_false, res_false_state, sel, count, result);
-	} else {
-		// have to execute both and mix and match
-		Execute(*expr.result_if_true, res_true_state, &true_sel, tcount, res_true);
-		Execute(*expr.result_if_false, res_false_state, &false_sel, fcount, res_false);
+	auto current_true_sel = &state->true_sel;
+	auto current_false_sel = &state->false_sel;
+	auto current_sel = sel;
+	idx_t current_count = count;
+	for (idx_t i = 0; i < expr.case_checks.size(); i++) {
+		auto &case_check = expr.case_checks[i];
+		auto &intermediate_result = state->intermediate_chunk.data[i * 2 + 1];
+		auto check_state = state->child_states[i * 2].get();
+		auto then_state = state->child_states[i * 2 + 1].get();
 
-		FillSwitch(res_true, result, true_sel, tcount);
-		FillSwitch(res_false, result, false_sel, fcount);
-		if (sel) {
-			result.Slice(*sel, count);
+		idx_t tcount =
+		    Select(*case_check.when_expr, check_state, current_sel, current_count, current_true_sel, current_false_sel);
+		if (tcount == 0) {
+			// everything is false: do nothing
+			continue;
 		}
+		idx_t fcount = current_count - tcount;
+		if (fcount == 0 && current_count == count) {
+			// everything is true in the first CHECK statement
+			// we can skip the entire case and only execute the TRUE side
+			Execute(*case_check.then_expr, then_state, sel, count, result);
+			return;
+		} else {
+			// we need to execute and then fill in the desired tuples in the result
+			Execute(*case_check.then_expr, then_state, current_true_sel, tcount, intermediate_result);
+			FillSwitch(intermediate_result, result, *current_true_sel, tcount);
+		}
+		// continue with the false tuples
+		current_sel = current_false_sel;
+		current_count = fcount;
+		if (fcount == 0) {
+			// everything is true: we are done
+			break;
+		}
+	}
+	if (current_count > 0) {
+		auto else_state = state->child_states.back().get();
+		if (current_count == count) {
+			// everything was false, we can just evaluate the else expression directly
+			Execute(*expr.else_expr, else_state, sel, count, result);
+			return;
+		} else {
+			auto &intermediate_result = state->intermediate_chunk.data[expr.case_checks.size() * 2];
+
+			D_ASSERT(current_sel);
+			Execute(*expr.else_expr, else_state, current_sel, current_count, intermediate_result);
+			FillSwitch(intermediate_result, result, *current_sel, current_count);
+		}
+	}
+	if (sel) {
+		result.Slice(*sel, count);
 	}
 }
 
 template <class T>
-void TemplatedFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel_t count) {
+void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto res = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Validity(result);
@@ -90,7 +117,7 @@ void TemplatedFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel
 	}
 }
 
-void ValidityFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel_t count) {
+void ValidityFillLoop(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &result_mask = FlatVector::Validity(result);
 	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -111,7 +138,7 @@ void ValidityFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel_
 	}
 }
 
-void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, SelectionVector &sel, sel_t count) {
+void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

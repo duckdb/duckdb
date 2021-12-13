@@ -1,3 +1,4 @@
+#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/sort/sorted_block.hpp"
@@ -261,7 +262,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	const idx_t sorting_entry_size = gstate.sort_layout.entry_size;
 	for (idx_t i = 0; i < count; i++) {
 		auto index = Load<uint32_t>(sorting_ptr);
-		memcpy(ordered_data_ptr, unordered_data_ptr + index * row_width, row_width);
+		FastMemcpy(ordered_data_ptr, unordered_data_ptr + index * row_width, row_width);
 		ordered_data_ptr += row_width;
 		sorting_ptr += sorting_entry_size;
 	}

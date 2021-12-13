@@ -36,11 +36,11 @@ idx_t Node4::GetMin() {
 }
 
 idx_t Node4::GetNextPos(idx_t pos) {
-	if (pos == INVALID_INDEX) {
+	if (pos == DConstants::INVALID_INDEX) {
 		return 0;
 	}
 	pos++;
-	return pos < count ? pos : INVALID_INDEX;
+	return pos < count ? pos : DConstants::INVALID_INDEX;
 }
 
 unique_ptr<Node> *Node4::GetChild(idx_t pos) {
@@ -101,7 +101,6 @@ void Node4::Erase(ART &art, unique_ptr<Node> &node, int pos) {
 		auto new_length = node->prefix_length + childref->prefix_length + 1;
 		//! have to allocate space in our prefix array
 		unique_ptr<uint8_t[]> new_prefix = unique_ptr<uint8_t[]>(new uint8_t[new_length]);
-		;
 
 		//! first move the existing prefix (if any)
 		for (uint32_t i = 0; i < childref->prefix_length; i++) {

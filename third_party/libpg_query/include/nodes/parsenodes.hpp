@@ -290,6 +290,7 @@ typedef struct PGFuncCall {
 	bool agg_within_group;    /* ORDER BY appeared in WITHIN GROUP */
 	bool agg_star;            /* argument was really '*' */
 	bool agg_distinct;        /* arguments were labeled DISTINCT */
+	bool agg_ignore_nulls;    /* arguments were labeled IGNORE NULLS */
 	bool func_variadic;       /* last argument was labeled VARIADIC */
 	struct PGWindowDef *over; /* OVER clause, if any */
 	int location;             /* token location, or -1 if unknown */
@@ -1794,9 +1795,14 @@ typedef struct PGViewStmt {
  *		Load Statement
  * ----------------------
  */
+
+typedef enum PGLoadInstallType { PG_LOAD_TYPE_LOAD,  PG_LOAD_TYPE_INSTALL, PG_LOAD_TYPE_FORCE_INSTALL } PGLoadInstallType;
+
+
 typedef struct PGLoadStmt {
 	PGNodeTag type;
-	char *filename; /* file to load */
+	const char *filename; /* file to load */
+	PGLoadInstallType load_type;
 } PGLoadStmt;
 
 /* ----------------------
@@ -1977,6 +1983,14 @@ typedef struct PGSampleOptions {
 	int location;             /* token location, or -1 if unknown */
 } PGSampleOptions;
 
+/* ----------------------
+ *              Limit Percentage
+ * ----------------------
+ */
+typedef struct PGLimitPercent {
+	PGNodeTag type;
+    PGNode* limit_percent;  /* limit percent */
+} PGLimitPercent;
 
 /* ----------------------
  *		Lambda Function

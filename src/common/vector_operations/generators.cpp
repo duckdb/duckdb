@@ -19,8 +19,10 @@ void TemplatedGenerateSequence(Vector &result, idx_t count, int64_t start, int64
 	auto result_data = FlatVector::GetData<T>(result);
 	auto value = (T)start;
 	for (idx_t i = 0; i < count; i++) {
+		if (i > 0) {
+			value += increment;
+		}
 		result_data[i] = value;
-		value += increment;
 	}
 }
 

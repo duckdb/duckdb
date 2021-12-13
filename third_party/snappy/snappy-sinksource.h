@@ -31,7 +31,7 @@
 
 #include <stddef.h>
 
-namespace snappy {
+namespace duckdb_snappy {
 
 // A Sink is an interface that consumes a sequence of bytes.
 class Sink {
@@ -177,6 +177,6 @@ class UncheckedByteArraySink : public Sink {
   char* dest_;
 };
 
-}  // namespace snappy
+}  // namespace duckdb_snappy
 
 #endif  // THIRD_PARTY_SNAPPY_SNAPPY_SINKSOURCE_H_

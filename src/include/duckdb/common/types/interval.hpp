@@ -22,8 +22,9 @@ public:
 	static constexpr const int32_t MONTHS_PER_YEAR = 12;
 	static constexpr const int32_t MONTHS_PER_QUARTER = 3;
 	static constexpr const int32_t DAYS_PER_WEEK = 7;
-	static constexpr const int64_t DAYS_PER_MONTH =
-	    30; // only used for interval comparison/ordering purposes, in which case a month counts as 30 days
+	//! only used for interval comparison/ordering purposes, in which case a month counts as 30 days
+	static constexpr const int64_t DAYS_PER_MONTH = 30;
+	static constexpr const int64_t DAYS_PER_YEAR = 365;
 	static constexpr const int64_t MSECS_PER_SEC = 1000;
 	static constexpr const int32_t SECS_PER_MINUTE = 60;
 	static constexpr const int32_t MINS_PER_HOUR = 60;
@@ -57,7 +58,7 @@ public:
 	static string ToString(const interval_t &val);
 
 	//! Convert milliseconds to a normalised interval
-	static interval_t FromMicro(int64_t micros);
+	DUCKDB_API static interval_t FromMicro(int64_t micros);
 
 	//! Get Interval in milliseconds
 	static int64_t GetMilli(const interval_t &val);
@@ -73,6 +74,12 @@ public:
 
 	//! Returns the exact difference between two timestamps (days and seconds)
 	static interval_t GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2);
+
+	//! Add an interval to a date
+	static date_t Add(date_t left, interval_t right);
+	//! Add an interval to a time. In case the time overflows or underflows, modify the date by the overflow.
+	//! For example if we go from 23:00 to 02:00, we add a day to the date
+	static dtime_t Add(dtime_t left, interval_t right, date_t &date);
 
 	//! Comparison operators
 	static bool Equals(interval_t left, interval_t right);

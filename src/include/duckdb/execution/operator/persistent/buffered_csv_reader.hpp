@@ -56,8 +56,8 @@ struct BufferedCSVReaderOptions {
 	//! The file path of the CSV file to read
 	string file_path;
 	//! Whether file is compressed or not, and if so which compression type
-	//! ("infer" (default; infer from file extention), "gzip", "none")
-	string compression = "infer";
+	//! AUTO_DETECT (default; infer from file extension)
+	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
 	//! Whether or not to automatically detect dialect and datatypes
 	bool auto_detect = false;
 	//! Whether or not a delimiter was defined by the user
@@ -99,15 +99,9 @@ struct BufferedCSVReaderOptions {
 	//! Whether or not a type format is specified
 	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
-	std::string toString() const {
-		return "DELIMITER='" + delimiter + (has_delimiter ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-		       ", QUOTE='" + quote + (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-		       ", ESCAPE='" + escape + (has_escape ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-		       ", HEADER=" + std::to_string(header) +
-		       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
-		       ", SAMPLE_SIZE=" + std::to_string(sample_chunk_size * sample_chunks) +
-		       ", ALL_VARCHAR=" + std::to_string(all_varchar);
-	}
+	void SetDelimiter(const string &delimiter);
+
+	std::string ToString() const;
 };
 
 enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DATATYPES = 2, PARSING_HEADER = 3 };
@@ -135,7 +129,6 @@ public:
 	unique_ptr<FileHandle> file_handle;
 	bool plain_file_source = false;
 	idx_t file_size = 0;
-	FileCompressionType compression = FileCompressionType::UNCOMPRESSED;
 
 	unique_ptr<char[]> buffer;
 	idx_t buffer_size;

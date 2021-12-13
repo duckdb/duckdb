@@ -5,9 +5,9 @@
 
 namespace duckdb {
 
-CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table, vector<ColumnDefinition> &columns,
+CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table_p, vector<ColumnDefinition> &columns,
                          unordered_set<column_t> &bound_columns)
-    : ExpressionBinder(binder, context), table(move(table)), columns(columns), bound_columns(bound_columns) {
+    : ExpressionBinder(binder, context), table(move(table_p)), columns(columns), bound_columns(bound_columns) {
 	target_type = LogicalType::INTEGER;
 }
 
@@ -29,18 +29,29 @@ string CheckBinder::UnsupportedAggregateMessage() {
 	return "aggregate functions are not allowed in check constraints";
 }
 
+BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name) {
+	idx_t struct_start = 0;
+	if (colref.column_names[0] == table_name) {
+		struct_start++;
+	}
+	auto result = make_unique_base<ParsedExpression, ColumnRefExpression>(colref.column_names.back());
+	for (idx_t i = struct_start; i + 1 < colref.column_names.size(); i++) {
+		result = CreateStructExtract(move(result), colref.column_names[i]);
+	}
+	return BindExpression(&result, 0);
+}
+
 BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
-	if (!colref.table_name.empty() && colref.table_name != table) {
-		throw BinderException("Cannot reference table %s from within check constraint for table %s!", colref.table_name,
-		                      table);
+	if (colref.column_names.size() > 1) {
+		return BindQualifiedColumnName(colref, table);
 	}
 	for (idx_t i = 0; i < columns.size(); i++) {
-		if (colref.column_name == columns[i].name) {
+		if (colref.column_names[0] == columns[i].name) {
 			bound_columns.insert(i);
 			return BindResult(make_unique<BoundReferenceExpression>(columns[i].type, i));
 		}
 	}
-	throw BinderException("Table does not contain column %s referenced in check constraint!", colref.column_name);
+	throw BinderException("Table does not contain column %s referenced in check constraint!", colref.column_names[0]);
 }
 
 } // namespace duckdb

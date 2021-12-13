@@ -22,14 +22,14 @@ struct TemplatedValidityData {
 	static constexpr const V MAX_ENTRY = ~V(0);
 
 public:
-	explicit TemplatedValidityData(idx_t count) {
+	inline explicit TemplatedValidityData(idx_t count) {
 		auto entry_count = EntryCount(count);
 		owned_data = unique_ptr<V[]>(new V[entry_count]);
 		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			owned_data[entry_idx] = MAX_ENTRY;
 		}
 	}
-	TemplatedValidityData(const V *validity_mask, idx_t count) {
+	inline TemplatedValidityData(const V *validity_mask, idx_t count) {
 		D_ASSERT(validity_mask);
 		auto entry_count = EntryCount(count);
 		owned_data = unique_ptr<V[]>(new V[entry_count]);
@@ -65,14 +65,14 @@ public:
 	static constexpr const int STANDARD_MASK_SIZE = STANDARD_ENTRY_COUNT * sizeof(validity_t);
 
 public:
-	TemplatedValidityMask() : validity_mask(nullptr) {
+	inline TemplatedValidityMask() : validity_mask(nullptr) {
 	}
-	explicit TemplatedValidityMask(idx_t max_count) {
+	inline explicit TemplatedValidityMask(idx_t max_count) {
 		Initialize(max_count);
 	}
-	explicit TemplatedValidityMask(V *ptr) : validity_mask(ptr) {
+	inline explicit TemplatedValidityMask(V *ptr) : validity_mask(ptr) {
 	}
-	TemplatedValidityMask(const TemplatedValidityMask &original, idx_t count) {
+	inline TemplatedValidityMask(const TemplatedValidityMask &original, idx_t count) {
 		Copy(original, count);
 	}
 
@@ -82,7 +82,7 @@ public:
 	inline bool AllValid() const {
 		return !validity_mask;
 	}
-	bool CheckAllValid(idx_t count) const {
+	inline bool CheckAllValid(idx_t count) const {
 		if (AllValid()) {
 			return true;
 		}
@@ -94,7 +94,7 @@ public:
 		return valid_count == entry_count;
 	}
 
-	bool CheckAllValid(idx_t to, idx_t from) const {
+	inline bool CheckAllValid(idx_t to, idx_t from) const {
 		if (AllValid()) {
 			return true;
 		}
@@ -144,7 +144,7 @@ public:
 	inline V *GetData() const {
 		return validity_mask;
 	}
-	void Reset() {
+	inline void Reset() {
 		validity_mask = nullptr;
 		validity_data.reset();
 	}
@@ -270,19 +270,19 @@ public:
 	}
 
 public:
-	void Initialize(validity_t *validity) {
+	inline void Initialize(validity_t *validity) {
 		validity_data.reset();
 		validity_mask = validity;
 	}
-	void Initialize(const TemplatedValidityMask &other) {
+	inline void Initialize(const TemplatedValidityMask &other) {
 		validity_mask = other.validity_mask;
 		validity_data = other.validity_data;
 	}
-	void Initialize(idx_t count = STANDARD_VECTOR_SIZE) {
+	inline void Initialize(idx_t count = STANDARD_VECTOR_SIZE) {
 		validity_data = make_buffer<ValidityBuffer>(count);
 		validity_mask = validity_data->owned_data.get();
 	}
-	void Copy(const TemplatedValidityMask &other, idx_t count) {
+	inline void Copy(const TemplatedValidityMask &other, idx_t count) {
 		if (other.AllValid()) {
 			validity_data = nullptr;
 			validity_mask = nullptr;
@@ -299,21 +299,21 @@ protected:
 
 struct ValidityMask : public TemplatedValidityMask<validity_t> {
 public:
-	ValidityMask() : TemplatedValidityMask(nullptr) {
+	inline ValidityMask() : TemplatedValidityMask(nullptr) {
 	}
-	explicit ValidityMask(idx_t max_count) : TemplatedValidityMask(max_count) {
+	inline explicit ValidityMask(idx_t max_count) : TemplatedValidityMask(max_count) {
 	}
-	explicit ValidityMask(validity_t *ptr) : TemplatedValidityMask(ptr) {
+	inline explicit ValidityMask(validity_t *ptr) : TemplatedValidityMask(ptr) {
 	}
-	ValidityMask(const ValidityMask &original, idx_t count) : TemplatedValidityMask(original, count) {
+	inline ValidityMask(const ValidityMask &original, idx_t count) : TemplatedValidityMask(original, count) {
 	}
 
 public:
-	void Resize(idx_t old_size, idx_t new_size);
+	DUCKDB_API void Resize(idx_t old_size, idx_t new_size);
 
-	void Slice(const ValidityMask &other, idx_t offset);
-	void Combine(const ValidityMask &other, idx_t count);
-	string ToString(idx_t count) const;
+	DUCKDB_API void Slice(const ValidityMask &other, idx_t offset);
+	DUCKDB_API void Combine(const ValidityMask &other, idx_t count);
+	DUCKDB_API string ToString(idx_t count) const;
 };
 
 } // namespace duckdb

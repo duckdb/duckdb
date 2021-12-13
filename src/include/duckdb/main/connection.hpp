@@ -106,6 +106,8 @@ public:
 	DUCKDB_API shared_ptr<Relation> View(const string &schema_name, const string &table_name);
 	//! Returns a relation that calls a specified table function
 	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname);
+	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname, const vector<Value> &values,
+	                                              const unordered_map<string, Value> &named_parameters);
 	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname, const vector<Value> &values);
 	//! Returns a relation that produces values
 	DUCKDB_API shared_ptr<Relation> Values(const vector<vector<Value>> &values);
@@ -125,6 +127,9 @@ public:
 	DUCKDB_API void Rollback();
 	DUCKDB_API void SetAutoCommit(bool auto_commit);
 	DUCKDB_API bool IsAutoCommit();
+
+	//! Fetch a list of table names that are required for a given query
+	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
 
 	template <typename TR, typename... Args>
 	void CreateScalarFunction(const string &name, TR (*udf_func)(Args...)) {

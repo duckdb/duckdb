@@ -14,8 +14,7 @@
 namespace duckdb {
 
 struct SortLayout;
-struct SortedBlock;
-struct SortedData;
+struct SBScanState;
 
 using ValidityBytes = RowLayout::ValidityBytes;
 
@@ -25,14 +24,14 @@ public:
 	static bool TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const RowLayout &row_layout);
 	//! Compares the tuples that a being read from in the 'left' and 'right blocks during merge sort
 	//! (only in case we cannot simply 'memcmp' - if there are blob columns)
-	static int CompareTuple(const SortedBlock &left, const SortedBlock &right, const data_ptr_t &l_ptr,
+	static int CompareTuple(const SBScanState &left, const SBScanState &right, const data_ptr_t &l_ptr,
 	                        const data_ptr_t &r_ptr, const SortLayout &sort_layout, const bool &external_sort);
 	//! Compare two blob values
 	static int CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, const LogicalType &type);
 
 private:
 	//! Compares two blob values that were initially tied by their prefix
-	static int BreakBlobTie(const idx_t &tie_col, const SortedData &left, const SortedData &right,
+	static int BreakBlobTie(const idx_t &tie_col, const SBScanState &left, const SBScanState &right,
 	                        const SortLayout &sort_layout, const bool &external);
 	//! Compare two fixed-size values
 	template <class T>

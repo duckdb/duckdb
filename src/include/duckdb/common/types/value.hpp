@@ -25,25 +25,25 @@ class Value {
 
 public:
 	//! Create an empty NULL value of the specified type
-	explicit Value(LogicalType type = LogicalType::SQLNULL);
+	DUCKDB_API explicit Value(LogicalType type = LogicalType::SQLNULL);
 	//! Create an INTEGER value
-	Value(int32_t val); // NOLINT: Allow implicit conversion from `int32_t`
+	DUCKDB_API Value(int32_t val); // NOLINT: Allow implicit conversion from `int32_t`
 	//! Create a BIGINT value
-	Value(int64_t val); // NOLINT: Allow implicit conversion from `int64_t`
+	DUCKDB_API Value(int64_t val); // NOLINT: Allow implicit conversion from `int64_t`
 	//! Create a FLOAT value
-	Value(float val); // NOLINT: Allow implicit conversion from `float`
+	DUCKDB_API Value(float val); // NOLINT: Allow implicit conversion from `float`
 	//! Create a DOUBLE value
-	Value(double val); // NOLINT: Allow implicit conversion from `double`
+	DUCKDB_API Value(double val); // NOLINT: Allow implicit conversion from `double`
 	//! Create a VARCHAR value
-	Value(const char *val); // NOLINT: Allow implicit conversion from `const char *`
+	DUCKDB_API Value(const char *val); // NOLINT: Allow implicit conversion from `const char *`
 	//! Create a NULL value
-	Value(std::nullptr_t val); // NOLINT: Allow implicit conversion from `nullptr_t`
+	DUCKDB_API Value(std::nullptr_t val); // NOLINT: Allow implicit conversion from `nullptr_t`
 	//! Create a VARCHAR value
-	Value(string_t val); // NOLINT: Allow implicit conversion from `string_t`
+	DUCKDB_API Value(string_t val); // NOLINT: Allow implicit conversion from `string_t`
 	//! Create a VARCHAR value
-	Value(string val); // NOLINT: Allow implicit conversion from `string`
+	DUCKDB_API Value(string val); // NOLINT: Allow implicit conversion from `string`
 
-	const LogicalType &type() const {
+	inline const LogicalType &type() const {
 		return type_;
 	}
 
@@ -85,19 +85,22 @@ public:
 	DUCKDB_API static Value POINTER(uintptr_t value);
 	//! Create a date Value from a specified date
 	DUCKDB_API static Value DATE(date_t date);
+	DUCKDB_API static Value DATETZ(date_t date);
 	//! Create a date Value from a specified date
 	DUCKDB_API static Value DATE(int32_t year, int32_t month, int32_t day);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(dtime_t time);
+	DUCKDB_API static Value TIMETZ(dtime_t time);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros);
 	//! Create a timestamp Value from a specified date/time combination
 	DUCKDB_API static Value TIMESTAMP(date_t date, dtime_t time);
 	//! Create a timestamp Value from a specified timestamp
 	DUCKDB_API static Value TIMESTAMP(timestamp_t timestamp);
-	DUCKDB_API static Value TimestampNs(timestamp_t timestamp);
-	DUCKDB_API static Value TimestampMs(timestamp_t timestamp);
-	DUCKDB_API static Value TimestampSec(timestamp_t timestamp);
+	DUCKDB_API static Value TIMESTAMPNS(timestamp_t timestamp);
+	DUCKDB_API static Value TIMESTAMPMS(timestamp_t timestamp);
+	DUCKDB_API static Value TIMESTAMPSEC(timestamp_t timestamp);
+	DUCKDB_API static Value TIMESTAMPTZ(timestamp_t timestamp);
 	//! Create a timestamp Value from a specified timestamp in separate values
 	DUCKDB_API static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
 	                                  int32_t micros);
@@ -118,8 +121,11 @@ public:
 	DUCKDB_API static Value DOUBLE(double value);
 	//! Create a struct value with given list of entries
 	DUCKDB_API static Value STRUCT(child_list_t<Value> values);
-	//! Create a list value with the given entries
+	//! Create a list value with the given entries, list type is inferred from children
+	//! Cannot be called with an empty list, use either EMPTYLIST or LIST with a type instead
 	DUCKDB_API static Value LIST(vector<Value> values);
+	//! Create a list value with the given entries
+	DUCKDB_API static Value LIST(LogicalType child_type, vector<Value> values);
 	//! Create an empty list with the specified type
 	DUCKDB_API static Value EMPTYLIST(LogicalType child_type);
 	//! Creat a map value from a (key, value) pair
@@ -174,32 +180,32 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Numeric Operators
 	//===--------------------------------------------------------------------===//
-	Value operator+(const Value &rhs) const;
-	Value operator-(const Value &rhs) const;
-	Value operator*(const Value &rhs) const;
-	Value operator/(const Value &rhs) const;
-	Value operator%(const Value &rhs) const;
+	DUCKDB_API Value operator+(const Value &rhs) const;
+	DUCKDB_API Value operator-(const Value &rhs) const;
+	DUCKDB_API Value operator*(const Value &rhs) const;
+	DUCKDB_API Value operator/(const Value &rhs) const;
+	DUCKDB_API Value operator%(const Value &rhs) const;
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operators
 	//===--------------------------------------------------------------------===//
-	bool operator==(const Value &rhs) const;
-	bool operator!=(const Value &rhs) const;
-	bool operator<(const Value &rhs) const;
-	bool operator>(const Value &rhs) const;
-	bool operator<=(const Value &rhs) const;
-	bool operator>=(const Value &rhs) const;
+	DUCKDB_API bool operator==(const Value &rhs) const;
+	DUCKDB_API bool operator!=(const Value &rhs) const;
+	DUCKDB_API bool operator<(const Value &rhs) const;
+	DUCKDB_API bool operator>(const Value &rhs) const;
+	DUCKDB_API bool operator<=(const Value &rhs) const;
+	DUCKDB_API bool operator>=(const Value &rhs) const;
 
-	bool operator==(const int64_t &rhs) const;
-	bool operator!=(const int64_t &rhs) const;
-	bool operator<(const int64_t &rhs) const;
-	bool operator>(const int64_t &rhs) const;
-	bool operator<=(const int64_t &rhs) const;
-	bool operator>=(const int64_t &rhs) const;
+	DUCKDB_API bool operator==(const int64_t &rhs) const;
+	DUCKDB_API bool operator!=(const int64_t &rhs) const;
+	DUCKDB_API bool operator<(const int64_t &rhs) const;
+	DUCKDB_API bool operator>(const int64_t &rhs) const;
+	DUCKDB_API bool operator<=(const int64_t &rhs) const;
+	DUCKDB_API bool operator>=(const int64_t &rhs) const;
 
-	static bool FloatIsValid(float value);
-	static bool DoubleIsValid(double value);
-	static bool StringIsValid(const char *str, idx_t length);
+	DUCKDB_API static bool FloatIsValid(float value);
+	DUCKDB_API static bool DoubleIsValid(double value);
+	DUCKDB_API static bool StringIsValid(const char *str, idx_t length);
 	static bool StringIsValid(const string &str) {
 		return StringIsValid(str.c_str(), str.size());
 	}
@@ -211,13 +217,13 @@ public:
 
 	//! Returns true if the values are (approximately) equivalent. Note this is NOT the SQL equivalence. For this
 	//! function, NULL values are equivalent and floating point values that are close are equivalent.
-	static bool ValuesAreEqual(const Value &result_value, const Value &value);
+	DUCKDB_API static bool ValuesAreEqual(const Value &result_value, const Value &value);
 
 	friend std::ostream &operator<<(std::ostream &out, const Value &val) {
 		out << val.ToString();
 		return out;
 	}
-	void Print() const;
+	DUCKDB_API void Print() const;
 
 private:
 	//! The logical of the value

@@ -1,5 +1,6 @@
 #include "duckdb/common/sort/comparators.hpp"
 
+#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/sort/sort.hpp"
 
 namespace duckdb {
@@ -25,17 +26,16 @@ bool Comparators::TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr,
 	return true;
 }
 
-int Comparators::CompareTuple(const SortedBlock &left, const SortedBlock &right, const data_ptr_t &l_ptr,
+int Comparators::CompareTuple(const SBScanState &left, const SBScanState &right, const data_ptr_t &l_ptr,
                               const data_ptr_t &r_ptr, const SortLayout &sort_layout, const bool &external_sort) {
 	// Compare the sorting columns one by one
 	int comp_res = 0;
 	data_ptr_t l_ptr_offset = l_ptr;
 	data_ptr_t r_ptr_offset = r_ptr;
 	for (idx_t col_idx = 0; col_idx < sort_layout.column_count; col_idx++) {
-		comp_res = memcmp(l_ptr_offset, r_ptr_offset, sort_layout.column_sizes[col_idx]);
+		comp_res = FastMemcmp(l_ptr_offset, r_ptr_offset, sort_layout.column_sizes[col_idx]);
 		if (comp_res == 0 && !sort_layout.constant_size[col_idx]) {
-			comp_res =
-			    BreakBlobTie(col_idx, *left.blob_sorting_data, *right.blob_sorting_data, sort_layout, external_sort);
+			comp_res = BreakBlobTie(col_idx, left, right, sort_layout, external_sort);
 		}
 		if (comp_res != 0) {
 			break;
@@ -61,11 +61,11 @@ int Comparators::CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, cons
 	}
 }
 
-int Comparators::BreakBlobTie(const idx_t &tie_col, const SortedData &left, const SortedData &right,
+int Comparators::BreakBlobTie(const idx_t &tie_col, const SBScanState &left, const SBScanState &right,
                               const SortLayout &sort_layout, const bool &external) {
 	const idx_t &col_idx = sort_layout.sorting_to_blob_col.at(tie_col);
-	data_ptr_t l_data_ptr = left.DataPtr();
-	data_ptr_t r_data_ptr = right.DataPtr();
+	data_ptr_t l_data_ptr = left.DataPtr(*left.sb->blob_sorting_data);
+	data_ptr_t r_data_ptr = right.DataPtr(*right.sb->blob_sorting_data);
 	if (!TieIsBreakable(col_idx, l_data_ptr, sort_layout.blob_layout)) {
 		// Quick check to see if ties can be broken
 		return 0;
@@ -76,12 +76,12 @@ int Comparators::BreakBlobTie(const idx_t &tie_col, const SortedData &left, cons
 	r_data_ptr += tie_col_offset;
 	// Do the comparison
 	const int order = sort_layout.order_types[tie_col] == OrderType::DESCENDING ? -1 : 1;
-	const auto &type = left.layout.GetTypes()[col_idx];
+	const auto &type = sort_layout.blob_layout.GetTypes()[col_idx];
 	int result;
 	if (external) {
 		// Store heap pointers
-		data_ptr_t l_heap_ptr = left.HeapPtr();
-		data_ptr_t r_heap_ptr = right.HeapPtr();
+		data_ptr_t l_heap_ptr = left.HeapPtr(*left.sb->blob_sorting_data);
+		data_ptr_t r_heap_ptr = right.HeapPtr(*right.sb->blob_sorting_data);
 		// Unswizzle offset to pointer
 		UnswizzleSingleValue(l_data_ptr, l_heap_ptr, type);
 		UnswizzleSingleValue(r_data_ptr, r_heap_ptr, type);

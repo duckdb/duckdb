@@ -74,7 +74,7 @@
 #include <string>
 #include <vector>
 
-namespace snappy {
+namespace duckdb_snappy {
 
 using internal::COPY_1_BYTE_OFFSET;
 using internal::COPY_2_BYTE_OFFSET;
@@ -1659,4 +1659,4 @@ bool Uncompress(Source* compressed, Sink* uncompressed) {
   }
 }
 
-}  // namespace snappy
+}  // namespace duckdb_snappy

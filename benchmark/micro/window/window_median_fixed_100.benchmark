@@ -1,6 +1,6 @@
 # name: benchmark/micro/window/window_median_fixed_100.benchmark
 # description: Moving MEDIAN performance, fixed 100 element frame
-# group: [micro]
+# group: [window]
 
 name Windowed MEDIAN, Fixed 100
 group window

@@ -57,15 +57,48 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		}
 		return true;
 	}
+	if (source_type.id() == LogicalTypeId::TIMESTAMP || source_type.id() == LogicalTypeId::TIMESTAMP_TZ) {
+		switch (target_type.id()) {
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::DATE_TZ:
+		case LogicalTypeId::TIME_TZ:
+			return false;
+		default:
+			break;
+		}
+	}
 	if (source_type.id() == LogicalTypeId::VARCHAR) {
-		return target_type.id() == LogicalTypeId::DATE || target_type.id() == LogicalTypeId::TIME ||
-		       target_type.id() == LogicalTypeId::TIMESTAMP || target_type.id() == LogicalTypeId::TIMESTAMP_NS ||
-		       target_type.id() == LogicalTypeId::TIMESTAMP_MS || target_type.id() == LogicalTypeId::TIMESTAMP_SEC;
+		switch (target_type.id()) {
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::DATE_TZ:
+		case LogicalTypeId::TIME_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ:
+			return true;
+		default:
+			return false;
+		}
 	}
 	if (target_type.id() == LogicalTypeId::VARCHAR) {
-		return source_type.id() == LogicalTypeId::DATE || source_type.id() == LogicalTypeId::TIME ||
-		       source_type.id() == LogicalTypeId::TIMESTAMP || source_type.id() == LogicalTypeId::TIMESTAMP_NS ||
-		       source_type.id() == LogicalTypeId::TIMESTAMP_MS || source_type.id() == LogicalTypeId::TIMESTAMP_SEC;
+		switch (source_type.id()) {
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::DATE_TZ:
+		case LogicalTypeId::TIME_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ:
+			return true;
+		default:
+			return false;
+		}
 	}
 	return true;
 }

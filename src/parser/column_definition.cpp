@@ -3,6 +3,13 @@
 
 namespace duckdb {
 
+ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p) : name(move(name_p)), type(move(type_p)) {
+}
+
+ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> default_value)
+    : name(move(name_p)), type(move(type_p)), default_value(move(default_value)) {
+}
+
 ColumnDefinition ColumnDefinition::Copy() const {
 	ColumnDefinition copy(name, type);
 	copy.oid = oid;

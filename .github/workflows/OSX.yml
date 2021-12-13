@@ -37,10 +37,8 @@ jobs:
     runs-on: macos-latest
     needs: xcode-debug
     env:
-      BUILD_VISUALIZER: 1
       BUILD_ICU: 1
       BUILD_TPCH: 1
-      BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
@@ -87,3 +85,39 @@ jobs:
           build/release/tools/jdbc/duckdb_jdbc.jar
 
 
+
+  xcode-extensions:
+    name: OSX Extensions Release
+    runs-on: macos-latest
+    needs: xcode-debug
+    env:
+      BUILD_VISUALIZER: 1
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
+      AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+      AWS_DEFAULT_REGION: us-east-1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Build
+      run: make
+
+    - name: Unit Test
+      run: make allunit
+
+    - name: Deploy
+      run: |
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+            pip install awscli
+            ./scripts/extension-upload.sh osx_amd64
+          fi

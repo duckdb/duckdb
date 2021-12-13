@@ -1,0 +1,164 @@
+# name: test/sql/select/test_multi_column_reference.test
+# description: Test multi column reference
+# group: [select]
+
+statement ok
+PRAGMA enable_verification
+
+# column names can have an arbitrary amount of dots
+# here is how the resolution works:
+# no dots (i.e. "part1")
+# -> part1 refers to a column
+# one dot (i.e. "part1.part2")
+# EITHER:
+# -> part1 is a table, part2 is a column
+# -> part1 is a column, part2 is a property of that column (i.e. struct_extract)
+# two or more dots (i.e. "part1.part2.part3.part4...")
+# -> part1 is a schema, part2 is a table, part3 is a column name, part4 and beyond are struct fields
+# -> part1 is a table, part2 is a column name, part3 and beyond are struct fields
+# -> part1 is a column, part2 and beyond are struct fields
+
+# we always prefer the most top-level view
+# i.e. in case of multiple resolution options, we resolve in order:
+# -> 1. resolve "part1" as a schema
+# -> 2. resolve "part1" as a table
+# -> 3. resolve "part1" as a column
+
+# schema -> table -> column reference
+statement ok
+CREATE SCHEMA test
+
+statement ok
+CREATE TABLE test.tbl(col INTEGER);
+
+statement ok
+INSERT INTO test.tbl VALUES (1), (2), (3);
+
+query I
+SELECT test.tbl.col FROM test.tbl;
+----
+1
+2
+3
+
+# schema name with alias does not work
+statement error
+SELECT test.t.col FROM test.tbl t;
+
+statement error
+SELECT test.tbl.col FROM test.tbl t;
+
+# check how ties are resolved
+# we create a table called "t" in a schema called "t" with a column called "t" that has a field called "t"
+statement ok
+CREATE SCHEMA t
+
+statement ok
+CREATE TABLE t.t(t ROW(t INTEGER));
+
+statement ok
+INSERT INTO t.t VALUES ({'t': 42});
+
+# "t" selects the column
+query I
+SELECT t FROM t.t;
+----
+{'t': 42}
+
+# "t.t" also selects the column
+query I
+SELECT t.t FROM t.t;
+----
+{'t': 42}
+
+# t.t.t also selects the column
+query I
+SELECT t.t.t FROM t.t;
+----
+{'t': 42}
+
+# t.t.t.t selects the field
+query I
+SELECT t.t.t.t FROM t.t;
+----
+42
+
+statement ok
+DROP SCHEMA t CASCADE;
+
+# test long nested struct
+statement ok
+CREATE SCHEMA t
+
+statement ok
+CREATE TABLE t.t AS SELECT {'t': {'t': {'t': {'t': {'t': 42}}}}} t
+
+query I
+SELECT t.t.t.t.t.t.t.t FROM t.t;
+----
+42
+
+query I
+SELECT t.t.t.t.t.t.t FROM t.t;
+----
+{'t': 42}
+
+query I
+SELECT t.t.t.t.t.t FROM t.t;
+----
+{'t': {'t': 42}}
+
+query I
+SELECT t.t.t.t.t FROM t.t;
+----
+{'t': {'t': {'t': 42}}}
+
+query I
+SELECT t.t.t.t FROM t.t;
+----
+{'t': {'t': {'t': {'t': 42}}}}
+
+query I
+SELECT t.t.t FROM t.t;
+----
+{'t': {'t': {'t': {'t': {'t': 42}}}}}
+
+query I
+SELECT t.t FROM t.t;
+----
+{'t': {'t': {'t': {'t': {'t': 42}}}}}
+
+query I
+SELECT t FROM t.t;
+----
+{'t': {'t': {'t': {'t': {'t': 42}}}}}
+
+statement ok
+DROP SCHEMA t CASCADE
+
+# test multiple tables with the same name but a different schema
+# we don't allow this (duplicate alias in query)
+statement ok
+CREATE SCHEMA s1
+
+statement ok
+CREATE SCHEMA s2
+
+statement ok
+CREATE TABLE s1.t1 AS SELECT 42 t
+
+statement ok
+CREATE TABLE s2.t1 AS SELECT 84 t
+
+statement error
+SELECT s1.t1.t FROM s1.t1, s2.t1
+
+# test various failures
+statement error
+SELECT testX.tbl.col FROM test.tbl;
+
+statement error
+SELECT test.tblX.col FROM test.tbl;
+
+statement error
+SELECT test.tbl.colX FROM test.tbl;

@@ -14,6 +14,7 @@ set(PARQUET_EXTENSION_FILES
     parquet_timestamp.cpp
     parquet_writer.cpp
     parquet_statistics.cpp
+    zstd_file_system.cpp
     column_reader.cpp)
 
 if(NOT CLANG_TIDY)
@@ -50,6 +51,12 @@ if(NOT CLANG_TIDY)
 endif()
 
 add_library(parquet_extension STATIC ${PARQUET_EXTENSION_FILES})
+
+install(
+  TARGETS parquet_extension
+  EXPORT "${DUCKDB_EXPORT_SET}"
+  LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
 
 if(NOT CLANG_TIDY)
   add_executable(parquetcli parquetcli.cpp)
