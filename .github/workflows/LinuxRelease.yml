@@ -78,10 +78,16 @@ jobs:
           echo $ext
           EXTENSION_LIST="${EXTENSION_LIST}-$ext"
         done
+        export FILES
+        export EXTENSION_LIST
+        echo ${EXTENSION_LIST}
+
+    - name: Build Test Extension 2
+      run: |
         mkdir -p testext
         cd testext
         cmake -DCMAKE_BUILD_TYPE=Release -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ..
-        cmake --build . -j --config Release
+        cmake --build . --config Release
         cd ..
 
     # - name: Run Install Commands
