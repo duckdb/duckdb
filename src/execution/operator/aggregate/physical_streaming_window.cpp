@@ -2,6 +2,8 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
 
@@ -26,14 +28,12 @@ public:
 				break;
 			}
 			case ExpressionType::WINDOW_PERCENT_RANK: {
-				double zero = 0;
-				const_vectors.push_back(make_unique<Vector>(Value(zero)));
+				const_vectors.push_back(make_unique<Vector>(Value((double)0)));
 				break;
 			}
 			case ExpressionType::WINDOW_RANK:
 			case ExpressionType::WINDOW_RANK_DENSE: {
-				int64_t one = 1;
-				const_vectors.push_back(make_unique<Vector>(Value(one)));
+				const_vectors.push_back(make_unique<Vector>(Value((int64_t)1)));
 				break;
 			}
 			default:
@@ -81,7 +81,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			// Set row numbers
 			auto rdata = FlatVector::GetData<int64_t>(chunk.data[col_idx]);
 			for (idx_t i = 0; i < count; i++) {
-				rdata[i] = state.row_number++;
+				rdata[i] = state.row_number + i;
 			}
 			break;
 		}
@@ -89,6 +89,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			throw NotImplementedException("%s for StreamingWindow", ExpressionTypeToString(expr.GetExpressionType()));
 		}
 	}
+	state.row_number += count;
 	chunk.SetCardinality(count);
 	return OperatorResultType::NEED_MORE_INPUT;
 }

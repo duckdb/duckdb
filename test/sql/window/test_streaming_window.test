@@ -86,3 +86,11 @@ select row_number() over (), first_value(i) over (), first_value(j) over () from
 2	2	2
 3	2	2
 4	2	2
+
+query TT
+select row_number() over (), row_number() over () from integers
+----
+1	1
+2	2
+3	3
+4	4
