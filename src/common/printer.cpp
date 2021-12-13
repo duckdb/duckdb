@@ -47,7 +47,7 @@ void Printer::FinishProgressBarPrint(const char *pbstr, int pbwidth) {
 bool Printer::IsTerminal() {
 #ifndef DUCKDB_DISABLE_PRINT
 #ifdef DUCKDB_WINDOWS
-	return GetFileType(stderr) == FILE_TYPE_CHAR;
+	return GetFileType(GetStdHandle(STD_ERROR_HANDLE)) == FILE_TYPE_CHAR;
 #else
 	throw InternalException("IsTerminal is only implemented for Windows");
 #endif
