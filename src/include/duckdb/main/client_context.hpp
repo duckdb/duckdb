@@ -10,6 +10,7 @@
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/progress_bar.hpp"
@@ -205,6 +206,7 @@ private:
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
 	string EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
 
+	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, PendingQueryResult &result);
 
 	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatementInternal(ClientContextLock &lock, const string &query,
 																		unique_ptr<SQLStatement> statement,

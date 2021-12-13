@@ -173,6 +173,9 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 		// no query currently active
 		return;
 	}
+	if (active_query->executor) {
+		active_query->executor->CancelTasks();
+	}
 
 	auto error = EndQueryInternal(lock, result ? result->success : false, invalidate_transaction);
 	if (result && result->success) {
@@ -324,6 +327,21 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(
 	active_query->prepared = move(statement_p);
 	active_query->open_result = pending_result.get();
 	return pending_result;
+}
+
+PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, PendingQueryResult &result) {
+	D_ASSERT(active_query);
+	D_ASSERT(active_query->open_result == &result);
+	try {
+		return active_query->executor->ExecuteTask();
+	} catch(std::exception &ex) {
+		result.error = ex.what();
+	} catch (...) { // LCOV_EXCL_START
+		result.error = "Unhandled exception in ExecuteTaskInternal";
+	} // LCOV_EXCL_STOP
+	EndQueryInternal(lock, false, true);
+	result.success = false;
+	return PendingExecutionResult::EXECUTION_ERROR;
 }
 
 void ClientContext::InitialCleanup(ClientContextLock &lock) {

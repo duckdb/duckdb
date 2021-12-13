@@ -255,16 +255,6 @@ void Executor::VerifyPipelines() {
 #endif
 }
 
-void Executor::WorkOnTasks() {
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-
-	unique_ptr<Task> task;
-	while (scheduler.GetTaskFromProducer(*producer, task)) {
-		task->Execute();
-		task.reset();
-	}
-}
-
 void Executor::Initialize(PhysicalOperator *plan) {
 	Reset();
 
@@ -290,7 +280,61 @@ void Executor::Initialize(PhysicalOperator *plan) {
 
 		ScheduleEvents();
 	}
+}
 
+void Executor::WorkOnTasks() {
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+
+	unique_ptr<Task> task;
+	while (scheduler.GetTaskFromProducer(*producer, task)) {
+		task->Execute();
+		task.reset();
+	}
+}
+
+void Executor::CancelTasks() {
+	// we do this by creating weak pointers to all pipelines
+	// then clearing our references to the pipelines
+	// and waiting until all pipelines have been destroyed
+	vector<weak_ptr<Pipeline>> weak_references;
+	{
+		lock_guard<mutex> elock(executor_lock);
+		if (pipelines.empty()) {
+			return;
+		}
+		weak_references.reserve(pipelines.size());
+		for (auto &pipeline : pipelines) {
+			weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+		}
+		for (auto &kv : union_pipelines) {
+			for (auto &pipeline : kv.second) {
+				weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+			}
+		}
+		for (auto &kv : child_pipelines) {
+			for (auto &pipeline : kv.second) {
+				weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+			}
+		}
+		pipelines.clear();
+		union_pipelines.clear();
+		child_pipelines.clear();
+		events.clear();
+	}
+	for (auto &weak_ref : weak_references) {
+		while (true) {
+			auto weak = weak_ref.lock();
+			if (!weak) {
+				break;
+			}
+		}
+	}
+}
+
+PendingExecutionResult Executor::ExecuteTask() {
+	if (execution_result != PendingExecutionResult::RESULT_NOT_READY) {
+		return execution_result;
+	}
 	// now execute tasks from this producer until all pipelines are completed
 	while (completed_pipelines < total_pipelines) {
 		WorkOnTasks();
@@ -298,42 +342,11 @@ void Executor::Initialize(PhysicalOperator *plan) {
 			// no exceptions: continue
 			continue;
 		}
+		execution_result = PendingExecutionResult::EXECUTION_ERROR;
 
 		// an exception has occurred executing one of the pipelines
-		// we need to wait until all threads are finished
-		// we do this by creating weak pointers to all pipelines
-		// then clearing our references to the pipelines
-		// and waiting until all pipelines have been destroyed
-		vector<weak_ptr<Pipeline>> weak_references;
-		{
-			lock_guard<mutex> elock(executor_lock);
-			weak_references.reserve(pipelines.size());
-			for (auto &pipeline : pipelines) {
-				weak_references.push_back(weak_ptr<Pipeline>(pipeline));
-			}
-			for (auto &kv : union_pipelines) {
-				for (auto &pipeline : kv.second) {
-					weak_references.push_back(weak_ptr<Pipeline>(pipeline));
-				}
-			}
-			for (auto &kv : child_pipelines) {
-				for (auto &pipeline : kv.second) {
-					weak_references.push_back(weak_ptr<Pipeline>(pipeline));
-				}
-			}
-			pipelines.clear();
-			union_pipelines.clear();
-			child_pipelines.clear();
-			events.clear();
-		}
-		for (auto &weak_ref : weak_references) {
-			while (true) {
-				auto weak = weak_ref.lock();
-				if (!weak) {
-					break;
-				}
-			}
-		}
+		// we need to cancel all tasks associated with this executor
+		CancelTasks();
 		ThrowException();
 	}
 
@@ -342,8 +355,11 @@ void Executor::Initialize(PhysicalOperator *plan) {
 	NextExecutor();
 	if (!exceptions.empty()) { // LCOV_EXCL_START
 		// an exception has occurred executing one of the pipelines
+		execution_result = PendingExecutionResult::EXECUTION_ERROR;
 		ThrowExceptionInternal();
 	} // LCOV_EXCL_STOP
+	execution_result = PendingExecutionResult::RESULT_READY;
+	return execution_result;
 }
 
 void Executor::Reset() {
@@ -362,6 +378,7 @@ void Executor::Reset() {
 	union_pipelines.clear();
 	child_pipelines.clear();
 	child_dependencies.clear();
+	execution_result = PendingExecutionResult::RESULT_NOT_READY;
 }
 
 void Executor::AddChildPipeline(Pipeline *current) {

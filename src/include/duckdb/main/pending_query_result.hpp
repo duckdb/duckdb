@@ -9,18 +9,13 @@
 #pragma once
 
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/execution/executor.hpp"
 
 namespace duckdb {
 class ClientContext;
 class ClientContextLock;
 class PreparedStatementData;
-
-enum class PendingExecutionResult : uint8_t {
-	RESULT_READY,
-	RESULT_NOT_READY,
-	EXECUTION_ERROR
-};
 
 class PendingQueryResult : public BaseQueryResult {
 	friend class ClientContext;

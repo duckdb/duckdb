@@ -41,7 +41,7 @@ PendingExecutionResult PendingQueryResult::ExecuteTask() {
 
 PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
-	return PendingExecutionResult::RESULT_READY;
+	return context->ExecuteTaskInternal(lock, *this);
 }
 
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock, bool allow_streaming_result) {
