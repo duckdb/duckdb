@@ -69,11 +69,13 @@ jobs:
 
     - name: Build Test Extension
       run: |
-        FILES="${EXT_BASE_PATH}/extension/*/*.duckdb_extension"
+        echo "Hello World"
+        FILES="build/release/extension/*/*.duckdb_extension"
         EXTENSION_LIST=""
         for f in $FILES
         do
           ext=`basename $f .duckdb_extension`
+          echo $ext
           EXTENSION_LIST="${EXTENSION_LIST}-$ext"
         done
         mkdir -p testext
@@ -82,29 +84,29 @@ jobs:
         cmake --build . -j --config Release
         cd ..
 
-    - name: Run Install Commands
-      run: |
-        FILES="${EXT_BASE_PATH}/extension/*/*.duckdb_extension"
-        EXTENSION_LIST=""
-        for f in $FILES
-        do
-          ext=`basename $f .duckdb_extension`
-          EXTENSION_LIST="${EXTENSION_LIST}-$ext"
-        done
-        for f in $FILES
-        do
-          ext=`basename $f .duckdb_extension`
-          install_path=${ext}
-          if [ "$1" = "local" ]
-          then
-            install_path=${f}
-          fi
-          echo ${install_path}
-          testext/duckdb -c "INSTALL '${install_path}'"
-          testext/duckdb -c "LOAD '${ext}'"
-        done
+    # - name: Run Install Commands
+    #   run: |
+    #     FILES="build/release/extension/*/*.duckdb_extension"
+    #     EXTENSION_LIST=""
+    #     for f in $FILES
+    #     do
+    #       ext=`basename $f .duckdb_extension`
+    #       EXTENSION_LIST="${EXTENSION_LIST}-$ext"
+    #     done
+    #     for f in $FILES
+    #     do
+    #       ext=`basename $f .duckdb_extension`
+    #       install_path=${ext}
+    #       if [ "$1" = "local" ]
+    #       then
+    #         install_path=${f}
+    #       fi
+    #       echo ${install_path}
+    #       testext/duckdb -c "INSTALL '${install_path}'"
+    #       testext/duckdb -c "LOAD '${ext}'"
+    #     done
 
-    - name: Run Tests
-      run: |
-       testext/test/unittest
+    # - name: Run Tests
+    #   run: |
+    #    testext/test/unittest
 
