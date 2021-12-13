@@ -13,8 +13,16 @@ namespace duckdb {
 #pragma clang diagnostic ignored "-Wexit-time-destructors"
 #endif
 
-const SelectionVector ConstantVector::ZERO_SELECTION_VECTOR = SelectionVector((sel_t *)ConstantVector::ZERO_VECTOR);
-const SelectionVector FlatVector::INCREMENTAL_SELECTION_VECTOR;
+const SelectionVector *ConstantVector::ZeroSelectionVector() {
+	static const SelectionVector zero_selection_vector = SelectionVector((sel_t *)ConstantVector::ZERO_VECTOR);
+	return &zero_selection_vector;
+}
+
+const SelectionVector *FlatVector::IncrementalSelectionVector() {
+	static const SelectionVector incremental_selection_vector;
+	return &incremental_selection_vector;
+}
+
 const sel_t ConstantVector::ZERO_VECTOR[STANDARD_VECTOR_SIZE] = {0};
 
 #ifdef __clang__

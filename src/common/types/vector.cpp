@@ -1174,7 +1174,7 @@ void ConstantVector::SetNull(Vector &vector, bool is_null) {
 
 const SelectionVector *FlatVector::IncrementalSelectionVector(idx_t count, SelectionVector &owned_sel) {
 	if (count <= STANDARD_VECTOR_SIZE) {
-		return &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+		return FlatVector::IncrementalSelectionVector();
 	}
 	owned_sel.Initialize(count);
 	for (idx_t i = 0; i < count; i++) {
@@ -1185,7 +1185,7 @@ const SelectionVector *FlatVector::IncrementalSelectionVector(idx_t count, Selec
 
 const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, SelectionVector &owned_sel) {
 	if (count <= STANDARD_VECTOR_SIZE) {
-		return &ConstantVector::ZERO_SELECTION_VECTOR;
+		return ConstantVector::ZeroSelectionVector();
 	}
 	owned_sel.Initialize(count);
 	for (idx_t i = 0; i < count; i++) {
