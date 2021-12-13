@@ -32,10 +32,6 @@ idx_t BaseQueryResult::ColumnCount() {
 	return types.size();
 }
 
-void BaseQueryResult::MarkAsClosed() {
-	throw InternalException("Unsupported query result type for MarkAsClosed()");
-}
-
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type) :
 	BaseQueryResult(type, statement_type) {}
 

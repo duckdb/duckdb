@@ -1,6 +1,8 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
+#include <thread>
+
 using namespace duckdb;
 using namespace std;
 
@@ -102,5 +104,40 @@ TEST_CASE("Test Pending Query API", "[api]") {
 		// query the connection as normal after
 		result = con.Query("SELECT 42");
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	}
+}
+
+static void parallel_pending_query(Connection *conn, bool *correct, size_t threadnr) {
+	correct[threadnr] = true;
+	for (size_t i = 0; i < 100; i++) {
+		// run pending query and then execute it
+		auto executor = conn->PendingQuery("SELECT * FROM integers ORDER BY i");
+		try {
+			// this will randomly throw an exception if another thread calls pending query first
+			auto result = executor->Execute();
+			if (!CHECK_COLUMN(result, 0, {Value(), 1, 2, 3})) {
+				correct[threadnr] = false;
+			}
+		} catch (...) {
+			continue;
+		}
+	}
+}
+
+TEST_CASE("Test parallel usage of pending query API", "[api][.]") {
+	auto db = make_unique<DuckDB>(nullptr);
+	auto conn = make_unique<Connection>(*db);
+
+	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
+
+	bool correct[20];
+	thread threads[20];
+	for (size_t i = 0; i < 20; i++) {
+		threads[i] = thread(parallel_pending_query, conn.get(), correct, i);
+	}
+	for (size_t i = 0; i < 20; i++) {
+		threads[i].join();
+		REQUIRE(correct[i]);
 	}
 }

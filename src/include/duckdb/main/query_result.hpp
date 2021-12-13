@@ -46,7 +46,6 @@ public:
 	DUCKDB_API bool HasError();
 	DUCKDB_API const string &GetError();
 	DUCKDB_API idx_t ColumnCount();
-	DUCKDB_API virtual void MarkAsClosed();
 };
 
 //! The QueryResult object holds the result of a query. It can either be a MaterializedQueryResult, in which case the

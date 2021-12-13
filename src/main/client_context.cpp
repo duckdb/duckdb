@@ -38,12 +38,19 @@
 
 namespace duckdb {
 
+struct ActiveQueryContext {
+	//! The query that is currently being executed
+	string query;
+	//! The currently open result
+	BaseQueryResult *open_result = nullptr;
+};
+
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
     : profiler(make_unique<QueryProfiler>(*this)), query_profiler_history(make_unique<QueryProfilerHistory>()),
       db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false),
       temporary_objects(make_unique<SchemaCatalogEntry>(&db->GetCatalog(), TEMP_SCHEMA, true)),
       catalog_search_path(make_unique<CatalogSearchPath>(*this)),
-      file_opener(make_unique<ClientContextFileOpener>(*this)), open_result(nullptr) {
+      file_opener(make_unique<ClientContextFileOpener>(*this)) {
 	std::random_device rd;
 	random_engine.seed(rd());
 }
@@ -72,14 +79,9 @@ void ClientContext::Destroy() {
 	CleanupInternal(*lock);
 }
 
-void ClientContext::Cleanup() {
-	auto lock = LockContext();
-	CleanupInternal(*lock);
-}
-
-unique_ptr<DataChunk> ClientContext::Fetch(StreamQueryResult &result) {
-	auto lock = LockContext();
-	return FetchInternal(*lock, *result.executor, result);
+unique_ptr<DataChunk> ClientContext::Fetch(ClientContextLock &lock, StreamQueryResult &result) {
+	D_ASSERT(IsActiveResult(lock, &result));
+	return FetchInternal(lock, *result.executor, result);
 }
 
 unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Executor &executor, BaseQueryResult &result) {
@@ -93,73 +95,84 @@ unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Exec
 		result.error = "Unhandled exception in FetchInternal";
 	} // LCOV_EXCL_STOP
 	result.success = false;
-	CleanupInternal(lock);
+	CleanupInternal(lock, &result);
 	return nullptr;
 }
 
-string ClientContext::FinalizeQuery(ClientContextLock &lock, bool success) {
-	// executor.Reset();
+void ClientContext::BeginTransactionInternal(ClientContextLock &lock, bool requires_valid_transaction) {
+	// check if we are on AutoCommit. In this case we should start a transaction
+	D_ASSERT(!active_query);
+	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
+	    transaction.ActiveTransaction().IsInvalidated()) {
+		throw Exception("Failed: transaction has been invalidated!");
+	}
+	active_query = make_unique<ActiveQueryContext>();
+	if (transaction.IsAutoCommit()) {
+		transaction.BeginTransaction();
+	}
+}
 
+void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &query) {
+	BeginTransactionInternal(lock, true);
+	LogQueryInternal(lock, query);
+	active_query->query = query;
+	ActiveTransaction().active_query = db->GetTransactionManager().GetQueryNumber();
+}
+
+string ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
+	D_ASSERT(active_query.get());
 	string error;
-	if (transaction.HasActiveTransaction()) {
-		ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
-		// Move the query profiler into the history
-		// throw InternalException("FIXME: profiler history");
-		// auto &prev_profilers = query_profiler_history->GetPrevProfilers();
-		// prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(profiler));
-		// // Reinitialize the query profiler
-		// profiler = make_unique<QueryProfiler>();
-		// // Propagate settings of the saved query into the new profiler.
-		// profiler->Propagate(*prev_profilers.back().second);
-		// if (prev_profilers.size() >= query_profiler_history->GetPrevProfilersSize()) {
-		// 	prev_profilers.pop_front();
-		// }
-		try {
+	try {
+		if (transaction.HasActiveTransaction()) {
+			ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
 			if (transaction.IsAutoCommit()) {
 				if (success) {
-					// query was successful: commit
 					transaction.Commit();
 				} else {
-					// query was unsuccessful: rollback
 					transaction.Rollback();
 				}
+			} else if (invalidate_transaction) {
+				D_ASSERT(!success);
+				ActiveTransaction().Invalidate();
 			}
-		} catch (std::exception &ex) {
-			error = ex.what();
-		} catch (...) { // LCOV_EXCL_START
-			error = "Unhandled exception!";
-		} // LCOV_EXCL_STOP
-	}
+		}
+	} catch (std::exception &ex) {
+		error = ex.what();
+	} catch (...) { // LCOV_EXCL_START
+		error = "Unhandled exception!";
+	} // LCOV_EXCL_STOP
+	active_query.reset();
 	return error;
 }
 
-void ClientContext::CleanupInternal(ClientContextLock &lock) {
-	if (!open_result) {
-		// no result currently open
+void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *result) {
+	if (!active_query) {
+		// no query currently active
 		return;
 	}
 
-	auto error = FinalizeQuery(lock, open_result->success);
-	if (open_result->success) {
+	auto error = EndQueryInternal(lock, result ? result->success : false, result ? !result->success : false);
+	if (result && result->success) {
 		// if an error occurred while committing report it in the result
-		open_result->error = error;
-		open_result->success = error.empty();
+		result->error = error;
+		result->success = error.empty();
 	}
-
-	open_result->MarkAsClosed();
-	open_result = nullptr;
 }
 
 unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending, bool allow_stream_result) {
-	bool create_stream_result = pending.statement->allow_stream_result && allow_stream_result;
+	D_ASSERT(active_query);
+	D_ASSERT(active_query->open_result == &pending);
+	bool create_stream_result = pending.prepared->allow_stream_result && allow_stream_result;
 	if (create_stream_result) {
 		if (config.enable_progress_bar) {
 			throw InternalException("FIXME: progress bar");
 		}
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
-		return make_unique<StreamQueryResult>(pending.statement_type, shared_from_this(), pending.types,
-		                                      pending.names, pending.statement, move(pending.executor));
+		auto stream_result = make_unique<StreamQueryResult>(pending.statement_type, shared_from_this(), pending.types,
+		                                      pending.names, pending.prepared, move(pending.executor));
+		active_query->open_result = stream_result.get();
+		return move(stream_result);
 	}
 	// create a materialized result by continuously fetching
 	auto result = make_unique<MaterializedQueryResult>(pending.statement_type, pending.types, pending.names);
@@ -177,7 +190,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 #endif
 		result->collection.Append(*chunk);
 	}
-	CleanupInternal(lock);
+	CleanupInternal(lock, result.get());
 	// if (config.enable_progress_bar) {
 	// 	throw InternalException("FIXME: progress bar");
 	// }
@@ -245,6 +258,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(
 	shared_ptr<PreparedStatementData> statement_p,
 	vector<Value> bound_values
 ) {
+	D_ASSERT(active_query);
 	auto &statement = *statement_p;
 	if (ActiveTransaction().IsInvalidated() && statement.requires_valid_transaction) {
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
@@ -267,10 +281,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(
 	executor->Initialize(statement.plan.get());
 	auto types = executor->GetTypes();
 	D_ASSERT(types == statement.types);
-	D_ASSERT(!open_result);
+	D_ASSERT(!active_query->open_result);
 
 	auto pending_result = make_unique<PendingQueryResult>(shared_from_this(), move(statement_p), move(executor), move(types));
-	open_result = pending_result.get();
+	active_query->open_result = pending_result.get();
 	return pending_result;
 }
 
@@ -382,9 +396,11 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 	} catch (std::exception &ex) {
 		return make_unique<MaterializedQueryResult>(ex.what());
 	}
-	LogQueryInternal(*lock, query);
-	throw InternalException("FIXME: Execute");
-	// return RunStatementOrPreparedStatement(*lock, query, nullptr, prepared, &values, allow_stream_result);
+	auto pending = PendingStatementOrPreparedStatement(*lock, query, nullptr, prepared, &values);
+	if (!pending->success) {
+		return make_unique<MaterializedQueryResult>(pending->error);
+	}
+	return pending->ExecuteInternal(*lock, allow_stream_result);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientContextLock &lock, const string &query,
@@ -399,8 +415,15 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 
 unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query,
 												unique_ptr<SQLStatement> statement, bool allow_stream_result) {
-	auto pending = PendingStatementInternal(lock, query, move(statement));
+	auto pending = PendingQueryInternal(lock, move(statement));
 	return ExecutePendingQueryInternal(lock, *pending, allow_stream_result);
+}
+
+bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult *result) {
+	if (!active_query) {
+		return false;
+	}
+	return active_query->open_result == result;
 }
 
 static bool IsExplainAnalyze(SQLStatement *statement) {
@@ -414,16 +437,11 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 	return explain.explain_type == ExplainType::EXPLAIN_ANALYZE;
 }
 
-unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
+unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(ClientContextLock &lock, const string &query,
                                                                        unique_ptr<SQLStatement> statement,
                                                                        shared_ptr<PreparedStatementData> &prepared,
                                                                        vector<Value> *values) {
-	unique_ptr<PendingQueryResult> result;
 	// check if we are on AutoCommit. In this case we should start a transaction.
-	if (transaction.IsAutoCommit()) {
-		transaction.BeginTransaction();
-	}
-	ActiveTransaction().active_query = db->GetTransactionManager().GetQueryNumber();
 	if (statement && config.query_verification_enabled) {
 		// query verification is enabled
 		// create a copy of the statement, and use the copy
@@ -433,17 +451,26 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			// in case this is a select query, we verify the original statement
 			string error = VerifyQuery(lock, query, move(statement));
 			if (!error.empty()) {
-				// query failed: abort now
-				FinalizeQuery(lock, false);
 				// error in verifying query
 				return make_unique<PendingQueryResult>(error);
 			}
 		}
 		statement = move(copied_statement);
 	}
+	return PendingStatementOrPreparedStatement(lock, query, move(statement), prepared, nullptr);
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
+                                                                       unique_ptr<SQLStatement> statement,
+                                                                       shared_ptr<PreparedStatementData> &prepared,
+                                                                       vector<Value> *values) {
+	unique_ptr<PendingQueryResult> result;
+
+	BeginQueryInternal(lock, query);
 	// start the profiler
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
+	bool invalidate_query = true;
 	try {
 		if (statement) {
 			result = PendingStatementInternal(lock, query, move(statement));
@@ -464,19 +491,17 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	} catch (StandardException &ex) {
 		// standard exceptions do not invalidate the current transaction
 		result = make_unique<PendingQueryResult>(ex.what());
+		invalidate_query = false;
 	} catch (std::exception &ex) {
 		// other types of exceptions do invalidate the current transaction
-		if (transaction.HasActiveTransaction()) {
-			ActiveTransaction().Invalidate();
-		}
 		result = make_unique<PendingQueryResult>(ex.what());
 	}
 	if (!result->success) {
 		// query failed: abort now
-		FinalizeQuery(lock, false);
+		EndQueryInternal(lock, false, invalidate_query);
 		return result;
 	}
-	this->open_result = result.get();
+	D_ASSERT(active_query->open_result == result.get());
 	return result;
 }
 
@@ -578,7 +603,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement) {
-	auto &query = statement->query;
+	auto query = statement->query;
 	shared_ptr<PreparedStatementData> prepared;
 	return PendingStatementOrPreparedStatement(lock, query, move(statement), prepared, nullptr);
 }
@@ -801,33 +826,17 @@ void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 
 void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
                                                      bool requires_valid_transaction) {
-	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
-	    transaction.ActiveTransaction().IsInvalidated()) {
-		throw Exception("Failed: transaction has been invalidated!");
-	}
-	// check if we are on AutoCommit. In this case we should start a transaction
-	bool require_new_transaction = transaction.IsAutoCommit() && !transaction.HasActiveTransaction();
-	if (require_new_transaction) {
-		transaction.BeginTransaction();
-	}
+	BeginTransactionInternal(lock, requires_valid_transaction);
 	try {
 		fun();
 	} catch (StandardException &ex) {
-		if (require_new_transaction) {
-			transaction.Rollback();
-		}
+		EndQueryInternal(lock, false, false);
 		throw;
 	} catch (std::exception &ex) {
-		if (require_new_transaction) {
-			transaction.Rollback();
-		} else {
-			ActiveTransaction().Invalidate();
-		}
+		EndQueryInternal(lock, false, true);
 		throw;
 	}
-	if (require_new_transaction) {
-		transaction.Commit();
-	}
+	EndQueryInternal(lock, true, false);
 }
 
 void ClientContext::RunFunctionInTransaction(const std::function<void(void)> &fun, bool requires_valid_transaction) {

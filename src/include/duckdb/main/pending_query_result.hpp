@@ -44,22 +44,19 @@ public:
 
 	DUCKDB_API void Close();
 
-	DUCKDB_API void MarkAsClosed() override;
-
 private:
 	shared_ptr<ClientContext> context;
 	//! Prepared statement data
-	shared_ptr<PreparedStatementData> statement;
-	//! Whether or not the PendingQueryResult is still open
-	bool is_open;
-	//! The current query being executed
-	string query;
+	shared_ptr<PreparedStatementData> prepared;
 	//! The query executor
 	unique_ptr<Executor> executor;
 
 private:
-	void CheckExecutable();
+	void CheckExecutableInternal(ClientContextLock &lock);
+
+	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock);
 	unique_ptr<QueryResult> ExecuteInternal(ClientContextLock &lock, bool allow_streaming_result = false);
+	unique_ptr<ClientContextLock> LockContext();
 };
 
 } // namespace duckdb

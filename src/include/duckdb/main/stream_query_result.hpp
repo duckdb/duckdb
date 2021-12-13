@@ -14,6 +14,7 @@
 namespace duckdb {
 
 class ClientContext;
+class ClientContextLock;
 class Executor;
 class MaterializedQueryResult;
 class PreparedStatementData;
@@ -37,14 +38,10 @@ public:
 	//! Materializes the query result and turns it into a materialized query result
 	DUCKDB_API unique_ptr<MaterializedQueryResult> Materialize();
 
+	DUCKDB_API bool IsOpen();
+
 	//! Closes the StreamQueryResult
 	DUCKDB_API void Close();
-
-	DUCKDB_API void MarkAsClosed() override;
-
-	inline bool IsOpen() const {
-		return is_open;
-	}
 
 private:
 	//! The client context this StreamQueryResult belongs to
@@ -54,8 +51,10 @@ private:
 	//! The query executor
 	unique_ptr<Executor> executor;
 
-	//! Whether or not the StreamQueryResult is still open
-	bool is_open;
+private:
+	unique_ptr<ClientContextLock> LockContext();
+	void CheckExecutableInternal(ClientContextLock &lock);
+
 };
 
 } // namespace duckdb

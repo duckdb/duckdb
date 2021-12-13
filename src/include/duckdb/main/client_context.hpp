@@ -40,11 +40,13 @@ class QueryProfilerHistory;
 class ClientContextLock;
 struct CreateScalarFunctionInfo;
 class ScalarFunctionCatalogEntry;
+struct ActiveQueryContext;
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
 class ClientContext : public std::enable_shared_from_this<ClientContext> {
 	friend class PendingQueryResult;
+	friend class StreamQueryResult;
 	friend class TransactionManager;
 
 public:
@@ -101,8 +103,6 @@ public:
 	//! Issues a query to the database and returns a Pending Query Result
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement);
 
-	//! Cleanup the result set (if any).
-	DUCKDB_API void Cleanup();
 	//! Destroy the client context
 	DUCKDB_API void Destroy();
 
@@ -129,7 +129,7 @@ public:
 	                                           vector<Value> &values, bool allow_stream_result = true);
 
 	//! Gets current percentage of the query's progress, returns 0 in case the progress bar is disabled.
-	int GetProgress();
+	DUCKDB_API int GetProgress();
 
 	//! Register function in the temporary schema
 	DUCKDB_API void RegisterFunction(CreateFunctionInfo *info);
@@ -139,7 +139,7 @@ public:
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
-	void HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements);
+	DUCKDB_API void HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements);
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
@@ -152,7 +152,9 @@ public:
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
-	DUCKDB_API unique_ptr<DataChunk> Fetch(StreamQueryResult &result);
+	DUCKDB_API unique_ptr<DataChunk> Fetch(ClientContextLock &lock, StreamQueryResult &result);
+
+	DUCKDB_API bool IsActiveResult(ClientContextLock &lock, BaseQueryResult *result);
 
 private:
 	//! Parse statements and resolve pragmas from a query
@@ -169,7 +171,7 @@ private:
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
-	void CleanupInternal(ClientContextLock &lock);
+	void CleanupInternal(ClientContextLock &lock, BaseQueryResult *result = nullptr);
 	string FinalizeQuery(ClientContextLock &lock, bool success);
 	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
@@ -197,11 +199,20 @@ private:
 
 	bool UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *existing_function, CreateScalarFunctionInfo *new_info);
 
+	void BeginTransactionInternal(ClientContextLock &lock, bool requires_valid_transaction);
+	void BeginQueryInternal(ClientContextLock &lock, const string &query);
+	string EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
+
+
+	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatementInternal(ClientContextLock &lock, const string &query,
+																		unique_ptr<SQLStatement> statement,
+																		shared_ptr<PreparedStatementData> &prepared,
+																		vector<Value> *values);
 private:
-	//! The currently opened query result (if any)
-	BaseQueryResult *open_result = nullptr;
 	//! Lock on using the ClientContext in parallel
 	mutex context_lock;
+	//! The currently active query context
+	unique_ptr<ActiveQueryContext> active_query;
 };
 
 class ClientContextLock {

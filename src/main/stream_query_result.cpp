@@ -9,11 +9,10 @@ StreamQueryResult::StreamQueryResult(StatementType statement_type, shared_ptr<Cl
                                      vector<LogicalType> types, vector<string> names,
                                      shared_ptr<PreparedStatementData> prepared, unique_ptr<Executor> executor_p)
     : QueryResult(QueryResultType::STREAM_RESULT, statement_type, move(types), move(names)),
-      context(move(context)), prepared(move(prepared)), executor(move(executor_p)), is_open(true) {
+      context(move(context)), prepared(move(prepared)), executor(move(executor_p)) {
 }
 
 StreamQueryResult::~StreamQueryResult() {
-	Close();
 }
 
 string StreamQueryResult::ToString() {
@@ -27,12 +26,32 @@ string StreamQueryResult::ToString() {
 	return result;
 }
 
-unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
-	if (!success || !is_open) {
+unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
+	if (!context) {
 		throw InvalidInputException(
-		    "Attempting to fetch from an unsuccessful or closed streaming query result\nError: %s", error);
+		    "Attempting to execute an unsuccessful or closed pending query result\nError: %s", error);
 	}
-	auto chunk = context->Fetch(*this);
+	return context->LockContext();
+}
+
+void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
+	bool invalidated = !success || !context || !executor;
+	if (!invalidated) {
+		invalidated = !context->IsActiveResult(lock, this);
+	}
+	if (invalidated) {
+		throw InvalidInputException(
+		    "Attempting to execute an unsuccessful or closed pending query result\nError: %s", error);
+	}
+}
+
+unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
+	unique_ptr<DataChunk> chunk;
+	{
+		auto lock = LockContext();
+		CheckExecutableInternal(*lock);
+		chunk = context->Fetch(*lock, *this);
+	}
 	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
 		Close();
 		return nullptr;
@@ -58,16 +77,14 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	return result;
 }
 
-void StreamQueryResult::Close() {
-	if (!is_open) {
-		return;
-	}
-	is_open = false;
-	context->Cleanup();
+bool StreamQueryResult::IsOpen() {
+	return true;
 }
 
-void StreamQueryResult::MarkAsClosed() {
-	this->is_open = false;
+void StreamQueryResult::Close() {
+	executor.reset();
+	prepared.reset();
+	context.reset();
 }
 
 } // namespace duckdb
