@@ -155,6 +155,7 @@ public:
 	DUCKDB_API unique_ptr<DataChunk> Fetch(ClientContextLock &lock, StreamQueryResult &result);
 
 	DUCKDB_API bool IsActiveResult(ClientContextLock &lock, BaseQueryResult *result);
+	Executor &GetExecutor();
 
 private:
 	//! Parse statements and resolve pragmas from a query
@@ -171,7 +172,7 @@ private:
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
-	void CleanupInternal(ClientContextLock &lock, BaseQueryResult *result = nullptr);
+	void CleanupInternal(ClientContextLock &lock, BaseQueryResult *result = nullptr, bool invalidate_transaction = false);
 	string FinalizeQuery(ClientContextLock &lock, bool success);
 	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,

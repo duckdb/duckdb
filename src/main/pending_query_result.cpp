@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, shared_ptr<PreparedStatementData> statement_p, unique_ptr<Executor> executor_p, vector<LogicalType> types_p) :
-	BaseQueryResult(QueryResultType::PENDING_RESULT, statement_p->statement_type, move(types_p), statement_p->names), context(move(context_p)), prepared(move(statement_p)), executor(move(executor_p)) {}
+PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, PreparedStatementData &statement, vector<LogicalType> types_p) :
+	BaseQueryResult(QueryResultType::PENDING_RESULT, statement.statement_type, move(types_p), statement.names), context(move(context_p)) {}
 
 PendingQueryResult::PendingQueryResult(string error) :
 	BaseQueryResult(QueryResultType::PENDING_RESULT, move(error)) {
@@ -24,7 +24,7 @@ unique_ptr<ClientContextLock> PendingQueryResult::LockContext() {
 }
 
 void PendingQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
-	bool invalidated = !success || !context || !executor;
+	bool invalidated = !success || !context;
 	if (!invalidated) {
 		invalidated = !context->IsActiveResult(lock, this);
 	}
@@ -61,8 +61,6 @@ unique_ptr<QueryResult> PendingQueryResult::Execute(bool allow_streaming_result)
 }
 
 void PendingQueryResult::Close() {
-	executor.reset();
-	prepared.reset();
 	context.reset();
 }
 

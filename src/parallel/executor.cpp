@@ -26,8 +26,7 @@ Executor::~Executor() {
 }
 
 Executor &Executor::Get(ClientContext &context) {
-	throw InternalException("FIXME: get executor");
-	// return context.executor;
+	return context.GetExecutor();
 }
 
 void Executor::AddEvent(shared_ptr<Event> event) {

@@ -6,10 +6,9 @@
 namespace duckdb {
 
 StreamQueryResult::StreamQueryResult(StatementType statement_type, shared_ptr<ClientContext> context,
-                                     vector<LogicalType> types, vector<string> names,
-                                     shared_ptr<PreparedStatementData> prepared, unique_ptr<Executor> executor_p)
+                                     vector<LogicalType> types, vector<string> names)
     : QueryResult(QueryResultType::STREAM_RESULT, statement_type, move(types), move(names)),
-      context(move(context)), prepared(move(prepared)), executor(move(executor_p)) {
+      context(move(context)) {
 }
 
 StreamQueryResult::~StreamQueryResult() {
@@ -35,7 +34,7 @@ unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 }
 
 void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
-	bool invalidated = !success || !context || !executor;
+	bool invalidated = !success || !context;
 	if (!invalidated) {
 		invalidated = !context->IsActiveResult(lock, this);
 	}
@@ -82,8 +81,6 @@ bool StreamQueryResult::IsOpen() {
 }
 
 void StreamQueryResult::Close() {
-	executor.reset();
-	prepared.reset();
 	context.reset();
 }
 

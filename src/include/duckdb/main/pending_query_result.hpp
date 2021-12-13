@@ -26,7 +26,7 @@ class PendingQueryResult : public BaseQueryResult {
 	friend class ClientContext;
 
 public:
-	DUCKDB_API PendingQueryResult(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> statement, unique_ptr<Executor> executor, vector<LogicalType> types);
+	DUCKDB_API PendingQueryResult(shared_ptr<ClientContext> context, PreparedStatementData &statement, vector<LogicalType> types);
 	DUCKDB_API explicit PendingQueryResult(string error_message);
 	DUCKDB_API ~PendingQueryResult();
 
@@ -46,10 +46,6 @@ public:
 
 private:
 	shared_ptr<ClientContext> context;
-	//! Prepared statement data
-	shared_ptr<PreparedStatementData> prepared;
-	//! The query executor
-	unique_ptr<Executor> executor;
 
 private:
 	void CheckExecutableInternal(ClientContextLock &lock);

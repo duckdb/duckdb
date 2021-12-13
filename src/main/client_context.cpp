@@ -43,6 +43,10 @@ struct ActiveQueryContext {
 	string query;
 	//! The currently open result
 	BaseQueryResult *open_result = nullptr;
+	//! Prepared statement data
+	shared_ptr<PreparedStatementData> prepared;
+	//! The query executor
+	unique_ptr<Executor> executor;
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
@@ -81,21 +85,27 @@ void ClientContext::Destroy() {
 
 unique_ptr<DataChunk> ClientContext::Fetch(ClientContextLock &lock, StreamQueryResult &result) {
 	D_ASSERT(IsActiveResult(lock, &result));
-	return FetchInternal(lock, *result.executor, result);
+	D_ASSERT(active_query->executor);
+	return FetchInternal(lock, *active_query->executor, result);
 }
 
 unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Executor &executor, BaseQueryResult &result) {
+	bool invalidate_query = true;
 	try {
 		// fetch the chunk and return it
 		auto chunk = executor.FetchChunk();
 		return chunk;
+	} catch (StandardException &ex) {
+		// standard exceptions do not invalidate the current transaction
+		result.error = ex.what();
+		invalidate_query = false;
 	} catch (std::exception &ex) {
 		result.error = ex.what();
 	} catch (...) { // LCOV_EXCL_START
 		result.error = "Unhandled exception in FetchInternal";
 	} // LCOV_EXCL_STOP
 	result.success = false;
-	CleanupInternal(lock, &result);
+	CleanupInternal(lock, &result, invalidate_query);
 	return nullptr;
 }
 
@@ -113,7 +123,7 @@ void ClientContext::BeginTransactionInternal(ClientContextLock &lock, bool requi
 }
 
 void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &query) {
-	BeginTransactionInternal(lock, true);
+	BeginTransactionInternal(lock, false);
 	LogQueryInternal(lock, query);
 	active_query->query = query;
 	ActiveTransaction().active_query = db->GetTransactionManager().GetQueryNumber();
@@ -145,13 +155,13 @@ string ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bo
 	return error;
 }
 
-void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *result) {
+void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *result, bool invalidate_transaction) {
 	if (!active_query) {
 		// no query currently active
 		return;
 	}
 
-	auto error = EndQueryInternal(lock, result ? result->success : false, result ? !result->success : false);
+	auto error = EndQueryInternal(lock, result ? result->success : false, invalidate_transaction);
 	if (result && result->success) {
 		// if an error occurred while committing report it in the result
 		result->error = error;
@@ -159,10 +169,18 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	}
 }
 
+Executor &ClientContext::GetExecutor() {
+	D_ASSERT(active_query);
+	D_ASSERT(active_query->executor);
+	return *active_query->executor;
+}
+
 unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending, bool allow_stream_result) {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->open_result == &pending);
-	bool create_stream_result = pending.prepared->allow_stream_result && allow_stream_result;
+	D_ASSERT(active_query->prepared);
+	auto &prepared = *active_query->prepared;
+	bool create_stream_result = prepared.allow_stream_result && allow_stream_result;
 	if (create_stream_result) {
 		if (config.enable_progress_bar) {
 			throw InternalException("FIXME: progress bar");
@@ -170,14 +188,14 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
 		auto stream_result = make_unique<StreamQueryResult>(pending.statement_type, shared_from_this(), pending.types,
-		                                      pending.names, pending.prepared, move(pending.executor));
+		                                      pending.names);
 		active_query->open_result = stream_result.get();
 		return move(stream_result);
 	}
 	// create a materialized result by continuously fetching
 	auto result = make_unique<MaterializedQueryResult>(pending.statement_type, pending.types, pending.names);
 	while (true) {
-		auto chunk = FetchInternal(lock, *pending.executor, *result);
+		auto chunk = FetchInternal(lock, GetExecutor(), *result);
 		if (!chunk || chunk->size() == 0) {
 			break;
 		}
@@ -277,13 +295,15 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(
 		// progress_bar->Initialize(config.wait_time);
 		// progress_bar->Start();
 	}
-	auto executor = make_unique<Executor>(*this);
-	executor->Initialize(statement.plan.get());
-	auto types = executor->GetTypes();
+	active_query->executor = make_unique<Executor>(*this);
+	auto &executor = *active_query->executor;
+	executor.Initialize(statement.plan.get());
+	auto types = executor.GetTypes();
 	D_ASSERT(types == statement.types);
 	D_ASSERT(!active_query->open_result);
 
-	auto pending_result = make_unique<PendingQueryResult>(shared_from_this(), move(statement_p), move(executor), move(types));
+	auto pending_result = make_unique<PendingQueryResult>(shared_from_this(), *statement_p, move(types));
+	active_query->prepared = move(statement_p);
 	active_query->open_result = pending_result.get();
 	return pending_result;
 }
@@ -416,6 +436,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query,
 												unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	auto pending = PendingQueryInternal(lock, move(statement));
+	if (!pending->success) {
+		return make_unique<MaterializedQueryResult>(move(pending->error));
+	}
 	return ExecutePendingQueryInternal(lock, *pending, allow_stream_result);
 }
 
@@ -912,15 +935,14 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 			// verify read only statements by running a select statement
 			auto select = make_unique<SelectStatement>();
 			select->node = relation->GetQueryNode();
-			throw InternalException("FIXME: RunStatement");
-			// RunStatement(*lock, query, move(select), false);
+			RunStatementInternal(*lock, query, move(select), false);
 		}
 	}
 	auto &expected_columns = relation->Columns();
 	auto relation_stmt = make_unique<RelationStatement>(relation);
-	throw InternalException("FIXME: RunStatement");
+
 	unique_ptr<QueryResult> result;
-	// result = RunStatement(*lock, query, move(relation_stmt), false);
+	result = RunStatementInternal(*lock, query, move(relation_stmt), false);
 	if (!result->success) {
 		return result;
 	}
