@@ -435,7 +435,7 @@ endfunction()
 function(add_extension_definitions)
   include_directories(${PROJECT_SOURCE_DIR}/extension)
 
-  if(NOT("${TEST_REMOTE_INSTALL}" STREQUAL "FALSE"))
+  if(NOT("${TEST_REMOTE_INSTALL}" STREQUAL "OFF"))
     add_definitions(-DDUCKDB_TEST_REMOTE_INSTALL="${TEST_REMOTE_INSTALL}")
   endif()
 

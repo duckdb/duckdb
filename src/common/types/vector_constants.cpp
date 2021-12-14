@@ -14,13 +14,13 @@ namespace duckdb {
 #endif
 
 const SelectionVector *ConstantVector::ZeroSelectionVector() {
-	static const SelectionVector zero_selection_vector = SelectionVector((sel_t *)ConstantVector::ZERO_VECTOR);
-	return &zero_selection_vector;
+	static const SelectionVector ZERO_SELECTION_VECTOR = SelectionVector((sel_t *)ConstantVector::ZERO_VECTOR);
+	return &ZERO_SELECTION_VECTOR;
 }
 
 const SelectionVector *FlatVector::IncrementalSelectionVector() {
-	static const SelectionVector incremental_selection_vector;
-	return &incremental_selection_vector;
+	static const SelectionVector INCREMENTAL_SELECTION_VECTOR;
+	return &INCREMENTAL_SELECTION_VECTOR;
 }
 
 const sel_t ConstantVector::ZERO_VECTOR[STANDARD_VECTOR_SIZE] = {0};
