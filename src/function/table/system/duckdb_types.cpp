@@ -49,7 +49,7 @@ static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, vector<V
 unique_ptr<FunctionOperatorData> DuckDBTypesInit(ClientContext &context, const FunctionData *bind_data,
                                                  const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<DuckDBTypesData>();
-	result->types = LogicalType::ALL_TYPES;
+	result->types = LogicalType::AllTypes();
 	// FIXME: add user-defined types here (when we have them)
 	return move(result);
 }

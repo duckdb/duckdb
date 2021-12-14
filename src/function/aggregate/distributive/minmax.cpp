@@ -525,7 +525,7 @@ static AggregateFunction GetMinMaxFunction(const LogicalType &type) {
 
 template <class OP, class OP_STRING, class OP_VECTOR>
 static void AddMinMaxOperator(AggregateFunctionSet &set) {
-	for (auto &type : LogicalType::ALL_TYPES) {
+	for (auto &type : LogicalType::AllTypes()) {
 		if (type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::BLOB) {
 			set.AddFunction(
 			    AggregateFunction::UnaryAggregateDestructor<MinMaxState<string_t>, string_t, string_t, OP_STRING>(

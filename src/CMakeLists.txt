@@ -9,6 +9,9 @@ if(NOT MSVC)
       "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wno-redundant-move"
   )
 endif()
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors")
+endif()
 
 set(DUCKDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})
 

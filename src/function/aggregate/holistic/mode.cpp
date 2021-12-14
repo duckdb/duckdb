@@ -297,7 +297,7 @@ void ModeFun::RegisterFunction(BuiltinFunctions &set) {
 	mode.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
 	                                   nullptr, nullptr, nullptr, BindModeDecimal));
 
-	for (const auto &type : LogicalType::NUMERIC) {
+	for (const auto &type : LogicalType::Numeric()) {
 		if (type.id() != LogicalTypeId::DECIMAL) {
 			mode.AddFunction(GetModeAggregate(type));
 		}

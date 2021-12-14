@@ -1,3 +1,5 @@
+#define DUCKDB_EXTENSION_MAIN
+
 #include "tpcds-extension.hpp"
 
 #include "dsdgen.hpp"

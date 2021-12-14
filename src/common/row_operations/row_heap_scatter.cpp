@@ -81,7 +81,7 @@ static void ComputeListEntrySizes(Vector &v, VectorData &vdata, idx_t entry_size
 				// compute and add to the total
 				std::fill_n(list_entry_sizes, next, 0);
 				RowOperations::ComputeEntrySizes(child_vector, list_entry_sizes, next, next,
-				                                 FlatVector::INCREMENTAL_SELECTION_VECTOR, entry_offset);
+				                                 *FlatVector::IncrementalSelectionVector(), entry_offset);
 				for (idx_t list_idx = 0; list_idx < next; list_idx++) {
 					entry_sizes[i] += list_entry_sizes[list_idx];
 				}
@@ -343,7 +343,7 @@ static void HeapScatterListVector(Vector &v, idx_t vcount, const SelectionVector
 				// variable size list entries: compute entry sizes and set list entry locations
 				std::fill_n(list_entry_sizes, next, 0);
 				RowOperations::ComputeEntrySizes(child_vector, list_entry_sizes, next, next,
-				                                 FlatVector::INCREMENTAL_SELECTION_VECTOR, entry_offset);
+				                                 *FlatVector::IncrementalSelectionVector(), entry_offset);
 				for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
 					list_entry_locations[entry_idx] = key_locations[i];
 					key_locations[i] += list_entry_sizes[entry_idx];
@@ -354,8 +354,8 @@ static void HeapScatterListVector(Vector &v, idx_t vcount, const SelectionVector
 
 			// now serialize to the locations
 			RowOperations::HeapScatter(child_vector, ListVector::GetListSize(v),
-			                           FlatVector::INCREMENTAL_SELECTION_VECTOR, next, 0, list_entry_locations, nullptr,
-			                           entry_offset);
+			                           *FlatVector::IncrementalSelectionVector(), next, 0, list_entry_locations,
+			                           nullptr, entry_offset);
 
 			// update for next iteration
 			entry_remaining -= next;

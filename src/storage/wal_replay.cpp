@@ -448,9 +448,9 @@ void ReplayState::ReplayDelete() {
 		throw InternalException("Corrupt WAL: delete without table");
 	}
 
-	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LOGICAL_ROW_TYPE);
+	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
 	row_t row_ids[1];
-	Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t)row_ids);
+	Vector row_identifiers(LogicalType::ROW_TYPE, (data_ptr_t)row_ids);
 
 	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
 	// delete the tuples from the current table

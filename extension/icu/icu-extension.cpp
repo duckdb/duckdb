@@ -1,3 +1,5 @@
+#define DUCKDB_EXTENSION_MAIN
+
 #include "include/icu-extension.hpp"
 #include "include/icu-collate.hpp"
 #include "include/icu-dateadd.hpp"

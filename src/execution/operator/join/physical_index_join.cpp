@@ -119,7 +119,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
 		}
 		state.rhs_chunk.Reset();
 		ColumnFetchState fetch_state;
-		Vector row_ids(LOGICAL_ROW_TYPE, (data_ptr_t)&fetch_rows[0]);
+		Vector row_ids(LogicalType::ROW_TYPE, (data_ptr_t)&fetch_rows[0]);
 		tbl->Fetch(transaction, state.rhs_chunk, fetch_ids, row_ids, output_sel_idx, fetch_state);
 	}
 
