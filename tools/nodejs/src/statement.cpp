@@ -171,6 +171,9 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 			case duckdb::LogicalTypeId::VARCHAR: {
 				value = Napi::String::New(env, dval.str_value);
 			} break;
+			case duckdb::LogicalTypeId::BOOLEAN: {
+				value = Napi::Boolean::New(env, dval.value_.boolean);
+			} break;
 			case duckdb::LogicalTypeId::BLOB: {
 				value = Napi::Buffer<char>::Copy(env, dval.str_value.c_str(), dval.str_value.length());
 			} break;
