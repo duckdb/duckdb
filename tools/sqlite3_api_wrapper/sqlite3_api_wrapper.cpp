@@ -1184,8 +1184,7 @@ int sqlite3_create_function(sqlite3 *db, const char *zFunctionName, int nArg, in
 		argv_types[i] = LogicalType::ANY;
 	}
 
-	UDFWrapper::RegisterFunction(fname, argv_types, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context),
-									varargs);
+	UDFWrapper::RegisterFunction(fname, argv_types, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context), varargs);
 	return SQLITE_OK;
 }
 

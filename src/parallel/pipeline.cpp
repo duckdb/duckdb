@@ -60,7 +60,7 @@ ClientContext &Pipeline::GetClientContext() {
 }
 
 // LCOV_EXCL_START
-bool Pipeline::GetProgressInternal(ClientContext &context, PhysicalOperator *op, int &current_percentage) {
+bool Pipeline::GetProgressInternal(ClientContext &context, PhysicalOperator *op, double &current_percentage) {
 	current_percentage = -1;
 	switch (op->type) {
 	case PhysicalOperatorType::TABLE_SCAN: {
@@ -79,7 +79,7 @@ bool Pipeline::GetProgressInternal(ClientContext &context, PhysicalOperator *op,
 }
 // LCOV_EXCL_STOP
 
-bool Pipeline::GetProgress(int &current_percentage) {
+bool Pipeline::GetProgress(double &current_percentage) {
 	auto &client = executor.context;
 	return GetProgressInternal(client, source, current_percentage);
 }

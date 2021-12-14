@@ -680,7 +680,7 @@ void Executor::Flush(ThreadContext &tcontext) {
 	profiler.Flush(tcontext.profiler);
 }
 
-bool Executor::GetPipelinesProgress(int &current_progress) { // LCOV_EXCL_START
+bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_START
 	lock_guard<mutex> elock(executor_lock);
 
 	if (!pipelines.empty()) {

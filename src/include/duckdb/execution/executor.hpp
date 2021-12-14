@@ -69,7 +69,7 @@ public:
 	void Flush(ThreadContext &context);
 
 	//! Returns the progress of the pipelines
-	bool GetPipelinesProgress(int &current_progress);
+	bool GetPipelinesProgress(double &current_progress);
 
 	void CompletePipeline() {
 		completed_pipelines++;

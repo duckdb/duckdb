@@ -251,14 +251,14 @@ public:
 		return move(result);
 	}
 
-	static int ParquetProgress(ClientContext &context, const FunctionData *bind_data_p) {
+	static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 		if (bind_data.initial_reader->NumRows() == 0) {
-			return (100 * (bind_data.cur_file + 1)) / bind_data.files.size();
+			return (100.0 * (bind_data.cur_file + 1)) / bind_data.files.size();
 		}
-		auto percentage = (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100 / bind_data.initial_reader->NumRows()) /
+		auto percentage = (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_reader->NumRows()) /
 		                  bind_data.files.size();
-		percentage += 100 * bind_data.cur_file / bind_data.files.size();
+		percentage += 100.0 * bind_data.cur_file / bind_data.files.size();
 		return percentage;
 	}
 

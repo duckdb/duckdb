@@ -132,6 +132,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	BeginTransactionInternal(lock, false);
 	LogQueryInternal(lock, query);
 	active_query->query = query;
+	query_progress = -1;
 	ActiveTransaction().active_query = db->GetTransactionManager().GetQueryNumber();
 }
 
@@ -171,6 +172,7 @@ string ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bo
 		error = "Unhandled exception!";
 	} // LCOV_EXCL_STOP
 	active_query.reset();
+	query_progress = -1;
 	return error;
 }
 
@@ -213,6 +215,8 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	bool create_stream_result = prepared.allow_stream_result && allow_stream_result;
 	if (create_stream_result) {
 		active_query->progress_bar.reset();
+		query_progress = -1;
+
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
 		auto stream_result =
@@ -289,11 +293,8 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	return result;
 }
 
-int ClientContext::GetProgress() {
-	if (!active_query || !active_query->progress_bar) {
-		return -1;
-	}
-	return active_query->progress_bar->GetCurrentPercentage();
+double ClientContext::GetProgress() {
+	return query_progress.load();
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientContextLock &lock,
@@ -318,6 +319,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	if (config.enable_progress_bar) {
 		active_query->progress_bar = make_unique<ProgressBar>(executor, config.wait_time);
 		active_query->progress_bar->Start();
+		query_progress = 0;
 	}
 	executor.Initialize(statement.plan.get());
 	auto types = executor.GetTypes();
@@ -337,6 +339,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 		auto result = active_query->executor->ExecuteTask();
 		if (active_query->progress_bar) {
 			active_query->progress_bar->Update(result == PendingExecutionResult::RESULT_READY);
+			query_progress = active_query->progress_bar->GetCurrentPercentage();
 		}
 		return result;
 	} catch (std::exception &ex) {

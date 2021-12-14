@@ -24,7 +24,7 @@ public:
 	//! Updates the progress bar and prints it to the screen
 	void Update(bool final);
 	//! Gets current percentage
-	int GetCurrentPercentage();
+	double GetCurrentPercentage();
 
 private:
 	const string PROGRESS_BAR_STRING = "============================================================";
@@ -38,7 +38,7 @@ private:
 	//! The time in ms after which to start displaying the progress bar
 	idx_t show_progress_after;
 	//! The current progress percentage
-	int current_percentage;
+	double current_percentage;
 	//! Whether or not profiling is supported for the current query
 	bool supported = true;
 };

@@ -224,12 +224,12 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["skip"] = LogicalType::BIGINT;
 }
 
-int CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p) {
+double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (ReadCSVData &)*bind_data_p;
 	if (bind_data.file_size == 0) {
 		return 100;
 	}
-	auto percentage = bind_data.bytes_read * 100 / bind_data.file_size;
+	auto percentage = (bind_data.bytes_read * 100.0) / bind_data.file_size;
 	return percentage;
 }
 

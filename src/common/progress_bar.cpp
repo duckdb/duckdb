@@ -8,7 +8,7 @@ ProgressBar::ProgressBar(Executor &executor, idx_t show_progress_after)
     : executor(executor), show_progress_after(show_progress_after), current_percentage(-1) {
 }
 
-int ProgressBar::GetCurrentPercentage() {
+double ProgressBar::GetCurrentPercentage() {
 	return current_percentage;
 }
 
@@ -22,7 +22,7 @@ void ProgressBar::Update(bool final) {
 	if (!supported) {
 		return;
 	}
-	int new_percentage;
+	double new_percentage;
 	supported = executor.GetPipelinesProgress(new_percentage);
 	if (!supported) {
 		return;
