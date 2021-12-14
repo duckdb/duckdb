@@ -1177,6 +1177,7 @@ typedef struct PGSelectStmt {
 	PGList *groupClause;      /* GROUP BY clauses */
 	PGNode *havingClause;     /* HAVING conditional-expression */
 	PGList *windowClause;     /* WINDOW window_name AS (...), ... */
+	PGNode *qualifyClause;    /* QUALIFY conditional-expression */
 
 	/*
 	 * In a "leaf" node representing a VALUES list, the above fields are all
