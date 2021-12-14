@@ -247,7 +247,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 		} else {
 			auto stream_result = (StreamQueryResult *)result.get();
 			for (idx_t count_vec = 0; count_vec < vectors_per_chunk; count_vec++) {
-				if (!stream_result->is_open) {
+				if (!stream_result->IsOpen()) {
 					break;
 				}
 				unique_ptr<DataChunk> chunk;
@@ -297,7 +297,7 @@ bool FetchArrowChunk(QueryResult *result, py::list &batches,
                      bool copy = false) {
 	if (result->type == QueryResultType::STREAM_RESULT) {
 		auto stream_result = (StreamQueryResult *)result;
-		if (!stream_result->is_open) {
+		if (!stream_result->IsOpen()) {
 			return false;
 		}
 	}
