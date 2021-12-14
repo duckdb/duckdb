@@ -1,6 +1,7 @@
 #include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -42,6 +43,10 @@ string PragmaVersion(ClientContext &context, const FunctionParameters &parameter
 }
 
 string PragmaImportDatabase(ClientContext &context, const FunctionParameters &parameters) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.enable_external_access) {
+		throw PermissionException("Import is disabled through configuration");
+	}
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto *opener = FileSystem::GetFileOpener(context);
 

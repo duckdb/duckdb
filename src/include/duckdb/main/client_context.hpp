@@ -155,9 +155,17 @@ public:
 
 	DUCKDB_API unique_ptr<DataChunk> Fetch(ClientContextLock &lock, StreamQueryResult &result);
 
+	//! Whether or not the given result object (streaming query result or pending query result) is active
 	DUCKDB_API bool IsActiveResult(ClientContextLock &lock, BaseQueryResult *result);
+
+	//! Returns the current executor
 	Executor &GetExecutor();
+
+	//! Returns the current query string (if any)
 	const string &GetCurrentQuery();
+
+	//! Fetch a list of table names that are required for a given query
+	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
 
 private:
 	//! Parse statements and resolve pragmas from a query

@@ -1,11 +1,11 @@
 #include "include/icu-dateadd.hpp"
-#include "include/icu-collate.hpp"
+#include "include/icu-datefunc.hpp"
 
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
@@ -17,10 +17,17 @@ struct ICUCalendarAdd {
 	}
 };
 
-struct ICUCalendarSub {
+struct ICUCalendarSub : public ICUDateFunc {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right, icu::Calendar *calendar) {
 		throw InternalException("Unimplemented type for ICUCalendarSub");
+	}
+};
+
+struct ICUCalendarAge : public ICUDateFunc {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right, icu::Calendar *calendar) {
+		throw InternalException("Unimplemented type for ICUCalendarAge");
 	}
 };
 
@@ -82,36 +89,90 @@ timestamp_t ICUCalendarSub::Operation(timestamp_t timestamp, interval_t interval
 	return ICUCalendarAdd::template Operation<timestamp_t, interval_t, timestamp_t>(timestamp, negated, calendar);
 }
 
-struct ICUDateAdd {
-	using CalendarPtr = unique_ptr<icu::Calendar>;
+template <>
+interval_t ICUCalendarSub::Operation(timestamp_t end_date, timestamp_t start_date, icu::Calendar *calendar) {
+	if (start_date > end_date) {
+		auto negated = Operation<timestamp_t, timestamp_t, interval_t>(start_date, end_date, calendar);
+		return {-negated.months, -negated.days, -negated.micros};
+	}
 
-	struct BindData : public FunctionData {
-		explicit BindData(CalendarPtr calendar_p) : calendar(move(calendar_p)) {
-		}
+	auto start_micros = ICUDateFunc::SetTime(calendar, start_date);
+	auto end_micros = end_date.value % Interval::MICROS_PER_MSEC;
 
-		CalendarPtr calendar;
+	// Borrow 1ms from end_date if we wrap. This works because start_date <= end_date
+	// and if the µs are out of order, then there must be an extra ms.
+	if (start_micros > end_micros) {
+		end_date.value -= Interval::MICROS_PER_MSEC;
+		end_micros += Interval::MICROS_PER_MSEC;
+	}
 
-		unique_ptr<FunctionData> Copy() override {
-			return make_unique<BindData>(CalendarPtr(calendar->clone()));
-		}
-	};
+	//	Timestamp differences do not use months, so start with days
+	interval_t result;
+	result.months = 0;
+	result.days = SubtractField(calendar, UCAL_DATE, end_date);
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
-		Value tz_value;
-		string tz_id;
-		if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
-			tz_id = tz_value.ToString();
-		}
-		auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id)));
+	auto hour_diff = SubtractField(calendar, UCAL_HOUR_OF_DAY, end_date);
+	auto min_diff = SubtractField(calendar, UCAL_MINUTE, end_date);
+	auto sec_diff = SubtractField(calendar, UCAL_SECOND, end_date);
+	auto ms_diff = SubtractField(calendar, UCAL_MILLISECOND, end_date);
+	auto micros_diff = ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros);
+	result.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).micros;
 
-		UErrorCode success = U_ZERO_ERROR;
-		CalendarPtr calendar(icu::Calendar::createInstance(tz, success));
-		if (U_FAILURE(success)) {
-			throw Exception("Unable to create ICU DATEADD calendar.");
-		}
+	return result;
+}
 
-		return make_unique<BindData>(move(calendar));
+template <>
+interval_t ICUCalendarAge::Operation(timestamp_t end_date, timestamp_t start_date, icu::Calendar *calendar) {
+	if (start_date > end_date) {
+		auto negated = Operation<timestamp_t, timestamp_t, interval_t>(start_date, end_date, calendar);
+		return {-negated.months, -negated.days, -negated.micros};
+	}
+
+	auto start_micros = ICUDateFunc::SetTime(calendar, start_date);
+	auto end_micros = end_date.value % Interval::MICROS_PER_MSEC;
+
+	// Borrow 1ms from end_date if we wrap. This works because start_date <= end_date
+	// and if the µs are out of order, then there must be an extra ms.
+	if (start_micros > end_micros) {
+		end_date.value -= Interval::MICROS_PER_MSEC;
+		end_micros += Interval::MICROS_PER_MSEC;
+	}
+
+	//	Lunar calendars have uneven numbers of months, so we just diff months, not years
+	interval_t result;
+	result.months = SubtractField(calendar, UCAL_MONTH, end_date);
+	result.days = SubtractField(calendar, UCAL_DATE, end_date);
+
+	auto hour_diff = SubtractField(calendar, UCAL_HOUR_OF_DAY, end_date);
+	auto min_diff = SubtractField(calendar, UCAL_MINUTE, end_date);
+	auto sec_diff = SubtractField(calendar, UCAL_SECOND, end_date);
+	auto ms_diff = SubtractField(calendar, UCAL_MILLISECOND, end_date);
+	auto micros_diff = ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros);
+	result.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).micros;
+
+	return result;
+}
+
+struct ICUDateAdd : public ICUDateFunc {
+
+	template <typename TA, typename TR, typename OP>
+	static void ExecuteUnary(DataChunk &args, ExpressionState &state, Vector &result) {
+		D_ASSERT(args.ColumnCount() == 1);
+
+		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &info = (BindData &)*func_expr.bind_info;
+		CalendarPtr calendar(info.calendar->clone());
+
+		auto end_date = Timestamp::GetCurrentTimestamp();
+		UnaryExecutor::Execute<TA, TR>(args.data[0], result, args.size(), [&](TA start_date) {
+			return OP::template Operation<timestamp_t, TA, TR>(end_date, start_date, calendar.get());
+		});
+	}
+
+	template <typename TA, typename TR, typename OP>
+	inline static ScalarFunction GetUnaryDateFunction(const LogicalTypeId &left_type,
+	                                                  const LogicalTypeId &result_type) {
+		return ScalarFunction({left_type}, result_type, ExecuteUnary<TA, TR, OP>, false, Bind);
 	}
 
 	template <typename TA, typename TB, typename TR, typename OP>
@@ -127,30 +188,61 @@ struct ICUDateAdd {
 		});
 	}
 
+	template <typename TA, typename TB, typename TR, typename OP>
+	inline static ScalarFunction GetBinaryDateFunction(const LogicalTypeId &left_type, const LogicalTypeId &right_type,
+	                                                   const LogicalTypeId &result_type) {
+		return ScalarFunction({left_type, right_type}, result_type, ExecuteBinary<TA, TB, TR, OP>, false, Bind);
+	}
+
 	template <typename TA, typename TB, typename OP>
-	static ScalarFunction GetDateIntervalOperator(const LogicalTypeId &left_type, const LogicalTypeId &right_type) {
-		return ScalarFunction({left_type, right_type}, LogicalType::TIMESTAMP_TZ,
-		                      ExecuteBinary<TA, TB, timestamp_t, OP>, false, Bind);
+	static ScalarFunction GetDateAddFunction(const LogicalTypeId &left_type, const LogicalTypeId &right_type) {
+		return GetBinaryDateFunction<TA, TB, timestamp_t, OP>(left_type, right_type, LogicalType::TIMESTAMP_TZ);
 	}
 
 	static void AddDateAddOperators(const string &name, ClientContext &context) {
 		//	temporal + interval
 		ScalarFunctionSet set(name);
-		set.AddFunction(GetDateIntervalOperator<timestamp_t, interval_t, ICUCalendarAdd>(LogicalType::TIMESTAMP_TZ,
-		                                                                                 LogicalType::INTERVAL));
-		set.AddFunction(GetDateIntervalOperator<interval_t, timestamp_t, ICUCalendarAdd>(LogicalType::INTERVAL,
-		                                                                                 LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetDateAddFunction<timestamp_t, interval_t, ICUCalendarAdd>(LogicalType::TIMESTAMP_TZ,
+		                                                                            LogicalType::INTERVAL));
+		set.AddFunction(GetDateAddFunction<interval_t, timestamp_t, ICUCalendarAdd>(LogicalType::INTERVAL,
+		                                                                            LogicalType::TIMESTAMP_TZ));
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetCatalog(context);
 		catalog.AddFunction(context, &func_info);
 	}
 
+	template <typename TA, typename OP>
+	static ScalarFunction GetUnaryAgeFunction(const LogicalTypeId &left_type) {
+		return GetUnaryDateFunction<TA, interval_t, OP>(left_type, LogicalType::INTERVAL);
+	}
+
+	template <typename TA, typename TB, typename OP>
+	static ScalarFunction GetBinaryAgeFunction(const LogicalTypeId &left_type, const LogicalTypeId &right_type) {
+		return GetBinaryDateFunction<TA, TB, interval_t, OP>(left_type, right_type, LogicalType::INTERVAL);
+	}
+
 	static void AddDateSubOperators(const string &name, ClientContext &context) {
 		//	temporal - interval
 		ScalarFunctionSet set(name);
-		set.AddFunction(GetDateIntervalOperator<timestamp_t, interval_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
-		                                                                                 LogicalType::INTERVAL));
+		set.AddFunction(GetDateAddFunction<timestamp_t, interval_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
+		                                                                            LogicalType::INTERVAL));
+
+		//	temporal - temporal
+		set.AddFunction(GetBinaryAgeFunction<timestamp_t, timestamp_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
+		                                                                               LogicalType::TIMESTAMP_TZ));
+
+		CreateScalarFunctionInfo func_info(set);
+		auto &catalog = Catalog::GetCatalog(context);
+		catalog.AddFunction(context, &func_info);
+	}
+
+	static void AddDateAgeFunctions(const string &name, ClientContext &context) {
+		//	age(temporal, temporal)
+		ScalarFunctionSet set(name);
+		set.AddFunction(GetBinaryAgeFunction<timestamp_t, timestamp_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ,
+		                                                                               LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetUnaryAgeFunction<timestamp_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ));
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetCatalog(context);
@@ -161,6 +253,7 @@ struct ICUDateAdd {
 void RegisterICUDateAddFunctions(ClientContext &context) {
 	ICUDateAdd::AddDateAddOperators("+", context);
 	ICUDateAdd::AddDateSubOperators("-", context);
+	ICUDateAdd::AddDateAgeFunctions("age", context);
 }
 
 } // namespace duckdb

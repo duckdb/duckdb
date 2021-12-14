@@ -141,7 +141,7 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 // Index Scan
 //===--------------------------------------------------------------------===//
 struct IndexScanOperatorData : public FunctionOperatorData {
-	explicit IndexScanOperatorData(data_ptr_t row_id_data) : row_ids(LOGICAL_ROW_TYPE, row_id_data) {
+	explicit IndexScanOperatorData(data_ptr_t row_id_data) : row_ids(LogicalType::ROW_TYPE, row_id_data) {
 	}
 
 	Vector row_ids;

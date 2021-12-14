@@ -1,7 +1,10 @@
+#define DUCKDB_EXTENSION_MAIN
+
 #include "include/icu-extension.hpp"
 #include "include/icu-collate.hpp"
 #include "include/icu-dateadd.hpp"
 #include "include/icu-datepart.hpp"
+#include "include/icu-datesub.hpp"
 #include "include/icu-datetrunc.hpp"
 
 #include "duckdb/main/database.hpp"
@@ -262,6 +265,7 @@ void ICUExtension::Load(DuckDB &db) {
 
 	RegisterICUDateAddFunctions(*con.context);
 	RegisterICUDatePartFunctions(*con.context);
+	RegisterICUDateSubFunctions(*con.context);
 	RegisterICUDateTruncFunctions(*con.context);
 
 	con.Commit();

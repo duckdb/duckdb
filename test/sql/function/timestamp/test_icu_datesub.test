@@ -1,0 +1,260 @@
+# name: test/sql/function/timestamp/test_icu_datesub.test
+# description: Test ICU date difference function
+# group: [timestamp]
+
+require icu
+
+statement ok
+SET TimeZone = 'America/Los_Angeles';
+
+#
+# TIMESTAMPTZ
+#
+
+# Ragged months
+
+query I
+select DATESUB('month', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-29 13:00:00-08'::TIMESTAMPTZ);
+----
+1
+
+query I
+select DATESUB('month', '2004-01-29 12:00:00-08'::TIMESTAMPTZ, '2004-02-29 13:00:00-08'::TIMESTAMPTZ);
+----
+1
+
+query I
+select DATESUB('month', '2004-02-29 12:00:00-08'::TIMESTAMPTZ, '2004-03-31 13:00:00-08'::TIMESTAMPTZ);
+----
+1
+
+query I
+select DATESUB('month', '2004-02-29 13:00:00-08'::TIMESTAMPTZ, '2004-03-31 12:00:00-08'::TIMESTAMPTZ);
+----
+1
+
+query I
+select DATESUB('quarter', '2004-01-31 12:00:00-07'::TIMESTAMPTZ, '2004-04-30 13:00:00-07'::TIMESTAMPTZ);
+----
+1
+
+query I
+select DATESUB('year', '2004-02-29 12:00:00-08'::TIMESTAMPTZ, '2005-02-28 13:00:00-08'::TIMESTAMPTZ);
+----
+1
+
+query I
+select DATESUB('decade', '1994-02-28 12:00:00-08'::TIMESTAMPTZ, '2004-02-29 13:00:00-08'::TIMESTAMPTZ);
+----
+1
+
+query I
+select DATESUB('century', '1904-02-29 12:00:00-08'::TIMESTAMPTZ, '2005-02-28 13:00:00-08'::TIMESTAMPTZ);
+----
+1
+
+# Ragged incomplete months
+
+query I
+select DATESUB('month', '2004-01-31 13:00:00-08'::TIMESTAMPTZ, '2004-02-29 12:00:00-08'::TIMESTAMPTZ);
+----
+0
+
+query I
+select DATESUB('month', '2004-01-29 13:00:00-08'::TIMESTAMPTZ, '2004-02-29 12:00:00-08'::TIMESTAMPTZ);
+----
+0
+
+query I
+select DATESUB('quarter', '2004-01-31 13:00:00-08'::TIMESTAMPTZ, '2004-04-30 12:00:00-07'::TIMESTAMPTZ);
+----
+0
+
+query I
+select DATESUB('year', '2004-02-29 13:00:00-08'::TIMESTAMPTZ, '2005-02-28 12:00:00-08'::TIMESTAMPTZ);
+----
+0
+
+query I
+select DATESUB('decade', '1992-02-29 13:00:00-08'::TIMESTAMPTZ, '2002-02-28 12:00:00-08'::TIMESTAMPTZ);
+----
+0
+
+query I
+select DATESUB('century', '1904-02-29 13:00:00-08'::TIMESTAMPTZ, '2004-02-28 12:00:00-08'::TIMESTAMPTZ);
+----
+0
+
+# 6 day difference between the proleptic Gregorian calendar (used to parse the strings)
+# and the Julian calendar (used by ICU) at the millenium
+query I
+select DATESUB('millennium', '1004-03-06 12:00:00-08'::TIMESTAMPTZ, '2004-02-29 11:00:00-08'::TIMESTAMPTZ);
+----
+0
+
+# Sub-month
+foreach datepart day doy dow isodow
+
+query I
+select DATESUB('${datepart}', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-29 13:00:00-08'::TIMESTAMPTZ);
+----
+29
+
+query I
+select DATESUB('${datepart}', '2004-01-31 13:00:00-08'::TIMESTAMPTZ, '2004-02-29 12:00:00-08'::TIMESTAMPTZ);
+----
+28
+
+endloop
+
+foreach datepart week yearweek
+
+query I
+select DATESUB('${datepart}', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-28 13:00:00-08'::TIMESTAMPTZ);
+----
+4
+
+query I
+select DATESUB('${datepart}', '2004-01-31 13:00:00-08'::TIMESTAMPTZ, '2004-02-28 12:00:00-08'::TIMESTAMPTZ);
+----
+3
+
+endloop
+query I
+select DATESUB('hour', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-01 13:05:00-08'::TIMESTAMPTZ);
+----
+25
+
+query I
+select DATESUB('hour', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-01 12:00:00-08'::TIMESTAMPTZ);
+----
+24
+
+query I
+select DATESUB('hour', '2004-01-31 13:00:00-08'::TIMESTAMPTZ, '2004-02-01 12:05:00-08'::TIMESTAMPTZ);
+----
+23
+
+query I
+select DATESUB('minute', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-01 13:05:00-08'::TIMESTAMPTZ);
+----
+1505
+
+query I
+select DATESUB('minute', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-01 12:00:00-08'::TIMESTAMPTZ);
+----
+1440
+
+query I
+select DATESUB('minute', '2004-01-31 13:00:00-08'::TIMESTAMPTZ, '2004-02-01 12:05:00-08'::TIMESTAMPTZ);
+----
+1385
+
+
+query I
+select DATESUB('second', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-01 12:00:05-08'::TIMESTAMPTZ);
+----
+86405
+
+query I
+select DATESUB('second', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-01 12:00:00-08'::TIMESTAMPTZ);
+----
+86400
+
+query I
+select DATESUB('second', '2004-01-31 12:00:05-08'::TIMESTAMPTZ, '2004-02-01 12:00:00-08'::TIMESTAMPTZ);
+----
+86395
+
+
+query I
+select DATESUB('millisecond', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-01 12:00:00.050-08'::TIMESTAMPTZ);
+----
+86400050
+
+query I
+select DATESUB('millisecond', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-01 12:00:00-08'::TIMESTAMPTZ);
+----
+86400000
+
+query I
+select DATESUB('millisecond', '2004-01-31 12:00:00.050-08'::TIMESTAMPTZ, '2004-02-01 12:00:00-08'::TIMESTAMPTZ);
+----
+86399950
+
+query I
+select DATESUB('microsecond', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-01 12:00:00.000050-08'::TIMESTAMPTZ);
+----
+86400000050
+
+query I
+select DATESUB('microsecond', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-01 12:00:00-08'::TIMESTAMPTZ);
+----
+86400000000
+
+query I
+select DATESUB('microsecond', '2004-01-31 12:00:00.000050-08'::TIMESTAMPTZ, '2004-02-01 12:00:00-08'::TIMESTAMPTZ);
+----
+86399999950
+
+# Negation
+statement ok
+CREATE TABLE datetime1 AS
+SELECT '2004-01-31 12:00:00-08'::TIMESTAMPTZ AS startdate, '2004-02-29 13:05:00-08'::TIMESTAMPTZ AS enddate;
+
+statement ok
+CREATE TABLE dateparts AS SELECT datepart FROM (VALUES
+	('year'),
+	('quarter'),
+	('month'),
+	('day'),
+	('dayofyear'),
+	('hour'),
+	('minute'),
+	('second'),
+	('millisecond'),
+	('microsecond'),
+	('decade'),
+	('century'),
+	('millennium'),
+	('week'),
+	('yearweek')
+) tbl(datepart)
+
+query II
+SELECT DATESUB(datepart, startdate, enddate) + DATESUB(datepart, enddate, startdate), datepart
+FROM datetime1, dateparts
+----
+0	year
+0	quarter
+0	month
+0	day
+0	dayofyear
+0	hour
+0	minute
+0	second
+0	millisecond
+0	microsecond
+0	decade
+0	century
+0	millennium
+0	week
+0	yearweek
+
+# Table
+foreach datepart year month day hour minute second millisecond microsecond
+
+query I
+SELECT DATESUB('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+FROM (
+	SELECT '2021-07-30 00:00:00-07'::TIMESTAMPTZ + INTERVAL (d) DAY AS startdate
+	FROM range(0, 5) tbl(d)
+	) days
+----
+1
+1
+1
+1
+1
+
+endloop

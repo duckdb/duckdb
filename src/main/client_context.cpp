@@ -990,6 +990,25 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 	});
 }
 
+unordered_set<string> ClientContext::GetTableNames(const string &query) {
+	auto lock = LockContext();
+
+	auto statements = ParseStatementsInternal(*lock, query);
+	if (statements.size() != 1) {
+		throw InvalidInputException("Expected a single statement");
+	}
+
+	unordered_set<string> result;
+	RunFunctionInTransactionInternal(*lock, [&]() {
+		// bind the expressions
+		auto binder = Binder::CreateBinder(*this);
+		binder->SetBindingMode(BindingMode::EXTRACT_NAMES);
+		binder->Bind(*statements[0]);
+		result = binder->GetTableNames();
+	});
+	return result;
+}
+
 unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relation) {
 	auto lock = LockContext();
 	InitialCleanup(*lock);

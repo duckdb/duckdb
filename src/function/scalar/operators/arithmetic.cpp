@@ -315,7 +315,7 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 
 void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("+");
-	for (auto &type : LogicalType::NUMERIC) {
+	for (auto &type : LogicalType::Numeric()) {
 		// unary add function is a nop, but only exists for numeric types
 		functions.AddFunction(GetFunction(type));
 		// binary add function adds two numbers together
@@ -516,7 +516,7 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 
 void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
-	for (auto &type : LogicalType::NUMERIC) {
+	for (auto &type : LogicalType::Numeric()) {
 		// unary subtract function, negates the input (i.e. multiplies by -1)
 		functions.AddFunction(GetFunction(type));
 		// binary subtract function "a - b", subtracts b from a
@@ -651,7 +651,7 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 
 void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("*");
-	for (auto &type : LogicalType::NUMERIC) {
+	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, false, BindDecimalMultiply));
 		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
@@ -779,7 +779,7 @@ static scalar_function_t GetBinaryFunctionIgnoreZero(const LogicalType &type) {
 
 void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("/");
-	for (auto &type : LogicalType::NUMERIC) {
+	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			continue;
 		} else {
@@ -819,7 +819,7 @@ hugeint_t ModuloOperator::Operation(hugeint_t left, hugeint_t right) {
 
 void ModFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("%");
-	for (auto &type : LogicalType::NUMERIC) {
+	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			continue;
 		} else {

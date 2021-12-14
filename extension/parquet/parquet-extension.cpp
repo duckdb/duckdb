@@ -1,3 +1,5 @@
+#define DUCKDB_EXTENSION_MAIN
+
 #include <string>
 #include <vector>
 #include <fstream>
@@ -194,6 +196,10 @@ public:
 	                                                vector<LogicalType> &input_table_types,
 	                                                vector<string> &input_table_names,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
+		auto &config = DBConfig::GetConfig(context);
+		if (!config.enable_external_access) {
+			throw PermissionException("Scanning Parquet files is disabled through configuration");
+		}
 		auto file_name = inputs[0].GetValue<string>();
 		ParquetOptions parquet_options(context);
 		for (auto &kv : named_parameters) {
@@ -211,6 +217,10 @@ public:
 	                                                    vector<LogicalType> &input_table_types,
 	                                                    vector<string> &input_table_names,
 	                                                    vector<LogicalType> &return_types, vector<string> &names) {
+		auto &config = DBConfig::GetConfig(context);
+		if (!config.enable_external_access) {
+			throw PermissionException("Scanning Parquet files is disabled through configuration");
+		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		vector<string> files;
 		for (auto &val : inputs[0].list_value) {

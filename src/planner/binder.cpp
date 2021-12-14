@@ -320,6 +320,35 @@ bool Binder::HasMatchingBinding(const string &schema_name, const string &table_n
 	return true;
 }
 
+void Binder::SetBindingMode(BindingMode mode) {
+	if (parent) {
+		parent->SetBindingMode(mode);
+	}
+	this->mode = mode;
+}
+
+BindingMode Binder::GetBindingMode() {
+	if (parent) {
+		return parent->GetBindingMode();
+	}
+	return mode;
+}
+
+void Binder::AddTableName(string table_name) {
+	if (parent) {
+		parent->AddTableName(move(table_name));
+		return;
+	}
+	table_names.insert(move(table_name));
+}
+
+const unordered_set<string> &Binder::GetTableNames() {
+	if (parent) {
+		return parent->GetTableNames();
+	}
+	return table_names;
+}
+
 string Binder::FormatError(ParsedExpression &expr_context, const string &message) {
 	return FormatError(expr_context.query_location, message);
 }

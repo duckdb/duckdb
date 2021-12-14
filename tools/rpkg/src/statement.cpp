@@ -447,7 +447,14 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 		}
 
 		RProtector r;
-		auto levels_sexp = r.Protect(RApi::StringsToSexp(EnumType::GetValuesInsertOrder(src_vec.GetType())));
+		auto &str_vec = EnumType::GetValuesInsertOrder(src_vec.GetType());
+		auto size = EnumType::GetSize(src_vec.GetType());
+		vector<string> str_c_vec(size);
+		for (idx_t i = 0; i < size; i++) {
+			str_c_vec[i] = str_vec.GetValue(i).ToString();
+		}
+
+		auto levels_sexp = r.Protect(RApi::StringsToSexp(str_c_vec));
 		SET_LEVELS(dest, levels_sexp);
 		SET_CLASS(dest, RStrings::get().factor_str);
 		break;

@@ -67,8 +67,7 @@ void SortedData::Unswizzle() {
 		auto &heap_block = heap_blocks[i];
 		auto data_handle_p = buffer_manager.Pin(data_block.block);
 		auto heap_handle_p = buffer_manager.Pin(heap_block.block);
-		RowOperations::UnswizzleHeapPointer(layout, data_handle_p->Ptr(), heap_handle_p->Ptr(), data_block.count);
-		RowOperations::UnswizzleColumns(layout, data_handle_p->Ptr(), data_block.count);
+		RowOperations::UnswizzlePointers(layout, data_handle_p->Ptr(), heap_handle_p->Ptr(), data_block.count);
 		state.heap_blocks.push_back(move(heap_block));
 		state.pinned_blocks.push_back(move(heap_handle_p));
 	}
@@ -314,9 +313,7 @@ void PayloadScanner::Scan(DataChunk &chunk) {
 		}
 		// Unswizzle the offsets back to pointers (if needed)
 		if (!sorted_data.layout.AllConstant() && global_sort_state.external) {
-			RowOperations::UnswizzleHeapPointer(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(),
-			                                    next);
-			RowOperations::UnswizzleColumns(sorted_data.layout, data_ptr, next);
+			RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(), next);
 		}
 		// Update state indices
 		read_state.entry_idx += next;
@@ -330,8 +327,8 @@ void PayloadScanner::Scan(DataChunk &chunk) {
 	// Deserialize the payload data
 	for (idx_t col_idx = 0; col_idx < sorted_data.layout.ColumnCount(); col_idx++) {
 		const auto col_offset = sorted_data.layout.GetOffsets()[col_idx];
-		RowOperations::Gather(addresses, FlatVector::INCREMENTAL_SELECTION_VECTOR, chunk.data[col_idx],
-		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, count, col_offset, col_idx);
+		RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), chunk.data[col_idx],
+		                      *FlatVector::IncrementalSelectionVector(), count, col_offset, col_idx);
 	}
 	chunk.SetCardinality(count);
 	chunk.Verify();

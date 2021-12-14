@@ -73,21 +73,26 @@ static vector<TestType> GetTestTypes() {
 	                    Value("\\x00\\x00\\x00a"));
 
 	// enums
-	vector<string> small_enum {"DUCK_DUCK_ENUM", "GOOSE"};
-	result.emplace_back(LogicalType::ENUM("small_enum", small_enum), "small_enum");
+	Vector small_enum(LogicalType::VARCHAR, 2);
+	auto small_enum_ptr = FlatVector::GetData<string_t>(small_enum);
+	small_enum_ptr[0] = StringVector::AddStringOrBlob(small_enum, "DUCK_DUCK_ENUM");
+	small_enum_ptr[1] = StringVector::AddStringOrBlob(small_enum, "GOOSE");
+	result.emplace_back(LogicalType::ENUM("small_enum", small_enum, 2), "small_enum");
 
-	vector<string> medium_enum;
+	Vector medium_enum(LogicalType::VARCHAR, 300);
+	auto medium_enum_ptr = FlatVector::GetData<string_t>(medium_enum);
 	for (idx_t i = 0; i < 300; i++) {
-		medium_enum.push_back(string("enum_") + to_string(i));
+		medium_enum_ptr[i] = StringVector::AddStringOrBlob(medium_enum, string("enum_") + to_string(i));
 	}
-	result.emplace_back(LogicalType::ENUM("medium_enum", medium_enum), "medium_enum");
+	result.emplace_back(LogicalType::ENUM("medium_enum", medium_enum, 300), "medium_enum");
 
 	// this is a big one... not sure if we should push this one here, but it's required for completeness
-	vector<string> large_enum;
+	Vector large_enum(LogicalType::VARCHAR, 70000);
+	auto large_enum_ptr = FlatVector::GetData<string_t>(large_enum);
 	for (idx_t i = 0; i < 70000; i++) {
-		large_enum.push_back(string("enum_") + to_string(i));
+		large_enum_ptr[i] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(i));
 	}
-	result.emplace_back(LogicalType::ENUM("large_enum", large_enum), "large_enum");
+	result.emplace_back(LogicalType::ENUM("large_enum", large_enum, 70000), "large_enum");
 
 	// arrays
 	auto int_list_type = LogicalType::LIST(LogicalType::INTEGER);

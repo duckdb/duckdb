@@ -210,6 +210,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::DOUBLE:
 		child.format = "g";
 		break;
+	case LogicalTypeId::UUID:
 	case LogicalTypeId::VARCHAR:
 		child.format = "u";
 		break;
@@ -302,6 +303,29 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	}
 	case LogicalTypeId::MAP: {
 		SetArrowMapFormat(root_holder, child, type);
+		break;
+	}
+	case LogicalTypeId::ENUM: {
+		switch (EnumType::GetPhysicalType(EnumType::GetSize(type))) {
+		case PhysicalType::UINT8:
+			child.format = "C";
+			break;
+		case PhysicalType::UINT16:
+			child.format = "S";
+			break;
+		case PhysicalType::UINT32:
+			child.format = "I";
+			break;
+		default:
+			throw InternalException("Unsupported Enum Internal Type");
+		}
+		root_holder.nested_children.emplace_back();
+		root_holder.nested_children.back().resize(1);
+		root_holder.nested_children_ptr.emplace_back();
+		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+		InitializeChild(root_holder.nested_children.back()[0]);
+		child.dictionary = root_holder.nested_children_ptr.back()[0];
+		child.dictionary->format = "u";
 		break;
 	}
 	default:

@@ -207,12 +207,12 @@ jobs:
       run: |
         make
 
-    - name: Test
-      run: build/release/test/Debug/unittest.exe
-
     - name: Deploy
       run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           pip install awscli
-          ./scripts/extension-upload.sh windows-amd64
+          ./scripts/extension-upload.sh windows_amd64
+          ./scripts/extension-upload-test.sh
+        else
+          ./scripts/extension-upload-test.sh local
         fi

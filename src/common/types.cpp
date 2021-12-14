@@ -13,6 +13,8 @@
 #include <cmath>
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
 
@@ -171,31 +173,40 @@ constexpr const LogicalTypeId LogicalType::VARCHAR;
 
 constexpr const LogicalTypeId LogicalType::BLOB;
 constexpr const LogicalTypeId LogicalType::INTERVAL;
+constexpr const LogicalTypeId LogicalType::ROW_TYPE;
 
 // TODO these are incomplete and should maybe not exist as such
 constexpr const LogicalTypeId LogicalType::TABLE;
 
 constexpr const LogicalTypeId LogicalType::ANY;
 
-const vector<LogicalType> LogicalType::NUMERIC = {LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
-                                                  LogicalType::BIGINT,    LogicalType::HUGEINT,   LogicalType::FLOAT,
-                                                  LogicalType::DOUBLE,    LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
-                                                  LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT};
+const vector<LogicalType> LogicalType::Numeric() {
+	vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
+	                             LogicalType::BIGINT,    LogicalType::HUGEINT,   LogicalType::FLOAT,
+	                             LogicalType::DOUBLE,    LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
+	                             LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT};
+	return types;
+}
 
-const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,
-                                                   LogicalType::BIGINT,    LogicalType::HUGEINT,  LogicalType::UTINYINT,
-                                                   LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
+const vector<LogicalType> LogicalType::Integral() {
+	vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,
+	                             LogicalType::BIGINT,    LogicalType::HUGEINT,  LogicalType::UTINYINT,
+	                             LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
+	return types;
+}
 
-const vector<LogicalType> LogicalType::ALL_TYPES = {
-    LogicalType::BOOLEAN,  LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
-    LogicalType::BIGINT,   LogicalType::DATE,      LogicalType::TIMESTAMP, LogicalType::DOUBLE,
-    LogicalType::FLOAT,    LogicalType::VARCHAR,   LogicalType::BLOB,      LogicalType::INTERVAL,
-    LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,  LogicalType::USMALLINT,
-    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,      LogicalTypeId::LIST,
-    LogicalTypeId::STRUCT, LogicalType::DATE_TZ,   LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ,
-    LogicalTypeId::MAP,    LogicalType::UUID};
+const vector<LogicalType> LogicalType::AllTypes() {
+	vector<LogicalType> types = {
+	    LogicalType::BOOLEAN,  LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
+	    LogicalType::BIGINT,   LogicalType::DATE,      LogicalType::TIMESTAMP, LogicalType::DOUBLE,
+	    LogicalType::FLOAT,    LogicalType::VARCHAR,   LogicalType::BLOB,      LogicalType::INTERVAL,
+	    LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,  LogicalType::USMALLINT,
+	    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,      LogicalTypeId::LIST,
+	    LogicalTypeId::STRUCT, LogicalType::DATE_TZ,   LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ,
+	    LogicalTypeId::MAP,    LogicalType::UUID};
+	return types;
+}
 
-const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
 const PhysicalType ROW_TYPE = PhysicalType::INT64;
 
 // LCOV_EXCL_START
@@ -747,7 +758,7 @@ struct ExtraTypeInfo {
 public:
 	virtual bool Equals(ExtraTypeInfo *other) = 0;
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
-	virtual void Serialize(Serializer &serializer) const = 0;
+	virtual void Serialize(Serializer &serializer) = 0;
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
 	static void Serialize(ExtraTypeInfo *info, Serializer &serializer);
 	//! Deserializes a blob back into an ExtraTypeInfo
@@ -777,7 +788,7 @@ public:
 		return width == other.width && scale == other.scale;
 	}
 
-	void Serialize(Serializer &serializer) const override {
+	void Serialize(Serializer &serializer) override {
 		serializer.Write<uint8_t>(width);
 		serializer.Write<uint8_t>(scale);
 	}
@@ -824,7 +835,7 @@ public:
 		return true;
 	}
 
-	void Serialize(Serializer &serializer) const override {
+	void Serialize(Serializer &serializer) override {
 		serializer.WriteString(collation);
 	}
 
@@ -872,7 +883,7 @@ public:
 		return child_type == other.child_type;
 	}
 
-	void Serialize(Serializer &serializer) const override {
+	void Serialize(Serializer &serializer) override {
 		child_type.Serialize(serializer);
 	}
 
@@ -916,7 +927,7 @@ public:
 		return child_types == other.child_types;
 	}
 
-	void Serialize(Serializer &serializer) const override {
+	void Serialize(Serializer &serializer) override {
 		serializer.Write<uint32_t>(child_types.size());
 		for (idx_t i = 0; i < child_types.size(); i++) {
 			serializer.WriteString(child_types[i].first);
@@ -998,7 +1009,7 @@ public:
 		return other.user_type_name == user_type_name;
 	}
 
-	void Serialize(Serializer &serializer) const override {
+	void Serialize(Serializer &serializer) override {
 		serializer.WriteString(user_type_name);
 	}
 
@@ -1024,12 +1035,13 @@ LogicalType LogicalType::USER(const string &user_type_name) {
 // Enum Type
 //===--------------------------------------------------------------------===//
 struct EnumTypeInfo : public ExtraTypeInfo {
-	explicit EnumTypeInfo(string enum_name_p, vector<string> values_insert_order_p)
+	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t size)
 	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), enum_name(move(enum_name_p)),
-	      values_insert_order(std::move(values_insert_order_p)) {
+	      values_insert_order(values_insert_order_p), size(size) {
 	}
 	string enum_name;
-	vector<string> values_insert_order;
+	Vector values_insert_order;
+	idx_t size;
 	TypeCatalogEntry *catalog_entry = nullptr;
 
 public:
@@ -1042,33 +1054,42 @@ public:
 			return false;
 		}
 		auto &other = (EnumTypeInfo &)*other_p;
-		// We must check if all elements are equal
-		if (other.values_insert_order == values_insert_order) {
-			return true;
+
+		// We must check if both enums have the same size
+		if (other.size != size) {
+			return false;
 		}
-		return false;
+		auto other_vector_ptr = FlatVector::GetData<string_t>(other.values_insert_order);
+		auto this_vector_ptr = FlatVector::GetData<string_t>(values_insert_order);
+
+		// Now we must check if all strings are the same
+		for (idx_t i = 0; i < size; i++) {
+			if (!Equals::Operation(other_vector_ptr[i], this_vector_ptr[i])) {
+				return false;
+			}
+		}
+		return true;
 	}
-	void Serialize(Serializer &serializer) const override {
-		serializer.Write<uint32_t>(values_insert_order.size());
+	void Serialize(Serializer &serializer) override {
+		serializer.Write<uint32_t>(size);
 		serializer.WriteString(enum_name);
-		serializer.WriteStringVector(values_insert_order);
+		values_insert_order.Serialize(size, serializer);
 	}
 };
 
 template <class T>
 struct EnumTypeInfoTemplated : public EnumTypeInfo {
-	explicit EnumTypeInfoTemplated(const string &enum_name_p, const vector<string> &values_insert_order_p)
-	    : EnumTypeInfo(enum_name_p, values_insert_order_p) {
-		idx_t count = 0;
-		for (auto &value : values_insert_order) {
-			values[value] = count++;
+	explicit EnumTypeInfoTemplated(const string &enum_name_p, Vector &values_insert_order_p, idx_t size_p)
+	    : EnumTypeInfo(enum_name_p, values_insert_order_p, size_p) {
+		for (idx_t count = 0; count < size_p; count++) {
+			values[values_insert_order_p.GetValue(count).ToString()] = count;
 		}
 	}
-	static shared_ptr<EnumTypeInfoTemplated> Deserialize(Deserializer &source) {
+	static shared_ptr<EnumTypeInfoTemplated> Deserialize(Deserializer &source, uint32_t size) {
 		auto enum_name = source.Read<string>();
-		vector<string> values_insert_order;
-		source.ReadStringVector(values_insert_order);
-		return make_shared<EnumTypeInfoTemplated>(move(enum_name), move(values_insert_order));
+		Vector values_insert_order(LogicalType::VARCHAR, size);
+		values_insert_order.Deserialize(size, source);
+		return make_shared<EnumTypeInfoTemplated>(move(enum_name), values_insert_order, size);
 	}
 	unordered_map<string, T> values;
 };
@@ -1080,20 +1101,19 @@ const string &EnumType::GetTypeName(const LogicalType &type) {
 	return ((EnumTypeInfo &)*info).enum_name;
 }
 
-LogicalType LogicalType::ENUM(const string &enum_name, const vector<string> &ordered_data) {
-	auto size = ordered_data.size();
+LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx_t size) {
 	// Generate EnumTypeInfo
 	shared_ptr<ExtraTypeInfo> info;
 	auto enum_internal_type = EnumType::GetPhysicalType(size);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
-		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(enum_name, ordered_data);
+		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(enum_name, ordered_data, size);
 		break;
 	case PhysicalType::UINT16:
-		info = make_shared<EnumTypeInfoTemplated<uint16_t>>(enum_name, ordered_data);
+		info = make_shared<EnumTypeInfoTemplated<uint16_t>>(enum_name, ordered_data, size);
 		break;
 	case PhysicalType::UINT32:
-		info = make_shared<EnumTypeInfoTemplated<uint32_t>>(enum_name, ordered_data);
+		info = make_shared<EnumTypeInfoTemplated<uint32_t>>(enum_name, ordered_data, size);
 		break;
 	default:
 		throw InternalException("Invalid Physical Type for ENUMs");
@@ -1124,22 +1144,22 @@ int64_t EnumType::GetPos(const LogicalType &type, const string &key) {
 	}
 }
 
-const string &EnumType::GetValue(const Value &val) {
+const string EnumType::GetValue(const Value &val) {
 	auto info = val.type().AuxInfo();
-	vector<string> &values_insert_order = ((EnumTypeInfo &)*info).values_insert_order;
+	auto &values_insert_order = ((EnumTypeInfo &)*info).values_insert_order;
 	switch (val.type().InternalType()) {
 	case PhysicalType::UINT8:
-		return values_insert_order[val.value_.utinyint];
+		return values_insert_order.GetValue(val.value_.utinyint).ToString();
 	case PhysicalType::UINT16:
-		return values_insert_order[val.value_.usmallint];
+		return values_insert_order.GetValue(val.value_.usmallint).ToString();
 	case PhysicalType::UINT32:
-		return values_insert_order[val.value_.uinteger];
+		return values_insert_order.GetValue(val.value_.uinteger).ToString();
 	default:
 		throw InternalException("Invalid Internal Type for ENUMs");
 	}
 }
 
-const vector<string> &EnumType::GetValuesInsertOrder(const LogicalType &type) {
+Vector &EnumType::GetValuesInsertOrder(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
@@ -1150,7 +1170,7 @@ idx_t EnumType::GetSize(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).values_insert_order.size();
+	return ((EnumTypeInfo &)*info).size;
 }
 
 void EnumType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
@@ -1205,14 +1225,15 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &source) {
 	case ExtraTypeInfoType::USER_TYPE_INFO:
 		return UserTypeInfo::Deserialize(source);
 	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
-		auto enum_internal_type = EnumType::GetPhysicalType(source.Read<uint32_t>());
+		auto enum_size = source.Read<uint32_t>();
+		auto enum_internal_type = EnumType::GetPhysicalType(enum_size);
 		switch (enum_internal_type) {
 		case PhysicalType::UINT8:
-			return EnumTypeInfoTemplated<uint8_t>::Deserialize(source);
+			return EnumTypeInfoTemplated<uint8_t>::Deserialize(source, enum_size);
 		case PhysicalType::UINT16:
-			return EnumTypeInfoTemplated<uint16_t>::Deserialize(source);
+			return EnumTypeInfoTemplated<uint16_t>::Deserialize(source, enum_size);
 		case PhysicalType::UINT32:
-			return EnumTypeInfoTemplated<uint32_t>::Deserialize(source);
+			return EnumTypeInfoTemplated<uint32_t>::Deserialize(source, enum_size);
 		default:
 			throw InternalException("Invalid Physical Type for ENUMs");
 		}
