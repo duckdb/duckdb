@@ -27,7 +27,8 @@ FunctionData::~FunctionData() {
 }
 
 unique_ptr<FunctionData> FunctionData::Copy() {
-	throw InternalException("Unimplemented copy for FunctionData");
+	return make_unique<FunctionData>();
+	// throw InternalException("Unimplemented copy for FunctionData");
 }
 
 bool FunctionData::Equals(FunctionData &other) {

@@ -1150,19 +1150,6 @@ const string EnumType::GetValue(const Value &val) {
 	}
 }
 
-idx_t EnumType::GetValuePosition(const Value &val) {
-	switch (val.type().InternalType()) {
-	case PhysicalType::UINT8:
-		return val.value_.utinyint;
-	case PhysicalType::UINT16:
-		return val.value_.usmallint;
-	case PhysicalType::UINT32:
-		return val.value_.uinteger;
-	default:
-		throw InternalException("Invalid Internal Type for ENUMs");
-	}
-}
-
 Vector &EnumType::GetValuesInsertOrder(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();

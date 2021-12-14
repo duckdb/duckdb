@@ -1,21 +1,6 @@
 #include "duckdb/function/scalar/enum_functions.hpp"
 
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/main/client_context.hpp"
-
 namespace duckdb {
-
-struct CurrentBindData : public FunctionData {
-	ClientContext &context;
-
-	explicit CurrentBindData(ClientContext &context) : context(context) {
-	}
-
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<CurrentBindData>(context);
-	}
-};
 
 static void EnumFirstFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.GetTypes().size() == 1);
@@ -56,12 +41,12 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 	if (first_param.is_null) {
 		start = 0;
 	} else {
-		start = EnumType::GetValuePosition(first_param);
+		start = first_param.GetValue<uint32_t>();
 	}
 	if (second_param.is_null) {
 		end = EnumType::GetSize(input.GetTypes()[0]);
 	} else {
-		end = EnumType::GetValuePosition(second_param) + 1;
+		end = second_param.GetValue<uint32_t>() + 1;
 	}
 	vector<Value> enum_values;
 	for (idx_t i = start; i < end; i++) {
@@ -74,29 +59,29 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 unique_ptr<FunctionData> BindEnumFunction(ClientContext &context, ScalarFunction &bound_function,
                                           vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
-		throw std::runtime_error("This function needs an ENUM as an argument");
+		throw BinderException("This function needs an ENUM as an argument");
 	}
-	return make_unique<CurrentBindData>(context);
+	return make_unique<FunctionData>();
 }
 
 unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(ClientContext &context, ScalarFunction &bound_function,
                                                        vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM && arguments[0]->return_type != LogicalType::SQLNULL) {
-		throw std::runtime_error("This function needs an ENUM as an argument");
+		throw BinderException("This function needs an ENUM as an argument");
 	}
 	if (arguments[1]->return_type.id() != LogicalTypeId::ENUM && arguments[1]->return_type != LogicalType::SQLNULL) {
-		throw std::runtime_error("This function needs an ENUM as an argument");
+		throw BinderException("This function needs an ENUM as an argument");
 	}
 	if (arguments[0]->return_type == LogicalType::SQLNULL && arguments[1]->return_type == LogicalType::SQLNULL) {
-		throw std::runtime_error("This function needs an ENUM as an argument");
+		throw BinderException("This function needs an ENUM as an argument");
 	}
 	if (arguments[0]->return_type.id() == LogicalTypeId::ENUM &&
 	    arguments[1]->return_type.id() == LogicalTypeId::ENUM &&
 	    arguments[0]->return_type != arguments[1]->return_type) {
 
-		throw std::runtime_error("The parameters need to link to ONLY one enum OR be NULL ");
+		throw BinderException("The parameters need to link to ONLY one enum OR be NULL ");
 	}
-	return make_unique<CurrentBindData>(context);
+	return make_unique<FunctionData>();
 }
 
 void EnumFirst::RegisterFunction(BuiltinFunctions &set) {

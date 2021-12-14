@@ -1,5 +1,5 @@
 # name: test/sql/function/enum/test_enum_range.test
-# description: Enum First Function
+# description: Enum Range Function
 # group: [enum]
 
 statement ok
@@ -39,3 +39,9 @@ SELECT enum_range_boundary(NULL, NULL)
 
 statement error
 SELECT enum_last('bla')
+
+statement error
+SELECT enum_range_boundary('orange'::rainbow, 1)
+
+statement error
+SELECT enum_range_boundary(1, 'orange'::rainbow)
