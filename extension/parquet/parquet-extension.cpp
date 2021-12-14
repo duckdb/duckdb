@@ -1,3 +1,5 @@
+#define DUCKDB_EXTENSION_MAIN
+
 #include <string>
 #include <vector>
 #include <fstream>

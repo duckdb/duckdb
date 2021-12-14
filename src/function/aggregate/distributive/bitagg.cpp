@@ -92,7 +92,7 @@ struct BitAndOperation {
 
 void BitAndFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet bit_and("bit_and");
-	for (auto &type : LogicalType::INTEGRAL) {
+	for (auto &type : LogicalType::Integral()) {
 		bit_and.AddFunction(GetBitfieldUnaryAggregate<BitAndOperation>(type));
 	}
 	set.AddFunction(bit_and);
@@ -152,7 +152,7 @@ struct BitOrOperation {
 
 void BitOrFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet bit_or("bit_or");
-	for (auto &type : LogicalType::INTEGRAL) {
+	for (auto &type : LogicalType::Integral()) {
 		bit_or.AddFunction(GetBitfieldUnaryAggregate<BitOrOperation>(type));
 	}
 	set.AddFunction(bit_or);
@@ -212,7 +212,7 @@ struct BitXorOperation {
 
 void BitXorFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet bit_xor("bit_xor");
-	for (auto &type : LogicalType::INTEGRAL) {
+	for (auto &type : LogicalType::Integral()) {
 		bit_xor.AddFunction(GetBitfieldUnaryAggregate<BitXorOperation>(type));
 	}
 	set.AddFunction(bit_xor);
