@@ -16,7 +16,7 @@ QualifyBinder::QualifyBinder(Binder &binder, ClientContext &context, BoundSelect
 
 BindResult QualifyBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
 	auto &expr = (ColumnRefExpression &)**expr_ptr;
-	auto result = ExpressionBinder::BindExpression(expr_ptr, depth);
+	auto result = duckdb::SelectBinder::BindExpression(expr_ptr, depth);
 	if (!result.HasError()) {
 		return result;
 	}
