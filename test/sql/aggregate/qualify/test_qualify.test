@@ -2,6 +2,8 @@
 # description: Test QUALIFY clause
 # group: [qualify]
 
+require vector_size 512
+
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
 
