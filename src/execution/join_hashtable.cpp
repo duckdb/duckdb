@@ -288,7 +288,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 	// First, fill the hash_map and handle conflicts with a next_pointer
-	if (has_unique_keys && (join_type == JoinType::INNER || join_type == JoinType::RIGHT) ) {
+	if (has_unique_keys && (join_type == JoinType::INNER || join_type == JoinType::RIGHT)) {
 		// For inner joins we check whether the build is composed of unique keys during the insertion into the hash map
 		InsertHashesAndCheckUniqueness(count_tuples, indices, key_locations, pointers); // inlined
 	} else {
