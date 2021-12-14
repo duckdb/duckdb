@@ -74,6 +74,11 @@ struct ICUCalendarSub : public ICUDateFunc {
 		return SubtractYear(calendar, start_date, end_date) / 1000;
 	}
 
+	static int64_t SubtractEra(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+		SetTime(calendar, start_date);
+		return SubtractField(calendar, UCAL_ERA, end_date);
+	}
+
 	template <typename T>
 	static void ICUDateSubFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 3);
@@ -156,6 +161,8 @@ ICUDateFunc::part_sub_t ICUDateFunc::SubtractFactory(DatePartSpecifier type) {
 		return ICUCalendarSub::SubtractMillisecond;
 	case DatePartSpecifier::MICROSECONDS:
 		return ICUCalendarSub::SubtractMicrosecond;
+	case DatePartSpecifier::ERA:
+		return ICUCalendarSub::SubtractEra;
 	default:
 		throw NotImplementedException("Specifier type not implemented for ICU subtraction");
 	}

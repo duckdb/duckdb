@@ -14,20 +14,11 @@ namespace duckdb {
 struct ICUDatePart : public ICUDateFunc {
 	typedef int64_t (*part_adapter_t)(icu::Calendar *calendar, const uint64_t micros);
 
-	static DatePartSpecifier PartCodeFromFunction(const string &name) {
-		//	Missing part aliases
-		if (name == "dayofmonth") {
-			return DatePartSpecifier::DAY;
-		} else if (name == "weekday") {
-			return DatePartSpecifier::DOW;
-		} else if (name == "weekofyear") {
-			return DatePartSpecifier::WEEK;
-		} else {
-			return GetDatePartSpecifier(name);
-		}
+	// Date part adapters
+	static int64_t ExtractEra(icu::Calendar *calendar, const uint64_t micros) {
+		return ExtractField(calendar, UCAL_ERA);
 	}
 
-	// Date part adapters
 	static int64_t ExtractYear(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_YEAR);
 	}
@@ -109,6 +100,12 @@ struct ICUDatePart : public ICUDateFunc {
 		return millis / Interval::MSECS_PER_SEC;
 	}
 
+	static int64_t ExtractOffset(icu::Calendar *calendar, const uint64_t micros) {
+		auto millis = ExtractField(calendar, UCAL_ZONE_OFFSET);
+		millis += ExtractField(calendar, UCAL_DST_OFFSET);
+		return millis * Interval::MICROS_PER_MSEC;
+	}
+
 	static part_adapter_t PartCodeAdapterFactory(DatePartSpecifier part) {
 		switch (part) {
 		case DatePartSpecifier::YEAR:
@@ -147,6 +144,10 @@ struct ICUDatePart : public ICUDateFunc {
 			return ExtractYearWeek;
 		case DatePartSpecifier::EPOCH:
 			return ExtractEpoch;
+		case DatePartSpecifier::ERA:
+			return ExtractEra;
+		case DatePartSpecifier::OFFSET:
+			return ExtractOffset;
 		default:
 			throw Exception("Unsupported ICU extract adapter");
 		}
@@ -250,7 +251,7 @@ struct ICUDatePart : public ICUDateFunc {
 	                                             vector<unique_ptr<Expression>> &arguments) {
 		using data_t = BindAdapterData<int64_t>;
 		auto adapter =
-		    (arguments.size() == 1) ? PartCodeAdapterFactory(PartCodeFromFunction(bound_function.name)) : nullptr;
+		    (arguments.size() == 1) ? PartCodeAdapterFactory(GetDatePartSpecifier(bound_function.name)) : nullptr;
 		return BindAdapter<data_t>(context, bound_function, arguments, adapter);
 	}
 
@@ -298,6 +299,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 void RegisterICUDatePartFunctions(ClientContext &context) {
 	// register the individual operators
+	ICUDatePart::AddUnaryPartCodeFunction("era", context);
 	ICUDatePart::AddUnaryPartCodeFunction("year", context);
 	ICUDatePart::AddUnaryPartCodeFunction("month", context);
 	ICUDatePart::AddUnaryPartCodeFunction("day", context);
