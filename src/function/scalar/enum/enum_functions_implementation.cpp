@@ -52,7 +52,12 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 	for (idx_t i = start; i < end; i++) {
 		enum_values.emplace_back(enum_vector.GetValue(i));
 	}
-	auto val = Value::LIST(enum_values);
+	Value val;
+	if (enum_values.empty()) {
+		val = Value::EMPTYLIST(LogicalType::VARCHAR);
+	} else {
+		val = Value::LIST(enum_values);
+	}
 	result.Reference(val);
 }
 
@@ -61,7 +66,7 @@ unique_ptr<FunctionData> BindEnumFunction(ClientContext &context, ScalarFunction
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
 		throw BinderException("This function needs an ENUM as an argument");
 	}
-	return make_unique<FunctionData>();
+	return nullptr;
 }
 
 unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(ClientContext &context, ScalarFunction &bound_function,
@@ -81,7 +86,7 @@ unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(ClientContext &context, S
 
 		throw BinderException("The parameters need to link to ONLY one enum OR be NULL ");
 	}
-	return make_unique<FunctionData>();
+	return nullptr;
 }
 
 void EnumFirst::RegisterFunction(BuiltinFunctions &set) {

@@ -21,6 +21,12 @@ SELECT enum_range_boundary('orange'::rainbow, 'green'::rainbow)
 ----
 [orange, yellow, green]
 
+
+query I
+SELECT enum_range_boundary('green'::rainbow, 'orange'::rainbow)
+----
+[]
+
 query I
 SELECT enum_range_boundary(NULL, 'green'::rainbow)
 ----
