@@ -7,10 +7,10 @@ create temporary table t as select range i, mod(range,10) j,mod(range,10)*100000
 
 # use correlated expression inside the filter itself
 query I
-    SELECT
- (select sum(t2.i) FILTER (where t.i = t2.i) from t as t2) sq
+   explain  SELECT
+ (SELECT sum(t2.i) FILTER (WHERE t.i = t2.i) FROM t AS t2) sq
 FROM t
-where i < 5 ORDER BY sq
+WHERE i < 5 ORDER BY sq;
 ----
 0
 1
@@ -18,131 +18,5 @@ where i < 5 ORDER BY sq
 3
 4
 
-statement ok
-CREATE TABLE integers1 AS SELECT * FROM (VALUES (1), (2), (10)) tbl(i);
 
-statement ok
-CREATE TABLE integers2 AS SELECT * FROM (VALUES (2, 5), (3, 6), (4, 7)) tbl(i, j);
-
-statement ok
-PRAGMA explain_output = OPTIMIZED_ONLY;
-
-statement ok
-PRAGMA enable_verification
-
-query I
-SELECT i1.i FROM integers1 i1 JOIN integers2 i2 ON (i1.i=i2.i AND i1.i<i2.j);
-----
-2
-
-statement ok
-PRAGMA enable_verification
-
-statement ok
-CREATE TABLE test1 (a INTEGER, b INTEGER);
-
-statement ok
-INSERT INTO test1 VALUES (11, 1), (12, 2), (13, 3), (13, 2)
-
-statement ok
-CREATE TABLE test2 (b INTEGER, c INTEGER);
-
-statement ok
-INSERT INTO test2 VALUES (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30)
-
-statement ok
-CREATE TABLE integers(i INTEGER)
-
-statement ok
-INSERT INTO integers VALUES (1), (2), (3), (NULL);
-
-# simple inner join
-query III
-SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY a;
-----
-11	1	10
-11	1	10
-11	1	10
-11	1	10
-11	1	10
-12	2	20
-12	2	20
-12	2	20
-12	2	20
-12	2	20
-13	2	20
-13	3	30
-13	2	20
-13	3	30
-13	2	20
-13	3	30
-13	2	20
-13	3	30
-13	2	20
-13	3	30
-
-
-# test string
-statement ok
-CREATE TABLE string1 (a VARCHAR, b VARCHAR);
-
-statement ok
-INSERT INTO string1 VALUES ('11', '1'), ('12', '2'), ('13', '3'), ('13', '2')
-
-statement ok
-CREATE TABLE string2 (b VARCHAR, c VARCHAR);
-
-statement ok
-INSERT INTO string2 VALUES ('1', '10'), ('2', '20'), ('3', '30'), ('1', '10'), ('2', '20'), ('3', '30'), ('1', '10'), ('2', '20'), ('3', '30'), ('1', '10'), ('2', '20'), ('3', '30'), ('1', '10'), ('2', '20'), ('3', '30')
-
-# simple inner join
-query III
-SELECT a, string1.b, c FROM string1, string2 WHERE string1.b = string2.b ORDER BY a;
-----
-11	1	10
-11	1	10
-11	1	10
-11	1	10
-11	1	10
-12	2	20
-12	2	20
-12	2	20
-12	2	20
-12	2	20
-13	2	20
-13	3	30
-13	2	20
-13	3	30
-13	2	20
-13	3	30
-13	2	20
-13	3	30
-13	2	20
-13	3	30
-
-# Multiple key matches
-query II
-select * from (
-	(select [1,2,3] a from range(3))) tbl(i)
-	join
-	((select [1,2,3] a from range(3))) tbl2(j)
-	on (i=j);
-----
-[1, 2, 3]	[1, 2, 3]
-[1, 2, 3]	[1, 2, 3]
-[1, 2, 3]	[1, 2, 3]
-[1, 2, 3]	[1, 2, 3]
-[1, 2, 3]	[1, 2, 3]
-[1, 2, 3]	[1, 2, 3]
-[1, 2, 3]	[1, 2, 3]
-[1, 2, 3]	[1, 2, 3]
-[1, 2, 3]	[1, 2, 3]
-
-query IT
-SELECT i, i IN (1, 2, NULL, 4, 5, 6, 7, 8) FROM integers ORDER BY i
-----
-NULL	NULL
-1	1
-2	1
-3	NULL
 

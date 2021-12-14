@@ -453,7 +453,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
 		if (ht.has_unique_keys) {
-			NextInnerJoin(keys, left, result);
+			NextInnerUniqueKeysJoin(keys, left, result);
 		} else {
 			NextInnerJoin(keys, left, result);
 		}
@@ -633,28 +633,19 @@ void ScanStructure::NextInnerUniqueKeysJoin(DataChunk &keys, DataChunk &left, Da
 		return;
 	}
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
-	// first scan for key matches
-	ScanKeyMatches(keys, result_sel);
-	// then construct the result from all tuples with a match
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	idx_t result_count = 0;
-	for (idx_t i = 0; i < keys.size(); i++) {
-		if (found_match[i]) {
-			// part of the result
-			sel.set_index(result_count++, i);
-		}
-	}
+	// first scan for key matches and construct the selection vector with the matches
+	auto result_count = ScanKeyMatches(keys, result_sel);
 	// construct the final result
 	if (result_count > 0) {
 		// Reference the columns of the left side from the result
-		result.Slice(left, sel, result_count);
+		result.Slice(left, result_sel, result_count);
 		// And the columns of the right side
 		if (left.ColumnCount() < result.ColumnCount()) {
 			// on the RHS, we need to fetch the data from the hash table
 			for (idx_t i = 0; i < ht.build_types.size(); i++) {
 				auto &vector = result.data[left.ColumnCount() + i];
 				D_ASSERT(vector.GetType() == ht.build_types[i]);
-				GatherResult(vector, sel, result_count, i + ht.condition_types.size());
+				GatherResult(vector, result_sel, result_count, i + ht.condition_types.size());
 			}
 		}
 	} else {
