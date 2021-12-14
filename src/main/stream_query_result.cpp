@@ -33,11 +33,7 @@ unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 }
 
 void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
-	bool invalidated = !success || !context;
-	if (!invalidated) {
-		invalidated = !context->IsActiveResult(lock, this);
-	}
-	if (invalidated) {
+	if (!IsOpenInternal(lock)) {
 		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
 		                            error);
 	}
@@ -75,8 +71,20 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	return result;
 }
 
+bool StreamQueryResult::IsOpenInternal(ClientContextLock &lock) {
+	bool invalidated = !success || !context;
+	if (!invalidated) {
+		invalidated = !context->IsActiveResult(lock, this);
+	}
+	return !invalidated;
+}
+
 bool StreamQueryResult::IsOpen() {
-	return true;
+	if (!success || !context) {
+		return false;
+	}
+	auto lock = LockContext();
+	return IsOpenInternal(*lock);
 }
 
 void StreamQueryResult::Close() {

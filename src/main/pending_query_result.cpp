@@ -47,8 +47,8 @@ PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock
 
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock, bool allow_streaming_result) {
 	CheckExecutableInternal(lock);
-	while (ExecuteTaskInternal(lock) == PendingExecutionResult::RESULT_NOT_READY)
-		;
+	while (ExecuteTaskInternal(lock) == PendingExecutionResult::RESULT_NOT_READY) {
+	}
 	if (!success) {
 		return make_unique<MaterializedQueryResult>(error);
 	}
