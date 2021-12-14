@@ -282,17 +282,8 @@ void Executor::Initialize(PhysicalOperator *plan) {
 	}
 }
 
-void Executor::WorkOnTasks() {
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-
-	unique_ptr<Task> task;
-	while (scheduler.GetTaskFromProducer(*producer, task)) {
-		task->Execute();
-		task.reset();
-	}
-}
-
 void Executor::CancelTasks() {
+	task.reset();
 	// we do this by creating weak pointers to all pipelines
 	// then clearing our references to the pipelines
 	// and waiting until all pipelines have been destroyed
@@ -321,6 +312,7 @@ void Executor::CancelTasks() {
 		child_pipelines.clear();
 		events.clear();
 	}
+	WorkOnTasks();
 	for (auto &weak_ref : weak_references) {
 		while (true) {
 			auto weak = weak_ref.lock();
@@ -331,16 +323,39 @@ void Executor::CancelTasks() {
 	}
 }
 
+void Executor::WorkOnTasks() {
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+
+	unique_ptr<Task> task;
+	while (scheduler.GetTaskFromProducer(*producer, task)) {
+		task->Execute(TaskExecutionMode::PROCESS_ALL);
+		task.reset();
+	}
+}
+
 PendingExecutionResult Executor::ExecuteTask() {
 	if (execution_result != PendingExecutionResult::RESULT_NOT_READY) {
 		return execution_result;
 	}
-	// now execute tasks from this producer until all pipelines are completed
+	// check if there are any incomplete pipelines
+	auto &scheduler = TaskScheduler::GetScheduler(context);
 	while (completed_pipelines < total_pipelines) {
-		WorkOnTasks();
+		// there are! if we don't already have a task, fetch one
+		if (!task) {
+			scheduler.GetTaskFromProducer(*producer, task);
+		}
+		if (task) {
+			// if we have a task, partially process it
+			auto result = task->Execute(TaskExecutionMode::PROCESS_PARTIAL);
+			if (result != TaskExecutionResult::TASK_NOT_FINISHED) {
+				// if the task is finished, clean it up
+				task.reset();
+			}
+		}
 		if (!HasError()) {
-			// no exceptions: continue
-			continue;
+			// we (partially) processed a task and no exceptions were thrown
+			// give back control to the caller
+			return PendingExecutionResult::RESULT_NOT_READY;
 		}
 		execution_result = PendingExecutionResult::EXECUTION_ERROR;
 
@@ -349,6 +364,7 @@ PendingExecutionResult Executor::ExecuteTask() {
 		CancelTasks();
 		ThrowException();
 	}
+	D_ASSERT(!task);
 
 	lock_guard<mutex> elock(executor_lock);
 	pipelines.clear();

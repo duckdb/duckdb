@@ -145,5 +145,7 @@ private:
 
 	//! The last pending execution result (if any)
 	PendingExecutionResult execution_result;
+	//! The current task in process (if any)
+	unique_ptr<Task> task;
 };
 } // namespace duckdb

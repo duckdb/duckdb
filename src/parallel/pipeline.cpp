@@ -22,6 +22,7 @@
 namespace duckdb {
 
 class PipelineTask : public ExecutorTask {
+	static constexpr const idx_t PARTIAL_CHUNK_COUNT = 50;
 public:
 	explicit PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
 	    : ExecutorTask(pipeline_p.executor), pipeline(pipeline_p), event(move(event_p)) {
@@ -29,12 +30,24 @@ public:
 
 	Pipeline &pipeline;
 	shared_ptr<Event> event;
+	unique_ptr<PipelineExecutor> pipeline_executor;
 
 public:
-	void ExecuteTask() override {
-		PipelineExecutor executor(pipeline.GetClientContext(), pipeline);
-		executor.Execute();
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		if (!pipeline_executor) {
+			pipeline_executor = make_unique<PipelineExecutor>(pipeline.GetClientContext(), pipeline);
+		}
+		if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
+			bool finished = pipeline_executor->Execute(PARTIAL_CHUNK_COUNT);
+			if (!finished) {
+				return TaskExecutionResult::TASK_NOT_FINISHED;
+			}
+		} else {
+			pipeline_executor->Execute();
+		}
 		event->FinishTask();
+		pipeline_executor.reset();
+		return TaskExecutionResult::TASK_FINISHED;
 	}
 };
 

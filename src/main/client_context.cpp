@@ -47,6 +47,8 @@ struct ActiveQueryContext {
 	shared_ptr<PreparedStatementData> prepared;
 	//! The query executor
 	unique_ptr<Executor> executor;
+	//! The progress bar
+	unique_ptr<ProgressBar> progress_bar;
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
@@ -176,6 +178,7 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	if (active_query->executor) {
 		active_query->executor->CancelTasks();
 	}
+	active_query->progress_bar.reset();
 
 	auto error = EndQueryInternal(lock, result ? result->success : false, invalidate_transaction);
 	if (result && result->success) {
@@ -203,9 +206,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	auto &prepared = *active_query->prepared;
 	bool create_stream_result = prepared.allow_stream_result && allow_stream_result;
 	if (create_stream_result) {
-		if (config.enable_progress_bar) {
-			throw InternalException("FIXME: progress bar");
-		}
+		active_query->progress_bar.reset();
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
 		auto stream_result = make_unique<StreamQueryResult>(pending.statement_type, shared_from_this(), pending.types,
@@ -230,9 +231,6 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		result->collection.Append(*chunk);
 	}
 	CleanupInternal(lock, result.get());
-	// if (config.enable_progress_bar) {
-	// 	throw InternalException("FIXME: progress bar");
-	// }
 	return move(result);
 }
 
@@ -287,9 +285,10 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 }
 
 int ClientContext::GetProgress() {
-	throw InternalException("FIXME: GetProgress");
-	// D_ASSERT(progress_bar);
-	// return progress_bar->GetCurrentPercentage();
+	if (!active_query || !active_query->progress_bar) {
+		return -1;
+	}
+	return active_query->progress_bar->GetCurrentPercentage();
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(
@@ -311,13 +310,12 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(
 	// bind the bound values before execution
 	statement.Bind(move(bound_values));
 
-	if (config.enable_progress_bar) {
-		throw InternalException("FIXME: enable progress bar");
-		// progress_bar->Initialize(config.wait_time);
-		// progress_bar->Start();
-	}
 	active_query->executor = make_unique<Executor>(*this);
 	auto &executor = *active_query->executor;
+	if (config.enable_progress_bar) {
+		active_query->progress_bar = make_unique<ProgressBar>(executor, config.wait_time);
+		active_query->progress_bar->Start();
+	}
 	executor.Initialize(statement.plan.get());
 	auto types = executor.GetTypes();
 	D_ASSERT(types == statement.types);
@@ -333,7 +331,11 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->open_result == &result);
 	try {
-		return active_query->executor->ExecuteTask();
+		auto result = active_query->executor->ExecuteTask();
+		if (active_query->progress_bar) {
+			active_query->progress_bar->Update(result == PendingExecutionResult::RESULT_READY);
+		}
+		return result;
 	} catch(std::exception &ex) {
 		result.error = ex.what();
 	} catch (...) { // LCOV_EXCL_START

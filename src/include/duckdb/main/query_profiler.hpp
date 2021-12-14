@@ -114,7 +114,7 @@ private:
 	//! Whether or not the profiler is enabled
 	bool enabled;
 	//! The timer used to time the execution time of the individual Physical Operators
-	Profiler<system_clock> op;
+	Profiler op;
 	//! The stack of Physical Operators that are currently active
 	const PhysicalOperator *active_operator;
 	//! A mapping of physical operators to recorded timings
@@ -195,7 +195,7 @@ private:
 	//! The query string
 	string query;
 	//! The timer used to time the execution time of the entire query
-	Profiler<system_clock> main_query;
+	Profiler main_query;
 	//! A map of a Physical Operator pointer to a tree node
 	TreeMap tree_map;
 
@@ -208,7 +208,7 @@ public:
 
 private:
 	//! The timer used to time the individual phases of the planning process
-	Profiler<system_clock> phase_profiler;
+	Profiler phase_profiler;
 	//! A mapping of the phase names to the timings
 	using PhaseTimingStorage = unordered_map<string, double>;
 	PhaseTimingStorage phase_timings;
