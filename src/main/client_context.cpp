@@ -97,6 +97,9 @@ unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Exec
 	try {
 		// fetch the chunk and return it
 		auto chunk = executor.FetchChunk();
+		if (!chunk || chunk->size() == 0) {
+			CleanupInternal(lock, &result);
+		}
 		return chunk;
 	} catch (StandardException &ex) {
 		// standard exceptions do not invalidate the current transaction
@@ -187,6 +190,7 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 		result->error = error;
 		result->success = error.empty();
 	}
+	D_ASSERT(!active_query);
 }
 
 Executor &ClientContext::GetExecutor() {
@@ -232,7 +236,6 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 #endif
 		result->collection.Append(*chunk);
 	}
-	CleanupInternal(lock, result.get());
 	return move(result);
 }
 
@@ -879,7 +882,7 @@ bool ClientContext::UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *exis
 void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 	RunFunctionInTransaction([&]() {
 		auto &catalog = Catalog::GetCatalog(*this);
-		ScalarFunctionCatalogEntry *existing_function = (ScalarFunctionCatalogEntry *)catalog.GetEntry(
+		auto existing_function = (ScalarFunctionCatalogEntry *)catalog.GetEntry(
 		    *this, CatalogType::SCALAR_FUNCTION_ENTRY, info->schema, info->name, true);
 		if (existing_function) {
 			if (UpdateFunctionInfoFromEntry(existing_function, (CreateScalarFunctionInfo *)info)) {
@@ -901,6 +904,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 	// check if we are on AutoCommit. In this case we should start a transaction
 	bool require_new_transaction = transaction.IsAutoCommit() && !transaction.HasActiveTransaction();
 	if (require_new_transaction) {
+		D_ASSERT(!active_query);
 		transaction.BeginTransaction();
 	}
 	try {
