@@ -123,6 +123,12 @@ public:
 	//! Directly prepare a SQL statement
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
 
+	//! Create a pending query result from a prepared statement with the given name and set of parameters
+	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
+	//! modified in between the prepared statement being bound and the prepared statement being run.
+	DUCKDB_API unique_ptr<PendingQueryResult>
+	PendingQuery(const string &query, shared_ptr<PreparedStatementData> &prepared, vector<Value> &values);
+
 	//! Execute a prepared statement with the given name and set of parameters
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
 	//! modified in between the prepared statement being bound and the prepared statement being run.
@@ -225,6 +231,10 @@ private:
 	PendingStatementOrPreparedStatementInternal(ClientContextLock &lock, const string &query,
 	                                            unique_ptr<SQLStatement> statement,
 	                                            shared_ptr<PreparedStatementData> &prepared, vector<Value> *values);
+
+	unique_ptr<PendingQueryResult> PendingQueryPreparedInternal(ClientContextLock &lock, const string &query,
+	                                                            shared_ptr<PreparedStatementData> &prepared,
+	                                                            vector<Value> &values);
 
 private:
 	//! Lock on using the ClientContext in parallel

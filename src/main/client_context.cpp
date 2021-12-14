@@ -452,15 +452,27 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 	}
 }
 
+unique_ptr<PendingQueryResult> ClientContext::PendingQueryPreparedInternal(ClientContextLock &lock, const string &query,
+                                                                           shared_ptr<PreparedStatementData> &prepared,
+                                                                           vector<Value> &values) {
+	try {
+		InitialCleanup(lock);
+	} catch (std::exception &ex) {
+		return make_unique<PendingQueryResult>(ex.what());
+	}
+	return PendingStatementOrPreparedStatementInternal(lock, query, nullptr, prepared, &values);
+}
+
+unique_ptr<PendingQueryResult>
+ClientContext::PendingQuery(const string &query, shared_ptr<PreparedStatementData> &prepared, vector<Value> &values) {
+	auto lock = LockContext();
+	return PendingQueryPreparedInternal(*lock, query, prepared, values);
+}
+
 unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
                                                vector<Value> &values, bool allow_stream_result) {
 	auto lock = LockContext();
-	try {
-		InitialCleanup(*lock);
-	} catch (std::exception &ex) {
-		return make_unique<MaterializedQueryResult>(ex.what());
-	}
-	auto pending = PendingStatementOrPreparedStatementInternal(*lock, query, nullptr, prepared, &values);
+	auto pending = PendingQueryPreparedInternal(*lock, query, prepared, values);
 	if (!pending->success) {
 		return make_unique<MaterializedQueryResult>(pending->error);
 	}
