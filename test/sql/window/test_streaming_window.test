@@ -14,6 +14,7 @@ create table integers (i int, j int)
 statement ok
 insert into integers values (2, 2), (2, 1), (1, 2), (1, NULL)
 
+# Test each of the streaming window functions
 query TT
 explain select row_number() over (), i, j from integers
 ----
@@ -66,6 +67,7 @@ select percent_rank() over (), i, j from integers
 0.0	1	2
 0.0	1	NULL
 
+# Some combinations of compatible window functions
 query TT
 explain select i, j, first_value(i) over (), first_value(j) over () from integers
 ----
@@ -94,3 +96,24 @@ select row_number() over (), row_number() over () from integers
 2	2
 3	3
 4	4
+
+# Ignore nulls is not supported for streaming windows
+query TT
+explain select first_value(i IGNORE NULLS) over () from integers
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+# When we combine a streaming and non-streaming window function over the same window,
+# We get a non-streaming window operator
+query TT
+explain select first_value(i) over (), last_value(i) over () from integers
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+# When we combine a streaming and non-streaming window function over a different window,
+# We get both a streaming and a non-streaming window operator
+# The order between the two window operators is not important
+query TT
+explain select first_value(i) over (), last_value(i) over (order by j) from integers
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*WINDOW.*|.*WINDOW.*STREAMING_WINDOW.*

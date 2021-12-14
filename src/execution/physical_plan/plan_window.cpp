@@ -10,7 +10,7 @@
 
 namespace duckdb {
 
-bool IsStreaming(vector<unique_ptr<Expression>> &select_list) {
+static bool IsStreamingWindow(vector<unique_ptr<Expression>> &select_list) {
 	for (auto &expr : select_list) {
 		auto wexpr = reinterpret_cast<BoundWindowExpression *>(expr.get());
 		if (!wexpr->partitions.empty() || !wexpr->orders.empty() || wexpr->ignore_nulls) {
@@ -77,7 +77,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 
 		// Chain the new window operator on top of the plan
 		unique_ptr<PhysicalOperator> window;
-		if (IsStreaming(select_list)) {
+		if (IsStreamingWindow(select_list)) {
 			window = make_unique<PhysicalStreamingWindow>(types, move(select_list), op.estimated_cardinality);
 		} else {
 			window = make_unique<PhysicalWindow>(types, move(select_list), op.estimated_cardinality);
