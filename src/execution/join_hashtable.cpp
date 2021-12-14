@@ -288,7 +288,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 	// First, fill the hash_map and handle conflicts with a next_pointer
-	if (has_unique_keys && join_type == JoinType::INNER) {
+	if (has_unique_keys && (join_type == JoinType::INNER || join_type == JoinType::RIGHT) ) {
 		// For inner joins we check whether the build is composed of unique keys during the insertion into the hash map
 		InsertHashesAndCheckUniqueness(count_tuples, indices, key_locations, pointers); // inlined
 	} else {
@@ -394,7 +394,7 @@ bool JoinHashTable::CompareKeysSwitch(data_ptr_t left_key, data_ptr_t right_key,
 	case PhysicalType::LIST:
 	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
-		return true; // not handling this type for now, return as if they were equals
+		return true; // not handling this type for now, return as if they were equals (duplicate)
 	default:
 		throw InternalException("Unsupported column type for ValueOperations::Equals");
 	}
@@ -637,6 +637,16 @@ void ScanStructure::NextInnerUniqueKeysJoin(DataChunk &keys, DataChunk &left, Da
 	auto result_count = ScanKeyMatches(keys, result_sel);
 	// construct the final result
 	if (result_count > 0) {
+		if (IsRightOuterJoin(ht.join_type)) {
+			// full/right outer join: mark join matches as FOUND in the HT
+			auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
+			for (idx_t i = 0; i < result_count; i++) {
+				auto idx = result_sel.get_index(i);
+				// NOTE: threadsan reports this as a data race because this can be set concurrently by separate threads
+				// Technically it is, but it does not matter, since the only value that can be written is "true"
+				Store<bool>(true, ptrs[idx] + ht.tuple_size);
+			}
+		}
 		// Reference the columns of the left side from the result
 		result.Slice(left, result_sel, result_count);
 		// And the columns of the right side
