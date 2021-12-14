@@ -298,7 +298,7 @@ unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunct
 void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet first("first");
 	AggregateFunctionSet last("last");
-	for (auto &type : LogicalType::ALL_TYPES) {
+	for (auto &type : LogicalType::AllTypes()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			first.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 			                                    BindDecimalFirst<false>, nullptr, nullptr, nullptr));
