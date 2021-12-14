@@ -14,16 +14,9 @@ namespace duckdb {
 class ClientContext;
 class Executor;
 
-enum class TaskExecutionMode : uint8_t {
-	PROCESS_ALL,
-	PROCESS_PARTIAL
-};
+enum class TaskExecutionMode : uint8_t { PROCESS_ALL, PROCESS_PARTIAL };
 
-enum class TaskExecutionResult : uint8_t {
-	TASK_FINISHED,
-	TASK_NOT_FINISHED,
-	TASK_ERROR
-};
+enum class TaskExecutionResult : uint8_t { TASK_FINISHED, TASK_NOT_FINISHED, TASK_ERROR };
 
 //! Generic parallel task
 class Task {

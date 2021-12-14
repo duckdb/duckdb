@@ -5,8 +5,7 @@
 namespace duckdb {
 
 ProgressBar::ProgressBar(Executor &executor, idx_t show_progress_after)
-	: executor(executor), show_progress_after(show_progress_after),
-		current_percentage(-1) {
+    : executor(executor), show_progress_after(show_progress_after), current_percentage(-1) {
 }
 
 int ProgressBar::GetCurrentPercentage() {

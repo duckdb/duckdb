@@ -4,12 +4,13 @@
 
 namespace duckdb {
 
-PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, PreparedStatementData &statement, vector<LogicalType> types_p) :
-	BaseQueryResult(QueryResultType::PENDING_RESULT, statement.statement_type, move(types_p), statement.names), context(move(context_p)) {}
+PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, PreparedStatementData &statement,
+                                       vector<LogicalType> types_p)
+    : BaseQueryResult(QueryResultType::PENDING_RESULT, statement.statement_type, move(types_p), statement.names),
+      context(move(context_p)) {
+}
 
-PendingQueryResult::PendingQueryResult(string error) :
-	BaseQueryResult(QueryResultType::PENDING_RESULT, move(error)) {
-
+PendingQueryResult::PendingQueryResult(string error) : BaseQueryResult(QueryResultType::PENDING_RESULT, move(error)) {
 }
 
 PendingQueryResult::~PendingQueryResult() {
@@ -17,8 +18,8 @@ PendingQueryResult::~PendingQueryResult() {
 
 unique_ptr<ClientContextLock> PendingQueryResult::LockContext() {
 	if (!context) {
-		throw InvalidInputException(
-		    "Attempting to execute an unsuccessful or closed pending query result\nError: %s", error);
+		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
+		                            error);
 	}
 	return context->LockContext();
 }
@@ -29,8 +30,8 @@ void PendingQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 		invalidated = !context->IsActiveResult(lock, this);
 	}
 	if (invalidated) {
-		throw InvalidInputException(
-		    "Attempting to execute an unsuccessful or closed pending query result\nError: %s", error);
+		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
+		                            error);
 	}
 }
 
@@ -46,7 +47,8 @@ PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock
 
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock, bool allow_streaming_result) {
 	CheckExecutableInternal(lock);
-	while(ExecuteTaskInternal(lock) == PendingExecutionResult::RESULT_NOT_READY);
+	while (ExecuteTaskInternal(lock) == PendingExecutionResult::RESULT_NOT_READY)
+		;
 	if (!success) {
 		return make_unique<MaterializedQueryResult>(error);
 	}
@@ -64,4 +66,4 @@ void PendingQueryResult::Close() {
 	context.reset();
 }
 
-}
+} // namespace duckdb

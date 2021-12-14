@@ -91,7 +91,8 @@ unique_ptr<DataChunk> ClientContext::Fetch(ClientContextLock &lock, StreamQueryR
 	return FetchInternal(lock, *active_query->executor, result);
 }
 
-unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Executor &executor, BaseQueryResult &result) {
+unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Executor &executor,
+                                                   BaseQueryResult &result) {
 	bool invalidate_query = true;
 	try {
 		// fetch the chunk and return it
@@ -199,7 +200,8 @@ const string &ClientContext::GetCurrentQuery() {
 	return active_query->query;
 }
 
-unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending, bool allow_stream_result) {
+unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending,
+                                                           bool allow_stream_result) {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->open_result == &pending);
 	D_ASSERT(active_query->prepared);
@@ -209,8 +211,8 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		active_query->progress_bar.reset();
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
-		auto stream_result = make_unique<StreamQueryResult>(pending.statement_type, shared_from_this(), pending.types,
-		                                      pending.names);
+		auto stream_result =
+		    make_unique<StreamQueryResult>(pending.statement_type, shared_from_this(), pending.types, pending.names);
 		active_query->open_result = stream_result.get();
 		return move(stream_result);
 	}
@@ -291,11 +293,9 @@ int ClientContext::GetProgress() {
 	return active_query->progress_bar->GetCurrentPercentage();
 }
 
-unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(
-	ClientContextLock &lock,
-	shared_ptr<PreparedStatementData> statement_p,
-	vector<Value> bound_values
-) {
+unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientContextLock &lock,
+                                                                       shared_ptr<PreparedStatementData> statement_p,
+                                                                       vector<Value> bound_values) {
 	D_ASSERT(active_query);
 	auto &statement = *statement_p;
 	if (ActiveTransaction().IsInvalidated() && statement.requires_valid_transaction) {
@@ -336,7 +336,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			active_query->progress_bar->Update(result == PendingExecutionResult::RESULT_READY);
 		}
 		return result;
-	} catch(std::exception &ex) {
+	} catch (std::exception &ex) {
 		result.error = ex.what();
 	} catch (...) { // LCOV_EXCL_START
 		result.error = "Unhandled exception in ExecuteTaskInternal";
@@ -462,7 +462,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientContextLock &lock, const string &query,
-                                                            unique_ptr<SQLStatement> statement) {
+                                                                       unique_ptr<SQLStatement> statement) {
 	// prepare the query for execution
 	auto prepared = CreatePreparedStatement(lock, query, move(statement));
 	// by default, no values are bound
@@ -472,7 +472,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 }
 
 unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query,
-												unique_ptr<SQLStatement> statement, bool allow_stream_result, bool verify) {
+                                                            unique_ptr<SQLStatement> statement,
+                                                            bool allow_stream_result, bool verify) {
 	auto pending = PendingQueryInternal(lock, move(statement), verify);
 	if (!pending->success) {
 		return make_unique<MaterializedQueryResult>(move(pending->error));
@@ -498,10 +499,9 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 	return explain.explain_type == ExplainType::EXPLAIN_ANALYZE;
 }
 
-unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(ClientContextLock &lock, const string &query,
-                                                                       unique_ptr<SQLStatement> statement,
-                                                                       shared_ptr<PreparedStatementData> &prepared,
-                                                                       vector<Value> *values) {
+unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
+    ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+    shared_ptr<PreparedStatementData> &prepared, vector<Value> *values) {
 	// check if we are on AutoCommit. In this case we should start a transaction.
 	if (statement && config.query_verification_enabled) {
 		// query verification is enabled
@@ -521,10 +521,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	return PendingStatementOrPreparedStatement(lock, query, move(statement), prepared, values);
 }
 
-unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
-                                                                       unique_ptr<SQLStatement> statement,
-                                                                       shared_ptr<PreparedStatementData> &prepared,
-                                                                       vector<Value> *values) {
+unique_ptr<PendingQueryResult>
+ClientContext::PendingStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
+                                                   unique_ptr<SQLStatement> statement,
+                                                   shared_ptr<PreparedStatementData> &prepared, vector<Value> *values) {
 	unique_ptr<PendingQueryResult> result;
 
 	BeginQueryInternal(lock, query);
@@ -632,7 +632,8 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 	return result;
 }
 
-bool ClientContext::ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result, string &error) {
+bool ClientContext::ParseStatements(ClientContextLock &lock, const string &query,
+                                    vector<unique_ptr<SQLStatement>> &result, string &error) {
 	try {
 		InitialCleanup(lock);
 		// parse the query and transform it into a set of statements
@@ -663,7 +664,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
 	return PendingQueryInternal(*lock, move(statement));
 }
 
-unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement, bool verify) {
+unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock,
+                                                                   unique_ptr<SQLStatement> statement, bool verify) {
 	auto query = statement->query;
 	shared_ptr<PreparedStatementData> prepared;
 	if (verify) {
@@ -673,7 +675,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
 	}
 }
 
-unique_ptr<QueryResult> ClientContext::ExecutePendingQueryInternal(ClientContextLock &lock, PendingQueryResult &query, bool allow_stream_result) {
+unique_ptr<QueryResult> ClientContext::ExecutePendingQueryInternal(ClientContextLock &lock, PendingQueryResult &query,
+                                                                   bool allow_stream_result) {
 	return query.ExecuteInternal(lock, allow_stream_result);
 }
 

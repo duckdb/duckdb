@@ -7,8 +7,7 @@ namespace duckdb {
 
 StreamQueryResult::StreamQueryResult(StatementType statement_type, shared_ptr<ClientContext> context,
                                      vector<LogicalType> types, vector<string> names)
-    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, move(types), move(names)),
-      context(move(context)) {
+    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, move(types), move(names)), context(move(context)) {
 }
 
 StreamQueryResult::~StreamQueryResult() {
@@ -27,8 +26,8 @@ string StreamQueryResult::ToString() {
 
 unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 	if (!context) {
-		throw InvalidInputException(
-		    "Attempting to execute an unsuccessful or closed pending query result\nError: %s", error);
+		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
+		                            error);
 	}
 	return context->LockContext();
 }
@@ -39,8 +38,8 @@ void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 		invalidated = !context->IsActiveResult(lock, this);
 	}
 	if (invalidated) {
-		throw InvalidInputException(
-		    "Attempting to execute an unsuccessful or closed pending query result\nError: %s", error);
+		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
+		                            error);
 	}
 }
 

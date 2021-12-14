@@ -21,7 +21,8 @@ class PendingQueryResult : public BaseQueryResult {
 	friend class ClientContext;
 
 public:
-	DUCKDB_API PendingQueryResult(shared_ptr<ClientContext> context, PreparedStatementData &statement, vector<LogicalType> types);
+	DUCKDB_API PendingQueryResult(shared_ptr<ClientContext> context, PreparedStatementData &statement,
+	                              vector<LogicalType> types);
 	DUCKDB_API explicit PendingQueryResult(string error_message);
 	DUCKDB_API ~PendingQueryResult();
 

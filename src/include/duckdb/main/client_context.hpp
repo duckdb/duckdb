@@ -161,10 +161,13 @@ public:
 
 private:
 	//! Parse statements and resolve pragmas from a query
-	bool ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result, string &error);
+	bool ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result,
+	                     string &error);
 	//! Issues a query to the database and returns a Pending Query Result
-	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement, bool verify = true);
-	unique_ptr<QueryResult> ExecutePendingQueryInternal(ClientContextLock &lock, PendingQueryResult &query, bool allow_stream_result);
+	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
+	                                                    bool verify = true);
+	unique_ptr<QueryResult> ExecutePendingQueryInternal(ClientContextLock &lock, PendingQueryResult &query,
+	                                                    bool allow_stream_result);
 
 	//! Parse statements from a query
 	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
@@ -174,28 +177,30 @@ private:
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
-	void CleanupInternal(ClientContextLock &lock, BaseQueryResult *result = nullptr, bool invalidate_transaction = false);
+	void CleanupInternal(ClientContextLock &lock, BaseQueryResult *result = nullptr,
+	                     bool invalidate_transaction = false);
 	string FinalizeQuery(ClientContextLock &lock, bool success);
 	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
-	                                                        unique_ptr<SQLStatement> statement,
-	                                                        shared_ptr<PreparedStatementData> &prepared,
-	                                                        vector<Value> *values);
-	unique_ptr<PendingQueryResult> PendingPreparedStatement(
-		ClientContextLock &lock,
-		shared_ptr<PreparedStatementData> statement_p,
-		vector<Value> bound_values);
+	                                                                   unique_ptr<SQLStatement> statement,
+	                                                                   shared_ptr<PreparedStatementData> &prepared,
+	                                                                   vector<Value> *values);
+	unique_ptr<PendingQueryResult> PendingPreparedStatement(ClientContextLock &lock,
+	                                                        shared_ptr<PreparedStatementData> statement_p,
+	                                                        vector<Value> bound_values);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData> CreatePreparedStatement(ClientContextLock &lock, const string &query,
 	                                                          unique_ptr<SQLStatement> statement);
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
-	                                             unique_ptr<SQLStatement> statement);
+	                                                        unique_ptr<SQLStatement> statement);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
-	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result, bool verify = true);
+	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result,
+	                                             bool verify = true);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 
-	unique_ptr<QueryResult> FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending, bool allow_stream_result);
+	unique_ptr<QueryResult> FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending,
+	                                            bool allow_stream_result);
 	unique_ptr<DataChunk> FetchInternal(ClientContextLock &lock, Executor &executor, BaseQueryResult &result);
 
 	unique_ptr<ClientContextLock> LockContext();
@@ -208,10 +213,11 @@ private:
 
 	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, PendingQueryResult &result);
 
-	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatementInternal(ClientContextLock &lock, const string &query,
-																		unique_ptr<SQLStatement> statement,
-																		shared_ptr<PreparedStatementData> &prepared,
-																		vector<Value> *values);
+	unique_ptr<PendingQueryResult>
+	PendingStatementOrPreparedStatementInternal(ClientContextLock &lock, const string &query,
+	                                            unique_ptr<SQLStatement> statement,
+	                                            shared_ptr<PreparedStatementData> &prepared, vector<Value> *values);
+
 private:
 	//! Lock on using the ClientContext in parallel
 	mutex context_lock;

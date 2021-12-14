@@ -24,7 +24,7 @@ public:
 	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
-	                       vector<string> names);
+	                           vector<string> names);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API BaseQueryResult(QueryResultType type, string error);
 	DUCKDB_API virtual ~BaseQueryResult();

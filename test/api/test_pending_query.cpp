@@ -40,7 +40,8 @@ TEST_CASE("Test Pending Query API", "[api]") {
 	}
 	SECTION("Execute tasks") {
 		auto pending_query = con.PendingQuery("SELECT SUM(i) FROM range(1000000) tbl(i)");
-		while(pending_query->ExecuteTask() == PendingExecutionResult::RESULT_NOT_READY);
+		while (pending_query->ExecuteTask() == PendingExecutionResult::RESULT_NOT_READY)
+			;
 		REQUIRE(pending_query->success);
 		auto result = pending_query->Execute(true);
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(499999500000)}));
@@ -80,7 +81,8 @@ TEST_CASE("Test Pending Query API", "[api]") {
 	}
 	SECTION("Runtime error in pending query (materialized)") {
 		// this succeeds initially
-		auto pending_query = con.PendingQuery("SELECT concat(SUM(i)::varchar, 'hello')::INT FROM range(1000000) tbl(i)");
+		auto pending_query =
+		    con.PendingQuery("SELECT concat(SUM(i)::varchar, 'hello')::INT FROM range(1000000) tbl(i)");
 		REQUIRE(pending_query->success);
 		// we only encounter the failure later on as we are executing the query
 		auto result = pending_query->Execute();
@@ -92,7 +94,8 @@ TEST_CASE("Test Pending Query API", "[api]") {
 	}
 	SECTION("Runtime error in pending query (streaming)") {
 		// this succeeds initially
-		auto pending_query = con.PendingQuery("SELECT concat(SUM(i)::varchar, 'hello')::INT FROM range(1000000) tbl(i)");
+		auto pending_query =
+		    con.PendingQuery("SELECT concat(SUM(i)::varchar, 'hello')::INT FROM range(1000000) tbl(i)");
 		REQUIRE(pending_query->success);
 		// still succeeds...
 		auto result = pending_query->Execute(true);

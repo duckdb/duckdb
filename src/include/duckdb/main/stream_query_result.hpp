@@ -49,7 +49,6 @@ private:
 private:
 	unique_ptr<ClientContextLock> LockContext();
 	void CheckExecutableInternal(ClientContextLock &lock);
-
 };
 
 } // namespace duckdb

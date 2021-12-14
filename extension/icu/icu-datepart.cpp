@@ -276,8 +276,8 @@ struct ICUDatePart {
 	}
 
 	static ScalarFunction GetUnaryPartCodeFunction(const string &name) {
-		return ScalarFunction(name, {LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT,
-		                      UnaryTimestampFunction<int64_t>, false, BindDatePart);
+		return ScalarFunction(name, {LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, UnaryTimestampFunction<int64_t>,
+		                      false, BindDatePart);
 	}
 
 	static void AddUnaryPartCodeFunction(const string &name, ClientContext &context) {
@@ -306,8 +306,8 @@ struct ICUDatePart {
 	}
 
 	static ScalarFunction GetLastDayFunction(const string &name) {
-		return ScalarFunction(name, {LogicalType::TIMESTAMP_TZ}, LogicalType::DATE_TZ,
-		                      UnaryTimestampFunction<date_t>, false, BindLastDate);
+		return ScalarFunction(name, {LogicalType::TIMESTAMP_TZ}, LogicalType::DATE_TZ, UnaryTimestampFunction<date_t>,
+		                      false, BindLastDate);
 	}
 	static void AddLastDayFunction(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);
