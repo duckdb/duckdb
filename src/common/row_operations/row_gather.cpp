@@ -47,8 +47,8 @@ static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vec
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
 	// Build the gather locations
-	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
-	data_ptr_t mask_locations[STANDARD_VECTOR_SIZE];
+	auto data_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[count]);
+	auto mask_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[count]);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_idx = row_sel.get_index(i);
 		mask_locations[i] = ptrs[row_idx];
@@ -56,7 +56,7 @@ static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vec
 	}
 
 	// Deserialise into the selected locations
-	RowOperations::HeapGather(col, count, col_sel, col_no, data_locations, mask_locations);
+	RowOperations::HeapGather(col, count, col_sel, col_no, data_locations.get(), mask_locations.get());
 }
 
 void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,
