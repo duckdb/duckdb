@@ -730,6 +730,19 @@ T Value::GetValueInternal() const {
 		return Cast::Operation<interval_t, T>(value_.interval);
 	case LogicalTypeId::DECIMAL:
 		return CastAs(LogicalType::DOUBLE).GetValueInternal<T>();
+	case LogicalTypeId::ENUM: {
+		switch (type_.InternalType()) {
+		case PhysicalType::UINT8:
+			return Cast::Operation<uint8_t, T>(value_.utinyint);
+		case PhysicalType::UINT16:
+			return Cast::Operation<uint16_t, T>(value_.usmallint);
+		case PhysicalType::UINT32:
+			return Cast::Operation<uint32_t, T>(value_.uinteger);
+		default:
+			throw InternalException("Invalid Internal Type for ENUMs");
+		}
+	}
+
 	default:
 		throw NotImplementedException("Unimplemented type \"%s\" for GetValue()", type_.ToString());
 	}
