@@ -12,11 +12,22 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/profiler_format.hpp"
 
 namespace duckdb {
 class ClientContext;
 
 struct ClientConfig {
+	//! If the query profiler is enabled or not.
+	bool enable_profiler = false;
+	//! If detailed query profiling is enabled
+	bool enable_detailed_profiling = false;
+	//! The format to automatically print query profiling information in (default: disabled)
+	ProfilerPrintFormat profiler_print_format = ProfilerPrintFormat::NONE;
+	//! The file to save query profiling information to, instead of printing it to the console
+	//! (empty = print to console)
+	string profiler_save_location;
+
 	//! If the progress bar is enabled or not.
 	bool enable_progress_bar = false;
 	//! If the print of the progress bar is enabled

@@ -544,7 +544,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
                      ArrowSchema &arrow_schema, SEXP &batch_import_from_c, SEXP &arrow_namespace) {
 	if (result->type == QueryResultType::STREAM_RESULT) {
 		auto stream_result = (StreamQueryResult *)result;
-		if (!stream_result->is_open) {
+		if (!stream_result->IsOpen()) {
 			return false;
 		}
 	}

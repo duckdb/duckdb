@@ -15,7 +15,7 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 		result = DatePartSpecifier::YEAR;
 	} else if (specifier == "month" || specifier == "mon" || specifier == "months" || specifier == "mons") {
 		result = DatePartSpecifier::MONTH;
-	} else if (specifier == "day" || specifier == "days" || specifier == "d") {
+	} else if (specifier == "day" || specifier == "days" || specifier == "d" || specifier == "dayofmonth") {
 		result = DatePartSpecifier::DAY;
 	} else if (specifier == "decade" || specifier == "decades") {
 		result = DatePartSpecifier::DECADE;
@@ -37,13 +37,13 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 	} else if (specifier == "epoch") {
 		// seconds since 1970-01-01
 		result = DatePartSpecifier::EPOCH;
-	} else if (specifier == "dow" || specifier == "dayofweek") {
+	} else if (specifier == "dow" || specifier == "dayofweek" || specifier == "weekday") {
 		// day of the week (Sunday = 0, Saturday = 6)
 		result = DatePartSpecifier::DOW;
 	} else if (specifier == "isodow") {
 		// isodow (Monday = 1, Sunday = 7)
 		result = DatePartSpecifier::ISODOW;
-	} else if (specifier == "week" || specifier == "weeks" || specifier == "w") {
+	} else if (specifier == "week" || specifier == "weeks" || specifier == "w" || specifier == "weekofyear") {
 		// week number
 		result = DatePartSpecifier::WEEK;
 	} else if (specifier == "doy" || specifier == "dayofyear") {
@@ -55,6 +55,10 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 	} else if (specifier == "yearweek") {
 		// Combined year and week YYYYWW
 		result = DatePartSpecifier::YEARWEEK;
+	} else if (specifier == "era") {
+		result = DatePartSpecifier::ERA;
+	} else if (specifier == "offset") {
+		result = DatePartSpecifier::OFFSET;
 	} else {
 		return false;
 	}
@@ -373,6 +377,35 @@ struct DatePart {
 			return PropagateDatePartStatistics<T, EpochOperator>(child_stats);
 		}
 	};
+
+	struct EraOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return Date::ExtractYear(input) > 0 ? 1 : 0;
+		}
+
+		template <class T>
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+		                                                      FunctionData *bind_data,
+		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+			return PropagateSimpleDatePartStatistics<0, 1>(child_stats);
+		}
+	};
+
+	struct OffsetOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			// Regular timestamps are UTC.
+			return 0;
+		}
+
+		template <class T>
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+		                                                      FunctionData *bind_data,
+		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+			return PropagateSimpleDatePartStatistics<0, 0>(child_stats);
+		}
+	};
 };
 
 template <>
@@ -647,6 +680,36 @@ DatePart::EpochOperator::PropagateStatistics<dtime_t>(ClientContext &context, Bo
 	return PropagateSimpleDatePartStatistics<0, 86400>(child_stats);
 }
 
+template <>
+int64_t DatePart::EraOperator::Operation(timestamp_t input) {
+	return EraOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+template <>
+int64_t DatePart::EraOperator::Operation(interval_t input) {
+	throw NotImplementedException("interval units \"era\" not recognized");
+}
+
+template <>
+int64_t DatePart::EraOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"era\" not recognized");
+}
+
+template <>
+int64_t DatePart::OffsetOperator::Operation(timestamp_t input) {
+	return 0;
+}
+
+template <>
+int64_t DatePart::OffsetOperator::Operation(interval_t input) {
+	return 0;
+}
+
+template <>
+int64_t DatePart::OffsetOperator::Operation(dtime_t input) {
+	return 0;
+}
+
 template <class T>
 static int64_t ExtractElement(DatePartSpecifier type, T element) {
 	switch (type) {
@@ -686,6 +749,10 @@ static int64_t ExtractElement(DatePartSpecifier type, T element) {
 		return DatePart::MinutesOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::HOUR:
 		return DatePart::HoursOperator::template Operation<T, int64_t>(element);
+	case DatePartSpecifier::ERA:
+		return DatePart::EraOperator::template Operation<T, int64_t>(element);
+	case DatePartSpecifier::OFFSET:
+		return DatePart::OffsetOperator::template Operation<T, int64_t>(element);
 	default:
 		throw NotImplementedException("Specifier type not implemented for DATEPART");
 	}
@@ -799,6 +866,7 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	AddDatePartOperator<DatePart::ISODayOfWeekOperator>(set, "isodow");
 	AddDatePartOperator<DatePart::DayOfYearOperator>(set, "dayofyear");
 	AddDatePartOperator<DatePart::WeekOperator>(set, "week");
+	AddDatePartOperator<DatePart::EraOperator>(set, "era");
 	AddTimePartOperator<DatePart::EpochOperator>(set, "epoch");
 	AddTimePartOperator<DatePart::MicrosecondsOperator>(set, "microsecond");
 	AddTimePartOperator<DatePart::MillisecondsOperator>(set, "millisecond");

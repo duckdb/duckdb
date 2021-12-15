@@ -13,6 +13,7 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/enums/pending_execution_result.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -44,6 +45,9 @@ public:
 	void Initialize(PhysicalOperator *physical_plan);
 	void BuildPipelines(PhysicalOperator *op, Pipeline *current);
 
+	void CancelTasks();
+	PendingExecutionResult ExecuteTask();
+
 	void Reset();
 
 	vector<LogicalType> GetTypes();
@@ -65,7 +69,7 @@ public:
 	void Flush(ThreadContext &context);
 
 	//! Returns the progress of the pipelines
-	bool GetPipelinesProgress(int &current_progress);
+	bool GetPipelinesProgress(double &current_progress);
 
 	void CompletePipeline() {
 		completed_pipelines++;
@@ -138,5 +142,10 @@ private:
 
 	//! Active recursive CTE node (if any)
 	PhysicalOperator *recursive_cte;
+
+	//! The last pending execution result (if any)
+	PendingExecutionResult execution_result;
+	//! The current task in process (if any)
+	unique_ptr<Task> task;
 };
 } // namespace duckdb

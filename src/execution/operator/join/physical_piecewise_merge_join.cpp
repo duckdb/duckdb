@@ -154,6 +154,10 @@ void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalSinkSt
 	auto &gstate = (MergeJoinGlobalState &)gstate_p;
 	auto &lstate = (MergeJoinLocalState &)lstate_p;
 	gstate.rhs_global_sort_state.AddLocalState(lstate.rhs_local_sort_state);
+	auto &client_profiler = QueryProfiler::Get(context.client);
+
+	context.thread.profiler.Flush(this, &lstate.rhs_executor, "rhs_executor", 1);
+	client_profiler.Flush(context.thread.profiler);
 }
 
 //===--------------------------------------------------------------------===//
@@ -165,12 +169,14 @@ public:
 	    : ExecutorTask(context), event(move(event_p)), context(context), state(state) {
 	}
 
-	void ExecuteTask() override {
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		// Initialize merge sorted and iterate until done
 		auto &global_sort_state = state.rhs_global_sort_state;
 		MergeSorter merge_sorter(global_sort_state, BufferManager::GetBufferManager(context));
 		merge_sorter.PerformInMergeRound();
 		event->FinishTask();
+
+		return TaskExecutionResult::TASK_FINISHED;
 	}
 
 private:
@@ -400,7 +406,7 @@ static void SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const i
 	for (idx_t col_idx = 0; col_idx < sorted_data.layout.ColumnCount(); col_idx++) {
 		const auto col_offset = sorted_data.layout.GetOffsets()[col_idx];
 		RowOperations::Gather(addresses, info.result, payload.data[left_cols + col_idx],
-		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, result_count, col_offset, col_idx);
+		                      *FlatVector::IncrementalSelectionVector(), result_count, col_offset, col_idx);
 	}
 }
 

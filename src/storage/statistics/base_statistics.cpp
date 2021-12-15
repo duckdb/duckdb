@@ -141,7 +141,9 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 }
 
 void BaseStatistics::Verify(Vector &vector, idx_t count) {
-	Verify(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
+	SelectionVector owned_sel;
+	auto sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
+	Verify(vector, *sel, count);
 }
 
 } // namespace duckdb

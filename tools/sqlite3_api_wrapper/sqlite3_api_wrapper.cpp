@@ -1170,26 +1170,23 @@ int sqlite3_create_function(sqlite3 *db, const char *zFunctionName, int nArg, in
 	string fname = string(zFunctionName);
 
 	// Scalar function
-	if (xFunc) {
-		auto udf_sqlite3 = SQLiteUDFWrapper::CreateSQLiteScalarFunction(xFunc, db, pApp);
-		LogicalType varargs = LogicalType::INVALID;
-		if (nArg == -1) {
-			varargs = LogicalType::ANY;
-			nArg = 0;
-		}
-
-		vector<LogicalType> argv_types(nArg);
-		for (idx_t i = 0; i < (idx_t)nArg; ++i) {
-			argv_types[i] = LogicalType::ANY;
-		}
-
-		UDFWrapper::RegisterFunction(fname, argv_types, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context),
-		                             varargs);
-
-		return SQLITE_OK;
+	if (!xFunc) {
+		return SQLITE_MISUSE;
+	}
+	auto udf_sqlite3 = SQLiteUDFWrapper::CreateSQLiteScalarFunction(xFunc, db, pApp);
+	LogicalType varargs = LogicalType::INVALID;
+	if (nArg == -1) {
+		varargs = LogicalType::ANY;
+		nArg = 0;
 	}
 
-	return SQLITE_MISUSE;
+	vector<LogicalType> argv_types(nArg);
+	for (idx_t i = 0; i < (idx_t)nArg; ++i) {
+		argv_types[i] = LogicalType::ANY;
+	}
+
+	UDFWrapper::RegisterFunction(fname, argv_types, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context), varargs);
+	return SQLITE_OK;
 }
 
 int sqlite3_create_function_v2(sqlite3 *db, const char *zFunctionName, int nArg, int eTextRep, void *pApp,

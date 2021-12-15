@@ -89,7 +89,7 @@ struct BitwiseANDOperator {
 
 void BitwiseAndFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("&");
-	for (auto &type : LogicalType::INTEGRAL) {
+	for (auto &type : LogicalType::Integral()) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseANDOperator>(type)));
 	}
@@ -108,7 +108,7 @@ struct BitwiseOROperator {
 
 void BitwiseOrFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("|");
-	for (auto &type : LogicalType::INTEGRAL) {
+	for (auto &type : LogicalType::Integral()) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseOROperator>(type)));
 	}
@@ -127,7 +127,7 @@ struct BitwiseXOROperator {
 
 void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("xor");
-	for (auto &type : LogicalType::INTEGRAL) {
+	for (auto &type : LogicalType::Integral()) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseXOROperator>(type)));
 	}
@@ -151,7 +151,7 @@ struct BitwiseShiftLeftOperator {
 
 void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("<<");
-	for (auto &type : LogicalType::INTEGRAL) {
+	for (auto &type : LogicalType::Integral()) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseShiftLeftOperator>(type)));
 	}
@@ -170,7 +170,7 @@ struct BitwiseShiftRightOperator {
 
 void RightShiftFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions(">>");
-	for (auto &type : LogicalType::INTEGRAL) {
+	for (auto &type : LogicalType::Integral()) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseShiftRightOperator>(type)));
 	}
@@ -189,7 +189,7 @@ struct BitwiseNotOperator {
 
 void BitwiseNotFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("~");
-	for (auto &type : LogicalType::INTEGRAL) {
+	for (auto &type : LogicalType::Integral()) {
 		functions.AddFunction(ScalarFunction({type}, type, GetScalarIntegerUnaryFunction<BitwiseNotOperator>(type)));
 	}
 	set.AddFunction(functions);

@@ -138,7 +138,7 @@ public:
 
 private:
 	//! Selection vector and addresses for scattering the data to rows
-	const SelectionVector &sel_ptr = FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	const SelectionVector &sel_ptr = *FlatVector::IncrementalSelectionVector();
 	Vector addresses = Vector(LogicalType::POINTER);
 };
 

@@ -71,8 +71,8 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	del->AddChild(move(root));
 
 	// set up the delete expression
-	del->expressions.push_back(
-	    make_unique<BoundColumnRefExpression>(LOGICAL_ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
+	del->expressions.push_back(make_unique<BoundColumnRefExpression>(
+	    LogicalType::ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
 	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
 	result.plan = move(del);

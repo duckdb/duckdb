@@ -246,36 +246,25 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 		}
 		materialized.collection.Reset();
 	} else {
+		D_ASSERT(result->type == QueryResultType::STREAM_RESULT);
 		if (!stream) {
-			while (true) {
-				unique_ptr<DataChunk> chunk;
-				{
-					py::gil_scoped_release release;
-					chunk = FetchNextRaw(*result);
-				}
-				if (!chunk || chunk->size() == 0) {
-					//! finished
-					break;
-				}
-				conversion.Append(*chunk, &categories);
+			vectors_per_chunk = NumericLimits<idx_t>::Maximum();
+		}
+		auto stream_result = (StreamQueryResult *)result.get();
+		for (idx_t count_vec = 0; count_vec < vectors_per_chunk; count_vec++) {
+			if (!stream_result->IsOpen()) {
+				break;
 			}
-		} else {
-			auto stream_result = (StreamQueryResult *)result.get();
-			for (idx_t count_vec = 0; count_vec < vectors_per_chunk; count_vec++) {
-				if (!stream_result->is_open) {
-					break;
-				}
-				unique_ptr<DataChunk> chunk;
-				{
-					py::gil_scoped_release release;
-					chunk = FetchNextRaw(*stream_result);
-				}
-				if (!chunk || chunk->size() == 0) {
-					//! finished
-					break;
-				}
-				conversion.Append(*chunk, &categories);
+			unique_ptr<DataChunk> chunk;
+			{
+				py::gil_scoped_release release;
+				chunk = FetchNextRaw(*stream_result);
 			}
+			if (!chunk || chunk->size() == 0) {
+				//! finished
+				break;
+			}
+			conversion.Append(*chunk, &categories);
 		}
 	}
 
@@ -312,7 +301,7 @@ bool FetchArrowChunk(QueryResult *result, py::list &batches,
                      bool copy = false) {
 	if (result->type == QueryResultType::STREAM_RESULT) {
 		auto stream_result = (StreamQueryResult *)result;
-		if (!stream_result->is_open) {
+		if (!stream_result->IsOpen()) {
 			return false;
 		}
 	}
