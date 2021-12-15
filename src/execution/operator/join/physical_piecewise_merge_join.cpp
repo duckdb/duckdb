@@ -97,8 +97,10 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, Globa
 void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate,
                                          LocalSinkState &lstate) const {
 	auto &state = (MergeJoinLocalState &)lstate;
+	auto &client_profiler = QueryProfiler::Get(context.client);
+
 	context.thread.profiler.Flush(this, &state.rhs_executor, "rhs_executor", 1);
-	context.client.profiler->Flush(context.thread.profiler);
+	client_profiler.Flush(context.thread.profiler);
 }
 
 //===--------------------------------------------------------------------===//
