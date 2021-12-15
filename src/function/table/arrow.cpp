@@ -1103,12 +1103,12 @@ unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContex
 	return make_unique<NodeStatistics>(bind_data.number_of_rows, bind_data.number_of_rows);
 }
 
-int ArrowTableFunction::ArrowProgress(ClientContext &context, const FunctionData *bind_data_p) {
+double ArrowTableFunction::ArrowProgress(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
 	if (bind_data.number_of_rows == 0) {
 		return 100;
 	}
-	auto percentage = bind_data.lines_read * 100 / bind_data.number_of_rows;
+	auto percentage = bind_data.lines_read * 100.0 / bind_data.number_of_rows;
 	return percentage;
 }
 
