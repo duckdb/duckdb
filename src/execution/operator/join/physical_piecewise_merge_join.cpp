@@ -90,7 +90,7 @@ unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(Clien
 
 class MergeJoinLocalState : public LocalSinkState {
 public:
-	explicit MergeJoinLocalState() {
+	explicit MergeJoinLocalState() : rhs_has_null(0), rhs_count(0) {
 	}
 
 	//! The local sort state
@@ -99,6 +99,10 @@ public:
 	ExpressionExecutor rhs_executor;
 	//! Holds a vector of incoming sorting columns
 	DataChunk rhs_keys;
+	//! Whether or not the RHS has NULL values
+	idx_t rhs_has_null;
+	//! The total number of rows in the RHS
+	idx_t rhs_count;
 };
 
 unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(ExecutionContext &context) const {
@@ -135,9 +139,9 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, Globa
 	// TODO: Sort any comparison NULLs to the end using an initial sort column
 	const auto count = join_keys.size();
 	for (auto &key : join_keys.data) {
-		gstate.rhs_has_null += (count - key.CountValid(count));
+		lstate.rhs_has_null += (count - key.CountValid(count));
 	}
-	gstate.rhs_count += count;
+	lstate.rhs_count += count;
 
 	// Sink the data into the local sort state
 	local_sort_state.SinkChunk(join_keys, input);
@@ -154,6 +158,8 @@ void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalSinkSt
 	auto &gstate = (MergeJoinGlobalState &)gstate_p;
 	auto &lstate = (MergeJoinLocalState &)lstate_p;
 	gstate.rhs_global_sort_state.AddLocalState(lstate.rhs_local_sort_state);
+	gstate.rhs_has_null += lstate.rhs_has_null;
+	gstate.rhs_count += lstate.rhs_count;
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
 	context.thread.profiler.Flush(this, &lstate.rhs_executor, "rhs_executor", 1);
