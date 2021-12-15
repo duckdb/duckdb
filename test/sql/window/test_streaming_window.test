@@ -112,8 +112,13 @@ physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 # When we combine a streaming and non-streaming window function over a different window,
 # We get both a streaming and a non-streaming window operator
-# The order between the two window operators is not important
+# The streaming window should always come last
 query TT
 explain select first_value(i) over (), last_value(i) over (order by j) from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*WINDOW.*|.*WINDOW.*STREAMING_WINDOW.*
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*WINDOW.*
+
+query TT
+explain select last_value(i) over (order by j), first_value(i) over () from integers
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*WINDOW.*

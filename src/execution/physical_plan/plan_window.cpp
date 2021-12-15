@@ -10,21 +10,27 @@
 
 namespace duckdb {
 
+static bool IsStreamingWindow(unique_ptr<Expression> &expr) {
+	auto wexpr = reinterpret_cast<BoundWindowExpression *>(expr.get());
+	if (!wexpr->partitions.empty() || !wexpr->orders.empty() || wexpr->ignore_nulls) {
+		return false;
+	}
+	switch (wexpr->type) {
+	// TODO: add more expression types here?
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_RANK_DENSE:
+	case ExpressionType::WINDOW_ROW_NUMBER:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static bool IsStreamingWindow(vector<unique_ptr<Expression>> &select_list) {
 	for (auto &expr : select_list) {
-		auto wexpr = reinterpret_cast<BoundWindowExpression *>(expr.get());
-		if (!wexpr->partitions.empty() || !wexpr->orders.empty() || wexpr->ignore_nulls) {
-			return false;
-		}
-		switch (wexpr->type) {
-		// TODO: add more expression types here
-		case ExpressionType::WINDOW_FIRST_VALUE:
-		case ExpressionType::WINDOW_PERCENT_RANK:
-		case ExpressionType::WINDOW_RANK:
-		case ExpressionType::WINDOW_RANK_DENSE:
-		case ExpressionType::WINDOW_ROW_NUMBER:
-			break;
-		default:
+		if (!IsStreamingWindow(expr)) {
 			return false;
 		}
 	}
@@ -46,10 +52,17 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 	const auto output_idx = types.size() - op.expressions.size();
 	types.resize(output_idx);
 
+	// Fill remaining with streaming window functions last
+	vector<idx_t> remaining;
+	for (idx_t expr_idx = 0; expr_idx < op.expressions.size(); expr_idx++) {
+		if (IsStreamingWindow(op.expressions[expr_idx])) {
+			remaining.push_back(expr_idx);
+		} else {
+			remaining.insert(remaining.begin(), expr_idx);
+		}
+	}
 	// Process the window functions by sharing the partition/order definitions
 	vector<idx_t> evaluation_order;
-	vector<idx_t> remaining(op.expressions.size());
-	std::iota(remaining.begin(), remaining.end(), 0);
 	while (!remaining.empty()) {
 		// Find all functions that share the partitioning of the first remaining expression
 		const auto over_idx = remaining[0];
