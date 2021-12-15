@@ -196,6 +196,7 @@ private:
 
 	// scalar functions
 	void RegisterDateFunctions();
+	void RegisterEnumFunctions();
 	void RegisterGenericFunctions();
 	void RegisterMathFunctions();
 	void RegisterOperators();
