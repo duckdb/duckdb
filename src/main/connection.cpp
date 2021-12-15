@@ -27,10 +27,11 @@ Connection::Connection(DuckDB &database) : Connection(*database.instance) {
 }
 
 string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
+	auto &profiler = QueryProfiler::Get(*context);
 	if (format == ProfilerPrintFormat::JSON) {
-		return context->profiler->ToJSON();
+		return profiler.ToJSON();
 	} else {
-		return context->profiler->ToString();
+		return profiler.ToString();
 	}
 }
 
@@ -72,6 +73,14 @@ unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> s
 	auto result = context->Query(move(statement), false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
+}
+
+unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query) {
+	return context->PendingQuery(query);
+}
+
+unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement) {
+	return context->PendingQuery(move(statement));
 }
 
 unique_ptr<PreparedStatement> Connection::Prepare(const string &query) {

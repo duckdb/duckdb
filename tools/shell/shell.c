@@ -20246,6 +20246,7 @@ static const char zOptions[] =
   "   -box                 set output mode to 'box'\n"
   "   -column              set output mode to 'column'\n"
   "   -cmd COMMAND         run \"COMMAND\" before reading stdin\n"
+  "   -c COMMAND           run \"COMMAND\" and exit\n"
   "   -csv                 set output mode to 'csv'\n"
 #if defined(SQLITE_ENABLE_DESERIALIZE)
   "   -deserialize         open the database using sqlite3_deserialize()\n"
@@ -20274,10 +20275,12 @@ static const char zOptions[] =
 #endif
   "   -newline SEP         set output row separator. Default: '\\n'\n"
   "   -nofollow            refuse to open symbolic links to database files\n"
+  "   -no-stdin            exit after processing options instead of reading stdin"
   "   -nullvalue TEXT      set text string for NULL values. Default ''\n"
   "   -pagecache SIZE N    use N slots of SZ bytes each for page cache memory\n"
   "   -quote               set output mode to 'quote'\n"
   "   -readonly            open the database read-only\n"
+  "   -s COMMAND           run \"COMMAND\" and exit\n"
   "   -separator SEP       set output column separator. Default: '|'\n"
 #ifdef SQLITE_ENABLE_SORTER_REFERENCES
   "   -sorterref SIZE      sorter references threshold size\n"
@@ -20518,6 +20521,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
      || strcmp(z,"-nullvalue")==0
      || strcmp(z,"-newline")==0
      || strcmp(z,"-cmd")==0
+     || strcmp(z,"-c")==0
+     || strcmp(z,"-s")==0
     ){
       (void)cmdline_option_value(argc, argv, ++i);
     }else if( strcmp(z,"-init")==0 ){
@@ -20785,7 +20790,12 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
 #endif
     }else if( strcmp(z,"-help")==0 ){
       usage(1);
-    }else if( strcmp(z,"-cmd")==0 ){
+    }else if( strcmp(z,"-no-stdin")==0 ){
+      readStdin = 0;
+    }else if( strcmp(z,"-cmd")==0 || strcmp(z,"-c")==0 || strcmp(z,"-s")==0){
+      if (strcmp(z,"-c")==0 || strcmp(z,"-s")==0) {
+        readStdin = 0;
+      }
       /* Run commands that follow -cmd first and separately from commands
       ** that simply appear on the command-line.  This seems goofy.  It would
       ** be better if all commands ran in the order that they appear.  But

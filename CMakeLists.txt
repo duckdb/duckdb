@@ -232,6 +232,7 @@ option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 option(BUILD_ARROW_ABI_TEST "Enable the Arrow ABI Test." FALSE)
+option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -433,6 +434,10 @@ endfunction()
 
 function(add_extension_definitions)
   include_directories(${PROJECT_SOURCE_DIR}/extension)
+
+  if(NOT("${TEST_REMOTE_INSTALL}" STREQUAL "OFF"))
+    add_definitions(-DDUCKDB_TEST_REMOTE_INSTALL="${TEST_REMOTE_INSTALL}")
+  endif()
 
   if(${BUILD_ICU_EXTENSION})
     include_directories(${PROJECT_SOURCE_DIR}/extension/icu/include)

@@ -29,7 +29,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &
 	// shorthand case
 	if (!StringUtil::Contains(extension, ".") && !StringUtil::Contains(extension, fs.PathSeparator())) {
 		string local_path = fs.GetHomeDirectory();
-		for (auto &path_ele : PATH_COMPONENTS) {
+		auto path_components = PathComponents();
+		for (auto &path_ele : path_components) {
 			local_path = fs.JoinPath(local_path, path_ele);
 		}
 		filename = fs.JoinPath(local_path, extension + ".duckdb_extension");

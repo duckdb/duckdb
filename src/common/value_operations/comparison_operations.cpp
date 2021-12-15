@@ -99,12 +99,15 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 	const auto &left_type = left.type();
 	const auto &right_type = right.type();
 	if (left_type != right_type) {
-		try {
-			LogicalType comparison_type = BoundComparisonExpression::BindComparison(left_type, right_type);
-			return TemplatedBooleanOperation<OP>(left.CastAs(comparison_type), right.CastAs(comparison_type));
-		} catch (...) {
+		Value left_copy = left;
+		Value right_copy = right;
+
+		LogicalType comparison_type = BoundComparisonExpression::BindComparison(left_type, right_type);
+		if (!left_copy.TryCastAs(comparison_type) || !right_copy.TryCastAs(comparison_type)) {
 			return false;
 		}
+		D_ASSERT(left_copy.type() == right_copy.type());
+		return TemplatedBooleanOperation<OP>(left_copy, right_copy);
 	}
 	switch (left_type.InternalType()) {
 	case PhysicalType::BOOL:

@@ -38,11 +38,19 @@ const vector<string> &PreparedStatement::GetNames() {
 }
 
 unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
+	auto pending = PendingQuery(values);
+	if (!pending->success) {
+		return make_unique<MaterializedQueryResult>(pending->error);
+	}
+	return pending->Execute(allow_stream_result && data->allow_stream_result);
+}
+
+unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &values) {
 	if (!success) {
 		throw InvalidInputException("Attempting to execute an unsuccessfully prepared statement!");
 	}
 	D_ASSERT(data);
-	auto result = context->Execute(query, data, values, allow_stream_result && data->allow_stream_result);
+	auto result = context->PendingQuery(query, data, values);
 	return result;
 }
 

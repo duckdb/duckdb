@@ -898,7 +898,7 @@ idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats,
 			}
 		}
 	}
-	sel.Initialize((sel_t *)(FlatVector::INCREMENTAL_VECTOR));
+	sel.Initialize(nullptr);
 	return count;
 }
 
@@ -912,7 +912,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 		for (idx_t i = 0; i < count; i++) {
 			NumericStatistics::Update<T>(stats, update_data[i]);
 		}
-		sel.Initialize((sel_t *)(FlatVector::INCREMENTAL_VECTOR));
+		sel.Initialize(nullptr);
 		return count;
 	} else {
 		idx_t not_null_count = 0;
@@ -938,7 +938,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 				update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
 			}
 		}
-		sel.Initialize(FlatVector::INCREMENTAL_SELECTION_VECTOR);
+		sel.Initialize(nullptr);
 		return count;
 	} else {
 		idx_t not_null_count = 0;

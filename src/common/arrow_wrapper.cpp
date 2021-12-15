@@ -79,7 +79,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = (StreamQueryResult &)result;
-		if (!stream_result.is_open) {
+		if (!stream_result.IsOpen()) {
 			my_stream->last_error = "Query Stream is closed";
 			return -1;
 		}
@@ -100,7 +100,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = (StreamQueryResult &)result;
-		if (!stream_result.is_open) {
+		if (!stream_result.IsOpen()) {
 			my_stream->last_error = "Query Stream is closed";
 			return -1;
 		}
