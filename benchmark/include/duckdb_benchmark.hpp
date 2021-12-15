@@ -99,7 +99,8 @@ public:
 
 	string GetLogOutput(BenchmarkState *state_p) override {
 		auto state = (DuckDBBenchmarkState *)state_p;
-		return state->conn.context->profiler->ToJSON();
+		auto &profiler = QueryProfiler::Get(*state->conn.context);
+		return profiler.ToJSON();
 	}
 
 	//! Interrupt the benchmark because of a timeout

@@ -21,13 +21,15 @@ Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context))
 }
 
 void Planner::CreatePlan(SQLStatement &statement) {
+	auto &profiler = QueryProfiler::Get(context);
+
 	vector<BoundParameterExpression *> bound_parameters;
 
 	// first bind the tables and columns to the catalog
-	context.profiler->StartPhase("binder");
+	profiler.StartPhase("binder");
 	binder->parameters = &bound_parameters;
 	auto bound_statement = binder->Bind(statement);
-	context.profiler->EndPhase();
+	profiler.EndPhase();
 
 	this->read_only = binder->read_only;
 	this->requires_valid_transaction = binder->requires_valid_transaction;

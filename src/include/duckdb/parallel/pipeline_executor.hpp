@@ -29,6 +29,10 @@ public:
 
 	//! Fully execute a pipeline with a source and a sink until the source is completely exhausted
 	void Execute();
+	//! Execute a pipeline with a source and a sink until finished, or until max_chunks have been processed
+	//! Returns true if execution is finished, false if Execute should be called again
+	bool Execute(idx_t max_chunks);
+
 	//! Push a single input DataChunk into the pipeline.
 	//! Returns either OperatorResultType::NEED_MORE_INPUT or OperatorResultType::FINISHED
 	//! If OperatorResultType::FINISHED is returned, more input will not change the result anymore
