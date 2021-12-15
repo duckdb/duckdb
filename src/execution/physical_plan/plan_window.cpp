@@ -52,15 +52,20 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 	const auto output_idx = types.size() - op.expressions.size();
 	types.resize(output_idx);
 
-	// Fill remaining with streaming window functions last
+	// Identify streaming windows
 	vector<idx_t> remaining;
+	vector<idx_t> streaming;
 	for (idx_t expr_idx = 0; expr_idx < op.expressions.size(); expr_idx++) {
 		if (IsStreamingWindow(op.expressions[expr_idx])) {
-			remaining.push_back(expr_idx);
+			streaming.push_back(expr_idx);
 		} else {
-			remaining.insert(remaining.begin(), expr_idx);
+			remaining.push_back(expr_idx);
 		}
 	}
+
+	// Insert streaming windows at the end
+	remaining.insert(remaining.end(), streaming.begin(), streaming.end());
+
 	// Process the window functions by sharing the partition/order definitions
 	vector<idx_t> evaluation_order;
 	while (!remaining.empty()) {
