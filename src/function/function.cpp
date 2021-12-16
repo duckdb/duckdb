@@ -107,6 +107,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterRegressiveAggregates();
 
 	RegisterDateFunctions();
+	RegisterEnumFunctions();
 	RegisterGenericFunctions();
 	RegisterMathFunctions();
 	RegisterOperators();
