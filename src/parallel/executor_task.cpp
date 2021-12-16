@@ -12,9 +12,9 @@ ExecutorTask::ExecutorTask(ClientContext &context) : ExecutorTask(Executor::Get(
 ExecutorTask::~ExecutorTask() {
 }
 
-void ExecutorTask::Execute() {
+TaskExecutionResult ExecutorTask::Execute(TaskExecutionMode mode) {
 	try {
-		ExecuteTask();
+		return ExecuteTask(mode);
 	} catch (Exception &ex) {
 		executor.PushError(ex.type, ex.what());
 	} catch (std::exception &ex) {
@@ -22,6 +22,7 @@ void ExecutorTask::Execute() {
 	} catch (...) { // LCOV_EXCL_START
 		executor.PushError(ExceptionType::UNKNOWN_TYPE, "Unknown exception in Finalize!");
 	} // LCOV_EXCL_STOP
+	return TaskExecutionResult::TASK_ERROR;
 }
 
 } // namespace duckdb

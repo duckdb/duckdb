@@ -44,7 +44,7 @@ public:
 	static bool PandasScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
 	                                        FunctionOperatorData *operator_state, ParallelState *parallel_state_p);
 
-	static int PandasProgress(ClientContext &context, const FunctionData *bind_data_p);
+	static double PandasProgress(ClientContext &context, const FunctionData *bind_data_p);
 
 	//! The main pandas scan function: note that this can be called in parallel without the GIL
 	//! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
