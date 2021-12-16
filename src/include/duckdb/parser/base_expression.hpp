@@ -25,11 +25,11 @@ public:
 	}
 
 	//! Returns the type of the expression
-	ExpressionType GetExpressionType() {
+	ExpressionType GetExpressionType() const {
 		return type;
 	}
 	//! Returns the class of the expression
-	ExpressionClass GetExpressionClass() {
+	ExpressionClass GetExpressionClass() const {
 		return expression_class;
 	}
 
