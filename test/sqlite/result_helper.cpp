@@ -11,17 +11,18 @@
 
 namespace duckdb {
 
-TestResultHelper::TestResultHelper(Command &command, MaterializedQueryResult &result_p) :
-	runner(command.runner), result(result_p), file_name(command.file_name), query_line(command.query_line), sql_query(command.sql_query) {
+TestResultHelper::TestResultHelper(Command &command, MaterializedQueryResult &result_p)
+    : runner(command.runner), result(result_p), file_name(command.file_name), query_line(command.query_line),
+      sql_query(command.sql_query) {
 }
 
-TestResultHelper::TestResultHelper(Query &query, MaterializedQueryResult &result_p) :
-      TestResultHelper((Command &) query, result_p) {
+TestResultHelper::TestResultHelper(Query &query, MaterializedQueryResult &result_p)
+    : TestResultHelper((Command &)query, result_p) {
 	query_ptr = &query;
 }
 
-TestResultHelper::TestResultHelper(Statement &stmt, MaterializedQueryResult &result_p) :
-      TestResultHelper((Command &) stmt, result_p) {
+TestResultHelper::TestResultHelper(Statement &stmt, MaterializedQueryResult &result_p)
+    : TestResultHelper((Command &)stmt, result_p) {
 	expect_ok = stmt.expect_ok;
 }
 
@@ -35,7 +36,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 
 	if (!result.success) {
 		PrintLineSep();
-		fprintf(stderr, "Query unexpectedly failed (%s:%d)\n", file_name.c_str(), (int)query_line);
+		std::cerr << "Query unexpectedly failed (" << file_name.c_str() << ":" << query_line << ")\n";
 		PrintLineSep();
 		PrintSQL(sql_query);
 		PrintLineSep();
@@ -49,15 +50,15 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 	}
 	idx_t row_count = result.collection.Count();
 	idx_t column_count = result.ColumnCount();
-	int nResult = row_count * column_count;
-	int compare_hash = query_has_label || (runner.hashThreshold > 0 && nResult > runner.hashThreshold);
+	idx_t total_value_count = row_count * column_count;
+	bool compare_hash = query_has_label || (runner.hashThreshold > 0 && total_value_count > runner.hashThreshold);
 	// check if the current line (the first line of the result) is a hash value
 	if (values.size() == 1 && ResultIsHash(values[0])) {
 		compare_hash = true;
 	}
 
-	vector<string> azResult;
-	DuckDBConvertResult(result, runner.original_sqlite_test, azResult);
+	vector<string> result_values_string;
+	DuckDBConvertResult(result, runner.original_sqlite_test, result_values_string);
 	if (runner.output_result_mode) {
 		// names
 		for (idx_t c = 0; c < result.ColumnCount(); c++) {
@@ -81,81 +82,76 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 				if (c != 0) {
 					std::cerr << "\t";
 				}
-				std::cerr << azResult[r * result.ColumnCount() + c];
+				std::cerr << result_values_string[r * result.ColumnCount() + c];
 			}
 			std::cerr << std::endl;
 		}
 	}
 
-	/* Do any required sorting of query results */
-	if (sort_style == SortStyle::NO_SORT) {
-		/* Do no sorting */
-	} else if (sort_style == SortStyle::ROW_SORT) {
-		/* Row-oriented sorting */
-		// construct rows
-		int nColumn = result.ColumnCount();
-		int nRow = nResult / nColumn;
+	// perform any required query sorts
+	if (sort_style == SortStyle::ROW_SORT) {
+		// row-oriented sorting
+		idx_t ncols = result.ColumnCount();
+		idx_t nrows = total_value_count / ncols;
 		vector<vector<string>> rows;
-		rows.reserve(nRow);
-		for (int r = 0; r < nRow; r++) {
+		rows.reserve(nrows);
+		for (idx_t row_idx = 0; row_idx < nrows; row_idx++) {
 			vector<string> row;
-			row.reserve(nColumn);
-			for (int c = 0; c < nColumn; c++) {
-				row.push_back(move(azResult[r * nColumn + c]));
+			row.reserve(ncols);
+			for (idx_t col_idx = 0; col_idx < ncols; col_idx++) {
+				row.push_back(move(result_values_string[row_idx * ncols + col_idx]));
 			}
 			rows.push_back(move(row));
 		}
 		// sort the individual rows
 		std::sort(rows.begin(), rows.end(), [](const vector<string> &a, const vector<string> &b) {
-			for (size_t c = 0; c < a.size(); c++) {
-				if (a[c] != b[c]) {
-					return a[c] < b[c];
+			for (idx_t col_idx = 0; col_idx < a.size(); col_idx++) {
+				if (a[col_idx] != b[col_idx]) {
+					return a[col_idx] < b[col_idx];
 				}
 			}
 			return false;
 		});
+
 		// now reconstruct the values from the rows
-		for (int r = 0; r < nRow; r++) {
-			for (int c = 0; c < nColumn; c++) {
-				azResult[r * nColumn + c] = move(rows[r][c]);
+		for (idx_t row_idx = 0; row_idx < nrows; row_idx++) {
+			for (idx_t col_idx = 0; col_idx < ncols; col_idx++) {
+				result_values_string[row_idx * ncols + col_idx] = move(rows[row_idx][col_idx]);
 			}
 		}
 	} else if (sort_style == SortStyle::VALUE_SORT) {
-		/* Sort all values independently */
-		std::sort(azResult.begin(), azResult.end());
+		// sort values independently
+		std::sort(result_values_string.begin(), result_values_string.end());
 	}
-	char zHash[100]; /* Storage space for hash results */
+
 	vector<string> comparison_values;
 	if (values.size() == 1 && ResultIsFile(values[0])) {
 		comparison_values =
-			LoadResultFromFile(SQLLogicTestRunner::LoopReplacement(values[0], runner.running_loops), result.names);
+		    LoadResultFromFile(SQLLogicTestRunner::LoopReplacement(values[0], runner.running_loops), result.names);
 	} else {
 		comparison_values = values;
 	}
-	/* Hash the results if we are over the hash threshold or if we
-	** there is a hash label */
+
+	// compute the hash of the results if there is a hash label or we are past the hash threshold
+	string hash_value;
 	if (runner.output_hash_mode || compare_hash) {
 		MD5Context context;
-		for (int i = 0; i < nResult; i++) {
-			context.Add(azResult[i]);
+		for (int i = 0; i < total_value_count; i++) {
+			context.Add(result_values_string[i]);
 			context.Add("\n");
 		}
 		string digest = context.FinishHex();
-		snprintf(zHash, sizeof(zHash), "%d values hashing to %s", nResult, digest.c_str());
+		hash_value = to_string(total_value_count) + " values hashing to " + digest;
 		if (runner.output_hash_mode) {
 			PrintLineSep();
 			PrintSQL(sql_query);
 			PrintLineSep();
-			fprintf(stderr, "%s\n", zHash);
+			std::cerr << hash_value << std::endl;
 			PrintLineSep();
 			return;
 		}
 	}
-	/* Compare subsequent lines of the script against the
-	 *results
-	 ** from the query.  Report an error if any differences are
-	 *found.
-	 */
+
 	if (!compare_hash) {
 		// check if the row/column count matches
 		int original_expected_columns = expected_column_count;
@@ -193,17 +189,17 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 			PrintErrorHeader("Error in test!");
 			PrintLineSep();
 			fprintf(stderr, "Expected %d columns, but %d values were supplied\n", (int)expected_column_count,
-					(int)comparison_values.size());
+			        (int)comparison_values.size());
 			fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
 			FAIL_LINE(file_name, query_line, 0);
 		}
 		if (expected_rows != result.collection.Count()) {
 			if (column_count_mismatch) {
-				ColumnCountMismatch( original_expected_columns, row_wise);
+				ColumnCountMismatch(original_expected_columns, row_wise);
 			}
 			PrintErrorHeader("Wrong row count in query!");
 			std::cerr << "Expected " << termcolor::bold << expected_rows << termcolor::reset << " rows, but got "
-					  << termcolor::bold << result.collection.Count() << termcolor::reset << " rows" << std::endl;
+			          << termcolor::bold << result.collection.Count() << termcolor::reset << " rows" << std::endl;
 			PrintLineSep();
 			PrintSQL(sql_query);
 			PrintLineSep();
@@ -213,7 +209,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 
 		if (row_wise) {
 			int current_row = 0;
-			for (int i = 0; i < nResult && i < (int)comparison_values.size(); i++) {
+			for (int i = 0; i < total_value_count && i < (int)comparison_values.size(); i++) {
 				// split based on tab character
 				auto splits = StringUtil::Split(comparison_values[i], "\t");
 				if (splits.size() != expected_column_count) {
@@ -223,19 +219,19 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 					PrintLineSep();
 					PrintErrorHeader("Error in test! Column count mismatch after splitting on tab!");
 					std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset
-							  << " columns, but got " << termcolor::bold << splits.size() << termcolor::reset
-							  << " columns" << std::endl;
+					          << " columns, but got " << termcolor::bold << splits.size() << termcolor::reset
+					          << " columns" << std::endl;
 					std::cerr << "Does the result contain tab values? In that case, place every value on a single row."
-							  << std::endl;
+					          << std::endl;
 					PrintLineSep();
 					PrintSQL(sql_query);
 					PrintLineSep();
 					FAIL_LINE(file_name, query_line, 0);
 				}
 				for (idx_t c = 0; c < splits.size(); c++) {
-					bool success = CompareValues( azResult[current_row * expected_column_count + c], splits[c],
-																   current_row, c, comparison_values,
-																   expected_column_count, row_wise, azResult);
+					bool success = CompareValues(result_values_string[current_row * expected_column_count + c],
+					                             splits[c], current_row, c, comparison_values, expected_column_count,
+					                             row_wise, result_values_string);
 					if (!success) {
 						FAIL_LINE(file_name, query_line, 0);
 					}
@@ -246,11 +242,10 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 			}
 		} else {
 			int current_row = 0, current_column = 0;
-			for (int i = 0; i < nResult && i < (int)comparison_values.size(); i++) {
-				bool success =
-					CompareValues(azResult[current_row * expected_column_count + current_column],
-													comparison_values[i], current_row, current_column,
-													comparison_values, expected_column_count, row_wise, azResult);
+			for (int i = 0; i < total_value_count && i < (int)comparison_values.size(); i++) {
+				bool success = CompareValues(result_values_string[current_row * expected_column_count + current_column],
+				                             comparison_values[i], current_row, current_column, comparison_values,
+				                             expected_column_count, row_wise, result_values_string);
 				if (!success) {
 					FAIL_LINE(file_name, query_line, 0);
 				}
@@ -268,16 +263,16 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 			PrintLineSep();
 			PrintErrorHeader("Wrong column count in query!");
 			std::cerr << "Expected " << termcolor::bold << original_expected_columns << termcolor::reset
-					  << " columns, but got " << termcolor::bold << expected_column_count << termcolor::reset
-					  << " columns" << std::endl;
+			          << " columns, but got " << termcolor::bold << expected_column_count << termcolor::reset
+			          << " columns" << std::endl;
 			PrintLineSep();
 			PrintSQL(sql_query);
 			PrintLineSep();
 			std::cerr << "The expected result " << termcolor::bold << "matched" << termcolor::reset
-					  << " the query result." << std::endl;
+			          << " the query result." << std::endl;
 			std::cerr << termcolor::bold << "Suggested fix: modify header to \"" << termcolor::green << "query "
-					  << string(result.ColumnCount(), 'I') << termcolor::reset << termcolor::bold << "\""
-					  << termcolor::reset << std::endl;
+			          << string(result.ColumnCount(), 'I') << termcolor::reset << termcolor::bold << "\""
+			          << termcolor::reset << std::endl;
 			PrintLineSep();
 			FAIL_LINE(file_name, query_line, 0);
 		}
@@ -288,17 +283,17 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 			auto entry = runner.hash_label_map.find(query_label);
 			if (entry == runner.hash_label_map.end()) {
 				// not computed yet: add it tot he map
-				runner.hash_label_map[query_label] = string(zHash);
+				runner.hash_label_map[query_label] = hash_value;
 				runner.result_label_map[query_label] = move(owned_result);
 			} else {
-				hash_compare_error = strcmp(entry->second.c_str(), zHash) != 0;
+				hash_compare_error = entry->second == hash_value;
 			}
 		} else {
 			if (values.size() <= 0) {
 				PrintErrorHeader("Error in test: attempting to compare hash but no hash found!");
 				FAIL_LINE(file_name, query_line, 0);
 			}
-			hash_compare_error = strcmp(values[0].c_str(), zHash) != 0;
+			hash_compare_error = values[0] == hash_value;
 		}
 		if (hash_compare_error) {
 			PrintErrorHeader("Wrong result hash!");
@@ -459,17 +454,17 @@ string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_t
 
 // standard result conversion: one line per value
 int TestResultHelper::DuckDBConvertResult(MaterializedQueryResult &result, bool original_sqlite_test,
-                               vector<string> &pazResult) {
+                                          vector<string> &out_result) {
 	size_t r, c;
 	idx_t row_count = result.collection.Count();
 	idx_t column_count = result.ColumnCount();
 
-	pazResult.resize(row_count * column_count);
+	out_result.resize(row_count * column_count);
 	for (r = 0; r < row_count; r++) {
 		for (c = 0; c < column_count; c++) {
 			auto value = result.GetValue(c, r);
 			auto converted_value = SQLLogicTestConvertValue(value, result.types[c], original_sqlite_test);
-			pazResult[r * column_count + c] = converted_value;
+			out_result[r * column_count + c] = converted_value;
 		}
 	}
 	return 0;
@@ -521,9 +516,8 @@ void TestResultHelper::PrintErrorHeader(const char *description) {
 	std::cerr << termcolor::bold << "(" << file_name << ":" << query_line << ")!" << termcolor::reset << std::endl;
 }
 
-
-void TestResultHelper::PrintResultError(vector<string> &result_values, vector<string> &values, idx_t expected_column_count,
-                             bool row_wise) {
+void TestResultHelper::PrintResultError(vector<string> &result_values, vector<string> &values,
+                                        idx_t expected_column_count, bool row_wise) {
 	PrintHeader("Expected result:");
 	PrintLineSep();
 	PrintExpectedResult(values, expected_column_count, row_wise);
@@ -533,8 +527,8 @@ void TestResultHelper::PrintResultError(vector<string> &result_values, vector<st
 	PrintExpectedResult(result_values, expected_column_count, false);
 }
 
-void TestResultHelper::PrintResultError(MaterializedQueryResult &result, vector<string> &values, idx_t expected_column_count,
-                               bool row_wise) {
+void TestResultHelper::PrintResultError(MaterializedQueryResult &result, vector<string> &values,
+                                        idx_t expected_column_count, bool row_wise) {
 	PrintHeader("Expected result:");
 	PrintLineSep();
 	PrintExpectedResult(values, expected_column_count, row_wise);
@@ -573,8 +567,9 @@ bool TestResultHelper::ResultIsFile(string result) {
 	return StringUtil::StartsWith(result, "<FILE>:");
 }
 
-bool TestResultHelper::CompareValues(string lvalue_str, string rvalue_str, int current_row, int current_column, vector<string> &values,
-                    int expected_column_count, bool row_wise, vector<string> &result_values) {
+bool TestResultHelper::CompareValues(string lvalue_str, string rvalue_str, int current_row, int current_column,
+                                     vector<string> &values, int expected_column_count, bool row_wise,
+                                     vector<string> &result_values) {
 	Value lvalue, rvalue;
 	bool error = false;
 	// simple first test: compare string value directly
@@ -685,4 +680,4 @@ void TestResultHelper::ColumnCountMismatch(int expected_column_count, bool row_w
 	FAIL_LINE(file_name, query_line, 0);
 }
 
-}
+} // namespace duckdb

@@ -36,7 +36,7 @@ Connection *Command::CommandConnection() {
 }
 
 unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection, string file_name, int query_line,
-													string sql_query) {
+                                                          string sql_query) {
 	query_break(query_line);
 	auto result = connection->Query(sql_query);
 
@@ -69,7 +69,6 @@ void Command::Execute() {
 Statement::Statement(SQLLogicTestRunner &runner) : Command(runner) {
 }
 
-
 Query::Query(SQLLogicTestRunner &runner) : Command(runner) {
 }
 
@@ -77,7 +76,7 @@ RestartCommand::RestartCommand(SQLLogicTestRunner &runner) : Command(runner) {
 }
 
 LoopCommand::LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p)
-	: Command(runner), definition(move(definition_p)) {
+    : Command(runner), definition(move(definition_p)) {
 }
 
 void LoopCommand::ExecuteInternal() {
@@ -135,4 +134,4 @@ void Statement::ExecuteInternal() {
 	helper.CheckStatementResult();
 }
 
-}
+} // namespace duckdb

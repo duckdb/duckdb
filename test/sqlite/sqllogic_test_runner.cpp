@@ -103,6 +103,52 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 	return input;
 }
 
+bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<string> &result) {
+	auto token_name = StringUtil::Lower(parameter);
+	StringUtil::Trim(token_name);
+	bool collection = false;
+	bool is_compression = token_name == "<compression>";
+	bool is_all = token_name == "<alltypes>";
+	bool is_numeric = is_all || token_name == "<numeric>";
+	bool is_integral = is_numeric || token_name == "<integral>";
+	bool is_signed = is_integral || token_name == "<signed>";
+	bool is_unsigned = is_integral || token_name == "<unsigned>";
+	if (is_signed) {
+		result.push_back("tinyint");
+		result.push_back("smallint");
+		result.push_back("integer");
+		result.push_back("bigint");
+		result.push_back("hugeint");
+		collection = true;
+	}
+	if (is_unsigned) {
+		result.push_back("utinyint");
+		result.push_back("usmallint");
+		result.push_back("uinteger");
+		result.push_back("ubigint");
+		collection = true;
+	}
+	if (is_numeric) {
+		result.push_back("float");
+		result.push_back("double");
+		collection = true;
+	}
+	if (is_all) {
+		result.push_back("bool");
+		result.push_back("interval");
+		result.push_back("varchar");
+		collection = true;
+	}
+	if (is_compression) {
+		result.push_back("none");
+		result.push_back("uncompressed");
+		result.push_back("rle");
+		result.push_back("bitpacking");
+		collection = true;
+	}
+	return collection;
+}
+
 void SQLLogicTestRunner::ExecuteFile(string script) {
 	TestParser parser;
 	idx_t skip_level = 0;
@@ -153,6 +199,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		if (skip_statement) {
 			continue;
 		}
+		if (skip_level > 0 && token.type != TestTokenType::TOKEN_MODE) {
+			continue;
+		}
 		if (token.type == TestTokenType::TOKEN_STATEMENT) {
 			// statement
 			if (token.parameters.size() < 1) {
@@ -198,10 +247,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// parse the expected column count
 			command->expected_column_count = 0;
 			auto &column_text = token.parameters[0];
-			for(idx_t i = 0; i < column_text.size(); i++) {
+			for (idx_t i = 0; i < column_text.size(); i++) {
 				command->expected_column_count++;
 				if (column_text[i] != 'T' && column_text[i] != 'I' && column_text[i] != 'R') {
-					parser.Fail("unknown type character '%s' in string, expected T, I or R only", string(1, column_text[i]));
+					parser.Fail("unknown type character '%s' in string, expected T, I or R only",
+					            string(1, column_text[i]));
 				}
 			}
 			if (command->expected_column_count == 0) {
@@ -248,9 +298,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else {
 				command->query_has_label = false;
 			}
-			if (skip_level > 0) {
-				continue;
-			}
 			ExecuteCommand(move(command));
 		} else if (token.type == TestTokenType::TOKEN_HASH_THRESHOLD) {
 			if (token.parameters.size() != 1) {
@@ -258,7 +305,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			try {
 				hashThreshold = std::stoi(token.parameters[0]);
-			} catch(...) {
+			} catch (...) {
 				parser.Fail("hash-threshold must be a number");
 			}
 		} else if (token.type == TestTokenType::TOKEN_HALT) {
@@ -280,87 +327,42 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else {
 				parser.Fail("unrecognized mode: %s", token.parameters[0]);
 			}
-		} else if (token.type == TestTokenType::TOKEN_LOOP || token.type == TestTokenType::TOKEN_FOREACH) {
+		} else if (token.type == TestTokenType::TOKEN_LOOP) {
+			if (token.parameters.size() != 3) {
+				parser.Fail("Expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)");
+			}
+			LoopDefinition def;
+			def.loop_iterator_name = token.parameters[0];
+			try {
+				def.loop_start = std::stoi(token.parameters[1].c_str());
+				def.loop_end = std::stoi(token.parameters[2].c_str());
+			} catch (...) {
+				parser.Fail("loop_start and loop_end must be a number");
+			}
+			def.loop_idx = def.loop_start;
+			StartLoop(def);
+		} else if (token.type == TestTokenType::TOKEN_FOREACH) {
 			if (skip_level > 0) {
 				continue;
 			}
-			if (token.type == TestTokenType::TOKEN_LOOP) {
-				if (token.parameters.size() != 3) {
-					parser.Fail("Expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)");
-				}
-				LoopDefinition def;
-				def.loop_iterator_name = token.parameters[0];
-				try {
-					def.loop_start = std::stoi(token.parameters[1].c_str());
-					def.loop_end = std::stoi(token.parameters[2].c_str());
-				} catch (...) {
-					parser.Fail("loop_start and loop_end must be a number");
-				}
-				def.loop_idx = def.loop_start;
-				StartLoop(def);
-			} else {
-				if (token.parameters.size() < 2) {
-					parser.Fail("expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type integer smallint float)");
-				}
-				LoopDefinition def;
-				def.loop_iterator_name = token.parameters[0];
-				for (idx_t i = 1; i < token.parameters.size(); i++) {
-					D_ASSERT(!token.parameters[i].empty());
-					auto token_name = StringUtil::Lower(token.parameters[i]);
-					StringUtil::Trim(token_name);
-					bool collection = false;
-					bool is_compression = token_name == "<compression>";
-					bool is_all = token_name == "<alltypes>";
-					bool is_numeric = is_all || token_name == "<numeric>";
-					bool is_integral = is_numeric || token_name == "<integral>";
-					bool is_signed = is_integral || token_name == "<signed>";
-					bool is_unsigned = is_integral || token_name == "<unsigned>";
-					if (is_signed) {
-						def.tokens.push_back("tinyint");
-						def.tokens.push_back("smallint");
-						def.tokens.push_back("integer");
-						def.tokens.push_back("bigint");
-						def.tokens.push_back("hugeint");
-						collection = true;
-					}
-					if (is_unsigned) {
-						def.tokens.push_back("utinyint");
-						def.tokens.push_back("usmallint");
-						def.tokens.push_back("uinteger");
-						def.tokens.push_back("ubigint");
-						collection = true;
-					}
-					if (is_numeric) {
-						def.tokens.push_back("float");
-						def.tokens.push_back("double");
-						collection = true;
-					}
-					if (is_all) {
-						def.tokens.push_back("bool");
-						def.tokens.push_back("interval");
-						def.tokens.push_back("varchar");
-						collection = true;
-					}
-					if (is_compression) {
-						def.tokens.push_back("none");
-						def.tokens.push_back("uncompressed");
-						def.tokens.push_back("rle");
-						def.tokens.push_back("bitpacking");
-						collection = true;
-					}
-					if (!collection) {
-						def.tokens.push_back(token.parameters[i]);
-					}
-				}
-				def.loop_idx = 0;
-				def.loop_start = 0;
-				def.loop_end = def.tokens.size();
-				StartLoop(def);
+
+			if (token.parameters.size() < 2) {
+				parser.Fail("expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type integer "
+				            "smallint float)");
 			}
+			LoopDefinition def;
+			def.loop_iterator_name = token.parameters[0];
+			for (idx_t i = 1; i < token.parameters.size(); i++) {
+				D_ASSERT(!token.parameters[i].empty());
+				if (!ForEachTokenReplace(token.parameters[i], def.tokens)) {
+					def.tokens.push_back(token.parameters[i]);
+				}
+			}
+			def.loop_idx = 0;
+			def.loop_start = 0;
+			def.loop_end = def.tokens.size();
+			StartLoop(def);
 		} else if (token.type == TestTokenType::TOKEN_ENDLOOP) {
-			if (skip_level > 0) {
-				continue;
-			}
 			EndLoop();
 		} else if (token.type == TestTokenType::TOKEN_REQUIRE) {
 			if (token.parameters.size() < 1) {
@@ -457,4 +459,4 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	}
 }
 
-}
+} // namespace duckdb

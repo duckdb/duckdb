@@ -56,6 +56,7 @@ public:
 	void EndLoop();
 	static string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
 	static string LoopReplacement(string text, const vector<LoopDefinition *> &loops);
+	static bool ForEachTokenReplace(const string &parameter, vector<string> &result);
 };
 
-}
+} // namespace duckdb

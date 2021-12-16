@@ -85,4 +85,4 @@ public:
 	void ExecuteInternal();
 };
 
-}
+} // namespace duckdb
