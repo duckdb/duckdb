@@ -1,4 +1,4 @@
-# name: test/sql/function/list/generate_series.test
+# name: test/sql/function/list/generate_series_timestamp.test
 # description: Test generate_series/range function
 # group: [list]
 

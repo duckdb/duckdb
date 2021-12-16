@@ -53,7 +53,8 @@ struct TimestampRangeInfo {
 	static interval_t DefaultIncrement() {
 		throw InternalException("Default increment not implemented for timestamp range");
 	}
-	static uint64_t ListLength(timestamp_t start_value, timestamp_t end_value, interval_t increment_value, bool inclusive_bound) {
+	static uint64_t ListLength(timestamp_t start_value, timestamp_t end_value, interval_t increment_value,
+	                           bool inclusive_bound) {
 		bool is_positive = increment_value.months > 0 || increment_value.days > 0 || increment_value.micros > 0;
 		bool is_negative = increment_value.months < 0 || increment_value.days < 0 || increment_value.micros < 0;
 		if (!is_negative && !is_positive) {
@@ -73,13 +74,13 @@ struct TimestampRangeInfo {
 		int64_t total_values = 0;
 		if (is_negative) {
 			// negative interval, start_value is going down
-			while(inclusive_bound ? start_value >= end_value : start_value > end_value) {
+			while (inclusive_bound ? start_value >= end_value : start_value > end_value) {
 				start_value = Interval::Add(start_value, increment_value);
 				total_values++;
 			}
 		} else {
 			// positive interval, start_value is going up
-			while(inclusive_bound ? start_value <= end_value : start_value < end_value) {
+			while (inclusive_bound ? start_value <= end_value : start_value < end_value) {
 				start_value = Interval::Add(start_value, increment_value);
 				total_values++;
 			}
@@ -92,7 +93,7 @@ struct TimestampRangeInfo {
 	}
 };
 
-template<class OP, bool INCLUSIVE_BOUND>
+template <class OP, bool INCLUSIVE_BOUND>
 class RangeInfoStruct {
 public:
 	explicit RangeInfoStruct(DataChunk &args_p) : args(args_p) {
@@ -151,7 +152,8 @@ public:
 		}
 	}
 
-	void GetListValues(idx_t row_idx, typename OP::TYPE &start_value, typename OP::TYPE &end_value, typename OP::INCREMENT_TYPE &increment_value) {
+	void GetListValues(idx_t row_idx, typename OP::TYPE &start_value, typename OP::TYPE &end_value,
+	                   typename OP::INCREMENT_TYPE &increment_value) {
 		start_value = StartListValue(row_idx);
 		end_value = EndListValue(row_idx);
 		increment_value = ListIncrementValue(row_idx);
@@ -223,25 +225,31 @@ static void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &r
 void ListRangeFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunctionSet range_set("range");
-	range_set.AddFunction(
-	    ScalarFunction({LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<NumericRangeInfo, false>));
+	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT),
+	                                     ListRangeFunction<NumericRangeInfo, false>));
 	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT},
-	                                     LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<NumericRangeInfo, false>));
+	                                     LogicalType::LIST(LogicalType::BIGINT),
+	                                     ListRangeFunction<NumericRangeInfo, false>));
 	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                     LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<NumericRangeInfo, false>));
- 	range_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
-	                                     LogicalType::LIST(LogicalType::TIMESTAMP), ListRangeFunction<TimestampRangeInfo, false>));
+	                                     LogicalType::LIST(LogicalType::BIGINT),
+	                                     ListRangeFunction<NumericRangeInfo, false>));
+	range_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
+	                                     LogicalType::LIST(LogicalType::TIMESTAMP),
+	                                     ListRangeFunction<TimestampRangeInfo, false>));
 	set.AddFunction(range_set);
 
 	ScalarFunctionSet generate_series("generate_series");
-	generate_series.AddFunction(
-	    ScalarFunction({LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<NumericRangeInfo, true>));
+	generate_series.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT),
+	                                           ListRangeFunction<NumericRangeInfo, true>));
 	generate_series.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT},
-	                                           LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<NumericRangeInfo, true>));
+	                                           LogicalType::LIST(LogicalType::BIGINT),
+	                                           ListRangeFunction<NumericRangeInfo, true>));
 	generate_series.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                           LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<NumericRangeInfo, true>));
+	                                           LogicalType::LIST(LogicalType::BIGINT),
+	                                           ListRangeFunction<NumericRangeInfo, true>));
 	generate_series.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
-	                                           LogicalType::LIST(LogicalType::TIMESTAMP), ListRangeFunction<TimestampRangeInfo, true>));
+	                                           LogicalType::LIST(LogicalType::TIMESTAMP),
+	                                           ListRangeFunction<TimestampRangeInfo, true>));
 	set.AddFunction(generate_series);
 }
 
