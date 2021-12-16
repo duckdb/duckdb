@@ -261,4 +261,9 @@ idx_t RowOperations::Match(DataChunk &columns, VectorData col_data[], const RowL
 	return count;
 }
 
+idx_t RowOperations::MatchRows(Vector &rows_left, SelectionVector &left_sel, const RowLayout &layout,
+                               Vector &rows_right, SelectionVector &right_sel, idx_t rows_count) {
+	TemplatedMatchOp<Equals>(rows_left, left_sel, layout, rows_right, right_sel, rows_count);
+}
+
 } // namespace duckdb

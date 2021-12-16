@@ -289,7 +289,8 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 	// First, fill the hash_map and handle conflicts with a next_pointer
 	if (has_unique_keys && (join_type == JoinType::INNER || join_type == JoinType::RIGHT)) {
-		// For inner joins we check whether the build is composed of unique keys during the insertion into the hash map
+		// For inner/right joins we check whether the build is composed of unique keys during the insertion into the
+		// hash map
 		InsertHashesAndCheckUniqueness(count_tuples, indices, key_locations, pointers); // inlined
 	} else {
 		for (idx_t i = 0; i < count_tuples; i++) {
@@ -302,6 +303,39 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 			pointers[index] = key_locations[i];
 		}
 	}
+}
+
+void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *indices, data_ptr_t key_locations[],
+                                                   data_ptr_t *pointers) {
+	auto col_offsets = layout.GetOffsets();
+	vector<data_ptr_t> conflict_entries, next_ptrs;
+	conflict_entries.reserve(count_tuples);
+	next_ptrs.reserve(count_tuples);
+	idx_t conflict_count = 0;
+	SelectionVector conflict_sel(STANDARD_VECTOR_SIZE);
+	SelectionVector pointers_sel(STANDARD_VECTOR_SIZE);
+	data_ptr_t conflict_entries[STANDARD_VECTOR_SIZE];
+	// Fill the hash map with ptrs to the hashtable entries
+	for (idx_t i = 0; i < count_tuples; i++) {
+		// For each tuple, the hash_value will be replaced by a pointer to the next_entry in the hash_map
+		auto index = indices[i];
+		auto next_ptr = key_locations[i] + pointer_offset;
+		// In case this is still a primary key and there is a conflict
+		if (has_unique_keys && pointers[index] != nullptr) {
+			// for each key pair in the entry
+			// store selection vector for entries and sequential for conflicts
+			// store a ptr to the next entry to evaluate the next_key later
+			conflict_entries[conflict_count] = pointers[index];
+			pointers_sel.set_index(conflict_count++, index);
+		}
+		// replace the hash_value in the current entry and point to a position in the hash_map
+		Store<data_ptr_t>(pointers[index], next_ptr);
+		// store the pointer to the current tuple entry in the hash_map
+		pointers[index] = key_locations[i];
+	}
+	Vector ht_entries(LogicalType::POINTER, key_locations);
+	Vector conflicts_vec(LogicalType::POINTER, conflict_entries);
+	// vectorize check
 }
 
 void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *indices, data_ptr_t key_locations[],
