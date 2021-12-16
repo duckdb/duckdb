@@ -28,15 +28,6 @@ static bool IsStreamingWindow(unique_ptr<Expression> &expr) {
 	}
 }
 
-static bool IsStreamingWindow(vector<unique_ptr<Expression>> &select_list) {
-	for (auto &expr : select_list) {
-		if (!IsStreamingWindow(expr)) {
-			return false;
-		}
-	}
-	return true;
-}
-
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	D_ASSERT(op.children.size() == 1);
 
@@ -53,22 +44,22 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 	types.resize(output_idx);
 
 	// Identify streaming windows
-	vector<idx_t> remaining;
-	vector<idx_t> streaming;
+	vector<idx_t> blocking_windows;
+	vector<idx_t> streaming_windows;
 	for (idx_t expr_idx = 0; expr_idx < op.expressions.size(); expr_idx++) {
 		if (IsStreamingWindow(op.expressions[expr_idx])) {
-			streaming.push_back(expr_idx);
+			streaming_windows.push_back(expr_idx);
 		} else {
-			remaining.push_back(expr_idx);
+			blocking_windows.push_back(expr_idx);
 		}
 	}
 
-	// Insert streaming windows at the end
-	remaining.insert(remaining.end(), streaming.begin(), streaming.end());
-
 	// Process the window functions by sharing the partition/order definitions
 	vector<idx_t> evaluation_order;
-	while (!remaining.empty()) {
+	while (!blocking_windows.empty() || !streaming_windows.empty()) {
+		const bool process_streaming = blocking_windows.empty();
+		auto &remaining = process_streaming ? streaming_windows : blocking_windows;
+
 		// Find all functions that share the partitioning of the first remaining expression
 		const auto over_idx = remaining[0];
 		auto over_expr = reinterpret_cast<BoundWindowExpression *>(op.expressions[over_idx].get());
@@ -95,7 +86,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 
 		// Chain the new window operator on top of the plan
 		unique_ptr<PhysicalOperator> window;
-		if (IsStreamingWindow(select_list)) {
+		if (process_streaming) {
 			window = make_unique<PhysicalStreamingWindow>(types, move(select_list), op.estimated_cardinality);
 		} else {
 			window = make_unique<PhysicalWindow>(types, move(select_list), op.estimated_cardinality);

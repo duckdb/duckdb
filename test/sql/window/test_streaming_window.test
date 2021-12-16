@@ -14,6 +14,11 @@ create table integers (i int, j int)
 statement ok
 insert into integers values (2, 2), (2, 1), (1, 2), (1, NULL)
 
+query TT
+explain select first_value(i IGNORE NULLS) over () from integers
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
 # Test each of the streaming window functions
 query TT
 explain select row_number() over (), i, j from integers
@@ -103,16 +108,20 @@ explain select first_value(i IGNORE NULLS) over () from integers
 ----
 physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
-# When we combine a streaming and non-streaming window function over the same window,
-# We get a non-streaming window operator
+# When we combine a streaming and a blocking window function over the same window,
+# We get both a streaming and a blocking window operator
+# The streaming window should always come last
 query TT
 explain select first_value(i) over (), last_value(i) over () from integers
 ----
-physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*WINDOW.*
 
-# When we combine a streaming and non-streaming window function over a different window,
-# We get both a streaming and a non-streaming window operator
-# The streaming window should always come last
+query TT
+explain select last_value(i) over (), first_value(i) over () from integers
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*WINDOW.*
+
+# Same when the streaming and blocking window functions have different windows
 query TT
 explain select first_value(i) over (), last_value(i) over (order by j) from integers
 ----
