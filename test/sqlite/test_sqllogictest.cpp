@@ -1,28 +1,3 @@
-/*
-** Copyright (c) 2008 D. Richard Hipp
-**
-** This program is free software; you can redistribute it and/or
-** modify it under the terms of the GNU General Public
-** License version 2 as published by the Free Software Foundation.
-**
-** This program is distributed in the hope that it will be useful,
-** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-** General Public License for more details.
-**
-** You should have received a copy of the GNU General Public
-** License along with this library; if not, write to the
-** Free Software Foundation, Inc., 59 Temple Place - Suite 330,
-** Boston, MA  02111-1307, USA.
-**
-** Author contact information:
-**   drh@hwaci.com
-**   http://www.hwaci.com/drh/
-**
-*******************************************************************************
-**
-** This main driver for the sqllogictest program.
-*/
 #include "re2/re2.h"
 
 #include "catch.hpp"
@@ -43,6 +18,7 @@
 
 #include "test_helpers.hpp"
 #include "test_helper_extension.hpp"
+#include "test_parser.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -52,6 +28,8 @@
 #include <iostream>
 #include <thread>
 #include <cfloat>
+#include <sstream>
+#include <fstream>
 
 using namespace duckdb;
 using namespace std;
@@ -111,179 +89,6 @@ public:
 	static string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
 	static string LoopReplacement(string text, const vector<LoopDefinition *> &loops);
 };
-
-/*
-** A structure to keep track of the state of scanning the input script.
-*/
-typedef struct Script Script;
-struct Script {
-	char *zScript; /* Complete text of the input script */
-	int iCur;      /* Index in zScript of start of current line */
-	char *zLine;   /* Pointer to start of current line */
-	int len;       /* Length of current line */
-	int iNext;     /* index of start of next line */
-	int nLine;     /* line number for the current line */
-	int iEnd;      /* Index in zScript of '\000' at end of script */
-	int startLine; /* Line number of start of current record */
-	int copyFlag;  /* If true, copy lines to output as they are read */
-	vector<string> tokens;
-
-	void Clear() {
-		zScript = nullptr;
-		iCur = 0;
-		zLine = nullptr;
-		len = 0;
-		iNext = 0;
-		nLine = 0;
-		iEnd = 0;
-		startLine = 0;
-		copyFlag = 0;
-		tokens.clear();
-	}
-};
-
-/*
-** Advance the cursor to the start of the next non-comment line of the
-** script.  Make p->zLine point to the start of the line.  Make p->len
-** be the length of the line.  Zero-terminate the line.  Any \r at the
-** end of the line is removed.
-**
-** Return 1 on success.  Return 0 and no-op at end-of-file.
-*/
-static int nextLine(Script *p) {
-	int i;
-
-	/* Loop until a non-comment line is found, or until end-of-file */
-	while (1) {
-		/* When we reach end-of-file, return 0 */
-		if (p->iNext >= p->iEnd) {
-			p->iCur = p->iEnd;
-			p->zLine = &p->zScript[p->iEnd];
-			p->len = 0;
-			return 0;
-		}
-
-		/* Advance the cursor to the next line */
-		p->iCur = p->iNext;
-		p->nLine++;
-		p->zLine = &p->zScript[p->iCur];
-		for (i = p->iCur; i < p->iEnd && p->zScript[i] != '\n'; i++) {
-		}
-		p->zScript[i] = 0;
-		p->len = i - p->iCur;
-		p->iNext = i + 1;
-
-		/* If the current line ends in a \r then remove the \r. */
-		if (p->len > 0 && p->zScript[i - 1] == '\r') {
-			p->len--;
-			i--;
-			p->zScript[i] = 0;
-		}
-
-		/* If the line consists of all spaces, make it an empty line */
-		for (i = i - 1; i >= p->iCur && StringUtil::CharacterIsSpace(p->zScript[i]); i--) {
-		}
-		if (i < p->iCur) {
-			p->zLine[0] = 0;
-		}
-
-		/* If the copy flag is set, write the line to standard output */
-		if (p->copyFlag) {
-			printf("%s\n", p->zLine);
-		}
-
-		/* If the line is not a comment line, then we are finished, so break
-		** out of the loop.  If the line is a comment, the loop will repeat in
-		** order to skip this line. */
-		if (p->zLine[0] != '#')
-			break;
-	}
-	return 1;
-}
-
-/*
-** Look ahead to the next line and return TRUE if it is a blank line.
-** But do not advance to the next line yet.
-*/
-static int nextIsBlank(Script *p) {
-	int i = p->iNext;
-	if (i >= p->iEnd)
-		return 1;
-	while (i < p->iEnd && StringUtil::CharacterIsSpace(p->zScript[i])) {
-		if (p->zScript[i] == '\n')
-			return 1;
-		i++;
-	}
-	return 0;
-}
-
-/*
-** Advance the cursor to the start of the next record.  To do this,
-** first skip over the tail section of the record in which we are
-** currently located, then skip over blank lines.
-**
-** Return 1 on success.  Return 0 at end-of-file.
-*/
-static int findStartOfNextRecord(Script *p) {
-	/* Skip over any existing content to find a blank line */
-	if (p->iCur > 0) {
-		while (p->zLine[0] && p->iCur < p->iEnd) {
-			nextLine(p);
-		}
-	} else {
-		nextLine(p);
-	}
-
-	/* Skip over one or more blank lines to find the first line of the
-	** new record */
-	while (p->zLine[0] == 0 && p->iCur < p->iEnd) {
-		nextLine(p);
-	}
-
-	/* Return 1 if we have not reached end of file. */
-	return p->iCur < p->iEnd;
-}
-
-/*
-** Find a single token in a string.  Return the index of the start
-** of the token and the length of the token.
-*/
-static void findToken(const char *z, int *piStart, int *pLen) {
-	int i;
-	int iStart;
-	for (i = 0; StringUtil::CharacterIsSpace(z[i]); i++) {
-	}
-	*piStart = iStart = i;
-	while (z[i] && !StringUtil::CharacterIsSpace(z[i])) {
-		i++;
-	}
-	*pLen = i - iStart;
-}
-
-#define count(X) (sizeof(X) / sizeof(X[0]))
-
-/*
-** tokenize the current line in up to 3 tokens and store those values
-** into p->azToken[0], p->azToken[1], and p->azToken[2].  Record the
-** current line in p->startLine.
-*/
-static void tokenizeLine(Script *p) {
-	int i, j, k;
-	int len, n;
-	p->tokens.clear();
-
-	p->startLine = p->nLine;
-	for (i = j = 0; j < p->len; i++) {
-		findToken(&p->zLine[j], &k, &len);
-		j += k;
-		n = len;
-		p->tokens.push_back(string(p->zLine + j, n));
-		j += n + 1;
-	}
-	while (p->tokens.size() < 4) {
-		p->tokens.push_back(string());
-	}
-}
 
 static void print_expected_result(vector<string> &values, idx_t columns, bool row_wise) {
 	if (row_wise) {
@@ -1186,19 +991,8 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
-	int haltOnError = 0; /* Stop on first error if true */
-	const char *zDbEngine = "DuckDB";
-	const char *zScriptFile = 0; /* Input script filename */
-	unique_ptr<char[]> zScriptStorage;
-	char *zScript;    /* Content of the script */
-	long nScript;     /* Size of the script in bytes */
-	long nGot;        /* Number of bytes read */
-	int nErr = 0;     /* Number of errors */
-	int nSkipped = 0; /* Number of SQL statements skipped */
-	Script sScript;   /* Script parsing status */
-	FILE *in;         /* For reading script */
-	int bHt = 0;      /* True if -ht command-line option */
-	int skip_level = 0;
+	TestParser parser;
+	idx_t skip_level = 0;
 
 	// for the original SQLite tests we convert floating point numbers to integers
 	// for our own tests this is undesirable since it hides certain errors
@@ -1214,277 +1008,192 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	// initialize the database with the default dbpath
 	LoadDatabase(dbpath);
 
-	/*
-	** Read the entire script file contents into memory
-	*/
-
-	zScriptFile = script.c_str();
-	in = fopen(zScriptFile, "rb");
-	if (!in) {
+	// open the file and parse it
+	bool success = parser.OpenFile(script);
+	if (!success) {
 		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
 	}
-	REQUIRE(in);
-	fseek(in, 0L, SEEK_END);
-	nScript = ftell(in);
-	REQUIRE(nScript > 0);
-	zScriptStorage = unique_ptr<char[]>(new char[nScript + 1]);
-	if (!zScriptStorage) {
-		FAIL();
-	}
-	zScript = zScriptStorage.get();
-	fseek(in, 0L, SEEK_SET);
-	nGot = fread(zScript, 1, nScript, in);
-	fclose(in);
-	REQUIRE(nGot <= nScript);
-	zScript[nGot] = 0;
-
-	/* Initialize the sScript structure so that the cursor will be pointing
-	** to the start of the first line in the file after nextLine() is called
-	** once. */
-	sScript.Clear();
-	sScript.zScript = zScript;
-	sScript.zLine = zScript;
-	sScript.iEnd = nScript;
-	sScript.copyFlag = 0;
 
 	/* Loop over all records in the file */
-	while ((nErr == 0 || !haltOnError) && findStartOfNextRecord(&sScript)) {
-		int bSkip = false; /* True if we should skip the current record. */
-
-		/* Tokenizer the first line of the record.  This also records the
-		** line number of the first record in sScript.startLine */
-		tokenizeLine(&sScript);
-
-		bSkip = false;
-		while (sScript.tokens[0] == "skipif" || sScript.tokens[0] == "onlyif") {
-			int bMatch;
-			/* The "skipif" and "onlyif" modifiers allow skipping or using
-			** statement or query record for a particular database engine.
-			** In this way, SQL features implemented by a majority of the
-			** engines can be tested without causing spurious errors for
-			** engines that don't support it.
-			**
-			** Once this record is encountered, and the current selected
-			** db interface matches the db engine specified in the record,
-			** then we skip this rest of this record for "skipif". For
-			** "onlyif" we skip the record if the record does not match.
-			*/
-			bMatch = sScript.tokens[1] == zDbEngine;
-			if (sScript.tokens[0][0] == 's') {
-				if (bMatch)
-					bSkip = true;
-			} else {
-				if (!bMatch)
-					bSkip = true;
+	while (parser.NextStatement()) {
+		// tokenize the current line
+		auto token = parser.Tokenize();
+		bool skip_statement = false;
+		while (token.type == TestTokenType::TOKEN_SKIP_IF || token.type == TestTokenType::TOKEN_ONLY_IF) {
+			// skipif/onlyif
+			bool skip_if = token.type == TestTokenType::TOKEN_SKIP_IF;
+			if (token.parameters.size() < 1) {
+				parser.Fail("skipif/onlyif requires a single parameter (e.g. skipif duckdb)");
 			}
-			nextLine(&sScript);
-			tokenizeLine(&sScript);
+			auto system_name = StringUtil::Lower(token.parameters[0]);
+			bool our_system = system_name == "duckdb";
+			if (our_system == skip_if) {
+				// we skip this command in two situations
+				// (1) skipif duckdb
+				// (2) onlyif <other_system>
+				skip_statement = true;
+				break;
+			}
+			parser.NextLine();
+			token = parser.Tokenize();
 		}
-		if (bSkip) {
-			nSkipped++;
+		if (skip_statement) {
 			continue;
 		}
-
-		/* Figure out the record type and do appropriate processing */
-		if (sScript.tokens[0] == "statement") {
+		if (token.type == TestTokenType::TOKEN_STATEMENT) {
+			// statement
+			if (token.parameters.size() < 1) {
+				parser.Fail("statement requires at least one parameter (statement ok/error)");
+			}
 			auto command = make_unique<Statement>(*this);
 
-			/* Extract the SQL from second and subsequent lines of the
-			** record.  Copy the SQL into contiguous memory at the beginning
-			** of zScript - we are guaranteed to have enough space there. */
-			command->file_name = zScriptFile;
-			command->query_line = sScript.nLine;
-			int k = 0;
-			while (nextLine(&sScript) && sScript.zLine[0]) {
-				if (k > 0)
-					zScript[k++] = '\n';
-				memmove(&zScript[k], sScript.zLine, sScript.len);
-				k += sScript.len;
-			}
-			zScript[k] = 0;
-
-			// perform any renames in zScript
-			command->sql_query = ReplaceKeywords(zScript);
-
-			// parse
-			if (sScript.tokens[1] == "ok") {
+			// parse the first parameter
+			if (token.parameters[0] == "ok") {
 				command->expect_ok = true;
-			} else if (sScript.tokens[1] == "error") {
+			} else if (token.parameters[0] == "error") {
 				command->expect_ok = false;
 			} else {
-				fprintf(stderr, "%s:%d: statement argument should be 'ok' or 'error'\n", zScriptFile,
-				        sScript.startLine);
-				FAIL();
+				parser.Fail("statement argument should be 'ok' or 'error");
 			}
 
-			command->connection_name = sScript.tokens[2];
+			command->file_name = script;
+			command->query_line = parser.current_line + 1;
+
+			// extract the SQL statement
+			parser.NextLine();
+			auto statement_text = parser.ExtractStatement(false);
+			if (statement_text.empty()) {
+				parser.Fail("Unexpected empty statement text");
+			}
+
+			// perform any renames in the text
+			command->sql_query = ReplaceKeywords(move(statement_text));
+
+			if (token.parameters.size() >= 2) {
+				command->connection_name = token.parameters[1];
+			}
 			if (skip_level > 0) {
 				continue;
 			}
 			ExecuteCommand(move(command));
-		} else if (sScript.tokens[0] == "query") {
+		} else if (token.type == TestTokenType::TOKEN_QUERY) {
+			if (token.parameters.size() < 1) {
+				parser.Fail("query requires at least one parameter (query III)");
+			}
 			auto command = make_unique<Query>(*this);
 
-			int k = 0;
-			int c;
-
-			command->file_name = zScriptFile;
-			command->query_line = sScript.nLine;
-
-			/* Verify that the type string consists of one or more
-			 *characters
-			 ** from the set 'TIR':*/
+			// parse the expected column count
 			command->expected_column_count = 0;
-			for (k = 0; (c = sScript.tokens[1][k]) != 0; k++) {
+			auto &column_text = token.parameters[0];
+			for(idx_t i = 0; i < column_text.size(); i++) {
 				command->expected_column_count++;
-				if (c != 'T' && c != 'I' && c != 'R') {
-					fprintf(stderr,
-					        "%s:%d: unknown type character '%c' in type "
-					        "string\n",
-					        zScriptFile, sScript.startLine, c);
-					nErr++;
-					break;
+				if (column_text[i] != 'T' && column_text[i] != 'I' && column_text[i] != 'R') {
+					parser.Fail("unknown type character '%s' in string, expected T, I or R only", string(1, column_text[i]));
 				}
 			}
-			if (c != 0)
-				continue;
-			if (k <= 0) {
-				fprintf(stderr, "%s:%d: missing type string\n", zScriptFile, sScript.startLine);
-				FAIL();
+			if (command->expected_column_count == 0) {
+				parser.Fail("query requires at least a single column in the result");
 			}
 
-			/* Extract the SQL from second and subsequent lines of the
-			 *record
-			 ** until the first "----" line or until end of record.
-			 */
-			k = 0;
-			while (!nextIsBlank(&sScript) && nextLine(&sScript) && sScript.zLine[0] &&
-			       strcmp(sScript.zLine, "----") != 0) {
-				if (k > 0)
-					zScript[k++] = '\n';
-				memmove(&zScript[k], sScript.zLine, sScript.len);
-				k += sScript.len;
-			}
-			zScript[k] = 0;
+			command->file_name = script;
+			command->query_line = parser.current_line + 1;
 
-			// perform any renames in zScript
-			command->sql_query = ReplaceKeywords(zScript);
+			// extract the SQL statement
+			parser.NextLine();
+			auto statement_text = parser.ExtractStatement(true);
+
+			// perform any renames in the text
+			command->sql_query = ReplaceKeywords(move(statement_text));
+
+			// extract the expected result
+			command->values = parser.ExtractExpectedResult();
 
 			// figure out the sort style/connection style
 			command->sort_style = SortStyle::NO_SORT;
-			if (sScript.tokens[2].empty() || sScript.tokens[2] == "nosort") {
-				/* Do no sorting */
-				command->sort_style = SortStyle::NO_SORT;
-			} else if (sScript.tokens[2] == "rowsort") {
-				/* Row-oriented sorting */
-				command->sort_style = SortStyle::ROW_SORT;
-			} else if (sScript.tokens[2] == "valuesort") {
-				/* Sort all values independently */
-				command->sort_style = SortStyle::VALUE_SORT;
-			} else {
-				command->connection_name = sScript.tokens[2];
-			}
-
-			/* In verify mode, first skip over the ---- line if we are
-			 *still
-			 ** pointing at it. */
-			if (strcmp(sScript.zLine, "----") == 0) {
-				nextLine(&sScript);
-			}
-			// read the expected result: keep reading until we encounter a blank line
-			while (sScript.zLine[0]) {
-				command->values.push_back(sScript.zLine);
-				if (!nextLine(&sScript)) {
-					break;
+			if (token.parameters.size() > 1) {
+				auto &sort_style = token.parameters[1];
+				if (sort_style == "nosort") {
+					/* Do no sorting */
+					command->sort_style = SortStyle::NO_SORT;
+				} else if (sort_style == "rowsort") {
+					/* Row-oriented sorting */
+					command->sort_style = SortStyle::ROW_SORT;
+				} else if (sort_style == "valuesort") {
+					/* Sort all values independently */
+					command->sort_style = SortStyle::VALUE_SORT;
+				} else {
+					// if this is not a known sort style, we use this as the connection name
+					// this is a bit dirty, but well
+					command->connection_name = sort_style;
 				}
 			}
-			command->query_has_label = sScript.tokens[3][0];
-			command->query_label = sScript.tokens[3];
+
+			// check the label of the query
+			if (token.parameters.size() > 2) {
+				command->query_has_label = true;
+				command->query_label = token.parameters[2];
+			} else {
+				command->query_has_label = false;
+			}
 			if (skip_level > 0) {
 				continue;
 			}
 			ExecuteCommand(move(command));
-		} else if (sScript.tokens[0] == "hash-threshold") {
-			/* Set the maximum number of result values that will be accepted
-			** for a query.  If the number of result values exceeds this
-			*number,
-			** then an MD5 hash is computed of all values, and the resulting
-			*hash
-			** is the only result.
-			**
-			** If the threshold is 0, then hashing is never used.
-			**
-			** If a threshold was specified on the command line, ignore
-			** any specifed in the script.
-			*/
-			if (!bHt) {
-				hashThreshold = atoi(sScript.tokens[1].c_str());
+		} else if (token.type == TestTokenType::TOKEN_HASH_THRESHOLD) {
+			if (token.parameters.size() != 1) {
+				parser.Fail("hash-threshold requires a parameter");
 			}
-		} else if (sScript.tokens[0] == "halt") {
-			/* Used for debugging.  Stop reading the test script and shut
-			 *down.
-			 ** A "halt" record can be inserted in the middle of a test
-			 *script in
-			 ** to run the script up to a particular point that is giving a
-			 ** faulty result, then terminate at that point for analysis.
-			 */
-			fprintf(stderr, "%s:%d: halt\n", zScriptFile, sScript.startLine);
+			try {
+				hashThreshold = std::stoi(token.parameters[0]);
+			} catch(...) {
+				parser.Fail("hash-threshold must be a number");
+			}
+		} else if (token.type == TestTokenType::TOKEN_HALT) {
 			break;
-		} else if (sScript.tokens[0] == "mode") {
-			if (sScript.tokens[1] == "output_hash") {
+		} else if (token.type == TestTokenType::TOKEN_MODE) {
+			if (token.parameters.size() != 1) {
+				parser.Fail("mode requires one parameter");
+			}
+			if (token.parameters[0] == "output_hash") {
 				output_hash_mode = true;
-			} else if (sScript.tokens[1] == "output_result") {
+			} else if (token.parameters[0] == "output_result") {
 				output_result_mode = true;
-			} else if (sScript.tokens[1] == "debug") {
+			} else if (token.parameters[0] == "debug") {
 				debug_mode = true;
-			} else if (sScript.tokens[1] == "skip") {
+			} else if (token.parameters[0] == "skip") {
 				skip_level++;
-			} else if (sScript.tokens[1] == "unskip") {
+			} else if (token.parameters[0] == "unskip") {
 				skip_level--;
 			} else {
-				fprintf(stderr, "%s:%d: unrecognized mode: '%s'\n", zScriptFile, sScript.startLine,
-				        sScript.tokens[1].c_str());
-				FAIL();
+				parser.Fail("unrecognized mode: %s", token.parameters[0]);
 			}
-		} else if (sScript.tokens[0] == "loop" || sScript.tokens[0] == "foreach") {
+		} else if (token.type == TestTokenType::TOKEN_LOOP || token.type == TestTokenType::TOKEN_FOREACH) {
 			if (skip_level > 0) {
 				continue;
 			}
-			if (sScript.tokens[0] == "loop") {
-				if (sScript.tokens[1].empty() || sScript.tokens[2].empty() || sScript.tokens[3].empty()) {
-					fprintf(stderr,
-					        "%s:%d: Test error: expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)!\n",
-					        zScriptFile, sScript.startLine);
-					FAIL();
+			if (token.type == TestTokenType::TOKEN_LOOP) {
+				if (token.parameters.size() != 3) {
+					parser.Fail("Expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)");
 				}
 				LoopDefinition def;
-				def.loop_iterator_name = sScript.tokens[1];
+				def.loop_iterator_name = token.parameters[0];
 				try {
-					def.loop_start = std::stoi(sScript.tokens[2].c_str());
-					def.loop_end = std::stoi(sScript.tokens[3].c_str());
+					def.loop_start = std::stoi(token.parameters[1].c_str());
+					def.loop_end = std::stoi(token.parameters[2].c_str());
 				} catch (...) {
-					fprintf(stderr,
-					        "%s:%d: Test error: expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)!\n",
-					        zScriptFile, sScript.startLine);
-					FAIL();
+					parser.Fail("loop_start and loop_end must be a number");
 				}
 				def.loop_idx = def.loop_start;
 				StartLoop(def);
 			} else {
-				if (sScript.tokens[1].empty() || sScript.tokens[2].empty()) {
-					fprintf(stderr,
-					        "%s:%d: Test error: expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type "
-					        "integer smallint float)!\n",
-					        zScriptFile, sScript.startLine);
-					FAIL();
+				if (token.parameters.size() < 2) {
+					parser.Fail("expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type integer smallint float)");
 				}
 				LoopDefinition def;
-				def.loop_iterator_name = sScript.tokens[1];
-				for (idx_t i = 2; i < sScript.tokens.size(); i++) {
-					if (sScript.tokens[i].empty()) {
-						break;
-					}
-					auto token_name = StringUtil::Lower(sScript.tokens[i]);
+				def.loop_iterator_name = token.parameters[0];
+				for (idx_t i = 1; i < token.parameters.size(); i++) {
+					D_ASSERT(!token.parameters[i].empty());
+					auto token_name = StringUtil::Lower(token.parameters[i]);
 					StringUtil::Trim(token_name);
 					bool collection = false;
 					bool is_compression = token_name == "<compression>";
@@ -1527,7 +1236,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 						collection = true;
 					}
 					if (!collection) {
-						def.tokens.push_back(sScript.tokens[i]);
+						def.tokens.push_back(token.parameters[i]);
 					}
 				}
 				def.loop_idx = 0;
@@ -1535,14 +1244,17 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				def.loop_end = def.tokens.size();
 				StartLoop(def);
 			}
-		} else if (sScript.tokens[0] == "endloop") {
+		} else if (token.type == TestTokenType::TOKEN_ENDLOOP) {
 			if (skip_level > 0) {
 				continue;
 			}
 			EndLoop();
-		} else if (sScript.tokens[0] == "require") {
+		} else if (token.type == TestTokenType::TOKEN_REQUIRE) {
+			if (token.parameters.size() < 1) {
+				parser.Fail("require requires a single parameter");
+			}
 			// require command
-			string param = StringUtil::Lower(sScript.tokens[1]);
+			string param = StringUtil::Lower(token.parameters[0]);
 			// os specific stuff
 			if (param == "notmingw") {
 #ifdef __MINGW32__
@@ -1569,8 +1281,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					return;
 				}
 			} else if (param == "vector_size") {
+				if (token.parameters.size() != 2) {
+					parser.Fail("require vector_size requires a parameter");
+				}
 				// require a specific vector size
-				int required_vector_size = std::stoi(sScript.tokens[2].c_str());
+				int required_vector_size = std::stoi(token.parameters[1]);
 				if (STANDARD_VECTOR_SIZE < required_vector_size) {
 					// vector size is too low for this test: skip it
 					return;
@@ -1583,24 +1298,26 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					// add the extension to the list of loaded extensions
 					extensions.insert(param);
 				} else if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
-					fprintf(stderr, "%s:%d: unknown extension type: '%s'\n", zScriptFile, sScript.startLine,
-					        sScript.tokens[1].c_str());
-					FAIL();
+					parser.Fail("unknown extension type: %s", token.parameters[0]);
 				} else if (result == ExtensionLoadResult::NOT_LOADED) {
 					// extension known but not build: skip this test
 					return;
 				}
 			}
-		} else if (sScript.tokens[0] == "load") {
+		} else if (token.type == TestTokenType::TOKEN_LOAD) {
 			if (InLoop()) {
-				fprintf(stderr, "%s:%d: load cannot be called in a loop\n", zScriptFile, sScript.startLine);
-				FAIL();
+				parser.Fail("load cannot be called in a loop");
 			}
-			bool readonly = sScript.tokens[2] == "readonly";
-			dbpath = ReplaceKeywords(sScript.tokens[1]);
-			if (!readonly) {
-				// delete the target database file, if it exists
-				DeleteDatabase(dbpath);
+
+			bool readonly = token.parameters.size() > 1 && token.parameters[1] == "readonly";
+			if (!token.parameters.empty()) {
+				dbpath = ReplaceKeywords(token.parameters[0]);
+				if (!readonly) {
+					// delete the target database file, if it exists
+					DeleteDatabase(dbpath);
+				}
+			} else {
+				dbpath = string();
 			}
 			// set up the config file
 			if (readonly) {
@@ -1612,26 +1329,18 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			// now create the database file
 			LoadDatabase(dbpath);
-		} else if (sScript.tokens[0] == "restart") {
+		} else if (token.type == TestTokenType::TOKEN_RESTART) {
 			if (dbpath.empty()) {
-				fprintf(stderr, "%s:%d: cannot restart an in-memory database, did you forget to call \"load\"?\n",
-				        zScriptFile, sScript.startLine);
-				FAIL();
+				parser.Fail("cannot restart an in-memory database, did you forget to call \"load\"?");
 			}
 			// restart the current database
 			// first clear all connections
 			auto command = make_unique<RestartCommand>(*this);
 			ExecuteCommand(move(command));
-		} else {
-			/* An unrecognized record type is an error */
-			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile, sScript.startLine,
-			        sScript.tokens[0].c_str());
-			FAIL();
 		}
 	}
 	if (InLoop()) {
-		fprintf(stderr, "%s:%d: Missing endloop!\n", zScriptFile, sScript.startLine);
-		FAIL();
+		parser.Fail("Missing endloop!");
 	}
 }
 
