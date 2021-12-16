@@ -28,13 +28,13 @@ bool TestParser::NextStatement() {
 	if (seen_statement) {
 		// skip the current statement
 		// but only if we have already seen a statement in the file
-		while(current_line < lines.size() && !EmptyOrComment(lines[current_line])) {
+		while (current_line < lines.size() && !EmptyOrComment(lines[current_line])) {
 			current_line++;
 		}
 	}
 	seen_statement = true;
 	// now look for the first non-empty line
-	while(current_line < lines.size() && EmptyOrComment(lines[current_line])) {
+	while (current_line < lines.size() && EmptyOrComment(lines[current_line])) {
 		current_line++;
 	}
 	// return whether or not we reached the end of the file
@@ -49,7 +49,7 @@ string TestParser::ExtractStatement(bool is_query) {
 	string statement;
 
 	bool first_line = true;
-	while(current_line < lines.size() && !EmptyOrComment(lines[current_line])) {
+	while (current_line < lines.size() && !EmptyOrComment(lines[current_line])) {
 		if (is_query && lines[current_line] == "----") {
 			break;
 		}
@@ -65,7 +65,6 @@ string TestParser::ExtractStatement(bool is_query) {
 	return statement;
 }
 
-
 vector<string> TestParser::ExtractExpectedResult() {
 	vector<string> result;
 	// skip the result line (----) if we are still reading that
@@ -73,7 +72,7 @@ vector<string> TestParser::ExtractExpectedResult() {
 		current_line++;
 	}
 	// read the expected result until we encounter a new line
-	while(current_line < lines.size() && !lines[current_line].empty()) {
+	while (current_line < lines.size() && !lines[current_line].empty()) {
 		result.push_back(lines[current_line]);
 		current_line++;
 	}
@@ -81,7 +80,8 @@ vector<string> TestParser::ExtractExpectedResult() {
 }
 
 void TestParser::FailRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
-	auto error_message = file_name + ":" + to_string(current_line + 1) + ": " + ExceptionFormatValue::Format(msg, values);
+	auto error_message =
+	    file_name + ":" + to_string(current_line + 1) + ": " + ExceptionFormatValue::Format(msg, values);
 	FAIL(error_message.c_str());
 }
 
@@ -95,7 +95,7 @@ TestToken TestParser::Tokenize() {
 	vector<string> argument_list;
 	auto &line = lines[current_line];
 	idx_t last_pos = 0;
-	for(idx_t i = 0; i < line.size(); i++) {
+	for (idx_t i = 0; i < line.size(); i++) {
 		if (StringUtil::CharacterIsSpace(line[i])) {
 			if (i == last_pos) {
 				last_pos++;
@@ -112,7 +112,7 @@ TestToken TestParser::Tokenize() {
 		Fail("Empty line!?");
 	}
 	result.type = CommandToToken(argument_list[0]);
-	for(idx_t i = 1; i < argument_list.size(); i++) {
+	for (idx_t i = 1; i < argument_list.size(); i++) {
 		result.parameters.push_back(move(argument_list[i]));
 	}
 	return result;
@@ -150,4 +150,4 @@ TestTokenType TestParser::CommandToToken(const string &token) {
 	return TestTokenType::TOKEN_INVALID;
 }
 
-}
+} // namespace duckdb

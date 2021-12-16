@@ -1,0 +1,460 @@
+
+#include "catch.hpp"
+
+#include "sqllogic_test_runner.hpp"
+#include "test_helpers.hpp"
+#include "duckdb/main/extension_helper.hpp"
+#include "test_parser.hpp"
+
+namespace duckdb {
+
+SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)) {
+	config = GetTestConfig();
+	config->load_extensions = false;
+}
+
+SQLLogicTestRunner::~SQLLogicTestRunner() {
+	for (auto &loaded_path : loaded_databases) {
+		if (loaded_path.empty()) {
+			continue;
+		}
+		// only delete database files that were created during the tests
+		if (!StringUtil::StartsWith(loaded_path, TestDirectoryPath())) {
+			continue;
+		}
+		DeleteDatabase(loaded_path);
+	}
+}
+
+void SQLLogicTestRunner::ExecuteCommand(unique_ptr<Command> command) {
+	if (InLoop()) {
+		active_loops.back()->loop_commands.push_back(move(command));
+	} else {
+		command->Execute();
+	}
+}
+
+void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
+	auto loop = make_unique<LoopCommand>(*this, move(definition));
+	auto loop_ptr = loop.get();
+	if (InLoop()) {
+		// already in a loop: add it to the currently active loop
+		active_loops.back()->loop_commands.push_back(move(loop));
+	} else {
+		// not in a loop yet: new top-level loop
+		top_level_loop = move(loop);
+	}
+	active_loops.push_back(loop_ptr);
+}
+
+void SQLLogicTestRunner::EndLoop() {
+	// finish a loop: pop it from the active_loop queue
+	if (active_loops.empty()) {
+		throw std::runtime_error("endloop without active loop!");
+	}
+	active_loops.pop_back();
+	if (active_loops.empty()) {
+		// not in a loop
+		top_level_loop->Execute();
+		top_level_loop.reset();
+	}
+}
+
+void SQLLogicTestRunner::LoadDatabase(string dbpath) {
+	loaded_databases.push_back(dbpath);
+
+	// restart the database with the specified db path
+	db.reset();
+	con.reset();
+	named_connection_map.clear();
+	// now re-open the current database
+
+	db = make_unique<DuckDB>(dbpath, config.get());
+	con = make_unique<Connection>(*db);
+
+	// load any previously loaded extensions again
+	for (auto &extension : extensions) {
+		ExtensionHelper::LoadExtension(*db, extension);
+	}
+}
+
+string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator_name, string replacement) {
+	return StringUtil::Replace(text, "${" + loop_iterator_name + "}", replacement);
+}
+
+string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinition *> &loops) {
+	for (auto &active_loop : loops) {
+		if (active_loop->tokens.empty()) {
+			// regular loop
+			text = ReplaceLoopIterator(text, active_loop->loop_iterator_name, to_string(active_loop->loop_idx));
+		} else {
+			// foreach loop
+			text =
+			    ReplaceLoopIterator(text, active_loop->loop_iterator_name, active_loop->tokens[active_loop->loop_idx]);
+		}
+	}
+	return text;
+}
+
+string SQLLogicTestRunner::ReplaceKeywords(string input) {
+	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
+	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
+	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+	return input;
+}
+
+void SQLLogicTestRunner::ExecuteFile(string script) {
+	TestParser parser;
+	idx_t skip_level = 0;
+
+	// for the original SQLite tests we convert floating point numbers to integers
+	// for our own tests this is undesirable since it hides certain errors
+	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
+		original_sqlite_test = true;
+	}
+
+	if (!dbpath.empty()) {
+		// delete the target database file, if it exists
+		DeleteDatabase(dbpath);
+	}
+
+	// initialize the database with the default dbpath
+	LoadDatabase(dbpath);
+
+	// open the file and parse it
+	bool success = parser.OpenFile(script);
+	if (!success) {
+		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
+	}
+
+	/* Loop over all records in the file */
+	while (parser.NextStatement()) {
+		// tokenize the current line
+		auto token = parser.Tokenize();
+		bool skip_statement = false;
+		while (token.type == TestTokenType::TOKEN_SKIP_IF || token.type == TestTokenType::TOKEN_ONLY_IF) {
+			// skipif/onlyif
+			bool skip_if = token.type == TestTokenType::TOKEN_SKIP_IF;
+			if (token.parameters.size() < 1) {
+				parser.Fail("skipif/onlyif requires a single parameter (e.g. skipif duckdb)");
+			}
+			auto system_name = StringUtil::Lower(token.parameters[0]);
+			bool our_system = system_name == "duckdb";
+			if (our_system == skip_if) {
+				// we skip this command in two situations
+				// (1) skipif duckdb
+				// (2) onlyif <other_system>
+				skip_statement = true;
+				break;
+			}
+			parser.NextLine();
+			token = parser.Tokenize();
+		}
+		if (skip_statement) {
+			continue;
+		}
+		if (token.type == TestTokenType::TOKEN_STATEMENT) {
+			// statement
+			if (token.parameters.size() < 1) {
+				parser.Fail("statement requires at least one parameter (statement ok/error)");
+			}
+			auto command = make_unique<Statement>(*this);
+
+			// parse the first parameter
+			if (token.parameters[0] == "ok") {
+				command->expect_ok = true;
+			} else if (token.parameters[0] == "error") {
+				command->expect_ok = false;
+			} else {
+				parser.Fail("statement argument should be 'ok' or 'error");
+			}
+
+			command->file_name = script;
+			command->query_line = parser.current_line + 1;
+
+			// extract the SQL statement
+			parser.NextLine();
+			auto statement_text = parser.ExtractStatement(false);
+			if (statement_text.empty()) {
+				parser.Fail("Unexpected empty statement text");
+			}
+
+			// perform any renames in the text
+			command->sql_query = ReplaceKeywords(move(statement_text));
+
+			if (token.parameters.size() >= 2) {
+				command->connection_name = token.parameters[1];
+			}
+			if (skip_level > 0) {
+				continue;
+			}
+			ExecuteCommand(move(command));
+		} else if (token.type == TestTokenType::TOKEN_QUERY) {
+			if (token.parameters.size() < 1) {
+				parser.Fail("query requires at least one parameter (query III)");
+			}
+			auto command = make_unique<Query>(*this);
+
+			// parse the expected column count
+			command->expected_column_count = 0;
+			auto &column_text = token.parameters[0];
+			for(idx_t i = 0; i < column_text.size(); i++) {
+				command->expected_column_count++;
+				if (column_text[i] != 'T' && column_text[i] != 'I' && column_text[i] != 'R') {
+					parser.Fail("unknown type character '%s' in string, expected T, I or R only", string(1, column_text[i]));
+				}
+			}
+			if (command->expected_column_count == 0) {
+				parser.Fail("query requires at least a single column in the result");
+			}
+
+			command->file_name = script;
+			command->query_line = parser.current_line + 1;
+
+			// extract the SQL statement
+			parser.NextLine();
+			auto statement_text = parser.ExtractStatement(true);
+
+			// perform any renames in the text
+			command->sql_query = ReplaceKeywords(move(statement_text));
+
+			// extract the expected result
+			command->values = parser.ExtractExpectedResult();
+
+			// figure out the sort style/connection style
+			command->sort_style = SortStyle::NO_SORT;
+			if (token.parameters.size() > 1) {
+				auto &sort_style = token.parameters[1];
+				if (sort_style == "nosort") {
+					/* Do no sorting */
+					command->sort_style = SortStyle::NO_SORT;
+				} else if (sort_style == "rowsort") {
+					/* Row-oriented sorting */
+					command->sort_style = SortStyle::ROW_SORT;
+				} else if (sort_style == "valuesort") {
+					/* Sort all values independently */
+					command->sort_style = SortStyle::VALUE_SORT;
+				} else {
+					// if this is not a known sort style, we use this as the connection name
+					// this is a bit dirty, but well
+					command->connection_name = sort_style;
+				}
+			}
+
+			// check the label of the query
+			if (token.parameters.size() > 2) {
+				command->query_has_label = true;
+				command->query_label = token.parameters[2];
+			} else {
+				command->query_has_label = false;
+			}
+			if (skip_level > 0) {
+				continue;
+			}
+			ExecuteCommand(move(command));
+		} else if (token.type == TestTokenType::TOKEN_HASH_THRESHOLD) {
+			if (token.parameters.size() != 1) {
+				parser.Fail("hash-threshold requires a parameter");
+			}
+			try {
+				hashThreshold = std::stoi(token.parameters[0]);
+			} catch(...) {
+				parser.Fail("hash-threshold must be a number");
+			}
+		} else if (token.type == TestTokenType::TOKEN_HALT) {
+			break;
+		} else if (token.type == TestTokenType::TOKEN_MODE) {
+			if (token.parameters.size() != 1) {
+				parser.Fail("mode requires one parameter");
+			}
+			if (token.parameters[0] == "output_hash") {
+				output_hash_mode = true;
+			} else if (token.parameters[0] == "output_result") {
+				output_result_mode = true;
+			} else if (token.parameters[0] == "debug") {
+				debug_mode = true;
+			} else if (token.parameters[0] == "skip") {
+				skip_level++;
+			} else if (token.parameters[0] == "unskip") {
+				skip_level--;
+			} else {
+				parser.Fail("unrecognized mode: %s", token.parameters[0]);
+			}
+		} else if (token.type == TestTokenType::TOKEN_LOOP || token.type == TestTokenType::TOKEN_FOREACH) {
+			if (skip_level > 0) {
+				continue;
+			}
+			if (token.type == TestTokenType::TOKEN_LOOP) {
+				if (token.parameters.size() != 3) {
+					parser.Fail("Expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)");
+				}
+				LoopDefinition def;
+				def.loop_iterator_name = token.parameters[0];
+				try {
+					def.loop_start = std::stoi(token.parameters[1].c_str());
+					def.loop_end = std::stoi(token.parameters[2].c_str());
+				} catch (...) {
+					parser.Fail("loop_start and loop_end must be a number");
+				}
+				def.loop_idx = def.loop_start;
+				StartLoop(def);
+			} else {
+				if (token.parameters.size() < 2) {
+					parser.Fail("expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type integer smallint float)");
+				}
+				LoopDefinition def;
+				def.loop_iterator_name = token.parameters[0];
+				for (idx_t i = 1; i < token.parameters.size(); i++) {
+					D_ASSERT(!token.parameters[i].empty());
+					auto token_name = StringUtil::Lower(token.parameters[i]);
+					StringUtil::Trim(token_name);
+					bool collection = false;
+					bool is_compression = token_name == "<compression>";
+					bool is_all = token_name == "<alltypes>";
+					bool is_numeric = is_all || token_name == "<numeric>";
+					bool is_integral = is_numeric || token_name == "<integral>";
+					bool is_signed = is_integral || token_name == "<signed>";
+					bool is_unsigned = is_integral || token_name == "<unsigned>";
+					if (is_signed) {
+						def.tokens.push_back("tinyint");
+						def.tokens.push_back("smallint");
+						def.tokens.push_back("integer");
+						def.tokens.push_back("bigint");
+						def.tokens.push_back("hugeint");
+						collection = true;
+					}
+					if (is_unsigned) {
+						def.tokens.push_back("utinyint");
+						def.tokens.push_back("usmallint");
+						def.tokens.push_back("uinteger");
+						def.tokens.push_back("ubigint");
+						collection = true;
+					}
+					if (is_numeric) {
+						def.tokens.push_back("float");
+						def.tokens.push_back("double");
+						collection = true;
+					}
+					if (is_all) {
+						def.tokens.push_back("bool");
+						def.tokens.push_back("interval");
+						def.tokens.push_back("varchar");
+						collection = true;
+					}
+					if (is_compression) {
+						def.tokens.push_back("none");
+						def.tokens.push_back("uncompressed");
+						def.tokens.push_back("rle");
+						def.tokens.push_back("bitpacking");
+						collection = true;
+					}
+					if (!collection) {
+						def.tokens.push_back(token.parameters[i]);
+					}
+				}
+				def.loop_idx = 0;
+				def.loop_start = 0;
+				def.loop_end = def.tokens.size();
+				StartLoop(def);
+			}
+		} else if (token.type == TestTokenType::TOKEN_ENDLOOP) {
+			if (skip_level > 0) {
+				continue;
+			}
+			EndLoop();
+		} else if (token.type == TestTokenType::TOKEN_REQUIRE) {
+			if (token.parameters.size() < 1) {
+				parser.Fail("require requires a single parameter");
+			}
+			// require command
+			string param = StringUtil::Lower(token.parameters[0]);
+			// os specific stuff
+			if (param == "notmingw") {
+#ifdef __MINGW32__
+				return;
+#endif
+			} else if (param == "mingw") {
+#ifndef __MINGW32__
+				return;
+#endif
+			} else if (param == "notwindows") {
+#ifdef _WIN32
+				return;
+#endif
+			} else if (param == "windows") {
+#ifndef _WIN32
+				return;
+#endif
+			} else if (param == "longdouble") {
+#if LDBL_MANT_DIG < 54
+				return;
+#endif
+			} else if (param == "noforcestorage") {
+				if (TestForceStorage()) {
+					return;
+				}
+			} else if (param == "vector_size") {
+				if (token.parameters.size() != 2) {
+					parser.Fail("require vector_size requires a parameter");
+				}
+				// require a specific vector size
+				int required_vector_size = std::stoi(token.parameters[1]);
+				if (STANDARD_VECTOR_SIZE < required_vector_size) {
+					// vector size is too low for this test: skip it
+					return;
+				}
+			} else if (param == "test_helper") {
+				db->LoadExtension<TestHelperExtension>();
+			} else {
+				auto result = ExtensionHelper::LoadExtension(*db, param);
+				if (result == ExtensionLoadResult::LOADED_EXTENSION) {
+					// add the extension to the list of loaded extensions
+					extensions.insert(param);
+				} else if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
+					parser.Fail("unknown extension type: %s", token.parameters[0]);
+				} else if (result == ExtensionLoadResult::NOT_LOADED) {
+					// extension known but not build: skip this test
+					return;
+				}
+			}
+		} else if (token.type == TestTokenType::TOKEN_LOAD) {
+			if (InLoop()) {
+				parser.Fail("load cannot be called in a loop");
+			}
+
+			bool readonly = token.parameters.size() > 1 && token.parameters[1] == "readonly";
+			if (!token.parameters.empty()) {
+				dbpath = ReplaceKeywords(token.parameters[0]);
+				if (!readonly) {
+					// delete the target database file, if it exists
+					DeleteDatabase(dbpath);
+				}
+			} else {
+				dbpath = string();
+			}
+			// set up the config file
+			if (readonly) {
+				config->use_temporary_directory = false;
+				config->access_mode = AccessMode::READ_ONLY;
+			} else {
+				config->use_temporary_directory = true;
+				config->access_mode = AccessMode::AUTOMATIC;
+			}
+			// now create the database file
+			LoadDatabase(dbpath);
+		} else if (token.type == TestTokenType::TOKEN_RESTART) {
+			if (dbpath.empty()) {
+				parser.Fail("cannot restart an in-memory database, did you forget to call \"load\"?");
+			}
+			// restart the current database
+			// first clear all connections
+			auto command = make_unique<RestartCommand>(*this);
+			ExecuteCommand(move(command));
+		}
+	}
+	if (InLoop()) {
+		parser.Fail("Missing endloop!");
+	}
+}
+
+}

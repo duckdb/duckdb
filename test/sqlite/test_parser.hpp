@@ -85,11 +85,10 @@ private:
 	void FailRecursive(const string &msg, vector<ExceptionFormatValue> &values);
 
 	template <class T, typename... Args>
-	void FailRecursive(const string &msg, vector<ExceptionFormatValue> &values, T param,
-	                                        Args... params) {
+	void FailRecursive(const string &msg, vector<ExceptionFormatValue> &values, T param, Args... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		FailRecursive(msg, values, params...);
 	}
 };
 
-}
+} // namespace duckdb
