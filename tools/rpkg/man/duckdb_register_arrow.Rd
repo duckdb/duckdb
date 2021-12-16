@@ -18,6 +18,8 @@ duckdb_list_arrow(conn)
 \item{name}{The name for the virtual table that is registered or unregistered}
 
 \item{arrow_scannable}{A scannable Arrow-object}
+
+\item{use_async}{Enables the async arrow scanner. Defaults to FALSE}
 }
 \value{
 These functions are called for their side effect.
