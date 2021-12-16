@@ -35,7 +35,7 @@ Connection *Command::CommandConnection() {
 	}
 }
 
-unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection, string file_name, int query_line,
+unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection, string file_name, idx_t query_line,
                                                           string sql_query) {
 	query_break(query_line);
 	auto result = connection->Query(sql_query);

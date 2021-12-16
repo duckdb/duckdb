@@ -37,7 +37,7 @@ public:
 public:
 	Connection *CommandConnection();
 
-	unique_ptr<MaterializedQueryResult> ExecuteQuery(Connection *connection, string file_name, int query_line,
+	unique_ptr<MaterializedQueryResult> ExecuteQuery(Connection *connection, string file_name, idx_t query_line,
 	                                                 string sql_query);
 
 	virtual void ExecuteInternal() = 0;

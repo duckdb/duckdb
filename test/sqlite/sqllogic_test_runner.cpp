@@ -234,9 +234,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (token.parameters.size() >= 2) {
 				command->connection_name = token.parameters[1];
 			}
-			if (skip_level > 0) {
-				continue;
-			}
 			ExecuteCommand(move(command));
 		} else if (token.type == TestTokenType::TOKEN_QUERY) {
 			if (token.parameters.size() < 1) {
@@ -342,10 +339,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			def.loop_idx = def.loop_start;
 			StartLoop(def);
 		} else if (token.type == TestTokenType::TOKEN_FOREACH) {
-			if (skip_level > 0) {
-				continue;
-			}
-
 			if (token.parameters.size() < 2) {
 				parser.Fail("expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type integer "
 				            "smallint float)");
@@ -400,7 +393,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					parser.Fail("require vector_size requires a parameter");
 				}
 				// require a specific vector size
-				int required_vector_size = std::stoi(token.parameters[1]);
+				auto required_vector_size = std::stoi(token.parameters[1]);
 				if (STANDARD_VECTOR_SIZE < required_vector_size) {
 					// vector size is too low for this test: skip it
 					return;

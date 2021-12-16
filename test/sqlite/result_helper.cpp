@@ -136,7 +136,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 	string hash_value;
 	if (runner.output_hash_mode || compare_hash) {
 		MD5Context context;
-		for (int i = 0; i < total_value_count; i++) {
+		for (idx_t i = 0; i < total_value_count; i++) {
 			context.Add(result_values_string[i]);
 			context.Add("\n");
 		}
@@ -154,7 +154,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 
 	if (!compare_hash) {
 		// check if the row/column count matches
-		int original_expected_columns = expected_column_count;
+		idx_t original_expected_columns = expected_column_count;
 		bool column_count_mismatch = false;
 		if (expected_column_count != result.ColumnCount()) {
 			// expected column count is different from the count found in the result
@@ -208,8 +208,8 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 		}
 
 		if (row_wise) {
-			int current_row = 0;
-			for (int i = 0; i < total_value_count && i < (int)comparison_values.size(); i++) {
+			idx_t current_row = 0;
+			for (idx_t i = 0; i < total_value_count && i < comparison_values.size(); i++) {
 				// split based on tab character
 				auto splits = StringUtil::Split(comparison_values[i], "\t");
 				if (splits.size() != expected_column_count) {
@@ -241,8 +241,8 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 				current_row++;
 			}
 		} else {
-			int current_row = 0, current_column = 0;
-			for (int i = 0; i < total_value_count && i < (int)comparison_values.size(); i++) {
+			idx_t current_row = 0, current_column = 0;
+			for (idx_t i = 0; i < total_value_count && i < comparison_values.size(); i++) {
 				bool success = CompareValues(result_values_string[current_row * expected_column_count + current_column],
 				                             comparison_values[i], current_row, current_column, comparison_values,
 				                             expected_column_count, row_wise, result_values_string);
@@ -253,7 +253,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 				REQUIRE(success);
 
 				current_column++;
-				if (current_column == (int)expected_column_count) {
+				if (current_column == expected_column_count) {
 					current_row++;
 					current_column = 0;
 				}
@@ -453,8 +453,8 @@ string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_t
 }
 
 // standard result conversion: one line per value
-int TestResultHelper::DuckDBConvertResult(MaterializedQueryResult &result, bool original_sqlite_test,
-                                          vector<string> &out_result) {
+void TestResultHelper::DuckDBConvertResult(MaterializedQueryResult &result, bool original_sqlite_test,
+                                           vector<string> &out_result) {
 	size_t r, c;
 	idx_t row_count = result.collection.Count();
 	idx_t column_count = result.ColumnCount();
@@ -467,7 +467,6 @@ int TestResultHelper::DuckDBConvertResult(MaterializedQueryResult &result, bool 
 			out_result[r * column_count + c] = converted_value;
 		}
 	}
-	return 0;
 }
 
 void TestResultHelper::PrintLineSep() {
@@ -567,8 +566,8 @@ bool TestResultHelper::ResultIsFile(string result) {
 	return StringUtil::StartsWith(result, "<FILE>:");
 }
 
-bool TestResultHelper::CompareValues(string lvalue_str, string rvalue_str, int current_row, int current_column,
-                                     vector<string> &values, int expected_column_count, bool row_wise,
+bool TestResultHelper::CompareValues(string lvalue_str, string rvalue_str, idx_t current_row, idx_t current_column,
+                                     vector<string> &values, idx_t expected_column_count, bool row_wise,
                                      vector<string> &result_values) {
 	Value lvalue, rvalue;
 	bool error = false;
@@ -669,7 +668,7 @@ bool TestResultHelper::CompareValues(string lvalue_str, string rvalue_str, int c
 	return true;
 }
 
-void TestResultHelper::ColumnCountMismatch(int expected_column_count, bool row_wise) {
+void TestResultHelper::ColumnCountMismatch(idx_t expected_column_count, bool row_wise) {
 	PrintErrorHeader("Wrong column count in query!");
 	std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got "
 	          << termcolor::bold << result.ColumnCount() << termcolor::reset << " columns" << std::endl;

@@ -37,8 +37,8 @@ public:
 
 	static void PrintExpectedResult(vector<string> &values, idx_t columns, bool row_wise);
 	static string SQLLogicTestConvertValue(Value value, LogicalType sql_type, bool original_sqlite_test);
-	static int DuckDBConvertResult(MaterializedQueryResult &result, bool original_sqlite_test,
-	                               vector<string> &out_result);
+	static void DuckDBConvertResult(MaterializedQueryResult &result, bool original_sqlite_test,
+	                                vector<string> &out_result);
 	static void PrintLineSep();
 	static void PrintHeader(string header);
 	static void PrintSQL(string sql);
@@ -51,10 +51,11 @@ public:
 	static bool ResultIsHash(const string &result);
 	static bool ResultIsFile(string result);
 
-	bool CompareValues(string lvalue_str, string rvalue_str, int current_row, int current_column,
-	                   vector<string> &values, int expected_column_count, bool row_wise, vector<string> &result_values);
+	bool CompareValues(string lvalue_str, string rvalue_str, idx_t current_row, idx_t current_column,
+	                   vector<string> &values, idx_t expected_column_count, bool row_wise,
+	                   vector<string> &result_values);
 	bool SkipErrorMessage(const string &message);
-	void ColumnCountMismatch(int expected_column_count, bool row_wise);
+	void ColumnCountMismatch(idx_t expected_column_count, bool row_wise);
 
 	vector<string> LoadResultFromFile(string fname, vector<string> names);
 
