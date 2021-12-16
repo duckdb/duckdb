@@ -181,7 +181,6 @@ SELECT * FROM (SELECT b FROM test as t GROUP BY b QUALIFY rank() OVER (PARTITION
 21
 22
 
-# correlated subquery with two correlated expressions
 query II
 SELECT * FROM test QUALIFY row_number() OVER (PARTITION BY test.b) = (SELECT max(a) FROM qt GROUP BY qt.b QUALIFY rank() OVER (PARTITION BY qt.b) = 1)
 ----
