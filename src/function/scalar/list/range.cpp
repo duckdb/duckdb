@@ -5,6 +5,95 @@
 
 namespace duckdb {
 
+struct NumericRangeInfo {
+	using TYPE = int64_t;
+	using INCREMENT_TYPE = int64_t;
+
+	static int64_t DefaultStart() {
+		return 0;
+	}
+	static int64_t DefaultIncrement() {
+		return 1;
+	}
+
+	static uint64_t ListLength(int64_t start_value, int64_t end_value, int64_t increment_value, bool inclusive_bound) {
+		if (increment_value == 0) {
+			return 0;
+		}
+		if (start_value > end_value && increment_value > 0) {
+			return 0;
+		}
+		if (start_value < end_value && increment_value < 0) {
+			return 0;
+		}
+		int64_t total_diff = AbsValue(end_value - start_value);
+		int64_t increment = AbsValue(increment_value);
+		int64_t total_values = total_diff / increment;
+		if (total_diff % increment == 0) {
+			if (inclusive_bound) {
+				total_values++;
+			}
+		} else {
+			total_values++;
+		}
+		return total_values;
+	}
+
+	static void Increment(int64_t &input, int64_t increment) {
+		input += increment;
+	}
+};
+struct TimestampRangeInfo {
+	using TYPE = timestamp_t;
+	using INCREMENT_TYPE = interval_t;
+
+	static timestamp_t DefaultStart() {
+		throw InternalException("Default start not implemented for timestamp range");
+	}
+	static interval_t DefaultIncrement() {
+		throw InternalException("Default increment not implemented for timestamp range");
+	}
+	static uint64_t ListLength(timestamp_t start_value, timestamp_t end_value, interval_t increment_value,
+	                           bool inclusive_bound) {
+		bool is_positive = increment_value.months > 0 || increment_value.days > 0 || increment_value.micros > 0;
+		bool is_negative = increment_value.months < 0 || increment_value.days < 0 || increment_value.micros < 0;
+		if (!is_negative && !is_positive) {
+			// interval is 0: no result
+			return 0;
+		}
+		if (is_negative && is_positive) {
+			// we don't allow a mix of
+			throw InvalidInputException("Interval with mix of negative/positive entries not supported");
+		}
+		if (start_value > end_value && is_positive) {
+			return 0;
+		}
+		if (start_value < end_value && is_negative) {
+			return 0;
+		}
+		int64_t total_values = 0;
+		if (is_negative) {
+			// negative interval, start_value is going down
+			while (inclusive_bound ? start_value >= end_value : start_value > end_value) {
+				start_value = Interval::Add(start_value, increment_value);
+				total_values++;
+			}
+		} else {
+			// positive interval, start_value is going up
+			while (inclusive_bound ? start_value <= end_value : start_value < end_value) {
+				start_value = Interval::Add(start_value, increment_value);
+				total_values++;
+			}
+		}
+		return total_values;
+	}
+
+	static void Increment(timestamp_t &input, interval_t increment) {
+		input = Interval::Add(input, increment);
+	}
+};
+
+template <class OP, bool INCLUSIVE_BOUND>
 class RangeInfoStruct {
 public:
 	explicit RangeInfoStruct(DataChunk &args_p) : args(args_p) {
@@ -36,64 +125,46 @@ public:
 		return true;
 	}
 
-	int64_t StartListValue(idx_t row_idx) {
+	typename OP::TYPE StartListValue(idx_t row_idx) {
 		if (args.ColumnCount() == 1) {
-			return 0;
+			return OP::DefaultStart();
 		} else {
-			auto data = (int64_t *)vdata[0].data;
+			auto data = (typename OP::TYPE *)vdata[0].data;
 			auto idx = vdata[0].sel->get_index(row_idx);
 			return data[idx];
 		}
 	}
 
-	int64_t EndListValue(idx_t row_idx) {
+	typename OP::TYPE EndListValue(idx_t row_idx) {
 		idx_t vdata_idx = args.ColumnCount() == 1 ? 0 : 1;
-		auto data = (int64_t *)vdata[vdata_idx].data;
+		auto data = (typename OP::TYPE *)vdata[vdata_idx].data;
 		auto idx = vdata[vdata_idx].sel->get_index(row_idx);
 		return data[idx];
 	}
 
-	int64_t ListIncrementValue(idx_t row_idx) {
+	typename OP::INCREMENT_TYPE ListIncrementValue(idx_t row_idx) {
 		if (args.ColumnCount() < 3) {
-			return 1;
+			return OP::DefaultIncrement();
 		} else {
-			auto data = (int64_t *)vdata[2].data;
+			auto data = (typename OP::INCREMENT_TYPE *)vdata[2].data;
 			auto idx = vdata[2].sel->get_index(row_idx);
 			return data[idx];
 		}
 	}
 
-	void GetListValues(idx_t row_idx, int64_t &start_value, int64_t &end_value, int64_t &increment_value) {
+	void GetListValues(idx_t row_idx, typename OP::TYPE &start_value, typename OP::TYPE &end_value,
+	                   typename OP::INCREMENT_TYPE &increment_value) {
 		start_value = StartListValue(row_idx);
 		end_value = EndListValue(row_idx);
 		increment_value = ListIncrementValue(row_idx);
 	}
 
-	uint64_t ListLength(idx_t row_idx, bool inclusive_bound) {
-		int64_t start_value;
-		int64_t end_value;
-		int64_t increment_value;
+	uint64_t ListLength(idx_t row_idx) {
+		typename OP::TYPE start_value;
+		typename OP::TYPE end_value;
+		typename OP::INCREMENT_TYPE increment_value;
 		GetListValues(row_idx, start_value, end_value, increment_value);
-		if (increment_value == 0) {
-			return 0;
-		}
-		if (start_value > end_value && increment_value > 0) {
-			return 0;
-		}
-		if (start_value < end_value && increment_value < 0) {
-			return 0;
-		}
-		int64_t total_diff = AbsValue(end_value - start_value);
-		int64_t increment = AbsValue(increment_value);
-		int64_t total_values = total_diff / increment;
-		if (total_diff % increment == 0) {
-			if (inclusive_bound) {
-				total_values++;
-			}
-		} else {
-			total_values++;
-		}
-		return total_values;
+		return OP::ListLength(start_value, end_value, increment_value, INCLUSIVE_BOUND);
 	}
 
 private:
@@ -101,11 +172,11 @@ private:
 	VectorData vdata[3];
 };
 
-template <bool INCLUSIVE_BOUND>
+template <class OP, bool INCLUSIVE_BOUND>
 static void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
-	RangeInfoStruct info(args);
+	RangeInfoStruct<OP, INCLUSIVE_BOUND> info(args);
 	idx_t args_size = 1;
 	auto result_type = VectorType::CONSTANT_VECTOR;
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
@@ -125,23 +196,23 @@ static void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &r
 			list_data[i].length = 0;
 		} else {
 			list_data[i].offset = total_size;
-			list_data[i].length = info.ListLength(i, INCLUSIVE_BOUND);
+			list_data[i].length = info.ListLength(i);
 			total_size += list_data[i].length;
 		}
 	}
 
 	// now construct the child vector of the list
 	ListVector::Reserve(result, total_size);
-	auto range_data = FlatVector::GetData<int64_t>(ListVector::GetEntry(result));
+	auto range_data = FlatVector::GetData<typename OP::TYPE>(ListVector::GetEntry(result));
 	idx_t total_idx = 0;
 	for (idx_t i = 0; i < args_size; i++) {
-		int64_t start_value = info.StartListValue(i);
-		int64_t increment = info.ListIncrementValue(i);
+		typename OP::TYPE start_value = info.StartListValue(i);
+		typename OP::INCREMENT_TYPE increment = info.ListIncrementValue(i);
 
-		int64_t range_value = start_value;
+		typename OP::TYPE range_value = start_value;
 		for (idx_t range_idx = 0; range_idx < list_data[i].length; range_idx++) {
 			range_data[total_idx++] = range_value;
-			range_value += increment;
+			OP::Increment(range_value, increment);
 		}
 	}
 
@@ -154,21 +225,31 @@ static void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &r
 void ListRangeFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunctionSet range_set("range");
-	range_set.AddFunction(
-	    ScalarFunction({LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<false>));
+	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT),
+	                                     ListRangeFunction<NumericRangeInfo, false>));
 	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT},
-	                                     LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<false>));
+	                                     LogicalType::LIST(LogicalType::BIGINT),
+	                                     ListRangeFunction<NumericRangeInfo, false>));
 	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                     LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<false>));
+	                                     LogicalType::LIST(LogicalType::BIGINT),
+	                                     ListRangeFunction<NumericRangeInfo, false>));
+	range_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
+	                                     LogicalType::LIST(LogicalType::TIMESTAMP),
+	                                     ListRangeFunction<TimestampRangeInfo, false>));
 	set.AddFunction(range_set);
 
 	ScalarFunctionSet generate_series("generate_series");
-	generate_series.AddFunction(
-	    ScalarFunction({LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<true>));
+	generate_series.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT),
+	                                           ListRangeFunction<NumericRangeInfo, true>));
 	generate_series.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT},
-	                                           LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<true>));
+	                                           LogicalType::LIST(LogicalType::BIGINT),
+	                                           ListRangeFunction<NumericRangeInfo, true>));
 	generate_series.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                           LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<true>));
+	                                           LogicalType::LIST(LogicalType::BIGINT),
+	                                           ListRangeFunction<NumericRangeInfo, true>));
+	generate_series.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
+	                                           LogicalType::LIST(LogicalType::TIMESTAMP),
+	                                           ListRangeFunction<TimestampRangeInfo, true>));
 	set.AddFunction(generate_series);
 }
 

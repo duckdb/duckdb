@@ -476,4 +476,13 @@ dtime_t Interval::Add(dtime_t left, interval_t right, date_t &date) {
 	return left;
 }
 
+timestamp_t Interval::Add(timestamp_t left, interval_t right) {
+	date_t date;
+	dtime_t time;
+	Timestamp::Convert(left, date, time);
+	auto new_date = Interval::Add(date, right);
+	auto new_time = Interval::Add(time, right, new_date);
+	return Timestamp::FromDatetime(new_date, new_time);
+}
+
 } // namespace duckdb
