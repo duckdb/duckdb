@@ -26,7 +26,8 @@ BindResult QualifyBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, 
 		return alias_result;
 	}
 
-	return result;
+	return BindResult(StringUtil::Format("Referenced column %s not found in FROM clause and can't find in alias map.",
+	                                     expr.ToString()));
 }
 
 BindResult QualifyBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {

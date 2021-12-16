@@ -5,6 +5,9 @@
 require vector_size 512
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
 
 statement ok
@@ -170,6 +173,18 @@ SELECT unique1 FROM tenk1 qualify lead(ten * 2, 1, -1) OVER (PARTITION BY four O
 8009	
 9850	
 3043	
+
+# using in subquery
+query I
+SELECT * FROM (SELECT b FROM test as t GROUP BY b QUALIFY rank() OVER (PARTITION BY t.b) = 1) QUALIFY row_number() OVER (PARTITION BY b) = 1
+----
+21
+22
+
+query II
+SELECT * FROM test QUALIFY row_number() OVER (PARTITION BY test.b) = (SELECT max(a) FROM qt GROUP BY qt.b QUALIFY rank() OVER (PARTITION BY qt.b) = 1)
+----
+13	22
 
 # in the order of WINDOW clause
 statement ok
