@@ -301,7 +301,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail("hash-threshold requires a parameter");
 			}
 			try {
-				hashThreshold = std::stoi(token.parameters[0]);
+				hash_threshold = std::stoi(token.parameters[0]);
 			} catch (...) {
 				parser.Fail("hash-threshold must be a number");
 			}

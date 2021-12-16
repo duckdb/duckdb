@@ -51,7 +51,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 	idx_t row_count = result.collection.Count();
 	idx_t column_count = result.ColumnCount();
 	idx_t total_value_count = row_count * column_count;
-	bool compare_hash = query_has_label || (runner.hashThreshold > 0 && total_value_count > runner.hashThreshold);
+	bool compare_hash = query_has_label || (runner.hash_threshold > 0 && total_value_count > runner.hash_threshold);
 	// check if the current line (the first line of the result) is a hash value
 	if (values.size() == 1 && ResultIsHash(values[0])) {
 		compare_hash = true;

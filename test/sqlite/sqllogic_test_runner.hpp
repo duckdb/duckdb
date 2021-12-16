@@ -32,7 +32,7 @@ public:
 	bool output_result_mode = false;
 	bool debug_mode = false;
 	bool finished_processing_file = false;
-	int hashThreshold = 0; /* Threshold for hashing res */
+	int hash_threshold = 0;
 	vector<LoopCommand *> active_loops;
 	unique_ptr<Command> top_level_loop;
 	vector<LoopDefinition *> running_loops;
