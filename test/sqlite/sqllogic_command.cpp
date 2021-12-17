@@ -1,6 +1,7 @@
 #include "sqllogic_command.hpp"
 #include "test_helper_extension.hpp"
 #include "sqllogic_test_runner.hpp"
+#include "result_helper.hpp"
 
 namespace duckdb {
 

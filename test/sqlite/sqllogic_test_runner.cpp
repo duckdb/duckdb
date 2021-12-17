@@ -5,6 +5,8 @@
 #include "test_helpers.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "test_parser.hpp"
+#include "test_helpers.hpp"
+#include "test_helper_extension.hpp"
 
 namespace duckdb {
 

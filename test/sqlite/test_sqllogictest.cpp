@@ -3,6 +3,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "test_helpers.hpp"
 
 #include "sqllogic_test_runner.hpp"
 
