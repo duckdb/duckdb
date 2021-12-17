@@ -14,9 +14,9 @@ find_package(Threads REQUIRED)
 
 if(NOT "${CMAKE_CXX_STANDARD}")
   if (CMAKE_VERSION VERSION_LESS "3.1")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
   else ()
-    set (CMAKE_CXX_STANDARD 20)
+    set (CMAKE_CXX_STANDARD 11)
   endif ()
 endif()
 
