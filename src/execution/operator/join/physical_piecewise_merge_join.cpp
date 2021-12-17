@@ -59,6 +59,8 @@ public:
 		return rhs_count;
 	}
 
+	//! The lock for updating the global state
+	mutex lock;
 	//! Global sort state
 	GlobalSortState rhs_global_sort_state;
 	//! Whether or not the RHS has NULL values
@@ -158,6 +160,7 @@ void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalSinkSt
 	auto &gstate = (MergeJoinGlobalState &)gstate_p;
 	auto &lstate = (MergeJoinLocalState &)lstate_p;
 	gstate.rhs_global_sort_state.AddLocalState(lstate.rhs_local_sort_state);
+	lock_guard<mutex> locked(gstate.lock);
 	gstate.rhs_has_null += lstate.rhs_has_null;
 	gstate.rhs_count += lstate.rhs_count;
 	auto &client_profiler = QueryProfiler::Get(context.client);
@@ -365,9 +368,13 @@ static int MergeJoinComparisonValue(ExpressionType comparison) {
 
 struct BlockMergeInfo {
 	GlobalSortState &state;
-	idx_t block_idx;
+	//! The block being scanned
+	const idx_t block_idx;
+	//! The start position being read from the block
 	const idx_t base_idx;
+	//! The number of not-NULL values in the block (they are at the end)
 	const idx_t not_null;
+	//! The current offset in the block
 	idx_t &entry_idx;
 	SelectionVector result;
 
@@ -659,7 +666,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		const auto &rblock = rsorted.radix_sorting_data[state.right_chunk_index];
 		const auto rhs_not_null =
 		    SortedBlockNotNull(state.right_base, rblock.count, gstate.rhs_count - gstate.rhs_has_null);
-		BlockMergeInfo right_info(gstate.rhs_global_sort_state, state.right_chunk_index, state.right_chunk_index,
+		BlockMergeInfo right_info(gstate.rhs_global_sort_state, state.right_chunk_index, state.right_position,
 		                          state.right_position, rhs_not_null);
 
 		idx_t result_count = MergeJoinComplexBlocks(left_info, right_info, conditions[0].comparison);
