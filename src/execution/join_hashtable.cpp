@@ -289,8 +289,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 	// First, fill the hash_map and handle conflicts with a next_pointer
 	if (has_unique_keys && (join_type == JoinType::INNER || join_type == JoinType::RIGHT)) {
-		// For inner/right joins we check whether the build is composed of unique keys during the insertion into the
-		// hash map
+		// For inner/right joins we check whether the build is composed of unique keys
 		InsertHashesAndCheckUniqueness(count_tuples, indices, key_locations, pointers); // inlined
 	} else {
 		for (idx_t i = 0; i < count_tuples; i++) {
@@ -308,9 +307,6 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *indices, data_ptr_t key_locations[],
                                                    data_ptr_t *pointers) {
 	auto col_offsets = layout.GetOffsets();
-	vector<data_ptr_t> conflict_entries, next_ptrs;
-	conflict_entries.reserve(count_tuples);
-	next_ptrs.reserve(count_tuples);
 	idx_t conflict_count = 0;
 	SelectionVector conflict_sel(STANDARD_VECTOR_SIZE);
 	SelectionVector pointers_sel(STANDARD_VECTOR_SIZE);
@@ -322,9 +318,7 @@ void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *i
 		auto next_ptr = key_locations[i] + pointer_offset;
 		// In case this is still a primary key and there is a conflict
 		if (has_unique_keys && pointers[index] != nullptr) {
-			// for each key pair in the entry
-			// store selection vector for entries and sequential for conflicts
-			// store a ptr to the next entry to evaluate the next_key later
+			// store a selection vector for entries and a ptr to the next entry
 			conflict_entries[conflict_count] = pointers[index];
 			pointers_sel.set_index(conflict_count++, index);
 		}
@@ -333,57 +327,62 @@ void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *i
 		// store the pointer to the current tuple entry in the hash_map
 		pointers[index] = key_locations[i];
 	}
-	Vector ht_entries(LogicalType::POINTER, key_locations);
-	Vector conflicts_vec(LogicalType::POINTER, conflict_entries);
-	// vectorize check
+	// Create vectors and do a vectorized check for duplicates
+	Vector ht_entries(LogicalType::POINTER, *key_locations);
+	Vector conflicts_vec(LogicalType::POINTER, *conflict_entries);
+	auto matches = RowOperations::MatchRows(ht_entries, pointers_sel, layout, conflicts_vec,
+	                                        FlatVector::INCREMENTAL_SELECTION_VECTOR, conflict_count);
+	if (matches > 0) {
+		has_unique_keys = false;
+	}
 }
 
-void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *indices, data_ptr_t key_locations[],
+/* void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *indices, data_ptr_t key_locations[],
                                                    data_ptr_t *pointers) {
-	auto col_offsets = layout.GetOffsets();
-	vector<data_ptr_t> conflict_entries;
-	conflict_entries.reserve(count_tuples);
-	for (idx_t i = 0; i < count_tuples; i++) {
-		// For each tuple, the hash_value will be replaced by a pointer to the next_entry in the hash_map
-		auto index = indices[i];
-		auto next_ptr = key_locations[i] + pointer_offset;
-		// In case this is still a primary key and there is a conflict
-		if (has_unique_keys && pointers[index] != nullptr) {
-			// for each key pair in the entry
-			for (idx_t key_idx = 0; key_idx != condition_types.size(); ++key_idx) {
-				auto key_type = condition_types[key_idx];
-				auto key_offset = col_offsets[key_idx];
-				// check whether the keys are the same
-				has_unique_keys =
-				    !CompareKeysSwitch(key_locations[i] + key_offset, pointers[index] + key_offset, key_type);
-			}
-			// store a ptr to the next entry to evaluate the next_key later
-			conflict_entries.push_back(pointers[index]);
-		}
-		// replace the hash_value in the current entry and point to a position in the hash_map
-		Store<data_ptr_t>(pointers[index], next_ptr);
-		// store the pointer to the current tuple entry in the hash_map
-		pointers[index] = key_locations[i];
-	}
-	// It is still necessary to handle multiple conflicts to the same key
-	if (has_unique_keys) {
-		for (auto entry : conflict_entries) {
-			auto next_entry_ptr = Load<data_ptr_t>(entry + pointer_offset);
-			// check the whole chain
-			while (has_unique_keys && next_entry_ptr != nullptr) {
-				// check whether the keys are the same
-				for (idx_t key_idx = 0; key_idx != condition_types.size(); ++key_idx) {
-					auto key_type = condition_types[key_idx];
-					auto key_offset = col_offsets[key_idx];
-					has_unique_keys = !CompareKeysSwitch(entry + key_offset, next_entry_ptr + key_offset, key_type);
-				}
-				// walk to the next entry
-				next_entry_ptr = Load<data_ptr_t>(next_entry_ptr + pointer_offset);
-			}
-			// no more conflicts for this key
-		}
-	}
-}
+    auto col_offsets = layout.GetOffsets();
+    vector<data_ptr_t> conflict_entries;
+    conflict_entries.reserve(count_tuples);
+    for (idx_t i = 0; i < count_tuples; i++) {
+        // For each tuple, the hash_value will be replaced by a pointer to the next_entry in the hash_map
+        auto index = indices[i];
+        auto next_ptr = key_locations[i] + pointer_offset;
+        // In case this is still a primary key and there is a conflict
+        if (has_unique_keys && pointers[index] != nullptr) {
+            // for each key pair in the entry
+            for (idx_t key_idx = 0; key_idx != condition_types.size(); ++key_idx) {
+                auto key_type = condition_types[key_idx];
+                auto key_offset = col_offsets[key_idx];
+                // check whether the keys are the same
+                has_unique_keys =
+                    !CompareKeysSwitch(key_locations[i] + key_offset, pointers[index] + key_offset, key_type);
+            }
+            // store a ptr to the next entry to evaluate the next_key later
+            conflict_entries.push_back(pointers[index]);
+        }
+        // replace the hash_value in the current entry and point to a position in the hash_map
+        Store<data_ptr_t>(pointers[index], next_ptr);
+        // store the pointer to the current tuple entry in the hash_map
+        pointers[index] = key_locations[i];
+    }
+    // It is still necessary to handle multiple conflicts to the same key
+    if (has_unique_keys) {
+        for (auto entry : conflict_entries) {
+            auto next_entry_ptr = Load<data_ptr_t>(entry + pointer_offset);
+            // check the whole chain
+            while (has_unique_keys && next_entry_ptr != nullptr) {
+                // check whether the keys are the same
+                for (idx_t key_idx = 0; key_idx != condition_types.size(); ++key_idx) {
+                    auto key_type = condition_types[key_idx];
+                    auto key_offset = col_offsets[key_idx];
+                    has_unique_keys = !CompareKeysSwitch(entry + key_offset, next_entry_ptr + key_offset, key_type);
+                }
+                // walk to the next entry
+                next_entry_ptr = Load<data_ptr_t>(next_entry_ptr + pointer_offset);
+            }
+            // no more conflicts for this key
+        }
+    }
+} */
 
 template <typename T>
 bool TemplatedKeysCompare(data_ptr_t left_ptr, data_ptr_t right_ptr) {
@@ -487,7 +486,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
 		if (ht.has_unique_keys) {
-			NextInnerUniqueKeysJoin(keys, left, result);
+			NextInnerJoin(keys, left, result);
 		} else {
 			NextInnerJoin(keys, left, result);
 		}

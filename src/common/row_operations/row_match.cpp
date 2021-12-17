@@ -261,9 +261,12 @@ idx_t RowOperations::Match(DataChunk &columns, VectorData col_data[], const RowL
 	return count;
 }
 
-idx_t RowOperations::MatchRows(Vector &rows_left, SelectionVector &left_sel, const RowLayout &layout,
-                               Vector &rows_right, SelectionVector &right_sel, idx_t rows_count) {
-	TemplatedMatchOp<Equals>(rows_left, left_sel, layout, rows_right, right_sel, rows_count);
+idx_t RowOperations::MatchRows(Vector &rows_left, const SelectionVector &left_sel, const RowLayout &layout,
+                               Vector &rows_right, const SelectionVector &right_sel, idx_t rows_count) {
+	rows_left.Print();
+	rows_right.Print();
+	return 1;
+	// TemplatedMatchOp<Equals>(rows_left, left_sel, layout, rows_right, right_sel, rows_count);
 }
 
 } // namespace duckdb
