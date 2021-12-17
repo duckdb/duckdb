@@ -20,18 +20,33 @@ bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<uni
 }
 
 void Transformer::InitializeStackCheck(int *stack_check_var) {
-	this->root = stack_check_var;
+	int stack_dir_test;
+	this->stack_root = stack_check_var;
+	if (&stack_dir_test > stack_root) {
+		this->stack_direction = StackDirection::STACK_DIRECTION_INCREASING;
+	} else {
+		this->stack_direction = StackDirection::STACK_DIRECTION_DECREASING;
+	}
 }
 
 void Transformer::StackCheck(idx_t extra_stack) {
-	if (!root) {
+	if (!stack_root) {
 		return;
 	}
 	int current_stack_var;
-	if (&current_stack_var > root) {
-		throw InternalException("Transformer::StackCheck variables are incorrectly set up");
+	idx_t stack_size;
+	if (stack_direction == StackDirection::STACK_DIRECTION_INCREASING) {
+		if (&current_stack_var < stack_root) {
+			throw InternalException("Transformer::StackCheck variables are incorrectly set up");
+		}
+		stack_size = &current_stack_var - stack_root;
+	} else {
+		if (&current_stack_var > stack_root) {
+			throw InternalException("Transformer::StackCheck variables are incorrectly set up");
+		}
+		stack_size = stack_root - &current_stack_var;
 	}
-	idx_t stack_size = root - &current_stack_var + extra_stack;
+	stack_size += extra_stack;
 	if (stack_size > MAX_STACK_SIZE) {
 		throw ParserException(
 		    "Stack usage in parsing is too high: the query tree is too deep (stack usage %lld, max stack usage %lld)",

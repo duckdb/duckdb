@@ -252,7 +252,12 @@ private:
 	constexpr static idx_t MAX_STACK_SIZE = 1024 * 100;
 	//! For iterative functions that create recursive objects, this is our default stack size per element
 	constexpr static idx_t DEFAULT_ENTRY_STACK_SIZE = 100;
-	int *root = nullptr;
+
+	//! Root stack variable
+	int *stack_root = nullptr;
+	//! Direction in which the stack grows
+	enum class StackDirection : uint8_t { STACK_DIRECTION_INCREASING, STACK_DIRECTION_DECREASING };
+	StackDirection stack_direction = StackDirection::STACK_DIRECTION_INCREASING;
 
 	void InitializeStackCheck(int *stack_check_var);
 	void StackCheck(idx_t extra_stack = 0);
