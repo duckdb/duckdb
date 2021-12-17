@@ -53,9 +53,11 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 	idx_t total_value_count = row_count * column_count;
 	bool compare_hash =
 	    query_has_label || (runner.hash_threshold > 0 && total_value_count > idx_t(runner.hash_threshold));
+	bool result_is_hash = false;
 	// check if the current line (the first line of the result) is a hash value
 	if (values.size() == 1 && ResultIsHash(values[0])) {
 		compare_hash = true;
+		result_is_hash = true;
 	}
 
 	vector<string> result_values_string;
@@ -287,14 +289,12 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 				runner.hash_label_map[query_label] = hash_value;
 				runner.result_label_map[query_label] = move(owned_result);
 			} else {
-				hash_compare_error = entry->second == hash_value;
+				hash_compare_error = entry->second != hash_value;
 			}
-		} else {
-			if (values.size() <= 0) {
-				PrintErrorHeader("Error in test: attempting to compare hash but no hash found!");
-				FAIL_LINE(file_name, query_line, 0);
-			}
-			hash_compare_error = values[0] == hash_value;
+		}
+		if (result_is_hash) {
+			D_ASSERT(values.size() == 1);
+			hash_compare_error = values[0] != hash_value;
 		}
 		if (hash_compare_error) {
 			PrintErrorHeader("Wrong result hash!");
