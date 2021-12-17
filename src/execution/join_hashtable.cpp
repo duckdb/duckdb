@@ -328,9 +328,9 @@ void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *i
 		pointers[index] = key_locations[i];
 	}
 	// Create vectors and do a vectorized check for duplicates
-	Vector ht_entries(LogicalType::POINTER, *key_locations);
-	Vector conflicts_vec(LogicalType::POINTER, *conflict_entries);
-	auto matches = RowOperations::MatchRows(ht_entries, pointers_sel, layout, conflicts_vec,
+	Vector ht_rows(LogicalType::POINTER, *key_locations);
+	Vector conflicts_rows(LogicalType::POINTER, *conflict_entries);
+	auto matches = RowOperations::MatchRows(ht_rows, pointers_sel, layout, conflicts_rows,
 	                                        FlatVector::INCREMENTAL_SELECTION_VECTOR, conflict_count);
 	if (matches > 0) {
 		has_unique_keys = false;
@@ -486,7 +486,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
 		if (ht.has_unique_keys) {
-			NextInnerJoin(keys, left, result);
+			NextInnerUniqueKeysJoin(keys, left, result);
 		} else {
 			NextInnerJoin(keys, left, result);
 		}
