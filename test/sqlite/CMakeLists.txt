@@ -10,7 +10,7 @@ add_library_unity(
   sqllogic_command.cpp
   sqllogic_test_runner.cpp
   test_sqllogictest.cpp
-  test_parser.cpp)
+  sqllogic_parser.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sqlite>
     PARENT_SCOPE)

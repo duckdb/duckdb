@@ -14,30 +14,30 @@
 
 namespace duckdb {
 
-enum class TestTokenType {
-	TOKEN_INVALID,
-	TOKEN_SKIP_IF,
-	TOKEN_ONLY_IF,
-	TOKEN_STATEMENT,
-	TOKEN_QUERY,
-	TOKEN_HASH_THRESHOLD,
-	TOKEN_HALT,
-	TOKEN_MODE,
-	TOKEN_LOOP,
-	TOKEN_FOREACH,
-	TOKEN_ENDLOOP,
-	TOKEN_REQUIRE,
-	TOKEN_LOAD,
-	TOKEN_RESTART
+enum class SQLLogicTokenType {
+	SQLLOGIC_INVALID,
+	SQLLOGIC_SKIP_IF,
+	SQLLOGIC_ONLY_IF,
+	SQLLOGIC_STATEMENT,
+	SQLLOGIC_QUERY,
+	SQLLOGIC_HASH_THRESHOLD,
+	SQLLOGIC_HALT,
+	SQLLOGIC_MODE,
+	SQLLOGIC_LOOP,
+	SQLLOGIC_FOREACH,
+	SQLLOGIC_ENDLOOP,
+	SQLLOGIC_REQUIRE,
+	SQLLOGIC_LOAD,
+	SQLLOGIC_RESTART
 };
 
-class TestToken {
+class SQLLogicToken {
 public:
-	TestTokenType type;
+	SQLLogicTokenType type;
 	vector<string> parameters;
 };
 
-class TestParser {
+class SQLLogicParser {
 public:
 	string file_name;
 	//! The lines of the current text file
@@ -71,7 +71,7 @@ public:
 	vector<string> ExtractExpectedResult();
 
 	//! Tokenize the current line
-	TestToken Tokenize();
+	SQLLogicToken Tokenize();
 
 	template <typename... Args>
 	void Fail(const string &msg, Args... params) {
@@ -80,7 +80,7 @@ public:
 	}
 
 private:
-	TestTokenType CommandToToken(const string &token);
+	SQLLogicTokenType CommandToToken(const string &token);
 
 	void FailRecursive(const string &msg, vector<ExceptionFormatValue> &values);
 

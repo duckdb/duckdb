@@ -4,7 +4,7 @@
 #include "sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "test_parser.hpp"
+#include "sqllogic_parser.hpp"
 #include "test_helpers.hpp"
 #include "test_helper_extension.hpp"
 
@@ -152,7 +152,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
-	TestParser parser;
+	SQLLogicParser parser;
 	idx_t skip_level = 0;
 
 	// for the original SQLite tests we convert floating point numbers to integers
@@ -180,9 +180,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		// tokenize the current line
 		auto token = parser.Tokenize();
 		bool skip_statement = false;
-		while (token.type == TestTokenType::TOKEN_SKIP_IF || token.type == TestTokenType::TOKEN_ONLY_IF) {
+		while (token.type == SQLLogicTokenType::SQLLOGIC_SKIP_IF || token.type == SQLLogicTokenType::SQLLOGIC_ONLY_IF) {
 			// skipif/onlyif
-			bool skip_if = token.type == TestTokenType::TOKEN_SKIP_IF;
+			bool skip_if = token.type == SQLLogicTokenType::SQLLOGIC_SKIP_IF;
 			if (token.parameters.size() < 1) {
 				parser.Fail("skipif/onlyif requires a single parameter (e.g. skipif duckdb)");
 			}
@@ -201,10 +201,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		if (skip_statement) {
 			continue;
 		}
-		if (skip_level > 0 && token.type != TestTokenType::TOKEN_MODE) {
+		if (skip_level > 0 && token.type != SQLLogicTokenType::SQLLOGIC_MODE) {
 			continue;
 		}
-		if (token.type == TestTokenType::TOKEN_STATEMENT) {
+		if (token.type == SQLLogicTokenType::SQLLOGIC_STATEMENT) {
 			// statement
 			if (token.parameters.size() < 1) {
 				parser.Fail("statement requires at least one parameter (statement ok/error)");
@@ -237,7 +237,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				command->connection_name = token.parameters[1];
 			}
 			ExecuteCommand(move(command));
-		} else if (token.type == TestTokenType::TOKEN_QUERY) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_QUERY) {
 			if (token.parameters.size() < 1) {
 				parser.Fail("query requires at least one parameter (query III)");
 			}
@@ -298,7 +298,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				command->query_has_label = false;
 			}
 			ExecuteCommand(move(command));
-		} else if (token.type == TestTokenType::TOKEN_HASH_THRESHOLD) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD) {
 			if (token.parameters.size() != 1) {
 				parser.Fail("hash-threshold requires a parameter");
 			}
@@ -307,9 +307,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} catch (...) {
 				parser.Fail("hash-threshold must be a number");
 			}
-		} else if (token.type == TestTokenType::TOKEN_HALT) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_HALT) {
 			break;
-		} else if (token.type == TestTokenType::TOKEN_MODE) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_MODE) {
 			if (token.parameters.size() != 1) {
 				parser.Fail("mode requires one parameter");
 			}
@@ -326,7 +326,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else {
 				parser.Fail("unrecognized mode: %s", token.parameters[0]);
 			}
-		} else if (token.type == TestTokenType::TOKEN_LOOP) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOOP) {
 			if (token.parameters.size() != 3) {
 				parser.Fail("Expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)");
 			}
@@ -340,7 +340,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			def.loop_idx = def.loop_start;
 			StartLoop(def);
-		} else if (token.type == TestTokenType::TOKEN_FOREACH) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_FOREACH) {
 			if (token.parameters.size() < 2) {
 				parser.Fail("expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type integer "
 				            "smallint float)");
@@ -357,9 +357,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			def.loop_start = 0;
 			def.loop_end = def.tokens.size();
 			StartLoop(def);
-		} else if (token.type == TestTokenType::TOKEN_ENDLOOP) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_ENDLOOP) {
 			EndLoop();
-		} else if (token.type == TestTokenType::TOKEN_REQUIRE) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE) {
 			if (token.parameters.size() < 1) {
 				parser.Fail("require requires a single parameter");
 			}
@@ -414,7 +414,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					return;
 				}
 			}
-		} else if (token.type == TestTokenType::TOKEN_LOAD) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
 			if (InLoop()) {
 				parser.Fail("load cannot be called in a loop");
 			}
@@ -439,7 +439,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			// now create the database file
 			LoadDatabase(dbpath);
-		} else if (token.type == TestTokenType::TOKEN_RESTART) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RESTART) {
 			if (dbpath.empty()) {
 				parser.Fail("cannot restart an in-memory database, did you forget to call \"load\"?");
 			}

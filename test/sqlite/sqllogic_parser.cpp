@@ -1,11 +1,11 @@
-#include "test_parser.hpp"
+#include "sqllogic_parser.hpp"
 #include "catch.hpp"
 
 #include <fstream>
 
 namespace duckdb {
 
-bool TestParser::OpenFile(const string &path) {
+bool SQLLogicParser::OpenFile(const string &path) {
 	this->file_name = path;
 
 	std::ifstream infile(file_name);
@@ -20,11 +20,11 @@ bool TestParser::OpenFile(const string &path) {
 	return !infile.bad();
 }
 
-bool TestParser::EmptyOrComment(const string &line) {
+bool SQLLogicParser::EmptyOrComment(const string &line) {
 	return line.empty() || StringUtil::StartsWith(line, "#");
 }
 
-bool TestParser::NextStatement() {
+bool SQLLogicParser::NextStatement() {
 	if (seen_statement) {
 		// skip the current statement
 		// but only if we have already seen a statement in the file
@@ -41,11 +41,11 @@ bool TestParser::NextStatement() {
 	return current_line < lines.size();
 }
 
-void TestParser::NextLine() {
+void SQLLogicParser::NextLine() {
 	current_line++;
 }
 
-string TestParser::ExtractStatement(bool is_query) {
+string SQLLogicParser::ExtractStatement(bool is_query) {
 	string statement;
 
 	bool first_line = true;
@@ -65,7 +65,7 @@ string TestParser::ExtractStatement(bool is_query) {
 	return statement;
 }
 
-vector<string> TestParser::ExtractExpectedResult() {
+vector<string> SQLLogicParser::ExtractExpectedResult() {
 	vector<string> result;
 	// skip the result line (----) if we are still reading that
 	if (current_line < lines.size() && lines[current_line] == "----") {
@@ -79,16 +79,16 @@ vector<string> TestParser::ExtractExpectedResult() {
 	return result;
 }
 
-void TestParser::FailRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
+void SQLLogicParser::FailRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
 	auto error_message =
 	    file_name + ":" + to_string(current_line + 1) + ": " + ExceptionFormatValue::Format(msg, values);
 	FAIL(error_message.c_str());
 }
 
-TestToken TestParser::Tokenize() {
-	TestToken result;
+SQLLogicToken SQLLogicParser::Tokenize() {
+	SQLLogicToken result;
 	if (current_line >= lines.size()) {
-		result.type = TestTokenType::TOKEN_INVALID;
+		result.type = SQLLogicTokenType::SQLLOGIC_INVALID;
 		return result;
 	}
 
@@ -118,36 +118,36 @@ TestToken TestParser::Tokenize() {
 	return result;
 }
 
-TestTokenType TestParser::CommandToToken(const string &token) {
+SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 	if (token == "skipif") {
-		return TestTokenType::TOKEN_SKIP_IF;
+		return SQLLogicTokenType::SQLLOGIC_SKIP_IF;
 	} else if (token == "onlyif") {
-		return TestTokenType::TOKEN_ONLY_IF;
+		return SQLLogicTokenType::SQLLOGIC_ONLY_IF;
 	} else if (token == "statement") {
-		return TestTokenType::TOKEN_STATEMENT;
+		return SQLLogicTokenType::SQLLOGIC_STATEMENT;
 	} else if (token == "query") {
-		return TestTokenType::TOKEN_QUERY;
+		return SQLLogicTokenType::SQLLOGIC_QUERY;
 	} else if (token == "hash-threshold") {
-		return TestTokenType::TOKEN_HASH_THRESHOLD;
+		return SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD;
 	} else if (token == "halt") {
-		return TestTokenType::TOKEN_HALT;
+		return SQLLogicTokenType::SQLLOGIC_HALT;
 	} else if (token == "mode") {
-		return TestTokenType::TOKEN_MODE;
+		return SQLLogicTokenType::SQLLOGIC_MODE;
 	} else if (token == "loop") {
-		return TestTokenType::TOKEN_LOOP;
+		return SQLLogicTokenType::SQLLOGIC_LOOP;
 	} else if (token == "foreach") {
-		return TestTokenType::TOKEN_FOREACH;
+		return SQLLogicTokenType::SQLLOGIC_FOREACH;
 	} else if (token == "endloop") {
-		return TestTokenType::TOKEN_ENDLOOP;
+		return SQLLogicTokenType::SQLLOGIC_ENDLOOP;
 	} else if (token == "require") {
-		return TestTokenType::TOKEN_REQUIRE;
+		return SQLLogicTokenType::SQLLOGIC_REQUIRE;
 	} else if (token == "load") {
-		return TestTokenType::TOKEN_LOAD;
+		return SQLLogicTokenType::SQLLOGIC_LOAD;
 	} else if (token == "restart") {
-		return TestTokenType::TOKEN_RESTART;
+		return SQLLogicTokenType::SQLLOGIC_RESTART;
 	}
 	Fail("Unrecognized parameter %s", token);
-	return TestTokenType::TOKEN_INVALID;
+	return SQLLogicTokenType::SQLLOGIC_INVALID;
 }
 
 } // namespace duckdb
