@@ -12,12 +12,13 @@ project(DuckDB)
 
 find_package(Threads REQUIRED)
 
-if (CMAKE_VERSION VERSION_LESS "3.1")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-else ()
-  set (CMAKE_CXX_STANDARD 11)
-endif ()
-
+if(NOT "${CMAKE_CXX_STANDARD}")
+  if (CMAKE_VERSION VERSION_LESS "3.1")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20")
+  else ()
+    set (CMAKE_CXX_STANDARD 20)
+  endif ()
+endif()
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -298,7 +299,7 @@ if(NOT MSVC)
   endif()
 else()
   set(CMAKE_CXX_WINDOWS_FLAGS
-      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /utf-8")
+      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /utf-8 /Zc:__cplusplus")
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CMAKE_CXX_WINDOWS_FLAGS "${CMAKE_CXX_WINDOWS_FLAGS} /WX")
   endif()

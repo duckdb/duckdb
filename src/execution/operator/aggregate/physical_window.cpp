@@ -615,8 +615,15 @@ private:
 	pointer pos;
 };
 
+template <class ARG1, class ARG2, class RESULT>
+struct BinaryFunction {
+	using first_argument_type  = ARG1;
+	using second_argument_type = ARG2;
+	using result_type          = RESULT;
+};
+
 template <typename T, typename OP>
-struct OperationCompare : public std::binary_function<T, T, bool> {
+struct OperationCompare : public BinaryFunction<T, T, bool> {
 	inline bool operator()(const T &lhs, const T &val) const {
 		return OP::template Operation(lhs, val);
 	}

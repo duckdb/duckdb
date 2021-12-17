@@ -292,15 +292,29 @@ matrix:
 
     - os: linux
       dist: xenial
-      name: GCC 5 (ARM64)
+      name: GCC 5 (ARM64), C++11
       if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       arch: arm64
 
       script:
         - mkdir -p build/debug
-        - (cd build/debug && cmake -DEXPLICIT_EXCEPTIONS=TRUE -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
+        - (cd build/debug && cmake -DEXPLICIT_EXCEPTIONS=TRUE -DCMAKE_CXX_STANDARD=11 -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
         - build/debug/test/unittest -s "[tpch]"
+
+
+    - os: linux
+      dist: xenial
+      name: GCC 5 (ARM64), C++20
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
+
+      arch: arm64
+
+      script:
+        - mkdir -p build/debug
+        - (cd build/debug && cmake -DEXPLICIT_EXCEPTIONS=TRUE -DCMAKE_CXX_STANDARD=20 -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
+        - build/debug/test/unittest -s "[tpch]"
+
 
 
     # - os: linux
