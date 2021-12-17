@@ -255,9 +255,6 @@ private:
 
 	//! Root stack variable
 	int *stack_root = nullptr;
-	//! Direction in which the stack grows
-	enum class StackDirection : uint8_t { STACK_DIRECTION_INCREASING, STACK_DIRECTION_DECREASING };
-	StackDirection stack_direction = StackDirection::STACK_DIRECTION_INCREASING;
 
 	void InitializeStackCheck(int *stack_check_var);
 	void StackCheck(idx_t extra_stack = 0);
