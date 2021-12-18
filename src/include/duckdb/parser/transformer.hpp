@@ -260,7 +260,7 @@ class StackChecker {
 public:
 	StackChecker(Transformer &transformer, idx_t stack_usage);
 	~StackChecker();
-	StackChecker(StackChecker &&);
+	StackChecker(StackChecker &&) noexcept;
 	StackChecker(const StackChecker &) = delete;
 
 private:

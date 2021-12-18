@@ -15,7 +15,8 @@ StackChecker::~StackChecker() {
 	transformer.stack_depth -= stack_usage;
 }
 
-StackChecker::StackChecker(StackChecker &&other) : transformer(other.transformer), stack_usage(other.stack_usage) {
+StackChecker::StackChecker(StackChecker &&other) noexcept
+    : transformer(other.transformer), stack_usage(other.stack_usage) {
 	other.stack_usage = 0;
 }
 
@@ -47,7 +48,7 @@ StackChecker Transformer::StackCheck(idx_t extra_stack) {
 	}
 	D_ASSERT(node->stack_depth != DConstants::INVALID_INDEX);
 	if (node->stack_depth + extra_stack >= max_expression_depth) {
-		throw ParserException("Max expression depth limit of %lld reached", max_expression_depth);
+		throw ParserException("Max expression depth limit of %lld exceeded", max_expression_depth);
 	}
 	return StackChecker(*node, extra_stack);
 }
