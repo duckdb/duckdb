@@ -617,9 +617,9 @@ private:
 
 template <class ARG1, class ARG2, class RESULT>
 struct BinaryFunction {
-	using first_argument_type  = ARG1;
+	using first_argument_type = ARG1;
 	using second_argument_type = ARG2;
-	using result_type          = RESULT;
+	using result_type = RESULT;
 };
 
 template <typename T, typename OP>
