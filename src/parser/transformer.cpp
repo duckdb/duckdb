@@ -6,9 +6,26 @@
 
 namespace duckdb {
 
+StackChecker::StackChecker(Transformer &transformer_p, idx_t stack_usage_p)
+    : transformer(transformer_p), stack_usage(stack_usage_p) {
+	transformer.stack_depth += stack_usage;
+}
+
+StackChecker::~StackChecker() {
+	transformer.stack_depth -= stack_usage;
+}
+
+StackChecker::StackChecker(StackChecker &&other) : transformer(other.transformer), stack_usage(other.stack_usage) {
+	other.stack_usage = 0;
+}
+
+Transformer::Transformer(Transformer *parent, idx_t max_expression_depth_p)
+    : parent(parent), max_expression_depth(parent ? parent->max_expression_depth : max_expression_depth_p),
+      stack_depth(DConstants::INVALID_INDEX) {
+}
+
 bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<unique_ptr<SQLStatement>> &statements) {
-	int stack_check_var;
-	InitializeStackCheck(&stack_check_var);
+	InitializeStackCheck();
 	for (auto entry = tree->head; entry != nullptr; entry = entry->next) {
 		SetParamCount(0);
 		auto stmt = TransformStatement((duckdb_libpgquery::PGNode *)entry->data.ptr_value);
@@ -19,22 +36,20 @@ bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<uni
 	return true;
 }
 
-void Transformer::InitializeStackCheck(int *stack_check_var) {
-	this->stack_root = stack_check_var;
+void Transformer::InitializeStackCheck() {
+	stack_depth = 0;
 }
 
-void Transformer::StackCheck(idx_t extra_stack) {
-	if (!stack_root) {
-		return;
+StackChecker Transformer::StackCheck(idx_t extra_stack) {
+	auto node = this;
+	while (node->parent) {
+		node = node->parent;
 	}
-	int current_stack_var;
-	idx_t stack_size = AbsValue<intptr_t>(intptr_t(stack_root) - intptr_t(&current_stack_var));
-	stack_size += extra_stack;
-	if (stack_size > MAX_STACK_SIZE) {
-		throw ParserException(
-		    "Stack usage in parsing is too high: the query tree is too deep (stack usage %lld, max stack usage %lld)",
-		    stack_size, MAX_STACK_SIZE);
+	D_ASSERT(node->stack_depth != DConstants::INVALID_INDEX);
+	if (node->stack_depth + extra_stack >= max_expression_depth) {
+		throw ParserException("Max expression depth limit of %lld reached", max_expression_depth);
 	}
+	return StackChecker(*node, extra_stack);
 }
 
 unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNode *stmt) {

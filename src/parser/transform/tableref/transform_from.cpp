@@ -29,7 +29,7 @@ unique_ptr<TableRef> Transformer::TransformFrom(duckdb_libpgquery::PGList *root)
 				cur_root = result.get();
 			}
 			list_size++;
-			StackCheck(list_size * DEFAULT_ENTRY_STACK_SIZE);
+			StackCheck(list_size);
 		}
 		return move(result);
 	}
