@@ -138,7 +138,7 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 			// set up a new Napi::Object for some data types, e.g. INTERVAL
 			Napi::Object object_value;
 
-			bool is_object_value { false };
+			bool is_object_value {false};
 
 			auto dval = chunk.GetValue(col_idx, row_idx);
 			if (dval.is_null) {
