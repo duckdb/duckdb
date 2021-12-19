@@ -1,0 +1,148 @@
+# name: test/sql/function/timestamp/test_date_part.test
+# description: Test the DATE_PART function for TIMESTAMPs
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE timestamps(ts TIMESTAMP)
+
+statement ok
+INSERT INTO timestamps VALUES
+	('1962-07-31 12:20:48.123456'),
+	('1969-01-01 01:03:20.45432'),
+	('1992-01-01 01:01:01.400'),
+	('1992-01-01 01:01:02.200'),
+	('1992-01-01 01:01:02.400'),
+	('1993-08-14 08:22:33.42'),
+	('2001-04-20 14:42:11.0'),
+	('2001-04-20 14:42:11.123'),
+	('2004-01-31 12:00:00.000050'),
+	('2004-01-31 12:00:00.050'),
+	('2004-02-01 12:00:00.000050'),
+	('2004-02-01 12:00:00.050'),
+	('2004-02-29 13:05:47.123456'),
+	('2008-01-01 00:00:01.5'),
+	('2008-01-01 00:00:01.594'),
+	('2008-01-01 00:00:01.794'),
+	('2008-01-01 00:00:01.88926'),
+	('2008-01-01 00:00:01.894'),
+	('2008-01-01 00:00:01.98926'),
+	('2008-01-01 00:00:01.99926'),
+	('2008-01-01 00:00:11.1'),
+	('2019-01-06 04:03:02.123456'),
+	('2019-01-06 04:03:02.5'),
+	('2020-01-01 00:00:01.88926'),
+	('2020-12-31 21:25:58.745232'),
+	('2021-04-15 14:55:17.915'),
+	('2021-04-15 14:55:17.915000'),
+	('2021-05-02 12:11:49.5'),
+	('2021-12-01 13:54:48.123456'),
+	('1993-08-14 08:22:33'),
+	(NULL)
+
+#
+# Structs
+#
+
+# Date parts
+query II
+SELECT ts::DATE AS d, DATE_PART(['year', 'month', 'day'], ts) AS parts
+FROM timestamps
+ORDER BY 1;
+----
+NULL	NULL
+1962-07-31	{'year': 1962, 'month': 7, 'day': 31}
+1969-01-01	{'year': 1969, 'month': 1, 'day': 1}
+1992-01-01	{'year': 1992, 'month': 1, 'day': 1}
+1992-01-01	{'year': 1992, 'month': 1, 'day': 1}
+1992-01-01	{'year': 1992, 'month': 1, 'day': 1}
+1993-08-14	{'year': 1993, 'month': 8, 'day': 14}
+1993-08-14	{'year': 1993, 'month': 8, 'day': 14}
+2001-04-20	{'year': 2001, 'month': 4, 'day': 20}
+2001-04-20	{'year': 2001, 'month': 4, 'day': 20}
+2004-01-31	{'year': 2004, 'month': 1, 'day': 31}
+2004-01-31	{'year': 2004, 'month': 1, 'day': 31}
+2004-02-01	{'year': 2004, 'month': 2, 'day': 1}
+2004-02-01	{'year': 2004, 'month': 2, 'day': 1}
+2004-02-29	{'year': 2004, 'month': 2, 'day': 29}
+2008-01-01	{'year': 2008, 'month': 1, 'day': 1}
+2008-01-01	{'year': 2008, 'month': 1, 'day': 1}
+2008-01-01	{'year': 2008, 'month': 1, 'day': 1}
+2008-01-01	{'year': 2008, 'month': 1, 'day': 1}
+2008-01-01	{'year': 2008, 'month': 1, 'day': 1}
+2008-01-01	{'year': 2008, 'month': 1, 'day': 1}
+2008-01-01	{'year': 2008, 'month': 1, 'day': 1}
+2008-01-01	{'year': 2008, 'month': 1, 'day': 1}
+2019-01-06	{'year': 2019, 'month': 1, 'day': 6}
+2019-01-06	{'year': 2019, 'month': 1, 'day': 6}
+2020-01-01	{'year': 2020, 'month': 1, 'day': 1}
+2020-12-31	{'year': 2020, 'month': 12, 'day': 31}
+2021-04-15	{'year': 2021, 'month': 4, 'day': 15}
+2021-04-15	{'year': 2021, 'month': 4, 'day': 15}
+2021-05-02	{'year': 2021, 'month': 5, 'day': 2}
+2021-12-01	{'year': 2021, 'month': 12, 'day': 1}
+
+# Time parts
+query II
+SELECT ts, DATE_PART(['hour', 'minute', 'microsecond'], ts) AS parts
+FROM timestamps
+ORDER BY 1;
+----
+NULL	NULL
+1962-07-31 12:20:48.123456	{'hour': 12, 'minute': 20, 'microsecond': 48123456}
+1969-01-01 01:03:20.45432	{'hour': 1, 'minute': 3, 'microsecond': 20454320}
+1992-01-01 01:01:01.4	{'hour': 1, 'minute': 1, 'microsecond': 1400000}
+1992-01-01 01:01:02.2	{'hour': 1, 'minute': 1, 'microsecond': 2200000}
+1992-01-01 01:01:02.4	{'hour': 1, 'minute': 1, 'microsecond': 2400000}
+1993-08-14 08:22:33	{'hour': 8, 'minute': 22, 'microsecond': 33000000}
+1993-08-14 08:22:33.42	{'hour': 8, 'minute': 22, 'microsecond': 33420000}
+2001-04-20 14:42:11	{'hour': 14, 'minute': 42, 'microsecond': 11000000}
+2001-04-20 14:42:11.123	{'hour': 14, 'minute': 42, 'microsecond': 11123000}
+2004-01-31 12:00:00.00005	{'hour': 12, 'minute': 0, 'microsecond': 50}
+2004-01-31 12:00:00.05	{'hour': 12, 'minute': 0, 'microsecond': 50000}
+2004-02-01 12:00:00.00005	{'hour': 12, 'minute': 0, 'microsecond': 50}
+2004-02-01 12:00:00.05	{'hour': 12, 'minute': 0, 'microsecond': 50000}
+2004-02-29 13:05:47.123456	{'hour': 13, 'minute': 5, 'microsecond': 47123456}
+2008-01-01 00:00:01.5	{'hour': 0, 'minute': 0, 'microsecond': 1500000}
+2008-01-01 00:00:01.594	{'hour': 0, 'minute': 0, 'microsecond': 1594000}
+2008-01-01 00:00:01.794	{'hour': 0, 'minute': 0, 'microsecond': 1794000}
+2008-01-01 00:00:01.88926	{'hour': 0, 'minute': 0, 'microsecond': 1889260}
+2008-01-01 00:00:01.894	{'hour': 0, 'minute': 0, 'microsecond': 1894000}
+2008-01-01 00:00:01.98926	{'hour': 0, 'minute': 0, 'microsecond': 1989260}
+2008-01-01 00:00:01.99926	{'hour': 0, 'minute': 0, 'microsecond': 1999260}
+2008-01-01 00:00:11.1	{'hour': 0, 'minute': 0, 'microsecond': 11100000}
+2019-01-06 04:03:02.123456	{'hour': 4, 'minute': 3, 'microsecond': 2123456}
+2019-01-06 04:03:02.5	{'hour': 4, 'minute': 3, 'microsecond': 2500000}
+2020-01-01 00:00:01.88926	{'hour': 0, 'minute': 0, 'microsecond': 1889260}
+2020-12-31 21:25:58.745232	{'hour': 21, 'minute': 25, 'microsecond': 58745232}
+2021-04-15 14:55:17.915	{'hour': 14, 'minute': 55, 'microsecond': 17915000}
+2021-04-15 14:55:17.915	{'hour': 14, 'minute': 55, 'microsecond': 17915000}
+2021-05-02 12:11:49.5	{'hour': 12, 'minute': 11, 'microsecond': 49500000}
+2021-12-01 13:54:48.123456	{'hour': 13, 'minute': 54, 'microsecond': 48123456}
+
+query I
+SELECT DATE_PART(['hour', 'minute', 'microsecond'], NULL::TIMESTAMP);
+----
+NULL
+
+query I
+SELECT DATE_PART(['hour', 'minute', 'microsecond'], '1962-07-31 12:20:48.123456'::TIMESTAMP);
+----
+{'hour': 12, 'minute': 20, 'microsecond': 48123456}
+
+# Invalid parts
+statement error
+SELECT ts, DATE_PART(['duck', 'month', 'day'], ts) AS parts
+FROM timestamps
+ORDER BY 1;
+
+statement error
+SELECT ts, DATE_PART(['year', 'month', 'day', 'year'], ts) AS parts
+FROM timestamps
+ORDER BY 1;
+
+statement error
+WITH parts(p) AS (VALUES (['year', 'month', 'day']), (['hour', 'minute', 'microsecond']))
+SELECT DATE_PART(p, '1962-07-31 12:20:48.123456'::TIMESTAMP) FROM parts;

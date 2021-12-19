@@ -92,5 +92,18 @@ SELECT extract(era from i) FROM intervals;
 statement error
 SELECT date_part('era', i) FROM intervals;
 
-statement ok
+statement error
 SELECT date_part('offset', i) FROM intervals;
+
+#
+# Structs
+#
+query II
+SELECT i, DATE_PART(['year', 'month', 'day'], i) AS parts
+FROM intervals
+ORDER BY 1;
+----
+00:34:26.3434	{'year': 0, 'month': 0, 'day': 0}
+42 days	{'year': 0, 'month': 0, 'day': 42}
+1 year 4 months	{'year': 1, 'month': 4, 'day': 0}
+2 years	{'year': 2, 'month': 0, 'day': 0}

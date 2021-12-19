@@ -211,3 +211,15 @@ date_part('quarter', DATE '1992-11-20'),
 date_part('quarter', DATE '1992-12-20')
 ----
 1	1	1	2	2	2	3	3	3	4	4	4
+
+#
+# Structs
+#
+query II
+SELECT d, DATE_PART(['year', 'month', 'day'], d) AS parts
+FROM dates
+ORDER BY 1;
+----
+1992-01-01	{'year': 1992, 'month': 1, 'day': 1}
+1992-03-03	{'year': 1992, 'month': 3, 'day': 3}
+1992-05-05	{'year': 1992, 'month': 5, 'day': 5}

@@ -1,10 +1,14 @@
 #include "duckdb/function/scalar/date_functions.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 namespace duckdb {
@@ -406,6 +410,36 @@ struct DatePart {
 			return PropagateSimpleDatePartStatistics<0, 0>(child_stats);
 		}
 	};
+
+	struct StructOperator {
+		template <class TA, class TR>
+		static inline void Operation(TR *part_values, const TA &input) {
+			int32_t yyyy;
+			int32_t mm;
+			int32_t dd;
+			Date::Convert(input, yyyy, mm, dd);
+
+			part_values[int(DatePartSpecifier::YEAR)] = yyyy;
+			part_values[int(DatePartSpecifier::MONTH)] = mm;
+			part_values[int(DatePartSpecifier::DAY)] = dd;
+			part_values[int(DatePartSpecifier::DECADE)] = yyyy / 10;
+			part_values[int(DatePartSpecifier::CENTURY)] = (yyyy - 1) / 100 + 1;
+			part_values[int(DatePartSpecifier::MILLENNIUM)] = (yyyy - 1) / 1000 + 1;
+			part_values[int(DatePartSpecifier::EPOCH)] = Date::Epoch(input);
+
+			const auto isodow = Date::ExtractISODayOfTheWeek(input);
+			const auto ww = isodow % 7;
+			part_values[int(DatePartSpecifier::DOW)] = ww;
+			part_values[int(DatePartSpecifier::ISODOW)] = isodow;
+			part_values[int(DatePartSpecifier::WEEK)] = Date::ExtractISOWeekNumber(input);
+			part_values[int(DatePartSpecifier::QUARTER)] = (mm - 1) / Interval::MONTHS_PER_QUARTER + 1;
+			part_values[int(DatePartSpecifier::DOY)] = Date::ExtractDayOfTheYear(input);
+			part_values[int(DatePartSpecifier::YEARWEEK)] = yyyy * 100 + ww;
+
+			part_values[int(DatePartSpecifier::ERA)] = yyyy > 0 ? 1 : 0;
+			part_values[int(DatePartSpecifier::OFFSET)] = 0;
+		}
+	};
 };
 
 template <>
@@ -702,15 +736,55 @@ int64_t DatePart::OffsetOperator::Operation(timestamp_t input) {
 
 template <>
 int64_t DatePart::OffsetOperator::Operation(interval_t input) {
-	return 0;
+	throw NotImplementedException("\"interval\" units \"offset\" not recognized");
 }
 
 template <>
 int64_t DatePart::OffsetOperator::Operation(dtime_t input) {
-	return 0;
+	throw NotImplementedException("\"time\" units \"offset\" not recognized");
 }
 
-template <class T>
+template <>
+void DatePart::StructOperator::Operation(int64_t *part_values, const dtime_t &input) {
+	const auto micros = MicrosecondsOperator::Operation<dtime_t, int64_t>(input);
+	part_values[int(DatePartSpecifier::MICROSECONDS)] = micros;
+	part_values[int(DatePartSpecifier::MILLISECONDS)] = micros / Interval::MICROS_PER_MSEC;
+	part_values[int(DatePartSpecifier::SECOND)] = micros / Interval::MICROS_PER_SEC;
+	part_values[int(DatePartSpecifier::MINUTE)] = MinutesOperator::Operation<dtime_t, int64_t>(input);
+	part_values[int(DatePartSpecifier::HOUR)] = HoursOperator::Operation<dtime_t, int64_t>(input);
+}
+
+template <>
+void DatePart::StructOperator::Operation(int64_t *part_values, const timestamp_t &input) {
+	date_t d;
+	dtime_t t;
+	Timestamp::Convert(input, d, t);
+	Operation(part_values, d);
+	Operation(part_values, t);
+}
+
+template <>
+void DatePart::StructOperator::Operation(int64_t *part_values, const interval_t &input) {
+	const auto mm = input.months % Interval::MONTHS_PER_YEAR;
+	part_values[int(DatePartSpecifier::YEAR)] = input.months / Interval::MONTHS_PER_YEAR;
+	part_values[int(DatePartSpecifier::MONTH)] = mm;
+	part_values[int(DatePartSpecifier::DAY)] = input.days;
+	part_values[int(DatePartSpecifier::DECADE)] = input.months / Interval::MONTHS_PER_DECADE;
+	part_values[int(DatePartSpecifier::CENTURY)] = input.months / Interval::MONTHS_PER_CENTURY;
+	part_values[int(DatePartSpecifier::MILLENNIUM)] = input.months / Interval::MONTHS_PER_MILLENIUM;
+	part_values[int(DatePartSpecifier::QUARTER)] = mm / Interval::MONTHS_PER_QUARTER + 1;
+
+	const auto micros = MicrosecondsOperator::Operation<interval_t, int64_t>(input);
+	part_values[int(DatePartSpecifier::MICROSECONDS)] = micros;
+	part_values[int(DatePartSpecifier::MILLISECONDS)] = micros / Interval::MICROS_PER_MSEC;
+	part_values[int(DatePartSpecifier::SECOND)] = micros / Interval::MICROS_PER_SEC;
+	part_values[int(DatePartSpecifier::MINUTE)] = MinutesOperator::Operation<interval_t, int64_t>(input);
+	part_values[int(DatePartSpecifier::HOUR)] = HoursOperator::Operation<interval_t, int64_t>(input);
+
+	part_values[int(DatePartSpecifier::EPOCH)] = EpochOperator::Operation<interval_t, int64_t>(input);
+}
+
+template <typename T>
 static int64_t ExtractElement(DatePartSpecifier type, T element) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
@@ -850,6 +924,126 @@ struct DayNameOperator {
 	}
 };
 
+struct StructDatePart {
+	using part_codes_t = vector<DatePartSpecifier>;
+
+	struct BindData : public VariableReturnBindData {
+		part_codes_t part_codes;
+
+		explicit BindData(const LogicalType &stype, const part_codes_t &part_codes_p)
+		    : VariableReturnBindData(stype), part_codes(part_codes_p) {
+		}
+
+		unique_ptr<FunctionData> Copy() override {
+			return make_unique<BindData>(stype, part_codes);
+		}
+	};
+
+	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                     vector<unique_ptr<Expression>> &arguments) {
+		// collect names and deconflict, construct return type
+		if (!arguments[0]->IsFoldable()) {
+			throw BinderException("%s can only take constant lists of part names", bound_function.name);
+		}
+
+		case_insensitive_set_t name_collision_set;
+		child_list_t<LogicalType> struct_children;
+		part_codes_t part_codes;
+
+		Value parts_list = ExpressionExecutor::EvaluateScalar(*arguments[0]);
+		if (parts_list.type().id() == LogicalTypeId::LIST) {
+			for (const auto &part_value : parts_list.list_value) {
+				const auto part_name = part_value.ToString();
+				const auto part_code = GetDatePartSpecifier(part_name);
+				if (name_collision_set.find(part_name) != name_collision_set.end()) {
+					throw BinderException("Duplicate struct entry name \"%s\" in %s", part_name, bound_function.name);
+				}
+				name_collision_set.insert(part_name);
+				part_codes.emplace_back(part_code);
+				struct_children.emplace_back(make_pair(part_name, LogicalType::BIGINT));
+			}
+		} else {
+			throw BinderException("%s can only take constant lists of part names", bound_function.name);
+		}
+
+		arguments.erase(arguments.begin());
+		bound_function.arguments.erase(bound_function.arguments.begin());
+		bound_function.return_type = LogicalType::STRUCT(move(struct_children));
+		return make_unique<BindData>(bound_function.return_type, part_codes);
+	}
+
+	template <typename INPUT_TYPE>
+	static void Function(DataChunk &args, ExpressionState &state, Vector &result) {
+		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &info = (BindData &)*func_expr.bind_info;
+		D_ASSERT(args.ColumnCount() == 1);
+
+		const auto count = args.size();
+		Vector &input = args.data[0];
+		vector<int64_t> part_values(int(DatePartSpecifier::OFFSET) + 1, 0);
+
+		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+
+			if (ConstantVector::IsNull(input)) {
+				ConstantVector::SetNull(result, true);
+			} else {
+				ConstantVector::SetNull(result, false);
+				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
+				DatePart::StructOperator::Operation(part_values.data(), tdata[0]);
+				auto &child_entries = StructVector::GetEntries(result);
+				for (size_t col = 0; col < child_entries.size(); ++col) {
+					auto &child_entry = child_entries[col];
+					ConstantVector::SetNull(*child_entry, false);
+					auto pdata = ConstantVector::GetData<int64_t>(*child_entry);
+					pdata[0] = part_values[int(info.part_codes[col])];
+				}
+			}
+		} else {
+			VectorData rdata;
+			input.Orrify(count, rdata);
+
+			const auto &arg_valid = rdata.validity;
+			auto tdata = (const INPUT_TYPE *)rdata.data;
+
+			result.SetVectorType(VectorType::FLAT_VECTOR);
+			auto &child_entries = StructVector::GetEntries(result);
+			for (auto &child_entry : child_entries) {
+				child_entry->SetVectorType(VectorType::FLAT_VECTOR);
+			}
+
+			auto &res_valid = FlatVector::Validity(result);
+			for (idx_t i = 0; i < count; ++i) {
+				const auto idx = rdata.sel->get_index(i);
+				if (arg_valid.RowIsValid(idx)) {
+					res_valid.SetValid(idx);
+					DatePart::StructOperator::Operation(part_values.data(), tdata[idx]);
+					for (size_t col = 0; col < child_entries.size(); ++col) {
+						auto &child_entry = child_entries[col];
+						FlatVector::Validity(*child_entry).SetValid(idx);
+						auto pdata = FlatVector::GetData<int64_t>(*child_entry);
+						pdata[idx] = part_values[int(info.part_codes[col])];
+					}
+				} else {
+					res_valid.SetInvalid(idx);
+					for (auto &child_entry : child_entries) {
+						FlatVector::Validity(*child_entry).SetInvalid(idx);
+					}
+				}
+			}
+		}
+
+		result.Verify(count);
+	}
+
+	template <typename INPUT_TYPE>
+	static ScalarFunction GetFunction(const LogicalType &temporal_type) {
+		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
+		auto result_type = LogicalType::STRUCT({});
+		return ScalarFunction({part_type, temporal_type}, result_type, Function<INPUT_TYPE>, false, Bind);
+	}
+};
+
 void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	// register the individual operators
 	AddGenericDatePartOperator(set, "year", LastYearFunction<date_t>, LastYearFunction<timestamp_t>,
@@ -916,6 +1110,13 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME}, LogicalType::BIGINT, DatePartFunction<dtime_t>));
 	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::BIGINT,
 	                                     DatePartFunction<interval_t>));
+
+	// struct variants
+	date_part.AddFunction(StructDatePart::GetFunction<date_t>(LogicalType::DATE));
+	date_part.AddFunction(StructDatePart::GetFunction<timestamp_t>(LogicalType::TIMESTAMP));
+	date_part.AddFunction(StructDatePart::GetFunction<dtime_t>(LogicalType::TIME));
+	date_part.AddFunction(StructDatePart::GetFunction<interval_t>(LogicalType::INTERVAL));
+
 	set.AddFunction(date_part);
 	date_part.name = "datepart";
 	set.AddFunction(date_part);
