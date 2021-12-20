@@ -377,8 +377,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 	if (!ObjectCache::ObjectCacheEnabled(context_p)) {
 		metadata = LoadMetadata(allocator, *file_handle);
 	} else {
-		auto metadata_obj = ObjectCache::GetObjectCache(context_p).Get(file_name);
-		metadata = std::dynamic_pointer_cast<ParquetFileMetadataCache>(metadata_obj);
+		auto metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
 		if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
 			metadata = LoadMetadata(allocator, *file_handle);
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
