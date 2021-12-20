@@ -20,4 +20,18 @@ describe("data type support", function () {
       done();
     });
   });
+  it("supports INTERVAL values", function (done) {
+    db.prepare(`SELECT 
+    INTERVAL 1 MINUTE as minutes,
+    INTERVAL 5 DAY as days,
+    INTERVAL 4 MONTH as months,
+    INTERVAL 4 MONTH + INTERVAL 5 DAY + INTERVAL 1 MINUTE as combined;`).each((err, row) => {
+      assert(err === null);
+      assert.deepEqual(row.minutes, { months: 0, days: 0, micros: 60 * 1000 * 1000});
+      assert.deepEqual(row.days, { months: 0, days: 5, micros: 0});
+      assert.deepEqual(row.months, {months: 4, days: 0, micros: 0});
+      assert.deepEqual(row.combined, {months: 4, days: 5, micros: 60 * 1000 * 1000});
+      done();
+    });
+  });
 });
