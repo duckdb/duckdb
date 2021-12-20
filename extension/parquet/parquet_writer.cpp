@@ -263,6 +263,7 @@ idx_t ParquetWriter::MaxWriteCount(ChunkCollection &buffer, idx_t col_idx, idx_t
 		auto &mask = FlatVector::Validity(input_column);
 		auto *ptr = FlatVector::GetData<string_t>(input_column);
 		for (; index_in_chunk < input.size(); index_in_chunk++) {
+			write_count++;
 			if (mask.RowIsValid(index_in_chunk)) {
 				current_size += ptr[index_in_chunk].GetSize() + sizeof(uint32_t);
 				if (current_size >= MAX_UNCOMPRESSED_PAGE_SIZE) {
@@ -270,7 +271,6 @@ idx_t ParquetWriter::MaxWriteCount(ChunkCollection &buffer, idx_t col_idx, idx_t
 					break;
 				}
 			}
-			write_count++;
 		}
 		if (index_in_chunk >= input.size()) {
 			index_in_chunk = 0;
