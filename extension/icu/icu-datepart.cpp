@@ -5,6 +5,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -176,20 +177,23 @@ struct ICUDatePart : public ICUDateFunc {
 	struct BindAdapterData : public BindData {
 		using result_t = RESULT_TYPE;
 		typedef result_t (*adapter_t)(icu::Calendar *calendar, const uint64_t micros);
+		using adapters_t = vector<adapter_t>;
 
-		BindAdapterData(ClientContext &context, adapter_t adapter_p) : BindData(context), adapter(adapter_p) {
+		BindAdapterData(ClientContext &context, adapter_t adapter_p) : BindData(context), adapters(1, adapter_p) {
 		}
-		BindAdapterData(const BindAdapterData &other) : BindData(other), adapter(other.adapter) {
+		BindAdapterData(ClientContext &context, adapters_t &adapters_p) : BindData(context), adapters(adapters_p) {
+		}
+		BindAdapterData(const BindAdapterData &other) : BindData(other), adapters(other.adapters) {
 		}
 
-		adapter_t adapter;
+		adapters_t adapters;
 
 		unique_ptr<FunctionData> Copy() override {
 			return make_unique<BindAdapterData>(*this);
 		}
 	};
 
-	template <typename RESULT_TYPE>
+	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static void UnaryTimestampFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		using BIND_TYPE = BindAdapterData<RESULT_TYPE>;
 		D_ASSERT(args.ColumnCount() == 1);
@@ -197,23 +201,16 @@ struct ICUDatePart : public ICUDateFunc {
 
 		auto &func_expr = (BoundFunctionExpression &)state.expr;
 		auto &info = (BIND_TYPE &)*func_expr.bind_info;
-		CalendarPtr calendar(info.calendar->clone());
+		CalendarPtr calendar_ptr(info.calendar->clone());
+		auto calendar = calendar_ptr.get();
 
 		UnaryExecutor::Execute<timestamp_t, RESULT_TYPE>(date_arg, result, args.size(), [&](timestamp_t input) {
-			UErrorCode status = U_ZERO_ERROR;
-
-			const int64_t millis = input.value / Interval::MICROS_PER_MSEC;
-			const uint64_t micros = input.value % Interval::MICROS_PER_MSEC;
-			const auto udate = UDate(millis);
-			calendar->setTime(udate, status);
-			if (U_FAILURE(status)) {
-				throw Exception("Unable to compute ICU date part.");
-			}
-			return info.adapter(calendar.get(), micros);
+			const auto micros = SetTime(calendar, input);
+			return info.adapters[0](calendar, micros);
 		});
 	}
 
-	template <typename RESULT_TYPE>
+	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static void BinaryTimestampFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		using BIND_TYPE = BindAdapterData<int64_t>;
 		D_ASSERT(args.ColumnCount() == 2);
@@ -222,22 +219,83 @@ struct ICUDatePart : public ICUDateFunc {
 
 		auto &func_expr = (BoundFunctionExpression &)state.expr;
 		auto &info = (BIND_TYPE &)*func_expr.bind_info;
-		CalendarPtr calendar(info.calendar->clone());
+		CalendarPtr calendar_ptr(info.calendar->clone());
+		auto calendar = calendar_ptr.get();
 
 		BinaryExecutor::Execute<string_t, timestamp_t, RESULT_TYPE>(
-		    part_arg, date_arg, result, args.size(), [&](string_t specifier, timestamp_t input) {
-			    UErrorCode status = U_ZERO_ERROR;
-
-			    const int64_t millis = input.value / Interval::MICROS_PER_MSEC;
-			    const uint64_t micros = input.value % Interval::MICROS_PER_MSEC;
-			    const auto udate = UDate(millis);
-			    calendar->setTime(udate, status);
-			    if (U_FAILURE(status)) {
-				    throw Exception("Unable to compute ICU date part.");
-			    }
+		    part_arg, date_arg, result, args.size(), [&](string_t specifier, INPUT_TYPE input) {
+			    const auto micros = SetTime(calendar, input);
 			    auto adapter = PartCodeAdapterFactory(GetDatePartSpecifier(specifier.GetString()));
-			    return adapter(calendar.get(), micros);
+			    return adapter(calendar, micros);
 		    });
+	}
+
+	template <typename INPUT_TYPE>
+	static void StructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+		using BIND_TYPE = BindAdapterData<int64_t>;
+		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &info = (BIND_TYPE &)*func_expr.bind_info;
+		CalendarPtr calendar_ptr(info.calendar->clone());
+		auto calendar = calendar_ptr.get();
+
+		D_ASSERT(args.ColumnCount() == 1);
+		const auto count = args.size();
+		Vector &input = args.data[0];
+
+		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+
+			if (ConstantVector::IsNull(input)) {
+				ConstantVector::SetNull(result, true);
+			} else {
+				ConstantVector::SetNull(result, false);
+				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
+				auto micros = SetTime(calendar, tdata[0]);
+				auto &child_entries = StructVector::GetEntries(result);
+				for (size_t col = 0; col < child_entries.size(); ++col) {
+					auto &child_entry = child_entries[col];
+					ConstantVector::SetNull(*child_entry, false);
+					auto pdata = ConstantVector::GetData<int64_t>(*child_entry);
+					auto adapter = info.adapters[col];
+					pdata[0] = adapter(calendar, micros);
+				}
+			}
+		} else {
+			VectorData rdata;
+			input.Orrify(count, rdata);
+
+			const auto &arg_valid = rdata.validity;
+			auto tdata = (const INPUT_TYPE *)rdata.data;
+
+			result.SetVectorType(VectorType::FLAT_VECTOR);
+			auto &child_entries = StructVector::GetEntries(result);
+			for (auto &child_entry : child_entries) {
+				child_entry->SetVectorType(VectorType::FLAT_VECTOR);
+			}
+
+			auto &res_valid = FlatVector::Validity(result);
+			for (idx_t i = 0; i < count; ++i) {
+				const auto idx = rdata.sel->get_index(i);
+				if (arg_valid.RowIsValid(idx)) {
+					res_valid.SetValid(idx);
+					auto micros = SetTime(calendar, tdata[idx]);
+					for (size_t col = 0; col < child_entries.size(); ++col) {
+						auto &child_entry = child_entries[col];
+						FlatVector::Validity(*child_entry).SetValid(idx);
+						auto pdata = FlatVector::GetData<int64_t>(*child_entry);
+						auto adapter = info.adapters[col];
+						pdata[idx] = adapter(calendar, micros);
+					}
+				} else {
+					res_valid.SetInvalid(idx);
+					for (auto &child_entry : child_entries) {
+						FlatVector::Validity(*child_entry).SetInvalid(idx);
+					}
+				}
+			}
+		}
+
+		result.Verify(count);
 	}
 
 	template <typename BIND_TYPE>
@@ -255,27 +313,75 @@ struct ICUDatePart : public ICUDateFunc {
 		return BindAdapter<data_t>(context, bound_function, arguments, adapter);
 	}
 
-	static ScalarFunction GetUnaryPartCodeFunction(const string &name) {
-		return ScalarFunction(name, {LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, UnaryTimestampFunction<int64_t>,
+	static unique_ptr<FunctionData> BindStruct(ClientContext &context, ScalarFunction &bound_function,
+	                                           vector<unique_ptr<Expression>> &arguments) {
+		using data_t = BindAdapterData<int64_t>;
+		using adapters_t = data_t::adapters_t;
+
+		// collect names and deconflict, construct return type
+		if (!arguments[0]->IsFoldable()) {
+			throw BinderException("%s can only take constant lists of part names", bound_function.name);
+		}
+
+		case_insensitive_set_t name_collision_set;
+		child_list_t<LogicalType> struct_children;
+		adapters_t adapters;
+
+		Value parts_list = ExpressionExecutor::EvaluateScalar(*arguments[0]);
+		if (parts_list.type().id() == LogicalTypeId::LIST) {
+			for (const auto &part_value : parts_list.list_value) {
+				const auto part_name = part_value.ToString();
+				const auto part_code = GetDatePartSpecifier(part_name);
+				if (name_collision_set.find(part_name) != name_collision_set.end()) {
+					throw BinderException("Duplicate struct entry name \"%s\" in %s", part_name, bound_function.name);
+				}
+				name_collision_set.insert(part_name);
+				adapters.emplace_back(PartCodeAdapterFactory(part_code));
+				struct_children.emplace_back(make_pair(part_name, LogicalType::BIGINT));
+			}
+		} else {
+			throw BinderException("%s can only take constant lists of part names", bound_function.name);
+		}
+
+		arguments.erase(arguments.begin());
+		bound_function.arguments.erase(bound_function.arguments.begin());
+		bound_function.return_type = LogicalType::STRUCT(move(struct_children));
+		return make_unique<data_t>(context, adapters);
+	}
+
+	template <typename INPUT_TYPE, typename RESULT_TYPE>
+	static ScalarFunction GetUnaryPartCodeFunction(const LogicalType &temporal_type) {
+		return ScalarFunction({temporal_type}, LogicalType::BIGINT, UnaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>,
 		                      false, BindDatePart);
 	}
 
-	static void AddUnaryPartCodeFunction(const string &name, ClientContext &context) {
+	static void AddUnaryPartCodeFunctions(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);
-		ScalarFunction func = GetUnaryPartCodeFunction(name);
-		CreateScalarFunctionInfo func_info(move(func));
+		ScalarFunctionSet set(name);
+		set.AddFunction(GetUnaryPartCodeFunction<timestamp_t, int64_t>(LogicalType::TIMESTAMP_TZ));
+		CreateScalarFunctionInfo func_info(set);
 		catalog.AddFunction(context, &func_info);
 	}
 
-	static ScalarFunction GetBinaryPartCodeFunction(const string &name) {
-		return ScalarFunction(name, {LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT,
-		                      BinaryTimestampFunction<int64_t>, false, BindDatePart);
+	template <typename INPUT_TYPE, typename RESULT_TYPE>
+	static ScalarFunction GetBinaryPartCodeFunction(const LogicalType &temporal_type) {
+		return ScalarFunction({LogicalType::VARCHAR, temporal_type}, LogicalType::BIGINT,
+		                      BinaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>, false, BindDatePart);
 	}
 
-	static void AddBinaryPartCodeFunction(const string &name, ClientContext &context) {
+	template <typename INPUT_TYPE>
+	static ScalarFunction GetStructFunction(const LogicalType &temporal_type) {
+		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
+		auto result_type = LogicalType::STRUCT({});
+		return ScalarFunction({part_type, temporal_type}, result_type, StructFunction<INPUT_TYPE>, false, BindStruct);
+	}
+
+	static void AddDatePartFunctions(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);
-		ScalarFunction func = GetBinaryPartCodeFunction(name);
-		CreateScalarFunctionInfo func_info(move(func));
+		ScalarFunctionSet set(name);
+		set.AddFunction(GetBinaryPartCodeFunction<timestamp_t, int64_t>(LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetStructFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		CreateScalarFunctionInfo func_info(set);
 		catalog.AddFunction(context, &func_info);
 	}
 
@@ -285,53 +391,55 @@ struct ICUDatePart : public ICUDateFunc {
 		return BindAdapter<data_t>(context, bound_function, arguments, MakeLastDay);
 	}
 
-	static ScalarFunction GetLastDayFunction(const string &name) {
-		return ScalarFunction(name, {LogicalType::TIMESTAMP_TZ}, LogicalType::DATE_TZ, UnaryTimestampFunction<date_t>,
-		                      false, BindLastDate);
+	template <typename INPUT_TYPE>
+	static ScalarFunction GetLastDayFunction(const LogicalType &temporal_type) {
+		return ScalarFunction({temporal_type}, LogicalType::DATE_TZ, UnaryTimestampFunction<INPUT_TYPE, date_t>, false,
+		                      BindLastDate);
 	}
-	static void AddLastDayFunction(const string &name, ClientContext &context) {
+	static void AddLastDayFunctions(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);
-		ScalarFunction func = GetLastDayFunction(name);
-		CreateScalarFunctionInfo func_info(move(func));
+		ScalarFunctionSet set(name);
+		set.AddFunction(GetLastDayFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		CreateScalarFunctionInfo func_info(set);
 		catalog.AddFunction(context, &func_info);
 	}
 };
 
 void RegisterICUDatePartFunctions(ClientContext &context) {
 	// register the individual operators
-	ICUDatePart::AddUnaryPartCodeFunction("era", context);
-	ICUDatePart::AddUnaryPartCodeFunction("year", context);
-	ICUDatePart::AddUnaryPartCodeFunction("month", context);
-	ICUDatePart::AddUnaryPartCodeFunction("day", context);
-	ICUDatePart::AddUnaryPartCodeFunction("decade", context);
-	ICUDatePart::AddUnaryPartCodeFunction("century", context);
-	ICUDatePart::AddUnaryPartCodeFunction("millennium", context);
-	ICUDatePart::AddUnaryPartCodeFunction("microsecond", context);
-	ICUDatePart::AddUnaryPartCodeFunction("millisecond", context);
-	ICUDatePart::AddUnaryPartCodeFunction("second", context);
-	ICUDatePart::AddUnaryPartCodeFunction("minute", context);
-	ICUDatePart::AddUnaryPartCodeFunction("hour", context);
-	ICUDatePart::AddUnaryPartCodeFunction("dayofweek", context);
-	ICUDatePart::AddUnaryPartCodeFunction("isodow", context);
-	ICUDatePart::AddUnaryPartCodeFunction("week", context); //  Note that WeekOperator is ISO-8601, not US
-	ICUDatePart::AddUnaryPartCodeFunction("dayofyear", context);
-	ICUDatePart::AddUnaryPartCodeFunction("quarter", context);
-	ICUDatePart::AddUnaryPartCodeFunction("epoch", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("era", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("year", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("month", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("day", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("decade", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("century", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("millennium", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("microsecond", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("millisecond", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("second", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("minute", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("hour", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("dayofweek", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("isodow", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("week", context); //  Note that WeekOperator is ISO-8601, not US
+	ICUDatePart::AddUnaryPartCodeFunctions("dayofyear", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("quarter", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("epoch", context);
 
 	//  register combinations
-	ICUDatePart::AddUnaryPartCodeFunction("yearweek", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", context);
 
 	//  register various aliases
-	ICUDatePart::AddUnaryPartCodeFunction("dayofmonth", context);
-	ICUDatePart::AddUnaryPartCodeFunction("weekday", context);
-	ICUDatePart::AddUnaryPartCodeFunction("weekofyear", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("dayofmonth", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("weekday", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("weekofyear", context);
 
 	//  register the last_day function
-	ICUDatePart::AddLastDayFunction("last_day", context);
+	ICUDatePart::AddLastDayFunctions("last_day", context);
 
 	// finally the actual date_part function
-	ICUDatePart::AddBinaryPartCodeFunction("date_part", context);
-	ICUDatePart::AddBinaryPartCodeFunction("datepart", context);
+	ICUDatePart::AddDatePartFunctions("date_part", context);
+	ICUDatePart::AddDatePartFunctions("datepart", context);
 }
 
 } // namespace duckdb
