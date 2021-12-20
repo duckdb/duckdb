@@ -4,6 +4,8 @@
 
 require parquet
 
+require 64bit
+
 statement ok
 CREATE TABLE tbl AS SELECT * FROM read_csv_auto('data/csv/sequences.csv.gz', delim=',', header=True);
 
