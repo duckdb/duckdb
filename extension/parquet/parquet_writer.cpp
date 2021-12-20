@@ -446,7 +446,7 @@ void ParquetWriter::WriteColumn(ChunkCollection &buffer, idx_t col_idx, idx_t ch
 	}
 
 	// now that we have finished writing the data we know the uncompressed size
-	if (temp_writer.blob.size > NumericLimits<int32_t>::Maximum()) {
+	if (temp_writer.blob.size > idx_t(NumericLimits<int32_t>::Maximum())) {
 		throw InternalException("Parquet writer: %d uncompressed page size out of range for type integer",
 		                        temp_writer.blob.size);
 	}
@@ -492,7 +492,7 @@ void ParquetWriter::WriteColumn(ChunkCollection &buffer, idx_t col_idx, idx_t ch
 		throw InternalException("Unsupported codec for Parquet Writer");
 	}
 
-	if (compressed_size > NumericLimits<int32_t>::Maximum()) {
+	if (compressed_size > idx_t(NumericLimits<int32_t>::Maximum())) {
 		throw InternalException("Parquet writer: %d compressed page size out of range for type integer",
 		                        temp_writer.blob.size);
 	}
