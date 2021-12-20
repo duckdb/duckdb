@@ -19,7 +19,10 @@ statement ok
 CREATE TABLE test.t (a INTEGER, b INTEGER);
 
 statement ok
-CREATE VIEW test.v AS SELECT * FROM test.t;
+INSERT INTO test.t VALUES (11, 22), (13, 22), (12, 21)
+
+statement ok
+CREATE VIEW test.v AS SELECT * FROM test.t QUALIFY row_number() OVER (PARTITION BY b) = 1;
 
 # drop the table the view is based on
 statement ok
@@ -41,7 +44,7 @@ query II
 SELECT b, SUM(a) FROM test.v GROUP BY b QUALIFY row_number() OVER (PARTITION BY b) = 1
 ----
 21	12
-22	24
+22	11
 
 # drop the table again
 statement ok

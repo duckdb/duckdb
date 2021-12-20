@@ -27,20 +27,10 @@ SELECT plus1(3)
 ----
 5
 
-statement ok
-DROP MACRO plus1
-
 loop i 0 2
 
 # restart the system
 restart
-
-statement error
-SELECT plus1(2)
-
-# after recreating the macro we can use it again
-statement ok
-CREATE MACRO plus1(x) AS (x + (SELECT COUNT(*) FROM (SELECT b, SUM(test.a) FROM test GROUP BY b QUALIFY row_number() OVER (PARTITION BY b) = 1)))
 
 query T
 SELECT plus1(5)
@@ -50,5 +40,12 @@ SELECT plus1(5)
 # drop the macro again
 statement ok
 DROP MACRO plus1
+
+statement error
+SELECT plus1(2)
+
+# after recreating the macro we can use it again
+statement ok
+CREATE MACRO plus1(x) AS (x + (SELECT COUNT(*) FROM (SELECT b, SUM(test.a) FROM test GROUP BY b QUALIFY row_number() OVER (PARTITION BY b) = 1)))
 
 endloop
