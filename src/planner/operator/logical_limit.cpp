@@ -2,9 +2,10 @@
 
 namespace duckdb {
 
-LogicalLimit::LogicalLimit(int64_t limit_val, int64_t offset_val, unique_ptr<Expression> limit, unique_ptr<Expression> offset)
-	: LogicalOperator(LogicalOperatorType::LOGICAL_LIMIT), limit_val(limit_val), offset_val(offset_val),
-		limit(move(limit)), offset(move(offset)) {
+LogicalLimit::LogicalLimit(int64_t limit_val, int64_t offset_val, unique_ptr<Expression> limit,
+                           unique_ptr<Expression> offset)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_LIMIT), limit_val(limit_val), offset_val(offset_val),
+      limit(move(limit)), offset(move(offset)) {
 }
 
 vector<ColumnBinding> LogicalLimit::GetColumnBindings() {
@@ -23,5 +24,4 @@ void LogicalLimit::ResolveTypes() {
 	types = children[0]->types;
 }
 
-}
-
+} // namespace duckdb

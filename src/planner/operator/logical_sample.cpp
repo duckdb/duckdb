@@ -3,7 +3,7 @@
 namespace duckdb {
 
 LogicalSample::LogicalSample(unique_ptr<SampleOptions> sample_options_p, unique_ptr<LogicalOperator> child)
-	: LogicalOperator(LogicalOperatorType::LOGICAL_SAMPLE), sample_options(move(sample_options_p)) {
+    : LogicalOperator(LogicalOperatorType::LOGICAL_SAMPLE), sample_options(move(sample_options_p)) {
 	children.push_back(move(child));
 }
 
@@ -28,4 +28,4 @@ void LogicalSample::ResolveTypes() {
 	types = children[0]->types;
 }
 
-}
+} // namespace duckdb
