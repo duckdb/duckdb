@@ -10,10 +10,6 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types/date.hpp"
-#include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/time.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #endif
@@ -168,42 +164,34 @@ static uint8_t GetVarintSize(uint32_t val) {
 	return res;
 }
 
-struct ParquetCastOperator {
-	template <class SRC, class TGT>
-	static TGT Operation(SRC input) {
-		return TGT(input);
-	}
-};
-
-struct ParquetTimestampNSOperator {
-	template <class SRC, class TGT>
-	static TGT Operation(SRC input) {
-		return Timestamp::FromEpochNanoSeconds(input).value;
-	}
-};
-
-struct ParquetTimestampSOperator {
-	template <class SRC, class TGT>
-	static TGT Operation(SRC input) {
-		return Timestamp::FromEpochSeconds(input).value;
-	}
-};
-
-struct ParquetHugeintOperator {
-	template <class SRC, class TGT>
-	static TGT Operation(SRC input) {
-		return Hugeint::Cast<double>(input);
-	}
-};
-
-template <class SRC, class TGT, class OP = ParquetCastOperator>
-static void TemplatedWritePlain(Vector &col, idx_t chunk_start, idx_t chunk_end, ValidityMask &mask, Serializer &ser) {
-	auto *ptr = FlatVector::GetData<SRC>(col);
-	for (idx_t r = chunk_start; r < chunk_end; r++) {
-		if (mask.RowIsValid(r)) {
-			ser.Write<TGT>(OP::template Operation<SRC, TGT>(ptr[r]));
+static void ConvertParquetSchema(vector<duckdb_parquet::format::SchemaElement> &schemas, const LogicalType &type, const string &name) {
+	if (type.id() == LogicalTypeId::STRUCT) {
+		auto &child_types = StructType::GetChildTypes(type);
+		// set up the schema element for this struct
+		duckdb_parquet::format::SchemaElement schema_element;
+		schema_element.repetition_type = FieldRepetitionType::OPTIONAL;
+		schema_element.num_children = child_types.size();
+		schema_element.__isset.num_children = true;
+		schema_element.__isset.type = false;
+		schema_element.__isset.repetition_type = true;
+		schema_element.name = name;
+		schemas.push_back(move(schema_element));
+		// construct the child types recursively
+		for(auto &child_type : child_types) {
+			ConvertParquetSchema(schemas, child_type.second, child_type.first);
 		}
+		return;
 	}
+	duckdb_parquet::format::SchemaElement schema_element;
+	schema_element.type = DuckDBTypeToParquetType(type);
+	schema_element.repetition_type = FieldRepetitionType::OPTIONAL;
+	schema_element.num_children = 0;
+	schema_element.__isset.num_children = true;
+	schema_element.__isset.type = true;
+	schema_element.__isset.repetition_type = true;
+	schema_element.name = name;
+	schema_element.__isset.converted_type = DuckDBTypeToConvertedType(type, schema_element.converted_type);
+	schemas.push_back(move(schema_element));
 }
 
 ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *file_opener_p, vector<LogicalType> types_p,
@@ -223,7 +211,7 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *fil
 	file_meta_data.__isset.created_by = true;
 	file_meta_data.created_by = "DuckDB";
 
-	file_meta_data.schema.resize(sql_types.size() + 1);
+	file_meta_data.schema.resize(1);
 
 	// populate root schema object
 	file_meta_data.schema[0].name = "duckdb_schema";
@@ -231,16 +219,8 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *fil
 	file_meta_data.schema[0].__isset.num_children = true;
 
 	for (idx_t i = 0; i < sql_types.size(); i++) {
-		auto &schema_element = file_meta_data.schema[i + 1];
-
-		schema_element.type = DuckDBTypeToParquetType(sql_types[i]);
-		schema_element.repetition_type = FieldRepetitionType::OPTIONAL;
-		schema_element.num_children = 0;
-		schema_element.__isset.num_children = true;
-		schema_element.__isset.type = true;
-		schema_element.__isset.repetition_type = true;
-		schema_element.name = column_names[i];
-		schema_element.__isset.converted_type = DuckDBTypeToConvertedType(sql_types[i], schema_element.converted_type);
+		ConvertParquetSchema(file_meta_data.schema, sql_types[i], column_names[i]);
+		column_writers.push_back(ColumnWriter::CreateWriterRecursive((sql_types[i])));
 	}
 }
 
@@ -283,106 +263,6 @@ idx_t ParquetWriter::MaxWriteCount(ChunkCollection &buffer, idx_t col_idx, idx_t
 	out_max_chunk = chunk_idx;
 	out_max_index_in_chunk = index_in_chunk;
 	return write_count;
-}
-
-void ParquetWriter::WriteVector(Serializer &temp_writer, DataChunk &input, idx_t col_idx, idx_t chunk_start,
-                                idx_t chunk_end) {
-	auto &input_column = input.data[col_idx];
-	auto &mask = FlatVector::Validity(input_column);
-
-	// write actual payload data
-	switch (sql_types[col_idx].id()) {
-	case LogicalTypeId::BOOLEAN: {
-#if STANDARD_VECTOR_SIZE < 64
-		throw InternalException("Writing booleans to Parquet not supported for vsize < 64");
-#endif
-		auto *ptr = FlatVector::GetData<bool>(input_column);
-		uint8_t byte = 0;
-		uint8_t byte_pos = 0;
-		for (idx_t r = chunk_start; r < chunk_end; r++) {
-			if (mask.RowIsValid(r)) { // only encode if non-null
-				byte |= (ptr[r] & 1) << byte_pos;
-				byte_pos++;
-
-				if (byte_pos == 8) {
-					temp_writer.Write<uint8_t>(byte);
-					byte = 0;
-					byte_pos = 0;
-				}
-			}
-		}
-		// flush last byte if req
-		if (byte_pos > 0) {
-			temp_writer.Write<uint8_t>(byte);
-		}
-		break;
-	}
-	case LogicalTypeId::TINYINT:
-		TemplatedWritePlain<int8_t, int32_t>(input_column, chunk_start, chunk_end, mask, temp_writer);
-		break;
-	case LogicalTypeId::SMALLINT:
-		TemplatedWritePlain<int16_t, int32_t>(input_column, chunk_start, chunk_end, mask, temp_writer);
-		break;
-	case LogicalTypeId::INTEGER:
-	case LogicalTypeId::DATE:
-		TemplatedWritePlain<int32_t, int32_t>(input_column, chunk_start, chunk_end, mask, temp_writer);
-		break;
-	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_MS:
-		TemplatedWritePlain<int64_t, int64_t>(input_column, chunk_start, chunk_end, mask, temp_writer);
-		break;
-	case LogicalTypeId::HUGEINT:
-		TemplatedWritePlain<hugeint_t, double, ParquetHugeintOperator>(input_column, chunk_start, chunk_end, mask,
-		                                                               temp_writer);
-		break;
-	case LogicalTypeId::TIMESTAMP_NS:
-		TemplatedWritePlain<int64_t, int64_t, ParquetTimestampNSOperator>(input_column, chunk_start, chunk_end, mask,
-		                                                                  temp_writer);
-		break;
-	case LogicalTypeId::TIMESTAMP_SEC:
-		TemplatedWritePlain<int64_t, int64_t, ParquetTimestampSOperator>(input_column, chunk_start, chunk_end, mask,
-		                                                                 temp_writer);
-		break;
-	case LogicalTypeId::UTINYINT:
-		TemplatedWritePlain<uint8_t, int32_t>(input_column, chunk_start, chunk_end, mask, temp_writer);
-		break;
-	case LogicalTypeId::USMALLINT:
-		TemplatedWritePlain<uint16_t, int32_t>(input_column, chunk_start, chunk_end, mask, temp_writer);
-		break;
-	case LogicalTypeId::UINTEGER:
-		TemplatedWritePlain<uint32_t, uint32_t>(input_column, chunk_start, chunk_end, mask, temp_writer);
-		break;
-	case LogicalTypeId::UBIGINT:
-		TemplatedWritePlain<uint64_t, uint64_t>(input_column, chunk_start, chunk_end, mask, temp_writer);
-		break;
-	case LogicalTypeId::FLOAT:
-		TemplatedWritePlain<float, float>(input_column, chunk_start, chunk_end, mask, temp_writer);
-		break;
-	case LogicalTypeId::DECIMAL: {
-		// FIXME: fixed length byte array...
-		Vector double_vec(LogicalType::DOUBLE);
-		VectorOperations::Cast(input_column, double_vec, input.size());
-		TemplatedWritePlain<double, double>(double_vec, chunk_start, chunk_end, mask, temp_writer);
-		break;
-	}
-	case LogicalTypeId::DOUBLE:
-		TemplatedWritePlain<double, double>(input_column, chunk_start, chunk_end, mask, temp_writer);
-		break;
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::VARCHAR: {
-		auto *ptr = FlatVector::GetData<string_t>(input_column);
-		for (idx_t r = chunk_start; r < chunk_end; r++) {
-			if (mask.RowIsValid(r)) {
-				temp_writer.Write<uint32_t>(ptr[r].GetSize());
-				temp_writer.WriteData((const_data_ptr_t)ptr[r].GetDataUnsafe(), ptr[r].GetSize());
-			}
-		}
-		break;
-	}
-	default:
-		throw NotImplementedException((sql_types[col_idx].ToString()));
-	}
 }
 
 void ParquetWriter::WriteColumn(ChunkCollection &buffer, idx_t col_idx, idx_t chunk_idx, idx_t index_in_chunk,
@@ -442,7 +322,7 @@ void ParquetWriter::WriteColumn(ChunkCollection &buffer, idx_t col_idx, idx_t ch
 		auto &input = *chunks[i];
 		auto start_row = i == chunk_idx ? index_in_chunk : 0;
 		auto end_row = i == max_chunk ? max_index_in_chunk : input.size();
-		WriteVector(temp_writer, input, col_idx, start_row, end_row);
+		column_writers[col_idx]->WriteVector(temp_writer, input, col_idx, start_row, end_row);
 	}
 
 	// now that we have finished writing the data we know the uncompressed size

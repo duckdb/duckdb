@@ -18,6 +18,7 @@
 #endif
 
 #include "parquet_types.h"
+#include "column_writer.hpp"
 #include "thrift/protocol/TCompactProtocol.h"
 
 namespace duckdb {
@@ -50,6 +51,8 @@ private:
 	duckdb_parquet::format::FileMetaData file_meta_data;
 	std::mutex lock;
 
+	vector<unique_ptr<ColumnWriter>> column_writers;
+
 private:
 	//! Returns how many rows we can write from the given column, starting at the given position
 	idx_t MaxWriteCount(ChunkCollection &buffer, idx_t col_idx, idx_t chunk_idx, idx_t index_in_chunk,
@@ -57,7 +60,6 @@ private:
 
 	void WriteColumn(ChunkCollection &collection, idx_t col_idx, idx_t chunk_idx, idx_t index_in_chunk, idx_t max_chunk,
 	                 idx_t max_index_in_chunk, idx_t write_count);
-	void WriteVector(Serializer &writer, DataChunk &input, idx_t col_idx, idx_t chunk_start, idx_t chunk_end);
 };
 
 } // namespace duckdb

@@ -1,0 +1,25 @@
+# name: test/sql/copy/parquet/writer/write_struct.test
+# description: Parquet write struct
+# group: [writer]
+
+require parquet
+
+statement ok
+CREATE TABLE structs AS SELECT * FROM (VALUES
+	({'a': 42, 'b': 84}),
+	({'a': NULL, 'b': 32}),
+	(NULL),
+	({'a': 42, 'b': NULL})
+) tbl(i);
+
+statement ok
+COPY structs TO '__TEST_DIR__/structs.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM parquet_scan('__TEST_DIR__/structs.parquet');
+----
+{'a': 42, 'b': 84}
+{'a': NULL, 'b': 32}
+NULL
+{'a': 42, 'b': NULL}
+
