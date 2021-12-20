@@ -387,7 +387,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				return;
 #endif
 			} else if (param == "64bit") {
-				if (sizeof(void*) != 8) {
+				if (sizeof(void *) != 8) {
 					return;
 				}
 			} else if (param == "noforcestorage") {
