@@ -1,0 +1,19 @@
+# name: test/sql/copy/parquet/writer/parquet_zstd_sequence.test_coverage
+# description: Test writing of large blobs into parquet files
+# group: [writer]
+
+require parquet
+
+statement ok
+CREATE TABLE tbl AS SELECT * FROM read_csv_auto('data/csv/sequences.csv.gz', delim=',', header=True);
+
+query IIIIII nosort querylabel
+select count(*), min(strain), max(strain), min(strlen(sequence)), max(strlen(sequence)), avg(strlen(sequence))
+from tbl;
+
+statement ok
+COPY tbl TO '__TEST_DIR__/duckseq.parquet' (FORMAT 'PARQUET', CODEC 'ZSTD');
+
+query IIIIII nosort querylabel
+select count(*), min(strain), max(strain), min(strlen(sequence)), max(strlen(sequence)), avg(strlen(sequence))
+from '__TEST_DIR__/duckseq.parquet';

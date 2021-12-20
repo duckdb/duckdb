@@ -25,6 +25,12 @@ class FileSystem;
 class FileOpener;
 
 class ParquetWriter {
+	//! We limit uncompressed pages to 1B bytes
+	//! This is because Parquet limits pages to 2^31 bytes as they use an int32 to represent page size
+	//! Since compressed page size can theoretically be larger than uncompressed page size
+	//! We conservatively choose to limit it to around half of this
+	static constexpr const idx_t MAX_UNCOMPRESSED_PAGE_SIZE = 1000000000;
+
 public:
 	ParquetWriter(FileSystem &fs, string file_name, FileOpener *file_opener, vector<LogicalType> types,
 	              vector<string> names, duckdb_parquet::format::CompressionCodec::type codec);
@@ -43,6 +49,15 @@ private:
 	shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::format::FileMetaData file_meta_data;
 	std::mutex lock;
+
+private:
+	//! Returns how many rows we can write from the given column, starting at the given position
+	idx_t MaxWriteCount(ChunkCollection &buffer, idx_t col_idx, idx_t chunk_idx, idx_t index_in_chunk,
+	                    idx_t &out_max_chunk, idx_t &out_max_index_in_chunk);
+
+	void WriteColumn(ChunkCollection &collection, idx_t col_idx, idx_t chunk_idx, idx_t index_in_chunk, idx_t max_chunk,
+	                 idx_t max_index_in_chunk, idx_t write_count);
+	void WriteVector(Serializer &writer, DataChunk &input, idx_t col_idx, idx_t chunk_start, idx_t chunk_end);
 };
 
 } // namespace duckdb
