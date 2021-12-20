@@ -135,6 +135,10 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 
 		for (duckdb::idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
 			Napi::Value value;
+			// set up a new Napi::Object for some data types, e.g. INTERVAL
+			Napi::Object object_value;
+
+			bool is_object_value {false};
 
 			auto dval = chunk.GetValue(col_idx, row_idx);
 			if (dval.is_null) {
@@ -158,6 +162,13 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 			} break;
 			case duckdb::LogicalTypeId::HUGEINT: {
 				value = Napi::Number::New(env, dval.GetValue<double>());
+			} break;
+			case duckdb::LogicalTypeId::INTERVAL: {
+				is_object_value = true;
+				object_value = Napi::Object::New(env);
+				object_value.Set("months", dval.value_.interval.months);
+				object_value.Set("days", dval.value_.interval.days);
+				object_value.Set("micros", dval.value_.interval.micros);
 			} break;
 #if (NAPI_VERSION > 4)
 			case duckdb::LogicalTypeId::DATE: {
@@ -185,7 +196,11 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 				    .ThrowAsJavaScriptException();
 				return env.Null();
 			}
-			row_result.Set(node_names[col_idx], value);
+			if (is_object_value == true) {
+				row_result.Set(node_names[col_idx], object_value);
+			} else {
+				row_result.Set(node_names[col_idx], value);
+			}
 		}
 		result.Set(row_idx, row_result);
 	}
