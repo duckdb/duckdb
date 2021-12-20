@@ -53,7 +53,7 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 			throw NotImplementedException("Unimplemented subscript type");
 		}
 		list_size++;
-		StackCheck(list_size * DEFAULT_ENTRY_STACK_SIZE);
+		StackCheck(list_size);
 	}
 	return result;
 }

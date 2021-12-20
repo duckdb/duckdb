@@ -148,15 +148,12 @@ statement ok
 CREATE TABLE test2.table_with_same_name(in_test2 INTEGER);
 
 statement error
----
 SELECT in_main FROM table_with_same_name;
 
 statement error
----
 SELECT in_test2 FROM table_with_same_name;
 
 statement ok
----
 SELECT in_test FROM table_with_same_name;
 
 
