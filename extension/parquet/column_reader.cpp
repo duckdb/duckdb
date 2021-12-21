@@ -441,6 +441,9 @@ void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReade
 	plain_data.inc(str_len);
 }
 
+//===--------------------------------------------------------------------===//
+// List Column Reader
+//===--------------------------------------------------------------------===//
 idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
                              Vector &result_out) {
 	idx_t result_offset = 0;
@@ -484,16 +487,6 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 		// the intuition is that we have to only collapse values into lists that are repeated *on this level*
 		// the rest is pretty much handed up as-is as a single-valued list or NULL
 		idx_t child_idx;
-
-		//		printf("REPEAT: ");
-		//		for (child_idx = 0; child_idx < child_actual_num_values; child_idx++) {
-		//			printf("%d ", child_repeats_ptr[child_idx]);
-		//		}
-		//		printf("\nDEFINE: ");
-		//		for (child_idx = 0; child_idx < child_actual_num_values; child_idx++) {
-		//			printf("%d ", child_defines_ptr[child_idx]);
-		//		}
-		//		printf("\n");
 		for (child_idx = 0; child_idx < child_actual_num_values; child_idx++) {
 			if (child_repeats_ptr[child_idx] == max_repeat) {
 				// value repeats on this level, append
@@ -557,6 +550,66 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 	child_repeats_ptr = (uint8_t *)child_repeats.ptr;
 
 	child_filter.set();
+}
+
+//===--------------------------------------------------------------------===//
+// Struct Column Reader
+//===--------------------------------------------------------------------===//
+StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
+                   idx_t max_define_p, idx_t max_repeat_p, vector<unique_ptr<ColumnReader>> child_readers_p)
+    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
+      child_readers(move(child_readers_p)) {
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(!StructType::GetChildTypes(type).empty());
+};
+
+ColumnReader *StructColumnReader::GetChildReader(idx_t child_idx) {
+	return child_readers[child_idx].get();
+}
+
+void StructColumnReader::InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
+	for (auto &child : child_readers) {
+		child->InitializeRead(columns, protocol_p);
+	}
+}
+
+idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+           Vector &result) {
+	auto &struct_entries = StructVector::GetEntries(result);
+	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
+
+	idx_t read_count = num_values;
+	for (idx_t i = 0; i < struct_entries.size(); i++) {
+		auto child_num_values =
+		    child_readers[i]->Read(num_values, filter, define_out, repeat_out, *struct_entries[i]);
+		if (i == 0) {
+			read_count = child_num_values;
+		} else if (read_count != child_num_values) {
+			throw std::runtime_error("Struct child row count mismatch");
+		}
+	}
+	// set the validity mask for this level
+	auto &validity = FlatVector::Validity(result);
+	for(idx_t i = 0; i < read_count; i++) {
+		if (define_out[i] < max_define) {
+			validity.SetInvalid(i);
+		}
+	}
+
+	return read_count;
+}
+
+void StructColumnReader::Skip(idx_t num_values) {
+	throw InternalException("Skip not implemented for StructColumnReader");
+}
+
+idx_t StructColumnReader::GroupRowsAvailable() {
+	for (idx_t i = 0; i < child_readers.size(); i++) {
+		if (child_readers[i]->Type().id() != LogicalTypeId::LIST) {
+			return child_readers[i]->GroupRowsAvailable();
+		}
+	}
+	return child_readers[0]->GroupRowsAvailable();
 }
 
 } // namespace duckdb
