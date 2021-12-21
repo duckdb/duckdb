@@ -14,7 +14,7 @@ vector<ColumnBinding> LogicalLimit::GetColumnBindings() {
 
 idx_t LogicalLimit::EstimateCardinality(ClientContext &context) {
 	auto child_cardinality = children[0]->EstimateCardinality(context);
-	if (limit_val < child_cardinality) {
+	if (limit_val >= 0 && idx_t(limit_val) < child_cardinality) {
 		child_cardinality = limit_val;
 	}
 	return child_cardinality;
