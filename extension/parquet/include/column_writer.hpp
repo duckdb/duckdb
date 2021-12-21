@@ -40,7 +40,7 @@ public:
 	                                                      const string &name);
 
 	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-	                                                           idx_t total_values);
+	                                                           vector<string> schema_path);
 	virtual void Prepare(ColumnWriterState &state, Vector &vector, idx_t count);
 
 	virtual void BeginWrite(ColumnWriterState &state);
@@ -48,6 +48,8 @@ public:
 	virtual void FinalizeWrite(ColumnWriterState &state);
 
 protected:
+	void WriteLevels(Serializer &temp_writer, const vector<uint16_t> &levels);
+
 	void NextPage(ColumnWriterState &state_p);
 	void FlushPage(ColumnWriterState &state_p);
 

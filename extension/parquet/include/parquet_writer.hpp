@@ -27,6 +27,7 @@ class FileOpener;
 
 class ParquetWriter {
 	friend class ColumnWriter;
+	friend class StructColumnWriter;
 
 public:
 	ParquetWriter(FileSystem &fs, string file_name, FileOpener *file_opener, vector<LogicalType> types,

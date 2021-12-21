@@ -156,6 +156,8 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *fil
 	file_meta_data.schema[0].name = "duckdb_schema";
 	file_meta_data.schema[0].num_children = sql_types.size();
 	file_meta_data.schema[0].__isset.num_children = true;
+	file_meta_data.schema[0].repetition_type = duckdb_parquet::format::FieldRepetitionType::REQUIRED;
+	file_meta_data.schema[0].__isset.repetition_type = true;
 
 	for (idx_t i = 0; i < sql_types.size(); i++) {
 		column_writers.push_back(
@@ -179,7 +181,8 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 	auto &chunks = buffer.Chunks();
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
-		auto write_state = column_writers[col_idx]->InitializeWriteState(row_group, buffer.Count());
+		vector<string> schema_path;
+		auto write_state = column_writers[col_idx]->InitializeWriteState(row_group, move(schema_path));
 		for (idx_t chunk_idx = 0; chunk_idx < chunks.size(); chunk_idx++) {
 			column_writers[col_idx]->Prepare(*write_state, chunks[chunk_idx]->data[col_idx], chunks[chunk_idx]->size());
 		}
