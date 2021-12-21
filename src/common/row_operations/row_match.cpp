@@ -262,8 +262,9 @@ idx_t RowOperations::Match(DataChunk &columns, VectorData col_data[], const RowL
 }
 
 template <class T, class OP>
-static void TemplatedMatchRowsType(Vector &rows_left, const SelectionVector &left_sel,
-                                 Vector &rows_right, const SelectionVector &right_sel, idx_t rows_count, idx_t col_offset, idx_t &matches) {
+static void TemplatedMatchRowsType(Vector &rows_left, const SelectionVector &left_sel, Vector &rows_right,
+                                   const SelectionVector &right_sel, idx_t rows_count, idx_t col_offset,
+                                   idx_t &matches) {
 	// Precompute row_mask indexes
 	idx_t entry_idx;
 	idx_t idx_in_entry;
@@ -273,29 +274,30 @@ static void TemplatedMatchRowsType(Vector &rows_left, const SelectionVector &lef
 	auto right_ptrs = FlatVector::GetData<data_ptr_t>(rows_right);
 	idx_t match_count = 0;
 
-		for (idx_t i = 0; i < rows_count; i++) {
-			auto left_idx = left_sel.get_index(i);
-			auto right_idx = right_sel.get_index(i);
+	for (idx_t i = 0; i < rows_count; i++) {
+		auto left_idx = left_sel.get_index(i);
+		auto right_idx = right_sel.get_index(i);
 
-			auto left_row = left_ptrs[left_idx];
-			auto right_row = right_ptrs[right_idx];
-			ValidityBytes left_row_mask(left_row);
-			ValidityBytes right_row_mask(right_row);
-			auto isnull = !left_row_mask.RowIsValid(left_row_mask.GetValidityEntry(entry_idx), idx_in_entry);
+		auto left_row = left_ptrs[left_idx];
+		auto right_row = right_ptrs[right_idx];
+		ValidityBytes left_row_mask(left_row);
+		ValidityBytes right_row_mask(right_row);
+		auto isnull = !left_row_mask.RowIsValid(left_row_mask.GetValidityEntry(entry_idx), idx_in_entry);
 
-			auto left_value = Load<T>(left_row + col_offset);
-			auto right_value = Load<T>(right_row + col_offset);
-			if (!isnull && OP::template Operation<T>(left_value, right_value)) {
-				match_count++;
-			} 
+		auto left_value = Load<T>(left_row + col_offset);
+		auto right_value = Load<T>(right_row + col_offset);
+		if (!isnull && OP::template Operation<T>(left_value, right_value)) {
+			match_count++;
 		}
-	
+	}
+
 	matches = match_count;
 }
 
 template <class OP>
 static void TemplatedMatchRowsOp(Vector &rows_left, const SelectionVector &left_sel, const RowLayout &layout,
-                                 Vector &rows_right, const SelectionVector &right_sel, idx_t rows_count, idx_t &matches) {
+                                 Vector &rows_right, const SelectionVector &right_sel, idx_t rows_count,
+                                 idx_t &matches) {
 	if (rows_count == 0) {
 		return;
 	}
@@ -309,48 +311,61 @@ static void TemplatedMatchRowsOp(Vector &rows_left, const SelectionVector &left_
 		switch (key_type.InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-			TemplatedMatchRowsType<int8_t, OP >(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset, matches);
+			TemplatedMatchRowsType<int8_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset,
+			                                   matches);
 			break;
 		case PhysicalType::INT16:
-			TemplatedMatchRowsType<int16_t, OP >(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset, matches);
+			TemplatedMatchRowsType<int16_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset,
+			                                    matches);
 			break;
 		case PhysicalType::INT32:
-			TemplatedMatchRowsType<int32_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset, matches);
+			TemplatedMatchRowsType<int32_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset,
+			                                    matches);
 			break;
 		case PhysicalType::INT64:
-			TemplatedMatchRowsType<int64_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset, matches);
+			TemplatedMatchRowsType<int64_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset,
+			                                    matches);
 			break;
 		case PhysicalType::UINT8:
-			TemplatedMatchRowsType<uint8_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset, matches);
+			TemplatedMatchRowsType<uint8_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset,
+			                                    matches);
 			break;
 		case PhysicalType::UINT16:
-			TemplatedMatchRowsType<uint16_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset, matches);
+			TemplatedMatchRowsType<uint16_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset,
+			                                     matches);
 			break;
 		case PhysicalType::UINT32:
-			TemplatedMatchRowsType<uint32_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset, matches);
+			TemplatedMatchRowsType<uint32_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset,
+			                                     matches);
 			break;
 		case PhysicalType::UINT64:
-			TemplatedMatchRowsType<uint64_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset, matches);
+			TemplatedMatchRowsType<uint64_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset,
+			                                     matches);
 			break;
 		case PhysicalType::INT128:
-			TemplatedMatchRowsType<hugeint_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset, matches);
+			TemplatedMatchRowsType<hugeint_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset,
+			                                      matches);
 			break;
 		case PhysicalType::FLOAT:
-			TemplatedMatchRowsType<float, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset, matches);
+			TemplatedMatchRowsType<float, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset,
+			                                  matches);
 			break;
 		case PhysicalType::DOUBLE:
-			TemplatedMatchRowsType<double, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset, matches);
+			TemplatedMatchRowsType<double, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset,
+			                                   matches);
 			break;
 		case PhysicalType::INTERVAL:
-			TemplatedMatchRowsType<interval_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset, matches);
+			TemplatedMatchRowsType<interval_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset,
+			                                       matches);
 			break;
 		case PhysicalType::VARCHAR:
-			TemplatedMatchRowsType<string_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset, matches);
+			TemplatedMatchRowsType<string_t, OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset,
+			                                     matches);
 			break;
 		case PhysicalType::LIST:
 		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
-			//TemplatedMatchRowsNested<OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset);
+			// TemplatedMatchRowsNested<OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset);
 			break;
 		default:
 			throw InternalException("Unsupported column type for RowOperations::Match");
@@ -360,7 +375,7 @@ static void TemplatedMatchRowsOp(Vector &rows_left, const SelectionVector &left_
 
 idx_t RowOperations::MatchRows(Vector &rows_left, const SelectionVector &left_sel, const RowLayout &layout,
                                Vector &rows_right, const SelectionVector &right_sel, idx_t rows_count) {
-								   idx_t match_count = 0;
+	idx_t match_count = 0;
 	TemplatedMatchRowsOp<Equals>(rows_left, left_sel, layout, rows_right, right_sel, rows_count, match_count);
 	return match_count > 0;
 }

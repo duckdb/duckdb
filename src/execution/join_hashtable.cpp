@@ -327,14 +327,16 @@ void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *i
 		// store the pointer to the current tuple entry in the hash_map
 		pointers[index] = key_locations[i];
 	}
-	// Create vectors and do a vectorized check for duplicates
-	Vector ht_rows(LogicalType::POINTER, *key_locations);
-	Vector conflicts_rows(LogicalType::POINTER, *conflict_entries);
-	auto matches = RowOperations::MatchRows(ht_rows, pointers_sel, layout, conflicts_rows,
-	                                        FlatVector::INCREMENTAL_SELECTION_VECTOR, conflict_count);
-	if (matches > 0) {
-		has_unique_keys = false;
-	}
+	// Create vectors and do a vectorized check for duplicates'
+	if (conflict_count > 0) {
+		Vector ht_rows(LogicalType::POINTER, *key_locations);
+		Vector conflicts_rows(LogicalType::POINTER, *conflict_entries);
+		auto matches = RowOperations::MatchRows(ht_rows, pointers_sel, layout, conflicts_rows,
+		                                        FlatVector::INCREMENTAL_SELECTION_VECTOR, conflict_count);
+		if (matches > 0) {
+			has_unique_keys = false;
+		}
+	} 
 }
 
 /* void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *indices, data_ptr_t key_locations[],
