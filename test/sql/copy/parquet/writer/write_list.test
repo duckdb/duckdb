@@ -1,0 +1,27 @@
+# name: test/sql/copy/parquet/writer/write_list.test
+# description: Parquet write list
+# group: [writer]
+
+require parquet
+
+# standard list
+statement ok
+CREATE TABLE list AS SELECT * FROM (VALUES
+	([1, 2, 3]),
+	([4, 5]),
+	([6, 7]),
+	([NULL]),
+    ([8, NULL, 10, 11])
+) tbl(i);
+
+statement ok
+COPY list TO 'test_list.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM parquet_scan('test_list.parquet');
+----
+[1, 2, 3]
+[4, 5]
+[6, 7]
+[NULL]
+[8, NULL, 10, 11]

@@ -17,9 +17,6 @@ class ParquetWriter;
 
 class ColumnWriterState {
 public:
-	static constexpr const uint16_t DEFINE_VALID = 65535;
-
-public:
 	virtual ~ColumnWriterState();
 
 	vector<uint16_t> definition_levels;
@@ -59,6 +56,8 @@ public:
 protected:
 	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, ValidityMask &validity, idx_t count,
 	                        uint16_t define_value, uint16_t null_value);
+	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count, idx_t max_repeat);
+
 	void WriteLevels(Serializer &temp_writer, const vector<uint16_t> &levels, idx_t max_value, idx_t start_offset,
 	                 idx_t count);
 

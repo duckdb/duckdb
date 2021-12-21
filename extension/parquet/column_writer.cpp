@@ -35,6 +35,8 @@ using duckdb_parquet::format::PageType;
 using ParquetRowGroup = duckdb_parquet::format::RowGroup;
 using duckdb_parquet::format::Type;
 
+#define PARQUET_DEFINE_VALID 65535
+
 //===--------------------------------------------------------------------===//
 // ColumnWriter
 //===--------------------------------------------------------------------===//
@@ -163,10 +165,21 @@ unique_ptr<ColumnWriterState> ColumnWriter::InitializeWriteState(duckdb_parquet:
 	return move(result);
 }
 
+void ColumnWriter::HandleRepeatLevels(ColumnWriterState &state, ColumnWriterState *parent, idx_t count,
+                                      idx_t max_repeat) {
+	if (!parent) {
+		// no repeat levels without a parent node
+		return;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		state.repetition_levels.push_back(parent->repetition_levels[state.repetition_levels.size()]);
+	}
+}
+
 void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, ValidityMask &validity,
                                       idx_t count, uint16_t define_value, uint16_t null_value) {
 	for (idx_t i = 0; i < count; i++) {
-		if (parent && parent->definition_levels[state.definition_levels.size()] != ColumnWriterState::DEFINE_VALID) {
+		if (parent && parent->definition_levels[state.definition_levels.size()] != PARQUET_DEFINE_VALID) {
 			state.definition_levels.push_back(parent->definition_levels[state.definition_levels.size()]);
 		} else if (validity.RowIsValid(i)) {
 			state.definition_levels.push_back(define_value);
@@ -181,6 +194,7 @@ void ColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent
 	auto &col_chunk = state.row_group.columns[state.col_idx];
 
 	auto &validity = FlatVector::Validity(vector);
+	HandleRepeatLevels(state_p, parent, count, max_repeat);
 	HandleDefineLevels(state_p, parent, validity, count, max_define, max_define - 1);
 	for (idx_t i = 0; i < count; i++) {
 		auto &page_info = state.page_info.back();
@@ -591,7 +605,7 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
 	auto &state = (StructColumnWriterState &)state_p;
 
 	auto &validity = FlatVector::Validity(vector);
-	HandleDefineLevels(state_p, parent, validity, count, ColumnWriterState::DEFINE_VALID, max_define - 1);
+	HandleDefineLevels(state_p, parent, validity, count, PARQUET_DEFINE_VALID, max_define - 1);
 	auto &child_vectors = StructVector::GetEntries(vector);
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		child_writers[child_idx]->Prepare(*state.child_states[child_idx], &state_p, *child_vectors[child_idx], count);
@@ -621,6 +635,108 @@ void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 }
 
 //===--------------------------------------------------------------------===//
+// List Column Writer
+//===--------------------------------------------------------------------===//
+class ListColumnWriter : public ColumnWriter {
+public:
+	ListColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
+	                 unique_ptr<ColumnWriter> child_writer_p)
+	    : ColumnWriter(writer, schema_idx, max_repeat, max_define), child_writer(move(child_writer_p)) {
+	}
+	~ListColumnWriter() override = default;
+
+	unique_ptr<ColumnWriter> child_writer;
+
+public:
+	void WriteVector(Serializer &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+		throw InternalException("Cannot write vector of type list");
+	}
+
+	idx_t GetRowSize(Vector &vector, idx_t index) override {
+		throw InternalException("Cannot get row size of list");
+	}
+
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
+	                                                   vector<string> schema_path) override;
+	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
+
+	void BeginWrite(ColumnWriterState &state) override;
+	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
+	void FinalizeWrite(ColumnWriterState &state) override;
+};
+
+class ListColumnWriterState : public ColumnWriterState {
+public:
+	ListColumnWriterState(duckdb_parquet::format::RowGroup &row_group, idx_t col_idx)
+	    : row_group(row_group), col_idx(col_idx) {
+	}
+	~ListColumnWriterState() override = default;
+
+	duckdb_parquet::format::RowGroup &row_group;
+	idx_t col_idx;
+	unique_ptr<ColumnWriterState> child_state;
+};
+
+unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
+                                                                     vector<string> schema_path) {
+	auto result = make_unique<ListColumnWriterState>(row_group, row_group.columns.size());
+	schema_path.push_back(writer.file_meta_data.schema[schema_idx].name);
+	result->child_state = child_writer->InitializeWriteState(row_group, move(schema_path));
+	return move(result);
+}
+
+void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
+	auto &state = (ListColumnWriterState &)state_p;
+
+	auto list_data = FlatVector::GetData<list_entry_t>(vector);
+	auto &validity = FlatVector::Validity(vector);
+
+	// write definition levels and repeats
+	for (idx_t i = 0; i < count; i++) {
+		if (parent && parent->definition_levels[state.definition_levels.size()] != PARQUET_DEFINE_VALID) {
+			//			state.definition_levels.push_back(parent->definition_levels[state.definition_levels.size()]);
+			throw InternalException("FIXME: parent defines");
+		} else if (validity.RowIsValid(i)) {
+			// push the repetition levels
+			if (list_data[i].length == 0) {
+				continue;
+			}
+			state.repetition_levels.push_back(max_repeat);
+			state.definition_levels.push_back(PARQUET_DEFINE_VALID);
+			for (idx_t k = 1; k < list_data[i].length; k++) {
+				state.repetition_levels.push_back(max_repeat + 1);
+				state.definition_levels.push_back(PARQUET_DEFINE_VALID);
+			}
+		} else {
+			throw InternalException("FIXME: defines");
+			//			state.definition_levels.push_back(max_define - 1);
+		}
+	}
+
+	auto &list_child = ListVector::GetEntry(vector);
+	auto list_count = ListVector::GetListSize(vector);
+	child_writer->Prepare(*state.child_state, &state_p, list_child, list_count);
+}
+
+void ListColumnWriter::BeginWrite(ColumnWriterState &state_p) {
+	auto &state = (ListColumnWriterState &)state_p;
+	child_writer->BeginWrite(*state.child_state);
+}
+
+void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
+	auto &state = (ListColumnWriterState &)state_p;
+
+	auto &list_child = ListVector::GetEntry(vector);
+	auto list_count = ListVector::GetListSize(vector);
+	child_writer->Write(*state.child_state, list_child, list_count);
+}
+
+void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
+	auto &state = (ListColumnWriterState &)state_p;
+	child_writer->FinalizeWrite(*state.child_state);
+}
+
+//===--------------------------------------------------------------------===//
 // Create Column Writer
 //===--------------------------------------------------------------------===//
 unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas,
@@ -646,6 +762,35 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 			                                              max_repeat, max_define + 1));
 		}
 		return make_unique<StructColumnWriter>(writer, schema_idx, max_repeat, max_define, move(child_writers));
+	}
+	if (type.id() == LogicalTypeId::LIST) {
+		auto &child_type = ListType::GetChildType(type);
+		// set up the two schema elements for the list
+		// for some reason we only set the converted type in the OPTIONAL element
+		// first an OPTIONAL element
+		duckdb_parquet::format::SchemaElement optional_element;
+		optional_element.repetition_type = FieldRepetitionType::OPTIONAL;
+		optional_element.num_children = 1;
+		optional_element.converted_type = ConvertedType::LIST;
+		optional_element.__isset.num_children = true;
+		optional_element.__isset.type = false;
+		optional_element.__isset.repetition_type = true;
+		optional_element.__isset.converted_type = true;
+		optional_element.name = "l";
+		schemas.push_back(move(optional_element));
+
+		// then a REPEATED element
+		duckdb_parquet::format::SchemaElement repeated_element;
+		repeated_element.repetition_type = FieldRepetitionType::REPEATED;
+		repeated_element.num_children = 1;
+		repeated_element.__isset.num_children = true;
+		repeated_element.__isset.type = false;
+		repeated_element.__isset.repetition_type = true;
+		repeated_element.name = "list";
+		schemas.push_back(move(repeated_element));
+
+		auto child_writer = CreateWriterRecursive(schemas, writer, child_type, "child", max_repeat + 1, max_define + 2);
+		return make_unique<ListColumnWriter>(writer, schema_idx, max_repeat, max_define, move(child_writer));
 	}
 	duckdb_parquet::format::SchemaElement schema_element;
 	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type);
