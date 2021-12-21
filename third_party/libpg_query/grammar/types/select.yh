@@ -59,7 +59,7 @@
 
 
 %type <node> where_clause 				a_expr b_expr c_expr AexprConst indirection_el opt_slice_bound
-				columnref in_expr having_clause func_table
+				columnref in_expr having_clause qualify_clause func_table
 %type <list>	rowsfrom_item rowsfrom_list opt_col_def_list
 %type <boolean> opt_ordinality
 %type <boolean> opt_ignore_nulls

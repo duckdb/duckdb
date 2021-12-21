@@ -45,6 +45,10 @@ bool SelectNode::Equals(const QueryNode *other_p) const {
 	if (!BaseExpression::Equals(having.get(), other->having.get())) {
 		return false;
 	}
+	// QUALIFY
+	if (!BaseExpression::Equals(qualify.get(), other->qualify.get())) {
+		return false;
+	}
 	return true;
 }
 
@@ -61,6 +65,7 @@ unique_ptr<QueryNode> SelectNode::Copy() {
 	}
 	result->groups.grouping_sets = groups.grouping_sets;
 	result->having = having ? having->Copy() : nullptr;
+	result->qualify = qualify ? qualify->Copy() : nullptr;
 	result->sample = sample ? sample->Copy() : nullptr;
 	this->CopyProperties(*result);
 	return move(result);
@@ -86,6 +91,8 @@ void SelectNode::Serialize(Serializer &serializer) {
 	// having / sample
 	serializer.WriteOptional(having);
 	serializer.WriteOptional(sample);
+	// qualify
+	serializer.WriteOptional(qualify);
 }
 
 unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
@@ -110,6 +117,8 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
 	// having / sample
 	result->having = source.ReadOptional<ParsedExpression>();
 	result->sample = source.ReadOptional<SampleOptions>();
+	// qualify
+	result->qualify = source.ReadOptional<ParsedExpression>();
 	return move(result);
 }
 
