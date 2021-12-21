@@ -107,7 +107,6 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 			WriteData<double>(out, result->collection, col);
 			break;
 		case LogicalTypeId::DATE:
-		case LogicalTypeId::DATE_TZ:
 			WriteData<date_t>(out, result->collection, col);
 			break;
 		case LogicalTypeId::TIME:

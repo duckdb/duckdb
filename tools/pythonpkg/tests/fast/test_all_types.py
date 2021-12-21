@@ -6,7 +6,7 @@ from decimal import Decimal
 from uuid import UUID
 
 def get_all_types():
-	conn = duckdb.connect()		
+	conn = duckdb.connect()
 	all_types = conn.execute("describe select * from test_all_types()").fetchall()
 	types = []
 	for cur_type in all_types:
@@ -17,7 +17,7 @@ all_types = get_all_types()
 
 class TestAllTypes(object):
 	def test_fetchall(self, duckdb_cursor):
-		conn = duckdb.connect()	
+		conn = duckdb.connect()
 		# We replace these values since the extreme ranges are not supported in native-python.
 		replacement_values = {
 			'timestamp': "'1990-01-01 00:00:00'::TIMESTAMP",
@@ -25,8 +25,7 @@ class TestAllTypes(object):
 			'timestamp_ns': "'1990-01-01 00:00:00'::TIMESTAMP_NS",
 			'timestamp_ms': "'1990-01-01 00:00:00'::TIMESTAMP_MS",
 			'timestamp_tz': "'1990-01-01 00:00:00'::TIMESTAMPTZ",
-			'date': "'1990-01-01'::DATE",
-			'date_tz': "'1990-01-01'::DATETZ"}
+			'date': "'1990-01-01'::DATE""}
 
 		correct_answer_map = {'bool':[(False,), (True,), (None,)]
 			, 'tinyint':[(-128,), (127,), (None,)], 'smallint': [(-32768,), (32767,), (None,)]
@@ -44,9 +43,9 @@ class TestAllTypes(object):
 			, 'int_array': [([],), ([42, 999, None, None, -42],), (None,)], 'varchar_array': [([],), (['🦆🦆🦆🦆🦆🦆', 'goose', None, ''],), (None,)]
 			, 'nested_int_array': [([],), ([[], [42, 999, None, None, -42], None, [], [42, 999, None, None, -42]],), (None,)], 'struct': [({'a': None, 'b': None},), ({'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'},), (None,)]
 			, 'struct_of_arrays': [({'a': None, 'b': None},), ({'a': [42, 999, None, None, -42], 'b': ['🦆🦆🦆🦆🦆🦆', 'goose', None, '']},), (None,)]
-			, 'array_of_structs': [([],), ([{'a': None, 'b': None}, {'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}, None],), (None,)], 'map':[({'key': [], 'value': []},), ({'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},), (None,)] 
+			, 'array_of_structs': [([],), ([{'a': None, 'b': None}, {'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}, None],), (None,)], 'map':[({'key': [], 'value': []},), ({'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},), (None,)]
 			, 'time_tz':[(datetime.time(0, 0),), (datetime.time(23, 59, 59, 999999),), (None,)], 'interval': [(datetime.timedelta(0),), (datetime.timedelta(days=30969, seconds=999, microseconds=999999),), (None,)]
-			, 'timestamp':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'date':[(datetime.date(1990, 1, 1),)], 'date_tz':[(datetime.date(1990, 1, 1),)], 'timestamp_s':[(datetime.datetime(1990, 1, 1, 0, 0),)]
+			, 'timestamp':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'date':[(datetime.date(1990, 1, 1),)], 'timestamp_s':[(datetime.datetime(1990, 1, 1, 0, 0),)]
 			, 'timestamp_ns':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'timestamp_ms':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'timestamp_tz':[(datetime.datetime(1990, 1, 1, 0, 0),)]}
 
 		for cur_type in all_types:
@@ -66,11 +65,11 @@ class TestAllTypes(object):
 		replacement_values = {'interval': "INTERVAL '2 years'"}
 		# We do not round trip enum types
 		enum_types = {'small_enum', 'medium_enum', 'large_enum'}
-		conn = duckdb.connect()	
+		conn = duckdb.connect()
 		for cur_type in all_types:
 			if cur_type in replacement_values:
 				arrow_table = conn.execute("select "+replacement_values[cur_type]).arrow()
-			else:	
+			else:
 				arrow_table = conn.execute("select "+cur_type+" from test_all_types()").arrow()
 			if cur_type in enum_types:
 				round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
@@ -80,7 +79,7 @@ class TestAllTypes(object):
 			else:
 				round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
 				assert arrow_table.equals(round_trip_arrow_table, check_metadata=True)
-			
+
 	def test_pandas(self, duckdb_cursor):
 		# We skip those since the extreme ranges are not supported in python.
 		replacement_values = { 'timestamp': "'1990-01-01 00:00:00'::TIMESTAMP",

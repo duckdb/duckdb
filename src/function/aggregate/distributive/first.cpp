@@ -232,7 +232,6 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 		return GetFirstAggregateTemplated<int16_t, LAST>(type);
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ:
 		return GetFirstAggregateTemplated<int32_t, LAST>(type);
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIME:
