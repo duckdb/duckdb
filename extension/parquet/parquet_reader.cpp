@@ -233,8 +233,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			max_repeat++;
 		}
 	}
-//	s_ele.printTo(std::cout);
-//	printf("\n");
+	//	s_ele.printTo(std::cout);
+	//	printf("\n");
 
 	if (!s_ele.__isset.type) { // inner node
 		if (s_ele.num_children == 0) {

@@ -496,15 +496,15 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 		// the rest is pretty much handed up as-is as a single-valued list or NULL
 		idx_t child_idx;
 
-//		printf("REPEAT: ");
-//		for (child_idx = 0; child_idx < child_actual_num_values; child_idx++) {
-//			printf("%d ", child_repeats_ptr[child_idx]);
-//		}
-//		printf("\nDEFINE: ");
-//		for (child_idx = 0; child_idx < child_actual_num_values; child_idx++) {
-//			printf("%d ", child_defines_ptr[child_idx]);
-//		}
-//		printf("\n");
+		//		printf("REPEAT: ");
+		//		for (child_idx = 0; child_idx < child_actual_num_values; child_idx++) {
+		//			printf("%d ", child_repeats_ptr[child_idx]);
+		//		}
+		//		printf("\nDEFINE: ");
+		//		for (child_idx = 0; child_idx < child_actual_num_values; child_idx++) {
+		//			printf("%d ", child_defines_ptr[child_idx]);
+		//		}
+		//		printf("\n");
 		for (child_idx = 0; child_idx < child_actual_num_values; child_idx++) {
 			if (child_repeats_ptr[child_idx] == max_repeat) {
 				// value repeats on this level, append
