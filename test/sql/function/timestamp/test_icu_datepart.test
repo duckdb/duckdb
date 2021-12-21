@@ -70,7 +70,7 @@ SELECT decade(ts), decade(ts::TIMESTAMP) FROM timestamps;
 query II
 SELECT century(ts), century(ts::TIMESTAMP) FROM timestamps;
 ----
-1	1
+-1	-1
 20	20
 21	21
 21	21
@@ -82,7 +82,7 @@ SELECT century(ts), century(ts::TIMESTAMP) FROM timestamps;
 query II
 SELECT millennium(ts), millennium(ts::TIMESTAMP) FROM timestamps;
 ----
-1	1
+-1	-1
 2	2
 3	3
 3	3

@@ -25,7 +25,7 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 		result = DatePartSpecifier::DECADE;
 	} else if (specifier == "century" || specifier == "centuries") {
 		result = DatePartSpecifier::CENTURY;
-	} else if (specifier == "millennium" || specifier == "millennia") {
+	} else if (specifier == "millennium" || specifier == "millennia" || specifier == "millenium") {
 		result = DatePartSpecifier::MILLENNIUM;
 	} else if (specifier == "microseconds" || specifier == "microsecond") {
 		result = DatePartSpecifier::MICROSECONDS;
@@ -175,6 +175,7 @@ struct DatePart {
 	struct DecadeOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
+			// From the PG docs: "The year field divided by 10"
 			return YearOperator::Operation<TA, TR>(input) / 10;
 		}
 
@@ -189,7 +190,19 @@ struct DatePart {
 	struct CenturyOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			return ((YearOperator::Operation<TA, TR>(input) - 1) / 100) + 1;
+			// From the PG docs:
+			// "The first century starts at 0001-01-01 00:00:00 AD, although they did not know it at the time.
+			// This definition applies to all Gregorian calendar countries.
+			// There is no century number 0, you go from -1 century to 1 century.
+			// If you disagree with this, please write your complaint to: Pope, Cathedral Saint-Peter of Roma, Vatican."
+			// (To be fair, His Holiness had nothing to do with this -
+			// it was the lack of zero in the counting systems of the time...)
+			const auto yyyy = YearOperator::Operation<TA, TR>(input);
+			if (yyyy > 0) {
+				return ((yyyy - 1) / 100) + 1;
+			} else {
+				return (yyyy / 100) - 1;
+			}
 		}
 
 		template <class T>
@@ -200,17 +213,23 @@ struct DatePart {
 		}
 	};
 
-	struct MilleniumOperator {
+	struct MillenniumOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			return ((YearOperator::Operation<TA, TR>(input) - 1) / 1000) + 1;
+			// See the century comment
+			const auto yyyy = YearOperator::Operation<TA, TR>(input);
+			if (yyyy > 0) {
+				return ((yyyy - 1) / 1000) + 1;
+			} else {
+				return (yyyy / 1000) - 1;
+			}
 		}
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
 		                                                      FunctionData *bind_data,
 		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateDatePartStatistics<T, MilleniumOperator>(child_stats);
+			return PropagateDatePartStatistics<T, MillenniumOperator>(child_stats);
 		}
 	};
 
@@ -514,12 +533,12 @@ int64_t DatePart::CenturyOperator::Operation(dtime_t input) {
 }
 
 template <>
-int64_t DatePart::MilleniumOperator::Operation(interval_t input) {
+int64_t DatePart::MillenniumOperator::Operation(interval_t input) {
 	return input.months / Interval::MONTHS_PER_MILLENIUM;
 }
 
 template <>
-int64_t DatePart::MilleniumOperator::Operation(dtime_t input) {
+int64_t DatePart::MillenniumOperator::Operation(dtime_t input) {
 	throw NotImplementedException("\"time\" units \"millennium\" not recognized");
 }
 
@@ -804,7 +823,7 @@ static int64_t ExtractElement(DatePartSpecifier type, T element) {
 	case DatePartSpecifier::CENTURY:
 		return DatePart::CenturyOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::MILLENNIUM:
-		return DatePart::MilleniumOperator::template Operation<T, int64_t>(element);
+		return DatePart::MillenniumOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::QUARTER:
 		return DatePart::QuarterOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::DOW:
@@ -1062,7 +1081,7 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	AddDatePartOperator<DatePart::DayOperator>(set, "day");
 	AddDatePartOperator<DatePart::DecadeOperator>(set, "decade");
 	AddDatePartOperator<DatePart::CenturyOperator>(set, "century");
-	AddDatePartOperator<DatePart::MilleniumOperator>(set, "millennium");
+	AddDatePartOperator<DatePart::MillenniumOperator>(set, "millennium");
 	AddDatePartOperator<DatePart::QuarterOperator>(set, "quarter");
 	AddDatePartOperator<DatePart::DayOfWeekOperator>(set, "dayofweek");
 	AddDatePartOperator<DatePart::ISODayOfWeekOperator>(set, "isodow");

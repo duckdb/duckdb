@@ -29,11 +29,15 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static int64_t ExtractCentury(icu::Calendar *calendar, const uint64_t micros) {
-		return 1 + ExtractYear(calendar, micros) / 100;
+		const auto era = ExtractEra(calendar, micros);
+		const auto cccc = ((ExtractYear(calendar, micros) - 1) / 100) + 1;
+		return era > 0 ? cccc : -cccc;
 	}
 
 	static int64_t ExtractMillenium(icu::Calendar *calendar, const uint64_t micros) {
-		return 1 + ExtractYear(calendar, micros) / 1000;
+		const auto era = ExtractEra(calendar, micros);
+		const auto mmmm = ((ExtractYear(calendar, micros) - 1) / 1000) + 1;
+		return era > 0 ? mmmm : -mmmm;
 	}
 
 	static int64_t ExtractMonth(icu::Calendar *calendar, const uint64_t micros) {

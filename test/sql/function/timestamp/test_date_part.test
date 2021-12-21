@@ -42,6 +42,35 @@ INSERT INTO timestamps VALUES
 	('1993-08-14 08:22:33'),
 	(NULL)
 
+# Century and millennia rules
+statement ok
+CREATE TABLE millennia AS SELECT * FROM (VALUES
+	('1001-03-15 (BC) 20:38:40'::TIMESTAMP),
+	('0044-03-15 (BC) 20:38:40'::TIMESTAMP),
+	('0998-02-16 20:38:40'::TIMESTAMP),
+	('1998-02-16 20:38:40'::TIMESTAMP),
+	('2001-02-16 20:38:40'::TIMESTAMP)
+) tbl(ts);
+
+query II
+SELECT ts, DATE_PART('millennium', ts) FROM millennia;
+----
+1001-03-15 (BC) 20:38:40	-2
+0044-03-15 (BC) 20:38:40	-1
+0998-02-16 20:38:40	1
+1998-02-16 20:38:40	2
+2001-02-16 20:38:40	3
+
+
+query II
+SELECT ts, DATE_PART('century', ts) FROM millennia;
+----
+1001-03-15 (BC) 20:38:40	-11
+0044-03-15 (BC) 20:38:40	-1
+0998-02-16 20:38:40	10
+1998-02-16 20:38:40	20
+2001-02-16 20:38:40	21
+
 #
 # Structs
 #
