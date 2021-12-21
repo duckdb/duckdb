@@ -244,17 +244,6 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 	}
 }
 
-static uint8_t ComputeBitWidth(idx_t val) {
-	if (val == 0) {
-		return 0;
-	}
-	uint8_t ret = 1;
-	while (((idx_t)(1 << ret) - 1) < val) {
-		ret++;
-	}
-	return ret;
-}
-
 void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (page_hdr.type == PageType::DATA_PAGE && !page_hdr.__isset.data_page_header) {
 		throw std::runtime_error("Missing data page header from data page");
@@ -273,8 +262,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		                          ? block->read<uint32_t>()
 		                          : page_hdr.data_page_header_v2.repetition_levels_byte_length;
 		block->available(rep_length);
-		repeated_decoder =
-		    make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, ComputeBitWidth(max_repeat));
+		repeated_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length,
+		                                             RleBpDecoder::ComputeBitWidth(max_repeat));
 		block->inc(rep_length);
 	}
 
@@ -283,8 +272,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		                          ? block->read<uint32_t>()
 		                          : page_hdr.data_page_header_v2.definition_levels_byte_length;
 		block->available(def_length);
-		defined_decoder =
-		    make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, ComputeBitWidth(max_define));
+		defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length,
+		                                            RleBpDecoder::ComputeBitWidth(max_define));
 		block->inc(def_length);
 	}
 

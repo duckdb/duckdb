@@ -17,7 +17,13 @@ class ParquetWriter;
 
 class ColumnWriterState {
 public:
+	static constexpr const uint16_t DEFINE_VALID = 65535;
+
+public:
 	virtual ~ColumnWriterState();
+
+	vector<uint16_t> definition_levels;
+	vector<uint16_t> repetition_levels;
 };
 
 class ColumnWriter {
@@ -28,27 +34,33 @@ class ColumnWriter {
 	static constexpr const idx_t MAX_UNCOMPRESSED_PAGE_SIZE = 1000000000;
 
 public:
-	ColumnWriter(ParquetWriter &writer, idx_t schema_idx);
+	ColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define);
 	virtual ~ColumnWriter();
 
 	ParquetWriter &writer;
 	idx_t schema_idx;
+	idx_t max_repeat;
+	idx_t max_define;
 
 public:
 	static unique_ptr<ColumnWriter> CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas,
 	                                                      ParquetWriter &writer, const LogicalType &type,
-	                                                      const string &name);
+	                                                      const string &name, idx_t max_repeat = 0,
+	                                                      idx_t max_define = 1);
 
 	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
 	                                                           vector<string> schema_path);
-	virtual void Prepare(ColumnWriterState &state, Vector &vector, idx_t count);
+	virtual void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count);
 
 	virtual void BeginWrite(ColumnWriterState &state);
 	virtual void Write(ColumnWriterState &state, Vector &vector, idx_t count);
 	virtual void FinalizeWrite(ColumnWriterState &state);
 
 protected:
-	void WriteLevels(Serializer &temp_writer, const vector<uint16_t> &levels);
+	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, ValidityMask &validity, idx_t count,
+	                        uint16_t define_value, uint16_t null_value);
+	void WriteLevels(Serializer &temp_writer, const vector<uint16_t> &levels, idx_t max_value, idx_t start_offset,
+	                 idx_t count);
 
 	void NextPage(ColumnWriterState &state_p);
 	void FlushPage(ColumnWriterState &state_p);

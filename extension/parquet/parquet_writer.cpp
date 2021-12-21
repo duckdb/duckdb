@@ -184,7 +184,8 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 		vector<string> schema_path;
 		auto write_state = column_writers[col_idx]->InitializeWriteState(row_group, move(schema_path));
 		for (idx_t chunk_idx = 0; chunk_idx < chunks.size(); chunk_idx++) {
-			column_writers[col_idx]->Prepare(*write_state, chunks[chunk_idx]->data[col_idx], chunks[chunk_idx]->size());
+			column_writers[col_idx]->Prepare(*write_state, nullptr, chunks[chunk_idx]->data[col_idx],
+			                                 chunks[chunk_idx]->size());
 		}
 		column_writers[col_idx]->BeginWrite(*write_state);
 		for (idx_t chunk_idx = 0; chunk_idx < chunks.size(); chunk_idx++) {
