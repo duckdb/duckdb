@@ -25,7 +25,7 @@ class TestAllTypes(object):
 			'timestamp_ns': "'1990-01-01 00:00:00'::TIMESTAMP_NS",
 			'timestamp_ms': "'1990-01-01 00:00:00'::TIMESTAMP_MS",
 			'timestamp_tz': "'1990-01-01 00:00:00'::TIMESTAMPTZ",
-			'date': "'1990-01-01'::DATE""}
+			'date': "'1990-01-01'::DATE"}
 
 		correct_answer_map = {'bool':[(False,), (True,), (None,)]
 			, 'tinyint':[(-128,), (127,), (None,)], 'smallint': [(-32768,), (32767,), (None,)]
