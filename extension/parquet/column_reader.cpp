@@ -555,8 +555,9 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 //===--------------------------------------------------------------------===//
 // Struct Column Reader
 //===--------------------------------------------------------------------===//
-StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
-                   idx_t max_define_p, idx_t max_repeat_p, vector<unique_ptr<ColumnReader>> child_readers_p)
+StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
+                                       idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
+                                       vector<unique_ptr<ColumnReader>> child_readers_p)
     : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
       child_readers(move(child_readers_p)) {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
@@ -574,14 +575,13 @@ void StructColumnReader::InitializeRead(const std::vector<ColumnChunk> &columns,
 }
 
 idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
-           Vector &result) {
+                               Vector &result) {
 	auto &struct_entries = StructVector::GetEntries(result);
 	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
 
 	idx_t read_count = num_values;
 	for (idx_t i = 0; i < struct_entries.size(); i++) {
-		auto child_num_values =
-		    child_readers[i]->Read(num_values, filter, define_out, repeat_out, *struct_entries[i]);
+		auto child_num_values = child_readers[i]->Read(num_values, filter, define_out, repeat_out, *struct_entries[i]);
 		if (i == 0) {
 			read_count = child_num_values;
 		} else if (read_count != child_num_values) {
@@ -590,7 +590,7 @@ idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, ui
 	}
 	// set the validity mask for this level
 	auto &validity = FlatVector::Validity(result);
-	for(idx_t i = 0; i < read_count; i++) {
+	for (idx_t i = 0; i < read_count; i++) {
 		if (define_out[i] < max_define) {
 			validity.SetInvalid(i);
 		}

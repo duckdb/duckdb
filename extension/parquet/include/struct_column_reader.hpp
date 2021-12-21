@@ -19,8 +19,8 @@ public:
 	                   idx_t max_define_p, idx_t max_repeat_p, vector<unique_ptr<ColumnReader>> child_readers_p);
 
 	vector<unique_ptr<ColumnReader>> child_readers;
-public:
 
+public:
 	ColumnReader *GetChildReader(idx_t child_idx);
 
 	void InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
