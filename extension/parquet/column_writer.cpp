@@ -194,6 +194,8 @@ void ColumnWriter::NextPage(ColumnWriterState &state_p) {
 		FlushPage(state_p);
 	}
 	if (state.write_info.write_page_idx == state.page_info.size()) {
+		state.write_info.write_count = 0;
+		state.write_info.max_write_count = 0;
 		return;
 	}
 	D_ASSERT(state.write_info.write_page_idx < state.page_info.size());
@@ -280,13 +282,14 @@ void ColumnWriter::FlushPage(ColumnWriterState &state_p) {
 void ColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
 	auto &state = (StandardColumnWriterState &)state_p;
 
-	auto &temp_writer = *state.write_info.temp_writer;
 	idx_t remaining = count;
 	idx_t offset = 0;
 	while (remaining > 0) {
+		auto &temp_writer = *state.write_info.temp_writer;
 		idx_t write_count = MinValue<idx_t>(remaining, state.write_info.max_write_count - state.write_info.write_count);
+		D_ASSERT(write_count > 0);
 
-		WriteVector(temp_writer, vector, offset, write_count);
+		WriteVector(temp_writer, vector, offset, offset + write_count);
 
 		state.write_info.write_count += write_count;
 		if (state.write_info.write_count == state.write_info.max_write_count) {
