@@ -69,14 +69,28 @@ SELECT date_part('era', '0044-03-15 (BC)'::DATE);
 0
 
 query I
-SELECT date_part('offset', d) FROM dates;
+SELECT date_part('timezone', d) FROM dates;
 ----
 0
 0
 0
 
 query I
-SELECT date_part('offset', '0044-03-15 (BC)'::DATE);
+SELECT date_part('timezone_hour', d) FROM dates;
+----
+0
+0
+0
+
+query I
+SELECT date_part('timezone_minute', d) FROM dates;
+----
+0
+0
+0
+
+query I
+SELECT date_part('timezone', '0044-03-15 (BC)'::DATE);
 ----
 0
 
@@ -121,9 +135,22 @@ SELECT date_part('era', '0044-03-15 (BC)'::TIMESTAMP);
 ----
 0
 
+query I
+SELECT date_part('timezone', d::TIMESTAMP) FROM dates;
+----
+0
+0
+0
 
 query I
-SELECT date_part('offset', d::TIMESTAMP) FROM dates;
+SELECT date_part('timezone_hour', d::TIMESTAMP) FROM dates;
+----
+0
+0
+0
+
+query I
+SELECT date_part('timezone_minute', d::TIMESTAMP) FROM dates;
 ----
 0
 0

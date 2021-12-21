@@ -61,8 +61,12 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 		result = DatePartSpecifier::YEARWEEK;
 	} else if (specifier == "era") {
 		result = DatePartSpecifier::ERA;
-	} else if (specifier == "offset") {
-		result = DatePartSpecifier::OFFSET;
+	} else if (specifier == "timezone") {
+		result = DatePartSpecifier::TIMEZONE;
+	} else if (specifier == "timezone_hour") {
+		result = DatePartSpecifier::TIMEZONE_HOUR;
+	} else if (specifier == "timezone_minute") {
+		result = DatePartSpecifier::TIMEZONE_MINUTE;
 	} else {
 		return false;
 	}
@@ -396,7 +400,7 @@ struct DatePart {
 		}
 	};
 
-	struct OffsetOperator {
+	struct TimezoneOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
 			// Regular timestamps are UTC.
@@ -437,7 +441,9 @@ struct DatePart {
 			part_values[int(DatePartSpecifier::YEARWEEK)] = yyyy * 100 + ww;
 
 			part_values[int(DatePartSpecifier::ERA)] = yyyy > 0 ? 1 : 0;
-			part_values[int(DatePartSpecifier::OFFSET)] = 0;
+			part_values[int(DatePartSpecifier::TIMEZONE)] = 0;
+			part_values[int(DatePartSpecifier::TIMEZONE_HOUR)] = 0;
+			part_values[int(DatePartSpecifier::TIMEZONE_MINUTE)] = 0;
 		}
 	};
 };
@@ -730,17 +736,17 @@ int64_t DatePart::EraOperator::Operation(dtime_t input) {
 }
 
 template <>
-int64_t DatePart::OffsetOperator::Operation(timestamp_t input) {
+int64_t DatePart::TimezoneOperator::Operation(timestamp_t input) {
 	return 0;
 }
 
 template <>
-int64_t DatePart::OffsetOperator::Operation(interval_t input) {
+int64_t DatePart::TimezoneOperator::Operation(interval_t input) {
 	throw NotImplementedException("\"interval\" units \"offset\" not recognized");
 }
 
 template <>
-int64_t DatePart::OffsetOperator::Operation(dtime_t input) {
+int64_t DatePart::TimezoneOperator::Operation(dtime_t input) {
 	throw NotImplementedException("\"time\" units \"offset\" not recognized");
 }
 
@@ -825,8 +831,10 @@ static int64_t ExtractElement(DatePartSpecifier type, T element) {
 		return DatePart::HoursOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::ERA:
 		return DatePart::EraOperator::template Operation<T, int64_t>(element);
-	case DatePartSpecifier::OFFSET:
-		return DatePart::OffsetOperator::template Operation<T, int64_t>(element);
+	case DatePartSpecifier::TIMEZONE:
+	case DatePartSpecifier::TIMEZONE_HOUR:
+	case DatePartSpecifier::TIMEZONE_MINUTE:
+		return DatePart::TimezoneOperator::template Operation<T, int64_t>(element);
 	default:
 		throw NotImplementedException("Specifier type not implemented for DATEPART");
 	}
@@ -980,7 +988,7 @@ struct StructDatePart {
 
 		const auto count = args.size();
 		Vector &input = args.data[0];
-		vector<int64_t> part_values(int(DatePartSpecifier::OFFSET) + 1, 0);
+		vector<int64_t> part_values(int(DatePartSpecifier::TIMEZONE_MINUTE) + 1, 0);
 
 		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -1061,6 +1069,9 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	AddDatePartOperator<DatePart::DayOfYearOperator>(set, "dayofyear");
 	AddDatePartOperator<DatePart::WeekOperator>(set, "week");
 	AddDatePartOperator<DatePart::EraOperator>(set, "era");
+	AddDatePartOperator<DatePart::TimezoneOperator>(set, "timezone");
+	AddDatePartOperator<DatePart::TimezoneOperator>(set, "timezone_hour");
+	AddDatePartOperator<DatePart::TimezoneOperator>(set, "timezone_minute");
 	AddTimePartOperator<DatePart::EpochOperator>(set, "epoch");
 	AddTimePartOperator<DatePart::MicrosecondsOperator>(set, "microsecond");
 	AddTimePartOperator<DatePart::MillisecondsOperator>(set, "millisecond");

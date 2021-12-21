@@ -101,10 +101,20 @@ struct ICUDatePart : public ICUDateFunc {
 		return millis / Interval::MSECS_PER_SEC;
 	}
 
-	static int64_t ExtractOffset(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractTimezone(icu::Calendar *calendar, const uint64_t micros) {
 		auto millis = ExtractField(calendar, UCAL_ZONE_OFFSET);
 		millis += ExtractField(calendar, UCAL_DST_OFFSET);
-		return millis * Interval::MICROS_PER_MSEC;
+		return millis / Interval::MSECS_PER_SEC;
+	}
+
+	static int64_t ExtractTimezoneHour(icu::Calendar *calendar, const uint64_t micros) {
+		auto secs = ExtractTimezone(calendar, micros);
+		return secs / Interval::SECS_PER_HOUR;
+	}
+
+	static int64_t ExtractTimezoneMinute(icu::Calendar *calendar, const uint64_t micros) {
+		auto secs = ExtractTimezone(calendar, micros);
+		return (secs % Interval::SECS_PER_HOUR) / Interval::SECS_PER_HOUR;
 	}
 
 	static part_adapter_t PartCodeAdapterFactory(DatePartSpecifier part) {
@@ -147,8 +157,12 @@ struct ICUDatePart : public ICUDateFunc {
 			return ExtractEpoch;
 		case DatePartSpecifier::ERA:
 			return ExtractEra;
-		case DatePartSpecifier::OFFSET:
-			return ExtractOffset;
+		case DatePartSpecifier::TIMEZONE:
+			return ExtractTimezone;
+		case DatePartSpecifier::TIMEZONE_HOUR:
+			return ExtractTimezoneHour;
+		case DatePartSpecifier::TIMEZONE_MINUTE:
+			return ExtractTimezoneMinute;
 		default:
 			throw Exception("Unsupported ICU extract adapter");
 		}

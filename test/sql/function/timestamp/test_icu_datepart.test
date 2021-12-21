@@ -280,7 +280,19 @@ SELECT DATE_PART('era', '0044-03-15 (BC) 12:00:00'::TIMESTAMPTZ);
 0
 
 query I
-SELECT DATE_PART('offset', ts) / (60::BIGINT * 60 * 1000 * 1000) FROM timestamps;
+SELECT DATE_PART('timezone', ts) FROM timestamps;
+----
+-28378
+-25200
+-28800
+-28800
+-28800
+-28800
+-28800
+-28800
+
+query I
+SELECT DATE_PART('timezone_hour', ts) FROM timestamps;
 ----
 -7
 -7
@@ -292,9 +304,31 @@ SELECT DATE_PART('offset', ts) / (60::BIGINT * 60 * 1000 * 1000) FROM timestamps
 -8
 
 query I
-SELECT DATE_PART('offset', '2021-07-31 00:00:00-07'::TIMESTAMPTZ) / (60::BIGINT * 60 * 1000 * 1000);
+SELECT DATE_PART('timezone_minute', ts) FROM timestamps;
+----
+0
+0
+0
+0
+0
+0
+0
+0
+
+query I
+SELECT DATE_PART('timezone', '2021-07-31 00:00:00-07'::TIMESTAMPTZ);
+----
+-25200
+
+query I
+SELECT DATE_PART('timezone_hour', '2021-07-31 00:00:00-07'::TIMESTAMPTZ);
 ----
 -7
+
+query I
+SELECT DATE_PART('timezone_minute', '2021-07-31 00:00:00-07'::TIMESTAMPTZ);
+----
+0
 
 # Aliases
 query II
@@ -355,22 +389,22 @@ ORDER BY 2
 
 # Time parts
 query II
-SELECT DATE_PART(['hour', 'minute', 'microsecond', 'offset'], ts), ts
+SELECT DATE_PART(['hour', 'minute', 'microsecond', 'timezone_hour'], ts), ts
 FROM timestamps
 ORDER BY 2
 ----
-{'hour': 1, 'minute': 40, 'microsecond': 43987654, 'offset': -28378000000}	0044-03-13 (BC) 09:33:41.987654+00
-{'hour': 5, 'minute': 20, 'microsecond': 48123456, 'offset': -25200000000}	1962-07-31 12:20:48.123456+00
-{'hour': 16, 'minute': 0, 'microsecond': 0, 'offset': -28800000000}	2021-01-01 00:00:00+00
-{'hour': 16, 'minute': 0, 'microsecond': 0, 'offset': -28800000000}	2021-02-02 00:00:00+00
-{'hour': 1, 'minute': 30, 'microsecond': 0, 'offset': -28800000000}	2021-11-15 09:30:00+00
-{'hour': 2, 'minute': 30, 'microsecond': 0, 'offset': -28800000000}	2021-11-15 10:30:00+00
-{'hour': 2, 'minute': 15, 'microsecond': 13123456, 'offset': -28800000000}	2021-11-26 10:15:13.123456+00
-{'hour': 14, 'minute': 0, 'microsecond': 0, 'offset': -28800000000}	2021-12-24 22:00:00+00
+{'hour': 1, 'minute': 40, 'microsecond': 43987654, 'timezone_hour': -7}	0044-03-13 (BC) 09:33:41.987654+00
+{'hour': 5, 'minute': 20, 'microsecond': 48123456, 'timezone_hour': -7}	1962-07-31 12:20:48.123456+00
+{'hour': 16, 'minute': 0, 'microsecond': 0, 'timezone_hour': -8}	2021-01-01 00:00:00+00
+{'hour': 16, 'minute': 0, 'microsecond': 0, 'timezone_hour': -8}	2021-02-02 00:00:00+00
+{'hour': 1, 'minute': 30, 'microsecond': 0, 'timezone_hour': -8}	2021-11-15 09:30:00+00
+{'hour': 2, 'minute': 30, 'microsecond': 0, 'timezone_hour': -8}	2021-11-15 10:30:00+00
+{'hour': 2, 'minute': 15, 'microsecond': 13123456, 'timezone_hour': -8}	2021-11-26 10:15:13.123456+00
+{'hour': 14, 'minute': 0, 'microsecond': 0, 'timezone_hour': -8}	2021-12-24 22:00:00+00
 
 # Invalid parts
 statement error
-SELECT DATE_PART(['duck', 'minute', 'microsecond', 'offset'], ts), ts
+SELECT DATE_PART(['duck', 'minute', 'microsecond', 'timezone'], ts), ts
 FROM timestamps
 ORDER BY 2
 
