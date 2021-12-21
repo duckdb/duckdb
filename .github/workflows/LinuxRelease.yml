@@ -456,3 +456,28 @@ jobs:
           python scripts/amalgamation.py --extended
           python scripts/parquet_amalgamation.py
           clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/parquet-amalgamation.cpp src/amalgamation/duckdb.cpp -emit-llvm -S -O0
+
+ cpp20-build-test:
+   name: Build C++ 20
+   runs-on: ubuntu-20.04
+   env:
+     CC: gcc-10
+     CXX: g++-10
+
+   steps:
+     - uses: actions/checkout@v2
+       with:
+         fetch-depth: 0
+
+     - uses: actions/setup-python@v2
+       with:
+         python-version: '3.7'
+
+     - name: Build
+       run: |
+         export TOOLCHAIN=`pwd`/rpi-tools
+         mkdir -p build/release
+         cd build/release
+         cmake -G Ninja -DCMAKE_CXX_STANDARD=20 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
+         cmake --build .
+         file duckdb
