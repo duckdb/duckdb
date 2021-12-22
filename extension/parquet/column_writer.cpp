@@ -120,6 +120,7 @@ void ColumnWriter::CompressPage(BufferedSerializer &temp_writer, size_t &compres
 struct PageInformation {
 	idx_t offset = 0;
 	idx_t row_count = 0;
+	idx_t empty_count = 0;
 	idx_t estimated_page_size = 0;
 };
 
@@ -171,20 +172,37 @@ void ColumnWriter::HandleRepeatLevels(ColumnWriterState &state, ColumnWriterStat
 		// no repeat levels without a parent node
 		return;
 	}
-	for (idx_t i = 0; i < count; i++) {
+	while(state.repetition_levels.size() < parent->repetition_levels.size()) {
 		state.repetition_levels.push_back(parent->repetition_levels[state.repetition_levels.size()]);
 	}
 }
 
 void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, ValidityMask &validity,
                                       idx_t count, uint16_t define_value, uint16_t null_value) {
-	for (idx_t i = 0; i < count; i++) {
-		if (parent && parent->definition_levels[state.definition_levels.size()] != PARQUET_DEFINE_VALID) {
-			state.definition_levels.push_back(parent->definition_levels[state.definition_levels.size()]);
-		} else if (validity.RowIsValid(i)) {
-			state.definition_levels.push_back(define_value);
-		} else {
-			state.definition_levels.push_back(null_value);
+	if (parent) {
+		// parent node: inherit definition level from the parent
+		idx_t vector_index = 0;
+		while(state.definition_levels.size() < parent->definition_levels.size()) {
+			idx_t current_index = state.definition_levels.size();
+			if (parent->definition_levels[current_index] != PARQUET_DEFINE_VALID) {
+				state.definition_levels.push_back(parent->definition_levels[current_index]);
+			} else if (validity.RowIsValid(vector_index)) {
+				state.definition_levels.push_back(define_value);
+			} else {
+				state.definition_levels.push_back(null_value);
+			}
+			if (parent->is_empty.empty() || !parent->is_empty[current_index]) {
+				vector_index++;
+			}
+		}
+	} else {
+		// no parent: set definition levels only from this validity mask
+		for (idx_t i = 0; i < count; i++) {
+			if (validity.RowIsValid(i)) {
+				state.definition_levels.push_back(define_value);
+			} else {
+				state.definition_levels.push_back(null_value);
+			}
 		}
 	}
 }
@@ -193,21 +211,30 @@ void ColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent
 	auto &state = (StandardColumnWriterState &)state_p;
 	auto &col_chunk = state.row_group.columns[state.col_idx];
 
+	idx_t start = 0;
+	idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 	auto &validity = FlatVector::Validity(vector);
 	HandleRepeatLevels(state_p, parent, count, max_repeat);
 	HandleDefineLevels(state_p, parent, validity, count, max_define, max_define - 1);
-	for (idx_t i = 0; i < count; i++) {
+
+	idx_t vector_index = 0;
+	for (idx_t i = start; i < vcount; i++) {
 		auto &page_info = state.page_info.back();
 		page_info.row_count++;
 		col_chunk.meta_data.num_values++;
-		if (validity.RowIsValid(i)) {
-			page_info.estimated_page_size += GetRowSize(vector, i);
+		if (parent && !parent->is_empty.empty() && parent->is_empty[i]) {
+			page_info.empty_count++;
+			continue;
+		}
+		if (validity.RowIsValid(vector_index)) {
+			page_info.estimated_page_size += GetRowSize(vector, vector_index);
 			if (page_info.estimated_page_size >= MAX_UNCOMPRESSED_PAGE_SIZE) {
 				PageInformation new_info;
 				new_info.offset = page_info.offset + page_info.row_count;
 				state.page_info.push_back(new_info);
 			}
 		}
+		vector_index++;
 	}
 }
 
@@ -236,7 +263,7 @@ void ColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		hdr.data_page_header.repetition_level_encoding = Encoding::RLE;
 
 		write_info.temp_writer = make_unique<BufferedSerializer>();
-		write_info.write_count = 0;
+		write_info.write_count = page_info.empty_count;
 		write_info.max_write_count = page_info.row_count;
 
 		write_info.compressed_size = 0;
@@ -254,6 +281,7 @@ void ColumnWriter::WriteLevels(Serializer &temp_writer, const vector<uint16_t> &
 	if (levels.empty() || count == 0) {
 		return;
 	}
+	D_ASSERT(levels.size() == count);
 
 	// write the levels
 	// we always RLE everything (for now)
@@ -605,6 +633,7 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
 	auto &state = (StructColumnWriterState &)state_p;
 
 	auto &validity = FlatVector::Validity(vector);
+	HandleRepeatLevels(state_p, parent, count, max_repeat);
 	HandleDefineLevels(state_p, parent, validity, count, PARQUET_DEFINE_VALID, max_define - 1);
 	auto &child_vectors = StructVector::GetEntries(vector);
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
@@ -699,17 +728,22 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 		} else if (validity.RowIsValid(i)) {
 			// push the repetition levels
 			if (list_data[i].length == 0) {
-				continue;
+				state.definition_levels.push_back(max_define);
+				state.is_empty.push_back(true);
+			} else {
+				state.definition_levels.push_back(PARQUET_DEFINE_VALID);
+				state.is_empty.push_back(false);
 			}
 			state.repetition_levels.push_back(max_repeat);
-			state.definition_levels.push_back(PARQUET_DEFINE_VALID);
 			for (idx_t k = 1; k < list_data[i].length; k++) {
 				state.repetition_levels.push_back(max_repeat + 1);
 				state.definition_levels.push_back(PARQUET_DEFINE_VALID);
+				state.is_empty.push_back(false);
 			}
 		} else {
-			throw InternalException("FIXME: defines");
-			//			state.definition_levels.push_back(max_define - 1);
+			state.definition_levels.push_back(max_define - 1);
+			state.repetition_levels.push_back(max_repeat);
+			state.is_empty.push_back(true);
 		}
 	}
 
@@ -776,7 +810,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		optional_element.__isset.type = false;
 		optional_element.__isset.repetition_type = true;
 		optional_element.__isset.converted_type = true;
-		optional_element.name = "l";
+		optional_element.name = name;
 		schemas.push_back(move(optional_element));
 
 		// then a REPEATED element

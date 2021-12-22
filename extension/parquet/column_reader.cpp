@@ -504,6 +504,10 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 				// value has been defined down the stack, hence its NOT NULL
 				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
 				result_ptr[result_offset].length = 1;
+			} else if (child_defines_ptr[child_idx] == max_define - 1) {
+				// empty list
+				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
+				result_ptr[result_offset].length = 0;
 			} else {
 				// value is NULL somewhere up the stack
 				result_mask.SetInvalid(result_offset);

@@ -21,6 +21,7 @@ public:
 
 	vector<uint16_t> definition_levels;
 	vector<uint16_t> repetition_levels;
+	vector<bool> is_empty;
 };
 
 class ColumnWriter {

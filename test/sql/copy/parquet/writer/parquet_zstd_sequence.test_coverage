@@ -17,3 +17,36 @@ COPY tbl TO '__TEST_DIR__/duckseq.parquet' (FORMAT 'PARQUET', CODEC 'ZSTD');
 query IIIIII nosort querylabel
 select count(*), min(strain), max(strain), min(strlen(sequence)), max(strlen(sequence)), avg(strlen(sequence))
 from '__TEST_DIR__/duckseq.parquet';
+
+statement ok
+DROP TABLE tbl;
+
+# write table as one big list
+statement ok
+CREATE TABLE strains_list(lstrain VARCHAR[], lsequence VARCHAR[]);
+
+statement ok
+INSERT INTO strains_list VALUES ([], []), (NULL, NULL), ([], []);
+
+statement ok
+INSERT INTO strains_list SELECT LIST(strain) AS lstrain, LIST(sequence) AS lsequence FROM '__TEST_DIR__/duckseq.parquet';
+
+statement ok
+INSERT INTO strains_list VALUES ([], []), (NULL, NULL), ([], []);
+
+query I
+SELECT COUNT(*) FROM strains_list
+----
+7
+
+statement ok
+COPY strains_list TO '__TEST_DIR__/duckseq.parquet' (FORMAT 'PARQUET', CODEC 'ZSTD');
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/duckseq.parquet'
+----
+7
+
+query IIIIII nosort querylabel
+select count(*), min(strain), max(strain), min(strlen(sequence)), max(strlen(sequence)), avg(strlen(sequence))
+from (SELECT UNNEST(lstrain) AS strain, UNNEST(lsequence) AS sequence FROM '__TEST_DIR__/duckseq.parquet');
