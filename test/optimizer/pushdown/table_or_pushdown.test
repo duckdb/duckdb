@@ -141,7 +141,6 @@ SELECT * FROM integers WHERE a!=1 OR a!=2 ORDER BY a
 4	4
 5	5
 
-
 #### Testing AND priority
 query II
 EXPLAIN SELECT * FROM integers WHERE a>2 AND (a=3 OR a=5)
@@ -153,7 +152,6 @@ SELECT * FROM integers WHERE a>2 AND (a=3 OR a=5) ORDER BY a
 ----
 3	3
 5	5
-
 
 ######### Complex filters #####################################################
 
@@ -218,7 +216,6 @@ SELECT * FROM integers WHERE a=1 OR (CASE WHEN a%2=0 THEN true ELSE false END)
 2	2
 4	4
 
-
 #### multiple complex OR filters connected with ANDs
 query II
 EXPLAIN SELECT * FROM integers WHERE (a=1 OR a=4) AND (a=1 OR (CASE WHEN a%2=0 THEN true ELSE false END)) AND (concat(a=1, b=1)='truetrue' OR a=2) AND (a::CHAR LIKE '1' OR a=5)
@@ -229,7 +226,6 @@ query II
 SELECT * FROM integers WHERE (a=1 OR a=4) AND (a=1 OR (CASE WHEN a%2=0 THEN true ELSE false END)) AND (concat(a=1, b=1)='truetrue' OR a=2) AND (a::CHAR LIKE '1' OR a=5)
 ----
 1	1
-
 
 #### OR filters with NULL
 statement ok
@@ -337,3 +333,4 @@ query II
 SELECT * FROM integers WHERE a!=1 OR a<3
 ----
 1	1
+
