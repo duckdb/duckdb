@@ -460,24 +460,38 @@ jobs:
  cpp20-build-test:
    name: Build C++ 20
    runs-on: ubuntu-20.04
+   container: ubuntu:16.04
+   needs: linux-release-64
    env:
-     CC: gcc-10
-     CXX: g++-10
+     GEN: ninja
 
    steps:
+     - name: Install
+       run: |
+         apt-get update -y -qq
+         apt-get install -y -qq software-properties-common
+         add-apt-repository ppa:deadsnakes/ppa
+         add-apt-repository ppa:git-core/ppa
+         apt-get update -y -qq
+         apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk python3.7 zip
+
      - uses: actions/checkout@v2
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v2
-       with:
-         python-version: '3.7'
+     - name: Version Check
+       run: |
+         ldd --version ldd
+         python3.7 --version
+         git --version
+
+     - name: Install CMake
+       run: |
+         wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+         chmod +x cmake-3.21.3-linux-x86_64.sh
+         ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
      - name: Build
        run: |
-         export TOOLCHAIN=`pwd`/rpi-tools
          mkdir -p build/release
-         cd build/release
-         cmake -G Ninja -DCMAKE_CXX_STANDARD=20 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
-         cmake --build .
-         file duckdb
+         (cd build/release && cmake -DCMAKE_CXX_STANDARD=20 -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
