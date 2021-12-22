@@ -284,8 +284,8 @@ static void TemplatedMatchRowsType(Vector &rows_left, const SelectionVector &lef
 		ValidityBytes right_row_mask(right_row);
 		auto isnull = !left_row_mask.RowIsValid(left_row_mask.GetValidityEntry(entry_idx), idx_in_entry);
 
-		auto left_value = Load<T>(left_row + col_offset);
 		auto right_value = Load<T>(right_row + col_offset);
+		auto left_value = Load<T>(left_row + col_offset);
 		if (!isnull && OP::template Operation<T>(left_value, right_value)) {
 			match_count++;
 		}

@@ -320,7 +320,7 @@ void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *i
 		if (has_unique_keys && pointers[index] != nullptr) {
 			// store a selection vector for entries and a ptr to the next entry
 			conflict_entries[conflict_count] = pointers[index];
-			pointers_sel.set_index(conflict_count++, index);
+			pointers_sel.set_index(conflict_count++, i);
 		}
 		// replace the hash_value in the current entry and point to a position in the hash_map
 		Store<data_ptr_t>(pointers[index], next_ptr);
@@ -330,8 +330,8 @@ void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *i
 	// Create vectors and do a vectorized check for duplicates'
 	if (conflict_count > 0) {
 		Vector ht_rows(LogicalType::POINTER, *key_locations);
-		Vector conflicts_rows(LogicalType::POINTER, *conflict_entries);
-		auto matches = RowOperations::MatchRows(ht_rows, pointers_sel, layout, conflicts_rows,
+		Vector conflict_rows(LogicalType::POINTER, *conflict_entries);
+		auto matches = RowOperations::MatchRows(ht_rows, pointers_sel, layout, conflict_rows,
 		                                        FlatVector::INCREMENTAL_SELECTION_VECTOR, conflict_count);
 		if (matches > 0) {
 			has_unique_keys = false;
