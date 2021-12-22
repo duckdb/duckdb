@@ -61,23 +61,6 @@ SELECT * FROM integers WHERE a=1 OR a>3 OR a<5 ORDER by a
 4	4
 5	5
 
-
-#### Testing not equal
-query II
-EXPLAIN SELECT * FROM integers WHERE a!=1 OR a>3 OR a<2 ORDER by a
-----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Filters: a!=1 OR a>3 OR a<2.*
-
-query II
-SELECT * FROM integers WHERE a!=1 OR a>3 OR a<2 ORDER by a
-----
-1	1
-2	2
-3	3
-4	4
-5	5
-
-
 ######### Testing String ######################################################
 
 statement ok
@@ -115,6 +98,21 @@ AAAAAAAAAAAAAAA99999
 statement ok
 INSERT INTO strings VALUES ('BBBB'), ('CCCC')
 
+# testing string statistics
+query II
+EXPLAIN SELECT * FROM strings WHERE s!='AAA' OR s!='WWW'
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters: s!=AAA OR s!=WWW.*
+
+query I
+SELECT * FROM strings WHERE s!='AAA' OR s!='WWW' ORDER BY s
+----
+AAAAAAAAAAAAAAA11111
+AAAAAAAAAAAAAAA99999
+BBBB
+CCCC
+
+
 #### Testing not equal
 query II
 EXPLAIN SELECT * FROM strings WHERE s!='BBBB' or s>'BBBB'
@@ -128,6 +126,33 @@ SELECT * FROM strings WHERE s!='BBBB' or s>'BBBB'
 AAAAAAAAAAAAAAA11111
 AAAAAAAAAAAAAAA99999
 CCCC
+
+query II
+EXPLAIN SELECT * FROM integers WHERE a!=1 OR a!=2
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters: a!=1 OR a!=2.*
+
+query II
+SELECT * FROM integers WHERE a!=1 OR a!=2 ORDER BY a
+----
+1	1
+2	2
+3	3
+4	4
+5	5
+
+
+#### Testing AND priority
+query II
+EXPLAIN SELECT * FROM integers WHERE a>2 AND (a=3 OR a=5)
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters: a>2 AND a IS NOT.*NULL.*
+
+query II
+SELECT * FROM integers WHERE a>2 AND (a=3 OR a=5) ORDER BY a
+----
+3	3
+5	5
 
 
 ######### Complex filters #####################################################
@@ -169,17 +194,16 @@ SELECT * FROM integers WHERE concat(a=1, b=1)='truetrue' OR a=2 ORDER by a
 
 #### LIKE operator
 query II
-EXPLAIN SELECT * FROM strings WHERE s>'BBBB' OR s LIKE '%AAAAAAAAAAAAAAA%'
+EXPLAIN SELECT * FROM strings WHERE s>'BBBB' OR s LIKE '%AAAAAAAAAAAAAAA%' ORDER BY s
 ----
 physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
 
 query I
-SELECT * FROM strings WHERE s>'BBBB' OR s LIKE '%AAAAAAAAAAAAAAA%'
+SELECT * FROM strings WHERE s>'BBBB' OR s LIKE '%AAAAAAAAAAAAAAA%' ORDER BY s
 ----
-CCCC
 AAAAAAAAAAAAAAA11111
 AAAAAAAAAAAAAAA99999
-
+CCCC
 
 #### OR filters with CASE statement
 query II
@@ -212,23 +236,23 @@ statement ok
 INSERT INTO integers VALUES (NULL, NULL)
 
 query II
-EXPLAIN SELECT * FROM integers WHERE a=1 OR a is null ORDER BY a
+EXPLAIN SELECT * FROM integers WHERE a=1 OR a IS NULL ORDER BY a
 ----
 physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
 
 query II
-SELECT * FROM integers WHERE a=1 OR a is null ORDER BY a
+SELECT * FROM integers WHERE a=1 OR a IS NULL ORDER BY a
 ----
-NULL	NULL	
-1	1	
+NULL	NULL
+1	1
 
 query II
-EXPLAIN SELECT * FROM integers WHERE a=1 OR a is not null
+EXPLAIN SELECT * FROM integers WHERE a=1 OR a IS NOT NULL
 ----
 physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
 
 query II
-SELECT * FROM integers WHERE a=1 OR a is not null
+SELECT * FROM integers WHERE a=1 OR a IS NOT NULL
 ----
 1	1
 2	2
@@ -236,10 +260,80 @@ SELECT * FROM integers WHERE a=1 OR a is not null
 4	4
 5	5
 
+# notequal and null
+query II
+EXPLAIN SELECT * FROM integers WHERE a!=1 OR a IS NULL ORDER BY a
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
 
+query II
+SELECT * FROM integers WHERE a!=1 OR a IS NULL ORDER BY a
+----
+NULL	NULL
+2	2
+3	3
+4	4
+5	5
 
+# notequal and not null
+query II
+EXPLAIN SELECT * FROM integers WHERE a!=1 OR a IS NOT NULL ORDER BY a
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
 
+query II
+SELECT * FROM integers WHERE a!=1 OR a IS NOT NULL ORDER BY a
+----
+1	1
+2	2
+3	3
+4	4
+5	5
 
+query II
+EXPLAIN SELECT * FROM integers WHERE a!=1 OR a>3 OR a<2 ORDER by a
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters: a!=1 OR a>3 OR a<2.*
 
+query II
+SELECT * FROM integers WHERE a!=1 OR a>3 OR a<2 ORDER by a
+----
+1	1
+2	2
+3	3
+4	4
+5	5
 
+#### numeric statistics
+# notequal and constant > max
+query II
+## The predicate a!=10 is greater than the numeric_statistics::max implying that it is always true within an OR conjuction
+EXPLAIN SELECT * FROM integers WHERE a!=10 OR a>3
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
 
+query II
+SELECT * FROM integers WHERE a!=10 OR a>3
+----
+1	1
+2	2
+3	3
+4	4
+5	5
+
+# notequal and min == max && min == constant
+statement ok
+DROP TABLE integers
+
+statement ok
+CREATE TABLE integers AS SELECT a as A, a as B FROM generate_series(1, 1, 1) tbl(a)
+
+query II
+EXPLAIN SELECT * FROM integers WHERE a!=1 OR a<2
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
+
+query II
+SELECT * FROM integers WHERE a!=1 OR a<3
+----
+1	1

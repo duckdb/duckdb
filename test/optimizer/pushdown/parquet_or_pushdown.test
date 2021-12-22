@@ -1,4 +1,4 @@
-# name: test/optimizer/pushdown/table_or_pushdown.test
+# name: test/optimizer/pushdown/parquet_or_pushdown.test
 # description: Test Table OR Filter Push Down
 # group: [pushdown]
 
