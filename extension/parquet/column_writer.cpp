@@ -146,7 +146,7 @@ class StandardColumnWriterState : public ColumnWriterState {
 public:
 	StandardColumnWriterState(duckdb_parquet::format::RowGroup &row_group, idx_t col_idx)
 	    : row_group(row_group), col_idx(col_idx) {
-		page_info.push_back(PageInformation());
+		page_info.emplace_back();
 	}
 	~StandardColumnWriterState() override = default;
 
