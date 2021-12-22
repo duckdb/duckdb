@@ -14,6 +14,7 @@
 namespace duckdb {
 class BufferedSerializer;
 class ParquetWriter;
+class ColumnWriterPageState;
 
 class ColumnWriterState {
 public:
@@ -41,6 +42,7 @@ public:
 	idx_t max_define;
 
 public:
+	//! Create the column writer for a specific type recursively
 	static unique_ptr<ColumnWriter> CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas,
 	                                                      ParquetWriter &writer, const LogicalType &type,
 	                                                      const string &name, idx_t max_repeat = 0,
@@ -65,8 +67,15 @@ protected:
 	void NextPage(ColumnWriterState &state_p);
 	void FlushPage(ColumnWriterState &state_p);
 
+	//! Retrieves the row size of a vector at the specified location. Only used for scalar types.
 	virtual idx_t GetRowSize(Vector &vector, idx_t index) = 0;
-	virtual void WriteVector(Serializer &temp_writer, Vector &vector, idx_t chunk_start, idx_t chunk_end) = 0;
+	//! Writes a (subset of a) vector to the specified serializer. Only used for scalar types.
+	virtual void WriteVector(Serializer &temp_writer, ColumnWriterPageState *page_state, Vector &vector,
+	                         idx_t chunk_start, idx_t chunk_end) = 0;
+	//! Initialize the writer for a specific page. Only used for scalar types.
+	virtual unique_ptr<ColumnWriterPageState> InitializePageState();
+	//! Flushes the writer for a specific page. Only used for scalar types.
+	virtual void FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state);
 
 	void CompressPage(BufferedSerializer &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
 	                  unique_ptr<data_t[]> &compressed_buf);

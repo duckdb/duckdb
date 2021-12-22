@@ -117,6 +117,12 @@ void ColumnWriter::CompressPage(BufferedSerializer &temp_writer, size_t &compres
 	}
 }
 
+class ColumnWriterPageState {
+public:
+	virtual ~ColumnWriterPageState() {
+	}
+};
+
 struct PageInformation {
 	idx_t offset = 0;
 	idx_t row_count = 0;
@@ -127,6 +133,7 @@ struct PageInformation {
 struct PageWriteInformation {
 	PageHeader page_header;
 	unique_ptr<BufferedSerializer> temp_writer;
+	unique_ptr<ColumnWriterPageState> page_state;
 	idx_t write_page_idx = 0;
 	idx_t write_count = 0;
 	idx_t max_write_count = 0;
@@ -239,6 +246,13 @@ void ColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent
 	}
 }
 
+unique_ptr<ColumnWriterPageState> ColumnWriter::InitializePageState() {
+	return nullptr;
+}
+
+void ColumnWriter::FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state) {
+}
+
 void ColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 	auto &state = (StandardColumnWriterState &)state_p;
 
@@ -266,6 +280,7 @@ void ColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		write_info.temp_writer = make_unique<BufferedSerializer>();
 		write_info.write_count = page_info.empty_count;
 		write_info.max_write_count = page_info.row_count;
+		write_info.page_state = InitializePageState();
 
 		write_info.compressed_size = 0;
 		write_info.compressed_data = nullptr;
@@ -367,6 +382,8 @@ void ColumnWriter::FlushPage(ColumnWriterState &state_p) {
 	auto &temp_writer = *write_info.temp_writer;
 	auto &hdr = write_info.page_header;
 
+	FlushPageState(temp_writer, write_info.page_state.get());
+
 	// now that we have finished writing the data we know the uncompressed size
 	if (temp_writer.blob.size > idx_t(NumericLimits<int32_t>::Maximum())) {
 		throw InternalException("Parquet writer: %d uncompressed page size out of range for type integer",
@@ -394,11 +411,14 @@ void ColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count
 	idx_t offset = 0;
 	while (remaining > 0) {
 		auto &write_info = state.write_info[state.current_page - 1];
+		if (!write_info.temp_writer) {
+			throw InternalException("Writes are not correctly aligned!?");
+		}
 		auto &temp_writer = *write_info.temp_writer;
 		idx_t write_count = MinValue<idx_t>(remaining, write_info.max_write_count - write_info.write_count);
 		D_ASSERT(write_count > 0);
 
-		WriteVector(temp_writer, vector, offset, offset + write_count);
+		WriteVector(temp_writer, write_info.page_state.get(), vector, offset, offset + write_count);
 
 		write_info.write_count += write_count;
 		if (write_info.write_count == write_info.max_write_count) {
@@ -419,11 +439,7 @@ void ColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	column_chunk.meta_data.data_page_offset = writer.writer->GetTotalWritten();
 	// write the individual pages to disk
 	for (auto &write_info : state.write_info) {
-		if (write_info.page_header.uncompressed_page_size == 0) {
-			// write_info.page_header.printTo(std::cout);
-			// std::cout << std::endl;
-			throw InternalException("Writing page without size!?");
-		}
+		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		write_info.page_header.write(writer.protocol.get());
 		writer.writer->WriteData(write_info.compressed_data, write_info.compressed_size);
 	}
@@ -481,7 +497,8 @@ public:
 	~StandardColumnWriter() override = default;
 
 public:
-	void WriteVector(Serializer &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+	void WriteVector(Serializer &temp_writer, ColumnWriterPageState *page_state, Vector &input_column,
+	                 idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
 		TemplatedWritePlain<SRC, TGT, OP>(input_column, chunk_start, chunk_end, mask, temp_writer);
 	}
@@ -494,6 +511,12 @@ public:
 //===--------------------------------------------------------------------===//
 // Boolean Column Writer
 //===--------------------------------------------------------------------===//
+class BooleanWriterPageState : public ColumnWriterPageState {
+public:
+	uint8_t byte = 0;
+	uint8_t byte_pos = 0;
+};
+
 class BooleanColumnWriter : public ColumnWriter {
 public:
 	BooleanColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define)
@@ -502,30 +525,39 @@ public:
 	~BooleanColumnWriter() override = default;
 
 public:
-	void WriteVector(Serializer &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+	void WriteVector(Serializer &temp_writer, ColumnWriterPageState *state_p, Vector &input_column, idx_t chunk_start,
+	                 idx_t chunk_end) override {
+		auto &state = (BooleanWriterPageState &)*state_p;
 		auto &mask = FlatVector::Validity(input_column);
 
-#if STANDARD_VECTOR_SIZE < 64
-		throw InternalException("Writing booleans to Parquet not supported for vsize < 64");
-#endif
 		auto *ptr = FlatVector::GetData<bool>(input_column);
-		uint8_t byte = 0;
-		uint8_t byte_pos = 0;
 		for (idx_t r = chunk_start; r < chunk_end; r++) {
-			if (mask.RowIsValid(r)) { // only encode if non-null
-				byte |= (ptr[r] & 1) << byte_pos;
-				byte_pos++;
+			if (mask.RowIsValid(r)) {
+				// only encode if non-null
+				if (ptr[r]) {
+					state.byte |= 1 << state.byte_pos;
+				}
+				state.byte_pos++;
 
-				if (byte_pos == 8) {
-					temp_writer.Write<uint8_t>(byte);
-					byte = 0;
-					byte_pos = 0;
+				if (state.byte_pos == 8) {
+					temp_writer.Write<uint8_t>(state.byte);
+					state.byte = 0;
+					state.byte_pos = 0;
 				}
 			}
 		}
-		// flush last byte if req
-		if (byte_pos > 0) {
-			temp_writer.Write<uint8_t>(byte);
+	}
+
+	unique_ptr<ColumnWriterPageState> InitializePageState() override {
+		return make_unique<BooleanWriterPageState>();
+	}
+
+	void FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state_p) override {
+		auto &state = (BooleanWriterPageState &)*state_p;
+		if (state.byte_pos > 0) {
+			temp_writer.Write<uint8_t>(state.byte);
+			state.byte = 0;
+			state.byte_pos = 0;
 		}
 	}
 
@@ -545,7 +577,8 @@ public:
 	~DecimalColumnWriter() override = default;
 
 public:
-	void WriteVector(Serializer &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+	void WriteVector(Serializer &temp_writer, ColumnWriterPageState *page_state, Vector &input_column,
+	                 idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
 
 		// FIXME: fixed length byte array...
@@ -570,7 +603,8 @@ public:
 	~StringColumnWriter() override = default;
 
 public:
-	void WriteVector(Serializer &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+	void WriteVector(Serializer &temp_writer, ColumnWriterPageState *page_state, Vector &input_column,
+	                 idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
 
 		auto *ptr = FlatVector::GetData<string_t>(input_column);
@@ -602,7 +636,8 @@ public:
 	vector<unique_ptr<ColumnWriter>> child_writers;
 
 public:
-	void WriteVector(Serializer &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+	void WriteVector(Serializer &temp_writer, ColumnWriterPageState *page_state, Vector &input_column,
+	                 idx_t chunk_start, idx_t chunk_end) override {
 		throw InternalException("Cannot write vector of type struct");
 	}
 
@@ -697,7 +732,8 @@ public:
 	unique_ptr<ColumnWriter> child_writer;
 
 public:
-	void WriteVector(Serializer &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+	void WriteVector(Serializer &temp_writer, ColumnWriterPageState *page_state, Vector &input_column,
+	                 idx_t chunk_start, idx_t chunk_end) override {
 		throw InternalException("Cannot write vector of type list");
 	}
 

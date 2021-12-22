@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/writer/parquet_zstd_sequence.test_coverage
+# name: test/sql/copy/parquet/writer/parquet_zstd_sequence.test_slow
 # description: Test writing of large blobs into parquet files
 # group: [writer]
 
