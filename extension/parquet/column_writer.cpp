@@ -540,7 +540,7 @@ public:
 		auto &mask = FlatVector::Validity(input_column);
 
 		// FIXME: fixed length byte array...
-		Vector double_vec(LogicalType::DOUBLE);
+		Vector double_vec(LogicalType::DOUBLE, true, false, chunk_end);
 		VectorOperations::Cast(input_column, double_vec, chunk_end);
 		TemplatedWritePlain<double, double>(double_vec, chunk_start, chunk_end, mask, temp_writer);
 	}
