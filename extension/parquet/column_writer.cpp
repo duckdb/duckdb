@@ -172,7 +172,7 @@ void ColumnWriter::HandleRepeatLevels(ColumnWriterState &state, ColumnWriterStat
 		// no repeat levels without a parent node
 		return;
 	}
-	while(state.repetition_levels.size() < parent->repetition_levels.size()) {
+	while (state.repetition_levels.size() < parent->repetition_levels.size()) {
 		state.repetition_levels.push_back(parent->repetition_levels[state.repetition_levels.size()]);
 	}
 }
@@ -182,7 +182,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 	if (parent) {
 		// parent node: inherit definition level from the parent
 		idx_t vector_index = 0;
-		while(state.definition_levels.size() < parent->definition_levels.size()) {
+		while (state.definition_levels.size() < parent->definition_levels.size()) {
 			idx_t current_index = state.definition_levels.size();
 			if (parent->definition_levels[current_index] != PARQUET_DEFINE_VALID) {
 				state.definition_levels.push_back(parent->definition_levels[current_index]);
