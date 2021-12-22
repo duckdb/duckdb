@@ -42,7 +42,7 @@ PRAGMA tpch(${i})
 
 endloop
 
-loop i 15 23
+loop i 16 23
 
 query I
 PRAGMA tpch(${i})
