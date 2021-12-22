@@ -14,10 +14,10 @@ CREATE TABLE list AS SELECT * FROM (VALUES
 ) tbl(i);
 
 statement ok
-COPY list TO 'test_list.parquet' (FORMAT 'parquet');
+COPY list TO '__TEST_DIR__/test_list.parquet' (FORMAT 'parquet');
 
 query I
-SELECT i FROM parquet_scan('test_list.parquet');
+SELECT i FROM parquet_scan('__TEST_DIR__/test_list.parquet');
 ----
 [1, 2, 3]
 [4, 5]
@@ -40,10 +40,10 @@ CREATE TABLE null_empty_list AS SELECT * FROM (VALUES
 ) tbl(i);
 
 statement ok
-COPY null_empty_list TO 'test_list.parquet' (FORMAT 'parquet');
+COPY null_empty_list TO '__TEST_DIR__/test_list.parquet' (FORMAT 'parquet');
 
 query I
-SELECT * FROM parquet_scan('test_list.parquet');
+SELECT * FROM parquet_scan('__TEST_DIR__/test_list.parquet');
 ----
 [1, 2, 3]
 [4, 5]
