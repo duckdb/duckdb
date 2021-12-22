@@ -7,7 +7,7 @@ require parquet
 require 64bit
 
 statement ok
-COPY (SELECT * FROM read_csv_auto('data/csv/sequences.csv.gz', delim=',', header=True)) TO '__TEST_DIR__/duckseq.parquet' (FORMAT 'PARQUET', CODEC 'ZSTD', ROW_GROUP_SIZE 25000);
+COPY (SELECT * FROM read_csv_auto('data/csv/sequences.csv.gz', delim=',', header=True) LIMIT 25000) TO '__TEST_DIR__/duckseq.parquet' (FORMAT 'PARQUET', CODEC 'ZSTD', ROW_GROUP_SIZE 25000);
 
 query IIIIII
 select count(*), min(strain), max(strain), min(strlen(sequence)), max(strlen(sequence)), avg(strlen(sequence))
