@@ -213,6 +213,7 @@ void ColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent
 
 	idx_t start = 0;
 	idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
+	idx_t parent_index = state.definition_levels.size();
 	auto &validity = FlatVector::Validity(vector);
 	HandleRepeatLevels(state_p, parent, count, max_repeat);
 	HandleDefineLevels(state_p, parent, validity, count, max_define, max_define - 1);
@@ -222,7 +223,7 @@ void ColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent
 		auto &page_info = state.page_info.back();
 		page_info.row_count++;
 		col_chunk.meta_data.num_values++;
-		if (parent && !parent->is_empty.empty() && parent->is_empty[i]) {
+		if (parent && !parent->is_empty.empty() && parent->is_empty[parent_index + i]) {
 			page_info.empty_count++;
 			continue;
 		}
@@ -338,6 +339,7 @@ void ColumnWriter::NextPage(ColumnWriterState &state_p) {
 		FlushPage(state_p);
 	}
 	if (state.current_page >= state.write_info.size()) {
+		state.current_page = state.write_info.size() + 1;
 		return;
 	}
 	auto &page_info = state.page_info[state.current_page];
@@ -356,6 +358,9 @@ void ColumnWriter::NextPage(ColumnWriterState &state_p) {
 void ColumnWriter::FlushPage(ColumnWriterState &state_p) {
 	auto &state = (StandardColumnWriterState &)state_p;
 	D_ASSERT(state.current_page > 0);
+	if (state.current_page > state.write_info.size()) {
+		return;
+	}
 
 	// compress the page info
 	auto &write_info = state.write_info[state.current_page - 1];
@@ -372,6 +377,8 @@ void ColumnWriter::FlushPage(ColumnWriterState &state_p) {
 	// compress the data
 	CompressPage(temp_writer, write_info.compressed_size, write_info.compressed_data, write_info.compressed_buf);
 	hdr.compressed_page_size = write_info.compressed_size;
+	D_ASSERT(hdr.uncompressed_page_size > 0);
+	D_ASSERT(hdr.compressed_page_size > 0);
 
 	if (write_info.compressed_buf) {
 		// if the data has been compressed, we no longer need the compressed data
@@ -406,6 +413,8 @@ void ColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = (StandardColumnWriterState &)state_p;
 	auto &column_chunk = state.row_group.columns[state.col_idx];
 
+	// flush the last page (if any remains)
+	FlushPage(state);
 	// record the start position of the pages for this column
 	column_chunk.meta_data.data_page_offset = writer.writer->GetTotalWritten();
 	// write the individual pages to disk
