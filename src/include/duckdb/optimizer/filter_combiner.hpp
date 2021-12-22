@@ -17,6 +17,7 @@
 
 #include "duckdb/storage/data_table.hpp"
 #include <functional>
+#include <map>
 
 namespace duckdb {
 
@@ -63,10 +64,6 @@ private:
 	bool UpdateFilterByColumn(BoundColumnRefExpression *column_ref, BoundComparisonExpression *comparison_expr);
 	void GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids);
 
-	void SetCurrentConjunction(BoundConjunctionExpression *conjunction);
-	void SetEarlyStopPushdown(bool value);
-	bool VerifyEarlyStopPushdown();
-
 	template <typename CONJUNCTION_TYPE>
 	void GenerateConjunctionFilter(BoundConjunctionExpression *conjunction, ConjunctionFilter *last_conj_filter) {
 		auto new_filter = NextConjunctionFilter<CONJUNCTION_TYPE>(conjunction);
@@ -100,37 +97,23 @@ private:
 
 	//! Structures used for OR Filters
 
-	// Structures to map a column reference to conjunction expressions
-	struct ColConjunctionToPush {
-		BoundColumnRefExpression *column_ref;
+	struct ConjunctionsToPush {
+		BoundConjunctionExpression *root_or;
 
 		// only preserve AND if there is a single column in the expression
 		bool preserve_and = true;
-
-		// an AND filter was found and uses this column, we should stop pushdown from this point
-		bool and_conj_found = false;
 
 		// conjunction chain for this column
 		vector<unique_ptr<BoundConjunctionExpression>> conjunctions;
 	};
 
-	struct OrToPush {
-		BoundConjunctionExpression *root_or;
+	expression_map_t<vector<unique_ptr<ConjunctionsToPush>>> map_col_conjunctions;
+	vector<BoundColumnRefExpression *> vec_colref_insertion_order;
 
-		BoundConjunctionExpression *cur_conjunction;
+	BoundConjunctionExpression *cur_root_or;
+	BoundConjunctionExpression *cur_conjunction;
 
-		// flag to indicate if pushdown can conitnue, it will continue in the case:
-		// 1) Only if there are single comparisons (against scalar), it will stop in case of bound functions.
-		// 2) Only a single column in the root OR, it will stop in case of multiple columns.
-		bool stop_pushdown = false;
-
-		unique_ptr<ColConjunctionToPush> col_conjunction = nullptr;
-	};
-
-	unique_ptr<OrToPush> cur_or_to_push;
-	vector<unique_ptr<OrToPush>> ors_to_pushdown;
-	// map used as index to find column_refs inserted into OR filters to be pushed
-	expression_map_t<BoundColumnRefExpression *> map_colref_in_ors;
+	BoundColumnRefExpression *cur_colref_to_push;
 };
 
 } // namespace duckdb

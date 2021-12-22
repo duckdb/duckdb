@@ -50,7 +50,7 @@ ConjunctionAndFilter::ConjunctionAndFilter() : ConjunctionFilter(TableFilterType
 }
 
 FilterPropagateResult ConjunctionAndFilter::CheckStatistics(BaseStatistics &stats) {
-	// the OR filter is true if ALL of the children is true
+	// the AND filter is true if ALL of the children is true
 	D_ASSERT(!child_filters.empty());
 	auto result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	for (auto &filter : child_filters) {
