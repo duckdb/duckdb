@@ -26,11 +26,9 @@ public:
 };
 
 class ColumnWriter {
-	//! We limit uncompressed pages to 1B bytes
-	//! This is because Parquet limits pages to 2^31 bytes as they use an int32 to represent page size
-	//! Since compressed page size can theoretically be larger than uncompressed page size
-	//! We conservatively choose to limit it to around half of this
-	static constexpr const idx_t MAX_UNCOMPRESSED_PAGE_SIZE = 1000000000;
+	//! We limit the uncompressed page size to 100MB
+	// The max size in Parquet is 2GB, but we choose a more conservative limit
+	static constexpr const idx_t MAX_UNCOMPRESSED_PAGE_SIZE = 100000000;
 
 public:
 	ColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define);

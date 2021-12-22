@@ -566,7 +566,7 @@ StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p
       child_readers(move(child_readers_p)) {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
 	D_ASSERT(!StructType::GetChildTypes(type).empty());
-};
+}
 
 ColumnReader *StructColumnReader::GetChildReader(idx_t child_idx) {
 	return child_readers[child_idx].get();
