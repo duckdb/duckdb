@@ -9,11 +9,10 @@ load __TEST_DIR__/test_bitpacking.db
 statement ok
 PRAGMA force_compression='dictionary'
 
-# Uncompressed size: 10 x 10 x sizeof(char) + 10 x sizeof(int32_t)
-# Compress value size: 10 x sizeof(char) + 10 x sizeof(int32_t)
-# Ratio: 4
+# Assuming 10 chars at 1 byte, with a 4byte offset and a 2byte length per string uncompressed:
+# Ratio absolute max at 3 bits per value (ignoring dict size) = (16/(3/8)) = 42.6666666667
 statement ok
-CREATE TABLE test_dictionary AS SELECT concat('BEEPBOOP-', (i%10)::VARCHAR) AS i FROM range(0, 1250000) tbl(i);
+CREATE TABLE test_dictionary AS SELECT concat('BEEPBOOP-', (i%3)::VARCHAR) AS i FROM range(0, 1250000) tbl(i);
 
 statement ok
 checkpoint
@@ -22,7 +21,7 @@ statement ok
 PRAGMA force_compression='uncompressed'
 
 statement ok
-CREATE TABLE test_uncompressed AS SELECT concat('BEEPBOOP-', (i%10)::VARCHAR) AS i FROM range(0, 1250000) tbl(i);
+CREATE TABLE test_uncompressed AS SELECT concat('BEEPBOOP-', (i%3)::VARCHAR) AS i FROM range(0, 1250000) tbl(i);
 
 statement ok
 checkpoint
@@ -30,7 +29,7 @@ checkpoint
 # This query keeps a pretty wide margin in compression ratio un purpose to account for possible changes that
 # influence compression ratio.
 query II
-select (uncompressed::FLOAT / dictionary::FLOAT) > 3, (uncompressed::FLOAT / dictionary::FLOAT) < 6  FROM (
+select (uncompressed::FLOAT / dictionary::FLOAT) > 35, (uncompressed::FLOAT / dictionary::FLOAT) < 43  FROM (
     select
         (select count(distinct block_id) from pragma_storage_info('test_dictionary') where segment_type in('VARCHAR')) as dictionary,
         (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type in('VARCHAR')) as uncompressed

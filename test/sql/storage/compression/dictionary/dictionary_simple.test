@@ -13,18 +13,14 @@ statement ok
 CREATE TABLE test (a VARCHAR);
 
 statement ok
-INSERT INTO test SELECT (i%5)::VARCHAR FROM range(0,32) tbl(i);
+INSERT INTO test SELECT (i%5)::VARCHAR FROM range(0,1025) tbl(i);
 
 statement ok
 checkpoint
 
 query I
-select a from test limit 5;
+select avg(a::INT) from test;
 ----
-0
-1
-2
-3
-4
+2.0
 
 
