@@ -13,7 +13,7 @@ query IIIIII
 select count(*), min(strain), max(strain), min(strlen(sequence)), max(strlen(sequence)), avg(strlen(sequence))
 from '__TEST_DIR__/duckseq.parquet';
 ----
-100000	ARG/Cordoba-1006-155/2020	tiger/NY/040420/2020	17340	30643	29821.264410
+25000	AUS/NT01/2020	canine/HKG/20-03695/2020	17340	30018	29855.647080
 
 statement ok
 COPY
