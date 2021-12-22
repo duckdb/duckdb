@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/writer/parquet_write_tpch.test_slow
+# name: test/sql/copy/parquet/writer/parquet_write_tpch_nested.test_slow
 # description: Parquet TPC-H tests
 # group: [writer]
 
