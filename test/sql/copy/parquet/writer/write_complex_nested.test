@@ -70,3 +70,43 @@ NULL
 [{'a': NULL, 'b': {'y': NULL, 'z': 101}}, {'a': {'x': 34}, 'b': {'y': 43, 'z': NULL}}]
 [{'a': NULL, 'b': NULL}]
 
+# list of lists
+# no empty lists or nulls
+statement ok
+CREATE TABLE list_of_lists_simple AS SELECT * FROM (VALUES
+	([[1, 2, 3], [4, 5]]),
+	([[6, 7]]),
+	([[8, 9, 10], [11, 12]])
+) tbl(i);
+
+statement ok
+COPY list_of_lists_simple TO '__TEST_DIR__/complex_list.parquet' (FORMAT 'parquet');
+
+query I
+SELECT i FROM parquet_scan('__TEST_DIR__/complex_list.parquet');
+----
+[[1, 2, 3], [4, 5]]
+[[6, 7]]
+[[8, 9, 10], [11, 12]]
+
+# list of lists with nulls and empty lists
+statement ok
+CREATE TABLE list_of_lists AS SELECT * FROM (VALUES
+	([[1, 2, 3], [4, 5], [], [6, 7]]),
+	([[8, NULL, 10], NULL, []]),
+	([]),
+	(NULL),
+	([[11, 12, 13, 14], [], NULL, [], [], [15], [NULL, NULL, NULL]])
+) tbl(i);
+
+statement ok
+COPY list_of_lists TO 'complex_list.parquet' (FORMAT 'parquet');
+
+query I
+SELECT i FROM parquet_scan('complex_list.parquet');
+----
+[[1, 2, 3], [4, 5], [], [6, 7]]
+[[8, NULL, 10], NULL, []]
+[]
+NULL
+[[11, 12, 13, 14], [], NULL, [], [], [15], [NULL, NULL, NULL]]

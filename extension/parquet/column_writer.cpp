@@ -411,8 +411,8 @@ void ColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	// write the individual pages to disk
 	for (auto &write_info : state.write_info) {
 		if (write_info.page_header.uncompressed_page_size == 0) {
-			//write_info.page_header.printTo(std::cout);
-			//std::cout << std::endl;
+			// write_info.page_header.printTo(std::cout);
+			// std::cout << std::endl;
 			throw InternalException("Writing page without size!?");
 		}
 		write_info.page_header.write(writer.protocol.get());
@@ -715,7 +715,7 @@ public:
 	duckdb_parquet::format::RowGroup &row_group;
 	idx_t col_idx;
 	unique_ptr<ColumnWriterState> child_state;
-	idx_t list_index = 0;
+	idx_t parent_index = 0;
 };
 
 unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
@@ -733,33 +733,46 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 	auto &validity = FlatVector::Validity(vector);
 
 	// write definition levels and repeats
-	for (idx_t i = 0; i < count; i++) {
-		if (parent && parent->definition_levels[state.list_index] != PARQUET_DEFINE_VALID) {
-			state.definition_levels.push_back(parent->definition_levels[state.list_index]);
-			state.repetition_levels.push_back(max_repeat);
+	idx_t start = 0;
+	idx_t vcount = parent ? parent->definition_levels.size() - state.parent_index : count;
+	idx_t vector_index = 0;
+	for (idx_t i = start; i < vcount; i++) {
+		idx_t parent_index = state.parent_index + i;
+		if (parent && !parent->is_empty.empty() && parent->is_empty[parent_index]) {
+			state.definition_levels.push_back(parent->definition_levels[parent_index]);
+			state.repetition_levels.push_back(parent->repetition_levels[parent_index]);
 			state.is_empty.push_back(true);
-		} else if (validity.RowIsValid(i)) {
+			continue;
+		}
+		auto first_repeat_level =
+		    parent && !parent->repetition_levels.empty() ? parent->repetition_levels[parent_index] : max_repeat;
+		if (parent && parent->definition_levels[parent_index] != PARQUET_DEFINE_VALID) {
+			state.definition_levels.push_back(parent->definition_levels[parent_index]);
+			state.repetition_levels.push_back(first_repeat_level);
+			state.is_empty.push_back(true);
+		} else if (validity.RowIsValid(vector_index)) {
 			// push the repetition levels
-			if (list_data[i].length == 0) {
+			if (list_data[vector_index].length == 0) {
 				state.definition_levels.push_back(max_define);
 				state.is_empty.push_back(true);
 			} else {
 				state.definition_levels.push_back(PARQUET_DEFINE_VALID);
 				state.is_empty.push_back(false);
 			}
-			state.repetition_levels.push_back(max_repeat);
-			for (idx_t k = 1; k < list_data[i].length; k++) {
+			state.repetition_levels.push_back(first_repeat_level);
+			for (idx_t k = 1; k < list_data[vector_index].length; k++) {
 				state.repetition_levels.push_back(max_repeat + 1);
 				state.definition_levels.push_back(PARQUET_DEFINE_VALID);
 				state.is_empty.push_back(false);
 			}
 		} else {
 			state.definition_levels.push_back(max_define - 1);
-			state.repetition_levels.push_back(max_repeat);
+			state.repetition_levels.push_back(first_repeat_level);
 			state.is_empty.push_back(true);
 		}
-		state.list_index++;
+		vector_index++;
 	}
+	state.parent_index += vcount;
 
 	auto &list_child = ListVector::GetEntry(vector);
 	auto list_count = ListVector::GetListSize(vector);
