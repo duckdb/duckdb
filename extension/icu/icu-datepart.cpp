@@ -184,6 +184,11 @@ struct ICUDatePart : public ICUDateFunc {
 
 		adapter_t adapter;
 
+		bool Equals(FunctionData &other_p) override {
+			const auto &other = (BindAdapterData &)other_p;
+			return BindData::Equals(other_p) && adapter == other.adapter;
+		}
+
 		unique_ptr<FunctionData> Copy() override {
 			return make_unique<BindAdapterData>(*this);
 		}

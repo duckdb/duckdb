@@ -1,5 +1,4 @@
 # adapted from sort-of reference at https://github.com/r-dbi/odbc/blob/main/R/Viewer.R
-
 rs_list_object_types <- function(connection) {
   # slurp all the objects in the database so we can determine the correct
   # object hierarchy
@@ -52,7 +51,6 @@ rs_list_objects <- function(connection, catalog = NULL, schema = NULL, name = NU
     ORDER BY table_schema, table_type, table_name',
     list(schema, schema, name, name, type))
 }
-
 
 rs_list_columns <- function(connection, table, catalog = NULL, schema = NULL, ...) {
 

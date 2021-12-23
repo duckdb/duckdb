@@ -1,0 +1,40 @@
+# name: test/sql/copy/parquet/writer/parquet_zstd_sequence.test_slow
+# description: Test writing of large blobs into parquet files
+# group: [writer]
+
+require parquet
+
+require 64bit
+
+statement ok
+COPY (SELECT * FROM read_csv_auto('data/csv/sequences.csv.gz', delim=',', header=True) LIMIT 25000) TO '__TEST_DIR__/duckseq.parquet' (FORMAT 'PARQUET', CODEC 'ZSTD', ROW_GROUP_SIZE 25000);
+
+query IIIIII
+select count(*), min(strain), max(strain), min(strlen(sequence)), max(strlen(sequence)), avg(strlen(sequence))
+from '__TEST_DIR__/duckseq.parquet';
+----
+25000	AUS/NT01/2020	canine/HKG/20-03695/2020	17340	30018	29855.647080
+
+statement ok
+COPY
+(
+	SELECT lstrain::VARCHAR[] lstrain, lsequence::VARCHAR[] lsequence FROM (VALUES ([], []), (NULL, NULL), ([], [])) tbl(lstrain, lsequence)
+	UNION ALL
+	SELECT * FROM (
+		SELECT LIST(strain) AS lstrain, LIST(sequence) AS lsequence FROM '__TEST_DIR__/duckseq.parquet' LIMIT 10000
+	)
+	UNION ALL
+	SELECT * FROM (VALUES ([], []), (NULL, NULL), ([], []))
+)
+TO '__TEST_DIR__/duckseq2.parquet' (FORMAT 'PARQUET', CODEC 'ZSTD');
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/duckseq2.parquet'
+----
+7
+
+query IIIIII nosort querylabel
+select count(*), min(strain), max(strain), min(strlen(sequence)), max(strlen(sequence)), avg(strlen(sequence))
+from (SELECT UNNEST(lstrain) AS strain, UNNEST(lsequence) AS sequence FROM '__TEST_DIR__/duckseq2.parquet');
+----
+100000	ARG/Cordoba-1006-155/2020	tiger/NY/040420/2020	17340	30643	29821.264410
