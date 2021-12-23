@@ -459,9 +459,7 @@ jobs:
 
  cpp20-build-test:
    name: Build C++ 20
-   runs-on: ubuntu-20.04
-   container: ubuntu:16.04
-   needs: linux-release-64
+   runs-on: ubuntu-latest
    env:
      GEN: ninja
 
@@ -484,6 +482,7 @@ jobs:
          ldd --version ldd
          python3.7 --version
          git --version
+         gcc --version
 
      - name: Install CMake
        run: |
