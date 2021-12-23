@@ -118,7 +118,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 	static int64_t ExtractTimezoneMinute(icu::Calendar *calendar, const uint64_t micros) {
 		auto secs = ExtractTimezone(calendar, micros);
-		return (secs % Interval::SECS_PER_HOUR) / Interval::SECS_PER_HOUR;
+		return (secs % Interval::SECS_PER_HOUR) / Interval::SECS_PER_MINUTE;
 	}
 
 	static part_adapter_t PartCodeAdapterFactory(DatePartSpecifier part) {

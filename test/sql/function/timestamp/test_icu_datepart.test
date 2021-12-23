@@ -306,7 +306,7 @@ SELECT DATE_PART('timezone_hour', ts) FROM timestamps;
 query I
 SELECT DATE_PART('timezone_minute', ts) FROM timestamps;
 ----
-0
+-52
 0
 0
 0
@@ -466,3 +466,24 @@ SELECT ts, LAST_DAY(ts), LAST_DAY(ts::TIMESTAMP) FROM timestamps;
 2021-11-15 10:30:00+00	2021-11-30	2021-11-30
 2021-11-15 09:30:00+00	2021-11-30	2021-11-30
 2021-12-24 22:00:00+00	2021-12-31	2021-12-31
+
+#
+# Fractional Time Zones
+#
+
+statement ok
+SET TimeZone='Asia/Kathmandu';
+
+query I
+SELECT DATE_PART(['timezone', 'timezone_hour', 'timezone_minute'], '2021-12-22'::TIMESTAMPTZ);
+----
+{'timezone': 20700, 'timezone_hour': 5, 'timezone_minute': 45}
+
+statement ok
+SET TimeZone='Canada/Newfoundland';
+
+query I
+SELECT DATE_PART(['timezone', 'timezone_hour', 'timezone_minute'], '2021-12-22'::TIMESTAMPTZ);
+----
+{'timezone': -12600, 'timezone_hour': -3, 'timezone_minute': -30}
+
