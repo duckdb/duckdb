@@ -297,7 +297,6 @@ void ColumnWriter::WriteLevels(Serializer &temp_writer, const vector<uint16_t> &
 	if (levels.empty() || count == 0) {
 		return;
 	}
-	D_ASSERT(levels.size() == count);
 
 	// write the levels
 	// we always RLE everything (for now)
