@@ -1,4 +1,4 @@
-# name: benchmark/micro/date/extract_struct.benchmark
+# name: benchmark/micro/date/extract_multiple.benchmark
 # description: EXTRACT(year from date)
 # group: [date]
 

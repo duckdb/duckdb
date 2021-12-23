@@ -296,6 +296,17 @@ SELECT DATE_PART('offset', '2021-07-31 00:00:00-07'::TIMESTAMPTZ) / (60::BIGINT 
 ----
 -7
 
+# Multiple extractions
+query IIIII
+SELECT MAX(EXTRACT(YEAR FROM ts))
+	, MAX(EXTRACT(MONTH FROM ts))
+	, MAX(EXTRACT(DAY FROM ts))
+	, MAX(EXTRACT(DECADE FROM ts))
+	, MAX(EXTRACT(CENTURY FROM ts))
+FROM timestamps
+----
+2021	12	31	202	21
+
 # Aliases
 query II
 SELECT dayofmonth(ts), dayofmonth(ts::TIMESTAMP) FROM timestamps;

@@ -1,0 +1,18 @@
+# name: benchmark/micro/date/extract_struct_icu.benchmark
+# description: EXTRACT(year from date)
+# group: [date]
+
+name Extract ICU Date Struct
+group date
+require icu
+
+load
+SET TimeZone='America/Los_Angeles';
+CREATE TABLE dates AS SELECT ('1992-01-01'::DATE + INTERVAL (i % 10000) days)::TIMESTAMPTZ AS d
+FROM range(0, 10000000) tbl(i);
+
+run
+SELECT MIN(DATE_PART(['year', 'month', 'day', 'decade', 'century'], d)['year']) FROM dates
+
+result I
+1991

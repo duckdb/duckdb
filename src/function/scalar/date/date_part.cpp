@@ -486,7 +486,6 @@ struct DatePart {
 				part_values[int(DatePartSpecifier::ERA)] = yyyy > 0 ? 1 : 0;
 			}
 
-
 			// Week calculations
 			int32_t isodow = 0;
 			int32_t ww = 0;
