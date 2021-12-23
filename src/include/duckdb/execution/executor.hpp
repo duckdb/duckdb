@@ -21,6 +21,7 @@ class DataChunk;
 class PhysicalOperator;
 class PipelineExecutor;
 class OperatorState;
+class QueryProfiler;
 class ThreadContext;
 class Task;
 
@@ -120,6 +121,8 @@ private:
 	vector<pair<ExceptionType, string>> exceptions;
 	//! List of events
 	vector<shared_ptr<Event>> events;
+	//! The query profiler
+	shared_ptr<QueryProfiler> profiler;
 
 	//! The amount of completed pipelines of the query
 	atomic<idx_t> completed_pipelines;

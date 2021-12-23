@@ -22,6 +22,11 @@ ICUDateFunc::BindData::BindData(ClientContext &context) {
 	}
 }
 
+bool ICUDateFunc::BindData::Equals(FunctionData &other_p) {
+	auto &other = (BindData &)other_p;
+	return FunctionData::Equals(other_p) && *calendar == *other.calendar;
+}
+
 unique_ptr<FunctionData> ICUDateFunc::BindData::Copy() {
 	return make_unique<BindData>(*this);
 }

@@ -1,4 +1,5 @@
 #include "duckdb_node.hpp"
+#include "parquet-amalgamation.hpp"
 
 namespace node_duckdb {
 
@@ -28,6 +29,8 @@ struct OpenTask : public Task {
 	void DoWork() override {
 		try {
 			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename);
+			duckdb::ParquetExtension extension;
+			extension.Load(*Get<Database>().database);
 			success = true;
 
 		} catch (std::exception &ex) {

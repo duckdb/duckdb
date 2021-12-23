@@ -144,8 +144,6 @@ public:
 private:
 	unique_ptr<TreeNode> CreateTree(PhysicalOperator *root, idx_t depth = 0);
 	void Render(const TreeNode &node, std::ostream &str) const;
-	//! The lock used for flushing information from a thread into the global query profiler
-	mutex flush_lock;
 
 public:
 	DUCKDB_API bool IsEnabled() const;
@@ -186,6 +184,8 @@ private:
 
 	//! Whether or not the query profiler is running
 	bool running;
+	//! The lock used for flushing information from a thread into the global query profiler
+	mutex flush_lock;
 
 	//! Whether or not the query requires profiling
 	bool query_requires_profiling;
@@ -198,7 +198,7 @@ private:
 	Profiler main_query;
 	//! A map of a Physical Operator pointer to a tree node
 	TreeMap tree_map;
-
+	//! Whether or not we are running as part of a explain_analyze query
 	bool is_explain_analyze;
 
 public:
@@ -228,12 +228,12 @@ private:
 class QueryProfilerHistory {
 private:
 	//! Previous Query profilers
-	deque<pair<transaction_t, unique_ptr<QueryProfiler>>> prev_profilers;
+	deque<pair<transaction_t, shared_ptr<QueryProfiler>>> prev_profilers;
 	//! Previous Query profilers size
 	uint64_t prev_profilers_size = 20;
 
 public:
-	deque<pair<transaction_t, unique_ptr<QueryProfiler>>> &GetPrevProfilers() {
+	deque<pair<transaction_t, shared_ptr<QueryProfiler>>> &GetPrevProfilers() {
 		return prev_profilers;
 	}
 	QueryProfilerHistory() {
