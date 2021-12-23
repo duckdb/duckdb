@@ -107,6 +107,7 @@ void QueryProfiler::StartExplainAnalyze() {
 }
 
 void QueryProfiler::EndQuery() {
+	lock_guard<mutex> guard(flush_lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -265,10 +266,10 @@ void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
+	lock_guard<mutex> guard(flush_lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
-	lock_guard<mutex> guard(flush_lock);
 	for (auto &node : profiler.timings) {
 		auto entry = tree_map.find(node.first);
 		D_ASSERT(entry != tree_map.end());

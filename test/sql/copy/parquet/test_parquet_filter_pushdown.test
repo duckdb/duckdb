@@ -3,7 +3,6 @@
 # group: [parquet]
 
 require parquet
-require vector_size 512
 
 statement ok
 pragma enable_verification

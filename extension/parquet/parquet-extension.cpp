@@ -395,6 +395,7 @@ struct ParquetWriteBindData : public FunctionData {
 	string file_name;
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
+	idx_t row_group_size = 100000;
 };
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
@@ -414,7 +415,9 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 	auto bind_data = make_unique<ParquetWriteBindData>();
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
-		if (loption == "compression" || loption == "codec") {
+		if (loption == "row_group_size" || loption == "chunk_size") {
+			bind_data->row_group_size = option.second[0].GetValue<uint64_t>();
+		} else if (loption == "compression" || loption == "codec") {
 			if (!option.second.empty()) {
 				auto roption = StringUtil::Lower(option.second[0].ToString());
 				if (roption == "uncompressed") {
@@ -453,14 +456,15 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	return move(global_state);
 }
 
-void ParquetWriteSink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+void ParquetWriteSink(ClientContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
                       LocalFunctionData &lstate, DataChunk &input) {
+	auto &bind_data = (ParquetWriteBindData &)bind_data_p;
 	auto &global_state = (ParquetWriteGlobalState &)gstate;
 	auto &local_state = (ParquetWriteLocalState &)lstate;
 
 	// append data to the local (buffered) chunk collection
 	local_state.buffer->Append(input);
-	if (local_state.buffer->Count() > 100000) {
+	if (local_state.buffer->Count() > bind_data.row_group_size) {
 		// if the chunk collection exceeds a certain size we flush it to the parquet file
 		global_state.writer->Flush(*local_state.buffer);
 		// and reset the buffer
