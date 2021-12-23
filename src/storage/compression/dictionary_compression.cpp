@@ -18,50 +18,38 @@ struct DictionaryCompressionState : UncompressedCompressState {
 		auto &db = checkpointer.GetDatabase();
 		auto &config = DBConfig::GetConfig(db);
 		function = config.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY, PhysicalType::VARCHAR);
+
+		// TODO: deduplicate this?
 		current_segment->function = function;
-		current_string_map = make_unique<std::unordered_map<string, int32_t>>();
-		index_buffer = make_unique<std::vector<int32_t>>();
-		index_buffer->push_back(0); // For NULL strings TODO check nullable on column? if we remove it, the str_length calc method becomes slower i think
-		selection_buffer = make_unique<std::vector<int32_t>>(1024);
+		ResetBuffers();
 	}
 
 	void CreateEmptySegment(idx_t row_start) override {
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
-		compressed_segment->function = function;
-		if (type.InternalType() == PhysicalType::VARCHAR) {
-			auto &state = (UncompressedStringSegmentState &)*compressed_segment->GetSegmentState();
-			state.overflow_writer = make_unique<WriteOverflowStringsToDisk>(db);
-		}
-		current_segment = move(compressed_segment);
-
-		// TODO clean up this mess
-		// Reset the string map
-		// Clearing the string map is crazy slow for poorly compressible data, likely due to random access.
-		//		current_string_map->clear();
-		current_string_map.reset();
-		current_string_map = make_unique<std::unordered_map<string, int32_t>>();
-		index_buffer.reset();
-		index_buffer = make_unique<std::vector<int32_t>>();
-		index_buffer->push_back(0); // For NULL strings
-		selection_buffer.reset();
-		selection_buffer = make_unique<std::vector<int32_t>>(1024);
+		// TODO: the overflow writer is not used, but created through this method
+		UncompressedCompressState::CreateEmptySegment(row_start);
+		current_segment->function = function;
+		ResetBuffers();
 	}
 
+	void ResetBuffers() {
+		current_string_map = make_unique<std::unordered_map<string, int32_t>>(); // TODO: initialization size?
+		index_buffer = make_unique<std::vector<int32_t>>();                      // TODO: initialization size?
+		index_buffer->push_back(0);                                              // For NULL strings
+		selection_buffer = make_unique<std::vector<int32_t>>();
+	}
 	// TODO initialize with certain size?
 	unique_ptr<std::unordered_map<string, int32_t>> current_string_map;
 	unique_ptr<std::vector<int32_t>> index_buffer;
 	unique_ptr<std::vector<int32_t>> selection_buffer;
 	CompressionFunction *function;
 
+	// Minimal bitpacking width for the indices in the index buffer. Necessary for current size on disk
 	bitpacking_width_t min_width = sizeof(sel_t) * 8;
 };
 
 struct DictionaryCompressionStorage : UncompressedStringStorage {
-
-	// We override this to make space to store the offset to the index buffer
 	// HEADER: dict_end, dict_size, buffer_index_start, buffer_index_count, bitpacking_width;
+	// TODO: make a struct for this
 	static constexpr uint16_t DICTIONARY_HEADER_SIZE =
 	    sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
 
@@ -131,9 +119,9 @@ bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &
 		if (vdata.validity.RowIsValid(idx)) {
 			auto string_size = data[idx].GetSize();
 
+			// TODO: should we reconsider this? or even support big strings?
 			if (string_size >= StringUncompressed::STRING_BLOCK_LIMIT) {
-				state.overflow_strings++;
-				state.current_segment_fill += BIG_STRING_MARKER_SIZE;
+				return false;
 			}
 
 			if (state.current_string_map->count(data[idx].GetString()) == 0) {
@@ -142,8 +130,6 @@ bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &
 				state.current_string_map->insert({data[idx].GetString(), string_size});
 			}
 
-			// If we have filled a segment size worth of data, we clear the string map to simulate a new segment being
-			// used
 			// TODO can we do better than this in size estimation?
 			if (state.current_segment_fill >= Storage::BLOCK_SIZE) {
 
@@ -159,6 +145,7 @@ bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &
 
 idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto &state = (DictionaryCompressionAnalyzeState &)state_p;
+	// TODO improve analysis
 	return state.count * sizeof(int32_t) + state.total_string_size + state.overflow_strings * BIG_STRING_MARKER_SIZE;
 }
 
@@ -173,7 +160,8 @@ unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(Colum
 void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = (DictionaryCompressionState &)state_p;
 
-	// TODO: why is this?
+	// TODO: check for GetBlockOFfset in other parts of code and then remove them all or add them all then remove
+	// asserts?
 	D_ASSERT(state.current_segment->GetBlockOffset() == 0);
 
 	VectorData vdata;
@@ -191,7 +179,6 @@ void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &s
 		auto next_start = state.current_segment->start + state.current_segment->count;
 		// the segment is full: flush it to disk
 
-		// TODO directly calling the finalize append may be hacky?
 		state.FlushSegment(
 		    DictionaryCompressionStorage::FinalizeAppend(*state.current_segment, state.current_segment->stats, state));
 
@@ -213,60 +200,44 @@ void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 
 // NOTE: this does not support overflow blocks
+// TODO should I rename this? its not an actual append method
 idx_t DictionaryCompressionStorage::StringAppendCompressed(ColumnSegment &segment, SegmentStatistics &stats,
                                                            VectorData &data, idx_t offset, idx_t count,
                                                            DictionaryCompressionState &state) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
-
-	auto index_buffer = state.index_buffer.get();
-	auto seen_strings = state.current_string_map.get();
-	auto selection_buffer = state.selection_buffer.get();
-
+	auto source_data = (string_t *)data.data;
 	auto dictionary = GetDictionary(segment, *handle);
 
 	// TODO we only support adding to fresh blocks?
 	D_ASSERT(segment.GetBlockOffset() == 0);
-
-	auto source_data = (string_t *)data.data;
+	D_ASSERT(segment.count == state.selection_buffer->size());
 
 	for (idx_t i = 0; i < count; i++) {
-		D_ASSERT(HasEnoughSpace(segment.count.load(), index_buffer->size(), dictionary.size, state.min_width));
+		D_ASSERT(HasEnoughSpace(segment.count.load(), state.index_buffer->size(), dictionary.size, state.min_width));
 		auto source_idx = data.sel->get_index(offset + i);
 		auto target_idx = segment.count.load();
 
 		// Check if adding a single sel_t would overfill the segment
-		if (!HasEnoughSpace(target_idx + 1, index_buffer->size(), dictionary.size, state.min_width)) {
+		if (!HasEnoughSpace(target_idx + 1, state.index_buffer->size(), dictionary.size, state.min_width)) {
 			return i;
 		}
 
 		if (!data.validity.RowIsValid(source_idx)) {
-			// Invalid string, insert
-			if (target_idx >= selection_buffer->size()) {
-				selection_buffer->resize(selection_buffer->size() * 2);
-			}
-			selection_buffer->at(target_idx) = 0;
-
-			D_ASSERT(HasEnoughSpace(target_idx + 1, index_buffer->size(), dictionary.size, state.min_width));
+			state.selection_buffer->push_back(0);
 		} else {
 			auto end = handle->node->buffer + dictionary.end;
 
 			dictionary.Verify();
 
-			auto search = seen_strings->find(source_data[source_idx].GetString());
+			auto search = state.current_string_map->find(source_data[source_idx].GetString());
 
-			if (search != seen_strings->end()) {
-				// We have seen this string
-				if (target_idx >= selection_buffer->size()) {
-					selection_buffer->resize(selection_buffer->size() * 2);
-				}
-				selection_buffer->at(target_idx) = search->second;
-
-				D_ASSERT(HasEnoughSpace(target_idx + 1, index_buffer->size(), dictionary.size, state.min_width));
+			if (search != state.current_string_map->end()) {
+				state.selection_buffer->push_back(search->second);
 			} else {
 				// Unknown string, continue
 
-				sel_t latest_inserted_sel = index_buffer->size();
+				sel_t latest_inserted_sel = state.index_buffer->size();
 				bitpacking_width_t new_width = BitpackingPrimitives::MinimumBitWidth(&latest_inserted_sel, 1);
 
 				// non-null value, check if we can fit it within the block
@@ -280,12 +251,11 @@ idx_t DictionaryCompressionStorage::StringAppendCompressed(ColumnSegment &segmen
 				}
 
 				// Test if the new string fits.
-				if (!HasEnoughSpace(target_idx + 1, index_buffer->size(), dictionary.size + required_space,
+				if (!HasEnoughSpace(target_idx + 1, state.index_buffer->size(), dictionary.size + required_space,
 				                    new_width)) {
 					return i;
 				}
 
-				// we have space: write the string
 				UpdateStringStats(stats, source_data[source_idx]);
 
 				// string fits in block, append to dictionary and increment dictionary position
@@ -297,26 +267,27 @@ idx_t DictionaryCompressionStorage::StringAppendCompressed(ColumnSegment &segmen
 				dictionary.Verify();
 
 				// write selection value, string index, and updated bitpacking width
-				index_buffer->push_back(dictionary.size);
-				if (target_idx >= selection_buffer->size()) {
-					selection_buffer->resize(selection_buffer->size() * 2);
-				}
-				selection_buffer->at(target_idx) = index_buffer->size() - 1;
-				seen_strings->insert({source_data[source_idx].GetString(), index_buffer->size() - 1});
+				state.index_buffer->push_back(dictionary.size);
+				state.selection_buffer->push_back(state.index_buffer->size() - 1);
+				state.current_string_map->insert({source_data[source_idx].GetString(), state.index_buffer->size() - 1});
 				state.min_width = new_width;
 
 				SetDictionary(segment, *handle, dictionary);
 
-				D_ASSERT(HasEnoughSpace(target_idx + 1, index_buffer->size(), dictionary.size, state.min_width));
+				D_ASSERT(HasEnoughSpace(target_idx + 1, state.index_buffer->size(), dictionary.size, state.min_width));
 			}
 		}
 		segment.count++;
 		dictionary.Verify();
-		D_ASSERT(HasEnoughSpace(target_idx, index_buffer->size(), dictionary.size, state.min_width));
+
+		D_ASSERT(state.selection_buffer->size() == segment.count);
+		D_ASSERT(state.index_buffer->size() == state.current_string_map->size() + 1);
+		D_ASSERT(HasEnoughSpace(segment.count, state.index_buffer->size(), dictionary.size, state.min_width));
 	}
 	return count;
 }
 
+// TODO this is not an actual finalizeAPPEnd, rename into something more clear?
 idx_t DictionaryCompressionStorage::FinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats,
                                                    DictionaryCompressionState &state) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
@@ -325,7 +296,7 @@ idx_t DictionaryCompressionStorage::FinalizeAppend(ColumnSegment &segment, Segme
 	D_ASSERT(dict.end == Storage::BLOCK_SIZE);
 
 	// compute the total size required to store this segment
-	auto index_buffer_size = state.index_buffer->size() * sizeof(int32_t);
+	auto index_buffer_size = state.index_buffer->size() * sizeof(int32_t); // TODO: is this really the required size?
 	auto offset_size =
 	    DICTIONARY_HEADER_SIZE + BitpackingPrimitives::GetRequiredSize<sel_t>(segment.count, state.min_width);
 	auto total_size = offset_size + dict.size + index_buffer_size;
@@ -333,30 +304,23 @@ idx_t DictionaryCompressionStorage::FinalizeAppend(ColumnSegment &segment, Segme
 	// Write the index buffer next to the index buffer offsets and store its offset in the header
 	memcpy(handle->node->buffer + offset_size, state.index_buffer->data(), index_buffer_size);
 	Store<uint32_t>(offset_size, handle->node->buffer + 2 * sizeof(uint32_t)); // TODO segment offset?
-
-	// We store the size of the index buffer which we need to construct the dictionary on scan initialization
 	Store<uint32_t>(state.index_buffer->size(), handle->node->buffer + 3 * sizeof(uint32_t)); // TODO segment offset?
+  	Store<uint32_t>((uint32_t)state.min_width, handle->node->buffer + 4 * sizeof(uint32_t));
 
-	D_ASSERT(segment.GetBlockOffset() == 0);
+	D_ASSERT(segment.GetBlockOffset() == 0); // TODO segment offset?
 	D_ASSERT(HasEnoughSpace(segment.count, state.index_buffer->size(), dict.size, state.min_width));
 	D_ASSERT((uint64_t)*max_element(std::begin(*state.selection_buffer), std::end(*state.selection_buffer)) <
 	         state.index_buffer->size());
 
 	auto baseptr = handle->node->buffer + segment.GetBlockOffset();
-	auto base_data = (uint32_t *)(baseptr + DICTIONARY_HEADER_SIZE);
-
-	// Store width
-	Store<uint32_t>((uint32_t)state.min_width, handle->node->buffer + 4 * sizeof(uint32_t));
-
-	idx_t count = segment.count;
-
-	data_ptr_t dst = (data_ptr_t)base_data;
+	data_ptr_t dst = baseptr + DICTIONARY_HEADER_SIZE;
 	sel_t *src = (sel_t *)(state.selection_buffer->data());
 
-	//		auto required_dst_space = BitpackingPrimitives::GetRequiredSize<sel_t>(count, width);
-	// Note: PackBuffer writes in blocks of 32*sizeof(sel_t), be careful!
-	BitpackingPrimitives::PackBuffer<sel_t, false>(dst, src, count, state.min_width);
+	// Note: PackBuffer may write beyond dst+count*width, however BitpackingPrimitives::GetRequiredSize, has made sure
+	// we have enough space in dst
+	BitpackingPrimitives::PackBuffer<sel_t, false>(dst, src, segment.count, state.min_width);
 
+	// TODO: deduplicate with uncompressed_string?
 	if (total_size >= Storage::BLOCK_SIZE / 5 * 4) {
 		// the block is full enough, don't bother moving around the dictionary
 		return Storage::BLOCK_SIZE;
@@ -380,6 +344,8 @@ struct CompressedStringScanState : public StringScanState {
 	unique_ptr<BufferHandle> handle;
 	buffer_ptr<Vector> dictionary;
 	bitpacking_width_t current_width;
+	unique_ptr<SelectionVector> sel_vec;
+	idx_t sel_vec_size = 0;
 };
 
 unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(ColumnSegment &segment) {
@@ -387,20 +353,17 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
 
-	// Simplest implementation create fresh vector that fits
-
-	// TODO: we should consider if emitting dictionary vectors is always a good idea, probably not.
+	// TODO: we should consider if emitting dictionary vectors is always a good idea, maybe not?
 	// TODO: we could use index_buffer_count to estimate the compression ratio and switch to emitting dict vectors when
 	// TODO: compression ratio is high
 	auto baseptr = state->handle->node->buffer + segment.GetBlockOffset();
 	auto dict = GetDictionary(segment, *(state->handle));
 	auto index_buffer_offset = Load<uint32_t>(baseptr + 2 * sizeof(uint32_t));
 	auto index_buffer_count = Load<uint32_t>(baseptr + 3 * sizeof(uint32_t));
-	auto index_buffer_ptr = (int32_t *)(baseptr + index_buffer_offset);
 	state->current_width = (bitpacking_width_t)(Load<uint32_t>(baseptr + 4 * sizeof(uint32_t)));
+	auto index_buffer_ptr = (int32_t *)(baseptr + index_buffer_offset);
 
 	state->dictionary = make_buffer<Vector>(LogicalType::VARCHAR, index_buffer_count);
-
 	auto dict_child_data = FlatVector::GetData<string_t>(*(state->dictionary));
 
 	// TODO the first value in the index buffer is always 0, do we care?
@@ -408,7 +371,7 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
 		uint16_t str_len = GetStringLength(index_buffer_ptr, i);
 		dict_child_data[i] =
-			FetchStringFromDict(segment, dict, *(state->dictionary), baseptr, index_buffer_ptr[i], str_len);
+		    FetchStringFromDict(segment, dict, *(state->dictionary), baseptr, index_buffer_ptr[i], str_len);
 	}
 
 	return move(state);
@@ -432,9 +395,7 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 	auto base_data = (data_ptr_t)(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
-	// TODO: We should determine here how to scan this segment:
-	// -
-
+	// TODO: maybe we can do non-bitpacking-algorithm-group-aligned dict vector emitting? It might not be very common though
 	if (scan_count != STANDARD_VECTOR_SIZE || start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0) {
 		// Emit regular vector
 
@@ -442,38 +403,40 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 		idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 
 		// We will scan in blocks of 32 so we may scan some extra values.
-		idx_t decompress_count =
-		    BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
+		idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
 
-		// TODO: reuse this buffer
-		auto sel_vec = make_unique<SelectionVector>(decompress_count);
-		data_ptr_t src =
-		    (data_ptr_t)&base_data[((start-start_offset) * scan_state.current_width) / 8];
-		sel_t *sel_vec_ptr = sel_vec->data();
+		// Create a decompression buffer of sufficient size if we don't already have one.
+		if (!scan_state.sel_vec || scan_state.sel_vec_size < decompress_count) {
+			scan_state.sel_vec_size = decompress_count;
+			scan_state.sel_vec = make_unique<SelectionVector>(decompress_count);
+		}
+
+		data_ptr_t src = (data_ptr_t)&base_data[((start - start_offset) * scan_state.current_width) / 8];
+		sel_t *sel_vec_ptr = scan_state.sel_vec->data();
 
 		BitpackingPrimitives::UnPackBuffer<sel_t>((data_ptr_t)sel_vec_ptr, src, decompress_count,
 		                                          scan_state.current_width);
 
 		for (idx_t i = 0; i < scan_count; i++) {
 			// Lookup dict offset in index buffer
-			auto string_number = sel_vec->get_index(i + start_offset);
+			auto string_number = scan_state.sel_vec->get_index(i + start_offset);
 			auto dict_offset = index_buffer_ptr[string_number];
 			uint16_t str_len = GetStringLength(index_buffer_ptr, string_number);
 			result_data[result_offset + i] = FetchStringFromDict(segment, dict, result, baseptr, dict_offset, str_len);
 		}
 
 	} else {
-		D_ASSERT(start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0); // TODO this assertion is hit if not prevented
+		D_ASSERT(start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0);
 		D_ASSERT(scan_count == STANDARD_VECTOR_SIZE);
+		D_ASSERT(result_offset == 0);
 
-		// TODO: this code breaks the benchmarkrunner on a normalify of a dict vector. This probably means that the dict
-		// isnt copied? properly and will be unpinned leaving a faulty string pointer?
+		idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count);
+
 		// Scanning 1024 values, emitting a dict vector
-		auto sel_data = make_buffer<SelectionData>(STANDARD_VECTOR_SIZE);
+		auto sel_data = make_buffer<SelectionData>(decompress_count);
 		data_ptr_t dst = (data_ptr_t)(sel_data->owned_data.get());
 
-		data_ptr_t src =
-		    (data_ptr_t)&base_data[(start * scan_state.current_width) / 8];
+		data_ptr_t src = (data_ptr_t)&base_data[(start * scan_state.current_width) / 8];
 
 		BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src, scan_count, scan_state.current_width);
 
@@ -513,7 +476,6 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	auto baseptr = handle_ptr->node->buffer + segment.GetBlockOffset();
 	auto dict = GetDictionary(segment, *handle_ptr);
 	auto index_buffer_offset = Load<uint32_t>(baseptr + 2 * sizeof(uint32_t));
-	auto index_buffer_count = Load<uint32_t>(baseptr + 3 * sizeof(uint32_t));
 	auto width = (bitpacking_width_t)(Load<uint32_t>(baseptr + 4 * sizeof(uint32_t)));
 	auto index_buffer_ptr = (int32_t *)(baseptr + index_buffer_offset);
 	auto base_data = (data_ptr_t)(baseptr + DICTIONARY_HEADER_SIZE);
@@ -527,7 +489,7 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 
 	// Make decompression buffer todo: should not be sel vec i guess
 	auto sel_vec = make_unique<SelectionVector>(group_size);
-	data_ptr_t src =(data_ptr_t)&base_data[((start-start_offset) * width) / 8];
+	data_ptr_t src = (data_ptr_t)&base_data[((start - start_offset) * width) / 8];
 	sel_t *sel_vec_ptr = sel_vec->data();
 
 	BitpackingPrimitives::UnPackBuffer<sel_t>((data_ptr_t)sel_vec_ptr, src, group_size, width);
