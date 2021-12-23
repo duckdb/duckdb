@@ -25,6 +25,7 @@ struct ICUDateFunc {
 
 		CalendarPtr calendar;
 
+		bool Equals(FunctionData &other_p) override;
 		unique_ptr<FunctionData> Copy() override;
 	};
 
