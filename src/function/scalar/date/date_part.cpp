@@ -412,32 +412,99 @@ struct DatePart {
 	};
 
 	struct StructOperator {
+		using part_codes_t = vector<DatePartSpecifier>;
+		using part_mask_t = uint64_t;
+
+		enum MaskBits : uint8_t {
+			YMD = 1 << 0,
+			DOW = 1 << 1,
+			DOY = 1 << 2,
+			EPOCH = 1 << 3,
+			TIME = 1 << 4,
+			ZONE = 1 << 5
+		};
+
+		static part_mask_t GetMask(const part_codes_t &part_codes) {
+			part_mask_t mask = 0;
+			for (const auto &part_code : part_codes) {
+				switch (part_code) {
+				case DatePartSpecifier::YEAR:
+				case DatePartSpecifier::MONTH:
+				case DatePartSpecifier::DAY:
+				case DatePartSpecifier::DECADE:
+				case DatePartSpecifier::CENTURY:
+				case DatePartSpecifier::MILLENNIUM:
+				case DatePartSpecifier::QUARTER:
+				case DatePartSpecifier::ERA:
+					mask |= YMD;
+					break;
+				case DatePartSpecifier::YEARWEEK:
+					mask |= YMD;
+					mask |= DOW;
+					break;
+				case DatePartSpecifier::DOW:
+				case DatePartSpecifier::ISODOW:
+				case DatePartSpecifier::WEEK:
+					mask |= DOW;
+					break;
+				case DatePartSpecifier::DOY:
+					mask |= DOY;
+					break;
+				case DatePartSpecifier::EPOCH:
+					mask |= EPOCH;
+					break;
+				case DatePartSpecifier::MICROSECONDS:
+				case DatePartSpecifier::MILLISECONDS:
+				case DatePartSpecifier::SECOND:
+				case DatePartSpecifier::MINUTE:
+				case DatePartSpecifier::HOUR:
+					mask |= TIME;
+					break;
+				case DatePartSpecifier::OFFSET:
+					mask |= ZONE;
+					break;
+				}
+			}
+			return mask;
+		}
+
 		template <class TA, class TR>
-		static inline void Operation(TR *part_values, const TA &input) {
-			int32_t yyyy;
-			int32_t mm;
-			int32_t dd;
-			Date::Convert(input, yyyy, mm, dd);
+		static inline void Operation(TR *part_values, const TA &input, const part_mask_t mask) {
+			// YMD calculations
+			int32_t yyyy = 1970;
+			int32_t mm = 0;
+			int32_t dd = 1;
+			if (mask & YMD) {
+				Date::Convert(input, yyyy, mm, dd);
+				part_values[int(DatePartSpecifier::YEAR)] = yyyy;
+				part_values[int(DatePartSpecifier::MONTH)] = mm;
+				part_values[int(DatePartSpecifier::DAY)] = dd;
+				part_values[int(DatePartSpecifier::DECADE)] = yyyy / 10;
+				part_values[int(DatePartSpecifier::CENTURY)] = (yyyy - 1) / 100 + 1;
+				part_values[int(DatePartSpecifier::MILLENNIUM)] = (yyyy - 1) / 1000 + 1;
+				part_values[int(DatePartSpecifier::QUARTER)] = (mm - 1) / Interval::MONTHS_PER_QUARTER + 1;
+				part_values[int(DatePartSpecifier::ERA)] = yyyy > 0 ? 1 : 0;
+			}
 
-			part_values[int(DatePartSpecifier::YEAR)] = yyyy;
-			part_values[int(DatePartSpecifier::MONTH)] = mm;
-			part_values[int(DatePartSpecifier::DAY)] = dd;
-			part_values[int(DatePartSpecifier::DECADE)] = yyyy / 10;
-			part_values[int(DatePartSpecifier::CENTURY)] = (yyyy - 1) / 100 + 1;
-			part_values[int(DatePartSpecifier::MILLENNIUM)] = (yyyy - 1) / 1000 + 1;
-			part_values[int(DatePartSpecifier::EPOCH)] = Date::Epoch(input);
+			// Week calculations
+			int32_t isodow = 0;
+			int32_t ww = 0;
+			if (mask & DOW) {
+				isodow = Date::ExtractISODayOfTheWeek(input);
+				ww = Date::ExtractISOWeekNumber(input);
+				int32_t dow = isodow % 7;
+				part_values[int(DatePartSpecifier::DOW)] = dow;
+				part_values[int(DatePartSpecifier::ISODOW)] = isodow;
+				part_values[int(DatePartSpecifier::WEEK)] = ww;
+				part_values[int(DatePartSpecifier::YEARWEEK)] = yyyy * 100 + dow;
+			}
 
-			const auto isodow = Date::ExtractISODayOfTheWeek(input);
-			const auto ww = isodow % 7;
-			part_values[int(DatePartSpecifier::DOW)] = ww;
-			part_values[int(DatePartSpecifier::ISODOW)] = isodow;
-			part_values[int(DatePartSpecifier::WEEK)] = Date::ExtractISOWeekNumber(input);
-			part_values[int(DatePartSpecifier::QUARTER)] = (mm - 1) / Interval::MONTHS_PER_QUARTER + 1;
-			part_values[int(DatePartSpecifier::DOY)] = Date::ExtractDayOfTheYear(input);
-			part_values[int(DatePartSpecifier::YEARWEEK)] = yyyy * 100 + ww;
-
-			part_values[int(DatePartSpecifier::ERA)] = yyyy > 0 ? 1 : 0;
-			part_values[int(DatePartSpecifier::OFFSET)] = 0;
+			if (mask & EPOCH) {
+				part_values[int(DatePartSpecifier::EPOCH)] = Date::Epoch(input);
+			}
+			if (mask & DOY) {
+				part_values[int(DatePartSpecifier::DOY)] = Date::ExtractDayOfTheYear(input);
+			}
 		}
 	};
 };
@@ -745,43 +812,51 @@ int64_t DatePart::OffsetOperator::Operation(dtime_t input) {
 }
 
 template <>
-void DatePart::StructOperator::Operation(int64_t *part_values, const dtime_t &input) {
-	const auto micros = MicrosecondsOperator::Operation<dtime_t, int64_t>(input);
-	part_values[int(DatePartSpecifier::MICROSECONDS)] = micros;
-	part_values[int(DatePartSpecifier::MILLISECONDS)] = micros / Interval::MICROS_PER_MSEC;
-	part_values[int(DatePartSpecifier::SECOND)] = micros / Interval::MICROS_PER_SEC;
-	part_values[int(DatePartSpecifier::MINUTE)] = MinutesOperator::Operation<dtime_t, int64_t>(input);
-	part_values[int(DatePartSpecifier::HOUR)] = HoursOperator::Operation<dtime_t, int64_t>(input);
+void DatePart::StructOperator::Operation(int64_t *part_values, const dtime_t &input, const part_mask_t mask) {
+	if (mask & TIME) {
+		const auto micros = MicrosecondsOperator::Operation<dtime_t, int64_t>(input);
+		part_values[int(DatePartSpecifier::MICROSECONDS)] = micros;
+		part_values[int(DatePartSpecifier::MILLISECONDS)] = micros / Interval::MICROS_PER_MSEC;
+		part_values[int(DatePartSpecifier::SECOND)] = micros / Interval::MICROS_PER_SEC;
+		part_values[int(DatePartSpecifier::MINUTE)] = MinutesOperator::Operation<dtime_t, int64_t>(input);
+		part_values[int(DatePartSpecifier::HOUR)] = HoursOperator::Operation<dtime_t, int64_t>(input);
+	}
 }
 
 template <>
-void DatePart::StructOperator::Operation(int64_t *part_values, const timestamp_t &input) {
+void DatePart::StructOperator::Operation(int64_t *part_values, const timestamp_t &input, const part_mask_t mask) {
 	date_t d;
 	dtime_t t;
 	Timestamp::Convert(input, d, t);
-	Operation(part_values, d);
-	Operation(part_values, t);
+	Operation(part_values, d, mask);
+	Operation(part_values, t, mask);
 }
 
 template <>
-void DatePart::StructOperator::Operation(int64_t *part_values, const interval_t &input) {
-	const auto mm = input.months % Interval::MONTHS_PER_YEAR;
-	part_values[int(DatePartSpecifier::YEAR)] = input.months / Interval::MONTHS_PER_YEAR;
-	part_values[int(DatePartSpecifier::MONTH)] = mm;
-	part_values[int(DatePartSpecifier::DAY)] = input.days;
-	part_values[int(DatePartSpecifier::DECADE)] = input.months / Interval::MONTHS_PER_DECADE;
-	part_values[int(DatePartSpecifier::CENTURY)] = input.months / Interval::MONTHS_PER_CENTURY;
-	part_values[int(DatePartSpecifier::MILLENNIUM)] = input.months / Interval::MONTHS_PER_MILLENIUM;
-	part_values[int(DatePartSpecifier::QUARTER)] = mm / Interval::MONTHS_PER_QUARTER + 1;
+void DatePart::StructOperator::Operation(int64_t *part_values, const interval_t &input, const part_mask_t mask) {
+	if (mask & YMD) {
+		const auto mm = input.months % Interval::MONTHS_PER_YEAR;
+		part_values[int(DatePartSpecifier::YEAR)] = input.months / Interval::MONTHS_PER_YEAR;
+		part_values[int(DatePartSpecifier::MONTH)] = mm;
+		part_values[int(DatePartSpecifier::DAY)] = input.days;
+		part_values[int(DatePartSpecifier::DECADE)] = input.months / Interval::MONTHS_PER_DECADE;
+		part_values[int(DatePartSpecifier::CENTURY)] = input.months / Interval::MONTHS_PER_CENTURY;
+		part_values[int(DatePartSpecifier::MILLENNIUM)] = input.months / Interval::MONTHS_PER_MILLENIUM;
+		part_values[int(DatePartSpecifier::QUARTER)] = mm / Interval::MONTHS_PER_QUARTER + 1;
+	}
 
-	const auto micros = MicrosecondsOperator::Operation<interval_t, int64_t>(input);
-	part_values[int(DatePartSpecifier::MICROSECONDS)] = micros;
-	part_values[int(DatePartSpecifier::MILLISECONDS)] = micros / Interval::MICROS_PER_MSEC;
-	part_values[int(DatePartSpecifier::SECOND)] = micros / Interval::MICROS_PER_SEC;
-	part_values[int(DatePartSpecifier::MINUTE)] = MinutesOperator::Operation<interval_t, int64_t>(input);
-	part_values[int(DatePartSpecifier::HOUR)] = HoursOperator::Operation<interval_t, int64_t>(input);
+	if (mask & TIME) {
+		const auto micros = MicrosecondsOperator::Operation<interval_t, int64_t>(input);
+		part_values[int(DatePartSpecifier::MICROSECONDS)] = micros;
+		part_values[int(DatePartSpecifier::MILLISECONDS)] = micros / Interval::MICROS_PER_MSEC;
+		part_values[int(DatePartSpecifier::SECOND)] = micros / Interval::MICROS_PER_SEC;
+		part_values[int(DatePartSpecifier::MINUTE)] = MinutesOperator::Operation<interval_t, int64_t>(input);
+		part_values[int(DatePartSpecifier::HOUR)] = HoursOperator::Operation<interval_t, int64_t>(input);
+	}
 
-	part_values[int(DatePartSpecifier::EPOCH)] = EpochOperator::Operation<interval_t, int64_t>(input);
+	if (mask & EPOCH) {
+		part_values[int(DatePartSpecifier::EPOCH)] = EpochOperator::Operation<interval_t, int64_t>(input);
+	}
 }
 
 template <typename T>
@@ -952,7 +1027,13 @@ struct StructDatePart {
 
 		Value parts_list = ExpressionExecutor::EvaluateScalar(*arguments[0]);
 		if (parts_list.type().id() == LogicalTypeId::LIST) {
+			if (parts_list.list_value.empty()) {
+				throw BinderException("%s requires non-empty lists of part names", bound_function.name);
+			}
 			for (const auto &part_value : parts_list.list_value) {
+				if (part_value.is_null) {
+					throw BinderException("NULL struct entry name in %s", bound_function.name);
+				}
 				const auto part_name = part_value.ToString();
 				const auto part_code = GetDatePartSpecifier(part_name);
 				if (name_collision_set.find(part_name) != name_collision_set.end()) {
@@ -981,6 +1062,7 @@ struct StructDatePart {
 		const auto count = args.size();
 		Vector &input = args.data[0];
 		vector<int64_t> part_values(int(DatePartSpecifier::OFFSET) + 1, 0);
+		const auto part_mask = DatePart::StructOperator::GetMask(info.part_codes);
 
 		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -990,7 +1072,7 @@ struct StructDatePart {
 			} else {
 				ConstantVector::SetNull(result, false);
 				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
-				DatePart::StructOperator::Operation(part_values.data(), tdata[0]);
+				DatePart::StructOperator::Operation(part_values.data(), tdata[0], part_mask);
 				auto &child_entries = StructVector::GetEntries(result);
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
@@ -1017,7 +1099,7 @@ struct StructDatePart {
 				const auto idx = rdata.sel->get_index(i);
 				if (arg_valid.RowIsValid(idx)) {
 					res_valid.SetValid(idx);
-					DatePart::StructOperator::Operation(part_values.data(), tdata[idx]);
+					DatePart::StructOperator::Operation(part_values.data(), tdata[idx], part_mask);
 					for (size_t col = 0; col < child_entries.size(); ++col) {
 						auto &child_entry = child_entries[col];
 						FlatVector::Validity(*child_entry).SetValid(idx);

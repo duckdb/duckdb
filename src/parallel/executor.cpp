@@ -263,8 +263,8 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		lock_guard<mutex> elock(executor_lock);
 		physical_plan = plan;
 
-		auto &profiler = QueryProfiler::Get(context);
-		profiler.Initialize(physical_plan);
+		this->profiler = context.profiler;
+		profiler->Initialize(physical_plan);
 		this->producer = scheduler.CreateProducer();
 
 		auto root_pipeline = make_shared<Pipeline>(*this);
@@ -675,9 +675,7 @@ void Executor::ThrowExceptionInternal() { // LCOV_EXCL_START
 } // LCOV_EXCL_STOP
 
 void Executor::Flush(ThreadContext &tcontext) {
-	lock_guard<mutex> elock(executor_lock);
-	auto &profiler = QueryProfiler::Get(context);
-	profiler.Flush(tcontext.profiler);
+	profiler->Flush(tcontext.profiler);
 }
 
 bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_START

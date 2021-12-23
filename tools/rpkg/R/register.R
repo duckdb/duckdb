@@ -16,7 +16,6 @@ encode_values <- function(value) {
   value
 }
 
-
 #' Register a data frame as a virtual table
 #'
 #' `duckdb_register()` registers a data frame as a virtual table (view)

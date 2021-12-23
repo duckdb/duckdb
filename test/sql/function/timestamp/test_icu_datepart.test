@@ -296,6 +296,17 @@ SELECT DATE_PART('offset', '2021-07-31 00:00:00-07'::TIMESTAMPTZ) / (60::BIGINT 
 ----
 -7
 
+# Multiple extractions
+query IIIII
+SELECT MAX(EXTRACT(YEAR FROM ts))
+	, MAX(EXTRACT(MONTH FROM ts))
+	, MAX(EXTRACT(DAY FROM ts))
+	, MAX(EXTRACT(DECADE FROM ts))
+	, MAX(EXTRACT(CENTURY FROM ts))
+FROM timestamps
+----
+2021	12	31	202	21
+
 # Aliases
 query II
 SELECT dayofmonth(ts), dayofmonth(ts::TIMESTAMP) FROM timestamps;
@@ -379,6 +390,19 @@ statement error
 SELECT DATE_PART(['era', 'year', 'month', 'era'], ts), ts
 FROM timestamps
 ORDER BY 2
+
+# Empty parts
+statement error
+SELECT DATE_PART([], ts) FROM timestamps;
+
+# Null parts
+statement error
+SELECT DATE_PART(['year', NULL, 'month'], ts) FROM timestamps;
+
+# Non-constant parts
+statement error
+WITH parts(p) AS (VALUES (['year', 'month', 'day']), (['hour', 'minute', 'microsecond']))
+SELECT DATE_PART(p, ts) FROM parts, timestamps;
 
 #  last_day
 statement ok

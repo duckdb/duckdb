@@ -386,6 +386,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 #if LDBL_MANT_DIG < 54
 				return;
 #endif
+			} else if (param == "64bit") {
+				if (sizeof(void *) != 8) {
+					return;
+				}
 			} else if (param == "noforcestorage") {
 				if (TestForceStorage()) {
 					return;

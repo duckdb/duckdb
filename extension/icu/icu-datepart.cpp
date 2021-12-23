@@ -187,6 +187,11 @@ struct ICUDatePart : public ICUDateFunc {
 
 		adapters_t adapters;
 
+		bool Equals(FunctionData &other_p) override {
+			const auto &other = (BindAdapterData &)other_p;
+			return BindData::Equals(other_p) && adapters == other.adapters;
+		}
+
 		unique_ptr<FunctionData> Copy() override {
 			return make_unique<BindAdapterData>(*this);
 		}
@@ -328,7 +333,13 @@ struct ICUDatePart : public ICUDateFunc {
 
 		Value parts_list = ExpressionExecutor::EvaluateScalar(*arguments[0]);
 		if (parts_list.type().id() == LogicalTypeId::LIST) {
+			if (parts_list.list_value.empty()) {
+				throw BinderException("%s requires non-empty lists of part names", bound_function.name);
+			}
 			for (const auto &part_value : parts_list.list_value) {
+				if (part_value.is_null) {
+					throw BinderException("NULL struct entry name in %s", bound_function.name);
+				}
 				const auto part_name = part_value.ToString();
 				const auto part_code = GetDatePartSpecifier(part_name);
 				if (name_collision_set.find(part_name) != name_collision_set.end()) {
