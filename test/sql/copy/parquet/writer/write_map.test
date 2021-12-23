@@ -48,10 +48,10 @@ INSERT INTO string_map VALUES
 ;
 
 statement ok
-COPY string_map TO 'string_map.parquet' (FORMAT PARQUET)
+COPY string_map TO '__TEST_DIR__/string_map.parquet' (FORMAT PARQUET)
 
 query I
-SELECT * FROM 'string_map.parquet'
+SELECT * FROM '__TEST_DIR__/string_map.parquet'
 ----
 {key1=value1, key2=value2}
 {best band=Tenacious D, best boyband=Backstreet Boys, richest person=Jon Lajoie}
