@@ -257,8 +257,12 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 		D_ASSERT(!child_types.empty());
 		unique_ptr<ColumnReader> result;
 		LogicalType result_type;
+
+		bool is_repeated = s_ele.repetition_type == FieldRepetitionType::REPEATED;
+		bool is_list = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::LIST;
+		bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
 		// if we only have a single child no reason to create a struct ay
-		if (child_types.size() > 1 || depth == 0) {
+		if (child_types.size() > 1 || (!is_list && !is_map && !is_repeated)) {
 			result_type = LogicalType::STRUCT(move(child_types));
 			result = make_unique<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
 			                                         move(child_readers));
@@ -267,7 +271,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			result_type = child_types[0].second;
 			result = move(child_readers[0]);
 		}
-		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
+		if (is_repeated) {
 			result_type = LogicalType::LIST(result_type);
 			return make_unique<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
 			                                     move(result));
@@ -377,8 +381,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 	if (!ObjectCache::ObjectCacheEnabled(context_p)) {
 		metadata = LoadMetadata(allocator, *file_handle);
 	} else {
-		metadata =
-		    std::dynamic_pointer_cast<ParquetFileMetadataCache>(ObjectCache::GetObjectCache(context_p).Get(file_name));
+		metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
 		if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
 			metadata = LoadMetadata(allocator, *file_handle);
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);

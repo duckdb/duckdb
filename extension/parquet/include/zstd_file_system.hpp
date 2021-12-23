@@ -8,7 +8,10 @@
 
 #pragma once
 
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/compressed_file_system.hpp"
+#endif
 
 namespace duckdb {
 

@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -54,5 +55,4 @@ string SequenceCatalogEntry::ToSQL() {
 	ss << " " << (cycle ? "CYCLE" : "NO CYCLE") << ";";
 	return ss.str();
 }
-
 } // namespace duckdb

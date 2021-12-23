@@ -55,6 +55,31 @@ SELECT date_part(s, d) FROM dates;
 3
 5
 
+
+query I
+SELECT date_part('era', d) FROM dates;
+----
+1
+1
+1
+
+query I
+SELECT date_part('era', '0044-03-15 (BC)'::DATE);
+----
+0
+
+query I
+SELECT date_part('offset', d) FROM dates;
+----
+0
+0
+0
+
+query I
+SELECT date_part('offset', '0044-03-15 (BC)'::DATE);
+----
+0
+
 # timestamps
 query I
 SELECT date_part(NULL, d::TIMESTAMP) FROM dates;
@@ -83,6 +108,26 @@ SELECT date_part(s, d::TIMESTAMP) FROM dates;
 1992
 3
 5
+
+query I
+SELECT date_part('era', d::TIMESTAMP) FROM dates;
+----
+1
+1
+1
+
+query I
+SELECT date_part('era', '0044-03-15 (BC)'::TIMESTAMP);
+----
+0
+
+
+query I
+SELECT date_part('offset', d::TIMESTAMP) FROM dates;
+----
+0
+0
+0
 
 #  last_day
 query TTT

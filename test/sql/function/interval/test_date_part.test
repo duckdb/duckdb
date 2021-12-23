@@ -69,15 +69,28 @@ SELECT date_part(s, i) FROM intervals;
 42
 34
 
+
 # interval gives errors for date-only parts
 statement error
-SELECT dayofweek(i) FROM times
+SELECT dayofweek(i) FROM intervals
 
 statement error
-SELECT isodow(i) FROM times
+SELECT isodow(i) FROM intervals
 
 statement error
-SELECT dayofyear(i) FROM times
+SELECT dayofyear(i) FROM intervals
 
 statement error
-SELECT week(i) FROM times
+SELECT week(i) FROM intervals
+
+statement error
+SELECT era(i) FROM intervals;
+
+statement error
+SELECT extract(era from i) FROM intervals;
+
+statement error
+SELECT date_part('era', i) FROM intervals;
+
+statement ok
+SELECT date_part('offset', i) FROM intervals;

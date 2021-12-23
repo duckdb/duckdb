@@ -19,6 +19,22 @@ unique_ptr<AlterInfo> AlterInfo::Deserialize(Deserializer &source) {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// ChangeOwnershipInfo
+//===--------------------------------------------------------------------===//
+
+CatalogType ChangeOwnershipInfo::GetCatalogType() {
+	return entry_catalog_type;
+}
+
+unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
+	return make_unique_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, schema, name, owner_schema, owner_name);
+}
+
+//===--------------------------------------------------------------------===//
+// AlterTableInfo
+//===--------------------------------------------------------------------===//
+
 void AlterTableInfo::Serialize(Serializer &serializer) {
 	AlterInfo::Serialize(serializer);
 	serializer.Write<AlterTableType>(alter_table_type);
@@ -203,5 +219,4 @@ unique_ptr<AlterInfo> RenameViewInfo::Deserialize(Deserializer &source, string s
 	auto new_name = source.Read<string>();
 	return make_unique<RenameViewInfo>(move(schema), move(view), new_name);
 }
-
 } // namespace duckdb

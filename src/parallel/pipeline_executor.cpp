@@ -44,16 +44,18 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	InitializeChunk(final_chunk);
 }
 
-void PipelineExecutor::Execute() {
+bool PipelineExecutor::Execute(idx_t max_chunks) {
 	D_ASSERT(pipeline.sink);
+	bool exhausted_source = false;
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
-	while (true) {
+	for (idx_t i = 0; i < max_chunks; i++) {
 		if (finished_processing) {
 			break;
 		}
 		source_chunk.Reset();
 		FetchFromSource(source_chunk);
 		if (source_chunk.size() == 0) {
+			exhausted_source = true;
 			break;
 		}
 		auto result = ExecutePushInternal(source_chunk);
@@ -62,7 +64,15 @@ void PipelineExecutor::Execute() {
 			break;
 		}
 	}
+	if (!exhausted_source && !finished_processing) {
+		return false;
+	}
 	PushFinalize();
+	return true;
+}
+
+void PipelineExecutor::Execute() {
+	Execute(NumericLimits<idx_t>::Maximum());
 }
 
 OperatorResultType PipelineExecutor::ExecutePush(DataChunk &input) { // LCOV_EXCL_START

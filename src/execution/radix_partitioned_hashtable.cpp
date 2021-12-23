@@ -259,6 +259,7 @@ public:
 	                           idx_t radix_p)
 	    : ExecutorTask(executor), event(move(event_p)), state(state_p), radix(radix_p) {
 	}
+
 	static void FinalizeHT(RadixHTGlobalState &gstate, idx_t radix) {
 		D_ASSERT(gstate.partition_info.n_partitions <= gstate.finalized_hts.size());
 		D_ASSERT(gstate.finalized_hts[radix]);
@@ -271,9 +272,10 @@ public:
 		gstate.finalized_hts[radix]->Finalize();
 	}
 
-	void ExecuteTask() override {
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		FinalizeHT(state, radix);
 		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
 	}
 
 private:

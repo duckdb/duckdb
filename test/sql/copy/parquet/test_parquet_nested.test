@@ -96,13 +96,13 @@ query II
 SELECT id, url FROM parquet_scan('data/parquet-testing/apkwan.parquet') limit 10
 ----
 53e997b9b7602d9701f9f044	[https://link.springer.com/10.1007/s00108-004-1229-0]
-53e997b2b7602d9701f8fea5	NULL
+53e997b2b7602d9701f8fea5	[]
 53e997aeb7602d9701f8856e	[http://www.ncbi.nlm.nih.gov/pubmed/4669724?report=xml&format=text, http://www.ncbi.nlm.nih.gov/pubmed/5123793?report=xml&format=text, http://www.ncbi.nlm.nih.gov/pubmed/5315218?report=xml&format=text]
-53e997bab7602d9701fa1e34	NULL
-53e997abb7602d9701f846c0	NULL
-53e9978db7602d9701f4d7e8	NULL
+53e997bab7602d9701fa1e34	[]
+53e997abb7602d9701f846c0	[]
+53e9978db7602d9701f4d7e8	[]
 53e9984bb7602d970207c61d	[http://subs.emis.de/LNI/Proceedings/Proceedings26/article639.html]
-53e99796b7602d9701f5cd36	NULL
+53e99796b7602d9701f5cd36	[]
 53e99809b7602d970201f551	[http://dx.doi.org/10.1016/S0140-6736(00)82170-4, http://www.ncbi.nlm.nih.gov/pubmed/20914302?report=xml&format=text]
 53e997a6b7602d9701f7ffb0	[http://www.ncbi.nlm.nih.gov/pubmed/4051185?report=xml&format=text]
 

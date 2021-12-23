@@ -84,6 +84,7 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 	if (zVfs) { /* unsupported so if set we complain */
 		return SQLITE_ERROR;
 	}
+	int rc = SQLITE_OK;
 	sqlite3 *pDb = nullptr;
 	try {
 		pDb = new sqlite3();
@@ -99,10 +100,10 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 			pDb->last_error = ex.what();
 			pDb->errCode = SQLITE_ERROR;
 		}
-		return SQLITE_ERROR;
+		rc = SQLITE_ERROR;
 	}
 	*ppDb = pDb;
-	return SQLITE_OK;
+	return rc;
 }
 
 int sqlite3_close(sqlite3 *db) {
@@ -594,7 +595,7 @@ int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, 
 	if (length < 0) {
 		value = string(val);
 	} else {
-		value = string(val, val + length);
+		value = string(val, length);
 	}
 	if (free_func && ((ptrdiff_t)free_func) != -1) {
 		free_func((void *)val);
@@ -1169,26 +1170,23 @@ int sqlite3_create_function(sqlite3 *db, const char *zFunctionName, int nArg, in
 	string fname = string(zFunctionName);
 
 	// Scalar function
-	if (xFunc) {
-		auto udf_sqlite3 = SQLiteUDFWrapper::CreateSQLiteScalarFunction(xFunc, db, pApp);
-		LogicalType varargs = LogicalType::INVALID;
-		if (nArg == -1) {
-			varargs = LogicalType::ANY;
-			nArg = 0;
-		}
-
-		vector<LogicalType> argv_types(nArg);
-		for (idx_t i = 0; i < (idx_t)nArg; ++i) {
-			argv_types[i] = LogicalType::ANY;
-		}
-
-		UDFWrapper::RegisterFunction(fname, argv_types, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context),
-		                             varargs);
-
-		return SQLITE_OK;
+	if (!xFunc) {
+		return SQLITE_MISUSE;
+	}
+	auto udf_sqlite3 = SQLiteUDFWrapper::CreateSQLiteScalarFunction(xFunc, db, pApp);
+	LogicalType varargs = LogicalType::INVALID;
+	if (nArg == -1) {
+		varargs = LogicalType::ANY;
+		nArg = 0;
 	}
 
-	return SQLITE_MISUSE;
+	vector<LogicalType> argv_types(nArg);
+	for (idx_t i = 0; i < (idx_t)nArg; ++i) {
+		argv_types[i] = LogicalType::ANY;
+	}
+
+	UDFWrapper::RegisterFunction(fname, argv_types, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context), varargs);
+	return SQLITE_OK;
 }
 
 int sqlite3_create_function_v2(sqlite3 *db, const char *zFunctionName, int nArg, int eTextRep, void *pApp,

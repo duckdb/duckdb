@@ -154,7 +154,7 @@ select_clause:
 simple_select:
 			SELECT opt_all_clause opt_target_list
 			into_clause from_clause where_clause
-			group_clause having_clause window_clause sample_clause
+			group_clause having_clause window_clause qualify_clause sample_clause
 				{
 					PGSelectStmt *n = makeNode(PGSelectStmt);
 					n->targetList = $3;
@@ -164,12 +164,13 @@ simple_select:
 					n->groupClause = $7;
 					n->havingClause = $8;
 					n->windowClause = $9;
-					n->sampleOptions = $10;
+					n->qualifyClause = $10;
+					n->sampleOptions = $11;
 					$$ = (PGNode *)n;
 				}
 			| SELECT distinct_clause target_list
 			into_clause from_clause where_clause
-			group_clause having_clause window_clause sample_clause
+			group_clause having_clause window_clause qualify_clause sample_clause
 				{
 					PGSelectStmt *n = makeNode(PGSelectStmt);
 					n->distinctClause = $2;
@@ -180,7 +181,8 @@ simple_select:
 					n->groupClause = $7;
 					n->havingClause = $8;
 					n->windowClause = $9;
-					n->sampleOptions = $10;
+					n->qualifyClause = $10;
+					n->sampleOptions = $11;
 					$$ = (PGNode *)n;
 				}
 			| values_clause							{ $$ = $1; }
@@ -549,6 +551,12 @@ select_limit_value:
 					/* LIMIT ALL is represented as a NULL constant */
 					$$ = makeNullAConst(@1);
 				}
+			| a_expr '%'
+				{ $$ = makeLimitPercent($1); }
+			| FCONST PERCENT
+				{ $$ = makeLimitPercent(makeFloatConst($1,@1)); }
+			| ICONST PERCENT
+				{ $$ = makeLimitPercent(makeIntConst($1,@1)); }
 		;
 
 select_offset_value:
@@ -673,6 +681,11 @@ grouping_or_grouping_id:
 
 having_clause:
 			HAVING a_expr							{ $$ = $2; }
+			| /*EMPTY*/								{ $$ = NULL; }
+		;
+
+qualify_clause:
+			QUALIFY a_expr							{ $$ = $2; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 

@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
+#include "duckdb/planner/operator/logical_limit_percent.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 
@@ -79,6 +80,14 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = move(win);
 	}
 
+	if (statement.qualify) {
+		PlanSubqueries(&statement.qualify, &root);
+		auto qualify = make_unique<LogicalFilter>(move(statement.qualify));
+
+		qualify->AddChild(move(root));
+		root = move(qualify);
+	}
+
 	if (!statement.unnests.empty()) {
 		auto unnest = make_unique<LogicalUnnest>(statement.unnest_index);
 		unnest->expressions = move(statement.unnests);
@@ -97,15 +106,25 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 
 	for (size_t i = 0; i < statement.modifiers.size(); i++) {
 		auto &modifier = statement.modifiers[i];
-		if (modifier->type != ResultModifierType::LIMIT_MODIFIER) {
-			continue;
+		unique_ptr<LogicalOperator> limit = nullptr;
+		if (modifier->type == ResultModifierType::LIMIT_MODIFIER) {
+			auto &limit_modifier = (BoundLimitModifier &)*modifier;
+			if (limit_modifier.limit || limit_modifier.offset) {
+				PlanSubqueries(&limit_modifier.limit, &root);
+				PlanSubqueries(&limit_modifier.offset, &root);
+				limit = make_unique<LogicalLimit>(limit_modifier.limit_val, limit_modifier.offset_val,
+				                                  move(limit_modifier.limit), move(limit_modifier.offset));
+			}
+		} else if (modifier->type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
+			auto &limit_modifier = (BoundLimitPercentModifier &)*modifier;
+			if (limit_modifier.limit || limit_modifier.offset) {
+				PlanSubqueries(&limit_modifier.limit, &root);
+				PlanSubqueries(&limit_modifier.offset, &root);
+				limit = make_unique<LogicalLimitPercent>(limit_modifier.limit_percent, limit_modifier.offset_val,
+				                                         move(limit_modifier.limit), move(limit_modifier.offset));
+			}
 		}
-		auto &limit_modifier = (BoundLimitModifier &)*modifier;
-		if (limit_modifier.limit || limit_modifier.offset) {
-			PlanSubqueries(&limit_modifier.limit, &root);
-			PlanSubqueries(&limit_modifier.offset, &root);
-			auto limit = make_unique<LogicalLimit>(limit_modifier.limit_val, limit_modifier.offset_val,
-			                                       move(limit_modifier.limit), move(limit_modifier.offset));
+		if (limit) {
 			limit->AddChild(move(root));
 			root = move(limit);
 			// Delete from modifiers

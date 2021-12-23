@@ -18,6 +18,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
                                             unordered_map<string, Value> &named_parameters,
                                             vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                             vector<LogicalType> &return_types, vector<string> &names) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.enable_external_access) {
+		throw PermissionException("Scanning CSV files is disabled through configuration");
+	}
 	auto result = make_unique<ReadCSVData>();
 	auto &options = result->options;
 
@@ -224,12 +228,12 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["skip"] = LogicalType::BIGINT;
 }
 
-int CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p) {
+double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (ReadCSVData &)*bind_data_p;
 	if (bind_data.file_size == 0) {
 		return 100;
 	}
-	auto percentage = bind_data.bytes_read * 100 / bind_data.file_size;
+	auto percentage = (bind_data.bytes_read * 100.0) / bind_data.file_size;
 	return percentage;
 }
 

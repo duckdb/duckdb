@@ -1,3 +1,4 @@
+#define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
 
 using namespace duckdb;

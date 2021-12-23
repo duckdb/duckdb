@@ -18,6 +18,7 @@
 #endif
 
 #include "parquet_types.h"
+#include "column_writer.hpp"
 #include "thrift/protocol/TCompactProtocol.h"
 
 namespace duckdb {
@@ -25,6 +26,10 @@ class FileSystem;
 class FileOpener;
 
 class ParquetWriter {
+	friend class ColumnWriter;
+	friend class ListColumnWriter;
+	friend class StructColumnWriter;
+
 public:
 	ParquetWriter(FileSystem &fs, string file_name, FileOpener *file_opener, vector<LogicalType> types,
 	              vector<string> names, duckdb_parquet::format::CompressionCodec::type codec);
@@ -32,6 +37,10 @@ public:
 public:
 	void Flush(ChunkCollection &buffer);
 	void Finalize();
+
+	static duckdb_parquet::format::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type);
+	static bool DuckDBTypeToConvertedType(const LogicalType &duckdb_type,
+	                                      duckdb_parquet::format::ConvertedType::type &result);
 
 private:
 	string file_name;
@@ -43,6 +52,8 @@ private:
 	shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::format::FileMetaData file_meta_data;
 	std::mutex lock;
+
+	vector<unique_ptr<ColumnWriter>> column_writers;
 };
 
 } // namespace duckdb

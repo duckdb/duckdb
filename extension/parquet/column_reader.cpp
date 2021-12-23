@@ -244,17 +244,6 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 	}
 }
 
-static uint8_t ComputeBitWidth(idx_t val) {
-	if (val == 0) {
-		return 0;
-	}
-	uint8_t ret = 1;
-	while (((idx_t)(1 << ret) - 1) < val) {
-		ret++;
-	}
-	return ret;
-}
-
 void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (page_hdr.type == PageType::DATA_PAGE && !page_hdr.__isset.data_page_header) {
 		throw std::runtime_error("Missing data page header from data page");
@@ -273,8 +262,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		                          ? block->read<uint32_t>()
 		                          : page_hdr.data_page_header_v2.repetition_levels_byte_length;
 		block->available(rep_length);
-		repeated_decoder =
-		    make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, ComputeBitWidth(max_repeat));
+		repeated_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length,
+		                                             RleBpDecoder::ComputeBitWidth(max_repeat));
 		block->inc(rep_length);
 	}
 
@@ -283,8 +272,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		                          ? block->read<uint32_t>()
 		                          : page_hdr.data_page_header_v2.definition_levels_byte_length;
 		block->available(def_length);
-		defined_decoder =
-		    make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, ComputeBitWidth(max_define));
+		defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length,
+		                                            RleBpDecoder::ComputeBitWidth(max_define));
 		block->inc(def_length);
 	}
 
@@ -452,6 +441,9 @@ void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReade
 	plain_data.inc(str_len);
 }
 
+//===--------------------------------------------------------------------===//
+// List Column Reader
+//===--------------------------------------------------------------------===//
 idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
                              Vector &result_out) {
 	idx_t result_offset = 0;
@@ -512,6 +504,10 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 				// value has been defined down the stack, hence its NOT NULL
 				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
 				result_ptr[result_offset].length = 1;
+			} else if (child_defines_ptr[child_idx] == max_define - 1) {
+				// empty list
+				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
+				result_ptr[result_offset].length = 0;
 			} else {
 				// value is NULL somewhere up the stack
 				result_mask.SetInvalid(result_offset);
@@ -558,6 +554,66 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 	child_repeats_ptr = (uint8_t *)child_repeats.ptr;
 
 	child_filter.set();
+}
+
+//===--------------------------------------------------------------------===//
+// Struct Column Reader
+//===--------------------------------------------------------------------===//
+StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
+                                       idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
+                                       vector<unique_ptr<ColumnReader>> child_readers_p)
+    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
+      child_readers(move(child_readers_p)) {
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(!StructType::GetChildTypes(type).empty());
+}
+
+ColumnReader *StructColumnReader::GetChildReader(idx_t child_idx) {
+	return child_readers[child_idx].get();
+}
+
+void StructColumnReader::InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
+	for (auto &child : child_readers) {
+		child->InitializeRead(columns, protocol_p);
+	}
+}
+
+idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+                               Vector &result) {
+	auto &struct_entries = StructVector::GetEntries(result);
+	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
+
+	idx_t read_count = num_values;
+	for (idx_t i = 0; i < struct_entries.size(); i++) {
+		auto child_num_values = child_readers[i]->Read(num_values, filter, define_out, repeat_out, *struct_entries[i]);
+		if (i == 0) {
+			read_count = child_num_values;
+		} else if (read_count != child_num_values) {
+			throw std::runtime_error("Struct child row count mismatch");
+		}
+	}
+	// set the validity mask for this level
+	auto &validity = FlatVector::Validity(result);
+	for (idx_t i = 0; i < read_count; i++) {
+		if (define_out[i] < max_define) {
+			validity.SetInvalid(i);
+		}
+	}
+
+	return read_count;
+}
+
+void StructColumnReader::Skip(idx_t num_values) {
+	throw InternalException("Skip not implemented for StructColumnReader");
+}
+
+idx_t StructColumnReader::GroupRowsAvailable() {
+	for (idx_t i = 0; i < child_readers.size(); i++) {
+		if (child_readers[i]->Type().id() != LogicalTypeId::LIST) {
+			return child_readers[i]->GroupRowsAvailable();
+		}
+	}
+	return child_readers[0]->GroupRowsAvailable();
 }
 
 } // namespace duckdb

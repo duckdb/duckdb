@@ -9,6 +9,9 @@ if(NOT MSVC)
       "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wno-redundant-move"
   )
 endif()
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors")
+endif()
 
 set(DUCKDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})
 
@@ -61,7 +64,8 @@ else()
       duckdb_re2
       miniz
       utf8proc
-      hyperloglog)
+      hyperloglog
+      fastpforlib)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})

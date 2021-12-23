@@ -3,6 +3,7 @@
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/main/config.hpp"
 #endif
 
 namespace duckdb {
@@ -408,6 +409,10 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, vector<Valu
                                              unordered_map<string, Value> &named_parameters,
                                              vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                              vector<LogicalType> &return_types, vector<string> &names) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.enable_external_access) {
+		throw PermissionException("Scanning Parquet files is disabled through configuration");
+	}
 	if (SCHEMA) {
 		ParquetMetaDataOperatorData::BindSchema(return_types, names);
 	} else {

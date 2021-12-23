@@ -97,6 +97,7 @@ jobs:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
+    needs: linux-release-64
     env:
       GEN: ninja
       BUILD_VISUALIZER: 1
@@ -104,7 +105,6 @@ jobs:
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_HTTPFS: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
       AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
@@ -142,14 +142,15 @@ jobs:
     - name: Build
       run: make
 
-    - name: Test
-      run: make allunit
-
     - name: Deploy
       run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
-          ./scripts/extension-upload.sh linux-amd64
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          ./scripts/extension-upload.sh linux_amd64
+          ./scripts/extension-upload-test.sh
+        else
+          ./scripts/extension-upload-test.sh local
         fi
+
 
 
  linux-release-32:
@@ -428,3 +429,30 @@ jobs:
 
     - name: Test
       run: make allunit
+
+ amalgamation-tests:
+    name: Amalgamation Tests
+    runs-on: ubuntu-20.04
+    env:
+      CC: clang
+      CXX: clang++
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "10.0"
+
+    - name: Generate Amalgamation
+      run:  |
+          python scripts/amalgamation.py --extended
+          python scripts/parquet_amalgamation.py
+          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/parquet-amalgamation.cpp src/amalgamation/duckdb.cpp -emit-llvm -S -O0

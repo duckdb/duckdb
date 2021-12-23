@@ -109,12 +109,13 @@ public:
 	    : ExecutorTask(context), event(move(event_p)), context(context), state(state) {
 	}
 
-	void ExecuteTask() override {
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		// Initialize merge sorted and iterate until done
 		auto &global_sort_state = state.global_sort_state;
 		MergeSorter merge_sorter(global_sort_state, BufferManager::GetBufferManager(context));
 		merge_sorter.PerformInMergeRound();
 		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
 	}
 
 private:
@@ -191,7 +192,7 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, Event &event, OrderGl
 class PhysicalOrderOperatorState : public GlobalSourceState {
 public:
 	//! Payload scanner
-	unique_ptr<SortedDataScanner> scanner;
+	unique_ptr<PayloadScanner> scanner;
 };
 
 unique_ptr<GlobalSourceState> PhysicalOrder::GetGlobalSourceState(ClientContext &context) const {
@@ -210,7 +211,7 @@ void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 			return;
 		}
 		state.scanner =
-		    make_unique<SortedDataScanner>(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
+		    make_unique<PayloadScanner>(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 	}
 
 	// Scan the next data chunk

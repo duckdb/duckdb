@@ -6,17 +6,44 @@
 
 namespace duckdb {
 
-QueryResult::QueryResult(QueryResultType type, StatementType statement_type)
+BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type)
     : type(type), statement_type(statement_type), success(true) {
 }
 
-QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types_p,
-                         vector<string> names_p)
+BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types_p,
+                                 vector<string> names_p)
     : type(type), statement_type(statement_type), types(move(types_p)), names(move(names_p)), success(true) {
 	D_ASSERT(types.size() == names.size());
 }
 
-QueryResult::QueryResult(QueryResultType type, string error) : type(type), success(false), error(move(error)) {
+BaseQueryResult::BaseQueryResult(QueryResultType type, string error) : type(type), success(false), error(move(error)) {
+}
+
+BaseQueryResult::~BaseQueryResult() {
+}
+
+bool BaseQueryResult::HasError() {
+	return !success;
+}
+const string &BaseQueryResult::GetError() {
+	return error;
+}
+idx_t BaseQueryResult::ColumnCount() {
+	return types.size();
+}
+
+QueryResult::QueryResult(QueryResultType type, StatementType statement_type) : BaseQueryResult(type, statement_type) {
+}
+
+QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types_p,
+                         vector<string> names_p)
+    : BaseQueryResult(type, statement_type, move(types_p), move(names_p)) {
+}
+
+QueryResult::QueryResult(QueryResultType type, string error) : BaseQueryResult(type, move(error)) {
+}
+
+QueryResult::~QueryResult() {
 }
 
 unique_ptr<DataChunk> QueryResult::Fetch() {
@@ -183,16 +210,20 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::DOUBLE:
 		child.format = "g";
 		break;
+	case LogicalTypeId::UUID:
 	case LogicalTypeId::VARCHAR:
 		child.format = "u";
 		break;
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 		child.format = "tdD";
 		break;
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 		child.format = "ttu";
 		break;
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		child.format = "tsu:";
 		break;
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -272,6 +303,29 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	}
 	case LogicalTypeId::MAP: {
 		SetArrowMapFormat(root_holder, child, type);
+		break;
+	}
+	case LogicalTypeId::ENUM: {
+		switch (EnumType::GetPhysicalType(EnumType::GetSize(type))) {
+		case PhysicalType::UINT8:
+			child.format = "C";
+			break;
+		case PhysicalType::UINT16:
+			child.format = "S";
+			break;
+		case PhysicalType::UINT32:
+			child.format = "I";
+			break;
+		default:
+			throw InternalException("Unsupported Enum Internal Type");
+		}
+		root_holder.nested_children.emplace_back();
+		root_holder.nested_children.back().resize(1);
+		root_holder.nested_children_ptr.emplace_back();
+		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+		InitializeChild(root_holder.nested_children.back()[0]);
+		child.dictionary = root_holder.nested_children_ptr.back()[0];
+		child.dictionary->format = "u";
 		break;
 	}
 	default:

@@ -51,9 +51,10 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 		// optimizer is marked as disabled: skip
 		return;
 	}
-	context.profiler->StartPhase(OptimizerTypeToString(type));
+	auto &profiler = QueryProfiler::Get(context);
+	profiler.StartPhase(OptimizerTypeToString(type));
 	callback();
-	context.profiler->EndPhase();
+	profiler.EndPhase();
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {

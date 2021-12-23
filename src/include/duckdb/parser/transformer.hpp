@@ -23,6 +23,7 @@
 namespace duckdb {
 
 class ColumnDefinition;
+class StackChecker;
 struct OrderByNode;
 struct CopyInfo;
 struct CommonTableExpressionInfo;
@@ -33,10 +34,10 @@ struct GroupingExpressionMap;
 class Transformer {
 	static constexpr const idx_t DEFAULT_MAX_EXPRESSION_DEPTH = 1000;
 
+	friend class StackChecker;
+
 public:
-	explicit Transformer(Transformer *parent = nullptr, idx_t max_expression_depth_p = DEFAULT_MAX_EXPRESSION_DEPTH)
-	    : parent(parent), max_expression_depth(parent ? parent->max_expression_depth : max_expression_depth_p) {
-	}
+	explicit Transformer(Transformer *parent = nullptr, idx_t max_expression_depth_p = DEFAULT_MAX_EXPRESSION_DEPTH);
 
 	//! Transforms a Postgres parse tree into a set of SQL Statements
 	bool TransformParseTree(duckdb_libpgquery::PGList *tree, vector<unique_ptr<SQLStatement>> &statements);
@@ -90,6 +91,8 @@ private:
 	unique_ptr<CreateStatement> TransformCreateFunction(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateEnumStmt node into CreateStatement
 	unique_ptr<CreateStatement> TransformCreateEnum(duckdb_libpgquery::PGNode *node);
+	//! Transform a Postgres duckdb_libpgquery::T_PGAlterSeqStmt node into CreateStatement
+	unique_ptr<AlterStatement> TransformAlterSequence(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGDropStmt node into a Drop[Table,Schema]Statement
 	unique_ptr<SQLStatement> TransformDrop(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGInsertStmt node into a InsertStatement
@@ -246,14 +249,23 @@ private:
 	unique_ptr<SampleOptions> TransformSampleOptions(duckdb_libpgquery::PGNode *options);
 
 private:
-	//! Default stack limit of the transformer
-	constexpr static idx_t MAX_STACK_SIZE = 1024 * 100;
-	//! For iterative functions that create recursive objects, this is our default stack size per element
-	constexpr static idx_t DEFAULT_ENTRY_STACK_SIZE = 100;
-	int *root = nullptr;
+	//! Current stack depth
+	idx_t stack_depth;
 
-	void InitializeStackCheck(int *stack_check_var);
-	void StackCheck(idx_t extra_stack = 0);
+	void InitializeStackCheck();
+	StackChecker StackCheck(idx_t extra_stack = 1);
+};
+
+class StackChecker {
+public:
+	StackChecker(Transformer &transformer, idx_t stack_usage);
+	~StackChecker();
+	StackChecker(StackChecker &&) noexcept;
+	StackChecker(const StackChecker &) = delete;
+
+private:
+	Transformer &transformer;
+	idx_t stack_usage;
 };
 
 } // namespace duckdb

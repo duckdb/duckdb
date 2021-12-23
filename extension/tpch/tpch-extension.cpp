@@ -1,3 +1,5 @@
+#define DUCKDB_EXTENSION_MAIN
+
 #include "tpch-extension.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
