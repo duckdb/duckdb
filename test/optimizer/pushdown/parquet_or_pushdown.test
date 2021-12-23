@@ -1,5 +1,5 @@
 # name: test/optimizer/pushdown/parquet_or_pushdown.test
-# description: Test Table OR Filter Push Down
+# description: Test Parquet With Pushing Down of OR Filters
 # group: [pushdown]
 
 require parquet

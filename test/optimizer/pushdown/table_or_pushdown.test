@@ -303,10 +303,11 @@ SELECT * FROM integers WHERE a!=1 OR a>3 OR a<2 ORDER by a
 #### numeric statistics
 # notequal and constant > max
 query II
-## The predicate a!=10 is greater than the numeric_statistics::max implying that it is always true within an OR conjuction
 EXPLAIN SELECT * FROM integers WHERE a!=10 OR a>3
 ----
 physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
+
+## The predicate a!=10 is greater than the numeric_statistics::max implying that it is always true within an OR conjuction
 
 query II
 SELECT * FROM integers WHERE a!=10 OR a>3
