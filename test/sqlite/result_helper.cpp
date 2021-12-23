@@ -600,36 +600,29 @@ bool TestResultHelper::CompareValues(string lvalue_str, string rvalue_str, idx_t
 	auto sql_type = result.types[current_column];
 	if (sql_type.IsNumeric()) {
 		bool converted_lvalue = false;
-		try {
-			if (lvalue_str == "NULL") {
-				lvalue = Value(sql_type);
-			} else {
-				lvalue = Value(lvalue_str);
-				if (!lvalue.TryCastAs(sql_type)) {
-					return false;
-				}
-			}
+		bool converted_rvalue = false;
+		if (lvalue_str == "NULL") {
+			lvalue = Value(sql_type);
 			converted_lvalue = true;
-			if (rvalue_str == "NULL") {
-				rvalue = Value(sql_type);
-			} else {
-				rvalue = Value(rvalue_str);
-				if (!rvalue.TryCastAs(sql_type)) {
-					return false;
-				}
+		} else {
+			lvalue = Value(lvalue_str);
+			if (lvalue.TryCastAs(sql_type)) {
+				converted_lvalue = true;
 			}
+		}
+		if (rvalue_str == "NULL") {
+			rvalue = Value(sql_type);
+			converted_rvalue = true;
+		} else {
+			rvalue = Value(rvalue_str);
+			if (rvalue.TryCastAs(sql_type)) {
+				converted_rvalue = true;
+			}
+		}
+		if (converted_lvalue && converted_rvalue) {
 			error = !Value::ValuesAreEqual(lvalue, rvalue);
-		} catch (std::exception &ex) {
-			PrintErrorHeader("Test error!");
-			PrintLineSep();
-			PrintSQL(sql_query);
-			PrintLineSep();
-			std::cerr << termcolor::red << termcolor::bold << "Cannot convert value "
-			          << (converted_lvalue ? rvalue_str : lvalue_str) << " to type " << sql_type.ToString()
-			          << termcolor::reset << std::endl;
-			std::cerr << termcolor::red << termcolor::bold << ex.what() << termcolor::reset << std::endl;
-			PrintLineSep();
-			return false;
+		} else {
+			error = true;
 		}
 	} else if (sql_type == LogicalType::BOOLEAN) {
 		auto low_r_val = StringUtil::Lower(rvalue_str);
