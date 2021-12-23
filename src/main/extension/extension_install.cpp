@@ -1,7 +1,9 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
 
+#ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #include "httplib.hpp"
+#endif
 #include "duckdb/common/windows_undefs.hpp"
 
 #include <fstream>
@@ -59,6 +61,9 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 		throw IOException("Failed to read extension from \"%s\": no such file", extension);
 	}
 
+#ifdef DISABLE_DUCKDB_REMOTE_INSTALL
+	throw BinderException("Remote extension installation is disabled through configuration");
+#else
 	string url_template = "http://extensions.duckdb.org/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension.gz";
 
 	if (is_http_url) {
@@ -97,6 +102,7 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 	if (out.bad()) {
 		throw IOException("Failed to write extension to %s", local_extension_path);
 	}
+#endif
 }
 
 } // namespace duckdb
