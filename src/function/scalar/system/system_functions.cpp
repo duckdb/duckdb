@@ -31,6 +31,7 @@ unique_ptr<FunctionData> BindSystemFunction(ClientContext &context, ScalarFuncti
 
 static void CurrentQueryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &info = SystemBindData::GetFrom(state);
+
 	Value val(info.context.GetCurrentQuery());
 	result.Reference(val);
 }
@@ -62,6 +63,14 @@ static void TransactionIdCurrent(DataChunk &input, ExpressionState &state, Vecto
 }
 
 // version
+static void ZdongVersionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	string ver = DuckDB::LibraryVersion();
+	ver += "-zdong";
+	auto val = Value(ver);
+	result.Reference(val);
+}
+
+// version
 static void VersionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto val = Value(DuckDB::LibraryVersion());
 	result.Reference(val);
@@ -79,6 +88,7 @@ void SystemFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
 	    ScalarFunction("txid_current", {}, LogicalType::BIGINT, TransactionIdCurrent, false, BindSystemFunction));
 	set.AddFunction(ScalarFunction("version", {}, LogicalType::VARCHAR, VersionFunction));
+	set.AddFunction(ScalarFunction("zversion", {}, LogicalType::VARCHAR, ZdongVersionFunction));
 }
 
 } // namespace duckdb
