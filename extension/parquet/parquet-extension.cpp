@@ -139,11 +139,15 @@ public:
 			FileSystem &fs = FileSystem::GetFileSystem(context);
 			for (idx_t file_idx = 1; file_idx < bind_data.files.size(); file_idx++) {
 				auto &file_name = bind_data.files[file_idx];
-				auto metadata = std::dynamic_pointer_cast<ParquetFileMetadataCache>(cache.Get(file_name));
+				auto metadata = cache.Get<ParquetFileMetadataCache>(file_name);
+				if (!metadata) {
+					// missing metadata entry in cache, no usable stats
+					return nullptr;
+				}
 				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
 				                          FileSystem::DEFAULT_COMPRESSION, FileSystem::GetFileOpener(context));
-				// but we need to check if the metadata cache entries are current
-				if (!metadata || (fs.GetLastModifiedTime(*handle) >= metadata->read_time)) {
+				// we need to check if the metadata cache entries are current
+				if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
 					// missing or invalid metadata entry in cache, no usable stats overall
 					return nullptr;
 				}

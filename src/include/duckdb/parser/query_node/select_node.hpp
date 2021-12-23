@@ -39,6 +39,8 @@ public:
 	GroupByNode groups;
 	//! HAVING clause
 	unique_ptr<ParsedExpression> having;
+	//! QUALIFY clause
+	unique_ptr<ParsedExpression> qualify;
 	//! Aggregate handling during binding
 	AggregateHandling aggregate_handling;
 	//! The SAMPLE clause
