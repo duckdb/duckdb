@@ -1093,7 +1093,7 @@ bool FilterCombiner::UpdateFilterByColumn(BoundColumnRefExpression *column_ref,
 		cur_colref_to_push = column_ref;
 
 		auto or_conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
-		or_conjunction->children.emplace_back(move(comparison_expr->Copy()));
+		or_conjunction->children.emplace_back(comparison_expr->Copy());
 
 		unique_ptr<ConjunctionsToPush> conjs_to_push = make_unique<ConjunctionsToPush>();
 		conjs_to_push->conjunctions.emplace_back(move(or_conjunction));
@@ -1126,10 +1126,10 @@ bool FilterCombiner::UpdateFilterByColumn(BoundColumnRefExpression *column_ref,
 
 	auto &last_conjunction = conjunctions_to_push->conjunctions.back();
 	if (cur_conjunction->GetExpressionType() == last_conjunction->GetExpressionType()) {
-		last_conjunction->children.emplace_back(move(comparison_expr->Copy()));
+		last_conjunction->children.emplace_back(comparison_expr->Copy());
 	} else {
 		auto new_conjunction = make_unique<BoundConjunctionExpression>(cur_conjunction->GetExpressionType());
-		new_conjunction->children.emplace_back(move(comparison_expr->Copy()));
+		new_conjunction->children.emplace_back(comparison_expr->Copy());
 		conjunctions_to_push->conjunctions.emplace_back(move(new_conjunction));
 	}
 	return true;

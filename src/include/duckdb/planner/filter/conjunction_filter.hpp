@@ -27,7 +27,7 @@ public:
 	virtual FilterPropagateResult CheckStatistics(BaseStatistics &stats) = 0;
 	virtual string ToString(const string &column_name) = 0;
 	virtual bool Equals(const ConjunctionFilter &other) const {
-		return TableFilter::Equals(other);
+		return TableFilter::Equals((const TableFilter &)other);
 	}
 };
 
