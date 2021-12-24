@@ -27,12 +27,12 @@ public:
 	virtual FilterPropagateResult CheckStatistics(BaseStatistics &stats) = 0;
 	virtual string ToString(const string &column_name) = 0;
 
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Woverloaded-virtual"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Woverloaded-virtual"
 	virtual bool Equals(const ConjunctionFilter &other) const {
 		return TableFilter::Equals((const TableFilter &)other);
 	}
-	#pragma clang diagnostic pop
+#pragma clang diagnostic pop
 };
 
 class ConjunctionOrFilter : public ConjunctionFilter {
