@@ -493,22 +493,44 @@ struct DatePart {
 			return mask;
 		}
 
+		template <typename P>
+		static inline P HasPartValue(P *part_values, DatePartSpecifier part) {
+			return part_values[int(part)];
+		}
+
 		template <class TA, class TR>
-		static inline void Operation(TR *part_values, const TA &input, const part_mask_t mask) {
+		static inline void Operation(TR **part_values, const TA &input, const idx_t idx, const part_mask_t mask) {
+			TR *part_data;
 			// YMD calculations
 			int32_t yyyy = 1970;
 			int32_t mm = 0;
 			int32_t dd = 1;
 			if (mask & YMD) {
 				Date::Convert(input, yyyy, mm, dd);
-				part_values[int(DatePartSpecifier::YEAR)] = yyyy;
-				part_values[int(DatePartSpecifier::MONTH)] = mm;
-				part_values[int(DatePartSpecifier::DAY)] = dd;
-				part_values[int(DatePartSpecifier::DECADE)] = yyyy / 10;
-				part_values[int(DatePartSpecifier::CENTURY)] = (yyyy - 1) / 100 + 1;
-				part_values[int(DatePartSpecifier::MILLENNIUM)] = (yyyy - 1) / 1000 + 1;
-				part_values[int(DatePartSpecifier::QUARTER)] = (mm - 1) / Interval::MONTHS_PER_QUARTER + 1;
-				part_values[int(DatePartSpecifier::ERA)] = yyyy > 0 ? 1 : 0;
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::YEAR))) {
+					part_data[idx] = yyyy;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::MONTH))) {
+					part_data[idx] = mm;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DAY))) {
+					part_data[idx] = dd;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DECADE))) {
+					part_data[idx] = yyyy / 10;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::CENTURY))) {
+					part_data[idx] = (yyyy - 1) / 100 + 1;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::MILLENNIUM))) {
+					part_data[idx] = (yyyy - 1) / 1000 + 1;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::QUARTER))) {
+					part_data[idx] = (mm - 1) / Interval::MONTHS_PER_QUARTER + 1;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::ERA))) {
+					part_data[idx] = yyyy > 0 ? 1 : 0;
+				}
 			}
 
 			// Week calculations
@@ -518,17 +540,29 @@ struct DatePart {
 				isodow = Date::ExtractISODayOfTheWeek(input);
 				ww = Date::ExtractISOWeekNumber(input);
 				int32_t dow = isodow % 7;
-				part_values[int(DatePartSpecifier::DOW)] = dow;
-				part_values[int(DatePartSpecifier::ISODOW)] = isodow;
-				part_values[int(DatePartSpecifier::WEEK)] = ww;
-				part_values[int(DatePartSpecifier::YEARWEEK)] = yyyy * 100 + dow;
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DOW))) {
+					part_data[idx] = dow;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::ISODOW))) {
+					part_data[idx] = isodow;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::WEEK))) {
+					part_data[idx] = ww;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::YEARWEEK))) {
+					part_data[idx] = yyyy * 100 + dow;
+				}
 			}
 
 			if (mask & EPOCH) {
-				part_values[int(DatePartSpecifier::EPOCH)] = Date::Epoch(input);
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH))) {
+					part_data[idx] = Date::Epoch(input);
+				}
 			}
 			if (mask & DOY) {
-				part_values[int(DatePartSpecifier::DOY)] = Date::ExtractDayOfTheYear(input);
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DOY))) {
+					part_data[idx] = Date::ExtractDayOfTheYear(input);
+				}
 			}
 		}
 	};
@@ -837,50 +871,91 @@ int64_t DatePart::TimezoneOperator::Operation(dtime_t input) {
 }
 
 template <>
-void DatePart::StructOperator::Operation(int64_t *part_values, const dtime_t &input, const part_mask_t mask) {
+void DatePart::StructOperator::Operation(int64_t **part_values, const dtime_t &input, const idx_t idx,
+                                         const part_mask_t mask) {
+	int64_t *part_data;
 	if (mask & TIME) {
 		const auto micros = MicrosecondsOperator::Operation<dtime_t, int64_t>(input);
-		part_values[int(DatePartSpecifier::MICROSECONDS)] = micros;
-		part_values[int(DatePartSpecifier::MILLISECONDS)] = micros / Interval::MICROS_PER_MSEC;
-		part_values[int(DatePartSpecifier::SECOND)] = micros / Interval::MICROS_PER_SEC;
-		part_values[int(DatePartSpecifier::MINUTE)] = MinutesOperator::Operation<dtime_t, int64_t>(input);
-		part_values[int(DatePartSpecifier::HOUR)] = HoursOperator::Operation<dtime_t, int64_t>(input);
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MICROSECONDS))) {
+			part_data[idx] = micros;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MILLISECONDS))) {
+			part_data[idx] = micros / Interval::MICROS_PER_MSEC;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::SECOND))) {
+			part_data[idx] = micros / Interval::MICROS_PER_SEC;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MINUTE))) {
+			part_data[idx] = MinutesOperator::Operation<dtime_t, int64_t>(input);
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::HOUR))) {
+			part_data[idx] = HoursOperator::Operation<dtime_t, int64_t>(input);
+		}
 	}
 }
 
 template <>
-void DatePart::StructOperator::Operation(int64_t *part_values, const timestamp_t &input, const part_mask_t mask) {
+void DatePart::StructOperator::Operation(int64_t **part_values, const timestamp_t &input, const idx_t idx,
+                                         const part_mask_t mask) {
 	date_t d;
 	dtime_t t;
 	Timestamp::Convert(input, d, t);
-	Operation(part_values, d, mask);
-	Operation(part_values, t, mask);
+	Operation(part_values, d, idx, mask);
+	Operation(part_values, t, idx, mask);
 }
 
 template <>
-void DatePart::StructOperator::Operation(int64_t *part_values, const interval_t &input, const part_mask_t mask) {
+void DatePart::StructOperator::Operation(int64_t **part_values, const interval_t &input, const idx_t idx,
+                                         const part_mask_t mask) {
+	int64_t *part_data;
 	if (mask & YMD) {
 		const auto mm = input.months % Interval::MONTHS_PER_YEAR;
-		part_values[int(DatePartSpecifier::YEAR)] = input.months / Interval::MONTHS_PER_YEAR;
-		part_values[int(DatePartSpecifier::MONTH)] = mm;
-		part_values[int(DatePartSpecifier::DAY)] = input.days;
-		part_values[int(DatePartSpecifier::DECADE)] = input.months / Interval::MONTHS_PER_DECADE;
-		part_values[int(DatePartSpecifier::CENTURY)] = input.months / Interval::MONTHS_PER_CENTURY;
-		part_values[int(DatePartSpecifier::MILLENNIUM)] = input.months / Interval::MONTHS_PER_MILLENIUM;
-		part_values[int(DatePartSpecifier::QUARTER)] = mm / Interval::MONTHS_PER_QUARTER + 1;
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::YEAR))) {
+			part_data[idx] = input.months / Interval::MONTHS_PER_YEAR;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MONTH))) {
+			part_data[idx] = mm;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::DAY))) {
+			part_data[idx] = input.days;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::DECADE))) {
+			part_data[idx] = input.months / Interval::MONTHS_PER_DECADE;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::CENTURY))) {
+			part_data[idx] = input.months / Interval::MONTHS_PER_CENTURY;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MILLENNIUM))) {
+			part_data[idx] = input.months / Interval::MONTHS_PER_MILLENIUM;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::QUARTER))) {
+			part_data[idx] = mm / Interval::MONTHS_PER_QUARTER + 1;
+		}
 	}
 
 	if (mask & TIME) {
 		const auto micros = MicrosecondsOperator::Operation<interval_t, int64_t>(input);
-		part_values[int(DatePartSpecifier::MICROSECONDS)] = micros;
-		part_values[int(DatePartSpecifier::MILLISECONDS)] = micros / Interval::MICROS_PER_MSEC;
-		part_values[int(DatePartSpecifier::SECOND)] = micros / Interval::MICROS_PER_SEC;
-		part_values[int(DatePartSpecifier::MINUTE)] = MinutesOperator::Operation<interval_t, int64_t>(input);
-		part_values[int(DatePartSpecifier::HOUR)] = HoursOperator::Operation<interval_t, int64_t>(input);
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MICROSECONDS))) {
+			part_data[idx] = micros;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MILLISECONDS))) {
+			part_data[idx] = micros / Interval::MICROS_PER_MSEC;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::SECOND))) {
+			part_data[idx] = micros / Interval::MICROS_PER_SEC;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MINUTE))) {
+			part_data[idx] = MinutesOperator::Operation<interval_t, int64_t>(input);
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::HOUR))) {
+			part_data[idx] = HoursOperator::Operation<interval_t, int64_t>(input);
+		}
 	}
 
 	if (mask & EPOCH) {
-		part_values[int(DatePartSpecifier::EPOCH)] = EpochOperator::Operation<interval_t, int64_t>(input);
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH))) {
+			part_data[idx] = EpochOperator::Operation<interval_t, int64_t>(input);
+		}
 	}
 }
 
@@ -1088,8 +1163,20 @@ struct StructDatePart {
 
 		const auto count = args.size();
 		Vector &input = args.data[0];
-		vector<int64_t> part_values(int(DatePartSpecifier::TIMEZONE_MINUTE) + 1, 0);
+		vector<int64_t *> part_values(int(DatePartSpecifier::TIMEZONE_MINUTE) + 1, nullptr);
 		const auto part_mask = DatePart::StructOperator::GetMask(info.part_codes);
+
+		auto &child_entries = StructVector::GetEntries(result);
+
+		// The first computer of a part "owns" it
+		// and other requestors just reference the owner
+		vector<size_t> owners(int(DatePartSpecifier::TIMEZONE_MINUTE) + 1, child_entries.size());
+		for (size_t col = 0; col < child_entries.size(); ++col) {
+			const auto part_index = size_t(info.part_codes[col]);
+			if (owners[part_index] == child_entries.size()) {
+				owners[part_index] = col;
+			}
+		}
 
 		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -1098,15 +1185,16 @@ struct StructDatePart {
 				ConstantVector::SetNull(result, true);
 			} else {
 				ConstantVector::SetNull(result, false);
-				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
-				DatePart::StructOperator::Operation(part_values.data(), tdata[0], part_mask);
-				auto &child_entries = StructVector::GetEntries(result);
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
 					ConstantVector::SetNull(*child_entry, false);
-					auto pdata = ConstantVector::GetData<int64_t>(*child_entry);
-					pdata[0] = part_values[int(info.part_codes[col])];
+					const auto part_index = size_t(info.part_codes[col]);
+					if (owners[part_index] == col) {
+						part_values[part_index] = ConstantVector::GetData<int64_t>(*child_entry);
+					}
 				}
+				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
+				DatePart::StructOperator::Operation(part_values.data(), tdata[0], 0, part_mask);
 			}
 		} else {
 			VectorData rdata;
@@ -1115,30 +1203,48 @@ struct StructDatePart {
 			const auto &arg_valid = rdata.validity;
 			auto tdata = (const INPUT_TYPE *)rdata.data;
 
+			// Start with a valid flat vector
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			auto &child_entries = StructVector::GetEntries(result);
-			for (auto &child_entry : child_entries) {
-				child_entry->SetVectorType(VectorType::FLAT_VECTOR);
+			auto &res_valid = FlatVector::Validity(result);
+			if (res_valid.GetData()) {
+				res_valid.SetAllValid(count);
 			}
 
-			auto &res_valid = FlatVector::Validity(result);
+			// Start with valid children
+			for (size_t col = 0; col < child_entries.size(); ++col) {
+				auto &child_entry = child_entries[col];
+				child_entry->SetVectorType(VectorType::FLAT_VECTOR);
+				auto &child_validity = FlatVector::Validity(*child_entry);
+				if (child_validity.GetData()) {
+					child_validity.SetAllValid(count);
+				}
+
+				// Pre-multiplex
+				const auto part_index = size_t(info.part_codes[col]);
+				if (owners[part_index] == col) {
+					part_values[part_index] = FlatVector::GetData<int64_t>(*child_entry);
+				}
+			}
+
 			for (idx_t i = 0; i < count; ++i) {
 				const auto idx = rdata.sel->get_index(i);
 				if (arg_valid.RowIsValid(idx)) {
-					res_valid.SetValid(idx);
-					DatePart::StructOperator::Operation(part_values.data(), tdata[idx], part_mask);
-					for (size_t col = 0; col < child_entries.size(); ++col) {
-						auto &child_entry = child_entries[col];
-						FlatVector::Validity(*child_entry).SetValid(idx);
-						auto pdata = FlatVector::GetData<int64_t>(*child_entry);
-						pdata[idx] = part_values[int(info.part_codes[col])];
-					}
+					DatePart::StructOperator::Operation(part_values.data(), tdata[idx], idx, part_mask);
 				} else {
 					res_valid.SetInvalid(idx);
 					for (auto &child_entry : child_entries) {
 						FlatVector::Validity(*child_entry).SetInvalid(idx);
 					}
 				}
+			}
+		}
+
+		// Reference any duplicate parts
+		for (size_t col = 0; col < child_entries.size(); ++col) {
+			const auto part_index = size_t(info.part_codes[col]);
+			const auto owner = owners[part_index];
+			if (owner != col) {
+				child_entries[col]->Reference(*child_entries[owner]);
 			}
 		}
 

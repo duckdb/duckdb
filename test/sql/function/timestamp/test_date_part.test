@@ -161,6 +161,49 @@ SELECT DATE_PART(['hour', 'minute', 'microsecond'], '1962-07-31 12:20:48.123456'
 ----
 {'hour': 12, 'minute': 20, 'microsecond': 48123456}
 
+# Aliases
+query I
+SELECT DATE_PART(['month', 'months', 'mon'], '1962-07-31 12:20:48.123456'::TIMESTAMP);
+----
+{'month': 7, 'months': 7, 'mon': 7}
+
+query II
+SELECT ts::DATE AS d, DATE_PART(['year', 'month', 'months'], ts) AS parts
+FROM timestamps
+ORDER BY 1;
+----
+NULL	NULL
+1962-07-31	{'year': 1962, 'month': 7, 'months': 7}
+1969-01-01	{'year': 1969, 'month': 1, 'months': 1}
+1992-01-01	{'year': 1992, 'month': 1, 'months': 1}
+1992-01-01	{'year': 1992, 'month': 1, 'months': 1}
+1992-01-01	{'year': 1992, 'month': 1, 'months': 1}
+1993-08-14	{'year': 1993, 'month': 8, 'months': 8}
+1993-08-14	{'year': 1993, 'month': 8, 'months': 8}
+2001-04-20	{'year': 2001, 'month': 4, 'months': 4}
+2001-04-20	{'year': 2001, 'month': 4, 'months': 4}
+2004-01-31	{'year': 2004, 'month': 1, 'months': 1}
+2004-01-31	{'year': 2004, 'month': 1, 'months': 1}
+2004-02-01	{'year': 2004, 'month': 2, 'months': 2}
+2004-02-01	{'year': 2004, 'month': 2, 'months': 2}
+2004-02-29	{'year': 2004, 'month': 2, 'months': 2}
+2008-01-01	{'year': 2008, 'month': 1, 'months': 1}
+2008-01-01	{'year': 2008, 'month': 1, 'months': 1}
+2008-01-01	{'year': 2008, 'month': 1, 'months': 1}
+2008-01-01	{'year': 2008, 'month': 1, 'months': 1}
+2008-01-01	{'year': 2008, 'month': 1, 'months': 1}
+2008-01-01	{'year': 2008, 'month': 1, 'months': 1}
+2008-01-01	{'year': 2008, 'month': 1, 'months': 1}
+2008-01-01	{'year': 2008, 'month': 1, 'months': 1}
+2019-01-06	{'year': 2019, 'month': 1, 'months': 1}
+2019-01-06	{'year': 2019, 'month': 1, 'months': 1}
+2020-01-01	{'year': 2020, 'month': 1, 'months': 1}
+2020-12-31	{'year': 2020, 'month': 12, 'months': 12}
+2021-04-15	{'year': 2021, 'month': 4, 'months': 4}
+2021-04-15	{'year': 2021, 'month': 4, 'months': 4}
+2021-05-02	{'year': 2021, 'month': 5, 'months': 5}
+2021-12-01	{'year': 2021, 'month': 12, 'months': 12}
+
 # Invalid parts
 statement error
 SELECT ts, DATE_PART(['duck', 'month', 'day'], ts) AS parts
