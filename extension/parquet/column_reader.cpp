@@ -157,7 +157,7 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 				throw InternalException("Unrecognized type for Decimal");
 			}
 		default:
-			throw NotImplementedException("Unrecognized type for Decimal");
+			throw NotImplementedException("Unrecognized Parquet type for Decimal");
 		}
 		break;
 	default:
@@ -564,8 +564,7 @@ StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p
                                        vector<unique_ptr<ColumnReader>> child_readers_p)
     : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
       child_readers(move(child_readers_p)) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
-	D_ASSERT(!StructType::GetChildTypes(type).empty());
+	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 }
 
 ColumnReader *StructColumnReader::GetChildReader(idx_t child_idx) {

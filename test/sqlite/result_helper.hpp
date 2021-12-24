@@ -42,7 +42,7 @@ public:
 	static void PrintLineSep();
 	static void PrintHeader(string header);
 	static void PrintSQL(string sql);
-	void PrintErrorHeader(const char *description);
+	void PrintErrorHeader(const string &description);
 	static void PrintResultError(vector<string> &result_values, vector<string> &values, idx_t expected_column_count,
 	                             bool row_wise);
 	static void PrintResultError(MaterializedQueryResult &result, vector<string> &values, idx_t expected_column_count,
