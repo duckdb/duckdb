@@ -13,7 +13,7 @@ coverage:
          # advanced settings
         if_not_found: failure
         if_ci_failed: failure
-        informational: false
+        informational: true
         only_pulls: false
     patch:
       default:

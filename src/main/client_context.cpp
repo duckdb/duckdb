@@ -52,7 +52,7 @@ struct ActiveQueryContext {
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : profiler(make_unique<QueryProfiler>(*this)), query_profiler_history(make_unique<QueryProfilerHistory>()),
+    : profiler(make_shared<QueryProfiler>(*this)), query_profiler_history(make_unique<QueryProfilerHistory>()),
       db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false),
       temporary_objects(make_unique<SchemaCatalogEntry>(&db->GetCatalog(), TEMP_SCHEMA, true)),
       catalog_search_path(make_unique<CatalogSearchPath>(*this)),
@@ -147,7 +147,7 @@ string ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bo
 			auto &prev_profilers = query_profiler_history->GetPrevProfilers();
 			prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(profiler));
 			// Reinitialize the query profiler
-			profiler = make_unique<QueryProfiler>(*this);
+			profiler = make_shared<QueryProfiler>(*this);
 			// Propagate settings of the saved query into the new profiler.
 			profiler->Propagate(*prev_profilers.back().second);
 			if (prev_profilers.size() >= query_profiler_history->GetPrevProfilersSize()) {

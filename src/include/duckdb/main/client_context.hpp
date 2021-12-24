@@ -55,7 +55,7 @@ public:
 	DUCKDB_API ~ClientContext();
 
 	//! Query profiler
-	unique_ptr<QueryProfiler> profiler;
+	shared_ptr<QueryProfiler> profiler;
 	//! QueryProfiler History
 	unique_ptr<QueryProfilerHistory> query_profiler_history;
 	//! The database that this client is connected to
