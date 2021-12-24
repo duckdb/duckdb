@@ -30,7 +30,7 @@ string ConjunctionOrFilter::ToString(const string &column_name) {
 	return result;
 }
 
-bool ConjunctionOrFilter::Equals(const ConjunctionFilter &other_p) const {
+bool ConjunctionOrFilter::Equals(const TableFilter &other_p) const {
 	if (!ConjunctionFilter::Equals(other_p)) {
 		return false;
 	}
@@ -75,7 +75,7 @@ string ConjunctionAndFilter::ToString(const string &column_name) {
 	return result;
 }
 
-bool ConjunctionAndFilter::Equals(const ConjunctionFilter &other_p) const {
+bool ConjunctionAndFilter::Equals(const TableFilter &other_p) const {
 	if (!ConjunctionFilter::Equals(other_p)) {
 		return false;
 	}

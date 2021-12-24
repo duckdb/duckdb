@@ -27,12 +27,9 @@ public:
 	virtual FilterPropagateResult CheckStatistics(BaseStatistics &stats) = 0;
 	virtual string ToString(const string &column_name) = 0;
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Woverloaded-virtual"
-	virtual bool Equals(const ConjunctionFilter &other) const {
-		return TableFilter::Equals((const TableFilter &)other);
+	virtual bool Equals(const TableFilter &other) const {
+		return TableFilter::Equals(other);
 	}
-#pragma clang diagnostic pop
 };
 
 class ConjunctionOrFilter : public ConjunctionFilter {
@@ -42,7 +39,7 @@ public:
 public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	string ToString(const string &column_name) override;
-	bool Equals(const ConjunctionFilter &other) const override;
+	bool Equals(const TableFilter &other) const override;
 };
 
 class ConjunctionAndFilter : public ConjunctionFilter {
@@ -52,7 +49,7 @@ public:
 public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	string ToString(const string &column_name) override;
-	bool Equals(const ConjunctionFilter &other) const override;
+	bool Equals(const TableFilter &other) const override;
 };
 
 } // namespace duckdb
