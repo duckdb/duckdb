@@ -223,3 +223,15 @@ ORDER BY 1;
 1992-01-01	{'year': 1992, 'month': 1, 'day': 1}
 1992-03-03	{'year': 1992, 'month': 3, 'day': 3}
 1992-05-05	{'year': 1992, 'month': 5, 'day': 5}
+
+
+# Invalid parts
+
+foreach hour minute second millisecond microsecond offset
+
+statement error
+SELECT d, DATE_PART(['${datepart}'], d) AS parts
+FROM dates
+ORDER BY 1;
+
+endloop
