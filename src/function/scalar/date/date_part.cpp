@@ -77,6 +77,73 @@ DatePartSpecifier GetDatePartSpecifier(const string &specifier) {
 	return result;
 }
 
+DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType &type) {
+	const auto part = GetDatePartSpecifier(specifier);
+	switch (type.id()) {
+	case LogicalType::TIMESTAMP:
+	case LogicalType::TIMESTAMP_TZ:
+		return part;
+	case LogicalType::DATE:
+		switch (part) {
+		case DatePartSpecifier::YEAR:
+		case DatePartSpecifier::MONTH:
+		case DatePartSpecifier::DAY:
+		case DatePartSpecifier::DECADE:
+		case DatePartSpecifier::CENTURY:
+		case DatePartSpecifier::MILLENNIUM:
+		case DatePartSpecifier::DOW:
+		case DatePartSpecifier::ISODOW:
+		case DatePartSpecifier::WEEK:
+		case DatePartSpecifier::QUARTER:
+		case DatePartSpecifier::DOY:
+		case DatePartSpecifier::YEARWEEK:
+		case DatePartSpecifier::ERA:
+			return part;
+		default:
+			break;
+		}
+		break;
+	case LogicalType::TIME:
+		switch (part) {
+		case DatePartSpecifier::MICROSECONDS:
+		case DatePartSpecifier::MILLISECONDS:
+		case DatePartSpecifier::SECOND:
+		case DatePartSpecifier::MINUTE:
+		case DatePartSpecifier::HOUR:
+		case DatePartSpecifier::EPOCH:
+		case DatePartSpecifier::OFFSET:
+			return part;
+		default:
+			break;
+		}
+		break;
+	case LogicalType::INTERVAL:
+		switch (part) {
+		case DatePartSpecifier::YEAR:
+		case DatePartSpecifier::MONTH:
+		case DatePartSpecifier::DAY:
+		case DatePartSpecifier::DECADE:
+		case DatePartSpecifier::CENTURY:
+		case DatePartSpecifier::QUARTER:
+		case DatePartSpecifier::MILLENNIUM:
+		case DatePartSpecifier::MICROSECONDS:
+		case DatePartSpecifier::MILLISECONDS:
+		case DatePartSpecifier::SECOND:
+		case DatePartSpecifier::MINUTE:
+		case DatePartSpecifier::HOUR:
+		case DatePartSpecifier::EPOCH:
+			return part;
+		default:
+			break;
+		}
+		break;
+	default:
+		break;
+	}
+
+	throw NotImplementedException("\"%s\" units \"%s\" not recognized", LogicalTypeIdToString(type.id()), specifier);
+}
+
 template <class T>
 static void LastYearFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	int32_t last_year = 0;
@@ -842,7 +909,7 @@ int64_t DatePart::OffsetOperator::Operation(interval_t input) {
 
 template <>
 int64_t DatePart::OffsetOperator::Operation(dtime_t input) {
-	throw NotImplementedException("\"time\" units \"offset\" not recognized");
+	return 0;
 }
 
 template <>
@@ -865,6 +932,12 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const dtime_t &i
 		}
 		if ((part_data = HasPartValue(part_values, DatePartSpecifier::HOUR))) {
 			part_data[idx] = HoursOperator::Operation<dtime_t, int64_t>(input);
+		}
+	}
+
+	if (mask & ZONE) {
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::OFFSET))) {
+			part_data[idx] = 0;
 		}
 	}
 }
@@ -930,6 +1003,12 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const interval_t
 	if (mask & EPOCH) {
 		if ((part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH))) {
 			part_data[idx] = EpochOperator::Operation<interval_t, int64_t>(input);
+		}
+	}
+
+	if (mask & ZONE) {
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::OFFSET))) {
+			part_data[idx] = 0;
 		}
 	}
 }
@@ -1110,7 +1189,7 @@ struct StructDatePart {
 					throw BinderException("NULL struct entry name in %s", bound_function.name);
 				}
 				const auto part_name = part_value.ToString();
-				const auto part_code = GetDatePartSpecifier(part_name);
+				const auto part_code = GetDateTypePartSpecifier(part_name, arguments[1]->return_type);
 				if (name_collision_set.find(part_name) != name_collision_set.end()) {
 					throw BinderException("Duplicate struct entry name \"%s\" in %s", part_name, bound_function.name);
 				}
