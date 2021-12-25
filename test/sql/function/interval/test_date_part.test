@@ -107,3 +107,14 @@ ORDER BY 1;
 42 days	{'year': 0, 'month': 0, 'day': 42}
 1 year 4 months	{'year': 1, 'month': 4, 'day': 0}
 2 years	{'year': 2, 'month': 0, 'day': 0}
+
+# Invalid parts
+
+foreach datepart dow isodow doy week yearweek era timezone timezone_hour timezone_minute
+
+statement error
+SELECT d, DATE_PART(['${datepart}'], d) AS parts
+FROM dates
+ORDER BY 1;
+
+endloop

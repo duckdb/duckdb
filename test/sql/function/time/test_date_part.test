@@ -62,6 +62,15 @@ SELECT date_part(s, d) FROM times;
 10
 10001
 
+foreach datepart timezone timezone_hour timezone_minute
+
+query I
+select date_part('${datepart}', time '10:00:00');
+----
+0
+
+endloop
+
 # time gives errors for date-only parts
 statement error
 SELECT era(i) FROM times
@@ -123,9 +132,6 @@ select extract(era from time '10:00:00');
 statement error
 select date_part('era', time '10:00:00');
 
-statement error
-select date_part('offset', time '10:00:00');
-
 #
 # Structs
 #
@@ -138,3 +144,14 @@ ORDER BY 1;
 20:08:10.001	{'hour': 20, 'minute': 8, 'microsecond': 10001000}
 20:08:10.33	{'hour': 20, 'minute': 8, 'microsecond': 10330000}
 20:08:10.998	{'hour': 20, 'minute': 8, 'microsecond': 10998000}
+
+# Invalid parts
+
+foreach datepart year month day decade century millennium quarter dow isodow doy week yearweek era
+
+statement error
+SELECT d, DATE_PART(['${datepart}'], d) AS parts
+FROM times
+ORDER BY 1;
+
+endloop
