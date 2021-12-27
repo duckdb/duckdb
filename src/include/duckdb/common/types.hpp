@@ -520,6 +520,11 @@ struct StructType {
 	DUCKDB_API static idx_t GetChildCount(const LogicalType &type);
 };
 
+struct MapType {
+	DUCKDB_API static const LogicalType &KeyType(const LogicalType &type);
+	DUCKDB_API static const LogicalType &ValueType(const LogicalType &type);
+};
+
 
 string LogicalTypeIdToString(LogicalTypeId type);
 

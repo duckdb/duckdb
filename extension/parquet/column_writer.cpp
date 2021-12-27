@@ -40,8 +40,10 @@ using duckdb_parquet::format::Type;
 //===--------------------------------------------------------------------===//
 // ColumnWriter
 //===--------------------------------------------------------------------===//
-ColumnWriter::ColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define)
-    : writer(writer), schema_idx(schema_idx), max_repeat(max_repeat), max_define(max_define) {
+ColumnWriter::ColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
+                           bool can_have_nulls)
+    : writer(writer), schema_idx(schema_idx), max_repeat(max_repeat), max_define(max_define),
+      can_have_nulls(can_have_nulls) {
 }
 ColumnWriter::~ColumnWriter() {
 }
@@ -196,6 +198,9 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 			} else if (validity.RowIsValid(vector_index)) {
 				state.definition_levels.push_back(define_value);
 			} else {
+				if (!can_have_nulls) {
+					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
+				}
 				state.definition_levels.push_back(null_value);
 			}
 			if (parent->is_empty.empty() || !parent->is_empty[current_index]) {
@@ -208,6 +213,9 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 			if (validity.RowIsValid(i)) {
 				state.definition_levels.push_back(define_value);
 			} else {
+				if (!can_have_nulls) {
+					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
+				}
 				state.definition_levels.push_back(null_value);
 			}
 		}
@@ -490,8 +498,9 @@ static void TemplatedWritePlain(Vector &col, idx_t chunk_start, idx_t chunk_end,
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 class StandardColumnWriter : public ColumnWriter {
 public:
-	StandardColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define)
-	    : ColumnWriter(writer, schema_idx, max_repeat, max_define) {
+	StandardColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
+	                     bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls) {
 	}
 	~StandardColumnWriter() override = default;
 
@@ -518,8 +527,9 @@ public:
 
 class BooleanColumnWriter : public ColumnWriter {
 public:
-	BooleanColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define)
-	    : ColumnWriter(writer, schema_idx, max_repeat, max_define) {
+	BooleanColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
+	                    bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls) {
 	}
 	~BooleanColumnWriter() override = default;
 
@@ -570,8 +580,9 @@ public:
 //===--------------------------------------------------------------------===//
 class DecimalColumnWriter : public ColumnWriter {
 public:
-	DecimalColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define)
-	    : ColumnWriter(writer, schema_idx, max_repeat, max_define) {
+	DecimalColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
+	                    bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls) {
 	}
 	~DecimalColumnWriter() override = default;
 
@@ -596,8 +607,8 @@ public:
 //===--------------------------------------------------------------------===//
 class StringColumnWriter : public ColumnWriter {
 public:
-	StringColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define)
-	    : ColumnWriter(writer, schema_idx, max_repeat, max_define) {
+	StringColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define, bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls) {
 	}
 	~StringColumnWriter() override = default;
 
@@ -627,8 +638,9 @@ public:
 class StructColumnWriter : public ColumnWriter {
 public:
 	StructColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
-	                   vector<unique_ptr<ColumnWriter>> child_writers_p)
-	    : ColumnWriter(writer, schema_idx, max_repeat, max_define), child_writers(move(child_writers_p)) {
+	                   vector<unique_ptr<ColumnWriter>> child_writers_p, bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls),
+	      child_writers(move(child_writers_p)) {
 	}
 	~StructColumnWriter() override = default;
 
@@ -723,8 +735,8 @@ void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 class ListColumnWriter : public ColumnWriter {
 public:
 	ListColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
-	                 unique_ptr<ColumnWriter> child_writer_p)
-	    : ColumnWriter(writer, schema_idx, max_repeat, max_define), child_writer(move(child_writer_p)) {
+	                 unique_ptr<ColumnWriter> child_writer_p, bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls), child_writer(move(child_writer_p)) {
 	}
 	~ListColumnWriter() override = default;
 
@@ -810,6 +822,9 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 				state.is_empty.push_back(false);
 			}
 		} else {
+			if (!can_have_nulls) {
+				throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
+			}
 			state.definition_levels.push_back(max_define - 1);
 			state.repetition_levels.push_back(first_repeat_level);
 			state.is_empty.push_back(true);
@@ -846,13 +861,18 @@ void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 //===--------------------------------------------------------------------===//
 unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas,
                                                              ParquetWriter &writer, const LogicalType &type,
-                                                             const string &name, idx_t max_repeat, idx_t max_define) {
+                                                             const string &name, idx_t max_repeat, idx_t max_define,
+                                                             bool can_have_nulls) {
+	auto null_type = can_have_nulls ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
+	if (!can_have_nulls) {
+		max_define--;
+	}
 	idx_t schema_idx = schemas.size();
 	if (type.id() == LogicalTypeId::STRUCT) {
 		auto &child_types = StructType::GetChildTypes(type);
 		// set up the schema element for this struct
 		duckdb_parquet::format::SchemaElement schema_element;
-		schema_element.repetition_type = FieldRepetitionType::OPTIONAL;
+		schema_element.repetition_type = null_type;
 		schema_element.num_children = child_types.size();
 		schema_element.__isset.num_children = true;
 		schema_element.__isset.type = false;
@@ -866,7 +886,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 			child_writers.push_back(CreateWriterRecursive(schemas, writer, child_type.second, child_type.first,
 			                                              max_repeat, max_define + 1));
 		}
-		return make_unique<StructColumnWriter>(writer, schema_idx, max_repeat, max_define, move(child_writers));
+		return make_unique<StructColumnWriter>(writer, schema_idx, max_repeat, max_define, move(child_writers),
+		                                       can_have_nulls);
 	}
 	if (type.id() == LogicalTypeId::LIST) {
 		auto &child_type = ListType::GetChildType(type);
@@ -874,7 +895,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		// for some reason we only set the converted type in the OPTIONAL element
 		// first an OPTIONAL element
 		duckdb_parquet::format::SchemaElement optional_element;
-		optional_element.repetition_type = FieldRepetitionType::OPTIONAL;
+		optional_element.repetition_type = null_type;
 		optional_element.num_children = 1;
 		optional_element.converted_type = ConvertedType::LIST;
 		optional_element.__isset.num_children = true;
@@ -894,12 +915,63 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		repeated_element.name = "list";
 		schemas.push_back(move(repeated_element));
 
-		auto child_writer = CreateWriterRecursive(schemas, writer, child_type, "child", max_repeat + 1, max_define + 2);
-		return make_unique<ListColumnWriter>(writer, schema_idx, max_repeat, max_define, move(child_writer));
+		auto child_writer =
+		    CreateWriterRecursive(schemas, writer, child_type, "element", max_repeat + 1, max_define + 2);
+		return make_unique<ListColumnWriter>(writer, schema_idx, max_repeat, max_define, move(child_writer),
+		                                     can_have_nulls);
+	}
+	if (type.id() == LogicalTypeId::MAP) {
+		// map type
+		// maps are stored as follows:
+		// <map-repetition> group <name> (MAP) {
+		// 	repeated group key_value {
+		// 		required <key-type> key;
+		// 		<value-repetition> <value-type> value;
+		// 	}
+		// }
+		// top map element
+		duckdb_parquet::format::SchemaElement top_element;
+		top_element.repetition_type = null_type;
+		top_element.num_children = 1;
+		top_element.converted_type = ConvertedType::MAP;
+		top_element.__isset.repetition_type = true;
+		top_element.__isset.num_children = true;
+		top_element.__isset.converted_type = true;
+		top_element.__isset.type = false;
+		top_element.name = name;
+		schemas.push_back(move(top_element));
+
+		// key_value element
+		duckdb_parquet::format::SchemaElement kv_element;
+		kv_element.repetition_type = FieldRepetitionType::REPEATED;
+		kv_element.num_children = 2;
+		kv_element.__isset.repetition_type = true;
+		kv_element.__isset.num_children = true;
+		kv_element.__isset.type = false;
+		kv_element.name = "key_value";
+		schemas.push_back(move(kv_element));
+
+		// construct the child types recursively
+		vector<LogicalType> kv_types {ListType::GetChildType(MapType::KeyType(type)),
+		                              ListType::GetChildType(MapType::ValueType(type))};
+		vector<string> kv_names {"key", "value"};
+		vector<unique_ptr<ColumnWriter>> child_writers;
+		child_writers.reserve(2);
+		for (idx_t i = 0; i < 2; i++) {
+			// key needs to be marked as REQUIRED
+			bool is_key = i == 0;
+			auto child_writer = CreateWriterRecursive(schemas, writer, kv_types[i], kv_names[i], max_repeat + 1,
+			                                          max_define + 2, !is_key);
+			auto list_writer = make_unique<ListColumnWriter>(writer, schema_idx, max_repeat, max_define,
+			                                                 move(child_writer), can_have_nulls);
+			child_writers.push_back(move(list_writer));
+		}
+		return make_unique<StructColumnWriter>(writer, schema_idx, max_repeat, max_define, move(child_writers),
+		                                       can_have_nulls);
 	}
 	duckdb_parquet::format::SchemaElement schema_element;
 	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type);
-	schema_element.repetition_type = FieldRepetitionType::OPTIONAL;
+	schema_element.repetition_type = null_type;
 	schema_element.num_children = 0;
 	schema_element.__isset.num_children = true;
 	schema_element.__isset.type = true;
@@ -911,44 +983,54 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return make_unique<BooleanColumnWriter>(writer, schema_idx, max_repeat, max_define);
+		return make_unique<BooleanColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::TINYINT:
-		return make_unique<StandardColumnWriter<int8_t, int32_t>>(writer, schema_idx, max_repeat, max_define);
+		return make_unique<StandardColumnWriter<int8_t, int32_t>>(writer, schema_idx, max_repeat, max_define,
+		                                                          can_have_nulls);
 	case LogicalTypeId::SMALLINT:
-		return make_unique<StandardColumnWriter<int16_t, int32_t>>(writer, schema_idx, max_repeat, max_define);
+		return make_unique<StandardColumnWriter<int16_t, int32_t>>(writer, schema_idx, max_repeat, max_define,
+		                                                           can_have_nulls);
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
-		return make_unique<StandardColumnWriter<int32_t, int32_t>>(writer, schema_idx, max_repeat, max_define);
+		return make_unique<StandardColumnWriter<int32_t, int32_t>>(writer, schema_idx, max_repeat, max_define,
+		                                                           can_have_nulls);
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:
-		return make_unique<StandardColumnWriter<int64_t, int64_t>>(writer, schema_idx, max_repeat, max_define);
+		return make_unique<StandardColumnWriter<int64_t, int64_t>>(writer, schema_idx, max_repeat, max_define,
+		                                                           can_have_nulls);
 	case LogicalTypeId::HUGEINT:
-		return make_unique<StandardColumnWriter<hugeint_t, double, ParquetHugeintOperator>>(writer, schema_idx,
-		                                                                                    max_repeat, max_define);
+		return make_unique<StandardColumnWriter<hugeint_t, double, ParquetHugeintOperator>>(
+		    writer, schema_idx, max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::TIMESTAMP_NS:
-		return make_unique<StandardColumnWriter<int64_t, int64_t, ParquetTimestampNSOperator>>(writer, schema_idx,
-		                                                                                       max_repeat, max_define);
+		return make_unique<StandardColumnWriter<int64_t, int64_t, ParquetTimestampNSOperator>>(
+		    writer, schema_idx, max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return make_unique<StandardColumnWriter<int64_t, int64_t, ParquetTimestampSOperator>>(writer, schema_idx,
-		                                                                                      max_repeat, max_define);
+		return make_unique<StandardColumnWriter<int64_t, int64_t, ParquetTimestampSOperator>>(
+		    writer, schema_idx, max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::UTINYINT:
-		return make_unique<StandardColumnWriter<uint8_t, int32_t>>(writer, schema_idx, max_repeat, max_define);
+		return make_unique<StandardColumnWriter<uint8_t, int32_t>>(writer, schema_idx, max_repeat, max_define,
+		                                                           can_have_nulls);
 	case LogicalTypeId::USMALLINT:
-		return make_unique<StandardColumnWriter<uint16_t, int32_t>>(writer, schema_idx, max_repeat, max_define);
+		return make_unique<StandardColumnWriter<uint16_t, int32_t>>(writer, schema_idx, max_repeat, max_define,
+		                                                            can_have_nulls);
 	case LogicalTypeId::UINTEGER:
-		return make_unique<StandardColumnWriter<uint32_t, uint32_t>>(writer, schema_idx, max_repeat, max_define);
+		return make_unique<StandardColumnWriter<uint32_t, uint32_t>>(writer, schema_idx, max_repeat, max_define,
+		                                                             can_have_nulls);
 	case LogicalTypeId::UBIGINT:
-		return make_unique<StandardColumnWriter<uint64_t, uint64_t>>(writer, schema_idx, max_repeat, max_define);
+		return make_unique<StandardColumnWriter<uint64_t, uint64_t>>(writer, schema_idx, max_repeat, max_define,
+		                                                             can_have_nulls);
 	case LogicalTypeId::FLOAT:
-		return make_unique<StandardColumnWriter<float, float>>(writer, schema_idx, max_repeat, max_define);
+		return make_unique<StandardColumnWriter<float, float>>(writer, schema_idx, max_repeat, max_define,
+		                                                       can_have_nulls);
 	case LogicalTypeId::DOUBLE:
-		return make_unique<StandardColumnWriter<double, double>>(writer, schema_idx, max_repeat, max_define);
+		return make_unique<StandardColumnWriter<double, double>>(writer, schema_idx, max_repeat, max_define,
+		                                                         can_have_nulls);
 	case LogicalTypeId::DECIMAL:
-		return make_unique<DecimalColumnWriter>(writer, schema_idx, max_repeat, max_define);
+		return make_unique<DecimalColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-		return make_unique<StringColumnWriter>(writer, schema_idx, max_repeat, max_define);
+		return make_unique<StringColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
 	default:
 		throw InternalException("Unsupported type in Parquet writer");
 	}
