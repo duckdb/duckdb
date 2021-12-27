@@ -720,8 +720,6 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		}
 	} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 		return AddBoundComparisonFilter(expr);
-	} else if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
-		return AddBoundComparisonFilter(expr);
 	}
 	// only comparisons supported for now
 	return FilterResult::UNSUPPORTED;
