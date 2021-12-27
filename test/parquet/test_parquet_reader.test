@@ -347,8 +347,6 @@ SELECT * FROM parquet_scan('data/parquet-testing/struct.parquet') limit 50;
 {'str_field': hello, 'f64_field': NULL}
 {'str_field': NULL, 'f64_field': 1.230000}
 
-mode skip
-
 query I
 SELECT * FROM parquet_scan('data/parquet-testing/arrow/byte_array_decimal.parquet') limit 50;
 ----
@@ -376,8 +374,6 @@ SELECT * FROM parquet_scan('data/parquet-testing/arrow/byte_array_decimal.parque
 22.00	
 23.00	
 24.00	
-
-mode unskip
 
 query II
 SELECT * FROM parquet_scan('data/parquet-testing/arrow/list_columns.parquet') limit 50;

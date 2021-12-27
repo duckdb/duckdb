@@ -5,7 +5,6 @@
 
 #include "boolean_column_reader.hpp"
 #include "callback_column_reader.hpp"
-#include "decimal_column_reader.hpp"
 #include "list_column_reader.hpp"
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"

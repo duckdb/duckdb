@@ -1,4 +1,5 @@
 #include "parquet_metadata.hpp"
+#include "parquet_decimal_utils.hpp"
 #include <sstream>
 
 #ifndef DUCKDB_AMALGAMATION
@@ -163,6 +164,39 @@ Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::format:
 			return Value(LogicalType::VARCHAR);
 		}
 		return Value(Value::DOUBLE(val).ToString());
+	}
+	case LogicalTypeId::DECIMAL: {
+		auto width = DecimalType::GetWidth(type);
+		auto scale = DecimalType::GetScale(type);
+		switch(schema_ele.type) {
+		case Type::INT32: {
+			if (stats.size() != sizeof(int32_t)) {
+				throw InternalException("Incorrect stats size for type %s", type.ToString());
+			}
+			return Value::DECIMAL(Load<int32_t>((data_ptr_t)stats.c_str()), width, scale);
+		}
+		case Type::INT64: {
+			if (stats.size() != sizeof(int64_t)) {
+				throw InternalException("Incorrect stats size for type %s", type.ToString());
+			}
+			return Value::DECIMAL(Load<int64_t>((data_ptr_t)stats.c_str()), width, scale);
+		}
+		case Type::FIXED_LEN_BYTE_ARRAY:
+			switch(type.InternalType()) {
+			case PhysicalType::INT16:
+				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int16_t>((const_data_ptr_t) stats.c_str(), stats.size()), width, scale);
+			case PhysicalType::INT32:
+				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int32_t>((const_data_ptr_t) stats.c_str(), stats.size()), width, scale);
+			case PhysicalType::INT64:
+				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int64_t>((const_data_ptr_t) stats.c_str(), stats.size()), width, scale);
+			case PhysicalType::INT128:
+				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<hugeint_t>((const_data_ptr_t) stats.c_str(), stats.size()), width, scale);
+			default:
+				throw InternalException("Unsupported internal type for decimal");
+			}
+		default:
+			throw InternalException("Unsupported internal type for decimal?..");
+		}
 	}
 	case LogicalType::VARCHAR:
 	case LogicalType::BLOB:

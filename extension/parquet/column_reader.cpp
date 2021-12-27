@@ -5,7 +5,7 @@
 
 #include "boolean_column_reader.hpp"
 #include "callback_column_reader.hpp"
-#include "decimal_column_reader.hpp"
+#include "parquet_decimal_utils.hpp"
 #include "list_column_reader.hpp"
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
@@ -142,23 +142,10 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 			return CreateDecimalReader<int32_t>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 		case Type::INT64:
 			return CreateDecimalReader<int64_t>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		case Type::BYTE_ARRAY:
 		case Type::FIXED_LEN_BYTE_ARRAY:
-			switch (type_p.InternalType()) {
-			case PhysicalType::INT16:
-				return make_unique<DecimalColumnReader<int16_t>>(reader, type_p, schema_p, file_idx_p, max_define,
-				                                                 max_repeat);
-			case PhysicalType::INT32:
-				return make_unique<DecimalColumnReader<int32_t>>(reader, type_p, schema_p, file_idx_p, max_define,
-				                                                 max_repeat);
-			case PhysicalType::INT64:
-				return make_unique<DecimalColumnReader<int64_t>>(reader, type_p, schema_p, file_idx_p, max_define,
-				                                                 max_repeat);
-			case PhysicalType::INT128:
-				return make_unique<DecimalColumnReader<hugeint_t>>(reader, type_p, schema_p, file_idx_p, max_define,
-				                                                   max_repeat);
-			default:
-				throw InternalException("Unrecognized type for Decimal");
-			}
+			return ParquetDecimalUtils::CreateReader(reader, type_p, schema_p, file_idx_p, max_define,
+			                                               max_repeat);
 		default:
 			throw NotImplementedException("Unrecognized Parquet type for Decimal");
 		}
@@ -617,5 +604,91 @@ idx_t StructColumnReader::GroupRowsAvailable() {
 	}
 	return child_readers[0]->GroupRowsAvailable();
 }
+
+//===--------------------------------------------------------------------===//
+// Decimal Column Reader
+//===--------------------------------------------------------------------===//
+template<class PHYSICAL_TYPE>
+PHYSICAL_TYPE ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t size) {
+	D_ASSERT(size <= sizeof(PHYSICAL_TYPE));
+	PHYSICAL_TYPE res = 0;
+
+	auto res_ptr = (uint8_t *)&res;
+	bool positive = (*pointer & 0x80) == 0;
+
+	// numbers are stored as two's complement so some muckery is required
+	for (idx_t i = 0; i < size; i++) {
+		auto byte = *(pointer + (size - i - 1));
+		res_ptr[i] = positive ? byte : byte ^ 0xFF;
+	}
+	if (!positive) {
+		res += 1;
+		return -res;
+	}
+	return res;
+}
+
+template <class DUCKDB_PHYSICAL_TYPE>
+struct DecimalParquetValueConversion {
+	static DUCKDB_PHYSICAL_TYPE DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
+		auto dict_ptr = (DUCKDB_PHYSICAL_TYPE *)dict.ptr;
+		return dict_ptr[offset];
+	}
+
+	static DUCKDB_PHYSICAL_TYPE PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		auto byte_len = (idx_t)reader.Schema().type_length; /* sure, type length needs to be a signed int */
+		plain_data.available(byte_len);
+		auto res = ParquetDecimalUtils::ReadDecimalValue<DUCKDB_PHYSICAL_TYPE>((const_data_ptr_t) plain_data.ptr, byte_len);
+
+		plain_data.inc(byte_len);
+		return res;
+	}
+
+	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		plain_data.inc(reader.Schema().type_length);
+	}
+};
+
+template <class DUCKDB_PHYSICAL_TYPE>
+class DecimalColumnReader
+    : public TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE, DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE>> {
+
+public:
+	DecimalColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
+	                    idx_t max_define_p, idx_t max_repeat_p)
+	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE, DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE>>(
+	          reader, move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {};
+
+protected:
+	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
+		this->dict = make_shared<ResizeableBuffer>(this->reader.allocator, num_entries * sizeof(DUCKDB_PHYSICAL_TYPE));
+		auto dict_ptr = (DUCKDB_PHYSICAL_TYPE *)this->dict->ptr;
+		for (idx_t i = 0; i < num_entries; i++) {
+			dict_ptr[i] = DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE>::PlainRead(*dictionary_data, *this);
+		}
+	}
+};
+
+unique_ptr<ColumnReader> ParquetDecimalUtils::CreateReader(ParquetReader &reader, const LogicalType &type_p,
+                                             const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define,
+                                             idx_t max_repeat) {
+	switch (type_p.InternalType()) {
+	case PhysicalType::INT16:
+		return make_unique<DecimalColumnReader<int16_t>>(reader, type_p, schema_p, file_idx_p, max_define,
+		                                                 max_repeat);
+	case PhysicalType::INT32:
+		return make_unique<DecimalColumnReader<int32_t>>(reader, type_p, schema_p, file_idx_p, max_define,
+		                                                 max_repeat);
+	case PhysicalType::INT64:
+		return make_unique<DecimalColumnReader<int64_t>>(reader, type_p, schema_p, file_idx_p, max_define,
+		                                                 max_repeat);
+	case PhysicalType::INT128:
+		return make_unique<DecimalColumnReader<hugeint_t>>(reader, type_p, schema_p, file_idx_p, max_define,
+		                                                   max_repeat);
+	default:
+		throw InternalException("Unrecognized type for Decimal");
+	}
+}
+
 
 } // namespace duckdb
