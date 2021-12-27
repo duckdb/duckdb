@@ -338,13 +338,3 @@ __nvm
 *.vcxproj*
 *.cmake
 *.sln
-
-#==============================================================================#
-# BigQuery benchmark
-#==============================================================================#
-
-benchmark/performance/emsdk
-benchmark/performance/build
-benchmark/performance/bigquery/bigquery_sql.py
-benchmark/performance/bigquery/bigquery_sql1.py
-benchmark/performance/duckdb
