@@ -86,6 +86,7 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 		return Type::INT32;
 	case LogicalTypeId::UBIGINT:
 		return Type::INT64;
+	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::UUID:
 		return Type::FIXED_LEN_BYTE_ARRAY;
 	case LogicalTypeId::DECIMAL:
@@ -150,6 +151,12 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		break;
 	case LogicalTypeId::TIME:
 		schema_ele.converted_type = ConvertedType::TIME_MICROS;
+		schema_ele.__isset.converted_type = true;
+		break;
+	case LogicalTypeId::INTERVAL:
+		schema_ele.type_length = 12;
+		schema_ele.converted_type = ConvertedType::INTERVAL;
+		schema_ele.__isset.type_length = true;
 		schema_ele.__isset.converted_type = true;
 		break;
 	case LogicalTypeId::UUID:

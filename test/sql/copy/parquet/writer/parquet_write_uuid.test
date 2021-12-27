@@ -35,10 +35,10 @@ INSERT INTO uuid VALUES
        ('ffffffff-ffff-ffff-ffff-ffffffffffff');
 
 statement ok
-COPY uuid TO 'uuid.parquet'
+COPY uuid TO '__TEST_DIR__/uuid.parquet'
 
 query I
-SELECT * FROM 'uuid.parquet' ORDER BY 1
+SELECT * FROM '__TEST_DIR__/uuid.parquet' ORDER BY 1
 ----
 NULL
 NULL

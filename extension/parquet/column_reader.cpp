@@ -395,7 +395,6 @@ string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnR
 void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
 	auto &scr = ((StringColumnReader &)reader);
 	uint32_t str_len = scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
-	plain_data.available(str_len);
 	plain_data.inc(str_len);
 }
 
@@ -600,9 +599,8 @@ struct DecimalParquetValueConversion {
 	}
 
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		uint32_t str_len = FIXED_LENGTH ? reader.Schema().type_length : plain_data.read<uint32_t>();
-		plain_data.available(str_len);
-		plain_data.inc(str_len);
+		uint32_t decimal_len = FIXED_LENGTH ? reader.Schema().type_length : plain_data.read<uint32_t>();
+		plain_data.inc(decimal_len);
 	}
 };
 
@@ -720,6 +718,57 @@ protected:
 };
 
 //===--------------------------------------------------------------------===//
+// Interval Column Reader
+//===--------------------------------------------------------------------===//
+struct IntervalValueConversion {
+	static constexpr const idx_t PARQUET_INTERVAL_SIZE = 12;
+
+	static interval_t DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
+		auto dict_ptr = (interval_t *)dict.ptr;
+		return dict_ptr[offset];
+	}
+
+	static interval_t ReadParquetInterval(const_data_ptr_t input) {
+		interval_t result;
+		result.months = Load<uint32_t>(input);
+		result.days = Load<uint32_t>(input + sizeof(uint32_t));
+		result.micros = int64_t(Load<uint32_t>(input + sizeof(uint32_t) * 2)) * 1000;
+		return result;
+	}
+
+	static interval_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		idx_t byte_len = PARQUET_INTERVAL_SIZE;
+		plain_data.available(byte_len);
+		auto res = ReadParquetInterval((const_data_ptr_t)plain_data.ptr);
+
+		plain_data.inc(byte_len);
+		return res;
+	}
+
+	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		plain_data.inc(PARQUET_INTERVAL_SIZE);
+	}
+};
+
+class IntervalColumnReader : public TemplatedColumnReader<interval_t, IntervalValueConversion> {
+
+public:
+	IntervalColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
+	                     idx_t max_define_p, idx_t max_repeat_p)
+	    : TemplatedColumnReader<interval_t, IntervalValueConversion>(reader, move(type_p), schema_p, file_idx_p,
+	                                                                 max_define_p, max_repeat_p) {};
+
+protected:
+	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
+		this->dict = make_shared<ResizeableBuffer>(this->reader.allocator, num_entries * sizeof(interval_t));
+		auto dict_ptr = (interval_t *)this->dict->ptr;
+		for (idx_t i = 0; i < num_entries; i++) {
+			dict_ptr[i] = IntervalValueConversion::PlainRead(*dictionary_data, *this);
+		}
+	}
+};
+
+//===--------------------------------------------------------------------===//
 // Create Column Reader
 //===--------------------------------------------------------------------===//
 template <class T>
@@ -822,6 +871,8 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		break;
 	case LogicalTypeId::UUID:
 		return make_unique<UUIDColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+	case LogicalTypeId::INTERVAL:
+		return make_unique<IntervalColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	default:
 		break;
 	}

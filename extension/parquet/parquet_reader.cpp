@@ -186,13 +186,14 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 			} else {
 				throw IOException("TIME_MICROS converted type can only be set for value of Type::INT64");
 			}
+		case ConvertedType::INTERVAL:
+			return LogicalType::INTERVAL;
 		case ConvertedType::MAP:
 		case ConvertedType::MAP_KEY_VALUE:
 		case ConvertedType::LIST:
 		case ConvertedType::ENUM:
 		case ConvertedType::JSON:
 		case ConvertedType::BSON:
-		case ConvertedType::INTERVAL:
 		default:
 			throw IOException("Unsupported converted type");
 		}

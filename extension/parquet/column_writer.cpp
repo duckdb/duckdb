@@ -855,21 +855,9 @@ public:
 //===--------------------------------------------------------------------===//
 // UUID Column Writer
 //===--------------------------------------------------------------------===//
-static void WriteParquetUUID(hugeint_t input, data_ptr_t result) {
-	uint64_t high_bytes = input.upper ^ (int64_t(1) << 63);
-	uint64_t low_bytes = input.lower;
-
-	for (idx_t i = 0; i < sizeof(uint64_t); i++) {
-		auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
-		result[i] = (high_bytes >> shift_count) & 0xFF;
-	}
-	for (idx_t i = 0; i < sizeof(uint64_t); i++) {
-		auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
-		result[sizeof(uint64_t) + i] = (low_bytes >> shift_count) & 0xFF;
-	}
-}
-
 class UUIDColumnWriter : public ColumnWriter {
+	static constexpr const idx_t PARQUET_UUID_SIZE = 16;
+
 public:
 	UUIDColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define, bool can_have_nulls)
 	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls) {
@@ -877,22 +865,78 @@ public:
 	~UUIDColumnWriter() override = default;
 
 public:
+	static void WriteParquetUUID(hugeint_t input, data_ptr_t result) {
+		uint64_t high_bytes = input.upper ^ (int64_t(1) << 63);
+		uint64_t low_bytes = input.lower;
+
+		for (idx_t i = 0; i < sizeof(uint64_t); i++) {
+			auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
+			result[i] = (high_bytes >> shift_count) & 0xFF;
+		}
+		for (idx_t i = 0; i < sizeof(uint64_t); i++) {
+			auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
+			result[sizeof(uint64_t) + i] = (low_bytes >> shift_count) & 0xFF;
+		}
+	}
+
 	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
 		auto *ptr = FlatVector::GetData<hugeint_t>(input_column);
 
-		data_t temp_buffer[16];
+		data_t temp_buffer[PARQUET_UUID_SIZE];
 		for (idx_t r = chunk_start; r < chunk_end; r++) {
 			if (mask.RowIsValid(r)) {
 				WriteParquetUUID(ptr[r], temp_buffer);
-				temp_writer.WriteData(temp_buffer, 16);
+				temp_writer.WriteData(temp_buffer, PARQUET_UUID_SIZE);
 			}
 		}
 	}
 
 	idx_t GetRowSize(Vector &vector, idx_t index) override {
-		return sizeof(hugeint_t);
+		return PARQUET_UUID_SIZE;
+	}
+};
+
+//===--------------------------------------------------------------------===//
+// Interval Column Writer
+//===--------------------------------------------------------------------===//
+class IntervalColumnWriter : public ColumnWriter {
+	static constexpr const idx_t PARQUET_INTERVAL_SIZE = 12;
+
+public:
+	IntervalColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
+	                     bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls) {
+	}
+	~IntervalColumnWriter() override = default;
+
+public:
+	static void WriteParquetInterval(interval_t input, data_ptr_t result) {
+		if (input.days < 0 || input.months < 0 || input.micros < 0) {
+			throw IOException("Parquet files do not support negative intervals");
+		}
+		Store<uint32_t>(input.months, result);
+		Store<uint32_t>(input.days, result + sizeof(uint32_t));
+		Store<uint32_t>(input.micros / 1000, result + sizeof(uint32_t) * 2);
+	}
+
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
+	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+		auto &mask = FlatVector::Validity(input_column);
+		auto *ptr = FlatVector::GetData<interval_t>(input_column);
+
+		data_t temp_buffer[PARQUET_INTERVAL_SIZE];
+		for (idx_t r = chunk_start; r < chunk_end; r++) {
+			if (mask.RowIsValid(r)) {
+				WriteParquetInterval(ptr[r], temp_buffer);
+				temp_writer.WriteData(temp_buffer, PARQUET_INTERVAL_SIZE);
+			}
+		}
+	}
+
+	idx_t GetRowSize(Vector &vector, idx_t index) override {
+		return PARQUET_INTERVAL_SIZE;
 	}
 };
 
@@ -1387,6 +1431,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		return make_unique<StringColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::UUID:
 		return make_unique<UUIDColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
+	case LogicalTypeId::INTERVAL:
+		return make_unique<IntervalColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
 	default:
 		throw InternalException("Unsupported type \"%s\" in Parquet writer", type.ToString());
 	}
