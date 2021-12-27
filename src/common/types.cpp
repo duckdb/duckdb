@@ -975,6 +975,9 @@ LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	return LogicalType(LogicalTypeId::STRUCT, move(info));
 }
 
+//===--------------------------------------------------------------------===//
+// Map Type
+//===--------------------------------------------------------------------===//
 LogicalType LogicalType::MAP(child_list_t<LogicalType> children) {
 	auto info = make_shared<StructTypeInfo>(move(children));
 	return LogicalType(LogicalTypeId::MAP, move(info));
@@ -985,6 +988,16 @@ LogicalType LogicalType::MAP(LogicalType key, LogicalType value) {
 	child_types.push_back({"key", LogicalType::LIST(move(key))});
 	child_types.push_back({"value", LogicalType::LIST(move(value))});
 	return LogicalType::MAP(move(child_types));
+}
+
+const LogicalType &MapType::KeyType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::MAP);
+	return StructType::GetChildTypes(type)[0].second;
+}
+
+const LogicalType &MapType::ValueType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::MAP);
+	return StructType::GetChildTypes(type)[1].second;
 }
 
 //===--------------------------------------------------------------------===//

@@ -31,20 +31,21 @@ class ColumnWriter {
 	static constexpr const idx_t MAX_UNCOMPRESSED_PAGE_SIZE = 100000000;
 
 public:
-	ColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define);
+	ColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define, bool can_have_nulls);
 	virtual ~ColumnWriter();
 
 	ParquetWriter &writer;
 	idx_t schema_idx;
 	idx_t max_repeat;
 	idx_t max_define;
+	bool can_have_nulls;
 
 public:
 	//! Create the column writer for a specific type recursively
 	static unique_ptr<ColumnWriter> CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas,
 	                                                      ParquetWriter &writer, const LogicalType &type,
 	                                                      const string &name, idx_t max_repeat = 0,
-	                                                      idx_t max_define = 1);
+	                                                      idx_t max_define = 1, bool can_have_nulls = true);
 
 	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
 	                                                           vector<string> schema_path);

@@ -261,7 +261,32 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 		bool is_repeated = s_ele.repetition_type == FieldRepetitionType::REPEATED;
 		bool is_list = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::LIST;
 		bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
-		// if we only have a single child no reason to create a struct ay
+		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
+		if (!is_map_kv && this_idx > 0) {
+			// check if the parent node of this is a map
+			auto &p_ele = file_meta_data->schema[this_idx - 1];
+			bool parent_is_map = p_ele.__isset.converted_type && p_ele.converted_type == ConvertedType::MAP;
+			bool parent_has_children = p_ele.__isset.num_children && p_ele.num_children == 1;
+			is_map_kv = parent_is_map && parent_has_children;
+		}
+
+		if (is_map_kv) {
+			if (child_types.size() != 2) {
+				throw IOException("MAP_KEY_VALUE requires two children");
+			}
+			if (!is_repeated) {
+				throw IOException("MAP_KEY_VALUE needs to be repeated");
+			}
+			result_type = LogicalType::MAP(move(child_types[0].second), move(child_types[1].second));
+			for (auto &child_reader : child_readers) {
+				auto child_type = LogicalType::LIST(child_reader->Type());
+				child_reader = make_unique<ListColumnReader>(*this, move(child_type), s_ele, this_idx, max_define,
+				                                             max_repeat, move(child_reader));
+			}
+			result = make_unique<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define - 1,
+			                                         max_repeat - 1, move(child_readers));
+			return result;
+		}
 		if (child_types.size() > 1 || (!is_list && !is_map && !is_repeated)) {
 			result_type = LogicalType::STRUCT(move(child_types));
 			result = make_unique<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
@@ -278,7 +303,6 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 		}
 		return result;
 	} else { // leaf node
-
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
 			const auto derived_type = DeriveLogicalType(s_ele);
 			auto list_type = LogicalType::LIST(derived_type);
