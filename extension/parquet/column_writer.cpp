@@ -660,6 +660,33 @@ public:
 //===--------------------------------------------------------------------===//
 // Boolean Column Writer
 //===--------------------------------------------------------------------===//
+class BooleanStatisticsState : public ColumnWriterStatistics {
+public:
+	BooleanStatisticsState() : min(true), max(false) {
+	}
+
+	bool min;
+	bool max;
+
+public:
+	bool HasStats() {
+		return !(min && !max);
+	}
+
+	string GetMin() override {
+		return GetMinValue();
+	}
+	string GetMax() override {
+		return GetMaxValue();
+	}
+	string GetMinValue() override {
+		return HasStats() ? string((char *)&min, sizeof(bool)) : string();
+	}
+	string GetMaxValue() override {
+		return HasStats() ? string((char *)&max, sizeof(bool)) : string();
+	}
+};
+
 class BooleanWriterPageState : public ColumnWriterPageState {
 public:
 	uint8_t byte = 0;
@@ -675,8 +702,13 @@ public:
 	~BooleanColumnWriter() override = default;
 
 public:
-	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *state_p,
+	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
+		return make_unique<BooleanStatisticsState>();
+	}
+
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+		auto &stats = (BooleanStatisticsState &)*stats_p;
 		auto &state = (BooleanWriterPageState &)*state_p;
 		auto &mask = FlatVector::Validity(input_column);
 
@@ -685,7 +717,10 @@ public:
 			if (mask.RowIsValid(r)) {
 				// only encode if non-null
 				if (ptr[r]) {
+					stats.max = true;
 					state.byte |= 1 << state.byte_pos;
+				} else {
+					stats.min = false;
 				}
 				state.byte_pos++;
 
@@ -746,6 +781,61 @@ public:
 //===--------------------------------------------------------------------===//
 // String Column Writer
 //===--------------------------------------------------------------------===//
+class StringStatisticsState : public ColumnWriterStatistics {
+	static constexpr const idx_t MAX_STRING_STATISTICS_SIZE = 10000;
+
+public:
+	StringStatisticsState() : has_stats(false), values_too_big(false), min(), max() {
+	}
+
+	bool has_stats;
+	bool values_too_big;
+	string min;
+	string max;
+
+public:
+	bool HasStats() {
+		return has_stats;
+	}
+
+	void Update(const string_t &val) {
+		if (values_too_big) {
+			return;
+		}
+		auto str_len = val.GetSize();
+		if (str_len > MAX_STRING_STATISTICS_SIZE) {
+			// we avoid gathering stats when individual string values are too large
+			// this is because the statistics are copied into the Parquet file meta data in uncompressed format
+			// ideally we avoid placing several mega or giga-byte long strings there
+			// we put a threshold of 10KB, if we see strings that exceed this threshold we avoid gathering stats
+			values_too_big = true;
+			min = string();
+			max = string();
+			return;
+		}
+		if (!has_stats || LessThan::Operation(val, string_t(min))) {
+			min = val.GetString();
+		}
+		if (!has_stats || GreaterThan::Operation(val, string_t(max))) {
+			max = val.GetString();
+		}
+		has_stats = true;
+	}
+
+	string GetMin() override {
+		return GetMinValue();
+	}
+	string GetMax() override {
+		return GetMaxValue();
+	}
+	string GetMinValue() override {
+		return HasStats() ? min : string();
+	}
+	string GetMaxValue() override {
+		return HasStats() ? max : string();
+	}
+};
+
 class StringColumnWriter : public ColumnWriter {
 public:
 	StringColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define, bool can_have_nulls)
@@ -754,13 +844,19 @@ public:
 	~StringColumnWriter() override = default;
 
 public:
-	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
+	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
+		return make_unique<StringStatisticsState>();
+	}
+
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
+		auto &stats = (StringStatisticsState &)*stats_p;
 
 		auto *ptr = FlatVector::GetData<string_t>(input_column);
 		for (idx_t r = chunk_start; r < chunk_end; r++) {
 			if (mask.RowIsValid(r)) {
+				stats.Update(ptr[r]);
 				temp_writer.Write<uint32_t>(ptr[r].GetSize());
 				temp_writer.WriteData((const_data_ptr_t)ptr[r].GetDataUnsafe(), ptr[r].GetSize());
 			}

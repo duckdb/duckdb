@@ -4,6 +4,12 @@
 
 require parquet
 
+# boolean values
+query IIII
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/boolean_stats.test');
+----
+False	True	False	True
+
 # signed numbers
 query IIII
 select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/signed_stats.parquet');

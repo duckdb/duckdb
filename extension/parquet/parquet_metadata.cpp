@@ -232,7 +232,7 @@ Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::format:
 				throw InternalException("Incorrect stats size for type TIMESTAMP");
 			}
 			Int96 impala_ts;
-			auto ptr = (data_ptr_t) stats.c_str();
+			auto ptr = (data_ptr_t)stats.c_str();
 			impala_ts.value[0] = Load<uint32_t>(ptr);
 			impala_ts.value[1] = Load<uint32_t>(ptr + sizeof(uint32_t));
 			impala_ts.value[2] = Load<uint32_t>(ptr + sizeof(uint32_t) * 2);
