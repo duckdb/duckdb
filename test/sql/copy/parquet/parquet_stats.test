@@ -78,3 +78,105 @@ select * from 'data/parquet-testing/decimal_stats.parquet';
 ----
 -999.9	-999999.999	-9999999999999.99999	-999999999999999999999999999999999.99999
 999.9	999999.999	9999999999999.99999	999999999999999999999999999999999.99999
+
+# int32 decimal stats
+query IIII
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/arrow/int32_decimal.parquet');
+----
+1.00	24.00	NULL	NULL
+
+query I
+SELECT * FROM 'data/parquet-testing/arrow/int32_decimal.parquet'
+----
+1.00
+2.00
+3.00
+4.00
+5.00
+6.00
+7.00
+8.00
+9.00
+10.00
+11.00
+12.00
+13.00
+14.00
+15.00
+16.00
+17.00
+18.00
+19.00
+20.00
+21.00
+22.00
+23.00
+24.00
+
+# int64 decimal stats
+query IIII
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/arrow/int64_decimal.parquet');
+----
+1.00	24.00	NULL	NULL
+
+query I
+SELECT * FROM 'data/parquet-testing/arrow/int64_decimal.parquet'
+----
+1.00
+2.00
+3.00
+4.00
+5.00
+6.00
+7.00
+8.00
+9.00
+10.00
+11.00
+12.00
+13.00
+14.00
+15.00
+16.00
+17.00
+18.00
+19.00
+20.00
+21.00
+22.00
+23.00
+24.00
+
+# data-types stats
+query IIII
+SELECT stats_min, stats_max, stats_min_value, stats_max_value FROM parquet_metadata('data/parquet-testing/data-types.parquet')
+----
+-127	127	-127	127
+-32767	32767	-32767	32767
+-2147483647	2147483647	-2147483647	2147483647
+-9223372036854775807	9223372036854775807	-9223372036854775807	9223372036854775807
+-4.600000	4.600000	-4.600000	4.600000
+-4.700000	4.700000	-4.700000	4.700000
+4.80	4.80	4.80	4.80
+49	49	49	49
+50	50	50	50
+False	True	False	True
+2019-11-26 20:11:42.501	2019-11-26 20:11:42.501	2019-11-26 20:11:42.501	2019-11-26 20:11:42.501
+2020-01-10	2020-01-10	2020-01-10	2020-01-10
+
+query IIIIIIIIIIII
+SELECT * FROM 'data/parquet-testing/data-types.parquet'
+----
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+42	43	44	45	4.600000	4.700000	4.80	49	50	True	2019-11-26 20:11:42.501	2020-01-10
+-127	-32767	-2147483647	-9223372036854775807	-4.600000	-4.700000	NULL	NULL	NULL	False	NULL	NULL
+127	32767	2147483647	9223372036854775807	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+
+# parquet stats for all parquet files
+foreach parquet_file data/parquet-testing/manyrowgroups.parquet data/parquet-testing/map.parquet data/parquet-testing/arrow/int32_decimal.parquet data/parquet-testing/arrow/nonnullable.impala.parquet data/parquet-testing/bug687_nulls.parquet data/parquet-testing/bug1554.parquet data/parquet-testing/apkwan.parquet data/parquet-testing/arrow/nested_lists.snappy.parquet data/parquet-testing/arrow/nulls.snappy.parquet data/parquet-testing/nan-float.parquet data/parquet-testing/manyrowgroups2.parquet data/parquet-testing/struct.parquet data/parquet-testing/arrow/list_columns.parquet data/parquet-testing/timestamp-ms.parquet data/parquet-testing/arrow/alltypes_dictionary.parquet data/parquet-testing/arrow/binary.parquet data/parquet-testing/arrow/nation.dict-malformed.parquet data/parquet-testing/lineitem-top10000.gzip.parquet data/parquet-testing/arrow/nested_maps.snappy.parquet data/parquet-testing/arrow/dict-page-offset-zero.parquet data/parquet-testing/silly-names.parquet data/parquet-testing/zstd.parquet data/parquet-testing/bug1618_struct_strings.parquet data/parquet-testing/arrow/single_nan.parquet data/parquet-testing/arrow/int64_decimal.parquet data/parquet-testing/filter_bug1391.parquet data/parquet-testing/arrow/fixed_length_decimal_legacy.parquet data/parquet-testing/timestamp.parquet data/parquet-testing/arrow/fixed_length_decimal.parquet data/parquet-testing/leftdate3_192_loop_1.parquet data/parquet-testing/blob.parquet data/parquet-testing/bug1588.parquet data/parquet-testing/bug1589.parquet data/parquet-testing/arrow/alltypes_plain.parquet data/parquet-testing/arrow/repeated_no_annotation.parquet data/parquet-testing/data-types.parquet data/parquet-testing/unsigned.parquet data/parquet-testing/pandas-date.parquet data/parquet-testing/date.parquet data/parquet-testing/arrow/nullable.impala.parquet data/parquet-testing/fixed.parquet data/parquet-testing/arrow/alltypes_plain.snappy.parquet data/parquet-testing/decimal/int32_decimal.parquet data/parquet-testing/decimal/pandas_decimal.parquet data/parquet-testing/decimal/decimal_dc.parquet data/parquet-testing/decimal/int64_decimal.parquet data/parquet-testing/decimal/fixed_length_decimal_legacy.parquet data/parquet-testing/decimal/fixed_length_decimal.parquet data/parquet-testing/glob2/t1.parquet data/parquet-testing/cache/cache1.parquet data/parquet-testing/cache/cache2.parquet data/parquet-testing/glob/t2.parquet data/parquet-testing/glob/t1.parquet data/parquet-testing/bug2557.parquet
+
+statement ok
+select * from parquet_metadata('${parquet_file}');
+
+endloop

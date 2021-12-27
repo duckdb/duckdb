@@ -1,5 +1,6 @@
 #include "parquet_metadata.hpp"
 #include "parquet_decimal_utils.hpp"
+#include "parquet_timestamp.hpp"
 #include <sstream>
 
 #ifndef DUCKDB_AMALGAMATION
@@ -182,6 +183,7 @@ Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::format:
 			}
 			return Value::DECIMAL(Load<int64_t>((data_ptr_t)stats.c_str()), width, scale);
 		}
+		case Type::BYTE_ARRAY:
 		case Type::FIXED_LEN_BYTE_ARRAY:
 			switch (type.InternalType()) {
 			case PhysicalType::INT16:
@@ -225,14 +227,27 @@ Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::format:
 		}
 		return Value(Value::TIME(dtime_t(Load<int64_t>((data_ptr_t)stats.c_str()))).ToString());
 	case LogicalTypeId::TIMESTAMP: {
-		if (stats.size() != sizeof(int64_t)) {
-			throw InternalException("Incorrect stats size for type TIMESTAMP");
-		}
-		auto val = Load<int64_t>((data_ptr_t)stats.c_str());
-		if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIMESTAMP_MILLIS) {
-			return Value(Value::TIMESTAMPMS(timestamp_t(val)).ToString());
+		if (schema_ele.type == Type::INT96) {
+			if (stats.size() != 3 * sizeof(uint32_t)) {
+				throw InternalException("Incorrect stats size for type TIMESTAMP");
+			}
+			Int96 impala_ts;
+			auto ptr = (data_ptr_t) stats.c_str();
+			impala_ts.value[0] = Load<uint32_t>(ptr);
+			impala_ts.value[1] = Load<uint32_t>(ptr + sizeof(uint32_t));
+			impala_ts.value[2] = Load<uint32_t>(ptr + sizeof(uint32_t) * 2);
+			return Value(Value::TIMESTAMP(ImpalaTimestampToTimestamp(impala_ts)).ToString());
 		} else {
-			return Value(Value::TIMESTAMP(timestamp_t(val)).ToString());
+			D_ASSERT(schema_ele.type == Type::INT64);
+			if (stats.size() != sizeof(int64_t)) {
+				throw InternalException("Incorrect stats size for type TIMESTAMP");
+			}
+			auto val = Load<int64_t>((data_ptr_t)stats.c_str());
+			if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIMESTAMP_MILLIS) {
+				return Value(Value::TIMESTAMPMS(timestamp_t(val)).ToString());
+			} else {
+				return Value(Value::TIMESTAMP(timestamp_t(val)).ToString());
+			}
 		}
 	}
 	default:
