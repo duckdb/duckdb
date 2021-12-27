@@ -1,6 +1,6 @@
 #include "parquet_metadata.hpp"
-#include "parquet_decimal_utils.hpp"
-#include "parquet_timestamp.hpp"
+#include "parquet_statistics.hpp"
+
 #include <sstream>
 
 #ifndef DUCKDB_AMALGAMATION
@@ -113,146 +113,10 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 
 Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::format::SchemaElement &schema_ele,
                           bool stats_is_set, const std::string &stats) {
-	if (!stats_is_set || stats.empty()) {
+	if (!stats_is_set) {
 		return Value(LogicalType::VARCHAR);
 	}
-	switch (type.id()) {
-	case LogicalTypeId::BOOLEAN: {
-		if (stats.size() != sizeof(bool)) {
-			throw InternalException("Incorrect stats size for type BOOLEAN");
-		}
-		return Value(Value::BOOLEAN(Load<bool>((data_ptr_t)stats.c_str())).ToString());
-	}
-	case LogicalTypeId::UTINYINT:
-	case LogicalTypeId::USMALLINT:
-	case LogicalTypeId::UINTEGER:
-		if (stats.size() != sizeof(uint32_t)) {
-			throw InternalException("Incorrect stats size for type UINTEGER");
-		}
-		return Value(Value::UINTEGER(Load<uint32_t>((data_ptr_t)stats.c_str())).ToString());
-	case LogicalTypeId::UBIGINT:
-		if (stats.size() != sizeof(uint64_t)) {
-			throw InternalException("Incorrect stats size for type UBIGINTEGER");
-		}
-		return Value(Value::UBIGINT(Load<uint64_t>((data_ptr_t)stats.c_str())).ToString());
-	case LogicalTypeId::TINYINT:
-	case LogicalTypeId::SMALLINT:
-	case LogicalTypeId::INTEGER:
-		if (stats.size() != sizeof(int32_t)) {
-			throw InternalException("Incorrect stats size for type INTEGER");
-		}
-		return Value(Value::INTEGER(Load<int32_t>((data_ptr_t)stats.c_str())).ToString());
-	case LogicalTypeId::BIGINT:
-		if (stats.size() != sizeof(int64_t)) {
-			throw InternalException("Incorrect stats size for type BIGINT");
-		}
-		return Value(Value::BIGINT(Load<int64_t>((data_ptr_t)stats.c_str())).ToString());
-	case LogicalTypeId::FLOAT: {
-		if (stats.size() != sizeof(float)) {
-			throw InternalException("Incorrect stats size for type FLOAT");
-		}
-		auto val = Load<float>((data_ptr_t)stats.c_str());
-		if (!Value::FloatIsValid(val)) {
-			return Value(LogicalType::VARCHAR);
-		}
-		return Value(Value::FLOAT(val).ToString());
-	}
-	case LogicalTypeId::DOUBLE: {
-		if (stats.size() != sizeof(double)) {
-			throw InternalException("Incorrect stats size for type DOUBLE");
-		}
-		auto val = Load<double>((data_ptr_t)stats.c_str());
-		if (!Value::FloatIsValid(val)) {
-			return Value(LogicalType::VARCHAR);
-		}
-		return Value(Value::DOUBLE(val).ToString());
-	}
-	case LogicalTypeId::DECIMAL: {
-		auto width = DecimalType::GetWidth(type);
-		auto scale = DecimalType::GetScale(type);
-		switch (schema_ele.type) {
-		case Type::INT32: {
-			if (stats.size() != sizeof(int32_t)) {
-				throw InternalException("Incorrect stats size for type %s", type.ToString());
-			}
-			return Value::DECIMAL(Load<int32_t>((data_ptr_t)stats.c_str()), width, scale);
-		}
-		case Type::INT64: {
-			if (stats.size() != sizeof(int64_t)) {
-				throw InternalException("Incorrect stats size for type %s", type.ToString());
-			}
-			return Value::DECIMAL(Load<int64_t>((data_ptr_t)stats.c_str()), width, scale);
-		}
-		case Type::BYTE_ARRAY:
-		case Type::FIXED_LEN_BYTE_ARRAY:
-			switch (type.InternalType()) {
-			case PhysicalType::INT16:
-				return Value::DECIMAL(
-				    ParquetDecimalUtils::ReadDecimalValue<int16_t>((const_data_ptr_t)stats.c_str(), stats.size()),
-				    width, scale);
-			case PhysicalType::INT32:
-				return Value::DECIMAL(
-				    ParquetDecimalUtils::ReadDecimalValue<int32_t>((const_data_ptr_t)stats.c_str(), stats.size()),
-				    width, scale);
-			case PhysicalType::INT64:
-				return Value::DECIMAL(
-				    ParquetDecimalUtils::ReadDecimalValue<int64_t>((const_data_ptr_t)stats.c_str(), stats.size()),
-				    width, scale);
-			case PhysicalType::INT128:
-				return Value::DECIMAL(
-				    ParquetDecimalUtils::ReadDecimalValue<hugeint_t>((const_data_ptr_t)stats.c_str(), stats.size()),
-				    width, scale);
-			default:
-				throw InternalException("Unsupported internal type for decimal");
-			}
-		default:
-			throw InternalException("Unsupported internal type for decimal?..");
-		}
-	}
-	case LogicalType::VARCHAR:
-	case LogicalType::BLOB:
-		if (Value::StringIsValid(stats)) {
-			return Value(stats);
-		} else {
-			return Value(Blob::ToString(string_t(stats)));
-		}
-	case LogicalTypeId::DATE:
-		if (stats.size() != sizeof(int32_t)) {
-			throw InternalException("Incorrect stats size for type DATE");
-		}
-		return Value(Value::DATE(date_t(Load<int32_t>((data_ptr_t)stats.c_str()))).ToString());
-	case LogicalTypeId::TIME:
-		if (stats.size() != sizeof(int64_t)) {
-			throw InternalException("Incorrect stats size for type TIME");
-		}
-		return Value(Value::TIME(dtime_t(Load<int64_t>((data_ptr_t)stats.c_str()))).ToString());
-	case LogicalTypeId::TIMESTAMP: {
-		if (schema_ele.type == Type::INT96) {
-			if (stats.size() != 3 * sizeof(uint32_t)) {
-				throw InternalException("Incorrect stats size for type TIMESTAMP");
-			}
-			Int96 impala_ts;
-			auto ptr = (data_ptr_t)stats.c_str();
-			impala_ts.value[0] = Load<uint32_t>(ptr);
-			impala_ts.value[1] = Load<uint32_t>(ptr + sizeof(uint32_t));
-			impala_ts.value[2] = Load<uint32_t>(ptr + sizeof(uint32_t) * 2);
-			return Value(Value::TIMESTAMP(ImpalaTimestampToTimestamp(impala_ts)).ToString());
-		} else {
-			D_ASSERT(schema_ele.type == Type::INT64);
-			if (stats.size() != sizeof(int64_t)) {
-				throw InternalException("Incorrect stats size for type TIMESTAMP");
-			}
-			auto val = Load<int64_t>((data_ptr_t)stats.c_str());
-			if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIMESTAMP_MILLIS) {
-				return Value(Value::TIMESTAMPMS(timestamp_t(val)).ToString());
-			} else {
-				return Value(Value::TIMESTAMP(timestamp_t(val)).ToString());
-			}
-		}
-	}
-	default:
-		throw InternalException("Unsupported type for stats %s", type.ToString());
-	}
+	return ParquetStatisticsUtils::ConvertValue(type, schema_ele, stats).CastAs(LogicalType::VARCHAR);
 }
 
 void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const vector<LogicalType> &return_types,

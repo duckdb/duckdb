@@ -51,6 +51,45 @@ ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const Sche
 ColumnReader::~ColumnReader() {
 }
 
+const LogicalType &ColumnReader::Type() {
+	return type;
+}
+
+const SchemaElement &ColumnReader::Schema() {
+	return schema;
+}
+
+idx_t ColumnReader::GroupRowsAvailable() {
+	return group_rows_available;
+}
+
+unique_ptr<BaseStatistics> ColumnReader::Stats(const std::vector<ColumnChunk> &columns) {
+	if (Type().id() == LogicalTypeId::LIST || Type().id() == LogicalTypeId::STRUCT ||
+	    Type().id() == LogicalTypeId::MAP) {
+		return nullptr;
+	}
+	return ParquetStatisticsUtils::TransformColumnStatistics(Schema(), Type(), columns[file_idx]);
+}
+
+void ColumnReader::Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values,
+                         parquet_filter_t &filter, idx_t result_offset, Vector &result) {
+	throw NotImplementedException("Plain");
+}
+
+void ColumnReader::Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
+	throw NotImplementedException("Dictionary");
+}
+
+void ColumnReader::Offsets(uint32_t *offsets, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
+                           idx_t result_offset, Vector &result) {
+	throw NotImplementedException("Offsets");
+}
+
+void ColumnReader::DictReference(Vector &result) {
+}
+void ColumnReader::PlainReference(shared_ptr<ByteBuffer>, Vector &result) {
+}
+
 template <class T>
 unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const LogicalType &type_p,
                                              const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define,
@@ -153,6 +192,26 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		break;
 	}
 	throw NotImplementedException(type_p.ToString());
+}
+
+void ColumnReader::InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
+	D_ASSERT(file_idx < columns.size());
+	chunk = &columns[file_idx];
+	protocol = &protocol_p;
+	D_ASSERT(chunk);
+	D_ASSERT(chunk->__isset.meta_data);
+
+	if (chunk->__isset.file_path) {
+		throw std::runtime_error("Only inlined data files are supported (no references)");
+	}
+
+	// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
+	chunk_read_offset = chunk->meta_data.data_page_offset;
+	if (chunk->meta_data.__isset.dictionary_page_offset && chunk->meta_data.dictionary_page_offset >= 4) {
+		// this assumes the data pages follow the dict pages directly.
+		chunk_read_offset = chunk->meta_data.dictionary_page_offset;
+	}
+	group_rows_available = chunk->meta_data.num_values;
 }
 
 void ColumnReader::PrepareRead(parquet_filter_t &filter) {

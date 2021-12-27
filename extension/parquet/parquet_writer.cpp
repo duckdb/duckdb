@@ -84,7 +84,7 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	case LogicalTypeId::UBIGINT:
 		return Type::INT64;
 	case LogicalTypeId::DECIMAL:
-		switch(duckdb_type.InternalType()) {
+		switch (duckdb_type.InternalType()) {
 		case PhysicalType::INT16:
 		case PhysicalType::INT32:
 			return Type::INT32;
@@ -100,7 +100,8 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	}
 }
 
-void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,  duckdb_parquet::format::SchemaElement &schema_ele) {
+void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
+                                        duckdb_parquet::format::SchemaElement &schema_ele) {
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::TINYINT:
 		schema_ele.converted_type = ConvertedType::INT_8;

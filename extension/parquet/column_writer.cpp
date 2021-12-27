@@ -763,11 +763,11 @@ static void WriteParquetDecimal(hugeint_t input, data_ptr_t result) {
 	uint64_t high_bytes = uint64_t(input.upper);
 	uint64_t low_bytes = input.lower;
 
-	for(idx_t i = 0; i < sizeof(uint64_t); i++) {
+	for (idx_t i = 0; i < sizeof(uint64_t); i++) {
 		auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
 		result[i] = (high_bytes >> shift_count) & 0xFF;
 	}
-	for(idx_t i = 0; i < sizeof(uint64_t); i++) {
+	for (idx_t i = 0; i < sizeof(uint64_t); i++) {
 		auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
 		result[sizeof(uint64_t) + i] = (low_bytes >> shift_count) & 0xFF;
 	}
@@ -788,7 +788,7 @@ public:
 	string GetStats(hugeint_t &input) {
 		data_t buffer[16];
 		WriteParquetDecimal(input, buffer);
-		return string((char*) buffer, 16);
+		return string((char *)buffer, 16);
 	}
 
 	bool HasStats() {
@@ -821,7 +821,7 @@ public:
 class FixedDecimalColumnWriter : public ColumnWriter {
 public:
 	FixedDecimalColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
-	                    bool can_have_nulls)
+	                         bool can_have_nulls)
 	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls) {
 	}
 	~FixedDecimalColumnWriter() override = default;
@@ -835,7 +835,7 @@ public:
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
 		auto *ptr = FlatVector::GetData<hugeint_t>(input_column);
-		auto &stats = (FixedDecimalStatistics &) *stats_p;
+		auto &stats = (FixedDecimalStatistics &)*stats_p;
 
 		data_t temp_buffer[16];
 		for (idx_t r = chunk_start; r < chunk_end; r++) {
@@ -1322,13 +1322,16 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		return make_unique<StandardColumnWriter<double, double>>(writer, schema_idx, max_repeat, max_define,
 		                                                         can_have_nulls);
 	case LogicalTypeId::DECIMAL:
-		switch(type.InternalType()) {
+		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			return make_unique<StandardColumnWriter<int16_t, int32_t>>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
+			return make_unique<StandardColumnWriter<int16_t, int32_t>>(writer, schema_idx, max_repeat, max_define,
+			                                                           can_have_nulls);
 		case PhysicalType::INT32:
-			return make_unique<StandardColumnWriter<int32_t, int32_t>>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
+			return make_unique<StandardColumnWriter<int32_t, int32_t>>(writer, schema_idx, max_repeat, max_define,
+			                                                           can_have_nulls);
 		case PhysicalType::INT64:
-			return make_unique<StandardColumnWriter<int64_t, int64_t>>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
+			return make_unique<StandardColumnWriter<int64_t, int64_t>>(writer, schema_idx, max_repeat, max_define,
+			                                                           can_have_nulls);
 		default:
 			return make_unique<FixedDecimalColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
 		}
