@@ -1,0 +1,63 @@
+# name: test/sql/copy/parquet/writer/parquet_write_uuid.test
+# description: Parquet UUID round trip
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE IF NOT EXISTS uuid (u uuid);
+
+statement ok
+INSERT INTO uuid VALUES
+       ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'),
+       (NULL),
+       ('47183823-2574-4bfd-b411-99ed177d3e43'),
+       ('{10203040506070800102030405060708}'),
+       ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'),
+       (NULL),
+       ('00112233-4455-6677-8899-aabbccddeeff'),
+       ('47183823-2574-4bfd-b411-99ed177d3e43'),
+       ('{10203040506070800102030405060708}'),
+       ('00000000-0000-0000-0000-000000000000'),
+       ('00000000-0000-0000-0000-000000000001'),
+       ('00000000-0000-0000-8000-000000000001'),
+       ('80000000-0000-0000-0000-000000000000'),
+       ('80000000-0000-0000-8000-000000000000'),
+       ('80000000-0000-0000-8fff-ffffffffffff'),
+       ('80000000-0000-0000-ffff-ffffffffffff'),
+       ('8fffffff-ffff-ffff-0000-000000000000'),
+       ('8fffffff-ffff-ffff-8000-000000000000'),
+       ('8fffffff-ffff-ffff-8fff-ffffffffffff'),
+       ('8fffffff-ffff-ffff-ffff-ffffffffffff'),
+       ('ffffffff-ffff-ffff-ffff-ffffffffffff');
+
+statement ok
+COPY uuid TO 'uuid.parquet'
+
+query I
+SELECT * FROM 'uuid.parquet' ORDER BY 1
+----
+NULL
+NULL
+00000000-0000-0000-0000-000000000000
+00000000-0000-0000-0000-000000000001
+00000000-0000-0000-8000-000000000001
+00112233-4455-6677-8899-aabbccddeeff
+10203040-5060-7080-0102-030405060708
+10203040-5060-7080-0102-030405060708
+47183823-2574-4bfd-b411-99ed177d3e43
+47183823-2574-4bfd-b411-99ed177d3e43
+80000000-0000-0000-0000-000000000000
+80000000-0000-0000-8000-000000000000
+80000000-0000-0000-8fff-ffffffffffff
+80000000-0000-0000-ffff-ffffffffffff
+8fffffff-ffff-ffff-0000-000000000000
+8fffffff-ffff-ffff-8000-000000000000
+8fffffff-ffff-ffff-8fff-ffffffffffff
+8fffffff-ffff-ffff-ffff-ffffffffffff
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+ffffffff-ffff-ffff-ffff-ffffffffffff

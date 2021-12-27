@@ -60,6 +60,7 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 		return Type::INT32;
 	case LogicalTypeId::BIGINT:
 		return Type::INT64;
@@ -72,7 +73,9 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	case LogicalTypeId::BLOB:
 		return Type::BYTE_ARRAY;
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -83,6 +86,8 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 		return Type::INT32;
 	case LogicalTypeId::UBIGINT:
 		return Type::INT64;
+	case LogicalTypeId::UUID:
+		return Type::FIXED_LEN_BYTE_ARRAY;
 	case LogicalTypeId::DECIMAL:
 		switch (duckdb_type.InternalType()) {
 		case PhysicalType::INT16:
@@ -96,7 +101,7 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 			throw InternalException("Unsupported internal decimal type");
 		}
 	default:
-		throw NotImplementedException(duckdb_type.ToString());
+		throw NotImplementedException("Unimplemented type for Parquet \"%s\"", duckdb_type.ToString());
 	}
 }
 
@@ -146,6 +151,12 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 	case LogicalTypeId::TIME:
 		schema_ele.converted_type = ConvertedType::TIME_MICROS;
 		schema_ele.__isset.converted_type = true;
+		break;
+	case LogicalTypeId::UUID:
+		schema_ele.type_length = 16;
+		schema_ele.__isset.type_length = true;
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.UUID = true;
 		break;
 	case LogicalTypeId::DECIMAL:
 		schema_ele.converted_type = ConvertedType::DECIMAL;
