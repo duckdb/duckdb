@@ -110,11 +110,12 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 	return_types.emplace_back(LogicalType::BIGINT);
 }
 
-Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::format::SchemaElement &schema_ele, bool stats_is_set, const std::string &stats) {
+Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::format::SchemaElement &schema_ele,
+                          bool stats_is_set, const std::string &stats) {
 	if (!stats_is_set || stats.empty()) {
 		return Value(LogicalType::VARCHAR);
 	}
-	switch(type.id()) {
+	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN: {
 		if (stats.size() != sizeof(bool)) {
 			throw InternalException("Incorrect stats size for type BOOLEAN");
@@ -168,7 +169,7 @@ Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::format:
 	case LogicalTypeId::DECIMAL: {
 		auto width = DecimalType::GetWidth(type);
 		auto scale = DecimalType::GetScale(type);
-		switch(schema_ele.type) {
+		switch (schema_ele.type) {
 		case Type::INT32: {
 			if (stats.size() != sizeof(int32_t)) {
 				throw InternalException("Incorrect stats size for type %s", type.ToString());
@@ -182,15 +183,23 @@ Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::format:
 			return Value::DECIMAL(Load<int64_t>((data_ptr_t)stats.c_str()), width, scale);
 		}
 		case Type::FIXED_LEN_BYTE_ARRAY:
-			switch(type.InternalType()) {
+			switch (type.InternalType()) {
 			case PhysicalType::INT16:
-				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int16_t>((const_data_ptr_t) stats.c_str(), stats.size()), width, scale);
+				return Value::DECIMAL(
+				    ParquetDecimalUtils::ReadDecimalValue<int16_t>((const_data_ptr_t)stats.c_str(), stats.size()),
+				    width, scale);
 			case PhysicalType::INT32:
-				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int32_t>((const_data_ptr_t) stats.c_str(), stats.size()), width, scale);
+				return Value::DECIMAL(
+				    ParquetDecimalUtils::ReadDecimalValue<int32_t>((const_data_ptr_t)stats.c_str(), stats.size()),
+				    width, scale);
 			case PhysicalType::INT64:
-				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int64_t>((const_data_ptr_t) stats.c_str(), stats.size()), width, scale);
+				return Value::DECIMAL(
+				    ParquetDecimalUtils::ReadDecimalValue<int64_t>((const_data_ptr_t)stats.c_str(), stats.size()),
+				    width, scale);
 			case PhysicalType::INT128:
-				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<hugeint_t>((const_data_ptr_t) stats.c_str(), stats.size()), width, scale);
+				return Value::DECIMAL(
+				    ParquetDecimalUtils::ReadDecimalValue<hugeint_t>((const_data_ptr_t)stats.c_str(), stats.size()),
+				    width, scale);
 			default:
 				throw InternalException("Unsupported internal type for decimal");
 			}
@@ -295,10 +304,12 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 			current_chunk.SetValue(9, count, ConvertParquetElementToString(col_meta.type));
 
 			// stats_min, LogicalType::VARCHAR
-			current_chunk.SetValue(10, count, ConvertParquetStats(column_type, schema_element, stats.__isset.min, stats.min));
+			current_chunk.SetValue(10, count,
+			                       ConvertParquetStats(column_type, schema_element, stats.__isset.min, stats.min));
 
 			// stats_max, LogicalType::VARCHAR
-			current_chunk.SetValue(11, count, ConvertParquetStats(column_type, schema_element, stats.__isset.max, stats.max));
+			current_chunk.SetValue(11, count,
+			                       ConvertParquetStats(column_type, schema_element, stats.__isset.max, stats.max));
 
 			// stats_null_count, LogicalType::BIGINT
 			current_chunk.SetValue(
@@ -310,12 +321,12 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 			                                                    : Value(LogicalType::BIGINT));
 
 			// stats_min_value, LogicalType::VARCHAR
-			current_chunk.SetValue(14, count,
-			                       ConvertParquetStats(column_type, schema_element, stats.__isset.min_value, stats.min_value));
+			current_chunk.SetValue(
+			    14, count, ConvertParquetStats(column_type, schema_element, stats.__isset.min_value, stats.min_value));
 
 			// stats_max_value, LogicalType::VARCHAR
-			current_chunk.SetValue(15, count,
-			                       ConvertParquetStats(column_type, schema_element, stats.__isset.max_value, stats.max_value));
+			current_chunk.SetValue(
+			    15, count, ConvertParquetStats(column_type, schema_element, stats.__isset.max_value, stats.max_value));
 
 			// compression, LogicalType::VARCHAR
 			current_chunk.SetValue(16, count, ConvertParquetElementToString(col_meta.codec));

@@ -84,8 +84,8 @@ protected:
 	//! Retrieves the row size of a vector at the specified location. Only used for scalar types.
 	virtual idx_t GetRowSize(Vector &vector, idx_t index);
 	//! Writes a (subset of a) vector to the specified serializer. Only used for scalar types.
-	virtual void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state, Vector &vector,
-	                         idx_t chunk_start, idx_t chunk_end);
+	virtual void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
+	                         Vector &vector, idx_t chunk_start, idx_t chunk_end);
 
 	//! Initialize the writer for a specific page. Only used for scalar types.
 	virtual unique_ptr<ColumnWriterPageState> InitializePageState();

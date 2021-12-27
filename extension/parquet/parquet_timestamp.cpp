@@ -53,5 +53,4 @@ dtime_t ParquetIntToTime(const int64_t &raw_time) {
 	return dtime_t(raw_time);
 }
 
-
 } // namespace duckdb

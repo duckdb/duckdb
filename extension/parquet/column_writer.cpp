@@ -443,8 +443,9 @@ unique_ptr<ColumnWriterStatistics> ColumnWriter::InitializeStatsState() {
 	return make_unique<ColumnWriterStatistics>();
 }
 
-void ColumnWriter::WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state, Vector &input_column,
-                 idx_t chunk_start, idx_t chunk_end) {
+void ColumnWriter::WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats,
+                               ColumnWriterPageState *page_state, Vector &input_column, idx_t chunk_start,
+                               idx_t chunk_end) {
 	throw InternalException("WriteVector unsupported for struct/list column writers");
 }
 
@@ -466,7 +467,8 @@ void ColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count
 		idx_t write_count = MinValue<idx_t>(remaining, write_info.max_write_count - write_info.write_count);
 		D_ASSERT(write_count > 0);
 
-		WriteVector(temp_writer, state.stats_state.get(), write_info.page_state.get(), vector, offset, offset + write_count);
+		WriteVector(temp_writer, state.stats_state.get(), write_info.page_state.get(), vector, offset,
+		            offset + write_count);
 
 		write_info.write_count += write_count;
 		if (write_info.write_count == write_info.max_write_count) {
@@ -477,7 +479,8 @@ void ColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count
 	}
 }
 
-void ColumnWriter::SetParquetStatistics(StandardColumnWriterState &state, duckdb_parquet::format::ColumnChunk &column_chunk) {
+void ColumnWriter::SetParquetStatistics(StandardColumnWriterState &state,
+                                        duckdb_parquet::format::ColumnChunk &column_chunk) {
 	if (max_repeat == 0) {
 		column_chunk.meta_data.statistics.null_count = null_count;
 		column_chunk.meta_data.statistics.__isset.null_count = true;
@@ -533,11 +536,11 @@ void ColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 //===--------------------------------------------------------------------===//
 // Standard Column Writer
 //===--------------------------------------------------------------------===//
-template<class SRC, class T, class OP>
+template <class SRC, class T, class OP>
 class NumericStatisticsState : public ColumnWriterStatistics {
 public:
-	NumericStatisticsState() :
- 		min(NumericLimits<T>::Maximum()), max(NumericLimits<T>::Minimum()) {}
+	NumericStatisticsState() : min(NumericLimits<T>::Maximum()), max(NumericLimits<T>::Minimum()) {
+	}
 
 	T min;
 	T max;
@@ -554,22 +557,22 @@ public:
 		return NumericLimits<SRC>::IsSigned() ? GetMaxValue() : string();
 	}
 	string GetMinValue() override {
-		return HasStats() ? string((char*) &min, sizeof(T)) : string();
+		return HasStats() ? string((char *)&min, sizeof(T)) : string();
 	}
 	string GetMaxValue() override {
-		return HasStats() ? string((char*) &max, sizeof(T)) : string();
+		return HasStats() ? string((char *)&max, sizeof(T)) : string();
 	}
 };
 
 struct BaseParquetOperator {
-	template<class SRC, class TGT>
+	template <class SRC, class TGT>
 	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
 		return make_unique<NumericStatisticsState<SRC, TGT, BaseParquetOperator>>();
 	}
 
-	template<class SRC, class TGT>
+	template <class SRC, class TGT>
 	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
-		auto &numeric_stats = (NumericStatisticsState<SRC, TGT, BaseParquetOperator> &) *stats;
+		auto &numeric_stats = (NumericStatisticsState<SRC, TGT, BaseParquetOperator> &)*stats;
 		if (LessThan::Operation(target_value, numeric_stats.min)) {
 			numeric_stats.min = target_value;
 		}
@@ -606,18 +609,19 @@ struct ParquetHugeintOperator {
 		return Hugeint::Cast<double>(input);
 	}
 
-	template<class SRC, class TGT>
+	template <class SRC, class TGT>
 	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
 		return make_unique<ColumnWriterStatistics>();
 	}
 
-	template<class SRC, class TGT>
+	template <class SRC, class TGT>
 	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
 	}
 };
 
 template <class SRC, class TGT, class OP = ParquetCastOperator>
-static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, idx_t chunk_start, idx_t chunk_end, ValidityMask &mask, Serializer &ser) {
+static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, idx_t chunk_start, idx_t chunk_end,
+                                ValidityMask &mask, Serializer &ser) {
 	auto *ptr = FlatVector::GetData<SRC>(col);
 	for (idx_t r = chunk_start; r < chunk_end; r++) {
 		if (mask.RowIsValid(r)) {
@@ -642,9 +646,8 @@ public:
 		return OP::template InitializeStats<SRC, TGT>();
 	}
 
-
-	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state, Vector &input_column,
-	                 idx_t chunk_start, idx_t chunk_end) override {
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
+	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
 		TemplatedWritePlain<SRC, TGT, OP>(input_column, stats, chunk_start, chunk_end, mask, temp_writer);
 	}
@@ -672,8 +675,8 @@ public:
 	~BooleanColumnWriter() override = default;
 
 public:
-	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *state_p, Vector &input_column, idx_t chunk_start,
-	                 idx_t chunk_end) override {
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *state_p,
+	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &state = (BooleanWriterPageState &)*state_p;
 		auto &mask = FlatVector::Validity(input_column);
 
@@ -725,8 +728,8 @@ public:
 	~DecimalColumnWriter() override = default;
 
 public:
-	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state, Vector &input_column,
-	                 idx_t chunk_start, idx_t chunk_end) override {
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
+	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
 
 		// FIXME: fixed length byte array...
@@ -751,8 +754,8 @@ public:
 	~StringColumnWriter() override = default;
 
 public:
-	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state, Vector &input_column,
-	                 idx_t chunk_start, idx_t chunk_end) override {
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
+	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
 
 		auto *ptr = FlatVector::GetData<string_t>(input_column);
