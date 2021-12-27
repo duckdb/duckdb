@@ -1,0 +1,214 @@
+# name: test/sql/copy/parquet/writer/write_stats_min_max.test
+# description: Write min/max stats to Parquet files
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+CREATE TABLE tinyint_limits AS SELECT (-128)::TINYINT min, 127::TINYINT max
+
+statement ok
+CREATE TABLE smallint_limits AS SELECT (-32768)::SMALLINT min, 32767::SMALLINT max
+
+statement ok
+CREATE TABLE integer_limits AS SELECT (-2147483648)::INTEGER min, 2147483647::INTEGER max
+
+statement ok
+CREATE TABLE bigint_limits AS SELECT (-9223372036854775808)::BIGINT min, 9223372036854775807::BIGINT max
+
+statement ok
+CREATE TABLE float_limits AS SELECT (-0.5)::FLOAT min, 0.5::FLOAT max
+
+statement ok
+CREATE TABLE double_limits AS SELECT (-0.5)::DOUBLE min, 0.5::DOUBLE max
+
+# min/max/min_value/max_value for signed tables
+foreach type tinyint smallint integer bigint float double
+
+statement ok
+CREATE TABLE tbl(i ${type});
+
+# empty stats (all values are NULL)
+statement ok
+INSERT INTO tbl SELECT NULL
+
+statement ok
+COPY tbl TO '${type}_stats.parquet' (FORMAT PARQUET);
+
+query I
+SELECT stats_min_value::${type} FROM parquet_metadata('${type}_stats.parquet')
+----
+NULL
+
+query I
+SELECT stats_max_value::${type} FROM parquet_metadata('${type}_stats.parquet')
+----
+NULL
+
+query I
+SELECT stats_min::${type} FROM parquet_metadata('${type}_stats.parquet')
+----
+NULL
+
+query I
+SELECT stats_max::${type} FROM parquet_metadata('${type}_stats.parquet')
+----
+NULL
+
+# min/max stats
+statement ok
+INSERT INTO tbl SELECT min FROM ${type}_limits
+
+statement ok
+INSERT INTO tbl SELECT max FROM ${type}_limits
+
+statement ok
+COPY tbl TO '${type}_stats.parquet' (FORMAT PARQUET);
+
+query I
+SELECT stats_min_value::${type} FROM parquet_metadata('${type}_stats.parquet') EXCEPT SELECT min FROM ${type}_limits
+----
+
+query I
+SELECT stats_max_value::${type} FROM parquet_metadata('${type}_stats.parquet') EXCEPT SELECT max FROM ${type}_limits
+----
+
+query I
+SELECT stats_min::${type} FROM parquet_metadata('${type}_stats.parquet') EXCEPT SELECT min FROM ${type}_limits
+----
+
+query I
+SELECT stats_max::${type} FROM parquet_metadata('${type}_stats.parquet') EXCEPT SELECT max FROM ${type}_limits
+----
+
+statement ok
+DROP TABLE tbl
+
+endloop
+
+statement ok
+CREATE TABLE utinyint_limits AS SELECT (0)::UTINYINT min, 255::UTINYINT max
+
+statement ok
+CREATE TABLE usmallint_limits AS SELECT (0)::USMALLINT min, 65535::USMALLINT max
+
+statement ok
+CREATE TABLE uinteger_limits AS SELECT 0::UINTEGER min, 4294967295::UINTEGER max
+
+statement ok
+CREATE TABLE ubigint_limits AS SELECT 0::UBIGINT min, 18446744073709551615::UBIGINT max
+
+# unsigned types only define min_value/max_value
+foreach type utinyint usmallint uinteger ubigint
+
+statement ok
+CREATE TABLE tbl(i ${type});
+
+# empty stats (all values are NULL)
+statement ok
+INSERT INTO tbl SELECT NULL
+
+statement ok
+COPY tbl TO '${type}_stats.parquet' (FORMAT PARQUET);
+
+query I
+SELECT stats_min_value::${type} FROM parquet_metadata('${type}_stats.parquet')
+----
+NULL
+
+query I
+SELECT stats_max_value::${type} FROM parquet_metadata('${type}_stats.parquet')
+----
+NULL
+
+query I
+SELECT stats_min::${type} FROM parquet_metadata('${type}_stats.parquet')
+----
+NULL
+
+query I
+SELECT stats_max::${type} FROM parquet_metadata('${type}_stats.parquet')
+----
+NULL
+
+# min/max stats
+statement ok
+INSERT INTO tbl SELECT min FROM ${type}_limits
+
+statement ok
+INSERT INTO tbl SELECT max FROM ${type}_limits
+
+statement ok
+COPY tbl TO '${type}_stats.parquet' (FORMAT PARQUET);
+
+query I
+SELECT stats_min_value::${type} FROM parquet_metadata('${type}_stats.parquet') EXCEPT SELECT min FROM ${type}_limits
+----
+
+query I
+SELECT stats_max_value::${type} FROM parquet_metadata('${type}_stats.parquet') EXCEPT SELECT max FROM ${type}_limits
+----
+
+query I
+SELECT stats_min::${type} FROM parquet_metadata('${type}_stats.parquet')
+----
+NULL
+
+query I
+SELECT stats_max::${type} FROM parquet_metadata('${type}_stats.parquet')
+----
+NULL
+
+statement ok
+DROP TABLE tbl
+
+endloop
+
+# no stats for these types
+statement ok
+CREATE TABLE hugeint_limits AS SELECT (-170141183460469231731687303715884105727)::HUGEINT min, 170141183460469231731687303715884105727::HUGEINT max
+
+foreach type hugeint
+
+statement ok
+CREATE TABLE tbl(i ${type});
+
+statement ok
+INSERT INTO tbl SELECT min FROM ${type}_limits
+
+statement ok
+INSERT INTO tbl SELECT max FROM ${type}_limits
+
+statement ok
+COPY tbl TO '${type}_stats.parquet' (FORMAT PARQUET);
+
+query I
+SELECT stats_min_value::${type} FROM parquet_metadata('${type}_stats.parquet')
+----
+NULL
+
+query I
+SELECT stats_max_value::${type} FROM parquet_metadata('${type}_stats.parquet')
+----
+NULL
+
+query I
+SELECT stats_min::${type} FROM parquet_metadata('${type}_stats.parquet')
+----
+NULL
+
+query I
+SELECT stats_max::${type} FROM parquet_metadata('${type}_stats.parquet')
+----
+NULL
+
+statement ok
+DROP TABLE tbl
+
+endloop

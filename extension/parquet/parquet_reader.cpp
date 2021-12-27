@@ -86,7 +86,7 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	return make_shared<ParquetFileMetadataCache>(move(metadata), current_time);
 }
 
-LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
+LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string) {
 	// inner node
 	D_ASSERT(s_ele.__isset.type && s_ele.num_children == 0);
 	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
@@ -177,12 +177,17 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 			default:
 				throw IOException("UTF8 converted type can only be set for Type::(FIXED_LEN_)BYTE_ARRAY");
 			}
+		case ConvertedType::TIME_MILLIS:
+		case ConvertedType::TIME_MICROS:
+			if (s_ele.type == Type::INT64) {
+				return LogicalType::TIME;
+			} else {
+				throw IOException("TIME_MICROS converted type can only be set for value of Type::INT64");
+			}
 		case ConvertedType::MAP:
 		case ConvertedType::MAP_KEY_VALUE:
 		case ConvertedType::LIST:
 		case ConvertedType::ENUM:
-		case ConvertedType::TIME_MILLIS:
-		case ConvertedType::TIME_MICROS:
 		case ConvertedType::JSON:
 		case ConvertedType::BSON:
 		case ConvertedType::INTERVAL:
@@ -207,7 +212,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 			return LogicalType::DOUBLE;
 		case Type::BYTE_ARRAY:
 		case Type::FIXED_LEN_BYTE_ARRAY:
-			if (parquet_options.binary_as_string) {
+			if (binary_as_string) {
 				return LogicalType::VARCHAR;
 			}
 			return LogicalType::BLOB;
@@ -215,6 +220,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 			return LogicalType::INVALID;
 		}
 	}
+}
+
+LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
+	return DeriveLogicalType(s_ele, parquet_options.binary_as_string);
 }
 
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData *file_meta_data, idx_t depth,

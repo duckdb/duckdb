@@ -15,6 +15,7 @@ namespace duckdb {
 class BufferedSerializer;
 class ParquetWriter;
 class ColumnWriterPageState;
+class StandardColumnWriterState;
 
 class ColumnWriterState {
 public:
@@ -23,6 +24,16 @@ public:
 	vector<uint16_t> definition_levels;
 	vector<uint16_t> repetition_levels;
 	vector<bool> is_empty;
+};
+
+class ColumnWriterStatistics {
+public:
+	virtual ~ColumnWriterStatistics();
+
+	virtual string GetMin();
+	virtual string GetMax();
+	virtual string GetMinValue();
+	virtual string GetMaxValue();
 };
 
 class ColumnWriter {
@@ -39,6 +50,8 @@ public:
 	idx_t max_repeat;
 	idx_t max_define;
 	bool can_have_nulls;
+	// collected stats
+	idx_t null_count;
 
 public:
 	//! Create the column writer for a specific type recursively
@@ -66,11 +79,14 @@ protected:
 	void NextPage(ColumnWriterState &state_p);
 	void FlushPage(ColumnWriterState &state_p);
 
+	//! Initializes the state used to track statistics during writing. Only used for scalar types.
+	virtual unique_ptr<ColumnWriterStatistics> InitializeStatsState();
 	//! Retrieves the row size of a vector at the specified location. Only used for scalar types.
-	virtual idx_t GetRowSize(Vector &vector, idx_t index) = 0;
+	virtual idx_t GetRowSize(Vector &vector, idx_t index);
 	//! Writes a (subset of a) vector to the specified serializer. Only used for scalar types.
-	virtual void WriteVector(Serializer &temp_writer, ColumnWriterPageState *page_state, Vector &vector,
-	                         idx_t chunk_start, idx_t chunk_end) = 0;
+	virtual void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state, Vector &vector,
+	                         idx_t chunk_start, idx_t chunk_end);
+
 	//! Initialize the writer for a specific page. Only used for scalar types.
 	virtual unique_ptr<ColumnWriterPageState> InitializePageState();
 	//! Flushes the writer for a specific page. Only used for scalar types.
@@ -78,6 +94,8 @@ protected:
 
 	void CompressPage(BufferedSerializer &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
 	                  unique_ptr<data_t[]> &compressed_buf);
+
+	void SetParquetStatistics(StandardColumnWriterState &state, duckdb_parquet::format::ColumnChunk &column);
 };
 
 } // namespace duckdb

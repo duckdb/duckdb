@@ -1,0 +1,65 @@
+# name: test/sql/copy/parquet/parquet_stats.test
+# description: Test stats reading in parquet reader
+# group: [parquet]
+
+require parquet
+
+# signed numbers
+query IIII
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/signed_stats.parquet');
+----
+-128	127	-128	127
+-32768	32767	-32768	32767
+-2147483648	2147483647	-2147483648	2147483647
+-9223372036854775808	9223372036854775807	-9223372036854775808	9223372036854775807
+
+query IIII
+select * from 'data/parquet-testing/signed_stats.parquet';
+----
+-128	-32768	-2147483648	-9223372036854775808
+127	32767	2147483647	9223372036854775807
+
+# unsigned numbers
+query IIII
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/unsigned_stats.parquet');
+----
+NULL	NULL	0	255
+NULL	NULL	0	65535
+0	4294967295	0	4294967295
+NULL	NULL	0	18446744073709551615
+
+query IIII
+select * from 'data/parquet-testing/unsigned_stats.parquet';
+----
+0	0	0	0
+255	65535	4294967295	18446744073709551615
+
+# dates/times/timestamps
+query IIII
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/date_stats.parquet');
+----
+1900-01-01	2030-12-31	1900-01-01	2030-12-31
+00:00:00	23:59:59	00:00:00	23:59:59
+1990-01-01 00:00:00	2030-12-31 23:59:59	1990-01-01 00:00:00	2030-12-31 23:59:59
+1900-01-01 00:00:00	2030-12-31 23:59:59	1900-01-01 00:00:00	2030-12-31 23:59:59
+1900-01-01 00:00:00	2030-12-31 23:59:59	1900-01-01 00:00:00	2030-12-31 23:59:59
+1900-01-01 00:00:00	2030-12-31 23:59:59	1900-01-01 00:00:00	2030-12-31 23:59:59
+
+query IIIIII
+select * from 'data/parquet-testing/date_stats.parquet';
+----
+1900-01-01	00:00:00	1990-01-01 00:00:00	1900-01-01 00:00:00	1900-01-01 00:00:00	1900-01-01 00:00:00
+2030-12-31	23:59:59	2030-12-31 23:59:59	2030-12-31 23:59:59	2030-12-31 23:59:59	2030-12-31 23:59:59
+
+# varchar/blob stats
+query IIII
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/varchar_stats.parquet');
+----
+NULL	NULL	hello world	world hello
+NULL	NULL	hello\x00world	world\x00hello
+
+query II
+select * from 'data/parquet-testing/varchar_stats.parquet';
+----
+hello world	hello\x00world
+world hello	world\x00hello

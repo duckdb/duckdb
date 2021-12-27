@@ -109,52 +109,91 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 	return_types.emplace_back(LogicalType::BIGINT);
 }
 
-Value ConvertParquetStats(duckdb_parquet::format::Type::type type, bool stats_is_set, const std::string &stats) {
-	if (!stats_is_set) {
+Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::format::SchemaElement &schema_ele, bool stats_is_set, const std::string &stats) {
+	if (!stats_is_set || stats.empty()) {
 		return Value(LogicalType::VARCHAR);
 	}
-	switch (type) {
-	case Type::BOOLEAN:
-		if (stats.size() == sizeof(bool)) {
-			return Value(Value::BOOLEAN(Load<bool>((data_ptr_t)stats.c_str())).ToString());
+	switch(type.id()) {
+	case LogicalTypeId::BOOLEAN: {
+		if (stats.size() != sizeof(bool)) {
+			throw InternalException("Incorrect stats size for type BOOLEAN");
 		}
-		break;
-	case Type::INT32:
-		if (stats.size() == sizeof(int32_t)) {
-			return Value(Value::INTEGER(Load<int32_t>((data_ptr_t)stats.c_str())).ToString());
-		}
-		break;
-	case Type::INT64:
-		if (stats.size() == sizeof(int64_t)) {
-			return Value(Value::BIGINT(Load<int64_t>((data_ptr_t)stats.c_str())).ToString());
-		}
-		break;
-	case Type::FLOAT:
-		if (stats.size() == sizeof(float)) {
-			float val = Load<float>((data_ptr_t)stats.c_str());
-			if (Value::FloatIsValid(val)) {
-				return Value(Value::FLOAT(val).ToString());
-			}
-		}
-		break;
-	case Type::DOUBLE:
-		if (stats.size() == sizeof(double)) {
-			double val = Load<double>((data_ptr_t)stats.c_str());
-			if (Value::DoubleIsValid(val)) {
-				return Value(Value::DOUBLE(val).ToString());
-			}
-		}
-		break;
-	case Type::BYTE_ARRAY:
-	case Type::INT96:
-	case Type::FIXED_LEN_BYTE_ARRAY:
-	default:
-		break;
+		return Value(Value::BOOLEAN(Load<bool>((data_ptr_t)stats.c_str())).ToString());
 	}
-	if (Value::StringIsValid(stats)) {
-		return Value(stats);
-	} else {
-		return Value(Blob::ToString(string_t(stats)));
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+		if (stats.size() != sizeof(uint32_t)) {
+			throw InternalException("Incorrect stats size for type UINTEGER");
+		}
+		return Value(Value::UINTEGER(Load<uint32_t>((data_ptr_t)stats.c_str())).ToString());
+	case LogicalTypeId::UBIGINT:
+		if (stats.size() != sizeof(uint64_t)) {
+			throw InternalException("Incorrect stats size for type UBIGINTEGER");
+		}
+		return Value(Value::UBIGINT(Load<uint64_t>((data_ptr_t)stats.c_str())).ToString());
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+		if (stats.size() != sizeof(int32_t)) {
+			throw InternalException("Incorrect stats size for type INTEGER");
+		}
+		return Value(Value::INTEGER(Load<int32_t>((data_ptr_t)stats.c_str())).ToString());
+	case LogicalTypeId::BIGINT:
+		if (stats.size() != sizeof(int64_t)) {
+			throw InternalException("Incorrect stats size for type BIGINT");
+		}
+		return Value(Value::BIGINT(Load<int64_t>((data_ptr_t)stats.c_str())).ToString());
+	case LogicalTypeId::FLOAT: {
+		if (stats.size() != sizeof(float)) {
+			throw InternalException("Incorrect stats size for type FLOAT");
+		}
+		auto val = Load<float>((data_ptr_t)stats.c_str());
+		if (!Value::FloatIsValid(val)) {
+			return Value(LogicalType::VARCHAR);
+		}
+		return Value(Value::FLOAT(val).ToString());
+	}
+	case LogicalTypeId::DOUBLE: {
+		if (stats.size() != sizeof(double)) {
+			throw InternalException("Incorrect stats size for type DOUBLE");
+		}
+		auto val = Load<double>((data_ptr_t)stats.c_str());
+		if (!Value::FloatIsValid(val)) {
+			return Value(LogicalType::VARCHAR);
+		}
+		return Value(Value::DOUBLE(val).ToString());
+	}
+	case LogicalType::VARCHAR:
+	case LogicalType::BLOB:
+		if (Value::StringIsValid(stats)) {
+			return Value(stats);
+		} else {
+			return Value(Blob::ToString(string_t(stats)));
+		}
+	case LogicalTypeId::DATE:
+		if (stats.size() != sizeof(int32_t)) {
+			throw InternalException("Incorrect stats size for type DATE");
+		}
+		return Value(Value::DATE(date_t(Load<int32_t>((data_ptr_t)stats.c_str()))).ToString());
+	case LogicalTypeId::TIME:
+		if (stats.size() != sizeof(int64_t)) {
+			throw InternalException("Incorrect stats size for type TIME");
+		}
+		return Value(Value::TIME(dtime_t(Load<int64_t>((data_ptr_t)stats.c_str()))).ToString());
+	case LogicalTypeId::TIMESTAMP: {
+		if (stats.size() != sizeof(int64_t)) {
+			throw InternalException("Incorrect stats size for type TIMESTAMP");
+		}
+		auto val = Load<int64_t>((data_ptr_t)stats.c_str());
+		if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIMESTAMP_MILLIS) {
+			return Value(Value::TIMESTAMPMS(timestamp_t(val)).ToString());
+		} else {
+			return Value(Value::TIMESTAMP(timestamp_t(val)).ToString());
+		}
+	}
+	default:
+		throw InternalException("Unsupported type for stats %s", type.ToString());
 	}
 }
 
@@ -167,13 +206,29 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 	DataChunk current_chunk;
 	current_chunk.Initialize(return_types);
 	auto meta_data = reader->GetFileMetadata();
+	vector<LogicalType> column_types;
+	vector<idx_t> schema_indexes;
+	for (idx_t schema_idx = 0; schema_idx < meta_data->schema.size(); schema_idx++) {
+		auto &schema_element = meta_data->schema[schema_idx];
+		if (schema_element.num_children > 0) {
+			continue;
+		}
+		column_types.push_back(ParquetReader::DeriveLogicalType(schema_element, false));
+		schema_indexes.push_back(schema_idx);
+	}
+
 	for (idx_t row_group_idx = 0; row_group_idx < meta_data->row_groups.size(); row_group_idx++) {
 		auto &row_group = meta_data->row_groups[row_group_idx];
 
+		if (row_group.columns.size() > column_types.size()) {
+			throw InternalException("Too many column in row group: corrupt file?");
+		}
 		for (idx_t col_idx = 0; col_idx < row_group.columns.size(); col_idx++) {
 			auto &column = row_group.columns[col_idx];
 			auto &col_meta = column.meta_data;
 			auto &stats = col_meta.statistics;
+			auto &schema_element = meta_data->schema[schema_indexes[col_idx]];
+			auto &column_type = column_types[col_idx];
 
 			// file_name, LogicalType::VARCHAR
 			current_chunk.SetValue(0, count, file_path);
@@ -206,10 +261,10 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 			current_chunk.SetValue(9, count, ConvertParquetElementToString(col_meta.type));
 
 			// stats_min, LogicalType::VARCHAR
-			current_chunk.SetValue(10, count, ConvertParquetStats(col_meta.type, stats.__isset.min, stats.min));
+			current_chunk.SetValue(10, count, ConvertParquetStats(column_type, schema_element, stats.__isset.min, stats.min));
 
 			// stats_max, LogicalType::VARCHAR
-			current_chunk.SetValue(11, count, ConvertParquetStats(col_meta.type, stats.__isset.max, stats.max));
+			current_chunk.SetValue(11, count, ConvertParquetStats(column_type, schema_element, stats.__isset.max, stats.max));
 
 			// stats_null_count, LogicalType::BIGINT
 			current_chunk.SetValue(
@@ -222,11 +277,11 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 
 			// stats_min_value, LogicalType::VARCHAR
 			current_chunk.SetValue(14, count,
-			                       ConvertParquetStats(col_meta.type, stats.__isset.min_value, stats.min_value));
+			                       ConvertParquetStats(column_type, schema_element, stats.__isset.min_value, stats.min_value));
 
 			// stats_max_value, LogicalType::VARCHAR
 			current_chunk.SetValue(15, count,
-			                       ConvertParquetStats(col_meta.type, stats.__isset.max_value, stats.max_value));
+			                       ConvertParquetStats(column_type, schema_element, stats.__isset.max_value, stats.max_value));
 
 			// compression, LogicalType::VARCHAR
 			current_chunk.SetValue(16, count, ConvertParquetElementToString(col_meta.codec));

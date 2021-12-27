@@ -129,6 +129,9 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 	case LogicalTypeId::DATE:
 		return make_unique<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(reader, type_p, schema_p,
 		                                                                            file_idx_p, max_define, max_repeat);
+	case LogicalTypeId::TIME:
+		return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(reader, type_p, schema_p,
+		                                                                             file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		return make_unique<StringColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
