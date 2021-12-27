@@ -754,27 +754,101 @@ public:
 //===--------------------------------------------------------------------===//
 // Decimal Column Writer
 //===--------------------------------------------------------------------===//
-class DecimalColumnWriter : public ColumnWriter {
+static void WriteParquetDecimal(hugeint_t input, data_ptr_t result) {
+	bool positive = input >= 0;
+	// numbers are stored as two's complement so some muckery is required
+	if (!positive) {
+		input = NumericLimits<hugeint_t>::Maximum() + input + 1;
+	}
+	uint64_t high_bytes = uint64_t(input.upper);
+	uint64_t low_bytes = input.lower;
+
+	for(idx_t i = 0; i < sizeof(uint64_t); i++) {
+		auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
+		result[i] = (high_bytes >> shift_count) & 0xFF;
+	}
+	for(idx_t i = 0; i < sizeof(uint64_t); i++) {
+		auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
+		result[sizeof(uint64_t) + i] = (low_bytes >> shift_count) & 0xFF;
+	}
+	if (!positive) {
+		result[0] |= 0x80;
+	}
+}
+
+class FixedDecimalStatistics : public ColumnWriterStatistics {
 public:
-	DecimalColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
+	FixedDecimalStatistics() : min(NumericLimits<hugeint_t>::Maximum()), max(NumericLimits<hugeint_t>::Minimum()) {
+	}
+
+	hugeint_t min;
+	hugeint_t max;
+
+public:
+	string GetStats(hugeint_t &input) {
+		data_t buffer[16];
+		WriteParquetDecimal(input, buffer);
+		return string((char*) buffer, 16);
+	}
+
+	bool HasStats() {
+		return min <= max;
+	}
+
+	void Update(hugeint_t &val) {
+		if (LessThan::Operation(val, min)) {
+			min = val;
+		}
+		if (GreaterThan::Operation(val, max)) {
+			max = val;
+		}
+	}
+
+	string GetMin() override {
+		return GetMinValue();
+	}
+	string GetMax() override {
+		return GetMaxValue();
+	}
+	string GetMinValue() override {
+		return HasStats() ? GetStats(min) : string();
+	}
+	string GetMaxValue() override {
+		return HasStats() ? GetStats(max) : string();
+	}
+};
+
+class FixedDecimalColumnWriter : public ColumnWriter {
+public:
+	FixedDecimalColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
 	                    bool can_have_nulls)
 	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls) {
 	}
-	~DecimalColumnWriter() override = default;
+	~FixedDecimalColumnWriter() override = default;
 
 public:
-	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
+	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
+		return make_unique<FixedDecimalStatistics>();
+	}
+
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
+		auto *ptr = FlatVector::GetData<hugeint_t>(input_column);
+		auto &stats = (FixedDecimalStatistics &) *stats_p;
 
-		// FIXME: fixed length byte array...
-		Vector double_vec(LogicalType::DOUBLE, true, false, chunk_end);
-		VectorOperations::Cast(input_column, double_vec, chunk_end);
-		TemplatedWritePlain<double, double>(double_vec, stats, chunk_start, chunk_end, mask, temp_writer);
+		data_t temp_buffer[16];
+		for (idx_t r = chunk_start; r < chunk_end; r++) {
+			if (mask.RowIsValid(r)) {
+				stats.Update(ptr[r]);
+				WriteParquetDecimal(ptr[r], temp_buffer);
+				temp_writer.WriteData(temp_buffer, 16);
+			}
+		}
 	}
 
 	idx_t GetRowSize(Vector &vector, idx_t index) override {
-		return sizeof(double);
+		return sizeof(hugeint_t);
 	}
 };
 
@@ -1198,8 +1272,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 	schema_element.__isset.type = true;
 	schema_element.__isset.repetition_type = true;
 	schema_element.name = name;
-	schema_element.__isset.converted_type =
-	    ParquetWriter::DuckDBTypeToConvertedType(type, schema_element.converted_type);
+	ParquetWriter::SetSchemaProperties(type, schema_element);
 	schemas.push_back(move(schema_element));
 
 	switch (type.id()) {
@@ -1216,6 +1289,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		return make_unique<StandardColumnWriter<int32_t, int32_t>>(writer, schema_idx, max_repeat, max_define,
 		                                                           can_have_nulls);
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:
 		return make_unique<StandardColumnWriter<int64_t, int64_t>>(writer, schema_idx, max_repeat, max_define,
@@ -1248,7 +1322,16 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		return make_unique<StandardColumnWriter<double, double>>(writer, schema_idx, max_repeat, max_define,
 		                                                         can_have_nulls);
 	case LogicalTypeId::DECIMAL:
-		return make_unique<DecimalColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
+		switch(type.InternalType()) {
+		case PhysicalType::INT16:
+			return make_unique<StandardColumnWriter<int16_t, int32_t>>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
+		case PhysicalType::INT32:
+			return make_unique<StandardColumnWriter<int32_t, int32_t>>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
+		case PhysicalType::INT64:
+			return make_unique<StandardColumnWriter<int64_t, int64_t>>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
+		default:
+			return make_unique<FixedDecimalColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
+		}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		return make_unique<StringColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);

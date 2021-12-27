@@ -1,0 +1,55 @@
+# name: test/sql/copy/parquet/writer/parquet_write_decimals.test
+# description: Parquet decimal types round trip
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE decimals(
+	dec4 DECIMAL(4,1),
+	dec9 DECIMAL(9,2),
+	dec18 DECIMAL(18,3),
+	dec38 DECIMAL(38,4)
+);
+
+statement ok
+INSERT INTO decimals VALUES (
+	-999.9,
+	-9999999.99,
+	-999999999999999.999,
+	-999999999999999999999999999999999.9999
+), (
+	NULL, NULL, NULL, NULL
+), (
+ 	42, 42, 42, 42
+), (
+ 	-42, -42, -42, -42
+), (
+  	0, 0, 0, 0
+ ), (
+  	999.9,
+  	9999999.99,
+  	999999999999999.999,
+  	999999999999999999999999999999999.9999
+);
+
+statement ok
+COPY decimals TO '__TEST_DIR__/decimals.parquet';
+
+query IIII nosort decimal_scan
+SELECT * FROM decimals;
+
+query IIII nosort decimal_scan
+SELECT * FROM '__TEST_DIR__/decimals.parquet';
+
+
+query IIII
+SELECT stats_min, stats_max, stats_min_value, stats_max_value FROM parquet_metadata('__TEST_DIR__/decimals.parquet');
+----
+-999.9	999.9	-999.9	999.9
+-9999999.99	9999999.99	-9999999.99	9999999.99
+-999999999999999.999	999999999999999.999	-999999999999999.999	999999999999999.999
+-999999999999999999999999999999999.9999	999999999999999999999999999999999.9999	-999999999999999999999999999999999.9999	999999999999999999999999999999999.9999

@@ -65,13 +65,13 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 		return Type::INT64;
 	case LogicalTypeId::FLOAT:
 		return Type::FLOAT;
-	case LogicalTypeId::DECIMAL: // for now...
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::HUGEINT:
 		return Type::DOUBLE;
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 		return Type::BYTE_ARRAY;
+	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -83,53 +83,93 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 		return Type::INT32;
 	case LogicalTypeId::UBIGINT:
 		return Type::INT64;
+	case LogicalTypeId::DECIMAL:
+		switch(duckdb_type.InternalType()) {
+		case PhysicalType::INT16:
+		case PhysicalType::INT32:
+			return Type::INT32;
+		case PhysicalType::INT64:
+			return Type::INT64;
+		case PhysicalType::INT128:
+			return Type::FIXED_LEN_BYTE_ARRAY;
+		default:
+			throw InternalException("Unsupported internal decimal type");
+		}
 	default:
 		throw NotImplementedException(duckdb_type.ToString());
 	}
 }
 
-bool ParquetWriter::DuckDBTypeToConvertedType(const LogicalType &duckdb_type, ConvertedType::type &result) {
+void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,  duckdb_parquet::format::SchemaElement &schema_ele) {
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::TINYINT:
-		result = ConvertedType::INT_8;
-		return true;
+		schema_ele.converted_type = ConvertedType::INT_8;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::SMALLINT:
-		result = ConvertedType::INT_16;
-		return true;
+		schema_ele.converted_type = ConvertedType::INT_16;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::INTEGER:
-		result = ConvertedType::INT_32;
-		return true;
+		schema_ele.converted_type = ConvertedType::INT_32;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::BIGINT:
-		result = ConvertedType::INT_64;
-		return true;
+		schema_ele.converted_type = ConvertedType::INT_64;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::UTINYINT:
-		result = ConvertedType::UINT_8;
-		return true;
+		schema_ele.converted_type = ConvertedType::UINT_8;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::USMALLINT:
-		result = ConvertedType::UINT_16;
-		return true;
+		schema_ele.converted_type = ConvertedType::UINT_16;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::UINTEGER:
-		result = ConvertedType::UINT_32;
-		return true;
+		schema_ele.converted_type = ConvertedType::UINT_32;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::UBIGINT:
-		result = ConvertedType::UINT_64;
-		return true;
+		schema_ele.converted_type = ConvertedType::UINT_64;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::DATE:
-		result = ConvertedType::DATE;
-		return true;
+		schema_ele.converted_type = ConvertedType::DATE;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::VARCHAR:
-		result = ConvertedType::UTF8;
-		return true;
+		schema_ele.converted_type = ConvertedType::UTF8;
+		schema_ele.__isset.converted_type = true;
+		break;
+	case LogicalTypeId::TIME:
+		schema_ele.converted_type = ConvertedType::TIME_MICROS;
+		schema_ele.__isset.converted_type = true;
+		break;
+	case LogicalTypeId::DECIMAL:
+		schema_ele.converted_type = ConvertedType::DECIMAL;
+		schema_ele.precision = DecimalType::GetWidth(duckdb_type);
+		schema_ele.scale = DecimalType::GetScale(duckdb_type);
+		schema_ele.__isset.converted_type = true;
+		schema_ele.__isset.precision = true;
+		schema_ele.__isset.scale = true;
+		if (duckdb_type.InternalType() == PhysicalType::INT128) {
+			schema_ele.type_length = 16;
+			schema_ele.__isset.type_length = true;
+		}
+		break;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
-		result = ConvertedType::TIMESTAMP_MICROS;
-		return true;
+		schema_ele.converted_type = ConvertedType::TIMESTAMP_MICROS;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::TIMESTAMP_MS:
-		result = ConvertedType::TIMESTAMP_MILLIS;
-		return true;
+		schema_ele.converted_type = ConvertedType::TIMESTAMP_MILLIS;
+		schema_ele.__isset.converted_type = true;
+		break;
 	default:
-		return false;
+		break;
 	}
 }
 
