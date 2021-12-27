@@ -23,20 +23,19 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
 	// `max_value`. All are optional. such elegance.
 	if (parquet_stats.__isset.min) {
-		stats->min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min);
+		stats->min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min).CastAs(type);
 	} else if (parquet_stats.__isset.min_value) {
-		stats->min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value);
+		stats->min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value).CastAs(type);
 	} else {
 		stats->min.is_null = true;
 	}
 	if (parquet_stats.__isset.max) {
-		stats->max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max);
+		stats->max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max).CastAs(type);
 	} else if (parquet_stats.__isset.max_value) {
-		stats->max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max_value);
+		stats->max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max_value).CastAs(type);
 	} else {
 		stats->max.is_null = true;
 	}
-	// GCC 4.x insists on a move() here
 	return move(stats);
 }
 
@@ -62,7 +61,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		return Value::UINTEGER(Load<uint32_t>((data_ptr_t)stats.c_str()));
 	case LogicalTypeId::UBIGINT:
 		if (stats.size() != sizeof(uint64_t)) {
-			throw InternalException("Incorrect stats size for type UBIGINTEGER");
+			throw InternalException("Incorrect stats size for type UBIGINT");
 		}
 		return Value::UBIGINT(Load<uint64_t>((data_ptr_t)stats.c_str()));
 	case LogicalTypeId::TINYINT:
@@ -85,7 +84,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		if (!Value::FloatIsValid(val)) {
 			return Value();
 		}
-		return Value::FLOAT(val).ToString();
+		return Value::FLOAT(val);
 	}
 	case LogicalTypeId::DOUBLE: {
 		if (stats.size() != sizeof(double)) {
@@ -95,7 +94,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		if (!Value::DoubleIsValid(val)) {
 			return Value();
 		}
-		return Value::DOUBLE(val).ToString();
+		return Value::DOUBLE(val);
 	}
 	case LogicalTypeId::DECIMAL: {
 		auto width = DecimalType::GetWidth(type);
@@ -150,7 +149,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		if (stats.size() != sizeof(int32_t)) {
 			throw InternalException("Incorrect stats size for type DATE");
 		}
-		return Value(Value::DATE(date_t(Load<int32_t>((data_ptr_t)stats.c_str()))).ToString());
+		return Value::DATE(date_t(Load<int32_t>((data_ptr_t)stats.c_str())));
 	case LogicalTypeId::TIME:
 		if (stats.size() != sizeof(int64_t)) {
 			throw InternalException("Incorrect stats size for type TIME");

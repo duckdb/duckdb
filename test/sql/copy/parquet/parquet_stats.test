@@ -8,7 +8,7 @@ require parquet
 query IIII
 select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/boolean_stats.test');
 ----
-False	True	False	True
+false	true	false	true
 
 # signed numbers
 query IIII
@@ -166,7 +166,7 @@ SELECT stats_min, stats_max, stats_min_value, stats_max_value FROM parquet_metad
 4.80	4.80	4.80	4.80
 49	49	49	49
 50	50	50	50
-False	True	False	True
+false	true	false	true
 2019-11-26 20:11:42.501	2019-11-26 20:11:42.501	2019-11-26 20:11:42.501	2019-11-26 20:11:42.501
 2020-01-10	2020-01-10	2020-01-10	2020-01-10
 
