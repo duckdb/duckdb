@@ -226,6 +226,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 			return nullptr;
 		}
 		string_stats->has_unicode = true; // we dont know better
+		string_stats->max_string_length = NumericLimits<uint32_t>::Maximum();
 		row_group_stats = move(string_stats);
 		break;
 	}

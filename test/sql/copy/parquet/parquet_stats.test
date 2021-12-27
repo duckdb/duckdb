@@ -6,7 +6,7 @@ require parquet
 
 # boolean values
 query IIII
-select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/boolean_stats.test');
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/boolean_stats.parquet');
 ----
 false	true	false	true
 
@@ -161,8 +161,8 @@ SELECT stats_min, stats_max, stats_min_value, stats_max_value FROM parquet_metad
 -32767	32767	-32767	32767
 -2147483647	2147483647	-2147483647	2147483647
 -9223372036854775807	9223372036854775807	-9223372036854775807	9223372036854775807
--4.600000	4.600000	-4.600000	4.600000
--4.700000	4.700000	-4.700000	4.700000
+-4.6	4.6	-4.6	4.6
+-4.7	4.7	-4.7	4.7
 4.80	4.80	4.80	4.80
 49	49	49	49
 50	50	50	50
