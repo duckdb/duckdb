@@ -220,7 +220,8 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 						ColumnCountMismatch(original_expected_columns, row_wise);
 					}
 					PrintLineSep();
-					PrintErrorHeader("Error in test! Column count mismatch after splitting on tab!");
+					PrintErrorHeader("Error in test! Column count mismatch after splitting on tab on row " +
+					                 to_string(i + 1) + "!");
 					std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset
 					          << " columns, but got " << termcolor::bold << splits.size() << termcolor::reset
 					          << " columns" << std::endl;
@@ -510,7 +511,7 @@ void TestResultHelper::PrintSQL(string sql) {
 	std::cerr << std::endl;
 }
 
-void TestResultHelper::PrintErrorHeader(const char *description) {
+void TestResultHelper::PrintErrorHeader(const string &description) {
 	PrintLineSep();
 	std::cerr << termcolor::red << termcolor::bold << description << " " << termcolor::reset;
 	std::cerr << termcolor::bold << "(" << file_name << ":" << query_line << ")!" << termcolor::reset << std::endl;
