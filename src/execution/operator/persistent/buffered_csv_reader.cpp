@@ -24,7 +24,7 @@ namespace duckdb {
 
 struct CSVFileHandle {
 public:
-	CSVFileHandle(unique_ptr<FileHandle> file_handle_p) : file_handle(move(file_handle_p)) {
+	explicit CSVFileHandle(unique_ptr<FileHandle> file_handle_p) : file_handle(move(file_handle_p)) {
 		can_seek = file_handle->CanSeek();
 		plain_file_source = file_handle->OnDiskFile() && can_seek;
 		file_size = file_handle->GetFileSize();
@@ -95,7 +95,9 @@ public:
 					buffer_capacity = MaxValue<idx_t>(NextPowerOfTwo(buffer_size + bytes_read), buffer_capacity * 2);
 
 					auto new_buffer = unique_ptr<data_t[]>(new data_t[buffer_capacity]);
-					memcpy(new_buffer.get(), cached_buffer.get(), buffer_size);
+					if (buffer_size > 0) {
+						memcpy(new_buffer.get(), cached_buffer.get(), buffer_size);
+					}
 					cached_buffer = move(new_buffer);
 				}
 				memcpy(cached_buffer.get() + buffer_size, (char *)buffer + result_offset, bytes_read);
