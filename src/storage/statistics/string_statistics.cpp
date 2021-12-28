@@ -23,7 +23,6 @@ unique_ptr<BaseStatistics> StringStatistics::Copy() {
 	memcpy(stats->max, max, MAX_STRING_MINMAX_SIZE);
 	stats->has_unicode = has_unicode;
 	stats->max_string_length = max_string_length;
-	stats->max_string_length = max_string_length;
 	if (validity_stats) {
 		stats->validity_stats = validity_stats->Copy();
 	}

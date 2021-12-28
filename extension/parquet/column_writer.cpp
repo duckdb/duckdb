@@ -1,6 +1,7 @@
 #include "column_writer.hpp"
 #include "parquet_writer.hpp"
 #include "parquet_rle_bp_decoder.hpp"
+#include "parquet_rle_bp_encoder.hpp"
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
@@ -14,6 +15,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #endif
 
 #include "snappy.h"
@@ -37,20 +39,6 @@ using duckdb_parquet::format::Type;
 
 #define PARQUET_DEFINE_VALID 65535
 
-//===--------------------------------------------------------------------===//
-// ColumnWriter
-//===--------------------------------------------------------------------===//
-ColumnWriter::ColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
-                           bool can_have_nulls)
-    : writer(writer), schema_idx(schema_idx), max_repeat(max_repeat), max_define(max_define),
-      can_have_nulls(can_have_nulls) {
-}
-ColumnWriter::~ColumnWriter() {
-}
-
-ColumnWriterState::~ColumnWriterState() {
-}
-
 static void VarintEncode(uint32_t val, Serializer &ser) {
 	do {
 		uint8_t byte = val & 127;
@@ -73,6 +61,127 @@ static uint8_t GetVarintSize(uint32_t val) {
 		res++;
 	} while (val != 0);
 	return res;
+}
+
+//===--------------------------------------------------------------------===//
+// ColumnWriterStatistics
+//===--------------------------------------------------------------------===//
+ColumnWriterStatistics::~ColumnWriterStatistics() {
+}
+
+string ColumnWriterStatistics::GetMin() {
+	return string();
+}
+
+string ColumnWriterStatistics::GetMax() {
+	return string();
+}
+
+string ColumnWriterStatistics::GetMinValue() {
+	return string();
+}
+
+string ColumnWriterStatistics::GetMaxValue() {
+	return string();
+}
+
+//===--------------------------------------------------------------------===//
+// RleBpEncoder
+//===--------------------------------------------------------------------===//
+RleBpEncoder::RleBpEncoder(uint32_t bit_width)
+    : byte_width((bit_width + 7) / 8), byte_count(idx_t(-1)), run_count(idx_t(-1)) {
+}
+
+// we always RLE everything (for now)
+void RleBpEncoder::BeginPrepare(uint32_t first_value) {
+	byte_count = 0;
+	run_count = 1;
+	current_run_count = 1;
+	last_value = first_value;
+}
+
+void RleBpEncoder::FinishRun() {
+	// last value, or value has changed
+	// write out the current run
+	byte_count += GetVarintSize(current_run_count << 1) + byte_width;
+	current_run_count = 1;
+	run_count++;
+}
+
+void RleBpEncoder::PrepareValue(uint32_t value) {
+	if (value != last_value) {
+		FinishRun();
+		last_value = value;
+	} else {
+		current_run_count++;
+	}
+}
+
+void RleBpEncoder::FinishPrepare() {
+	FinishRun();
+}
+
+idx_t RleBpEncoder::GetByteCount() {
+	D_ASSERT(byte_count != idx_t(-1));
+	return byte_count;
+}
+
+void RleBpEncoder::BeginWrite(Serializer &writer, uint32_t first_value) {
+	// start the RLE runs
+	last_value = first_value;
+	current_run_count = 1;
+}
+
+void RleBpEncoder::WriteRun(Serializer &writer) {
+	// write the header of the run
+	VarintEncode(current_run_count << 1, writer);
+	// now write the value
+	switch (byte_width) {
+	case 1:
+		writer.Write<uint8_t>(last_value);
+		break;
+	case 2:
+		writer.Write<uint16_t>(last_value);
+		break;
+	case 3:
+		writer.Write<uint8_t>(last_value & 0xFF);
+		writer.Write<uint8_t>((last_value >> 8) & 0xFF);
+		writer.Write<uint8_t>((last_value >> 16) & 0xFF);
+		break;
+	case 4:
+		writer.Write<uint32_t>(last_value);
+		break;
+	default:
+		throw InternalException("unsupported byte width for RLE encoding");
+	}
+	current_run_count = 1;
+}
+
+void RleBpEncoder::WriteValue(Serializer &writer, uint32_t value) {
+	if (value != last_value) {
+		WriteRun(writer);
+		last_value = value;
+	} else {
+		current_run_count++;
+	}
+}
+
+void RleBpEncoder::FinishWrite(Serializer &writer) {
+	WriteRun(writer);
+}
+
+//===--------------------------------------------------------------------===//
+// ColumnWriter
+//===--------------------------------------------------------------------===//
+ColumnWriter::ColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
+                           idx_t max_define, bool can_have_nulls)
+    : writer(writer), schema_idx(schema_idx), schema_path(move(schema_path_p)), max_repeat(max_repeat),
+      max_define(max_define), can_have_nulls(can_have_nulls), null_count(0) {
+}
+ColumnWriter::~ColumnWriter() {
+}
+
+ColumnWriterState::~ColumnWriterState() {
 }
 
 void ColumnWriter::CompressPage(BufferedSerializer &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
@@ -156,18 +265,17 @@ public:
 	idx_t col_idx;
 	vector<PageInformation> page_info;
 	vector<PageWriteInformation> write_info;
+	unique_ptr<ColumnWriterStatistics> stats_state;
 	idx_t current_page = 0;
 };
 
-unique_ptr<ColumnWriterState> ColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-                                                                 vector<string> schema_path) {
+unique_ptr<ColumnWriterState> ColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) {
 	auto result = make_unique<StandardColumnWriterState>(row_group, row_group.columns.size());
 
 	duckdb_parquet::format::ColumnChunk column_chunk;
 	column_chunk.__isset.meta_data = true;
 	column_chunk.meta_data.codec = writer.codec;
-	column_chunk.meta_data.path_in_schema = move(schema_path);
-	column_chunk.meta_data.path_in_schema.push_back(writer.file_meta_data.schema[schema_idx].name);
+	column_chunk.meta_data.path_in_schema = schema_path;
 	column_chunk.meta_data.num_values = 0;
 	column_chunk.meta_data.type = writer.file_meta_data.schema[schema_idx].type;
 	row_group.columns.push_back(move(column_chunk));
@@ -201,6 +309,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 				if (!can_have_nulls) {
 					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 				}
+				null_count++;
 				state.definition_levels.push_back(null_value);
 			}
 			if (parent->is_empty.empty() || !parent->is_empty[current_index]) {
@@ -216,6 +325,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 				if (!can_have_nulls) {
 					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 				}
+				null_count++;
 				state.definition_levels.push_back(null_value);
 			}
 		}
@@ -261,10 +371,15 @@ unique_ptr<ColumnWriterPageState> ColumnWriter::InitializePageState() {
 void ColumnWriter::FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state) {
 }
 
+duckdb_parquet::format::Encoding::type ColumnWriter::GetEncoding() {
+	return Encoding::PLAIN;
+}
+
 void ColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 	auto &state = (StandardColumnWriterState &)state_p;
 
 	// set up the page write info
+	state.stats_state = InitializeStatsState();
 	for (idx_t page_idx = 0; page_idx < state.page_info.size(); page_idx++) {
 		auto &page_info = state.page_info[page_idx];
 		if (page_info.row_count == 0) {
@@ -281,7 +396,7 @@ void ColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		hdr.__isset.data_page_header = true;
 
 		hdr.data_page_header.num_values = page_info.row_count;
-		hdr.data_page_header.encoding = Encoding::PLAIN;
+		hdr.data_page_header.encoding = GetEncoding();
 		hdr.data_page_header.definition_level_encoding = Encoding::RLE;
 		hdr.data_page_header.repetition_level_encoding = Encoding::RLE;
 
@@ -306,51 +421,23 @@ void ColumnWriter::WriteLevels(Serializer &temp_writer, const vector<uint16_t> &
 		return;
 	}
 
-	// write the levels
-	// we always RLE everything (for now)
+	// write the levels using the RLE-BP encoding
 	auto bit_width = RleBpDecoder::ComputeBitWidth((max_value));
-	auto byte_width = (bit_width + 7) / 8;
+	RleBpEncoder rle_encoder(bit_width);
 
-	// figure out how many bytes we are going to need
-	idx_t byte_count = 0;
-	idx_t run_count = 1;
-	idx_t current_run_count = 1;
-	for (idx_t i = offset + 1; i <= offset + count; i++) {
-		if (i == offset + count || levels[i] != levels[i - 1]) {
-			// last value, or value has changed
-			// write out the current run
-			byte_count += GetVarintSize(current_run_count << 1) + byte_width;
-			current_run_count = 1;
-			run_count++;
-		} else {
-			current_run_count++;
-		}
+	rle_encoder.BeginPrepare(levels[offset]);
+	for (idx_t i = offset + 1; i < offset + count; i++) {
+		rle_encoder.PrepareValue(levels[i]);
 	}
-	temp_writer.Write<uint32_t>(byte_count);
+	rle_encoder.FinishPrepare();
 
-	// now actually write the values
-	current_run_count = 1;
-	for (idx_t i = offset + 1; i <= offset + count; i++) {
-		if (i == offset + count || levels[i] != levels[i - 1]) {
-			// new run: write out the old run
-			// first write the header
-			VarintEncode(current_run_count << 1, temp_writer);
-			// now write hte value
-			switch (byte_width) {
-			case 1:
-				temp_writer.Write<uint8_t>(levels[i - 1]);
-				break;
-			case 2:
-				temp_writer.Write<uint16_t>(levels[i - 1]);
-				break;
-			default:
-				throw InternalException("unsupported byte width for RLE encoding");
-			}
-			current_run_count = 1;
-		} else {
-			current_run_count++;
-		}
+	// start off by writing the byte count as a uint32_t
+	temp_writer.Write<uint32_t>(rle_encoder.GetByteCount());
+	rle_encoder.BeginWrite(temp_writer, levels[offset]);
+	for (idx_t i = offset + 1; i < offset + count; i++) {
+		rle_encoder.WriteValue(temp_writer, levels[i]);
 	}
+	rle_encoder.FinishWrite(temp_writer);
 }
 
 void ColumnWriter::NextPage(ColumnWriterState &state_p) {
@@ -411,6 +498,20 @@ void ColumnWriter::FlushPage(ColumnWriterState &state_p) {
 	}
 }
 
+unique_ptr<ColumnWriterStatistics> ColumnWriter::InitializeStatsState() {
+	return make_unique<ColumnWriterStatistics>();
+}
+
+void ColumnWriter::WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats,
+                               ColumnWriterPageState *page_state, Vector &input_column, idx_t chunk_start,
+                               idx_t chunk_end) {
+	throw InternalException("WriteVector unsupported for struct/list column writers");
+}
+
+idx_t ColumnWriter::GetRowSize(Vector &vector, idx_t index) {
+	throw InternalException("GetRowSize unsupported for struct/list column writers");
+}
+
 void ColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
 	auto &state = (StandardColumnWriterState &)state_p;
 
@@ -425,7 +526,8 @@ void ColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count
 		idx_t write_count = MinValue<idx_t>(remaining, write_info.max_write_count - write_info.write_count);
 		D_ASSERT(write_count > 0);
 
-		WriteVector(temp_writer, write_info.page_state.get(), vector, offset, offset + write_count);
+		WriteVector(temp_writer, state.stats_state.get(), write_info.page_state.get(), vector, offset,
+		            offset + write_count);
 
 		write_info.write_count += write_count;
 		if (write_info.write_count == write_info.max_write_count) {
@@ -436,14 +538,54 @@ void ColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count
 	}
 }
 
+void ColumnWriter::SetParquetStatistics(StandardColumnWriterState &state,
+                                        duckdb_parquet::format::ColumnChunk &column_chunk) {
+	if (max_repeat == 0) {
+		column_chunk.meta_data.statistics.null_count = null_count;
+		column_chunk.meta_data.statistics.__isset.null_count = true;
+		column_chunk.meta_data.__isset.statistics = true;
+	}
+	// set min/max/min_value/max_value
+	// this code is not going to win any beauty contests, but well
+	auto min = state.stats_state->GetMin();
+	if (!min.empty()) {
+		column_chunk.meta_data.statistics.min = move(min);
+		column_chunk.meta_data.statistics.__isset.min = true;
+		column_chunk.meta_data.__isset.statistics = true;
+	}
+	auto max = state.stats_state->GetMax();
+	if (!max.empty()) {
+		column_chunk.meta_data.statistics.max = move(max);
+		column_chunk.meta_data.statistics.__isset.max = true;
+		column_chunk.meta_data.__isset.statistics = true;
+	}
+	auto min_value = state.stats_state->GetMinValue();
+	if (!min_value.empty()) {
+		column_chunk.meta_data.statistics.min_value = move(min_value);
+		column_chunk.meta_data.statistics.__isset.min_value = true;
+		column_chunk.meta_data.__isset.statistics = true;
+	}
+	auto max_value = state.stats_state->GetMaxValue();
+	if (!max_value.empty()) {
+		column_chunk.meta_data.statistics.max_value = move(max_value);
+		column_chunk.meta_data.statistics.__isset.max_value = true;
+		column_chunk.meta_data.__isset.statistics = true;
+	}
+}
+
 void ColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = (StandardColumnWriterState &)state_p;
 	auto &column_chunk = state.row_group.columns[state.col_idx];
 
 	// flush the last page (if any remains)
 	FlushPage(state);
+	// flush the dictionary
+	FlushDictionary(state, state.stats_state.get());
+
 	// record the start position of the pages for this column
 	column_chunk.meta_data.data_page_offset = writer.writer->GetTotalWritten();
+	SetParquetStatistics(state, column_chunk);
+
 	// write the individual pages to disk
 	for (auto &write_info : state.write_info) {
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
@@ -454,24 +596,105 @@ void ColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	    writer.writer->GetTotalWritten() - column_chunk.meta_data.data_page_offset;
 }
 
+void ColumnWriter::WriteDictionary(ColumnWriterState &state_p, unique_ptr<BufferedSerializer> temp_writer,
+                                   idx_t row_count) {
+	auto &state = (StandardColumnWriterState &)state_p;
+	D_ASSERT(temp_writer);
+	D_ASSERT(temp_writer->blob.size > 0);
+
+	// write the dictionary page header
+	PageWriteInformation write_info;
+	// set up the header
+	auto &hdr = write_info.page_header;
+	hdr.uncompressed_page_size = temp_writer->blob.size;
+	hdr.type = PageType::DICTIONARY_PAGE;
+	hdr.__isset.dictionary_page_header = true;
+
+	hdr.dictionary_page_header.encoding = Encoding::PLAIN;
+	hdr.dictionary_page_header.is_sorted = false;
+	hdr.dictionary_page_header.num_values = row_count;
+
+	write_info.temp_writer = move(temp_writer);
+	write_info.write_count = 0;
+	write_info.max_write_count = 0;
+
+	// compress the contents of the dictionary page
+	CompressPage(*write_info.temp_writer, write_info.compressed_size, write_info.compressed_data,
+	             write_info.compressed_buf);
+	hdr.compressed_page_size = write_info.compressed_size;
+
+	// insert the dictionary page as the first page to write for this column
+	state.write_info.insert(state.write_info.begin(), move(write_info));
+}
+
+void ColumnWriter::FlushDictionary(ColumnWriterState &state, ColumnWriterStatistics *stats) {
+	// nop: standard pages do not have a dictionary
+}
+
 //===--------------------------------------------------------------------===//
 // Standard Column Writer
 //===--------------------------------------------------------------------===//
-struct ParquetCastOperator {
+template <class SRC, class T, class OP>
+class NumericStatisticsState : public ColumnWriterStatistics {
+public:
+	NumericStatisticsState() : min(NumericLimits<T>::Maximum()), max(NumericLimits<T>::Minimum()) {
+	}
+
+	T min;
+	T max;
+
+public:
+	bool HasStats() {
+		return min <= max;
+	}
+
+	string GetMin() override {
+		return NumericLimits<SRC>::IsSigned() ? GetMinValue() : string();
+	}
+	string GetMax() override {
+		return NumericLimits<SRC>::IsSigned() ? GetMaxValue() : string();
+	}
+	string GetMinValue() override {
+		return HasStats() ? string((char *)&min, sizeof(T)) : string();
+	}
+	string GetMaxValue() override {
+		return HasStats() ? string((char *)&max, sizeof(T)) : string();
+	}
+};
+
+struct BaseParquetOperator {
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return make_unique<NumericStatisticsState<SRC, TGT, BaseParquetOperator>>();
+	}
+
+	template <class SRC, class TGT>
+	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
+		auto &numeric_stats = (NumericStatisticsState<SRC, TGT, BaseParquetOperator> &)*stats;
+		if (LessThan::Operation(target_value, numeric_stats.min)) {
+			numeric_stats.min = target_value;
+		}
+		if (GreaterThan::Operation(target_value, numeric_stats.max)) {
+			numeric_stats.max = target_value;
+		}
+	}
+};
+
+struct ParquetCastOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return TGT(input);
 	}
 };
 
-struct ParquetTimestampNSOperator {
+struct ParquetTimestampNSOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Timestamp::FromEpochNanoSeconds(input).value;
 	}
 };
 
-struct ParquetTimestampSOperator {
+struct ParquetTimestampSOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Timestamp::FromEpochSeconds(input).value;
@@ -483,14 +706,26 @@ struct ParquetHugeintOperator {
 	static TGT Operation(SRC input) {
 		return Hugeint::Cast<double>(input);
 	}
+
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return make_unique<ColumnWriterStatistics>();
+	}
+
+	template <class SRC, class TGT>
+	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
+	}
 };
 
 template <class SRC, class TGT, class OP = ParquetCastOperator>
-static void TemplatedWritePlain(Vector &col, idx_t chunk_start, idx_t chunk_end, ValidityMask &mask, Serializer &ser) {
+static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, idx_t chunk_start, idx_t chunk_end,
+                                ValidityMask &mask, Serializer &ser) {
 	auto *ptr = FlatVector::GetData<SRC>(col);
 	for (idx_t r = chunk_start; r < chunk_end; r++) {
 		if (mask.RowIsValid(r)) {
-			ser.Write<TGT>(OP::template Operation<SRC, TGT>(ptr[r]));
+			TGT target_value = OP::template Operation<SRC, TGT>(ptr[r]);
+			OP::template HandleStats<SRC, TGT>(stats, ptr[r], target_value);
+			ser.Write<TGT>(target_value);
 		}
 	}
 }
@@ -498,17 +733,21 @@ static void TemplatedWritePlain(Vector &col, idx_t chunk_start, idx_t chunk_end,
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 class StandardColumnWriter : public ColumnWriter {
 public:
-	StandardColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
-	                     bool can_have_nulls)
-	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls) {
+	StandardColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, // NOLINT
+	                     idx_t max_repeat, idx_t max_define, bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, move(schema_path_p), max_repeat, max_define, can_have_nulls) {
 	}
 	~StandardColumnWriter() override = default;
 
 public:
-	void WriteVector(Serializer &temp_writer, ColumnWriterPageState *page_state, Vector &input_column,
-	                 idx_t chunk_start, idx_t chunk_end) override {
+	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
+		return OP::template InitializeStats<SRC, TGT>();
+	}
+
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
+	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
-		TemplatedWritePlain<SRC, TGT, OP>(input_column, chunk_start, chunk_end, mask, temp_writer);
+		TemplatedWritePlain<SRC, TGT, OP>(input_column, stats, chunk_start, chunk_end, mask, temp_writer);
 	}
 
 	idx_t GetRowSize(Vector &vector, idx_t index) override {
@@ -519,6 +758,33 @@ public:
 //===--------------------------------------------------------------------===//
 // Boolean Column Writer
 //===--------------------------------------------------------------------===//
+class BooleanStatisticsState : public ColumnWriterStatistics {
+public:
+	BooleanStatisticsState() : min(true), max(false) {
+	}
+
+	bool min;
+	bool max;
+
+public:
+	bool HasStats() {
+		return !(min && !max);
+	}
+
+	string GetMin() override {
+		return GetMinValue();
+	}
+	string GetMax() override {
+		return GetMaxValue();
+	}
+	string GetMinValue() override {
+		return HasStats() ? string((char *)&min, sizeof(bool)) : string();
+	}
+	string GetMaxValue() override {
+		return HasStats() ? string((char *)&max, sizeof(bool)) : string();
+	}
+};
+
 class BooleanWriterPageState : public ColumnWriterPageState {
 public:
 	uint8_t byte = 0;
@@ -527,15 +793,20 @@ public:
 
 class BooleanColumnWriter : public ColumnWriter {
 public:
-	BooleanColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
-	                    bool can_have_nulls)
-	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls) {
+	BooleanColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
+	                    idx_t max_define, bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, move(schema_path_p), max_repeat, max_define, can_have_nulls) {
 	}
 	~BooleanColumnWriter() override = default;
 
 public:
-	void WriteVector(Serializer &temp_writer, ColumnWriterPageState *state_p, Vector &input_column, idx_t chunk_start,
-	                 idx_t chunk_end) override {
+	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
+		return make_unique<BooleanStatisticsState>();
+	}
+
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *state_p,
+	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+		auto &stats = (BooleanStatisticsState &)*stats_p;
 		auto &state = (BooleanWriterPageState &)*state_p;
 		auto &mask = FlatVector::Validity(input_column);
 
@@ -544,7 +815,10 @@ public:
 			if (mask.RowIsValid(r)) {
 				// only encode if non-null
 				if (ptr[r]) {
+					stats.max = true;
 					state.byte |= 1 << state.byte_pos;
+				} else {
+					stats.min = false;
 				}
 				state.byte_pos++;
 
@@ -578,48 +852,273 @@ public:
 //===--------------------------------------------------------------------===//
 // Decimal Column Writer
 //===--------------------------------------------------------------------===//
-class DecimalColumnWriter : public ColumnWriter {
-public:
-	DecimalColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
-	                    bool can_have_nulls)
-	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls) {
+static void WriteParquetDecimal(hugeint_t input, data_ptr_t result) {
+	bool positive = input >= 0;
+	// numbers are stored as two's complement so some muckery is required
+	if (!positive) {
+		input = NumericLimits<hugeint_t>::Maximum() + input + 1;
 	}
-	~DecimalColumnWriter() override = default;
+	uint64_t high_bytes = uint64_t(input.upper);
+	uint64_t low_bytes = input.lower;
+
+	for (idx_t i = 0; i < sizeof(uint64_t); i++) {
+		auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
+		result[i] = (high_bytes >> shift_count) & 0xFF;
+	}
+	for (idx_t i = 0; i < sizeof(uint64_t); i++) {
+		auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
+		result[sizeof(uint64_t) + i] = (low_bytes >> shift_count) & 0xFF;
+	}
+	if (!positive) {
+		result[0] |= 0x80;
+	}
+}
+
+class FixedDecimalStatistics : public ColumnWriterStatistics {
+public:
+	FixedDecimalStatistics() : min(NumericLimits<hugeint_t>::Maximum()), max(NumericLimits<hugeint_t>::Minimum()) {
+	}
+
+	hugeint_t min;
+	hugeint_t max;
 
 public:
-	void WriteVector(Serializer &temp_writer, ColumnWriterPageState *page_state, Vector &input_column,
-	                 idx_t chunk_start, idx_t chunk_end) override {
-		auto &mask = FlatVector::Validity(input_column);
+	string GetStats(hugeint_t &input) {
+		data_t buffer[16];
+		WriteParquetDecimal(input, buffer);
+		return string((char *)buffer, 16);
+	}
 
-		// FIXME: fixed length byte array...
-		Vector double_vec(LogicalType::DOUBLE, true, false, chunk_end);
-		VectorOperations::Cast(input_column, double_vec, chunk_end);
-		TemplatedWritePlain<double, double>(double_vec, chunk_start, chunk_end, mask, temp_writer);
+	bool HasStats() {
+		return min <= max;
+	}
+
+	void Update(hugeint_t &val) {
+		if (LessThan::Operation(val, min)) {
+			min = val;
+		}
+		if (GreaterThan::Operation(val, max)) {
+			max = val;
+		}
+	}
+
+	string GetMin() override {
+		return GetMinValue();
+	}
+	string GetMax() override {
+		return GetMaxValue();
+	}
+	string GetMinValue() override {
+		return HasStats() ? GetStats(min) : string();
+	}
+	string GetMaxValue() override {
+		return HasStats() ? GetStats(max) : string();
+	}
+};
+
+class FixedDecimalColumnWriter : public ColumnWriter {
+public:
+	FixedDecimalColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
+	                         idx_t max_define, bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, move(schema_path_p), max_repeat, max_define, can_have_nulls) {
+	}
+	~FixedDecimalColumnWriter() override = default;
+
+public:
+	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
+		return make_unique<FixedDecimalStatistics>();
+	}
+
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
+	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+		auto &mask = FlatVector::Validity(input_column);
+		auto *ptr = FlatVector::GetData<hugeint_t>(input_column);
+		auto &stats = (FixedDecimalStatistics &)*stats_p;
+
+		data_t temp_buffer[16];
+		for (idx_t r = chunk_start; r < chunk_end; r++) {
+			if (mask.RowIsValid(r)) {
+				stats.Update(ptr[r]);
+				WriteParquetDecimal(ptr[r], temp_buffer);
+				temp_writer.WriteData(temp_buffer, 16);
+			}
+		}
 	}
 
 	idx_t GetRowSize(Vector &vector, idx_t index) override {
-		return sizeof(double);
+		return sizeof(hugeint_t);
+	}
+};
+
+//===--------------------------------------------------------------------===//
+// UUID Column Writer
+//===--------------------------------------------------------------------===//
+class UUIDColumnWriter : public ColumnWriter {
+	static constexpr const idx_t PARQUET_UUID_SIZE = 16;
+
+public:
+	UUIDColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
+	                 idx_t max_define, bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, move(schema_path_p), max_repeat, max_define, can_have_nulls) {
+	}
+	~UUIDColumnWriter() override = default;
+
+public:
+	static void WriteParquetUUID(hugeint_t input, data_ptr_t result) {
+		uint64_t high_bytes = input.upper ^ (int64_t(1) << 63);
+		uint64_t low_bytes = input.lower;
+
+		for (idx_t i = 0; i < sizeof(uint64_t); i++) {
+			auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
+			result[i] = (high_bytes >> shift_count) & 0xFF;
+		}
+		for (idx_t i = 0; i < sizeof(uint64_t); i++) {
+			auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
+			result[sizeof(uint64_t) + i] = (low_bytes >> shift_count) & 0xFF;
+		}
+	}
+
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
+	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+		auto &mask = FlatVector::Validity(input_column);
+		auto *ptr = FlatVector::GetData<hugeint_t>(input_column);
+
+		data_t temp_buffer[PARQUET_UUID_SIZE];
+		for (idx_t r = chunk_start; r < chunk_end; r++) {
+			if (mask.RowIsValid(r)) {
+				WriteParquetUUID(ptr[r], temp_buffer);
+				temp_writer.WriteData(temp_buffer, PARQUET_UUID_SIZE);
+			}
+		}
+	}
+
+	idx_t GetRowSize(Vector &vector, idx_t index) override {
+		return PARQUET_UUID_SIZE;
+	}
+};
+
+//===--------------------------------------------------------------------===//
+// Interval Column Writer
+//===--------------------------------------------------------------------===//
+class IntervalColumnWriter : public ColumnWriter {
+	static constexpr const idx_t PARQUET_INTERVAL_SIZE = 12;
+
+public:
+	IntervalColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
+	                     idx_t max_define, bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, move(schema_path_p), max_repeat, max_define, can_have_nulls) {
+	}
+	~IntervalColumnWriter() override = default;
+
+public:
+	static void WriteParquetInterval(interval_t input, data_ptr_t result) {
+		if (input.days < 0 || input.months < 0 || input.micros < 0) {
+			throw IOException("Parquet files do not support negative intervals");
+		}
+		Store<uint32_t>(input.months, result);
+		Store<uint32_t>(input.days, result + sizeof(uint32_t));
+		Store<uint32_t>(input.micros / 1000, result + sizeof(uint32_t) * 2);
+	}
+
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
+	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+		auto &mask = FlatVector::Validity(input_column);
+		auto *ptr = FlatVector::GetData<interval_t>(input_column);
+
+		data_t temp_buffer[PARQUET_INTERVAL_SIZE];
+		for (idx_t r = chunk_start; r < chunk_end; r++) {
+			if (mask.RowIsValid(r)) {
+				WriteParquetInterval(ptr[r], temp_buffer);
+				temp_writer.WriteData(temp_buffer, PARQUET_INTERVAL_SIZE);
+			}
+		}
+	}
+
+	idx_t GetRowSize(Vector &vector, idx_t index) override {
+		return PARQUET_INTERVAL_SIZE;
 	}
 };
 
 //===--------------------------------------------------------------------===//
 // String Column Writer
 //===--------------------------------------------------------------------===//
+class StringStatisticsState : public ColumnWriterStatistics {
+	static constexpr const idx_t MAX_STRING_STATISTICS_SIZE = 10000;
+
+public:
+	StringStatisticsState() : has_stats(false), values_too_big(false), min(), max() {
+	}
+
+	bool has_stats;
+	bool values_too_big;
+	string min;
+	string max;
+
+public:
+	bool HasStats() {
+		return has_stats;
+	}
+
+	void Update(const string_t &val) {
+		if (values_too_big) {
+			return;
+		}
+		auto str_len = val.GetSize();
+		if (str_len > MAX_STRING_STATISTICS_SIZE) {
+			// we avoid gathering stats when individual string values are too large
+			// this is because the statistics are copied into the Parquet file meta data in uncompressed format
+			// ideally we avoid placing several mega or giga-byte long strings there
+			// we put a threshold of 10KB, if we see strings that exceed this threshold we avoid gathering stats
+			values_too_big = true;
+			min = string();
+			max = string();
+			return;
+		}
+		if (!has_stats || LessThan::Operation(val, string_t(min))) {
+			min = val.GetString();
+		}
+		if (!has_stats || GreaterThan::Operation(val, string_t(max))) {
+			max = val.GetString();
+		}
+		has_stats = true;
+	}
+
+	string GetMin() override {
+		return GetMinValue();
+	}
+	string GetMax() override {
+		return GetMaxValue();
+	}
+	string GetMinValue() override {
+		return HasStats() ? min : string();
+	}
+	string GetMaxValue() override {
+		return HasStats() ? max : string();
+	}
+};
+
 class StringColumnWriter : public ColumnWriter {
 public:
-	StringColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define, bool can_have_nulls)
-	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls) {
+	StringColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
+	                   idx_t max_define, bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, move(schema_path_p), max_repeat, max_define, can_have_nulls) {
 	}
 	~StringColumnWriter() override = default;
 
 public:
-	void WriteVector(Serializer &temp_writer, ColumnWriterPageState *page_state, Vector &input_column,
-	                 idx_t chunk_start, idx_t chunk_end) override {
+	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
+		return make_unique<StringStatisticsState>();
+	}
+
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
+	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
+		auto &stats = (StringStatisticsState &)*stats_p;
 
 		auto *ptr = FlatVector::GetData<string_t>(input_column);
 		for (idx_t r = chunk_start; r < chunk_end; r++) {
 			if (mask.RowIsValid(r)) {
+				stats.Update(ptr[r]);
 				temp_writer.Write<uint32_t>(ptr[r].GetSize());
 				temp_writer.WriteData((const_data_ptr_t)ptr[r].GetDataUnsafe(), ptr[r].GetSize());
 			}
@@ -633,13 +1132,126 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
+// Enum Column Writer
+//===--------------------------------------------------------------------===//
+class EnumWriterPageState : public ColumnWriterPageState {
+public:
+	explicit EnumWriterPageState(uint32_t bit_width) : encoder(bit_width), written_value(false) {
+	}
+
+	RleBpEncoder encoder;
+	bool written_value;
+};
+
+class EnumColumnWriter : public ColumnWriter {
+public:
+	EnumColumnWriter(ParquetWriter &writer, LogicalType enum_type_p, idx_t schema_idx, vector<string> schema_path_p,
+	                 idx_t max_repeat, idx_t max_define, bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, move(schema_path_p), max_repeat, max_define, can_have_nulls),
+	      enum_type(move(enum_type_p)) {
+		bit_width = RleBpDecoder::ComputeBitWidth(EnumType::GetSize(enum_type));
+	}
+	~EnumColumnWriter() override = default;
+
+	LogicalType enum_type;
+	uint32_t bit_width;
+
+public:
+	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
+		return make_unique<StringStatisticsState>();
+	}
+
+	template <class T>
+	void WriteEnumInternal(Serializer &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end,
+	                       EnumWriterPageState &page_state) {
+		auto &mask = FlatVector::Validity(input_column);
+		auto *ptr = FlatVector::GetData<T>(input_column);
+		for (idx_t r = chunk_start; r < chunk_end; r++) {
+			if (mask.RowIsValid(r)) {
+				if (!page_state.written_value) {
+					// first value
+					// write the bit-width as a one-byte entry
+					temp_writer.Write<uint8_t>(bit_width);
+					// now begin writing the actual value
+					page_state.encoder.BeginWrite(temp_writer, ptr[r]);
+					page_state.written_value = true;
+				} else {
+					page_state.encoder.WriteValue(temp_writer, ptr[r]);
+				}
+			}
+		}
+	}
+
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
+	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+		auto &page_state = (EnumWriterPageState &)*page_state_p;
+		switch (enum_type.InternalType()) {
+		case PhysicalType::UINT8:
+			WriteEnumInternal<uint8_t>(temp_writer, input_column, chunk_start, chunk_end, page_state);
+			break;
+		case PhysicalType::UINT16:
+			WriteEnumInternal<uint16_t>(temp_writer, input_column, chunk_start, chunk_end, page_state);
+			break;
+		case PhysicalType::UINT32:
+			WriteEnumInternal<uint32_t>(temp_writer, input_column, chunk_start, chunk_end, page_state);
+			break;
+		default:
+			throw InternalException("Unsupported internal enum type");
+		}
+	}
+
+	unique_ptr<ColumnWriterPageState> InitializePageState() override {
+		return make_unique<EnumWriterPageState>(bit_width);
+	}
+
+	void FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state_p) override {
+		auto &page_state = (EnumWriterPageState &)*state_p;
+		if (!page_state.written_value) {
+			// all values are null
+			// just write the bit width
+			temp_writer.Write<uint8_t>(bit_width);
+			return;
+		}
+		page_state.encoder.FinishWrite(temp_writer);
+	}
+
+	duckdb_parquet::format::Encoding::type GetEncoding() override {
+		return Encoding::RLE_DICTIONARY;
+	}
+
+	void FlushDictionary(ColumnWriterState &state, ColumnWriterStatistics *stats_p) override {
+		auto &stats = (StringStatisticsState &)*stats_p;
+		// write the enum values to a dictionary page
+		auto &enum_values = EnumType::GetValuesInsertOrder(enum_type);
+		auto enum_count = EnumType::GetSize(enum_type);
+		auto string_values = FlatVector::GetData<string_t>(enum_values);
+		// first write the contents of the dictionary page to a temporary buffer
+		auto temp_writer = make_unique<BufferedSerializer>();
+		for (idx_t r = 0; r < enum_count; r++) {
+			D_ASSERT(!FlatVector::IsNull(enum_values, r));
+			// update the statistics
+			stats.Update(string_values[r]);
+			// write this string value to the dictionary
+			temp_writer->Write<uint32_t>(string_values[r].GetSize());
+			temp_writer->WriteData((const_data_ptr_t)string_values[r].GetDataUnsafe(), string_values[r].GetSize());
+		}
+		// flush the dictionary page and add it to the to-be-written pages
+		WriteDictionary(state, move(temp_writer), enum_count);
+	}
+
+	idx_t GetRowSize(Vector &vector, idx_t index) override {
+		return (bit_width + 7) / 8;
+	}
+};
+
+//===--------------------------------------------------------------------===//
 // Struct Column Writer
 //===--------------------------------------------------------------------===//
 class StructColumnWriter : public ColumnWriter {
 public:
-	StructColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
-	                   vector<unique_ptr<ColumnWriter>> child_writers_p, bool can_have_nulls)
-	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls),
+	StructColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
+	                   idx_t max_define, vector<unique_ptr<ColumnWriter>> child_writers_p, bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, move(schema_path_p), max_repeat, max_define, can_have_nulls),
 	      child_writers(move(child_writers_p)) {
 	}
 	~StructColumnWriter() override = default;
@@ -647,17 +1259,7 @@ public:
 	vector<unique_ptr<ColumnWriter>> child_writers;
 
 public:
-	void WriteVector(Serializer &temp_writer, ColumnWriterPageState *page_state, Vector &input_column,
-	                 idx_t chunk_start, idx_t chunk_end) override {
-		throw InternalException("Cannot write vector of type struct");
-	}
-
-	idx_t GetRowSize(Vector &vector, idx_t index) override {
-		throw InternalException("Cannot get row size of struct");
-	}
-
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-	                                                   vector<string> schema_path) override;
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override;
 	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
 
 	void BeginWrite(ColumnWriterState &state) override;
@@ -677,14 +1279,12 @@ public:
 	vector<unique_ptr<ColumnWriterState>> child_states;
 };
 
-unique_ptr<ColumnWriterState> StructColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-                                                                       vector<string> schema_path) {
+unique_ptr<ColumnWriterState> StructColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) {
 	auto result = make_unique<StructColumnWriterState>(row_group, row_group.columns.size());
-	schema_path.push_back(writer.file_meta_data.schema[schema_idx].name);
 
 	result->child_states.reserve(child_writers.size());
 	for (auto &child_writer : child_writers) {
-		result->child_states.push_back(child_writer->InitializeWriteState(row_group, schema_path));
+		result->child_states.push_back(child_writer->InitializeWriteState(row_group));
 	}
 	return move(result);
 }
@@ -725,6 +1325,8 @@ void StructColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t
 void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = (StructColumnWriterState &)state_p;
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
+		// we add the null count of the struct to the null count of the children
+		child_writers[child_idx]->null_count += null_count;
 		child_writers[child_idx]->FinalizeWrite(*state.child_states[child_idx]);
 	}
 }
@@ -734,26 +1336,17 @@ void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 //===--------------------------------------------------------------------===//
 class ListColumnWriter : public ColumnWriter {
 public:
-	ListColumnWriter(ParquetWriter &writer, idx_t schema_idx, idx_t max_repeat, idx_t max_define,
-	                 unique_ptr<ColumnWriter> child_writer_p, bool can_have_nulls)
-	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls), child_writer(move(child_writer_p)) {
+	ListColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
+	                 idx_t max_define, unique_ptr<ColumnWriter> child_writer_p, bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, move(schema_path_p), max_repeat, max_define, can_have_nulls),
+	      child_writer(move(child_writer_p)) {
 	}
 	~ListColumnWriter() override = default;
 
 	unique_ptr<ColumnWriter> child_writer;
 
 public:
-	void WriteVector(Serializer &temp_writer, ColumnWriterPageState *page_state, Vector &input_column,
-	                 idx_t chunk_start, idx_t chunk_end) override {
-		throw InternalException("Cannot write vector of type list");
-	}
-
-	idx_t GetRowSize(Vector &vector, idx_t index) override {
-		throw InternalException("Cannot get row size of list");
-	}
-
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-	                                                   vector<string> schema_path) override;
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override;
 	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
 
 	void BeginWrite(ColumnWriterState &state) override;
@@ -774,11 +1367,9 @@ public:
 	idx_t parent_index = 0;
 };
 
-unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-                                                                     vector<string> schema_path) {
+unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) {
 	auto result = make_unique<ListColumnWriterState>(row_group, row_group.columns.size());
-	schema_path.push_back(writer.file_meta_data.schema[schema_idx].name);
-	result->child_state = child_writer->InitializeWriteState(row_group, move(schema_path));
+	result->child_state = child_writer->InitializeWriteState(row_group);
 	return move(result);
 }
 
@@ -861,8 +1452,8 @@ void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 //===--------------------------------------------------------------------===//
 unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas,
                                                              ParquetWriter &writer, const LogicalType &type,
-                                                             const string &name, idx_t max_repeat, idx_t max_define,
-                                                             bool can_have_nulls) {
+                                                             const string &name, vector<string> schema_path,
+                                                             idx_t max_repeat, idx_t max_define, bool can_have_nulls) {
 	auto null_type = can_have_nulls ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
 	if (!can_have_nulls) {
 		max_define--;
@@ -879,15 +1470,17 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		schema_element.__isset.repetition_type = true;
 		schema_element.name = name;
 		schemas.push_back(move(schema_element));
+		schema_path.push_back(name);
+
 		// construct the child types recursively
 		vector<unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(child_types.size());
 		for (auto &child_type : child_types) {
 			child_writers.push_back(CreateWriterRecursive(schemas, writer, child_type.second, child_type.first,
-			                                              max_repeat, max_define + 1));
+			                                              schema_path, max_repeat, max_define + 1));
 		}
-		return make_unique<StructColumnWriter>(writer, schema_idx, max_repeat, max_define, move(child_writers),
-		                                       can_have_nulls);
+		return make_unique<StructColumnWriter>(writer, schema_idx, move(schema_path), max_repeat, max_define,
+		                                       move(child_writers), can_have_nulls);
 	}
 	if (type.id() == LogicalTypeId::LIST) {
 		auto &child_type = ListType::GetChildType(type);
@@ -904,6 +1497,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		optional_element.__isset.converted_type = true;
 		optional_element.name = name;
 		schemas.push_back(move(optional_element));
+		schema_path.push_back(name);
 
 		// then a REPEATED element
 		duckdb_parquet::format::SchemaElement repeated_element;
@@ -914,11 +1508,12 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		repeated_element.__isset.repetition_type = true;
 		repeated_element.name = "list";
 		schemas.push_back(move(repeated_element));
+		schema_path.emplace_back("list");
 
 		auto child_writer =
-		    CreateWriterRecursive(schemas, writer, child_type, "element", max_repeat + 1, max_define + 2);
-		return make_unique<ListColumnWriter>(writer, schema_idx, max_repeat, max_define, move(child_writer),
-		                                     can_have_nulls);
+		    CreateWriterRecursive(schemas, writer, child_type, "element", schema_path, max_repeat + 1, max_define + 2);
+		return make_unique<ListColumnWriter>(writer, schema_idx, move(schema_path), max_repeat, max_define,
+		                                     move(child_writer), can_have_nulls);
 	}
 	if (type.id() == LogicalTypeId::MAP) {
 		// map type
@@ -940,6 +1535,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		top_element.__isset.type = false;
 		top_element.name = name;
 		schemas.push_back(move(top_element));
+		schema_path.push_back(name);
 
 		// key_value element
 		duckdb_parquet::format::SchemaElement kv_element;
@@ -950,6 +1546,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		kv_element.__isset.type = false;
 		kv_element.name = "key_value";
 		schemas.push_back(move(kv_element));
+		schema_path.emplace_back("key_value");
 
 		// construct the child types recursively
 		vector<LogicalType> kv_types {ListType::GetChildType(MapType::KeyType(type)),
@@ -960,14 +1557,14 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		for (idx_t i = 0; i < 2; i++) {
 			// key needs to be marked as REQUIRED
 			bool is_key = i == 0;
-			auto child_writer = CreateWriterRecursive(schemas, writer, kv_types[i], kv_names[i], max_repeat + 1,
-			                                          max_define + 2, !is_key);
-			auto list_writer = make_unique<ListColumnWriter>(writer, schema_idx, max_repeat, max_define,
+			auto child_writer = CreateWriterRecursive(schemas, writer, kv_types[i], kv_names[i], schema_path,
+			                                          max_repeat + 1, max_define + 2, !is_key);
+			auto list_writer = make_unique<ListColumnWriter>(writer, schema_idx, schema_path, max_repeat, max_define,
 			                                                 move(child_writer), can_have_nulls);
 			child_writers.push_back(move(list_writer));
 		}
-		return make_unique<StructColumnWriter>(writer, schema_idx, max_repeat, max_define, move(child_writers),
-		                                       can_have_nulls);
+		return make_unique<StructColumnWriter>(writer, schema_idx, schema_path, max_repeat, max_define,
+		                                       move(child_writers), can_have_nulls);
 	}
 	duckdb_parquet::format::SchemaElement schema_element;
 	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type);
@@ -977,62 +1574,90 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 	schema_element.__isset.type = true;
 	schema_element.__isset.repetition_type = true;
 	schema_element.name = name;
-	schema_element.__isset.converted_type =
-	    ParquetWriter::DuckDBTypeToConvertedType(type, schema_element.converted_type);
+	ParquetWriter::SetSchemaProperties(type, schema_element);
 	schemas.push_back(move(schema_element));
+	schema_path.push_back(name);
 
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return make_unique<BooleanColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
+		return make_unique<BooleanColumnWriter>(writer, schema_idx, move(schema_path), max_repeat, max_define,
+		                                        can_have_nulls);
 	case LogicalTypeId::TINYINT:
-		return make_unique<StandardColumnWriter<int8_t, int32_t>>(writer, schema_idx, max_repeat, max_define,
-		                                                          can_have_nulls);
+		return make_unique<StandardColumnWriter<int8_t, int32_t>>(writer, schema_idx, move(schema_path), max_repeat,
+		                                                          max_define, can_have_nulls);
 	case LogicalTypeId::SMALLINT:
-		return make_unique<StandardColumnWriter<int16_t, int32_t>>(writer, schema_idx, max_repeat, max_define,
-		                                                           can_have_nulls);
+		return make_unique<StandardColumnWriter<int16_t, int32_t>>(writer, schema_idx, move(schema_path), max_repeat,
+		                                                           max_define, can_have_nulls);
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
-		return make_unique<StandardColumnWriter<int32_t, int32_t>>(writer, schema_idx, max_repeat, max_define,
-		                                                           can_have_nulls);
+	case LogicalTypeId::DATE_TZ:
+		return make_unique<StandardColumnWriter<int32_t, int32_t>>(writer, schema_idx, move(schema_path), max_repeat,
+		                                                           max_define, can_have_nulls);
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_MS:
-		return make_unique<StandardColumnWriter<int64_t, int64_t>>(writer, schema_idx, max_repeat, max_define,
-		                                                           can_have_nulls);
+		return make_unique<StandardColumnWriter<int64_t, int64_t>>(writer, schema_idx, move(schema_path), max_repeat,
+		                                                           max_define, can_have_nulls);
 	case LogicalTypeId::HUGEINT:
 		return make_unique<StandardColumnWriter<hugeint_t, double, ParquetHugeintOperator>>(
-		    writer, schema_idx, max_repeat, max_define, can_have_nulls);
+		    writer, schema_idx, move(schema_path), max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return make_unique<StandardColumnWriter<int64_t, int64_t, ParquetTimestampNSOperator>>(
-		    writer, schema_idx, max_repeat, max_define, can_have_nulls);
+		    writer, schema_idx, move(schema_path), max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return make_unique<StandardColumnWriter<int64_t, int64_t, ParquetTimestampSOperator>>(
-		    writer, schema_idx, max_repeat, max_define, can_have_nulls);
+		    writer, schema_idx, move(schema_path), max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::UTINYINT:
-		return make_unique<StandardColumnWriter<uint8_t, int32_t>>(writer, schema_idx, max_repeat, max_define,
-		                                                           can_have_nulls);
+		return make_unique<StandardColumnWriter<uint8_t, int32_t>>(writer, schema_idx, move(schema_path), max_repeat,
+		                                                           max_define, can_have_nulls);
 	case LogicalTypeId::USMALLINT:
-		return make_unique<StandardColumnWriter<uint16_t, int32_t>>(writer, schema_idx, max_repeat, max_define,
-		                                                            can_have_nulls);
+		return make_unique<StandardColumnWriter<uint16_t, int32_t>>(writer, schema_idx, move(schema_path), max_repeat,
+		                                                            max_define, can_have_nulls);
 	case LogicalTypeId::UINTEGER:
-		return make_unique<StandardColumnWriter<uint32_t, uint32_t>>(writer, schema_idx, max_repeat, max_define,
-		                                                             can_have_nulls);
+		return make_unique<StandardColumnWriter<uint32_t, uint32_t>>(writer, schema_idx, move(schema_path), max_repeat,
+		                                                             max_define, can_have_nulls);
 	case LogicalTypeId::UBIGINT:
-		return make_unique<StandardColumnWriter<uint64_t, uint64_t>>(writer, schema_idx, max_repeat, max_define,
-		                                                             can_have_nulls);
+		return make_unique<StandardColumnWriter<uint64_t, uint64_t>>(writer, schema_idx, move(schema_path), max_repeat,
+		                                                             max_define, can_have_nulls);
 	case LogicalTypeId::FLOAT:
-		return make_unique<StandardColumnWriter<float, float>>(writer, schema_idx, max_repeat, max_define,
-		                                                       can_have_nulls);
+		return make_unique<StandardColumnWriter<float, float>>(writer, schema_idx, move(schema_path), max_repeat,
+		                                                       max_define, can_have_nulls);
 	case LogicalTypeId::DOUBLE:
-		return make_unique<StandardColumnWriter<double, double>>(writer, schema_idx, max_repeat, max_define,
-		                                                         can_have_nulls);
+		return make_unique<StandardColumnWriter<double, double>>(writer, schema_idx, move(schema_path), max_repeat,
+		                                                         max_define, can_have_nulls);
 	case LogicalTypeId::DECIMAL:
-		return make_unique<DecimalColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return make_unique<StandardColumnWriter<int16_t, int32_t>>(writer, schema_idx, move(schema_path),
+			                                                           max_repeat, max_define, can_have_nulls);
+		case PhysicalType::INT32:
+			return make_unique<StandardColumnWriter<int32_t, int32_t>>(writer, schema_idx, move(schema_path),
+			                                                           max_repeat, max_define, can_have_nulls);
+		case PhysicalType::INT64:
+			return make_unique<StandardColumnWriter<int64_t, int64_t>>(writer, schema_idx, move(schema_path),
+			                                                           max_repeat, max_define, can_have_nulls);
+		default:
+			return make_unique<FixedDecimalColumnWriter>(writer, schema_idx, move(schema_path), max_repeat, max_define,
+			                                             can_have_nulls);
+		}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-		return make_unique<StringColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
+		return make_unique<StringColumnWriter>(writer, schema_idx, move(schema_path), max_repeat, max_define,
+		                                       can_have_nulls);
+	case LogicalTypeId::UUID:
+		return make_unique<UUIDColumnWriter>(writer, schema_idx, move(schema_path), max_repeat, max_define,
+		                                     can_have_nulls);
+	case LogicalTypeId::INTERVAL:
+		return make_unique<IntervalColumnWriter>(writer, schema_idx, move(schema_path), max_repeat, max_define,
+		                                         can_have_nulls);
+	case LogicalTypeId::ENUM:
+		return make_unique<EnumColumnWriter>(writer, type, schema_idx, move(schema_path), max_repeat, max_define,
+		                                     can_have_nulls);
 	default:
-		throw InternalException("Unsupported type in Parquet writer");
+		throw InternalException("Unsupported type \"%s\" in Parquet writer", type.ToString());
 	}
 }
 

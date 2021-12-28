@@ -11,6 +11,10 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 	// only handle numerics for now
 	switch (left.type.InternalType()) {
 	case PhysicalType::BOOL:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:
