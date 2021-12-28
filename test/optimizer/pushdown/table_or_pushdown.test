@@ -100,12 +100,12 @@ INSERT INTO strings VALUES ('BBBB'), ('CCCC')
 
 # testing string statistics
 query II
-EXPLAIN SELECT * FROM strings WHERE s!='AAA' OR s!='WWW'
+EXPLAIN SELECT * FROM strings WHERE s!='111' OR s!='WWW'
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Filters: s!=AAA OR s!=WWW.*
+physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
 
 query I
-SELECT * FROM strings WHERE s!='AAA' OR s!='WWW' ORDER BY s
+SELECT * FROM strings WHERE s!='111' OR s!='WWW' ORDER BY s
 ----
 AAAAAAAAAAAAAAA11111
 AAAAAAAAAAAAAAA99999
