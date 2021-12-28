@@ -84,6 +84,82 @@ NULL	NULL
 2021-05-02	{'year': 2021, 'month': 5, 'day': 2}
 2021-12-01	{'year': 2021, 'month': 12, 'day': 1}
 
+# Year parts
+query II
+SELECT ts::DATE AS d, DATE_PART(['era', 'millennium', 'century', 'decade', 'quarter'], ts) AS parts
+FROM timestamps
+ORDER BY 1;
+----
+NULL	NULL
+1962-07-31	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 196, 'quarter': 3}
+1969-01-01	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 196, 'quarter': 1}
+1992-01-01	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 1}
+1992-01-01	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 1}
+1992-01-01	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 1}
+1993-08-14	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 3}
+1993-08-14	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 3}
+2001-04-20	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 2}
+2001-04-20	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 2}
+2004-01-31	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 1}
+2004-01-31	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 1}
+2004-02-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 1}
+2004-02-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 1}
+2004-02-29	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 1}
+2008-01-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 1}
+2008-01-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 1}
+2008-01-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 1}
+2008-01-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 1}
+2008-01-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 1}
+2008-01-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 1}
+2008-01-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 1}
+2008-01-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 200, 'quarter': 1}
+2019-01-06	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 201, 'quarter': 1}
+2019-01-06	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 201, 'quarter': 1}
+2020-01-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 1}
+2020-12-31	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}
+2021-04-15	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 2}
+2021-04-15	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 2}
+2021-05-02	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 2}
+2021-12-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}
+
+# Day parts
+query II
+SELECT ts::DATE AS d, DATE_PART(['weekday', 'isodow', 'week', 'yearweek', 'doy'], ts) AS parts
+FROM timestamps
+ORDER BY 1;
+----
+NULL	NULL
+1962-07-31	{'weekday': 2, 'isodow': 2, 'week': 31, 'yearweek': 196231, 'doy': 212}
+1969-01-01	{'weekday': 3, 'isodow': 3, 'week': 1, 'yearweek': 196901, 'doy': 1}
+1992-01-01	{'weekday': 3, 'isodow': 3, 'week': 1, 'yearweek': 199201, 'doy': 1}
+1992-01-01	{'weekday': 3, 'isodow': 3, 'week': 1, 'yearweek': 199201, 'doy': 1}
+1992-01-01	{'weekday': 3, 'isodow': 3, 'week': 1, 'yearweek': 199201, 'doy': 1}
+1993-08-14	{'weekday': 6, 'isodow': 6, 'week': 32, 'yearweek': 199332, 'doy': 226}
+1993-08-14	{'weekday': 6, 'isodow': 6, 'week': 32, 'yearweek': 199332, 'doy': 226}
+2001-04-20	{'weekday': 5, 'isodow': 5, 'week': 16, 'yearweek': 200116, 'doy': 110}
+2001-04-20	{'weekday': 5, 'isodow': 5, 'week': 16, 'yearweek': 200116, 'doy': 110}
+2004-01-31	{'weekday': 6, 'isodow': 6, 'week': 5, 'yearweek': 200405, 'doy': 31}
+2004-01-31	{'weekday': 6, 'isodow': 6, 'week': 5, 'yearweek': 200405, 'doy': 31}
+2004-02-01	{'weekday': 0, 'isodow': 7, 'week': 5, 'yearweek': 200405, 'doy': 32}
+2004-02-01	{'weekday': 0, 'isodow': 7, 'week': 5, 'yearweek': 200405, 'doy': 32}
+2004-02-29	{'weekday': 0, 'isodow': 7, 'week': 9, 'yearweek': 200409, 'doy': 60}
+2008-01-01	{'weekday': 2, 'isodow': 2, 'week': 1, 'yearweek': 200801, 'doy': 1}
+2008-01-01	{'weekday': 2, 'isodow': 2, 'week': 1, 'yearweek': 200801, 'doy': 1}
+2008-01-01	{'weekday': 2, 'isodow': 2, 'week': 1, 'yearweek': 200801, 'doy': 1}
+2008-01-01	{'weekday': 2, 'isodow': 2, 'week': 1, 'yearweek': 200801, 'doy': 1}
+2008-01-01	{'weekday': 2, 'isodow': 2, 'week': 1, 'yearweek': 200801, 'doy': 1}
+2008-01-01	{'weekday': 2, 'isodow': 2, 'week': 1, 'yearweek': 200801, 'doy': 1}
+2008-01-01	{'weekday': 2, 'isodow': 2, 'week': 1, 'yearweek': 200801, 'doy': 1}
+2008-01-01	{'weekday': 2, 'isodow': 2, 'week': 1, 'yearweek': 200801, 'doy': 1}
+2019-01-06	{'weekday': 0, 'isodow': 7, 'week': 1, 'yearweek': 201901, 'doy': 6}
+2019-01-06	{'weekday': 0, 'isodow': 7, 'week': 1, 'yearweek': 201901, 'doy': 6}
+2020-01-01	{'weekday': 3, 'isodow': 3, 'week': 1, 'yearweek': 202001, 'doy': 1}
+2020-12-31	{'weekday': 4, 'isodow': 4, 'week': 53, 'yearweek': 202053, 'doy': 366}
+2021-04-15	{'weekday': 4, 'isodow': 4, 'week': 15, 'yearweek': 202115, 'doy': 105}
+2021-04-15	{'weekday': 4, 'isodow': 4, 'week': 15, 'yearweek': 202115, 'doy': 105}
+2021-05-02	{'weekday': 0, 'isodow': 7, 'week': 17, 'yearweek': 202117, 'doy': 122}
+2021-12-01	{'weekday': 3, 'isodow': 3, 'week': 48, 'yearweek': 202148, 'doy': 335}
+
 # Time parts
 query II
 SELECT ts, DATE_PART(['hour', 'minute', 'microsecond'], ts) AS parts
@@ -121,6 +197,44 @@ NULL	NULL
 2021-04-15 14:55:17.915	{'hour': 14, 'minute': 55, 'microsecond': 17915000}
 2021-05-02 12:11:49.5	{'hour': 12, 'minute': 11, 'microsecond': 49500000}
 2021-12-01 13:54:48.123456	{'hour': 13, 'minute': 54, 'microsecond': 48123456}
+
+# Miscellaneous parts
+query II
+SELECT ts, DATE_PART(['epoch', 'offset'], ts) AS parts
+FROM timestamps
+ORDER BY 1;
+----
+NULL	NULL
+1962-07-31 12:20:48.123456	{'epoch': -234230400, 'offset': 0}
+1969-01-01 01:03:20.45432	{'epoch': -31536000, 'offset': 0}
+1992-01-01 01:01:01.4	{'epoch': 694224000, 'offset': 0}
+1992-01-01 01:01:02.2	{'epoch': 694224000, 'offset': 0}
+1992-01-01 01:01:02.4	{'epoch': 694224000, 'offset': 0}
+1993-08-14 08:22:33	{'epoch': 745286400, 'offset': 0}
+1993-08-14 08:22:33.42	{'epoch': 745286400, 'offset': 0}
+2001-04-20 14:42:11	{'epoch': 987724800, 'offset': 0}
+2001-04-20 14:42:11.123	{'epoch': 987724800, 'offset': 0}
+2004-01-31 12:00:00.00005	{'epoch': 1075507200, 'offset': 0}
+2004-01-31 12:00:00.05	{'epoch': 1075507200, 'offset': 0}
+2004-02-01 12:00:00.00005	{'epoch': 1075593600, 'offset': 0}
+2004-02-01 12:00:00.05	{'epoch': 1075593600, 'offset': 0}
+2004-02-29 13:05:47.123456	{'epoch': 1078012800, 'offset': 0}
+2008-01-01 00:00:01.5	{'epoch': 1199145600, 'offset': 0}
+2008-01-01 00:00:01.594	{'epoch': 1199145600, 'offset': 0}
+2008-01-01 00:00:01.794	{'epoch': 1199145600, 'offset': 0}
+2008-01-01 00:00:01.88926	{'epoch': 1199145600, 'offset': 0}
+2008-01-01 00:00:01.894	{'epoch': 1199145600, 'offset': 0}
+2008-01-01 00:00:01.98926	{'epoch': 1199145600, 'offset': 0}
+2008-01-01 00:00:01.99926	{'epoch': 1199145600, 'offset': 0}
+2008-01-01 00:00:11.1	{'epoch': 1199145600, 'offset': 0}
+2019-01-06 04:03:02.123456	{'epoch': 1546732800, 'offset': 0}
+2019-01-06 04:03:02.5	{'epoch': 1546732800, 'offset': 0}
+2020-01-01 00:00:01.88926	{'epoch': 1577836800, 'offset': 0}
+2020-12-31 21:25:58.745232	{'epoch': 1609372800, 'offset': 0}
+2021-04-15 14:55:17.915	{'epoch': 1618444800, 'offset': 0}
+2021-04-15 14:55:17.915	{'epoch': 1618444800, 'offset': 0}
+2021-05-02 12:11:49.5	{'epoch': 1619913600, 'offset': 0}
+2021-12-01 13:54:48.123456	{'epoch': 1638316800, 'offset': 0}
 
 query I
 SELECT DATE_PART(['hour', 'minute', 'microsecond'], NULL::TIMESTAMP);
