@@ -1,6 +1,6 @@
-# name: test/optimizer/table_filter_pushdown.test
+# name: test/optimizer/pushdown/table_filter_pushdown.test
 # description: Test Table Filter Push Down
-# group: [optimizer]
+# group: [pushdown]
 
 statement ok
 CREATE TABLE integers(i integer, j integer, k integer)

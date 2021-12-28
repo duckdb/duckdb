@@ -127,6 +127,11 @@ FilterPropagateResult StringStatistics::CheckZonemap(ExpressionType comparison_t
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+	case ExpressionType::COMPARE_NOTEQUAL:
+		if (min_comp < 0 || max_comp > 0) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 	case ExpressionType::COMPARE_GREATERTHAN:
 		if (max_comp <= 0) {
