@@ -242,10 +242,15 @@ struct DatePart {
 	};
 
 	struct DecadeOperator {
+		// From the PG docs: "The year field divided by 10"
+		template <typename TR>
+		static inline TR DecadeFromYear(TR yyyy) {
+			return yyyy / 10;
+		}
+
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			// From the PG docs: "The year field divided by 10"
-			return YearOperator::Operation<TA, TR>(input) / 10;
+			return DecadeFromYear(YearOperator::Operation<TA, TR>(input));
 		}
 
 		template <class T>
@@ -257,21 +262,25 @@ struct DatePart {
 	};
 
 	struct CenturyOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			// From the PG docs:
-			// "The first century starts at 0001-01-01 00:00:00 AD, although they did not know it at the time.
-			// This definition applies to all Gregorian calendar countries.
-			// There is no century number 0, you go from -1 century to 1 century.
-			// If you disagree with this, please write your complaint to: Pope, Cathedral Saint-Peter of Roma, Vatican."
-			// (To be fair, His Holiness had nothing to do with this -
-			// it was the lack of zero in the counting systems of the time...)
-			const auto yyyy = YearOperator::Operation<TA, TR>(input);
+		// From the PG docs:
+		// "The first century starts at 0001-01-01 00:00:00 AD, although they did not know it at the time.
+		// This definition applies to all Gregorian calendar countries.
+		// There is no century number 0, you go from -1 century to 1 century.
+		// If you disagree with this, please write your complaint to: Pope, Cathedral Saint-Peter of Roma, Vatican."
+		// (To be fair, His Holiness had nothing to do with this -
+		// it was the lack of zero in the counting systems of the time...)
+		template <typename TR>
+		static inline TR CenturyFromYear(TR yyyy) {
 			if (yyyy > 0) {
 				return ((yyyy - 1) / 100) + 1;
 			} else {
 				return (yyyy / 100) - 1;
 			}
+		}
+
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return CenturyFromYear(YearOperator::Operation<TA, TR>(input));
 		}
 
 		template <class T>
@@ -283,15 +292,19 @@ struct DatePart {
 	};
 
 	struct MillenniumOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			// See the century comment
-			const auto yyyy = YearOperator::Operation<TA, TR>(input);
+		// See the century comment
+		template <typename TR>
+		static inline TR MillenniumFromYear(TR yyyy) {
 			if (yyyy > 0) {
 				return ((yyyy - 1) / 1000) + 1;
 			} else {
 				return (yyyy / 1000) - 1;
 			}
+		}
+
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return MillenniumFromYear<TR>(YearOperator::Operation<TA, TR>(input));
 		}
 
 		template <class T>
@@ -303,9 +316,14 @@ struct DatePart {
 	};
 
 	struct QuarterOperator {
+		template <class TR>
+		static inline TR QuarterFromMonth(TR mm) {
+			return (mm - 1) / Interval::MONTHS_PER_QUARTER + 1;
+		}
+
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			return (Date::ExtractMonth(input) - 1) / Interval::MONTHS_PER_QUARTER + 1;
+			return QuarterFromMonth(Date::ExtractMonth(input));
 		}
 
 		template <class T>
@@ -318,11 +336,16 @@ struct DatePart {
 	};
 
 	struct DayOfWeekOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
+		template <class TR>
+		static inline TR DayOfWeekFromISO(TR isodow) {
 			// day of the week (Sunday = 0, Saturday = 6)
 			// turn sunday into 0 by doing mod 7
-			return Date::ExtractISODayOfTheWeek(input) % 7;
+			return isodow % 7;
+		}
+
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return DayOfWeekFromISO(Date::ExtractISODayOfTheWeek(input));
 		}
 
 		template <class T>
@@ -377,9 +400,14 @@ struct DatePart {
 	};
 
 	struct YearWeekOperator {
+		template <class TR>
+		static inline TR YearWeekFromParts(TR yyyy, TR ww) {
+			return yyyy * 100 + ((yyyy > 0) ? ww : -ww);
+		}
+
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			return YearOperator::Operation<TA, TR>(input) * 100 + WeekOperator::Operation<TA, TR>(input);
+			return YearWeekFromParts(YearOperator::Operation<TA, TR>(input), WeekOperator::Operation<TA, TR>(input));
 		}
 
 		template <class T>
@@ -475,9 +503,14 @@ struct DatePart {
 	};
 
 	struct EraOperator {
+		template <class TR>
+		static inline TR EraFromYear(TR yyyy) {
+			return yyyy > 0 ? 1 : 0;
+		}
+
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			return Date::ExtractYear(input) > 0 ? 1 : 0;
+			return EraFromYear(Date::ExtractYear(input));
 		}
 
 		template <class T>
@@ -502,6 +535,10 @@ struct DatePart {
 			return PropagateSimpleDatePartStatistics<0, 0>(child_stats);
 		}
 	};
+
+	// These are all zero and have the same restrictions
+	using TimezoneHourOperator = TimezoneOperator;
+	using TimezoneMinuteOperator = TimezoneOperator;
 
 	struct StructOperator {
 		using part_codes_t = vector<DatePartSpecifier>;
@@ -586,19 +623,19 @@ struct DatePart {
 					part_data[idx] = dd;
 				}
 				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DECADE))) {
-					part_data[idx] = yyyy / 10;
+					part_data[idx] = DecadeOperator::DecadeFromYear(yyyy);
 				}
 				if ((part_data = HasPartValue(part_values, DatePartSpecifier::CENTURY))) {
-					part_data[idx] = (yyyy - 1) / 100 + 1;
+					part_data[idx] = CenturyOperator::CenturyFromYear(yyyy);
 				}
 				if ((part_data = HasPartValue(part_values, DatePartSpecifier::MILLENNIUM))) {
-					part_data[idx] = (yyyy - 1) / 1000 + 1;
+					part_data[idx] = MillenniumOperator::MillenniumFromYear(yyyy);
 				}
 				if ((part_data = HasPartValue(part_values, DatePartSpecifier::QUARTER))) {
-					part_data[idx] = (mm - 1) / Interval::MONTHS_PER_QUARTER + 1;
+					part_data[idx] = QuarterOperator::QuarterFromMonth(mm);
 				}
 				if ((part_data = HasPartValue(part_values, DatePartSpecifier::ERA))) {
-					part_data[idx] = yyyy > 0 ? 1 : 0;
+					part_data[idx] = EraOperator::EraFromYear(yyyy);
 				}
 			}
 
@@ -608,9 +645,8 @@ struct DatePart {
 			if (mask & DOW) {
 				isodow = Date::ExtractISODayOfTheWeek(input);
 				ww = Date::ExtractISOWeekNumber(input);
-				int32_t dow = isodow % 7;
 				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DOW))) {
-					part_data[idx] = dow;
+					part_data[idx] = DayOfWeekOperator::DayOfWeekFromISO(isodow);
 				}
 				if ((part_data = HasPartValue(part_values, DatePartSpecifier::ISODOW))) {
 					part_data[idx] = isodow;
@@ -619,7 +655,7 @@ struct DatePart {
 					part_data[idx] = ww;
 				}
 				if ((part_data = HasPartValue(part_values, DatePartSpecifier::YEARWEEK))) {
-					part_data[idx] = yyyy * 100 + dow;
+					part_data[idx] = YearWeekOperator::YearWeekFromParts(yyyy, ww);
 				}
 			}
 
@@ -925,13 +961,13 @@ int64_t DatePart::EraOperator::Operation(dtime_t input) {
 }
 
 template <>
-int64_t DatePart::TimezoneOperator::Operation(timestamp_t input) {
-	return 0;
+int64_t DatePart::TimezoneOperator::Operation(date_t input) {
+	throw NotImplementedException("\"date\" units \"timezone\" not recognized");
 }
 
 template <>
 int64_t DatePart::TimezoneOperator::Operation(interval_t input) {
-	throw NotImplementedException("\"interval\" units \"offset\" not recognized");
+	throw NotImplementedException("\"interval\" units \"timezone\" not recognized");
 }
 
 template <>
@@ -962,6 +998,13 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const dtime_t &i
 		}
 	}
 
+	if (mask & EPOCH) {
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH))) {
+			part_data[idx] = EpochOperator::Operation<dtime_t, int64_t>(input);
+			;
+		}
+	}
+
 	if (mask & ZONE) {
 		if ((part_data = HasPartValue(part_values, DatePartSpecifier::TIMEZONE))) {
 			part_data[idx] = 0;
@@ -981,8 +1024,9 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const timestamp_
 	date_t d;
 	dtime_t t;
 	Timestamp::Convert(input, d, t);
-	Operation(part_values, d, idx, mask);
+	// Time first because they both define epoch.
 	Operation(part_values, t, idx, mask);
+	Operation(part_values, d, idx, mask);
 }
 
 template <>
@@ -1358,8 +1402,8 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	AddDatePartOperator<DatePart::WeekOperator>(set, "week");
 	AddDatePartOperator<DatePart::EraOperator>(set, "era");
 	AddDatePartOperator<DatePart::TimezoneOperator>(set, "timezone");
-	AddDatePartOperator<DatePart::TimezoneOperator>(set, "timezone_hour");
-	AddDatePartOperator<DatePart::TimezoneOperator>(set, "timezone_minute");
+	AddDatePartOperator<DatePart::TimezoneHourOperator>(set, "timezone_hour");
+	AddDatePartOperator<DatePart::TimezoneMinuteOperator>(set, "timezone_minute");
 	AddTimePartOperator<DatePart::EpochOperator>(set, "epoch");
 	AddTimePartOperator<DatePart::MicrosecondsOperator>(set, "microsecond");
 	AddTimePartOperator<DatePart::MillisecondsOperator>(set, "millisecond");
