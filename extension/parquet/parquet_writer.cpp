@@ -164,11 +164,6 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		schema_ele.__isset.converted_type = true;
 		break;
 	case LogicalTypeId::ENUM:
-		schema_ele.converted_type = ConvertedType::UTF8;
-		schema_ele.__isset.converted_type = true;
-		schema_ele.__isset.logicalType = true;
-		schema_ele.logicalType.__isset.ENUM = true;
-		break;
 	case LogicalTypeId::VARCHAR:
 		schema_ele.converted_type = ConvertedType::UTF8;
 		schema_ele.__isset.converted_type = true;
