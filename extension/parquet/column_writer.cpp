@@ -1137,7 +1137,7 @@ public:
 //===--------------------------------------------------------------------===//
 class EnumWriterPageState : public ColumnWriterPageState {
 public:
-	EnumWriterPageState(uint32_t bit_width) : encoder(bit_width), written_value(false) {
+	explicit EnumWriterPageState(uint32_t bit_width) : encoder(bit_width), written_value(false) {
 	}
 
 	RleBpEncoder encoder;

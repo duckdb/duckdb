@@ -609,8 +609,8 @@ class DecimalColumnReader
                                    DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>> {
 
 public:
-	DecimalColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
-	                    idx_t max_define_p, idx_t max_repeat_p)
+	DecimalColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, // NOLINT
+	                    idx_t file_idx_p, idx_t max_define_p, idx_t max_repeat_p)
 	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
 	                            DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>(
 	          reader, move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {};
