@@ -733,8 +733,8 @@ static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, idx_
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 class StandardColumnWriter : public ColumnWriter {
 public:
-	StandardColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
-	                     idx_t max_define, bool can_have_nulls)
+	StandardColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, // NOLINT
+	                     idx_t max_repeat, idx_t max_define, bool can_have_nulls)
 	    : ColumnWriter(writer, schema_idx, move(schema_path_p), max_repeat, max_define, can_have_nulls) {
 	}
 	~StandardColumnWriter() override = default;
@@ -1508,7 +1508,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		repeated_element.__isset.repetition_type = true;
 		repeated_element.name = "list";
 		schemas.push_back(move(repeated_element));
-		schema_path.push_back("list");
+		schema_path.emplace_back("list");
 
 		auto child_writer =
 		    CreateWriterRecursive(schemas, writer, child_type, "element", schema_path, max_repeat + 1, max_define + 2);
@@ -1546,7 +1546,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		kv_element.__isset.type = false;
 		kv_element.name = "key_value";
 		schemas.push_back(move(kv_element));
-		schema_path.push_back("key_value");
+		schema_path.emplace_back("key_value");
 
 		// construct the child types recursively
 		vector<LogicalType> kv_types {ListType::GetChildType(MapType::KeyType(type)),
