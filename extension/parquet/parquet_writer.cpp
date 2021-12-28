@@ -151,6 +151,9 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 	case LogicalTypeId::TIME:
 		schema_ele.converted_type = ConvertedType::TIME_MICROS;
 		schema_ele.__isset.converted_type = true;
+		schema_ele.logicalType.__isset.TIME = true;
+		schema_ele.logicalType.TIME.isAdjustedToUTC = true;
+		schema_ele.logicalType.TIME.unit.__isset.MICROS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP:
@@ -158,10 +161,18 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 	case LogicalTypeId::TIMESTAMP_SEC:
 		schema_ele.converted_type = ConvertedType::TIMESTAMP_MICROS;
 		schema_ele.__isset.converted_type = true;
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.TIMESTAMP = true;
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = true;
+		schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_MS:
 		schema_ele.converted_type = ConvertedType::TIMESTAMP_MILLIS;
 		schema_ele.__isset.converted_type = true;
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.TIMESTAMP = true;
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = true;
+		schema_ele.logicalType.TIMESTAMP.unit.__isset.MILLIS = true;
 		break;
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::VARCHAR:
@@ -191,6 +202,10 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 			schema_ele.type_length = 16;
 			schema_ele.__isset.type_length = true;
 		}
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.DECIMAL = true;
+		schema_ele.logicalType.DECIMAL.precision = schema_ele.precision;
+		schema_ele.logicalType.DECIMAL.scale = schema_ele.scale;
 		break;
 	default:
 		break;
@@ -223,9 +238,10 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *fil
 	file_meta_data.schema[0].repetition_type = duckdb_parquet::format::FieldRepetitionType::REQUIRED;
 	file_meta_data.schema[0].__isset.repetition_type = true;
 
+	vector<string> schema_path;
 	for (idx_t i = 0; i < sql_types.size(); i++) {
-		column_writers.push_back(
-		    ColumnWriter::CreateWriterRecursive(file_meta_data.schema, *this, sql_types[i], column_names[i]));
+		column_writers.push_back(ColumnWriter::CreateWriterRecursive(file_meta_data.schema, *this, sql_types[i],
+		                                                             column_names[i], schema_path));
 	}
 }
 
@@ -245,8 +261,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 	auto &chunks = buffer.Chunks();
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
-		vector<string> schema_path;
-		auto write_state = column_writers[col_idx]->InitializeWriteState(row_group, move(schema_path));
+		auto write_state = column_writers[col_idx]->InitializeWriteState(row_group);
 		for (idx_t chunk_idx = 0; chunk_idx < chunks.size(); chunk_idx++) {
 			column_writers[col_idx]->Prepare(*write_state, nullptr, chunks[chunk_idx]->data[col_idx],
 			                                 chunks[chunk_idx]->size());
