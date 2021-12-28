@@ -1,6 +1,6 @@
 # name: test/sql/copy/parquet/writer/parquet_write_enums.test
 # description: ENUM tests
-# group: [enum]
+# group: [writer]
 
 require parquet
 

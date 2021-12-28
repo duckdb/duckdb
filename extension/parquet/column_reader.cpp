@@ -71,12 +71,12 @@ unique_ptr<BaseStatistics> ColumnReader::Stats(const std::vector<ColumnChunk> &c
 	return ParquetStatisticsUtils::TransformColumnStatistics(Schema(), Type(), columns[file_idx]);
 }
 
-void ColumnReader::Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values,
+void ColumnReader::Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, // NOLINT
                          parquet_filter_t &filter, idx_t result_offset, Vector &result) {
 	throw NotImplementedException("Plain");
 }
 
-void ColumnReader::Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
+void ColumnReader::Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) { // NOLINT
 	throw NotImplementedException("Dictionary");
 }
 
@@ -87,7 +87,7 @@ void ColumnReader::Offsets(uint32_t *offsets, uint8_t *defines, idx_t num_values
 
 void ColumnReader::DictReference(Vector &result) {
 }
-void ColumnReader::PlainReference(shared_ptr<ByteBuffer>, Vector &result) {
+void ColumnReader::PlainReference(shared_ptr<ByteBuffer>, Vector &result) { // NOLINT
 }
 
 void ColumnReader::InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
@@ -575,7 +575,6 @@ idx_t StructColumnReader::GroupRowsAvailable() {
 //===--------------------------------------------------------------------===//
 // Decimal Column Reader
 //===--------------------------------------------------------------------===//
-
 template <class DUCKDB_PHYSICAL_TYPE, bool FIXED_LENGTH>
 struct DecimalParquetValueConversion {
 	static DUCKDB_PHYSICAL_TYPE DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
@@ -617,7 +616,7 @@ public:
 	          reader, move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {};
 
 protected:
-	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
+	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) { // NOLINT
 		this->dict = make_shared<ResizeableBuffer>(this->reader.allocator, num_entries * sizeof(DUCKDB_PHYSICAL_TYPE));
 		auto dict_ptr = (DUCKDB_PHYSICAL_TYPE *)this->dict->ptr;
 		for (idx_t i = 0; i < num_entries; i++) {
@@ -708,7 +707,7 @@ public:
 	                                                            max_define_p, max_repeat_p) {};
 
 protected:
-	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
+	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) { // NOLINT
 		this->dict = make_shared<ResizeableBuffer>(this->reader.allocator, num_entries * sizeof(hugeint_t));
 		auto dict_ptr = (hugeint_t *)this->dict->ptr;
 		for (idx_t i = 0; i < num_entries; i++) {
@@ -759,7 +758,7 @@ public:
 	                                                                 max_define_p, max_repeat_p) {};
 
 protected:
-	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
+	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override { // NOLINT
 		this->dict = make_shared<ResizeableBuffer>(this->reader.allocator, num_entries * sizeof(interval_t));
 		auto dict_ptr = (interval_t *)this->dict->ptr;
 		for (idx_t i = 0; i < num_entries; i++) {
