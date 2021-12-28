@@ -76,8 +76,13 @@ protected:
 	void WriteLevels(Serializer &temp_writer, const vector<uint16_t> &levels, idx_t max_value, idx_t start_offset,
 	                 idx_t count);
 
+	virtual duckdb_parquet::format::Encoding::type GetEncoding();
+
 	void NextPage(ColumnWriterState &state_p);
 	void FlushPage(ColumnWriterState &state_p);
+	void WriteDictionary(ColumnWriterState &state_p, unique_ptr<BufferedSerializer> temp_writer, idx_t row_count);
+
+	virtual void FlushDictionary(ColumnWriterState &state, ColumnWriterStatistics *stats);
 
 	//! Initializes the state used to track statistics during writing. Only used for scalar types.
 	virtual unique_ptr<ColumnWriterStatistics> InitializeStatsState();

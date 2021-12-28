@@ -69,6 +69,7 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::HUGEINT:
 		return Type::DOUBLE;
+	case LogicalTypeId::ENUM:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 		return Type::BYTE_ARRAY;
@@ -141,16 +142,35 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		schema_ele.converted_type = ConvertedType::UINT_64;
 		schema_ele.__isset.converted_type = true;
 		break;
+	case LogicalTypeId::DATE_TZ:
 	case LogicalTypeId::DATE:
 		schema_ele.converted_type = ConvertedType::DATE;
 		schema_ele.__isset.converted_type = true;
 		break;
-	case LogicalTypeId::VARCHAR:
-		schema_ele.converted_type = ConvertedType::UTF8;
-		schema_ele.__isset.converted_type = true;
-		break;
+	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIME:
 		schema_ele.converted_type = ConvertedType::TIME_MICROS;
+		schema_ele.__isset.converted_type = true;
+		break;
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+		schema_ele.converted_type = ConvertedType::TIMESTAMP_MICROS;
+		schema_ele.__isset.converted_type = true;
+		break;
+	case LogicalTypeId::TIMESTAMP_MS:
+		schema_ele.converted_type = ConvertedType::TIMESTAMP_MILLIS;
+		schema_ele.__isset.converted_type = true;
+		break;
+	case LogicalTypeId::ENUM:
+		schema_ele.converted_type = ConvertedType::UTF8;
+		schema_ele.__isset.converted_type = true;
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.ENUM = true;
+		break;
+	case LogicalTypeId::VARCHAR:
+		schema_ele.converted_type = ConvertedType::UTF8;
 		schema_ele.__isset.converted_type = true;
 		break;
 	case LogicalTypeId::INTERVAL:
@@ -176,16 +196,6 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 			schema_ele.type_length = 16;
 			schema_ele.__isset.type_length = true;
 		}
-		break;
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_SEC:
-		schema_ele.converted_type = ConvertedType::TIMESTAMP_MICROS;
-		schema_ele.__isset.converted_type = true;
-		break;
-	case LogicalTypeId::TIMESTAMP_MS:
-		schema_ele.converted_type = ConvertedType::TIMESTAMP_MILLIS;
-		schema_ele.__isset.converted_type = true;
 		break;
 	default:
 		break;

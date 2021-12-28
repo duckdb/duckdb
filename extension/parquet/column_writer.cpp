@@ -1,6 +1,7 @@
 #include "column_writer.hpp"
 #include "parquet_writer.hpp"
 #include "parquet_rle_bp_decoder.hpp"
+#include "parquet_rle_bp_encoder.hpp"
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
@@ -38,6 +39,30 @@ using duckdb_parquet::format::Type;
 
 #define PARQUET_DEFINE_VALID 65535
 
+static void VarintEncode(uint32_t val, Serializer &ser) {
+	do {
+		uint8_t byte = val & 127;
+		val >>= 7;
+		if (val != 0) {
+			byte |= 128;
+		}
+		ser.Write<uint8_t>(byte);
+	} while (val != 0);
+}
+
+static uint8_t GetVarintSize(uint32_t val) {
+	uint8_t res = 0;
+	do {
+		uint8_t byte = val & 127;
+		val >>= 7;
+		if (val != 0) {
+			byte |= 128;
+		}
+		res++;
+	} while (val != 0);
+	return res;
+}
+
 //===--------------------------------------------------------------------===//
 // ColumnWriterStatistics
 //===--------------------------------------------------------------------===//
@@ -61,6 +86,91 @@ string ColumnWriterStatistics::GetMaxValue() {
 }
 
 //===--------------------------------------------------------------------===//
+// RleBpEncoder
+//===--------------------------------------------------------------------===//
+RleBpEncoder::RleBpEncoder(uint32_t bit_width)
+    : byte_width((bit_width + 7) / 8), byte_count(idx_t(-1)), run_count(idx_t(-1)) {
+}
+
+// we always RLE everything (for now)
+void RleBpEncoder::BeginPrepare(uint32_t first_value) {
+	byte_count = 0;
+	run_count = 1;
+	current_run_count = 1;
+	last_value = first_value;
+}
+
+void RleBpEncoder::FinishRun() {
+	// last value, or value has changed
+	// write out the current run
+	byte_count += GetVarintSize(current_run_count << 1) + byte_width;
+	current_run_count = 1;
+	run_count++;
+}
+
+void RleBpEncoder::PrepareValue(uint32_t value) {
+	if (value != last_value) {
+		FinishRun();
+		last_value = value;
+	} else {
+		current_run_count++;
+	}
+}
+
+void RleBpEncoder::FinishPrepare() {
+	FinishRun();
+}
+
+idx_t RleBpEncoder::GetByteCount() {
+	D_ASSERT(byte_count != idx_t(-1));
+	return byte_count;
+}
+
+void RleBpEncoder::BeginWrite(Serializer &writer, uint32_t first_value) {
+	// start the RLE runs
+	last_value = first_value;
+	current_run_count = 1;
+}
+
+void RleBpEncoder::WriteRun(Serializer &writer) {
+	// write the header of the run
+	VarintEncode(current_run_count << 1, writer);
+	// now write the value
+	switch (byte_width) {
+	case 1:
+		writer.Write<uint8_t>(last_value);
+		break;
+	case 2:
+		writer.Write<uint16_t>(last_value);
+		break;
+	case 3:
+		writer.Write<uint8_t>(last_value & 0xFF);
+		writer.Write<uint8_t>((last_value >> 8) & 0xFF);
+		writer.Write<uint8_t>((last_value >> 16) & 0xFF);
+		break;
+	case 4:
+		writer.Write<uint32_t>(last_value);
+		break;
+	default:
+		throw InternalException("unsupported byte width for RLE encoding");
+	}
+	current_run_count = 1;
+}
+
+void RleBpEncoder::WriteValue(Serializer &writer, uint32_t value) {
+	if (value != last_value) {
+		WriteRun(writer);
+		last_value = value;
+	} else {
+		current_run_count++;
+	}
+}
+
+void RleBpEncoder::FinishWrite(Serializer &writer) {
+	WriteRun(writer);
+}
+
+//===--------------------------------------------------------------------===//
 // ColumnWriter
 //===--------------------------------------------------------------------===//
 
@@ -73,30 +183,6 @@ ColumnWriter::~ColumnWriter() {
 }
 
 ColumnWriterState::~ColumnWriterState() {
-}
-
-static void VarintEncode(uint32_t val, Serializer &ser) {
-	do {
-		uint8_t byte = val & 127;
-		val >>= 7;
-		if (val != 0) {
-			byte |= 128;
-		}
-		ser.Write<uint8_t>(byte);
-	} while (val != 0);
-}
-
-static uint8_t GetVarintSize(uint32_t val) {
-	uint8_t res = 0;
-	do {
-		uint8_t byte = val & 127;
-		val >>= 7;
-		if (val != 0) {
-			byte |= 128;
-		}
-		res++;
-	} while (val != 0);
-	return res;
 }
 
 void ColumnWriter::CompressPage(BufferedSerializer &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
@@ -288,6 +374,10 @@ unique_ptr<ColumnWriterPageState> ColumnWriter::InitializePageState() {
 void ColumnWriter::FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state) {
 }
 
+duckdb_parquet::format::Encoding::type ColumnWriter::GetEncoding() {
+	return Encoding::PLAIN;
+}
+
 void ColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 	auto &state = (StandardColumnWriterState &)state_p;
 
@@ -309,7 +399,7 @@ void ColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		hdr.__isset.data_page_header = true;
 
 		hdr.data_page_header.num_values = page_info.row_count;
-		hdr.data_page_header.encoding = Encoding::PLAIN;
+		hdr.data_page_header.encoding = GetEncoding();
 		hdr.data_page_header.definition_level_encoding = Encoding::RLE;
 		hdr.data_page_header.repetition_level_encoding = Encoding::RLE;
 
@@ -334,51 +424,23 @@ void ColumnWriter::WriteLevels(Serializer &temp_writer, const vector<uint16_t> &
 		return;
 	}
 
-	// write the levels
-	// we always RLE everything (for now)
+	// write the levels using the RLE-BP encoding
 	auto bit_width = RleBpDecoder::ComputeBitWidth((max_value));
-	auto byte_width = (bit_width + 7) / 8;
+	RleBpEncoder rle_encoder(bit_width);
 
-	// figure out how many bytes we are going to need
-	idx_t byte_count = 0;
-	idx_t run_count = 1;
-	idx_t current_run_count = 1;
-	for (idx_t i = offset + 1; i <= offset + count; i++) {
-		if (i == offset + count || levels[i] != levels[i - 1]) {
-			// last value, or value has changed
-			// write out the current run
-			byte_count += GetVarintSize(current_run_count << 1) + byte_width;
-			current_run_count = 1;
-			run_count++;
-		} else {
-			current_run_count++;
-		}
+	rle_encoder.BeginPrepare(levels[offset]);
+	for (idx_t i = offset + 1; i < offset + count; i++) {
+		rle_encoder.PrepareValue(levels[i]);
 	}
-	temp_writer.Write<uint32_t>(byte_count);
+	rle_encoder.FinishPrepare();
 
-	// now actually write the values
-	current_run_count = 1;
-	for (idx_t i = offset + 1; i <= offset + count; i++) {
-		if (i == offset + count || levels[i] != levels[i - 1]) {
-			// new run: write out the old run
-			// first write the header
-			VarintEncode(current_run_count << 1, temp_writer);
-			// now write hte value
-			switch (byte_width) {
-			case 1:
-				temp_writer.Write<uint8_t>(levels[i - 1]);
-				break;
-			case 2:
-				temp_writer.Write<uint16_t>(levels[i - 1]);
-				break;
-			default:
-				throw InternalException("unsupported byte width for RLE encoding");
-			}
-			current_run_count = 1;
-		} else {
-			current_run_count++;
-		}
+	// start off by writing the byte count as a uint32_t
+	temp_writer.Write<uint32_t>(rle_encoder.GetByteCount());
+	rle_encoder.BeginWrite(temp_writer, levels[offset]);
+	for (idx_t i = offset + 1; i < offset + count; i++) {
+		rle_encoder.WriteValue(temp_writer, levels[i]);
 	}
+	rle_encoder.FinishWrite(temp_writer);
 }
 
 void ColumnWriter::NextPage(ColumnWriterState &state_p) {
@@ -520,9 +582,13 @@ void ColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 
 	// flush the last page (if any remains)
 	FlushPage(state);
+	// flush the dictionary
+	FlushDictionary(state, state.stats_state.get());
+
 	// record the start position of the pages for this column
 	column_chunk.meta_data.data_page_offset = writer.writer->GetTotalWritten();
 	SetParquetStatistics(state, column_chunk);
+
 	// write the individual pages to disk
 	for (auto &write_info : state.write_info) {
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
@@ -531,6 +597,41 @@ void ColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	}
 	column_chunk.meta_data.total_compressed_size =
 	    writer.writer->GetTotalWritten() - column_chunk.meta_data.data_page_offset;
+}
+
+void ColumnWriter::WriteDictionary(ColumnWriterState &state_p, unique_ptr<BufferedSerializer> temp_writer,
+                                   idx_t row_count) {
+	auto &state = (StandardColumnWriterState &)state_p;
+	D_ASSERT(temp_writer);
+	D_ASSERT(temp_writer->blob.size > 0);
+
+	// write the dictionary page header
+	PageWriteInformation write_info;
+	// set up the header
+	auto &hdr = write_info.page_header;
+	hdr.uncompressed_page_size = temp_writer->blob.size;
+	hdr.type = PageType::DICTIONARY_PAGE;
+	hdr.__isset.dictionary_page_header = true;
+
+	hdr.dictionary_page_header.encoding = Encoding::PLAIN;
+	hdr.dictionary_page_header.is_sorted = false;
+	hdr.dictionary_page_header.num_values = row_count;
+
+	write_info.temp_writer = move(temp_writer);
+	write_info.write_count = 0;
+	write_info.max_write_count = 0;
+
+	// compress the contents of the dictionary page
+	CompressPage(*write_info.temp_writer, write_info.compressed_size, write_info.compressed_data,
+	             write_info.compressed_buf);
+	hdr.compressed_page_size = write_info.compressed_size;
+
+	// insert the dictionary page as the first page to write for this column
+	state.write_info.insert(state.write_info.begin(), move(write_info));
+}
+
+void ColumnWriter::FlushDictionary(ColumnWriterState &state, ColumnWriterStatistics *stats) {
+	// nop: standard pages do not have a dictionary
 }
 
 //===--------------------------------------------------------------------===//
@@ -1032,6 +1133,118 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
+// Enum Column Writer
+//===--------------------------------------------------------------------===//
+class EnumWriterPageState : public ColumnWriterPageState {
+public:
+	EnumWriterPageState(uint32_t bit_width) : encoder(bit_width), written_value(false) {
+	}
+
+	RleBpEncoder encoder;
+	bool written_value;
+};
+
+class EnumColumnWriter : public ColumnWriter {
+public:
+	EnumColumnWriter(ParquetWriter &writer, LogicalType enum_type_p, idx_t schema_idx, idx_t max_repeat,
+	                 idx_t max_define, bool can_have_nulls)
+	    : ColumnWriter(writer, schema_idx, max_repeat, max_define, can_have_nulls), enum_type(move(enum_type_p)) {
+		bit_width = RleBpDecoder::ComputeBitWidth(EnumType::GetSize(enum_type));
+	}
+	~EnumColumnWriter() override = default;
+
+	LogicalType enum_type;
+	uint32_t bit_width;
+
+public:
+	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
+		return make_unique<StringStatisticsState>();
+	}
+
+	template <class T>
+	void WriteEnumInternal(Serializer &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end,
+	                       EnumWriterPageState &page_state) {
+		auto &mask = FlatVector::Validity(input_column);
+		auto *ptr = FlatVector::GetData<T>(input_column);
+		for (idx_t r = chunk_start; r < chunk_end; r++) {
+			if (mask.RowIsValid(r)) {
+				if (!page_state.written_value) {
+					// first value
+					// write the bit-width as a one-byte entry
+					temp_writer.Write<uint8_t>(bit_width);
+					// now begin writing the actual value
+					page_state.encoder.BeginWrite(temp_writer, ptr[r]);
+					page_state.written_value = true;
+				} else {
+					page_state.encoder.WriteValue(temp_writer, ptr[r]);
+				}
+			}
+		}
+	}
+
+	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
+	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+		auto &page_state = (EnumWriterPageState &)*page_state_p;
+		switch (enum_type.InternalType()) {
+		case PhysicalType::UINT8:
+			WriteEnumInternal<uint8_t>(temp_writer, input_column, chunk_start, chunk_end, page_state);
+			break;
+		case PhysicalType::UINT16:
+			WriteEnumInternal<uint16_t>(temp_writer, input_column, chunk_start, chunk_end, page_state);
+			break;
+		case PhysicalType::UINT32:
+			WriteEnumInternal<uint32_t>(temp_writer, input_column, chunk_start, chunk_end, page_state);
+			break;
+		default:
+			throw InternalException("Unsupported internal enum type");
+		}
+	}
+
+	unique_ptr<ColumnWriterPageState> InitializePageState() override {
+		return make_unique<EnumWriterPageState>(bit_width);
+	}
+
+	void FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state_p) override {
+		auto &page_state = (EnumWriterPageState &)*state_p;
+		if (!page_state.written_value) {
+			// all values are null
+			// just write the bit width
+			temp_writer.Write<uint8_t>(bit_width);
+			return;
+		}
+		page_state.encoder.FinishWrite(temp_writer);
+	}
+
+	duckdb_parquet::format::Encoding::type GetEncoding() override {
+		return Encoding::RLE_DICTIONARY;
+	}
+
+	void FlushDictionary(ColumnWriterState &state, ColumnWriterStatistics *stats_p) override {
+		auto &stats = (StringStatisticsState &)*stats_p;
+		// write the enum values to a dictionary page
+		auto &enum_values = EnumType::GetValuesInsertOrder(enum_type);
+		auto enum_count = EnumType::GetSize(enum_type);
+		auto string_values = FlatVector::GetData<string_t>(enum_values);
+		// first write the contents of the dictionary page to a temporary buffer
+		auto temp_writer = make_unique<BufferedSerializer>();
+		for (idx_t r = 0; r < enum_count; r++) {
+			D_ASSERT(!FlatVector::IsNull(enum_values, r));
+			// update the statistics
+			stats.Update(string_values[r]);
+			// write this string value to the dictionary
+			temp_writer->Write<uint32_t>(string_values[r].GetSize());
+			temp_writer->WriteData((const_data_ptr_t)string_values[r].GetDataUnsafe(), string_values[r].GetSize());
+		}
+		// flush the dictionary page and add it to the to-be-written pages
+		WriteDictionary(state, move(temp_writer), enum_count);
+	}
+
+	idx_t GetRowSize(Vector &vector, idx_t index) override {
+		return (bit_width + 7) / 8;
+	}
+};
+
+//===--------------------------------------------------------------------===//
 // Struct Column Writer
 //===--------------------------------------------------------------------===//
 class StructColumnWriter : public ColumnWriter {
@@ -1433,6 +1646,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		return make_unique<UUIDColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::INTERVAL:
 		return make_unique<IntervalColumnWriter>(writer, schema_idx, max_repeat, max_define, can_have_nulls);
+	case LogicalTypeId::ENUM:
+		return make_unique<EnumColumnWriter>(writer, type, schema_idx, max_repeat, max_define, can_have_nulls);
 	default:
 		throw InternalException("Unsupported type \"%s\" in Parquet writer", type.ToString());
 	}
