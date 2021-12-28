@@ -135,6 +135,8 @@ select date_part('era', time '10:00:00');
 #
 # Structs
 #
+
+# Time parts
 query II
 SELECT d, DATE_PART(['hour', 'minute', 'microsecond'], d) AS parts
 FROM times
@@ -144,6 +146,17 @@ ORDER BY 1;
 20:08:10.001	{'hour': 20, 'minute': 8, 'microsecond': 10001000}
 20:08:10.33	{'hour': 20, 'minute': 8, 'microsecond': 10330000}
 20:08:10.998	{'hour': 20, 'minute': 8, 'microsecond': 10998000}
+
+# Miscellaneous parts
+query II
+SELECT d, DATE_PART(['epoch', 'second', 'timezone', 'timezone_hour', 'timezone_minute'], d) AS parts
+FROM times
+ORDER BY 1;
+----
+00:01:20	{'epoch': 80, 'second': 20, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+20:08:10.001	{'epoch': 72490, 'second': 10, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+20:08:10.33	{'epoch': 72490, 'second': 10, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+20:08:10.998	{'epoch': 72490, 'second': 10, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
 
 # Invalid parts
 
