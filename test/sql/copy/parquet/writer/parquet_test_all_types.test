@@ -24,7 +24,7 @@ SELECT * REPLACE (
 	date_tz::DATE AS date_tz,
 	time_tz::TIME AS time_tz,
 	timestamp_tz::TIMESTAMP AS timestamp_tz,
-	case when interval='83 years 3 months 999 days 00:16:39.999999' then interval '83 years 3 months 999 days 00:16:39.999' else interval end AS interval
+	case when extract(month from interval) <> 0 then interval '83 years 3 months 999 days 00:16:39.999' else interval end AS interval
 )
 FROM all_types
 ----
