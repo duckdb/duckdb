@@ -410,6 +410,11 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 	file_name = move(file_name_p);
 	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
 	                          FileSystem::DEFAULT_COMPRESSION, file_opener);
+	if (!file_handle->CanSeek()) {
+		throw NotImplementedException(
+		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
+		    "metadata is located at the end of the file. Write the stream to disk first and read from there instead.");
+	}
 	// If object cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
