@@ -325,7 +325,7 @@ StringColumnReader::StringColumnReader(ParquetReader &reader, LogicalType type_p
 		D_ASSERT(schema_p.__isset.type_length);
 		fixed_width_string_length = schema_p.type_length;
 	}
-};
+}
 
 uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len) {
 	if (Type() != LogicalTypeId::VARCHAR) {
