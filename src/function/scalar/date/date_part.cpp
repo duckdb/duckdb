@@ -592,7 +592,7 @@ struct DatePart {
 					part_data[idx] = ww;
 				}
 				if ((part_data = HasPartValue(part_values, DatePartSpecifier::YEARWEEK))) {
-					part_data[idx] = yyyy * 100 + dow;
+					part_data[idx] = yyyy * 100 + ww;
 				}
 			}
 
@@ -935,6 +935,13 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const dtime_t &i
 		}
 	}
 
+	if (mask & EPOCH) {
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH))) {
+			part_data[idx] = EpochOperator::Operation<dtime_t, int64_t>(input);
+			;
+		}
+	}
+
 	if (mask & ZONE) {
 		if ((part_data = HasPartValue(part_values, DatePartSpecifier::OFFSET))) {
 			part_data[idx] = 0;
@@ -948,8 +955,9 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const timestamp_
 	date_t d;
 	dtime_t t;
 	Timestamp::Convert(input, d, t);
-	Operation(part_values, d, idx, mask);
+	// Time first because they both define epoch.
 	Operation(part_values, t, idx, mask);
+	Operation(part_values, d, idx, mask);
 }
 
 template <>
@@ -1003,12 +1011,6 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const interval_t
 	if (mask & EPOCH) {
 		if ((part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH))) {
 			part_data[idx] = EpochOperator::Operation<interval_t, int64_t>(input);
-		}
-	}
-
-	if (mask & ZONE) {
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::OFFSET))) {
-			part_data[idx] = 0;
 		}
 	}
 }

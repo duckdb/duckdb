@@ -366,18 +366,63 @@ ORDER BY 2
 
 # Time parts
 query II
-SELECT DATE_PART(['hour', 'minute', 'microsecond', 'offset'], ts), ts
+SELECT DATE_PART(['hour', 'minute', 'microsecond'], ts), ts
 FROM timestamps
 ORDER BY 2
 ----
-{'hour': 1, 'minute': 40, 'microsecond': 43987654, 'offset': -28378000000}	0044-03-13 (BC) 09:33:41.987654+00
-{'hour': 5, 'minute': 20, 'microsecond': 48123456, 'offset': -25200000000}	1962-07-31 12:20:48.123456+00
-{'hour': 16, 'minute': 0, 'microsecond': 0, 'offset': -28800000000}	2021-01-01 00:00:00+00
-{'hour': 16, 'minute': 0, 'microsecond': 0, 'offset': -28800000000}	2021-02-02 00:00:00+00
-{'hour': 1, 'minute': 30, 'microsecond': 0, 'offset': -28800000000}	2021-11-15 09:30:00+00
-{'hour': 2, 'minute': 30, 'microsecond': 0, 'offset': -28800000000}	2021-11-15 10:30:00+00
-{'hour': 2, 'minute': 15, 'microsecond': 13123456, 'offset': -28800000000}	2021-11-26 10:15:13.123456+00
-{'hour': 14, 'minute': 0, 'microsecond': 0, 'offset': -28800000000}	2021-12-24 22:00:00+00
+{'hour': 1, 'minute': 40, 'microsecond': 43987654}	0044-03-13 (BC) 09:33:41.987654+00
+{'hour': 5, 'minute': 20, 'microsecond': 48123456}	1962-07-31 12:20:48.123456+00
+{'hour': 16, 'minute': 0, 'microsecond': 0}	2021-01-01 00:00:00+00
+{'hour': 16, 'minute': 0, 'microsecond': 0}	2021-02-02 00:00:00+00
+{'hour': 1, 'minute': 30, 'microsecond': 0}	2021-11-15 09:30:00+00
+{'hour': 2, 'minute': 30, 'microsecond': 0}	2021-11-15 10:30:00+00
+{'hour': 2, 'minute': 15, 'microsecond': 13123456}	2021-11-26 10:15:13.123456+00
+{'hour': 14, 'minute': 0, 'microsecond': 0}	2021-12-24 22:00:00+00
+
+# Year parts
+query II
+SELECT DATE_PART(['millennium', 'century', 'decade', 'quarter'], ts), ts
+FROM timestamps
+ORDER BY 2
+----
+{'millennium': 1, 'century': 1, 'decade': 4, 'quarter': 1}	0044-03-13 (BC) 09:33:41.987654+00
+{'millennium': 2, 'century': 20, 'decade': 196, 'quarter': 3}	1962-07-31 12:20:48.123456+00
+{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-01-01 00:00:00+00
+{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 1}	2021-02-02 00:00:00+00
+{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-11-15 09:30:00+00
+{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-11-15 10:30:00+00
+{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-11-26 10:15:13.123456+00
+{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-12-24 22:00:00+00
+
+# Week parts
+query II
+SELECT DATE_PART(['weekday', 'isodow', 'week', 'yearweek', 'doy'], ts), ts
+FROM timestamps
+ORDER BY 2
+----
+{'weekday': 3, 'isodow': 4, 'week': 11, 'yearweek': 4411, 'doy': 74}	0044-03-13 (BC) 09:33:41.987654+00
+{'weekday': 2, 'isodow': 3, 'week': 31, 'yearweek': 196231, 'doy': 212}	1962-07-31 12:20:48.123456+00
+{'weekday': 4, 'isodow': 5, 'week': 53, 'yearweek': 202053, 'doy': 366}	2021-01-01 00:00:00+00
+{'weekday': 1, 'isodow': 2, 'week': 5, 'yearweek': 202105, 'doy': 32}	2021-02-02 00:00:00+00
+{'weekday': 1, 'isodow': 2, 'week': 46, 'yearweek': 202146, 'doy': 319}	2021-11-15 09:30:00+00
+{'weekday': 1, 'isodow': 2, 'week': 46, 'yearweek': 202146, 'doy': 319}	2021-11-15 10:30:00+00
+{'weekday': 5, 'isodow': 6, 'week': 47, 'yearweek': 202147, 'doy': 330}	2021-11-26 10:15:13.123456+00
+{'weekday': 5, 'isodow': 6, 'week': 51, 'yearweek': 202151, 'doy': 358}	2021-12-24 22:00:00+00
+
+# Miscellaneous parts
+query II
+SELECT DATE_PART(['epoch', 'second', 'offset'], ts), ts
+FROM timestamps
+ORDER BY 2
+----
+{'epoch': -63517990756, 'second': 43, 'offset': -28378000000}	0044-03-13 (BC) 09:33:41.987654+00
+{'epoch': -234211151, 'second': 48, 'offset': -25200000000}	1962-07-31 12:20:48.123456+00
+{'epoch': 1609430400, 'second': 0, 'offset': -28800000000}	2021-01-01 00:00:00+00
+{'epoch': 1612195200, 'second': 0, 'offset': -28800000000}	2021-02-02 00:00:00+00
+{'epoch': 1636939800, 'second': 0, 'offset': -28800000000}	2021-11-15 09:30:00+00
+{'epoch': 1636943400, 'second': 0, 'offset': -28800000000}	2021-11-15 10:30:00+00
+{'epoch': 1637892913, 'second': 13, 'offset': -28800000000}	2021-11-26 10:15:13.123456+00
+{'epoch': 1640354400, 'second': 0, 'offset': -28800000000}	2021-12-24 22:00:00+00
 
 # Invalid parts
 statement error

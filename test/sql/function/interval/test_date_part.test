@@ -98,6 +98,8 @@ SELECT date_part('offset', i) FROM intervals;
 #
 # Structs
 #
+
+# Day parts
 query II
 SELECT i, DATE_PART(['year', 'month', 'day'], i) AS parts
 FROM intervals
@@ -107,6 +109,28 @@ ORDER BY 1;
 42 days	{'year': 0, 'month': 0, 'day': 42}
 1 year 4 months	{'year': 1, 'month': 4, 'day': 0}
 2 years	{'year': 2, 'month': 0, 'day': 0}
+
+# Year parts
+query II
+SELECT i, DATE_PART(['millennium', 'century', 'decade', 'quarter'], i) AS parts
+FROM intervals
+ORDER BY 1;
+----
+00:34:26.3434	{'millennium': 0, 'century': 0, 'decade': 0, 'quarter': 1}
+42 days	{'millennium': 0, 'century': 0, 'decade': 0, 'quarter': 1}
+1 year 4 months	{'millennium': 0, 'century': 0, 'decade': 0, 'quarter': 2}
+2 years	{'millennium': 0, 'century': 0, 'decade': 0, 'quarter': 1}
+
+# Time parts
+query II
+SELECT i, DATE_PART(['hour', 'minute', 'second', 'epoch'], i) AS parts
+FROM intervals
+ORDER BY 1;
+----
+00:34:26.3434	{'hour': 0, 'minute': 34, 'second': 26, 'epoch': 2066}
+42 days	{'hour': 0, 'minute': 0, 'second': 0, 'epoch': 3628800}
+1 year 4 months	{'hour': 0, 'minute': 0, 'second': 0, 'epoch': 41925600}
+2 years	{'hour': 0, 'minute': 0, 'second': 0, 'epoch': 63115200}
 
 # Invalid parts
 
