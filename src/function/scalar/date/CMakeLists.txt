@@ -8,6 +8,7 @@ add_library_unity(
   date_part.cpp
   date_sub.cpp
   date_trunc.cpp
+  make_date.cpp
   strftime.cpp
   to_interval.cpp)
 set(ALL_OBJECT_FILES
