@@ -45,6 +45,9 @@ int64_t PipeFileSystem::GetFileSize(FileHandle &handle) {
 	return 0;
 }
 
+void PipeFileSystem::FileSync(FileHandle &handle) {
+}
+
 unique_ptr<FileHandle> PipeFileSystem::OpenPipe(unique_ptr<FileHandle> handle) {
 	auto path = handle->path;
 	return make_unique<PipeFile>(move(handle), path);

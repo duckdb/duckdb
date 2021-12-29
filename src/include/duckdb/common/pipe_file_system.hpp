@@ -28,6 +28,7 @@ public:
 	bool CanSeek() override {
 		return false;
 	}
+	void FileSync(FileHandle &handle) override;
 
 	std::string GetName() const override {
 		return "PipeFileSystem";
