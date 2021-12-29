@@ -99,6 +99,17 @@ SELECT date_part('offset', i) FROM intervals;
 # Structs
 #
 
+# Correctness: Compare struct values with scalar values
+foreach partcode millennium century decade year quarter month day hour minute second millisecond microsecond epoch
+
+query III
+SELECT i, DATE_PART('${partcode}', i) AS p, DATE_PART(['${partcode}'], i) AS st
+FROM intervals
+WHERE p <> st['${partcode}'];
+----
+
+endloop
+
 # Day parts
 query II
 SELECT i, DATE_PART(['year', 'month', 'day'], i) AS parts
