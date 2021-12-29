@@ -1,0 +1,23 @@
+# name: benchmark/micro/date/extract_multiple_icu.benchmark
+# description: EXTRACT(part from date)
+# group: [date]
+
+name Extract Multiple Parts
+group date
+require icu
+
+load
+SET TimeZone='America/Los_Angeles';
+CREATE TABLE dates AS SELECT ('1992-01-01'::DATE + INTERVAL (i % 10000) days)::TIMESTAMPTZ AS d
+FROM range(0, 10000000) tbl(i);
+
+run
+SELECT MIN(EXTRACT(YEAR FROM d))
+	, MIN(EXTRACT(MONTH FROM d))
+	, MIN(EXTRACT(DAY FROM d))
+	, MIN(EXTRACT(DECADE FROM d))
+	, MIN(EXTRACT(CENTURY FROM d))
+FROM dates
+
+result IIIII
+1991	1	1	199	20

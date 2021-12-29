@@ -60,19 +60,23 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 		return Type::INT32;
 	case LogicalTypeId::BIGINT:
 		return Type::INT64;
 	case LogicalTypeId::FLOAT:
 		return Type::FLOAT;
-	case LogicalTypeId::DECIMAL: // for now...
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::HUGEINT:
 		return Type::DOUBLE;
+	case LogicalTypeId::ENUM:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 		return Type::BYTE_ARRAY;
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -83,53 +87,128 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 		return Type::INT32;
 	case LogicalTypeId::UBIGINT:
 		return Type::INT64;
+	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::UUID:
+		return Type::FIXED_LEN_BYTE_ARRAY;
+	case LogicalTypeId::DECIMAL:
+		switch (duckdb_type.InternalType()) {
+		case PhysicalType::INT16:
+		case PhysicalType::INT32:
+			return Type::INT32;
+		case PhysicalType::INT64:
+			return Type::INT64;
+		case PhysicalType::INT128:
+			return Type::FIXED_LEN_BYTE_ARRAY;
+		default:
+			throw InternalException("Unsupported internal decimal type");
+		}
 	default:
-		throw NotImplementedException(duckdb_type.ToString());
+		throw NotImplementedException("Unimplemented type for Parquet \"%s\"", duckdb_type.ToString());
 	}
 }
 
-bool ParquetWriter::DuckDBTypeToConvertedType(const LogicalType &duckdb_type, ConvertedType::type &result) {
+void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
+                                        duckdb_parquet::format::SchemaElement &schema_ele) {
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::TINYINT:
-		result = ConvertedType::INT_8;
-		return true;
+		schema_ele.converted_type = ConvertedType::INT_8;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::SMALLINT:
-		result = ConvertedType::INT_16;
-		return true;
+		schema_ele.converted_type = ConvertedType::INT_16;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::INTEGER:
-		result = ConvertedType::INT_32;
-		return true;
+		schema_ele.converted_type = ConvertedType::INT_32;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::BIGINT:
-		result = ConvertedType::INT_64;
-		return true;
+		schema_ele.converted_type = ConvertedType::INT_64;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::UTINYINT:
-		result = ConvertedType::UINT_8;
-		return true;
+		schema_ele.converted_type = ConvertedType::UINT_8;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::USMALLINT:
-		result = ConvertedType::UINT_16;
-		return true;
+		schema_ele.converted_type = ConvertedType::UINT_16;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::UINTEGER:
-		result = ConvertedType::UINT_32;
-		return true;
+		schema_ele.converted_type = ConvertedType::UINT_32;
+		schema_ele.__isset.converted_type = true;
+		break;
 	case LogicalTypeId::UBIGINT:
-		result = ConvertedType::UINT_64;
-		return true;
+		schema_ele.converted_type = ConvertedType::UINT_64;
+		schema_ele.__isset.converted_type = true;
+		break;
+	case LogicalTypeId::DATE_TZ:
 	case LogicalTypeId::DATE:
-		result = ConvertedType::DATE;
-		return true;
-	case LogicalTypeId::VARCHAR:
-		result = ConvertedType::UTF8;
-		return true;
+		schema_ele.converted_type = ConvertedType::DATE;
+		schema_ele.__isset.converted_type = true;
+		break;
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIME:
+		schema_ele.converted_type = ConvertedType::TIME_MICROS;
+		schema_ele.__isset.converted_type = true;
+		schema_ele.logicalType.__isset.TIME = true;
+		schema_ele.logicalType.TIME.isAdjustedToUTC = true;
+		schema_ele.logicalType.TIME.unit.__isset.MICROS = true;
+		break;
+	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
-		result = ConvertedType::TIMESTAMP_MICROS;
-		return true;
+		schema_ele.converted_type = ConvertedType::TIMESTAMP_MICROS;
+		schema_ele.__isset.converted_type = true;
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.TIMESTAMP = true;
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = true;
+		schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS = true;
+		break;
 	case LogicalTypeId::TIMESTAMP_MS:
-		result = ConvertedType::TIMESTAMP_MILLIS;
-		return true;
+		schema_ele.converted_type = ConvertedType::TIMESTAMP_MILLIS;
+		schema_ele.__isset.converted_type = true;
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.TIMESTAMP = true;
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = true;
+		schema_ele.logicalType.TIMESTAMP.unit.__isset.MILLIS = true;
+		break;
+	case LogicalTypeId::ENUM:
+	case LogicalTypeId::VARCHAR:
+		schema_ele.converted_type = ConvertedType::UTF8;
+		schema_ele.__isset.converted_type = true;
+		break;
+	case LogicalTypeId::INTERVAL:
+		schema_ele.type_length = 12;
+		schema_ele.converted_type = ConvertedType::INTERVAL;
+		schema_ele.__isset.type_length = true;
+		schema_ele.__isset.converted_type = true;
+		break;
+	case LogicalTypeId::UUID:
+		schema_ele.type_length = 16;
+		schema_ele.__isset.type_length = true;
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.UUID = true;
+		break;
+	case LogicalTypeId::DECIMAL:
+		schema_ele.converted_type = ConvertedType::DECIMAL;
+		schema_ele.precision = DecimalType::GetWidth(duckdb_type);
+		schema_ele.scale = DecimalType::GetScale(duckdb_type);
+		schema_ele.__isset.converted_type = true;
+		schema_ele.__isset.precision = true;
+		schema_ele.__isset.scale = true;
+		if (duckdb_type.InternalType() == PhysicalType::INT128) {
+			schema_ele.type_length = 16;
+			schema_ele.__isset.type_length = true;
+		}
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.DECIMAL = true;
+		schema_ele.logicalType.DECIMAL.precision = schema_ele.precision;
+		schema_ele.logicalType.DECIMAL.scale = schema_ele.scale;
+		break;
 	default:
-		return false;
+		break;
 	}
 }
 
@@ -159,9 +238,10 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *fil
 	file_meta_data.schema[0].repetition_type = duckdb_parquet::format::FieldRepetitionType::REQUIRED;
 	file_meta_data.schema[0].__isset.repetition_type = true;
 
+	vector<string> schema_path;
 	for (idx_t i = 0; i < sql_types.size(); i++) {
-		column_writers.push_back(
-		    ColumnWriter::CreateWriterRecursive(file_meta_data.schema, *this, sql_types[i], column_names[i]));
+		column_writers.push_back(ColumnWriter::CreateWriterRecursive(file_meta_data.schema, *this, sql_types[i],
+		                                                             column_names[i], schema_path));
 	}
 }
 
@@ -181,8 +261,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 	auto &chunks = buffer.Chunks();
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
-		vector<string> schema_path;
-		auto write_state = column_writers[col_idx]->InitializeWriteState(row_group, move(schema_path));
+		auto write_state = column_writers[col_idx]->InitializeWriteState(row_group);
 		for (idx_t chunk_idx = 0; chunk_idx < chunks.size(); chunk_idx++) {
 			column_writers[col_idx]->Prepare(*write_state, nullptr, chunks[chunk_idx]->data[col_idx],
 			                                 chunks[chunk_idx]->size());

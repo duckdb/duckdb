@@ -798,8 +798,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	} catch (std::exception &ex) {
 		original_result->error = ex.what();
 		original_result->success = false;
-		interrupted = false;
 	}
+	interrupted = false;
 
 	// check explain, only if q does not already contain EXPLAIN
 	if (original_result->success) {
@@ -819,8 +819,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	} catch (std::exception &ex) {
 		copied_result->error = ex.what();
 		copied_result->success = false;
-		interrupted = false;
 	}
+	interrupted = false;
 	// now execute the deserialized statement
 	try {
 		auto result = RunStatementInternal(lock, query, move(deserialized_stmt), false, false);
@@ -828,8 +828,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	} catch (std::exception &ex) {
 		deserialized_result->error = ex.what();
 		deserialized_result->success = false;
-		interrupted = false;
 	}
+	interrupted = false;
 	// now execute the unoptimized statement
 	config.enable_optimizer = false;
 	try {
@@ -838,8 +838,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	} catch (std::exception &ex) {
 		unoptimized_result->error = ex.what();
 		unoptimized_result->success = false;
-		interrupted = false;
 	}
+	interrupted = false;
 	config.enable_optimizer = true;
 
 	if (profiling_is_enabled) {
