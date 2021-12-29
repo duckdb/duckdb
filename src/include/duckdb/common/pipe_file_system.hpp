@@ -21,12 +21,14 @@ public:
 
 	int64_t GetFileSize(FileHandle &handle) override;
 
+	void Reset(FileHandle &handle) override;
 	bool OnDiskFile(FileHandle &handle) override {
 		return false;
 	};
 	bool CanSeek() override {
 		return false;
 	}
+	void FileSync(FileHandle &handle) override;
 
 	std::string GetName() const override {
 		return "PipeFileSystem";

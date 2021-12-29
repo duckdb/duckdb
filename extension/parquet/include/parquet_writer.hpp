@@ -39,8 +39,7 @@ public:
 	void Finalize();
 
 	static duckdb_parquet::format::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type);
-	static bool DuckDBTypeToConvertedType(const LogicalType &duckdb_type,
-	                                      duckdb_parquet::format::ConvertedType::type &result);
+	static void SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::format::SchemaElement &schema_ele);
 
 private:
 	string file_name;

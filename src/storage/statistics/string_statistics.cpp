@@ -23,7 +23,6 @@ unique_ptr<BaseStatistics> StringStatistics::Copy() {
 	memcpy(stats->max, max, MAX_STRING_MINMAX_SIZE);
 	stats->has_unicode = has_unicode;
 	stats->max_string_length = max_string_length;
-	stats->max_string_length = max_string_length;
 	if (validity_stats) {
 		stats->validity_stats = validity_stats->Copy();
 	}
@@ -127,6 +126,11 @@ FilterPropagateResult StringStatistics::CheckZonemap(ExpressionType comparison_t
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+	case ExpressionType::COMPARE_NOTEQUAL:
+		if (min_comp < 0 || max_comp > 0) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 	case ExpressionType::COMPARE_GREATERTHAN:
 		if (max_comp <= 0) {

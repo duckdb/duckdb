@@ -9,7 +9,7 @@ statement ok
 CREATE TEMPORARY TABLE t1 AS SELECT gen_random_uuid() a FROM range(0, 16);
 
 statement ok
-CREATE TEMPORARY TABLE t2 AS SELECT gen_random_uuid() b FROM range(0, 16);
+CREATE TEMPORARY TABLE t2 AS SELECT uuid() b FROM range(0, 16);
 
 statement ok
 CREATE TEMPORARY TABLE t3 AS SELECT gen_random_uuid() c FROM range(0, 16);

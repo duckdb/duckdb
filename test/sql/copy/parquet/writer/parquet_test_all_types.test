@@ -1,0 +1,36 @@
+# name: test/sql/copy/parquet/writer/parquet_test_all_types.test
+# description: Parquet test_all_types function
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE all_types AS
+SELECT * REPLACE (
+	case when extract(month from interval) <> 0 then interval '1 month 1 day 12:13:34.123' else interval end AS interval
+)
+FROM test_all_types();
+
+statement ok
+COPY all_types TO '__TEST_DIR__/all_types.parquet' (FORMAT PARQUET);
+
+# we have to make some replacements to get result equivalence
+# hugeint is stored as double -> we have to cast
+# datetz/timetz/timestamptz lose their tz qualifier -> cast to the non-tz type
+# intervals are saved with ms precision -> truncate microsecond precision to milisecond
+query I nosort alltypes
+SELECT * REPLACE (
+	hugeint::DOUBLE AS hugeint,
+	date_tz::DATE AS date_tz,
+	time_tz::TIME AS time_tz,
+	timestamp_tz::TIMESTAMP AS timestamp_tz
+)
+FROM all_types
+----
+
+query I nosort alltypes
+SELECT * FROM '__TEST_DIR__/all_types.parquet'
+----
