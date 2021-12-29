@@ -211,3 +211,48 @@ date_part('quarter', DATE '1992-11-20'),
 date_part('quarter', DATE '1992-12-20')
 ----
 1	1	1	2	2	2	3	3	3	4	4	4
+
+#
+# Structs
+#
+
+# Date parts
+query II
+SELECT d, DATE_PART(['year', 'month', 'day'], d) AS parts
+FROM dates
+ORDER BY 1;
+----
+1992-01-01	{'year': 1992, 'month': 1, 'day': 1}
+1992-03-03	{'year': 1992, 'month': 3, 'day': 3}
+1992-05-05	{'year': 1992, 'month': 5, 'day': 5}
+
+# Year parts
+query II
+SELECT d, DATE_PART(['era', 'millennium', 'century', 'decade', 'quarter'], d) AS parts
+FROM dates
+ORDER BY 1;
+----
+1992-01-01	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 1}
+1992-03-03	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 1}
+1992-05-05	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 2}
+
+# Day parts
+query II
+SELECT d, DATE_PART(['weekday', 'isodow', 'week', 'yearweek', 'doy'], d) AS parts
+FROM dates
+ORDER BY 1;
+----
+1992-01-01	{'weekday': 3, 'isodow': 3, 'week': 1, 'yearweek': 199201, 'doy': 1}
+1992-03-03	{'weekday': 2, 'isodow': 2, 'week': 9, 'yearweek': 199209, 'doy': 63}
+1992-05-05	{'weekday': 2, 'isodow': 2, 'week': 18, 'yearweek': 199218, 'doy': 126}
+
+# Invalid parts
+
+foreach hour minute second millisecond microsecond offset
+
+statement error
+SELECT d, DATE_PART(['${datepart}'], d) AS parts
+FROM dates
+ORDER BY 1;
+
+endloop
