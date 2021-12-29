@@ -1527,13 +1527,12 @@ vector<idx_t> ListVector::Search(Vector &list, Value &key, idx_t row) {
 }
 
 Value ListVector::GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets) {
-	Value ret(ListType::GetChildType(list.GetType()));
-	ret.is_null = false;
 	auto &child_vec = ListVector::GetEntry(list);
+	vector<Value> list_values;
 	for (auto &offset : offsets) {
-		ret.list_value.push_back(child_vec.GetValue(offset));
+		list_values.push_back(child_vec.GetValue(offset));
 	}
-	return ret;
+	return Value::LIST(ListType::GetChildType(list.GetType()), move(list_values));
 }
 
 idx_t ListVector::GetListSize(const Vector &vec) {

@@ -231,10 +231,10 @@ public:
 private:
 	//! The logical of the value
 	LogicalType type_;
-
-public:
 	//! Whether or not the value is NULL
 	bool is_null;
+
+public:
 
 	//! The value of the object, if it is of a constant size Type
 	union Val {

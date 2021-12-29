@@ -92,12 +92,12 @@ void NumericStatistics::Merge(const BaseStatistics &other_p) {
 	BaseStatistics::Merge(other_p);
 	auto &other = (const NumericStatistics &)other_p;
 	if (other.min.IsNull() || min.IsNull()) {
-		min.is_null = true;
+		min = Value(type);
 	} else if (other.min < min) {
 		min = other.min;
 	}
 	if (other.max.IsNull() || max.IsNull()) {
-		max.is_null = true;
+		max = Value(type);
 	} else if (other.max > max) {
 		max = other.max;
 	}
