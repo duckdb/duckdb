@@ -19,12 +19,11 @@ COPY all_types TO '__TEST_DIR__/all_types.parquet' (FORMAT PARQUET);
 
 # we have to make some replacements to get result equivalence
 # hugeint is stored as double -> we have to cast
-# datetz/timetz/timestamptz lose their tz qualifier -> cast to the non-tz type
+# timetz/timestamptz lose their tz qualifier -> cast to the non-tz type
 # intervals are saved with ms precision -> truncate microsecond precision to milisecond
 query I nosort alltypes
 SELECT * REPLACE (
 	hugeint::DOUBLE AS hugeint,
-	date_tz::DATE AS date_tz,
 	time_tz::TIME AS time_tz,
 	timestamp_tz::TIMESTAMP AS timestamp_tz
 )

@@ -60,7 +60,6 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ:
 		return Type::INT32;
 	case LogicalTypeId::BIGINT:
 		return Type::INT64;
@@ -142,7 +141,6 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		schema_ele.converted_type = ConvertedType::UINT_64;
 		schema_ele.__isset.converted_type = true;
 		break;
-	case LogicalTypeId::DATE_TZ:
 	case LogicalTypeId::DATE:
 		schema_ele.converted_type = ConvertedType::DATE;
 		schema_ele.__isset.converted_type = true;
