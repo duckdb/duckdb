@@ -46,6 +46,9 @@ public:
 	inline const LogicalType &type() const {
 		return type_;
 	}
+	inline bool IsNull() const {
+		return is_null;
+	}
 
 	//! Create the lowest possible value of a given type (numeric only)
 	DUCKDB_API static Value MinimumValue(const LogicalType &type);

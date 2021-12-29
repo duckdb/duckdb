@@ -105,7 +105,7 @@ static unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, ScalarFun
 		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) with non-constant collation is not supported");
 	}
 	Value val = ExpressionExecutor::EvaluateScalar(*arguments[1]).CastAs(LogicalType::VARCHAR);
-	if (val.is_null) {
+	if (val.IsNull()) {
 		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) expected a non-null collation");
 	}
 	auto splits = StringUtil::Split(val.str_value, "_");

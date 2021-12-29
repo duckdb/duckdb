@@ -124,7 +124,7 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 	auto &rstats = (NumericStatistics &)*child_stats[1];
 	Value new_min, new_max;
 	bool potential_overflow = true;
-	if (!lstats.min.is_null && !lstats.max.is_null && !rstats.min.is_null && !rstats.max.is_null) {
+	if (!lstats.min.IsNull() && !lstats.max.IsNull() && !rstats.min.IsNull() && !rstats.max.IsNull()) {
 		switch (expr.return_type.InternalType()) {
 		case PhysicalType::INT8:
 			potential_overflow =
@@ -407,7 +407,7 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, B
 	}
 	auto &istats = (NumericStatistics &)*child_stats[0];
 	Value new_min, new_max;
-	if (!istats.min.is_null && !istats.max.is_null) {
+	if (!istats.min.IsNull() && !istats.max.IsNull()) {
 		switch (expr.return_type.InternalType()) {
 		case PhysicalType::INT8:
 			NegatePropagateStatistics::Operation<int8_t>(expr.return_type, istats, new_min, new_max);

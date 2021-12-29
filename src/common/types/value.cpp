@@ -683,7 +683,7 @@ Value Value::CreateValue(Value value) {
 //===--------------------------------------------------------------------===//
 template <class T>
 T Value::GetValueInternal() const {
-	if (is_null) {
+	if (IsNull()) {
 		return NullValue<T>();
 	}
 	switch (type_.id()) {
@@ -1014,7 +1014,7 @@ Value Value::Numeric(const LogicalType &type, hugeint_t value) {
 }
 
 string Value::ToString() const {
-	if (is_null) {
+	if (IsNull()) {
 		return "NULL";
 	}
 	switch (type_.id()) {
@@ -1263,8 +1263,8 @@ bool Value::TryCastAs(const LogicalType &target_type, bool strict) {
 
 void Value::Serialize(Serializer &serializer) {
 	type_.Serialize(serializer);
-	serializer.Write<bool>(is_null);
-	if (!is_null) {
+	serializer.Write<bool>(IsNull());
+	if (!IsNull()) {
 		switch (type_.InternalType()) {
 		case PhysicalType::BOOL:
 			serializer.Write<int8_t>(value_.boolean);
@@ -1382,10 +1382,10 @@ void Value::Print() const {
 }
 
 bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
-	if (result_value.is_null != value.is_null) {
+	if (result_value.IsNull() != value.IsNull()) {
 		return false;
 	}
-	if (result_value.is_null && value.is_null) {
+	if (result_value.IsNull() && value.IsNull()) {
 		// NULL = NULL in checking code
 		return true;
 	}

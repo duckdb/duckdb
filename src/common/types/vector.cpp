@@ -71,11 +71,11 @@ void Vector::Reference(const Value &value) {
 		auto &child_types = StructType::GetChildTypes(value.type());
 		auto &child_vectors = struct_buffer->GetChildren();
 		for (idx_t i = 0; i < child_types.size(); i++) {
-			auto vector = make_unique<Vector>(value.is_null ? Value(child_types[i].second) : value.struct_value[i]);
+			auto vector = make_unique<Vector>(value.IsNull() ? Value(child_types[i].second) : value.struct_value[i]);
 			child_vectors.push_back(move(vector));
 		}
 		auxiliary = move(struct_buffer);
-		if (value.is_null) {
+		if (value.IsNull()) {
 			SetValue(0, value);
 		}
 	} else if (internal_type == PhysicalType::LIST) {
@@ -293,8 +293,8 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	}
 
 	validity.EnsureWritable();
-	validity.Set(index, !val.is_null);
-	if (val.is_null && GetType().InternalType() != PhysicalType::STRUCT) {
+	validity.Set(index, !val.IsNull());
+	if (val.IsNull() && GetType().InternalType() != PhysicalType::STRUCT) {
 		// for structs we still need to set the child-entries to NULL
 		// so we do not bail out yet
 		return;
@@ -383,10 +383,10 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		D_ASSERT(GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR);
 
 		auto &children = StructVector::GetEntries(*this);
-		D_ASSERT(val.is_null || children.size() == val.struct_value.size());
+		D_ASSERT(val.IsNull() || children.size() == val.struct_value.size());
 		for (size_t i = 0; i < children.size(); i++) {
 			auto &vec_child = children[i];
-			if (!val.is_null) {
+			if (!val.IsNull()) {
 				auto &struct_child = val.struct_value[i];
 				vec_child->SetValue(index, struct_child);
 			} else {
@@ -1452,73 +1452,73 @@ vector<idx_t> ListVector::Search(Vector &list, Value &key, idx_t row) {
 	switch (list_vector.GetType().id()) {
 
 	case LogicalTypeId::SQLNULL:
-		if (key.is_null) {
+		if (key.IsNull()) {
 			for (idx_t i = entry.offset; i < entry.offset + entry.length; i++) {
 				offsets.push_back(i);
 			}
 		}
 		break;
 	case LogicalTypeId::UTINYINT:
-		::duckdb::TemplatedSearchInMap<uint8_t>(list, key.value_.utinyint, offsets, key.is_null, entry.offset,
+		::duckdb::TemplatedSearchInMap<uint8_t>(list, key.value_.utinyint, offsets, key.IsNull(), entry.offset,
 		                                        entry.length);
 		break;
 	case LogicalTypeId::TINYINT:
-		::duckdb::TemplatedSearchInMap<int8_t>(list, key.value_.tinyint, offsets, key.is_null, entry.offset,
+		::duckdb::TemplatedSearchInMap<int8_t>(list, key.value_.tinyint, offsets, key.IsNull(), entry.offset,
 		                                       entry.length);
 		break;
 	case LogicalTypeId::USMALLINT:
-		::duckdb::TemplatedSearchInMap<uint16_t>(list, key.value_.usmallint, offsets, key.is_null, entry.offset,
+		::duckdb::TemplatedSearchInMap<uint16_t>(list, key.value_.usmallint, offsets, key.IsNull(), entry.offset,
 		                                         entry.length);
 		break;
 	case LogicalTypeId::SMALLINT:
-		::duckdb::TemplatedSearchInMap<int16_t>(list, key.value_.smallint, offsets, key.is_null, entry.offset,
+		::duckdb::TemplatedSearchInMap<int16_t>(list, key.value_.smallint, offsets, key.IsNull(), entry.offset,
 		                                        entry.length);
 		break;
 	case LogicalTypeId::UINTEGER:
-		::duckdb::TemplatedSearchInMap<uint32_t>(list, key.value_.uinteger, offsets, key.is_null, entry.offset,
+		::duckdb::TemplatedSearchInMap<uint32_t>(list, key.value_.uinteger, offsets, key.IsNull(), entry.offset,
 		                                         entry.length);
 		break;
 	case LogicalTypeId::INTEGER:
-		::duckdb::TemplatedSearchInMap<int32_t>(list, key.value_.integer, offsets, key.is_null, entry.offset,
+		::duckdb::TemplatedSearchInMap<int32_t>(list, key.value_.integer, offsets, key.IsNull(), entry.offset,
 		                                        entry.length);
 		break;
 	case LogicalTypeId::UBIGINT:
-		::duckdb::TemplatedSearchInMap<uint64_t>(list, key.value_.ubigint, offsets, key.is_null, entry.offset,
+		::duckdb::TemplatedSearchInMap<uint64_t>(list, key.value_.ubigint, offsets, key.IsNull(), entry.offset,
 		                                         entry.length);
 		break;
 	case LogicalTypeId::BIGINT:
-		::duckdb::TemplatedSearchInMap<int64_t>(list, key.value_.bigint, offsets, key.is_null, entry.offset,
+		::duckdb::TemplatedSearchInMap<int64_t>(list, key.value_.bigint, offsets, key.IsNull(), entry.offset,
 		                                        entry.length);
 		break;
 	case LogicalTypeId::HUGEINT:
-		::duckdb::TemplatedSearchInMap<hugeint_t>(list, key.value_.hugeint, offsets, key.is_null, entry.offset,
+		::duckdb::TemplatedSearchInMap<hugeint_t>(list, key.value_.hugeint, offsets, key.IsNull(), entry.offset,
 		                                          entry.length);
 		break;
 	case LogicalTypeId::FLOAT:
-		::duckdb::TemplatedSearchInMap<float>(list, key.value_.float_, offsets, key.is_null, entry.offset,
+		::duckdb::TemplatedSearchInMap<float>(list, key.value_.float_, offsets, key.IsNull(), entry.offset,
 		                                      entry.length);
 		break;
 	case LogicalTypeId::DOUBLE:
-		::duckdb::TemplatedSearchInMap<double>(list, key.value_.double_, offsets, key.is_null, entry.offset,
+		::duckdb::TemplatedSearchInMap<double>(list, key.value_.double_, offsets, key.IsNull(), entry.offset,
 		                                       entry.length);
 		break;
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::DATE_TZ:
-		::duckdb::TemplatedSearchInMap<date_t>(list, key.value_.date, offsets, key.is_null, entry.offset, entry.length);
+		::duckdb::TemplatedSearchInMap<date_t>(list, key.value_.date, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
-		::duckdb::TemplatedSearchInMap<dtime_t>(list, key.value_.time, offsets, key.is_null, entry.offset,
+		::duckdb::TemplatedSearchInMap<dtime_t>(list, key.value_.time, offsets, key.IsNull(), entry.offset,
 		                                        entry.length);
 		break;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		::duckdb::TemplatedSearchInMap<timestamp_t>(list, key.value_.timestamp, offsets, key.is_null, entry.offset,
+		::duckdb::TemplatedSearchInMap<timestamp_t>(list, key.value_.timestamp, offsets, key.IsNull(), entry.offset,
 		                                            entry.length);
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-		::duckdb::SearchString(list, key.str_value, offsets, key.is_null, entry.offset, entry.length);
+		::duckdb::SearchString(list, key.str_value, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	default:
 		throw InvalidTypeException(list.GetType().id(), "Invalid type for List Vector Search");

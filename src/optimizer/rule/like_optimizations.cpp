@@ -105,7 +105,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	auto constant_expr = (BoundConstantExpression *)bindings[2];
 	D_ASSERT(root->children.size() == 2);
 
-	if (constant_expr->value.is_null) {
+	if (constant_expr->value.IsNull()) {
 		return make_unique<BoundConstantExpression>(Value(root->return_type));
 	}
 

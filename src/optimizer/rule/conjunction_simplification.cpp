@@ -42,7 +42,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 		return nullptr;
 	}
 	constant_value = constant_value.CastAs(LogicalType::BOOLEAN);
-	if (constant_value.is_null) {
+	if (constant_value.IsNull()) {
 		// we can't simplify conjunctions with a constant NULL
 		return nullptr;
 	}

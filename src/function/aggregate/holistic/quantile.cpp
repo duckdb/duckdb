@@ -1119,7 +1119,7 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(ClientContext &conte
 static double CheckQuantile(const Value &quantile_val) {
 	auto quantile = quantile_val.GetValue<double>();
 
-	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
+	if (quantile_val.IsNull() || quantile < 0 || quantile > 1) {
 		throw BinderException("QUANTILE can only take parameters in the range [0, 1]");
 	}
 

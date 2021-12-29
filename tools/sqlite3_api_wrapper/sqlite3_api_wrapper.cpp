@@ -236,7 +236,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		if (StatementTypeReturnChanges(statement_type) && pStmt->current_chunk->size() > 0) {
 			// update total changes
 			auto row_changes = pStmt->current_chunk->GetValue(0, 0);
-			if (!row_changes.is_null && row_changes.TryCastAs(LogicalType::BIGINT)) {
+			if (!row_changes.IsNull() && row_changes.TryCastAs(LogicalType::BIGINT)) {
 				pStmt->db->last_changes = row_changes.GetValue<int64_t>();
 				pStmt->db->total_changes += row_changes.GetValue<int64_t>();
 			}

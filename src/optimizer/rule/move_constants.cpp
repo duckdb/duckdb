@@ -36,7 +36,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 	if (!arithmetic->return_type.IsNumeric()) {
 		return nullptr;
 	}
-	if (inner_constant->value.is_null || outer_constant->value.is_null) {
+	if (inner_constant->value.IsNull() || outer_constant->value.IsNull()) {
 		return make_unique<BoundConstantExpression>(Value(comparison->return_type));
 	}
 

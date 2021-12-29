@@ -6,7 +6,7 @@
 namespace duckdb {
 
 hash_t ValueOperations::Hash(const Value &op) {
-	if (op.is_null) {
+	if (op.IsNull()) {
 		return 0;
 	}
 	switch (op.type().InternalType()) {

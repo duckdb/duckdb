@@ -828,7 +828,7 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 
 	vector<row_t> row_ids;
 	bool success = true;
-	if (state->values[1].is_null) {
+	if (state->values[1].IsNull()) {
 		lock_guard<mutex> l(lock);
 		// single predicate
 		switch (state->expressions[0]) {

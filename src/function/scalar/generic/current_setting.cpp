@@ -36,7 +36,7 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
-	if (key_val.is_null || key_val.str_value.empty()) {
+	if (key_val.IsNull() || key_val.str_value.empty()) {
 		throw ParserException("Key name for current_setting needs to be neither NULL nor empty");
 	}
 

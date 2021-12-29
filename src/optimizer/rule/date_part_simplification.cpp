@@ -25,7 +25,7 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	auto &constant_expr = (BoundConstantExpression &)*bindings[1];
 	auto &constant = constant_expr.value;
 
-	if (constant.is_null) {
+	if (constant.IsNull()) {
 		// NULL specifier: return constant NULL
 		return make_unique<BoundConstantExpression>(Value(date_part.return_type));
 	}

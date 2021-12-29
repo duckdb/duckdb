@@ -906,7 +906,7 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 	first_row_nulls = true;
 	for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
 		auto dummy_val = best_header_row.GetValue(col, 0);
-		if (!dummy_val.is_null) {
+		if (!dummy_val.IsNull()) {
 			first_row_nulls = false;
 		}
 
@@ -927,7 +927,7 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 			string col_name = val.ToString();
 
 			// generate name if field is empty
-			if (col_name.empty() || val.is_null) {
+			if (col_name.empty() || val.IsNull()) {
 				col_name = GenerateColumnName(options.num_cols, col);
 			}
 

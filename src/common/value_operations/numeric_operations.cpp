@@ -20,7 +20,7 @@ static Value BinaryValueOperation(const Value &left, const Value &right) {
 		Value right_cast = right.CastAs(result_type);
 		return BinaryValueOperation<OP>(left_cast, right_cast);
 	}
-	if (left.is_null || right.is_null) {
+	if (left.IsNull() || right.IsNull()) {
 		return Value().CastAs(result_type);
 	}
 	if (TypeIsIntegral(result_type.InternalType())) {

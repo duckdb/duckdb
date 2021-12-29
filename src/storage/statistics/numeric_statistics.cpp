@@ -91,12 +91,12 @@ NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_
 void NumericStatistics::Merge(const BaseStatistics &other_p) {
 	BaseStatistics::Merge(other_p);
 	auto &other = (const NumericStatistics &)other_p;
-	if (other.min.is_null || min.is_null) {
+	if (other.min.IsNull() || min.IsNull()) {
 		min.is_null = true;
 	} else if (other.min < min) {
 		min = other.min;
 	}
-	if (other.max.is_null || max.is_null) {
+	if (other.max.IsNull() || max.IsNull()) {
 		max.is_null = true;
 	} else if (other.max > max) {
 		max = other.max;
@@ -104,10 +104,10 @@ void NumericStatistics::Merge(const BaseStatistics &other_p) {
 }
 
 FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
-	if (constant.is_null) {
+	if (constant.IsNull()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	if (min.is_null || max.is_null) {
+	if (min.IsNull() || max.IsNull()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	switch (comparison_type) {
@@ -217,11 +217,11 @@ void NumericStatistics::TemplatedVerify(Vector &vector, const SelectionVector &s
 		if (!vdata.validity.RowIsValid(index)) {
 			continue;
 		}
-		if (!min.is_null && LessThan::Operation(data[index], min.GetValueUnsafe<T>())) { // LCOV_EXCL_START
+		if (!min.IsNull() && LessThan::Operation(data[index], min.GetValueUnsafe<T>())) { // LCOV_EXCL_START
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
 		} // LCOV_EXCL_STOP
-		if (!max.is_null && GreaterThan::Operation(data[index], max.GetValueUnsafe<T>())) {
+		if (!max.IsNull() && GreaterThan::Operation(data[index], max.GetValueUnsafe<T>())) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
 		}

@@ -338,7 +338,7 @@ struct ICUDatePart : public ICUDateFunc {
 				throw BinderException("%s requires non-empty lists of part names", bound_function.name);
 			}
 			for (const auto &part_value : parts_list.list_value) {
-				if (part_value.is_null) {
+				if (part_value.IsNull()) {
 					throw BinderException("NULL struct entry name in %s", bound_function.name);
 				}
 				const auto part_name = part_value.ToString();

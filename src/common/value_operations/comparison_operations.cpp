@@ -172,7 +172,7 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 }
 
 bool ValueOperations::Equals(const Value &left, const Value &right) {
-	if (left.is_null || right.is_null) {
+	if (left.IsNull() || right.IsNull()) {
 		throw InternalException("Comparison on NULL values");
 	}
 	return TemplatedBooleanOperation<duckdb::Equals>(left, right);
@@ -183,14 +183,14 @@ bool ValueOperations::NotEquals(const Value &left, const Value &right) {
 }
 
 bool ValueOperations::GreaterThan(const Value &left, const Value &right) {
-	if (left.is_null || right.is_null) {
+	if (left.IsNull() || right.IsNull()) {
 		throw InternalException("Comparison on NULL values");
 	}
 	return TemplatedBooleanOperation<duckdb::GreaterThan>(left, right);
 }
 
 bool ValueOperations::GreaterThanEquals(const Value &left, const Value &right) {
-	if (left.is_null || right.is_null) {
+	if (left.IsNull() || right.IsNull()) {
 		throw InternalException("Comparison on NULL values");
 	}
 	return TemplatedBooleanOperation<duckdb::GreaterThanEquals>(left, right);
@@ -205,10 +205,10 @@ bool ValueOperations::LessThanEquals(const Value &left, const Value &right) {
 }
 
 bool ValueOperations::NotDistinctFrom(const Value &left, const Value &right) {
-	if (left.is_null && right.is_null) {
+	if (left.IsNull() && right.IsNull()) {
 		return true;
 	}
-	if (left.is_null != right.is_null) {
+	if (left.IsNull() != right.IsNull()) {
 		return false;
 	}
 	return TemplatedBooleanOperation<duckdb::Equals>(left, right);
@@ -219,20 +219,20 @@ bool ValueOperations::DistinctFrom(const Value &left, const Value &right) {
 }
 
 bool ValueOperations::DistinctGreaterThan(const Value &left, const Value &right) {
-	if (left.is_null && right.is_null) {
+	if (left.IsNull() && right.IsNull()) {
 		return false;
-	} else if (right.is_null) {
+	} else if (right.IsNull()) {
 		return false;
-	} else if (left.is_null) {
+	} else if (left.IsNull()) {
 		return true;
 	}
 	return TemplatedBooleanOperation<duckdb::GreaterThan>(left, right);
 }
 
 bool ValueOperations::DistinctGreaterThanEquals(const Value &left, const Value &right) {
-	if (left.is_null) {
+	if (left.IsNull()) {
 		return true;
-	} else if (right.is_null) {
+	} else if (right.IsNull()) {
 		return false;
 	}
 	return TemplatedBooleanOperation<duckdb::GreaterThanEquals>(left, right);

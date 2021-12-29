@@ -271,7 +271,7 @@ bool FilterCombiner::HasFilters() {
 // 					break;
 // 				} else {
 // 					auto &const_value_expr = (BoundConstantExpression &)*comp_in_exp.children[i].get();
-// 					if (const_value_expr.value.is_null) {
+// 					if (const_value_expr.value.IsNull()) {
 // 						return checks;
 // 					}
 // 					if (!min && !max) {
@@ -520,7 +520,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			bool can_simplify_in_clause = true;
 			for (idx_t i = 1; i < func.children.size(); i++) {
 				auto &const_value_expr = (BoundConstantExpression &)*func.children[i].get();
-				if (const_value_expr.value.is_null) {
+				if (const_value_expr.value.IsNull()) {
 					can_simplify_in_clause = false;
 					break;
 				}
@@ -534,7 +534,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			sort(in_values.begin(), in_values.end());
 
 			for (idx_t in_val_idx = 1; in_val_idx < in_values.size(); in_val_idx++) {
-				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > one || in_values[in_val_idx - 1].is_null) {
+				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > one || in_values[in_val_idx - 1].IsNull()) {
 					can_simplify_in_clause = false;
 					break;
 				}
@@ -585,7 +585,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression *expr) {
 		idx_t equivalence_set = GetEquivalenceSet(node);
 		auto scalar = left_is_scalar ? comparison.left.get() : comparison.right.get();
 		auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
-		if (constant_value.is_null) {
+		if (constant_value.IsNull()) {
 			// comparisons with null are always null (i.e. will never result in rows)
 			return FilterResult::UNSATISFIABLE;
 		}
@@ -667,7 +667,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		// scalar condition, evaluate it
 		auto result = ExpressionExecutor::EvaluateScalar(*expr).CastAs(LogicalType::BOOLEAN);
 		// check if the filter passes
-		if (result.is_null || !result.value_.boolean) {
+		if (result.IsNull() || !result.value_.boolean) {
 			// the filter does not pass the scalar test, create an empty result
 			return FilterResult::UNSATISFIABLE;
 		} else {

@@ -675,7 +675,7 @@ void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enu
 
 	for (idx_t i = 0; i < count; i++) {
 		auto src_val = source.GetValue(i);
-		if (src_val.is_null) {
+		if (src_val.IsNull()) {
 			result.SetValue(i, Value());
 			continue;
 		}

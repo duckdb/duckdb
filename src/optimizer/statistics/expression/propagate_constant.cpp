@@ -22,13 +22,13 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE: {
 		auto result = make_unique<NumericStatistics>(input.type(), input, input);
-		result->validity_stats = make_unique<ValidityStatistics>(input.is_null, !input.is_null);
+		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
 		return move(result);
 	}
 	case PhysicalType::VARCHAR: {
 		auto result = make_unique<StringStatistics>(input.type());
-		result->validity_stats = make_unique<ValidityStatistics>(input.is_null, !input.is_null);
-		if (!input.is_null) {
+		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
+		if (!input.IsNull()) {
 			string_t str(input.str_value.c_str(), input.str_value.size());
 			result->Update(str);
 		}
@@ -36,8 +36,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	}
 	case PhysicalType::STRUCT: {
 		auto result = make_unique<StructStatistics>(input.type());
-		result->validity_stats = make_unique<ValidityStatistics>(input.is_null, !input.is_null);
-		if (input.is_null) {
+		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
+		if (input.IsNull()) {
 			for (auto &child_stat : result->child_stats) {
 				child_stat.reset();
 			}
@@ -51,8 +51,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	}
 	case PhysicalType::LIST: {
 		auto result = make_unique<ListStatistics>(input.type());
-		result->validity_stats = make_unique<ValidityStatistics>(input.is_null, !input.is_null);
-		if (input.is_null) {
+		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
+		if (input.IsNull()) {
 			result->child_stats.reset();
 		} else {
 			for (auto &child_element : input.list_value) {
