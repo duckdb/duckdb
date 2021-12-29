@@ -119,6 +119,14 @@ FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+	case ExpressionType::COMPARE_NOTEQUAL:
+		if (constant < min || constant > max) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (min == max && min == constant) {
+			// corner case of a cluster with one numeric equal to the target constant
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		// X >= C
 		// this can be true only if max(X) >= C
