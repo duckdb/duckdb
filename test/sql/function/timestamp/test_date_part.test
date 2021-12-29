@@ -75,6 +75,23 @@ SELECT ts, DATE_PART('century', ts) FROM millennia;
 # Structs
 #
 
+# Correctness: Compare struct values with scalar values
+foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek epoch timezone timezone_hour timezone_minute
+
+query III
+SELECT ts, DATE_PART('${partcode}', ts) AS p, DATE_PART(['${partcode}'], ts) AS s
+FROM timestamps
+WHERE p <> s['${partcode}'];
+----
+
+query III
+SELECT ts, DATE_PART('${partcode}', ts) AS p, DATE_PART(['${partcode}'], ts) AS s
+FROM millennia
+WHERE p <> s['${partcode}'];
+----
+
+endloop
+
 # Date parts
 query II
 SELECT ts::DATE AS d, DATE_PART(['year', 'month', 'day'], ts) AS parts
@@ -278,47 +295,47 @@ FROM timestamps
 ORDER BY 1;
 ----
 NULL	NULL
-1962-07-31 12:20:48.123456	{'epoch': -234230400, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-1969-01-01 01:03:20.45432	{'epoch': -31536000, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-1992-01-01 01:01:01.4	{'epoch': 694224000, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-1992-01-01 01:01:02.2	{'epoch': 694224000, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-1992-01-01 01:01:02.4	{'epoch': 694224000, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-1993-08-14 08:22:33	{'epoch': 745286400, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-1993-08-14 08:22:33.42	{'epoch': 745286400, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2001-04-20 14:42:11	{'epoch': 987724800, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2001-04-20 14:42:11.123	{'epoch': 987724800, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2004-01-31 12:00:00.00005	{'epoch': 1075507200, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2004-01-31 12:00:00.05	{'epoch': 1075507200, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2004-02-01 12:00:00.00005	{'epoch': 1075593600, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2004-02-01 12:00:00.05	{'epoch': 1075593600, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2004-02-29 13:05:47.123456	{'epoch': 1078012800, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2008-01-01 00:00:01.5	{'epoch': 1199145600, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2008-01-01 00:00:01.594	{'epoch': 1199145600, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2008-01-01 00:00:01.794	{'epoch': 1199145600, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2008-01-01 00:00:01.88926	{'epoch': 1199145600, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2008-01-01 00:00:01.894	{'epoch': 1199145600, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2008-01-01 00:00:01.98926	{'epoch': 1199145600, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2008-01-01 00:00:01.99926	{'epoch': 1199145600, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2008-01-01 00:00:11.1	{'epoch': 1199145600, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2019-01-06 04:03:02.123456	{'epoch': 1546732800, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2019-01-06 04:03:02.5	{'epoch': 1546732800, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2020-01-01 00:00:01.88926	{'epoch': 1577836800, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2020-12-31 21:25:58.745232	{'epoch': 1609372800, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2021-04-15 14:55:17.915	{'epoch': 1618444800, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2021-04-15 14:55:17.915	{'epoch': 1618444800, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2021-05-02 12:11:49.5	{'epoch': 1619913600, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2021-12-01 13:54:48.123456	{'epoch': 1638316800, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+1962-07-31 12:20:48.123456	{'epoch': -234185951, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+1969-01-01 01:03:20.45432	{'epoch': -31532199, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+1992-01-01 01:01:01.4	{'epoch': 694227661, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+1992-01-01 01:01:02.2	{'epoch': 694227662, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+1992-01-01 01:01:02.4	{'epoch': 694227662, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+1993-08-14 08:22:33	{'epoch': 745316553, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+1993-08-14 08:22:33.42	{'epoch': 745316553, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2001-04-20 14:42:11	{'epoch': 987777731, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2001-04-20 14:42:11.123	{'epoch': 987777731, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2004-01-31 12:00:00.00005	{'epoch': 1075550400, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2004-01-31 12:00:00.05	{'epoch': 1075550400, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2004-02-01 12:00:00.00005	{'epoch': 1075636800, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2004-02-01 12:00:00.05	{'epoch': 1075636800, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2004-02-29 13:05:47.123456	{'epoch': 1078059947, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2008-01-01 00:00:01.5	{'epoch': 1199145601, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2008-01-01 00:00:01.594	{'epoch': 1199145601, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2008-01-01 00:00:01.794	{'epoch': 1199145601, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2008-01-01 00:00:01.88926	{'epoch': 1199145601, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2008-01-01 00:00:01.894	{'epoch': 1199145601, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2008-01-01 00:00:01.98926	{'epoch': 1199145601, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2008-01-01 00:00:01.99926	{'epoch': 1199145601, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2008-01-01 00:00:11.1	{'epoch': 1199145611, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2019-01-06 04:03:02.123456	{'epoch': 1546747382, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2019-01-06 04:03:02.5	{'epoch': 1546747382, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2020-01-01 00:00:01.88926	{'epoch': 1577836801, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2020-12-31 21:25:58.745232	{'epoch': 1609449958, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2021-04-15 14:55:17.915	{'epoch': 1618498517, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2021-04-15 14:55:17.915	{'epoch': 1618498517, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2021-05-02 12:11:49.5	{'epoch': 1619957509, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2021-12-01 13:54:48.123456	{'epoch': 1638366888, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
 
 query II
 SELECT ts, DATE_PART(['epoch', 'timezone', 'timezone_hour', 'timezone_minute'], ts) AS parts
 FROM millennia
 ORDER BY 1;
 ----
-1001-03-15 (BC) 20:38:40	{'epoch': -93717820800, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-0044-03-15 (BC) 20:38:40	{'epoch': -63517824000, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-0998-02-16 20:38:40	{'epoch': -30669321600, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-1998-02-16 20:38:40	{'epoch': 887587200, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-2001-02-16 20:38:40	{'epoch': 982281600, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+1001-03-15 (BC) 20:38:40	{'epoch': -93717746480, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+0044-03-15 (BC) 20:38:40	{'epoch': -63517749680, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+0998-02-16 20:38:40	{'epoch': -30669247280, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+1998-02-16 20:38:40	{'epoch': 887661520, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+2001-02-16 20:38:40	{'epoch': 982355920, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
 
 query I
 SELECT DATE_PART(['hour', 'minute', 'microsecond'], NULL::TIMESTAMP);

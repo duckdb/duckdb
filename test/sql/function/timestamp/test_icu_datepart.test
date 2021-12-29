@@ -383,6 +383,17 @@ SELECT weekofyear(ts), weekofyear(ts::TIMESTAMP) FROM timestamps;
 # Struct parts
 #
 
+# Correctness: Compare struct values with scalar values
+foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek epoch timezone timezone_hour timezone_minute
+
+query III
+SELECT ts, DATE_PART('${partcode}', ts) AS pc, DATE_PART(['${partcode}'], ts) AS st
+FROM timestamps
+WHERE pc <> st['${partcode}'];
+----
+
+endloop
+
 # Date parts
 query II
 SELECT DATE_PART(['era', 'year', 'month', 'day'], ts), ts

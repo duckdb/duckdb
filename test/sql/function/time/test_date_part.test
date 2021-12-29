@@ -136,6 +136,17 @@ select date_part('era', time '10:00:00');
 # Structs
 #
 
+# Correctness: Compare against scalar extract
+foreach partcode hour minute second millisecond microsecond epoch timezone timezone_hour timezone_minute
+
+query III
+SELECT d, DATE_PART('${partcode}', d) AS p, DATE_PART(['${partcode}'], d) AS st
+FROM times
+WHERE p <> st['${partcode}'];
+----
+
+endloop
+
 # Time parts
 query II
 SELECT d, DATE_PART(['hour', 'minute', 'microsecond'], d) AS parts

@@ -242,6 +242,17 @@ date_part('quarter', DATE '1992-12-20')
 # Structs
 #
 
+# Correctness: Compare struct values with scalar values
+foreach partcode era millennium century decade year quarter month day week weekday isodow doy yearweek
+
+query III
+SELECT d, DATE_PART('${partcode}', d) AS p, DATE_PART(['${partcode}'], d) AS st
+FROM dates
+WHERE p <> st['${partcode}'];
+----
+
+endloop
+
 # Date parts
 query II
 SELECT d, DATE_PART(['year', 'month', 'day'], d) AS parts

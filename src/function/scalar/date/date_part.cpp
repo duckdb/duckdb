@@ -1024,9 +1024,18 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const timestamp_
 	date_t d;
 	dtime_t t;
 	Timestamp::Convert(input, d, t);
-	// Time first because they both define epoch.
-	Operation(part_values, t, idx, mask);
-	Operation(part_values, d, idx, mask);
+
+	// Both define epoch, and the correct value is the sum.
+	// So mask it out and compute it separately.
+	Operation(part_values, d, idx, mask & ~EPOCH);
+	Operation(part_values, t, idx, mask & ~EPOCH);
+
+	if (mask & EPOCH) {
+		auto part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH);
+		if (part_data) {
+			part_data[idx] = EpochOperator::Operation<timestamp_t, int64_t>(input);
+		}
+	}
 }
 
 template <>
