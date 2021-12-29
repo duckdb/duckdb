@@ -27,6 +27,10 @@ int64_t PipeFile::WriteChunk(void *buffer, int64_t nr_bytes) {
 	return child_handle->Write(buffer, nr_bytes);
 }
 
+void PipeFileSystem::Reset(FileHandle &handle) {
+	throw InternalException("Cannot reset pipe file system");
+}
+
 int64_t PipeFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &pipe = (PipeFile &)handle;
 	return pipe.ReadChunk(buffer, nr_bytes);

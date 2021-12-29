@@ -21,6 +21,7 @@ public:
 
 	int64_t GetFileSize(FileHandle &handle) override;
 
+	void Reset(FileHandle &handle) override;
 	bool OnDiskFile(FileHandle &handle) override {
 		return false;
 	};

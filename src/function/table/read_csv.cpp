@@ -169,7 +169,7 @@ static unique_ptr<FunctionOperatorData> ReadCSVInit(ClientContext &context, cons
 		result->csv_reader = make_unique<BufferedCSVReader>(context, bind_data.options, bind_data.sql_types);
 	}
 	bind_data.bytes_read = 0;
-	bind_data.file_size = result->csv_reader->file_size;
+	bind_data.file_size = result->csv_reader->GetFileSize();
 	result->file_index = 1;
 	return move(result);
 }
