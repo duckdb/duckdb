@@ -309,7 +309,6 @@ private:
 		case LogicalTypeId::BIGINT:
 			return std::is_same<T, int64_t>();
 		case LogicalTypeId::DATE:
-		case LogicalTypeId::DATE_TZ:
 			return std::is_same<T, date_t>();
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::TIME_TZ:

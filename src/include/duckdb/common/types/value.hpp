@@ -85,7 +85,6 @@ public:
 	DUCKDB_API static Value POINTER(uintptr_t value);
 	//! Create a date Value from a specified date
 	DUCKDB_API static Value DATE(date_t date);
-	DUCKDB_API static Value DATETZ(date_t date);
 	//! Create a date Value from a specified date
 	DUCKDB_API static Value DATE(int32_t year, int32_t month, int32_t day);
 	//! Create a time Value from a specified time

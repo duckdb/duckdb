@@ -169,7 +169,6 @@ struct ICUDatePart : public ICUDateFunc {
 
 		calendar->set(UCAL_DATE, dd);
 
-		// DATETZ only makes sense as a number of days from the local epoch.
 		return Date::EpochToDate(ExtractEpoch(calendar, 0));
 	}
 
@@ -404,7 +403,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 	template <typename INPUT_TYPE>
 	static ScalarFunction GetLastDayFunction(const LogicalType &temporal_type) {
-		return ScalarFunction({temporal_type}, LogicalType::DATE_TZ, UnaryTimestampFunction<INPUT_TYPE, date_t>, false,
+		return ScalarFunction({temporal_type}, LogicalType::DATE, UnaryTimestampFunction<INPUT_TYPE, date_t>, false,
 		                      BindLastDate);
 	}
 	static void AddLastDayFunctions(const string &name, ClientContext &context) {
