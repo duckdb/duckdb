@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+#
+# Dates
+#
 statement ok
 CREATE TABLE IF NOT EXISTS dates (d date);
 
@@ -59,6 +62,39 @@ FROM (SELECT d, make_date(year(d), month(d), day(d)) md FROM dates) tbl
 WHERE md IS DISTINCT FROM d;
 ----
 
+# Null parts
+query I
+SELECT md
+FROM (SELECT make_date(NULL, month(d), day(d)) md FROM dates) t
+WHERE md IS NOT NULL
+----
+
+query I
+SELECT md
+FROM (SELECT make_date(year(d), NULL, day(d)) md FROM dates) t
+WHERE md IS NOT NULL
+----
+
+query I
+SELECT md
+FROM (SELECT make_date(year(d), month(d), NULL) md FROM dates) t
+WHERE md IS NOT NULL
+----
+
+# Constants
+query IIII
+SELECT
+	make_date(2021, 12, 30),
+	make_date(NULL, 12, 30),
+	make_date(2021, NULL, 30),
+	make_date(2021, 12, NULL)
+;
+----
+2021-12-30	NULL	NULL	NULL
+
+#
+# Timestamps
+#
 statement ok
 CREATE TABLE timestamps(ts TIMESTAMP)
 
@@ -106,6 +142,72 @@ FROM (SELECT ts, make_timestamp(year(ts), month(ts), day(ts), hour(ts), minute(t
 WHERE mts IS DISTINCT FROM ts;
 ----
 
+# Null parts
+query I
+SELECT md
+FROM (
+	SELECT make_timestamp(NULL, month(ts), day(ts), hour(ts), minute(ts), microsecond(ts) / 1000000.0) md
+	FROM timestamps) t
+WHERE md IS NOT NULL
+----
+
+query I
+SELECT md
+FROM (
+	SELECT make_timestamp(year(ts), NULL, day(ts), hour(ts), minute(ts), microsecond(ts) / 1000000.0) md
+	FROM timestamps) t
+WHERE md IS NOT NULL
+----
+
+query I
+SELECT md
+FROM (
+	SELECT make_timestamp(year(ts), month(ts), NULL, hour(ts), minute(ts), microsecond(ts) / 1000000.0) md
+	FROM timestamps) t
+WHERE md IS NOT NULL
+----
+
+query I
+SELECT md
+FROM (
+	SELECT make_timestamp(year(ts), month(ts), day(ts), NULL, minute(ts), microsecond(ts) / 1000000.0) md
+	FROM timestamps) t
+WHERE md IS NOT NULL
+----
+
+query I
+SELECT md
+FROM (
+	SELECT make_timestamp(year(ts), month(ts), day(ts), hour(ts), NULL, microsecond(ts) / 1000000.0) md
+	FROM timestamps) t
+WHERE md IS NOT NULL
+----
+
+query I
+SELECT md
+FROM (
+	SELECT make_timestamp(year(ts), month(ts), day(ts), hour(ts), minute(ts), NULL) md
+	FROM timestamps) t
+WHERE md IS NOT NULL
+----
+
+# Constants
+query IIIIIII
+SELECT
+	make_timestamp(2021, 12, 30, 12, 41, 46.123456),
+	make_timestamp(NULL, 12, 30, 12, 41, 46.123456),
+	make_timestamp(2021, NULL, 30, 12, 41, 46.123456),
+	make_timestamp(2021, 12, NULL, 12, 41, 46.123456),
+	make_timestamp(2021, 12, 30, NULL, 41, 46.123456),
+	make_timestamp(2021, 12, 30, 12, NULL, 46.123456),
+	make_timestamp(2021, 12, 30, 12, 41, NULL)
+;
+----
+2021-12-30 12:41:46.123456	NULL	NULL	NULL	NULL	NULL	NULL
+
+#
+# Times
+#
 statement ok
 CREATE TABLE times(t TIME)
 
@@ -135,3 +237,32 @@ FROM (SELECT t, make_time(hour(t), minute(t), microsecond(t) / 1000000.0) mt
 WHERE mt IS DISTINCT FROM t;
 ----
 
+# Null parts
+query I
+SELECT md
+FROM (SELECT make_time(NULL, minute(d), microsecond(d) / 1000000.0) md FROM dates) t
+WHERE md IS NOT NULL
+----
+
+query I
+SELECT md
+FROM (SELECT make_time(hour(d), NULL, microsecond(d) / 1000000.0) md FROM dates) t
+WHERE md IS NOT NULL
+----
+
+query I
+SELECT md
+FROM (SELECT make_time(hour(d), minute(d), NULL) md FROM dates) t
+WHERE md IS NOT NULL
+----
+
+# Constants
+query IIII
+SELECT
+	make_time(12, 41, 46.123456),
+	make_time(NULL, 41, 46.123456),
+	make_time(12, NULL, 46.123456),
+	make_time(12, 41, NULL)
+;
+----
+12:41:46.123456	NULL	NULL	NULL

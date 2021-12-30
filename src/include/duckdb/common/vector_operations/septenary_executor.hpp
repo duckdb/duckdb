@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/vector_operations/senary_executor.hpp
+// duckdb/common/vector_operations/septenary_executor.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,11 +12,11 @@
 
 namespace duckdb {
 
-struct SenaryExecutor {
-	static const size_t NCOLS = 6;
+struct SeptenaryExecutor {
+	static const size_t NCOLS = 7;
 
-	template <class TA, class TB, class TC, class TD, class TE, class TF, class TR,
-	          class FUN = std::function<TR(TA, TB, TC, TD, TE, TF)>>
+	template <class TA, class TB, class TC, class TD, class TE, class TF, class TG, class TR,
+	          class FUN = std::function<TR(TA, TB, TC, TD, TE, TF, TG)>>
 	static void Execute(DataChunk &input, Vector &result, FUN fun) {
 		D_ASSERT(input.ColumnCount() >= NCOLS);
 		const auto count = input.size();
@@ -45,8 +45,9 @@ struct SenaryExecutor {
 				auto ddata = ConstantVector::GetData<TD>(input.data[3]);
 				auto edata = ConstantVector::GetData<TE>(input.data[4]);
 				auto fdata = ConstantVector::GetData<TF>(input.data[5]);
+				auto gdata = ConstantVector::GetData<TG>(input.data[6]);
 				auto result_data = ConstantVector::GetData<TR>(result);
-				result_data[0] = fun(*adata, *bdata, *cdata, *ddata, *edata, *fdata);
+				result_data[0] = fun(*adata, *bdata, *cdata, *ddata, *edata, *fdata, *gdata);
 			}
 		} else {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -66,6 +67,7 @@ struct SenaryExecutor {
 			auto ddata = (const TD *)(vdata[3].data);
 			auto edata = (const TE *)(vdata[4].data);
 			auto fdata = (const TF *)(vdata[5].data);
+			auto gdata = (const TG *)(vdata[6].data);
 
 			vector<idx_t> idx(NCOLS);
 			if (all_valid) {
@@ -73,8 +75,8 @@ struct SenaryExecutor {
 					for (size_t c = 0; c < NCOLS; ++c) {
 						idx[c] = vdata[c].sel->get_index(r);
 					}
-					result_data[r] =
-					    fun(adata[idx[0]], bdata[idx[1]], cdata[idx[2]], ddata[idx[3]], edata[idx[4]], fdata[idx[5]]);
+					result_data[r] = fun(adata[idx[0]], bdata[idx[1]], cdata[idx[2]], ddata[idx[3]], edata[idx[4]],
+					                     fdata[idx[5]], gdata[idx[6]]);
 				}
 			} else {
 				for (idx_t r = 0; r < count; ++r) {
@@ -89,7 +91,7 @@ struct SenaryExecutor {
 					}
 					if (all_valid) {
 						result_data[r] = fun(adata[idx[0]], bdata[idx[1]], cdata[idx[2]], ddata[idx[3]], edata[idx[4]],
-						                     fdata[idx[5]]);
+						                     fdata[idx[5]], gdata[idx[6]]);
 					}
 				}
 			}
