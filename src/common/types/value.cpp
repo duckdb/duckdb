@@ -838,179 +838,110 @@ uintptr_t Value::GetPointer() const {
 }
 
 Value Value::Numeric(const LogicalType &type, int64_t value) {
-	switch (type.id()) {
-	case LogicalTypeId::TINYINT:
-		D_ASSERT(value <= NumericLimits<int8_t>::Maximum());
-		return Value::TINYINT((int8_t)value);
-	case LogicalTypeId::SMALLINT:
-		D_ASSERT(value <= NumericLimits<int16_t>::Maximum());
-		return Value::SMALLINT((int16_t)value);
-	case LogicalTypeId::INTEGER:
-		D_ASSERT(value <= NumericLimits<int32_t>::Maximum());
-		return Value::INTEGER((int32_t)value);
-	case LogicalTypeId::BIGINT:
-		return Value::BIGINT(value);
-	case LogicalTypeId::UTINYINT:
-		return Value::UTINYINT((uint8_t)value);
-	case LogicalTypeId::USMALLINT:
-		return Value::USMALLINT((uint16_t)value);
-	case LogicalTypeId::UINTEGER:
-		return Value::UINTEGER((uint32_t)value);
-	case LogicalTypeId::UBIGINT:
-		return Value::UBIGINT(value);
-	case LogicalTypeId::HUGEINT:
-		return Value::HUGEINT(value);
-	case LogicalTypeId::DECIMAL:
-		return Value::DECIMAL(value, DecimalType::GetWidth(type), DecimalType::GetScale(type));
-	case LogicalTypeId::FLOAT:
-		return Value((float)value);
-	case LogicalTypeId::DOUBLE:
-		return Value((double)value);
-	case LogicalTypeId::HASH:
-		return Value::HASH(value);
-	case LogicalTypeId::POINTER:
-		return Value::POINTER(value);
-	case LogicalTypeId::DATE:
-		D_ASSERT(value <= NumericLimits<int32_t>::Maximum());
-		return Value::DATE(date_t(value));
-	case LogicalTypeId::TIME:
-		return Value::TIME(dtime_t(value));
-	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(timestamp_t(value));
-	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(timestamp_t(value));
-	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TIMESTAMPMS(timestamp_t(value));
-	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TIMESTAMPSEC(timestamp_t(value));
-	case LogicalTypeId::DATE_TZ:
-		return Value::DATETZ(date_t(value));
-	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(dtime_t(value));
-	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(timestamp_t(value));
-	case LogicalTypeId::ENUM:
-		switch (type.InternalType()) {
-		case PhysicalType::UINT8:
-			return Value::UTINYINT((uint8_t)value);
-		case PhysicalType::UINT16:
-			return Value::USMALLINT((uint16_t)value);
-		case PhysicalType::UINT32:
-			return Value::UINTEGER((uint32_t)value);
-		default:
-			throw InternalException("Enum doesn't accept this physical type");
-		}
-	default:
-		throw InvalidTypeException(type, "Numeric requires numeric type");
-	}
+	return Value::BIGINT(value).CastAs(type);
+}
+
+Value Value::Numeric(const LogicalType &type, hugeint_t value) {
+	return Value::HUGEINT(value).CastAs(type);
 }
 
 //===--------------------------------------------------------------------===//
 // GetValueUnsafe
 //===--------------------------------------------------------------------===//
 template <>
-int8_t &Value::GetValueUnsafe() {
+int8_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT8 || type_.InternalType() == PhysicalType::BOOL);
 	return value_.tinyint;
 }
 
 template <>
-int16_t &Value::GetValueUnsafe() {
+int16_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT16);
 	return value_.smallint;
 }
 
 template <>
-int32_t &Value::GetValueUnsafe() {
+int32_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT32);
 	return value_.integer;
 }
 
 template <>
-int64_t &Value::GetValueUnsafe() {
+int64_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
 	return value_.bigint;
 }
 
 template <>
-hugeint_t &Value::GetValueUnsafe() {
+hugeint_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT128);
 	return value_.hugeint;
 }
 
 template <>
-uint8_t &Value::GetValueUnsafe() {
+uint8_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::UINT8);
 	return value_.utinyint;
 }
 
 template <>
-uint16_t &Value::GetValueUnsafe() {
+uint16_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::UINT16);
 	return value_.usmallint;
 }
 
 template <>
-uint32_t &Value::GetValueUnsafe() {
+uint32_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::UINT32);
 	return value_.uinteger;
 }
 
 template <>
-uint64_t &Value::GetValueUnsafe() {
+uint64_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::UINT64);
 	return value_.ubigint;
 }
 
 template <>
-string &Value::GetValueUnsafe() {
+string Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::VARCHAR);
 	return str_value;
 }
 
 template <>
-float &Value::GetValueUnsafe() {
+float Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::FLOAT);
 	return value_.float_;
 }
 
 template <>
-double &Value::GetValueUnsafe() {
+double Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::DOUBLE);
 	return value_.double_;
 }
 
 template <>
-date_t &Value::GetValueUnsafe() {
+date_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT32);
 	return value_.date;
 }
 
 template <>
-dtime_t &Value::GetValueUnsafe() {
+dtime_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
 	return value_.time;
 }
 
 template <>
-timestamp_t &Value::GetValueUnsafe() {
+timestamp_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
 	return value_.timestamp;
 }
 
 template <>
-interval_t &Value::GetValueUnsafe() {
+interval_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INTERVAL);
 	return value_.interval;
-}
-
-Value Value::Numeric(const LogicalType &type, hugeint_t value) {
-	switch (type.id()) {
-	case LogicalTypeId::HUGEINT:
-		return Value::HUGEINT(value);
-	default:
-		return Value::Numeric(type, Hugeint::Cast<int64_t>(value));
-	}
 }
 
 string Value::ToString() const {
@@ -1149,27 +1080,75 @@ string Value::ToString() const {
 }
 
 //===--------------------------------------------------------------------===//
-// Numeric Operators
+// Type-specific getters
 //===--------------------------------------------------------------------===//
-Value Value::operator+(const Value &rhs) const {
-	return ValueOperations::Add(*this, rhs);
+int8_t TinyIntValue::Get(const Value &value) {
+	return value.GetValueUnsafe<int8_t>();
 }
 
-Value Value::operator-(const Value &rhs) const {
-	return ValueOperations::Subtract(*this, rhs);
+int16_t SmallIntValue::Get(const Value &value) {
+	return value.GetValueUnsafe<int16_t>();
 }
 
-Value Value::operator*(const Value &rhs) const {
-	return ValueOperations::Multiply(*this, rhs);
+int32_t IntegerValue::Get(const Value &value) {
+	return value.GetValueUnsafe<int32_t>();
 }
 
-Value Value::operator/(const Value &rhs) const {
-	return ValueOperations::Divide(*this, rhs);
+int64_t BigIntValue::Get(const Value &value) {
+	return value.GetValueUnsafe<int64_t>();
 }
 
-Value Value::operator%(const Value &rhs) const {
-	throw NotImplementedException("value modulo");
-	// return ValueOperations::Modulo(*this, rhs);
+hugeint_t HugeIntValue::Get(const Value &value) {
+	return value.GetValueUnsafe<hugeint_t>();
+}
+
+uint8_t UTinyIntValue::Get(const Value &value) {
+	return value.GetValueUnsafe<uint8_t>();
+}
+
+uint16_t USmallIntValue::Get(const Value &value) {
+	return value.GetValueUnsafe<uint16_t>();
+}
+
+uint32_t UIntegerValue::Get(const Value &value) {
+	return value.GetValueUnsafe<uint32_t>();
+}
+
+uint64_t UBigIntValue::Get(const Value &value) {
+	return value.GetValueUnsafe<uint64_t>();
+}
+
+double FloatValue::Get(const Value &value) {
+	return value.GetValueUnsafe<float>();
+}
+
+double DoubleValue::Get(const Value &value) {
+	return value.GetValueUnsafe<double>();
+}
+
+hugeint_t IntegralValue::Get(const Value &value) {
+	switch(value.type().InternalType()) {
+	case PhysicalType::INT8:
+		return TinyIntValue::Get(value);
+	case PhysicalType::INT16:
+		return SmallIntValue::Get(value);
+	case PhysicalType::INT32:
+		return IntegerValue::Get(value);
+	case PhysicalType::INT64:
+		return BigIntValue::Get(value);
+	case PhysicalType::INT128:
+		return HugeIntValue::Get(value);
+	case PhysicalType::UINT8:
+		return UTinyIntValue::Get(value);
+	case PhysicalType::UINT16:
+		return USmallIntValue::Get(value);
+	case PhysicalType::UINT32:
+		return UIntegerValue::Get(value);
+	case PhysicalType::UINT64:
+		return UBigIntValue::Get(value);
+	default:
+		throw InternalException("Invalid internal type \"%s\" for IntegralValue::Get", value.type().ToString());
+	}
 }
 
 //===--------------------------------------------------------------------===//

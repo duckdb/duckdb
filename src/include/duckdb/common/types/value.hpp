@@ -153,7 +153,7 @@ public:
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
 	// type of the value. Only use this if you know what you are doing.
 	template <class T>
-	T &GetValueUnsafe() {
+	T GetValueUnsafe() const {
 		throw NotImplementedException("Unimplemented template type for Value::GetValueUnsafe");
 	}
 
@@ -179,15 +179,6 @@ public:
 	DUCKDB_API void Serialize(Serializer &serializer);
 	//! Deserializes a Value from a blob
 	DUCKDB_API static Value Deserialize(Deserializer &source);
-
-	//===--------------------------------------------------------------------===//
-	// Numeric Operators
-	//===--------------------------------------------------------------------===//
-	DUCKDB_API Value operator+(const Value &rhs) const;
-	DUCKDB_API Value operator-(const Value &rhs) const;
-	DUCKDB_API Value operator*(const Value &rhs) const;
-	DUCKDB_API Value operator/(const Value &rhs) const;
-	DUCKDB_API Value operator%(const Value &rhs) const;
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operators
@@ -267,17 +258,61 @@ public:
 private:
 	template <class T>
 	T GetValueInternal() const;
-	//! Templated helper function for casting
-	template <class DST, class OP>
-	static DST _cast(const Value &v);
+};
 
-	//! Templated helper function for binary operations
-	template <class OP>
-	static void _templated_binary_operation(const Value &left, const Value &right, Value &result, bool ignore_null);
+//===--------------------------------------------------------------------===//
+// Type-specific getters
+//===--------------------------------------------------------------------===//
+// Note that these are equivalent to calling GetValueUnsafe<X>, meaning no cast will be performed
+// instead, an assertion will be triggered if the value is not of the correct type
+struct TinyIntValue {
+	static int8_t Get(const Value &value);
+};
 
-	//! Templated helper function for boolean operations
-	template <class OP>
-	static bool _templated_boolean_operation(const Value &left, const Value &right);
+struct SmallIntValue {
+	static int16_t Get(const Value &value);
+};
+
+struct IntegerValue {
+	static int32_t Get(const Value &value);
+};
+
+struct BigIntValue {
+	static int64_t Get(const Value &value);
+};
+
+struct HugeIntValue {
+	static hugeint_t Get(const Value &value);
+};
+
+struct UTinyIntValue {
+	static uint8_t Get(const Value &value);
+};
+
+struct USmallIntValue {
+	static uint16_t Get(const Value &value);
+};
+
+struct UIntegerValue {
+	static uint32_t Get(const Value &value);
+};
+
+struct UBigIntValue {
+	static uint64_t Get(const Value &value);
+};
+
+struct FloatValue {
+	static double Get(const Value &value);
+};
+
+struct DoubleValue {
+	static double Get(const Value &value);
+};
+
+//! Return the internal integral value for any type that is stored as an integral value internally
+//! This can be used on values of type integer, uinteger, but also date, timestamp, decimal, etc
+struct IntegralValue {
+	static hugeint_t Get(const Value &value);
 };
 
 template <>
@@ -357,37 +392,37 @@ template <>
 DUCKDB_API interval_t Value::GetValue() const;
 
 template <>
-DUCKDB_API int8_t &Value::GetValueUnsafe();
+DUCKDB_API int8_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API int16_t &Value::GetValueUnsafe();
+DUCKDB_API int16_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API int32_t &Value::GetValueUnsafe();
+DUCKDB_API int32_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API int64_t &Value::GetValueUnsafe();
+DUCKDB_API int64_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API hugeint_t &Value::GetValueUnsafe();
+DUCKDB_API hugeint_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API uint8_t &Value::GetValueUnsafe();
+DUCKDB_API uint8_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API uint16_t &Value::GetValueUnsafe();
+DUCKDB_API uint16_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API uint32_t &Value::GetValueUnsafe();
+DUCKDB_API uint32_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API uint64_t &Value::GetValueUnsafe();
+DUCKDB_API uint64_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API string &Value::GetValueUnsafe();
+DUCKDB_API string Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API float &Value::GetValueUnsafe();
+DUCKDB_API float Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API double &Value::GetValueUnsafe();
+DUCKDB_API double Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API date_t &Value::GetValueUnsafe();
+DUCKDB_API date_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API dtime_t &Value::GetValueUnsafe();
+DUCKDB_API dtime_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API timestamp_t &Value::GetValueUnsafe();
+DUCKDB_API timestamp_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API interval_t &Value::GetValueUnsafe();
+DUCKDB_API interval_t Value::GetValueUnsafe() const;
 
 template <>
 DUCKDB_API bool Value::IsValid(float value);

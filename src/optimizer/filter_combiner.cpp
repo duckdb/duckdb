@@ -489,7 +489,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			}
 		} else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
 			auto &func = (BoundOperatorExpression &)*remaining_filter;
-			vector<Value> in_values;
+			vector<hugeint_t> in_values;
 			D_ASSERT(func.children.size() > 1);
 			if (func.children[0]->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
@@ -510,10 +510,11 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				continue;
 			}
 			auto &fst_const_value_expr = (BoundConstantExpression &)*func.children[1].get();
+			auto &type = fst_const_value_expr.value.type();
 
 			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
 			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
-			if (!fst_const_value_expr.value.type().IsIntegral()) {
+			if (!type.IsIntegral()) {
 				continue;
 			}
 
@@ -524,17 +525,16 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 					can_simplify_in_clause = false;
 					break;
 				}
-				in_values.push_back(const_value_expr.value);
+				in_values.push_back(const_value_expr.value.GetValue<hugeint_t>());
 			}
 			if (!can_simplify_in_clause || in_values.empty()) {
 				continue;
 			}
-			Value one(1);
 
 			sort(in_values.begin(), in_values.end());
 
 			for (idx_t in_val_idx = 1; in_val_idx < in_values.size(); in_val_idx++) {
-				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > one || in_values[in_val_idx - 1].IsNull()) {
+				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > 1) {
 					can_simplify_in_clause = false;
 					break;
 				}
@@ -543,8 +543,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				continue;
 			}
 			auto lower_bound =
-			    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, in_values.front());
-			auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, in_values.back());
+			    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value::Numeric(type, in_values.front()));
+			auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, Value::Numeric(type, in_values.back()));
 			table_filters.PushFilter(column_index, move(lower_bound));
 			table_filters.PushFilter(column_index, move(upper_bound));
 			table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
