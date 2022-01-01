@@ -29,11 +29,15 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static int64_t ExtractCentury(icu::Calendar *calendar, const uint64_t micros) {
-		return 1 + ExtractYear(calendar, micros) / 100;
+		const auto era = ExtractEra(calendar, micros);
+		const auto cccc = ((ExtractYear(calendar, micros) - 1) / 100) + 1;
+		return era > 0 ? cccc : -cccc;
 	}
 
 	static int64_t ExtractMillenium(icu::Calendar *calendar, const uint64_t micros) {
-		return 1 + ExtractYear(calendar, micros) / 1000;
+		const auto era = ExtractEra(calendar, micros);
+		const auto mmmm = ((ExtractYear(calendar, micros) - 1) / 1000) + 1;
+		return era > 0 ? mmmm : -mmmm;
 	}
 
 	static int64_t ExtractMonth(icu::Calendar *calendar, const uint64_t micros) {
@@ -101,10 +105,20 @@ struct ICUDatePart : public ICUDateFunc {
 		return millis / Interval::MSECS_PER_SEC;
 	}
 
-	static int64_t ExtractOffset(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractTimezone(icu::Calendar *calendar, const uint64_t micros) {
 		auto millis = ExtractField(calendar, UCAL_ZONE_OFFSET);
 		millis += ExtractField(calendar, UCAL_DST_OFFSET);
-		return millis * Interval::MICROS_PER_MSEC;
+		return millis / Interval::MSECS_PER_SEC;
+	}
+
+	static int64_t ExtractTimezoneHour(icu::Calendar *calendar, const uint64_t micros) {
+		auto secs = ExtractTimezone(calendar, micros);
+		return secs / Interval::SECS_PER_HOUR;
+	}
+
+	static int64_t ExtractTimezoneMinute(icu::Calendar *calendar, const uint64_t micros) {
+		auto secs = ExtractTimezone(calendar, micros);
+		return (secs % Interval::SECS_PER_HOUR) / Interval::SECS_PER_MINUTE;
 	}
 
 	static part_adapter_t PartCodeAdapterFactory(DatePartSpecifier part) {
@@ -147,8 +161,12 @@ struct ICUDatePart : public ICUDateFunc {
 			return ExtractEpoch;
 		case DatePartSpecifier::ERA:
 			return ExtractEra;
-		case DatePartSpecifier::OFFSET:
-			return ExtractOffset;
+		case DatePartSpecifier::TIMEZONE:
+			return ExtractTimezone;
+		case DatePartSpecifier::TIMEZONE_HOUR:
+			return ExtractTimezoneHour;
+		case DatePartSpecifier::TIMEZONE_MINUTE:
+			return ExtractTimezoneMinute;
 		default:
 			throw Exception("Unsupported ICU extract adapter");
 		}
