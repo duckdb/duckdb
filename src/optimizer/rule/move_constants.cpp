@@ -57,7 +57,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 			// if the cast is not possible then the comparison is not possible
 			// for example, if we have x + 5 = 3, where x is an unsigned number, we will get x = -2
 			// since this is not possible we can remove the entire branch here
-			return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]), Value::BOOLEAN(false));
+			return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]),
+			                                          Value::BOOLEAN(false));
 		}
 		outer_constant->value = move(result_value);
 	} else if (op_type == "-") {
@@ -72,7 +73,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 			auto result_value = Value::HUGEINT(outer_value);
 			if (!result_value.TryCastAs(constant_type)) {
 				// if the cast is not possible then the comparison is not possible
-				return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]), Value::BOOLEAN(false));
+				return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]),
+				                                          Value::BOOLEAN(false));
 			}
 			outer_constant->value = move(result_value);
 		} else {
@@ -84,7 +86,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 			auto result_value = Value::HUGEINT(inner_value);
 			if (!result_value.TryCastAs(constant_type)) {
 				// if the cast is not possible then the comparison is not possible
-				return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]), Value::BOOLEAN(false));
+				return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]),
+				                                          Value::BOOLEAN(false));
 			}
 			outer_constant->value = move(result_value);
 			// in this case, we should also flip the comparison
@@ -102,11 +105,13 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 			// thus the final result will be either [TRUE, FALSE] or [NULL], depending
 			// on if 0 matches the comparison criteria with the RHS
 			bool outer_is_null = outer_constant->value == 0;
-			return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]), Value::BOOLEAN(outer_is_null));
+			return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]),
+			                                          Value::BOOLEAN(outer_is_null));
 		}
 		if (outer_value % inner_value != 0) {
 			// not cleanly divisible, the result will be either FALSE or NULL
-			return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]), Value::BOOLEAN(false));
+			return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]),
+			                                          Value::BOOLEAN(false));
 		}
 		if (inner_value < 0) {
 			// multiply by negative value, need to flip expression
@@ -117,7 +122,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 		// because e.g. -128 / -1 = 128, which is out of range
 		auto result_value = Value::HUGEINT(outer_value / inner_value);
 		if (!result_value.TryCastAs(constant_type)) {
-			return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]), Value::BOOLEAN(false));
+			return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]),
+			                                          Value::BOOLEAN(false));
 		}
 		outer_constant->value = move(result_value);
 	}

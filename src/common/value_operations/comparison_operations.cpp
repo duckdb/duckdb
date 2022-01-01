@@ -137,30 +137,34 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 	case PhysicalType::INTERVAL:
 		return OP::Operation(left.value_.interval, right.value_.interval);
 	case PhysicalType::VARCHAR:
-		return OP::Operation(left.str_value, right.str_value);
+		return OP::Operation(StringValue::Get(left), StringValue::Get(right));
 	case PhysicalType::STRUCT: {
+		auto &left_children = StructValue::GetChildren(left);
+		auto &right_children = StructValue::GetChildren(right);
 		// this should be enforced by the type
-		D_ASSERT(left.struct_value.size() == right.struct_value.size());
+		D_ASSERT(left_children.size() == right_children.size());
 		idx_t i = 0;
-		for (; i < left.struct_value.size() - 1; ++i) {
-			if (ValuePositionComparator::Definite<OP>(left.struct_value[i], right.struct_value[i])) {
+		for (; i < left_children.size() - 1; ++i) {
+			if (ValuePositionComparator::Definite<OP>(left_children[i], right_children[i])) {
 				return true;
 			}
-			if (!ValuePositionComparator::Possible<OP>(left.struct_value[i], right.struct_value[i])) {
+			if (!ValuePositionComparator::Possible<OP>(left_children[i], right_children[i])) {
 				return false;
 			}
 		}
-		return ValuePositionComparator::Final<OP>(left.struct_value[i], right.struct_value[i]);
+		return ValuePositionComparator::Final<OP>(left_children[i], right_children[i]);
 	}
 	case PhysicalType::LIST: {
+		auto &left_children = ListValue::GetChildren(left);
+		auto &right_children = ListValue::GetChildren(right);
 		for (idx_t pos = 0;; ++pos) {
-			if (pos == left.list_value.size() || pos == right.list_value.size()) {
-				return ValuePositionComparator::TieBreak<OP>(left.list_value.size(), right.list_value.size());
+			if (pos == left_children.size() || pos == right_children.size()) {
+				return ValuePositionComparator::TieBreak<OP>(left_children.size(), right_children.size());
 			}
-			if (ValuePositionComparator::Definite<OP>(left.list_value[pos], right.list_value[pos])) {
+			if (ValuePositionComparator::Definite<OP>(left_children[pos], right_children[pos])) {
 				return true;
 			}
-			if (!ValuePositionComparator::Possible<OP>(left.list_value[pos], right.list_value[pos])) {
+			if (!ValuePositionComparator::Possible<OP>(left_children[pos], right_children[pos])) {
 				return false;
 			}
 		}

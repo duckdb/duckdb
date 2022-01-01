@@ -36,7 +36,7 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 	auto second_param = input.GetValue(1, 0);
 
 	auto &enum_vector = first_param.IsNull() ? EnumType::GetValuesInsertOrder(input.GetTypes()[1])
-	                                        : EnumType::GetValuesInsertOrder(input.GetTypes()[0]);
+	                                         : EnumType::GetValuesInsertOrder(input.GetTypes()[0]);
 
 	if (first_param.IsNull()) {
 		start = 0;

@@ -433,18 +433,16 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				//! This is a like function.
 				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
 				auto &constant_value_expr = (BoundConstantExpression &)*func.children[1].get();
-				string like_string = constant_value_expr.value.str_value;
+				auto like_string = StringValue::Get(constant_value_expr.value);
 				if (like_string.empty()) {
 					continue;
 				}
 				auto column_index = column_ids[column_ref.binding.column_index];
-				auto const_value = constant_value_expr.value.Copy();
-				const_value.str_value = like_string;
 				//! Here the like must be transformed to a BOUND COMPARISON geq le
 				auto lower_bound =
-				    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, const_value);
-				const_value.str_value[const_value.str_value.size() - 1]++;
-				auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, const_value);
+				    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(like_string));
+				like_string[like_string.size() - 1]++;
+				auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(like_string));
 				table_filters.PushFilter(column_index, move(lower_bound));
 				table_filters.PushFilter(column_index, move(upper_bound));
 				table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
@@ -454,8 +452,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				//! This is a like function.
 				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
 				auto &constant_value_expr = (BoundConstantExpression &)*func.children[1].get();
-				string like_string = constant_value_expr.value.str_value;
-				auto const_value = constant_value_expr.value.Copy();
+				auto &like_string = StringValue::Get(constant_value_expr.value);
 				if (like_string[0] == '%' || like_string[0] == '_') {
 					//! We have no prefix so nothing to pushdown
 					break;
@@ -469,19 +466,18 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 					}
 					prefix += c;
 				}
-				const_value.str_value = prefix;
 				auto column_index = column_ids[column_ref.binding.column_index];
 				if (equality) {
 					//! Here the like can be transformed to an equality query
-					auto equal_filter = make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_value);
+					auto equal_filter = make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value(prefix));
 					table_filters.PushFilter(column_index, move(equal_filter));
 					table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
 				} else {
 					//! Here the like must be transformed to a BOUND COMPARISON geq le
 					auto lower_bound =
-					    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, const_value);
-					const_value.str_value[const_value.str_value.size() - 1]++;
-					auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, const_value);
+					    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(prefix));
+					prefix[prefix.size() - 1]++;
+					auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix));
 					table_filters.PushFilter(column_index, move(lower_bound));
 					table_filters.PushFilter(column_index, move(upper_bound));
 					table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
@@ -542,9 +538,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			if (!can_simplify_in_clause) {
 				continue;
 			}
-			auto lower_bound =
-			    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value::Numeric(type, in_values.front()));
-			auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, Value::Numeric(type, in_values.back()));
+			auto lower_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+			                                               Value::Numeric(type, in_values.front()));
+			auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+			                                               Value::Numeric(type, in_values.back()));
 			table_filters.PushFilter(column_index, move(lower_bound));
 			table_filters.PushFilter(column_index, move(upper_bound));
 			table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());

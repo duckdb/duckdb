@@ -85,9 +85,10 @@ string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator
 		auto name_splits = StringUtil::Split(loop_iterator_name, ",");
 		auto replacement_splits = StringUtil::Split(replacement, ",");
 		if (name_splits.size() != replacement_splits.size()) {
-			FAIL("foreach loop: number of commas in loop iterator (" + loop_iterator_name + ") does not match number of commas in replacement (" + replacement + ")");
+			FAIL("foreach loop: number of commas in loop iterator (" + loop_iterator_name +
+			     ") does not match number of commas in replacement (" + replacement + ")");
 		}
-		for(idx_t i = 0; i < name_splits.size(); i++) {
+		for (idx_t i = 0; i < name_splits.size(); i++) {
 			text = StringUtil::Replace(text, "${" + name_splits[i] + "}", replacement_splits[i]);
 		}
 		return text;

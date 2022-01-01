@@ -116,7 +116,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
 	D_ASSERT(constant_value.type() == constant_expr->return_type);
-	auto patt_str = constant_value.str_value;
+	auto &patt_str = StringValue::Get(constant_value);
 
 	bool is_not_like = root->function.name == "!~~";
 	if (PatternIsConstant(patt_str)) {

@@ -21,7 +21,9 @@ class Serializer;
 //! The Value object holds a single arbitrary value of any type that can be
 //! stored in the database.
 class Value {
-	friend class Vector;
+	friend struct StringValue;
+	friend struct StructValue;
+	friend struct ListValue;
 
 public:
 	//! Create an empty NULL value of the specified type
@@ -42,6 +44,8 @@ public:
 	DUCKDB_API Value(string_t val); // NOLINT: Allow implicit conversion from `string_t`
 	//! Create a VARCHAR value
 	DUCKDB_API Value(string val); // NOLINT: Allow implicit conversion from `string`
+	//! Destructor
+	DUCKDB_API ~Value();
 
 	inline const LogicalType &type() const {
 		return type_;
@@ -129,7 +133,7 @@ public:
 	DUCKDB_API static Value LIST(vector<Value> values);
 	//! Create a list value with the given entries
 	DUCKDB_API static Value LIST(LogicalType child_type, vector<Value> values);
-	//! Create an empty list with the specified type
+	//! Create an empty list with the specified child-type
 	DUCKDB_API static Value EMPTYLIST(LogicalType child_type);
 	//! Creat a map value from a (key, value) pair
 	DUCKDB_API static Value MAP(Value key, Value value);
@@ -226,7 +230,6 @@ private:
 	bool is_null;
 
 public:
-
 	//! The value of the object, if it is of a constant size Type
 	union Val {
 		int8_t boolean;
@@ -249,6 +252,7 @@ public:
 		interval_t interval;
 	} value_;
 
+private:
 	//! The value of the object, if it is of a variable size type
 	string str_value;
 
@@ -307,6 +311,18 @@ struct FloatValue {
 
 struct DoubleValue {
 	static double Get(const Value &value);
+};
+
+struct StringValue {
+	DUCKDB_API static const string &Get(const Value &value);
+};
+
+struct StructValue {
+	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
+};
+
+struct ListValue {
+	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
 };
 
 //! Return the internal integral value for any type that is stored as an integral value internally

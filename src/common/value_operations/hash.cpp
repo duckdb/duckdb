@@ -37,17 +37,19 @@ hash_t ValueOperations::Hash(const Value &op) {
 	case PhysicalType::INTERVAL:
 		return duckdb::Hash(op.value_.interval);
 	case PhysicalType::VARCHAR:
-		return duckdb::Hash(op.str_value.c_str());
-	case PhysicalType::LIST: {
+		return duckdb::Hash(string_t(StringValue::Get(op)));
+	case PhysicalType::STRUCT: {
+		auto &struct_children = StructValue::GetChildren(op);
 		hash_t hash = 0;
-		for (auto &entry : op.list_value) {
+		for (auto &entry : struct_children) {
 			hash ^= ValueOperations::Hash(entry);
 		}
 		return hash;
 	}
-	case PhysicalType::STRUCT: {
+	case PhysicalType::LIST: {
+		auto &list_children = ListValue::GetChildren(op);
 		hash_t hash = 0;
-		for (auto &entry : op.struct_value) {
+		for (auto &entry : list_children) {
 			hash ^= ValueOperations::Hash(entry);
 		}
 		return hash;

@@ -30,7 +30,7 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 		return make_unique<BoundConstantExpression>(Value(date_part.return_type));
 	}
 	// otherwise check the specifier
-	auto specifier = GetDatePartSpecifier(constant.str_value);
+	auto specifier = GetDatePartSpecifier(StringValue::Get(constant));
 	string new_function_name;
 	switch (specifier) {
 	case DatePartSpecifier::YEAR:

@@ -68,6 +68,9 @@ Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false), str_valu
 	}
 }
 
+Value::~Value() {
+}
+
 Value Value::MinimumValue(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -838,11 +841,93 @@ uintptr_t Value::GetPointer() const {
 }
 
 Value Value::Numeric(const LogicalType &type, int64_t value) {
-	return Value::BIGINT(value).CastAs(type);
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+		D_ASSERT(value >= NumericLimits<int8_t>::Minimum() && value <= NumericLimits<int8_t>::Maximum());
+		return Value::TINYINT((int8_t)value);
+	case LogicalTypeId::SMALLINT:
+		D_ASSERT(value >= NumericLimits<int16_t>::Minimum() && value <= NumericLimits<int16_t>::Maximum());
+		return Value::SMALLINT((int16_t)value);
+	case LogicalTypeId::INTEGER:
+		D_ASSERT(value >= NumericLimits<int32_t>::Minimum() && value <= NumericLimits<int32_t>::Maximum());
+		return Value::INTEGER((int32_t)value);
+	case LogicalTypeId::BIGINT:
+		return Value::BIGINT(value);
+	case LogicalTypeId::UTINYINT:
+		D_ASSERT(value >= NumericLimits<uint8_t>::Minimum() && value <= NumericLimits<uint8_t>::Maximum());
+		return Value::UTINYINT((uint8_t)value);
+	case LogicalTypeId::USMALLINT:
+		D_ASSERT(value >= NumericLimits<uint16_t>::Minimum() && value <= NumericLimits<uint16_t>::Maximum());
+		return Value::USMALLINT((uint16_t)value);
+	case LogicalTypeId::UINTEGER:
+		D_ASSERT(value >= NumericLimits<uint32_t>::Minimum() && value <= NumericLimits<uint32_t>::Maximum());
+		return Value::UINTEGER((uint32_t)value);
+	case LogicalTypeId::UBIGINT:
+		D_ASSERT(value >= 0);
+		return Value::UBIGINT(value);
+	case LogicalTypeId::HUGEINT:
+		return Value::HUGEINT(value);
+	case LogicalTypeId::DECIMAL:
+		return Value::DECIMAL(value, DecimalType::GetWidth(type), DecimalType::GetScale(type));
+	case LogicalTypeId::FLOAT:
+		return Value((float)value);
+	case LogicalTypeId::DOUBLE:
+		return Value((double)value);
+	case LogicalTypeId::HASH:
+		return Value::HASH(value);
+	case LogicalTypeId::POINTER:
+		return Value::POINTER(value);
+	case LogicalTypeId::DATE:
+		D_ASSERT(value >= NumericLimits<int32_t>::Minimum() && value <= NumericLimits<int32_t>::Maximum());
+		return Value::DATE(date_t(value));
+	case LogicalTypeId::TIME:
+		return Value::TIME(dtime_t(value));
+	case LogicalTypeId::TIMESTAMP:
+		return Value::TIMESTAMP(timestamp_t(value));
+	case LogicalTypeId::TIMESTAMP_NS:
+		return Value::TIMESTAMPNS(timestamp_t(value));
+	case LogicalTypeId::TIMESTAMP_MS:
+		return Value::TIMESTAMPMS(timestamp_t(value));
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return Value::TIMESTAMPSEC(timestamp_t(value));
+	case LogicalTypeId::DATE_TZ:
+		return Value::DATETZ(date_t(value));
+	case LogicalTypeId::TIME_TZ:
+		return Value::TIMETZ(dtime_t(value));
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Value::TIMESTAMPTZ(timestamp_t(value));
+	case LogicalTypeId::ENUM:
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			D_ASSERT(value >= NumericLimits<uint8_t>::Minimum() && value <= NumericLimits<uint8_t>::Maximum());
+			return Value::UTINYINT((uint8_t)value);
+		case PhysicalType::UINT16:
+			D_ASSERT(value >= NumericLimits<uint16_t>::Minimum() && value <= NumericLimits<uint16_t>::Maximum());
+			return Value::USMALLINT((uint16_t)value);
+		case PhysicalType::UINT32:
+			D_ASSERT(value >= NumericLimits<uint32_t>::Minimum() && value <= NumericLimits<uint32_t>::Maximum());
+			return Value::UINTEGER((uint32_t)value);
+		default:
+			throw InternalException("Enum doesn't accept this physical type");
+		}
+	default:
+		throw InvalidTypeException(type, "Numeric requires numeric type");
+	}
 }
 
 Value Value::Numeric(const LogicalType &type, hugeint_t value) {
-	return Value::HUGEINT(value).CastAs(type);
+#ifdef DEBUG
+	// perform a throwing cast to verify that the type fits
+	Value::HUGEINT(value).CastAs(type);
+#endif
+	switch (type.id()) {
+	case LogicalTypeId::HUGEINT:
+		return Value::HUGEINT(value);
+	case LogicalTypeId::UBIGINT:
+		return Value::UBIGINT(Hugeint::Cast<uint64_t>(value));
+	default:
+		return Value::Numeric(type, Hugeint::Cast<int64_t>(value));
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -1126,8 +1211,23 @@ double DoubleValue::Get(const Value &value) {
 	return value.GetValueUnsafe<double>();
 }
 
+const string &StringValue::Get(const Value &value) {
+	D_ASSERT(value.type().InternalType() == PhysicalType::VARCHAR);
+	return value.str_value;
+}
+
+const vector<Value> &StructValue::GetChildren(const Value &value) {
+	D_ASSERT(value.type().InternalType() == PhysicalType::STRUCT);
+	return value.struct_value;
+}
+
+const vector<Value> &ListValue::GetChildren(const Value &value) {
+	D_ASSERT(value.type().InternalType() == PhysicalType::LIST);
+	return value.list_value;
+}
+
 hugeint_t IntegralValue::Get(const Value &value) {
-	switch(value.type().InternalType()) {
+	switch (value.type().InternalType()) {
 	case PhysicalType::INT8:
 		return TinyIntValue::Get(value);
 	case PhysicalType::INT16:

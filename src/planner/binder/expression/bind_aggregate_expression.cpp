@@ -25,12 +25,12 @@ static void InvertPercentileFractions(unique_ptr<ParsedExpression> &fractions) {
 	Value value = ExpressionExecutor::EvaluateScalar(*bound.expr);
 	if (value.type().id() == LogicalTypeId::LIST) {
 		vector<Value> values;
-		for (const auto &element_val : value.list_value) {
-			values.push_back(Value::DOUBLE(1 - DoubleValue::Get(element_val)));
+		for (const auto &element_val : ListValue::GetChildren(value)) {
+			values.push_back(Value::DOUBLE(1 - element_val.GetValue<double>()));
 		}
 		bound.expr = make_unique<BoundConstantExpression>(Value::LIST(values));
 	} else {
-		bound.expr = make_unique<BoundConstantExpression>(Value::DOUBLE(1 - DoubleValue::Get(value)));
+		bound.expr = make_unique<BoundConstantExpression>(Value::DOUBLE(1 - value.GetValue<double>()));
 	}
 }
 

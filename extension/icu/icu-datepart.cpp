@@ -334,10 +334,11 @@ struct ICUDatePart : public ICUDateFunc {
 
 		Value parts_list = ExpressionExecutor::EvaluateScalar(*arguments[0]);
 		if (parts_list.type().id() == LogicalTypeId::LIST) {
-			if (parts_list.list_value.empty()) {
+			auto &list_children = ListValue::GetChildren(parts_list);
+			if (list_children.empty()) {
 				throw BinderException("%s requires non-empty lists of part names", bound_function.name);
 			}
-			for (const auto &part_value : parts_list.list_value) {
+			for (const auto &part_value : list_children) {
 				if (part_value.IsNull()) {
 					throw BinderException("NULL struct entry name in %s", bound_function.name);
 				}

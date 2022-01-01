@@ -347,11 +347,16 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 // - [subtract]
 //===--------------------------------------------------------------------===//
 struct NegateOperator {
+	template <class T>
+	static bool CanNegate(T input) {
+		using Limits = std::numeric_limits<T>;
+		return !(Limits::is_integer && Limits::is_signed && Limits::lowest() == input);
+	}
+
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		using Limits = std::numeric_limits<TR>;
 		auto cast = (TR)input;
-		if (Limits::is_integer && Limits::is_signed && Limits::lowest() == cast) {
+		if (!CanNegate<TR>(cast)) {
 			throw OutOfRangeException("Overflow in negation of integer!");
 		}
 		return -cast;
@@ -389,11 +394,17 @@ unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunctio
 
 struct NegatePropagateStatistics {
 	template <class T>
-	static void Operation(LogicalType type, NumericStatistics &istats, Value &new_min, Value &new_max) {
+	static bool Operation(LogicalType type, NumericStatistics &istats, Value &new_min, Value &new_max) {
+		auto max_value = istats.max.GetValueUnsafe<T>();
+		auto min_value = istats.min.GetValueUnsafe<T>();
+		if (!NegateOperator::CanNegate<T>(min_value) || !NegateOperator::CanNegate<T>(max_value)) {
+			return true;
+		}
 		// new min is -max
-		new_min = Value::Numeric(type, NegateOperator::Operation<T, T>(istats.max.GetValueUnsafe<T>()));
+		new_min = Value::Numeric(type, NegateOperator::Operation<T, T>(max_value));
 		// new max is -min
-		new_max = Value::Numeric(type, NegateOperator::Operation<T, T>(istats.min.GetValueUnsafe<T>()));
+		new_max = Value::Numeric(type, NegateOperator::Operation<T, T>(min_value));
+		return false;
 	}
 };
 
@@ -407,23 +418,32 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, B
 	}
 	auto &istats = (NumericStatistics &)*child_stats[0];
 	Value new_min, new_max;
+	bool potential_overflow = true;
 	if (!istats.min.IsNull() && !istats.max.IsNull()) {
 		switch (expr.return_type.InternalType()) {
 		case PhysicalType::INT8:
-			NegatePropagateStatistics::Operation<int8_t>(expr.return_type, istats, new_min, new_max);
+			potential_overflow =
+			    NegatePropagateStatistics::Operation<int8_t>(expr.return_type, istats, new_min, new_max);
 			break;
 		case PhysicalType::INT16:
-			NegatePropagateStatistics::Operation<int16_t>(expr.return_type, istats, new_min, new_max);
+			potential_overflow =
+			    NegatePropagateStatistics::Operation<int16_t>(expr.return_type, istats, new_min, new_max);
 			break;
 		case PhysicalType::INT32:
-			NegatePropagateStatistics::Operation<int32_t>(expr.return_type, istats, new_min, new_max);
+			potential_overflow =
+			    NegatePropagateStatistics::Operation<int32_t>(expr.return_type, istats, new_min, new_max);
 			break;
 		case PhysicalType::INT64:
-			NegatePropagateStatistics::Operation<int64_t>(expr.return_type, istats, new_min, new_max);
+			potential_overflow =
+			    NegatePropagateStatistics::Operation<int64_t>(expr.return_type, istats, new_min, new_max);
 			break;
 		default:
 			return nullptr;
 		}
+	}
+	if (potential_overflow) {
+		new_min = Value(expr.return_type);
+		new_max = Value(expr.return_type);
 	}
 	auto stats = make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max));
 	if (istats.validity_stats) {

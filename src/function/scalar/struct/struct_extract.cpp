@@ -72,10 +72,11 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
-	if (key_val.IsNull() || key_val.str_value.length() < 1) {
+	auto &key_str = StringValue::Get(key_val);
+	if (key_val.IsNull() || key_str.empty()) {
 		throw BinderException("Key name for struct_extract needs to be neither NULL nor empty");
 	}
-	string key = StringUtil::Lower(key_val.str_value);
+	string key = StringUtil::Lower(key_str);
 
 	LogicalType return_type;
 	idx_t key_index = 0;

@@ -611,7 +611,7 @@ static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-		TemplatedFilterOperation<string_t, OP>(v, string_t(constant.str_value), filter_mask, count);
+		TemplatedFilterOperation<string_t, OP>(v, string_t(StringValue::Get(constant)), filter_mask, count);
 		break;
 	case LogicalTypeId::DECIMAL:
 		switch (v.GetType().InternalType()) {

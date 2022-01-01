@@ -284,7 +284,7 @@ string append_to_primary_key(Connection &con, idx_t thread_nr) {
 		}
 		// check the count
 		result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers WHERE i >= 0");
-		if (!CHECK_COLUMN(result, 0, { Value::INTEGER(initial_count + i + 1) })) {
+		if (!CHECK_COLUMN(result, 0, {Value::INTEGER(initial_count + i + 1)})) {
 			return "Incorrect result for CHECK_COLUMN [" + result->error + "], expected " +
 			       Value::INTEGER(initial_count + i + 1).ToString() + " rows";
 		}

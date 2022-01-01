@@ -227,7 +227,7 @@ public:
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		vector<string> files;
-		for (auto &val : inputs[0].list_value) {
+		for (auto &val : ListValue::GetChildren(inputs[0])) {
 			auto glob_files = ParquetGlob(fs, val.ToString());
 			files.insert(files.end(), glob_files.begin(), glob_files.end());
 		}

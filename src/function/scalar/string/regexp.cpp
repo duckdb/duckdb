@@ -38,7 +38,7 @@ static inline duckdb_re2::StringPiece CreateStringPiece(string_t &input) {
 	return duckdb_re2::StringPiece(input.GetDataUnsafe(), input.GetSize());
 }
 
-static void ParseRegexOptions(string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr) {
+static void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr) {
 	for (idx_t i = 0; i < options.size(); i++) {
 		switch (options[i]) {
 		case 'c':
@@ -150,14 +150,14 @@ static unique_ptr<FunctionData> RegexpMatchesBind(ClientContext &context, Scalar
 		}
 		Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[2]);
 		if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
-			ParseRegexOptions(options_str.str_value, options);
+			ParseRegexOptions(StringValue::Get(options_str), options);
 		}
 	}
 
 	if (arguments[1]->IsFoldable()) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 		if (!pattern_str.IsNull() && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
-			return make_unique<RegexpMatchesBindData>(options, pattern_str.str_value);
+			return make_unique<RegexpMatchesBindData>(options, StringValue::Get(pattern_str));
 		}
 	}
 	return make_unique<RegexpMatchesBindData>(options, "");
@@ -201,7 +201,7 @@ static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarF
 		}
 		Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[3]);
 		if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
-			ParseRegexOptions(options_str.str_value, data->options, &data->global_replace);
+			ParseRegexOptions(StringValue::Get(options_str), data->options, &data->global_replace);
 		}
 	}
 
@@ -263,7 +263,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 	if (constant_pattern) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 		if (!pattern_str.IsNull() && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
-			pattern = pattern_str.str_value;
+			pattern = StringValue::Get(pattern_str);
 		}
 	}
 
