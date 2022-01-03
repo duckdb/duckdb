@@ -602,6 +602,9 @@ static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &
 	case PhysicalType::INT64:
 		TemplatedFilterOperation<int64_t, OP>(v, constant, filter_mask, count);
 		break;
+	case PhysicalType::INT128:
+		TemplatedFilterOperation<hugeint_t, OP>(v, constant, filter_mask, count);
+		break;
 	case PhysicalType::FLOAT:
 		TemplatedFilterOperation<float, OP>(v, constant, filter_mask, count);
 		break;

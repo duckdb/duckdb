@@ -842,6 +842,9 @@ uintptr_t Value::GetPointer() const {
 
 Value Value::Numeric(const LogicalType &type, int64_t value) {
 	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		D_ASSERT(value == 0 || value == 1);
+		return Value::BOOLEAN(value ? 1 : 0);
 	case LogicalTypeId::TINYINT:
 		D_ASSERT(value >= NumericLimits<int8_t>::Minimum() && value <= NumericLimits<int8_t>::Maximum());
 		return Value::TINYINT((int8_t)value);
