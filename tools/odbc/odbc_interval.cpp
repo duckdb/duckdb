@@ -1,5 +1,4 @@
 #include "odbc_interval.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
 #include <sqltypes.h>
 #include <sqlext.h>
 
@@ -8,26 +7,14 @@ using duckdb::OdbcInterval;
 using duckdb::Value;
 
 bool OdbcInterval::GetInterval(Value &value, interval_t &interval, duckdb::OdbcHandleStmt *stmt) {
-	switch (value.type().id()) {
-	case LogicalTypeId::INTERVAL:
-		// interval = value.GetValue<interval_t>(); // we don't have a get to retrieve interval
-		interval = value.value_.interval;
-		return true;
-	case LogicalTypeId::VARCHAR: {
-		string error_message;
-		string val_str = value.GetValue<string>();
-		if (!TryCastErrorMessage::Operation<string_t, interval_t>(string_t(val_str), interval, &error_message)) {
-			if (error_message.empty()) {
-				error_message = CastExceptionText<string_t, interval_t>(string_t(val_str));
-			}
-			stmt->error_messages.emplace_back(error_message);
-			return false;
-		}
-		return true;
-	}
-	default:
+	string error_message;
+	Value new_value;
+	if (!value.TryCastAs(LogicalType::INTERVAL, new_value, &error_message)) {
+		stmt->error_messages.emplace_back(error_message);
 		return false;
 	}
+	interval = IntervalValue::Get(new_value);
+	return true;
 }
 
 /**
