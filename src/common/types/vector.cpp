@@ -1459,6 +1459,7 @@ vector<idx_t> ListVector::Search(Vector &list, const Value &key, idx_t row) {
 Value ListVector::GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets) {
 	auto &child_vec = ListVector::GetEntry(list);
 	vector<Value> list_values;
+	list_values.reserve(offsets.size());
 	for (auto &offset : offsets) {
 		list_values.push_back(child_vec.GetValue(offset));
 	}

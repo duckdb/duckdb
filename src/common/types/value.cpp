@@ -72,6 +72,36 @@ Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false), str_valu
 Value::~Value() {
 }
 
+Value::Value(const Value &other)
+    : type_(other.type_), is_null(other.is_null), value_(other.value_), str_value(other.str_value),
+      struct_value(other.struct_value), list_value(other.list_value) {
+}
+
+Value::Value(Value &&other) noexcept
+    : type_(move(other.type_)), is_null(other.is_null), value_(other.value_), str_value(move(other.str_value)),
+      struct_value(move(other.struct_value)), list_value(move(other.list_value)) {
+}
+
+Value &Value::operator=(const Value &other) {
+	type_ = other.type_;
+	is_null = other.is_null;
+	value_ = other.value_;
+	str_value = other.str_value;
+	struct_value = other.struct_value;
+	list_value = other.list_value;
+	return *this;
+}
+
+Value &Value::operator=(Value &&other) noexcept {
+	type_ = move(other.type_);
+	is_null = other.is_null;
+	value_ = other.value_;
+	str_value = move(other.str_value);
+	struct_value = move(other.struct_value);
+	list_value = move(other.list_value);
+	return *this;
+}
+
 Value Value::MinimumValue(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:

@@ -44,8 +44,17 @@ public:
 	DUCKDB_API Value(string_t val); // NOLINT: Allow implicit conversion from `string_t`
 	//! Create a VARCHAR value
 	DUCKDB_API Value(string val); // NOLINT: Allow implicit conversion from `string`
+	//! Copy constructor
+	DUCKDB_API Value(const Value &other);
+	//! Move constructor
+	DUCKDB_API Value(Value &&other) noexcept;
 	//! Destructor
 	DUCKDB_API ~Value();
+
+	// copy assignment
+	DUCKDB_API Value &operator=(const Value &other);
+	// move assignment
+	DUCKDB_API Value &operator=(Value &&other) noexcept;
 
 	inline const LogicalType &type() const {
 		return type_;

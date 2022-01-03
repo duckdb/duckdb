@@ -398,7 +398,7 @@ struct LogicalType {
 		return *this;
 	}
 	// move assignment
-	inline LogicalType& operator=(LogicalType&& other) {
+	inline LogicalType& operator=(LogicalType&& other) noexcept {
 		id_ = other.id_;
 		physical_type_ = other.physical_type_;
 		type_info_ = move(other.type_info_);
