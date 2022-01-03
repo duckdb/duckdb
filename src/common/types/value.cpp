@@ -1385,6 +1385,22 @@ const string &StringValue::Get(const Value &value) {
 	return value.str_value;
 }
 
+date_t DateValue::Get(const Value &value) {
+	return value.GetValueUnsafe<date_t>();
+}
+
+dtime_t TimeValue::Get(const Value &value) {
+	return value.GetValueUnsafe<dtime_t>();
+}
+
+timestamp_t TimestampValue::Get(const Value &value) {
+	return value.GetValueUnsafe<timestamp_t>();
+}
+
+interval_t IntervalValue::Get(const Value &value) {
+	return value.GetValueUnsafe<interval_t>();
+}
+
 const vector<Value> &StructValue::GetChildren(const Value &value) {
 	D_ASSERT(value.type().InternalType() == PhysicalType::STRUCT);
 	return value.struct_value;

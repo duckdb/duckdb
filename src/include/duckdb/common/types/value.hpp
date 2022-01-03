@@ -328,6 +328,22 @@ struct StringValue {
 	DUCKDB_API static const string &Get(const Value &value);
 };
 
+struct DateValue {
+	static date_t Get(const Value &value);
+};
+
+struct TimeValue {
+	static dtime_t Get(const Value &value);
+};
+
+struct TimestampValue {
+	static timestamp_t Get(const Value &value);
+};
+
+struct IntervalValue {
+	static interval_t Get(const Value &value);
+};
+
 struct StructValue {
 	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
 };
