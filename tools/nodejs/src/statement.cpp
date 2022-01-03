@@ -149,25 +149,25 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 			// TODO templateroo here
 			switch (chunk.data[col_idx].GetType().id()) {
 			case duckdb::LogicalTypeId::BOOLEAN: {
-				value = Napi::Boolean::New(env, BooleanValue::Get(dval));
+				value = Napi::Boolean::New(env, duckdb::BooleanValue::Get(dval));
 			} break;
 			case duckdb::LogicalTypeId::INTEGER: {
-				value = Napi::Number::New(env, IntegerValue::Get(dval));
+				value = Napi::Number::New(env, duckdb::IntegerValue::Get(dval));
 			} break;
 			case duckdb::LogicalTypeId::FLOAT: {
-				value = Napi::Number::New(env, FloatValue::Get(dval));
+				value = Napi::Number::New(env, duckdb::FloatValue::Get(dval));
 			} break;
 			case duckdb::LogicalTypeId::DOUBLE: {
-				value = Napi::Number::New(env, DoubleValue::Get(dval));
+				value = Napi::Number::New(env, duckdb::DoubleValue::Get(dval));
 			} break;
 			case duckdb::LogicalTypeId::BIGINT: {
-				value = Napi::Number::New(env, BigIntValue::Get(dval));
+				value = Napi::Number::New(env, duckdb::BigIntValue::Get(dval));
 			} break;
 			case duckdb::LogicalTypeId::HUGEINT: {
 				value = Napi::Number::New(env, dval.GetValue<double>());
 			} break;
 			case duckdb::LogicalTypeId::INTERVAL: {
-				auto interval = IntervalValue::Get(dval);
+				auto interval = duckdb::IntervalValue::Get(dval);
 				is_object_value = true;
 				object_value = Napi::Object::New(env);
 				object_value.Set("months", interval.months);
@@ -184,10 +184,10 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 			} break;
 #endif
 			case duckdb::LogicalTypeId::VARCHAR: {
-				value = Napi::String::New(env, StringValue::Get(dval));
+				value = Napi::String::New(env, duckdb::StringValue::Get(dval));
 			} break;
 			case duckdb::LogicalTypeId::BLOB: {
-				auto &blob = StringValue::Get(dval);
+				auto &blob = duckdb::StringValue::Get(dval);
 				value = Napi::Buffer<char>::Copy(env, blob.c_str(), blob.length());
 			} break;
 			case duckdb::LogicalTypeId::SQLNULL: {
