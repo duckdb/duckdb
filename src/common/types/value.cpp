@@ -25,6 +25,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
 
