@@ -100,18 +100,25 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 		// order does not matter in multiplication:
 		// change right side to 10/2 (outer_constant / inner_constant)
 		// but ONLY if outer_constant is cleanly divisible by the inner_constant
-		if (inner_constant->value == 0) {
+		if (inner_value == 0) {
 			// x * 0, the result is either 0 or NULL
-			// thus the final result will be either [TRUE, FALSE] or [NULL], depending
-			// on if 0 matches the comparison criteria with the RHS
-			bool outer_is_null = outer_constant->value == 0;
-			return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]),
-			                                          Value::BOOLEAN(outer_is_null));
+			// we let the arithmetic_simplification rule take care of simplifying this first
+			return nullptr;
 		}
 		if (outer_value % inner_value != 0) {
-			// not cleanly divisible, the result will be either FALSE or NULL
-			return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]),
-			                                          Value::BOOLEAN(false));
+			// not cleanly divisible
+			bool is_equality = comparison->type == ExpressionType::COMPARE_EQUAL;
+			bool is_inequality = comparison->type == ExpressionType::COMPARE_NOTEQUAL;
+			if (is_equality || is_inequality) {
+				// we know the values are not equal
+				// the result will be either FALSE or NULL (if COMPARE_EQUAL)
+				// or TRUE or NULL (if COMPARE_NOTEQUAL)
+				return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]),
+				                                          Value::BOOLEAN(is_inequality));
+			} else {
+				// not cleanly divisible and we are doing > >= < <=, skip the simplification for now
+				return nullptr;
+			}
 		}
 		if (inner_value < 0) {
 			// multiply by negative value, need to flip expression
