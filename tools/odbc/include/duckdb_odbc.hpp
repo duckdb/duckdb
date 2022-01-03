@@ -19,11 +19,14 @@ namespace duckdb {
 
 class OdbcFetch;
 class ParameterDescriptor;
+class RowDescriptor;
 
 enum OdbcHandleType { ENV, DBC, STMT, DESC };
 struct OdbcHandle {
 	explicit OdbcHandle(OdbcHandleType type_p) : type(type_p) {};
 	OdbcHandleType type;
+	// appending all error messages into it
+	std::vector<std::string> error_messages;
 };
 
 struct OdbcHandleEnv : public OdbcHandle {
@@ -32,8 +35,10 @@ struct OdbcHandleEnv : public OdbcHandle {
 };
 
 struct OdbcHandleStmt;
+struct OdbcHandleDesc;
 
 struct OdbcHandleDbc : public OdbcHandle {
+public:
 	explicit OdbcHandleDbc(OdbcHandleEnv *env_p) : OdbcHandle(OdbcHandleType::DBC), env(env_p), autocommit(true) {
 		D_ASSERT(env_p);
 		D_ASSERT(env_p->db);
@@ -41,12 +46,18 @@ struct OdbcHandleDbc : public OdbcHandle {
 	~OdbcHandleDbc();
 	void EraseStmtRef(OdbcHandleStmt *stmt);
 	SQLRETURN MaterializeResult();
+	void ResetStmtDescriptors(OdbcHandleDesc *old_desc);
 
+public:
 	OdbcHandleEnv *env;
 	unique_ptr<Connection> conn;
 	bool autocommit;
 	// reference to an open statement handled by this connection
 	std::vector<OdbcHandleStmt *> vec_stmt_ref;
+
+	// explicitly allocated Application Descriptors
+	OdbcHandleDesc *apd = nullptr;
+	OdbcHandleDesc *ard = nullptr;
 };
 
 inline bool IsSQLVariableLengthType(SQLSMALLINT type) {
@@ -76,39 +87,39 @@ struct OdbcBoundCol {
 	SQLLEN *strlen_or_ind;
 };
 
-struct OdbcHandleDesc;
-
 struct OdbcHandleStmt : public OdbcHandle {
+public:
 	explicit OdbcHandleStmt(OdbcHandleDbc *dbc_p);
 	~OdbcHandleStmt();
 	void Close();
 	SQLRETURN MaterializeResult();
+	void SetARD(OdbcHandleDesc *new_ard);
+	void SetAPD(OdbcHandleDesc *new_apd);
 
+public:
 	OdbcHandleDbc *dbc;
 	unique_ptr<PreparedStatement> stmt;
 	unique_ptr<QueryResult> res;
 	vector<OdbcBoundCol> bound_cols;
 	bool open;
 	SQLULEN *rows_fetched_ptr;
-	// appending all statement error messages into it
-	vector<std::string> error_messages;
+
 	// fetcher
 	unique_ptr<OdbcFetch> odbc_fetcher;
 
 	unique_ptr<ParameterDescriptor> param_desc;
 
-	unique_ptr<OdbcHandleDesc> ard;
-	unique_ptr<OdbcHandleDesc> ird;
+	unique_ptr<RowDescriptor> row_desc;
 };
 
 struct OdbcHandleDesc : public OdbcHandle {
 	//! https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/descriptors?view=sql-server-ver15
 	// TODO requires full implmentation
 public:
-	explicit OdbcHandleDesc(DescType type, OdbcHandleStmt *stmt_p)
-	    : OdbcHandle(OdbcHandleType::DESC), desc_type(type), stmt(stmt_p) {
+	explicit OdbcHandleDesc(OdbcHandleDbc *dbc_ptr) : OdbcHandle(OdbcHandleType::DESC), dbc(dbc_ptr) {
 	}
-	~OdbcHandleDesc() {};
+	~OdbcHandleDesc() {
+	}
 	DescRecord *GetDescRecord(idx_t param_idx);
 	SQLRETURN SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field_identifier, SQLPOINTER value_ptr,
 	                       SQLINTEGER buffer_length);
@@ -118,10 +129,7 @@ public:
 public:
 	DescHeader header;
 	std::vector<DescRecord> records;
-
-private:
-	DescType desc_type;
-	OdbcHandleStmt *stmt;
+	OdbcHandleDbc *dbc;
 };
 
 struct OdbcUtils {
