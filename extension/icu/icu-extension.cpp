@@ -32,15 +32,20 @@ struct IcuBindData : public FunctionData {
 
 	IcuBindData(string language_p, string country_p) : language(move(language_p)), country(move(country_p)) {
 		UErrorCode status = U_ZERO_ERROR;
+		auto locale = icu::Locale(language.c_str(), country.c_str());
+		if (locale.isBogus()) {
+			throw InternalException("Locale is bogus!?");
+		}
 		this->collator = std::unique_ptr<icu::Collator>(
-		    icu::Collator::createInstance(icu::Locale(language.c_str(), country.c_str()), status));
+		    icu::Collator::createInstance(locale, status));
 		if (U_FAILURE(status)) {
-			throw Exception("Failed to create ICU collator!");
+			auto error_name = u_errorName(status);
+			throw InternalException("Failed to create ICU collator: %s (language: %s, country: %s)", error_name, language, country);
 		}
 	}
 
 	unique_ptr<FunctionData> Copy() override {
-		return make_unique<IcuBindData>(language.c_str(), country.c_str());
+		return make_unique<IcuBindData>(language, country);
 	}
 };
 
