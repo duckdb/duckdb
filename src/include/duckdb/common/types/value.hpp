@@ -233,6 +233,7 @@ public:
 private:
 	//! The logical of the value
 	LogicalType type_;
+
 	//! Whether or not the value is NULL
 	bool is_null;
 
