@@ -34,7 +34,7 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 }
 
 py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type) {
-	if (val.is_null) {
+	if (val.IsNull()) {
 		return py::none();
 	}
 	switch (type.id()) {
@@ -113,17 +113,21 @@ py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type)
 		return py::cast<py::object>(PyDate_FromDate(year, month, day));
 	}
 	case LogicalTypeId::LIST: {
+		auto &list_values = ListValue::GetChildren(val);
+
 		py::list list;
-		for (auto list_elem : val.list_value) {
+		for (auto list_elem : list_values) {
 			list.append(GetValueToPython(list_elem, ListType::GetChildType(type)));
 		}
 		return std::move(list);
 	}
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT: {
+		auto &struct_values = StructValue::GetChildren(val);
+
 		py::dict py_struct;
 		auto &child_types = StructType::GetChildTypes(type);
-		for (idx_t i = 0; i < val.struct_value.size(); i++) {
+		for (idx_t i = 0; i < struct_values.size(); i++) {
 			auto &child_entry = child_types[i];
 			auto &child_name = child_entry.first;
 			auto &child_type = child_entry.second;
