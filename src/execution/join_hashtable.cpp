@@ -327,7 +327,7 @@ void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *i
 		// store the pointer to the current tuple entry in the hash_map
 		pointers[index] = key_locations[i];
 	}
-	// Create vectors and do a vectorized check for duplicates'
+	// Create vectors and do a vectorized check for duplicates' TODO: simulate without this code
 	if (conflict_count > 0) {
 		Vector ht_rows(LogicalType::POINTER, *key_locations);
 		Vector conflict_rows(LogicalType::POINTER, *conflict_entries);
