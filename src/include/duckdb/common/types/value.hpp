@@ -277,51 +277,51 @@ private:
 // Note that these are equivalent to calling GetValueUnsafe<X>, meaning no cast will be performed
 // instead, an assertion will be triggered if the value is not of the correct type
 struct BooleanValue {
-	static bool Get(const Value &value);
+	DUCKDB_API static bool Get(const Value &value);
 };
 
 struct TinyIntValue {
-	static int8_t Get(const Value &value);
+	DUCKDB_API static int8_t Get(const Value &value);
 };
 
 struct SmallIntValue {
-	static int16_t Get(const Value &value);
+	DUCKDB_API static int16_t Get(const Value &value);
 };
 
 struct IntegerValue {
-	static int32_t Get(const Value &value);
+	DUCKDB_API static int32_t Get(const Value &value);
 };
 
 struct BigIntValue {
-	static int64_t Get(const Value &value);
+	DUCKDB_API static int64_t Get(const Value &value);
 };
 
 struct HugeIntValue {
-	static hugeint_t Get(const Value &value);
+	DUCKDB_API static hugeint_t Get(const Value &value);
 };
 
 struct UTinyIntValue {
-	static uint8_t Get(const Value &value);
+	DUCKDB_API static uint8_t Get(const Value &value);
 };
 
 struct USmallIntValue {
-	static uint16_t Get(const Value &value);
+	DUCKDB_API static uint16_t Get(const Value &value);
 };
 
 struct UIntegerValue {
-	static uint32_t Get(const Value &value);
+	DUCKDB_API static uint32_t Get(const Value &value);
 };
 
 struct UBigIntValue {
-	static uint64_t Get(const Value &value);
+	DUCKDB_API static uint64_t Get(const Value &value);
 };
 
 struct FloatValue {
-	static float Get(const Value &value);
+	DUCKDB_API static float Get(const Value &value);
 };
 
 struct DoubleValue {
-	static double Get(const Value &value);
+	DUCKDB_API static double Get(const Value &value);
 };
 
 struct StringValue {
@@ -329,19 +329,19 @@ struct StringValue {
 };
 
 struct DateValue {
-	static date_t Get(const Value &value);
+	DUCKDB_API static date_t Get(const Value &value);
 };
 
 struct TimeValue {
-	static dtime_t Get(const Value &value);
+	DUCKDB_API static dtime_t Get(const Value &value);
 };
 
 struct TimestampValue {
-	static timestamp_t Get(const Value &value);
+	DUCKDB_API static timestamp_t Get(const Value &value);
 };
 
 struct IntervalValue {
-	static interval_t Get(const Value &value);
+	DUCKDB_API static interval_t Get(const Value &value);
 };
 
 struct StructValue {
