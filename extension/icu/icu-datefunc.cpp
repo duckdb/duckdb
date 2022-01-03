@@ -18,8 +18,18 @@ ICUDateFunc::BindData::BindData(ClientContext &context) {
 	}
 	auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id)));
 
+	string cal_id("@calendar=");
+	Value cal_value;
+	if (context.TryGetCurrentSetting("Calendar", cal_value)) {
+		cal_id += cal_value.ToString();
+	} else {
+		cal_id += "gregorian";
+	}
+
+	icu::Locale locale(cal_id.c_str());
+
 	UErrorCode success = U_ZERO_ERROR;
-	calendar.reset(icu::Calendar::createInstance(tz, success));
+	calendar.reset(icu::Calendar::createInstance(tz, locale, success));
 	if (U_FAILURE(success)) {
 		throw Exception("Unable to create ICU calendar.");
 	}
