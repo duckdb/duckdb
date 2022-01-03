@@ -124,7 +124,7 @@ static ScalarFunction GetICUFunction(const string &collation) {
 }
 
 static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
-	icu::StringPiece utf8(parameter.Value::GetValueUnsafe<string>());
+	icu::StringPiece utf8(StringValue::Get(parameter));
 	const auto uid = icu::UnicodeString::fromUTF8(utf8);
 	std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(uid));
 	if (*tz == icu::TimeZone::getUnknown()) {

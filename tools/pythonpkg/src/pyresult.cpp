@@ -69,9 +69,9 @@ py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type)
 	case LogicalTypeId::ENUM:
 		return py::cast(EnumType::GetValue(val));
 	case LogicalTypeId::VARCHAR:
-		return py::cast(val.GetValue<string>());
+		return py::cast(StringValue::Get(val));
 	case LogicalTypeId::BLOB:
-		return py::bytes(val.GetValueUnsafe<string>());
+		return py::bytes(StringValue::Get(val));
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:

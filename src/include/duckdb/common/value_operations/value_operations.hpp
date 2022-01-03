@@ -43,10 +43,5 @@ struct ValueOperations {
 	static bool DistinctLessThan(const Value &left, const Value &right);
 	// A <= B, NULLs last
 	static bool DistinctLessThanEquals(const Value &left, const Value &right);
-	//===--------------------------------------------------------------------===//
-	// Hash functions
-	//===--------------------------------------------------------------------===//
-	// result = HASH(A)
-	static hash_t Hash(const Value &left);
 };
 } // namespace duckdb

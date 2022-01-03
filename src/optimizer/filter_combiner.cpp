@@ -664,7 +664,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		// scalar condition, evaluate it
 		auto result = ExpressionExecutor::EvaluateScalar(*expr).CastAs(LogicalType::BOOLEAN);
 		// check if the filter passes
-		if (result.IsNull() || !result.value_.boolean) {
+		if (result.IsNull() || !BooleanValue::Get(result)) {
 			// the filter does not pass the scalar test, create an empty result
 			return FilterResult::UNSATISFIABLE;
 		} else {

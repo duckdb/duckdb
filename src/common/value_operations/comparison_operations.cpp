@@ -111,31 +111,31 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 	}
 	switch (left_type.InternalType()) {
 	case PhysicalType::BOOL:
-		return OP::Operation(left.value_.boolean, right.value_.boolean);
+		return OP::Operation(left.GetValueUnsafe<bool>(), right.GetValueUnsafe<bool>());
 	case PhysicalType::INT8:
-		return OP::Operation(left.value_.tinyint, right.value_.tinyint);
+		return OP::Operation(left.GetValueUnsafe<int8_t>(), right.GetValueUnsafe<int8_t>());
 	case PhysicalType::INT16:
-		return OP::Operation(left.value_.smallint, right.value_.smallint);
+		return OP::Operation(left.GetValueUnsafe<int16_t>(), right.GetValueUnsafe<int16_t>());
 	case PhysicalType::INT32:
-		return OP::Operation(left.value_.integer, right.value_.integer);
+		return OP::Operation(left.GetValueUnsafe<int32_t>(), right.GetValueUnsafe<int32_t>());
 	case PhysicalType::INT64:
-		return OP::Operation(left.value_.bigint, right.value_.bigint);
+		return OP::Operation(left.GetValueUnsafe<int64_t>(), right.GetValueUnsafe<int64_t>());
 	case PhysicalType::UINT8:
-		return OP::Operation(left.value_.utinyint, right.value_.utinyint);
+		return OP::Operation(left.GetValueUnsafe<uint8_t>(), right.GetValueUnsafe<uint8_t>());
 	case PhysicalType::UINT16:
-		return OP::Operation(left.value_.usmallint, right.value_.usmallint);
+		return OP::Operation(left.GetValueUnsafe<uint16_t>(), right.GetValueUnsafe<uint16_t>());
 	case PhysicalType::UINT32:
-		return OP::Operation(left.value_.uinteger, right.value_.uinteger);
+		return OP::Operation(left.GetValueUnsafe<uint32_t>(), right.GetValueUnsafe<uint32_t>());
 	case PhysicalType::UINT64:
-		return OP::Operation(left.value_.ubigint, right.value_.ubigint);
+		return OP::Operation(left.GetValueUnsafe<uint64_t>(), right.GetValueUnsafe<uint64_t>());
 	case PhysicalType::INT128:
-		return OP::Operation(left.value_.hugeint, right.value_.hugeint);
+		return OP::Operation(left.GetValueUnsafe<hugeint_t>(), right.GetValueUnsafe<hugeint_t>());
 	case PhysicalType::FLOAT:
-		return OP::Operation(left.value_.float_, right.value_.float_);
+		return OP::Operation(left.GetValueUnsafe<float>(), right.GetValueUnsafe<float>());
 	case PhysicalType::DOUBLE:
-		return OP::Operation(left.value_.double_, right.value_.double_);
+		return OP::Operation(left.GetValueUnsafe<double>(), right.GetValueUnsafe<double>());
 	case PhysicalType::INTERVAL:
-		return OP::Operation(left.value_.interval, right.value_.interval);
+		return OP::Operation(left.GetValueUnsafe<interval_t>(), right.GetValueUnsafe<interval_t>());
 	case PhysicalType::VARCHAR:
 		return OP::Operation(StringValue::Get(left), StringValue::Get(right));
 	case PhysicalType::STRUCT: {

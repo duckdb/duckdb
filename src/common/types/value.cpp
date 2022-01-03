@@ -934,6 +934,12 @@ Value Value::Numeric(const LogicalType &type, hugeint_t value) {
 // GetValueUnsafe
 //===--------------------------------------------------------------------===//
 template <>
+DUCKDB_API bool Value::GetValueUnsafe() const {
+	D_ASSERT(type_.InternalType() == PhysicalType::BOOL);
+	return value_.boolean;
+}
+
+template <>
 int8_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT8 || type_.InternalType() == PhysicalType::BOOL);
 	return value_.tinyint;
@@ -994,6 +1000,12 @@ string Value::GetValueUnsafe() const {
 }
 
 template <>
+DUCKDB_API string_t Value::GetValueUnsafe() const {
+	D_ASSERT(type_.InternalType() == PhysicalType::VARCHAR);
+	return string_t(str_value);
+}
+
+template <>
 float Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::FLOAT);
 	return value_.float_;
@@ -1027,6 +1039,156 @@ template <>
 interval_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INTERVAL);
 	return value_.interval;
+}
+
+//===--------------------------------------------------------------------===//
+// GetReferenceUnsafe
+//===--------------------------------------------------------------------===//
+template <>
+int8_t &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT8 || type_.InternalType() == PhysicalType::BOOL);
+	return value_.tinyint;
+}
+
+template <>
+int16_t &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT16);
+	return value_.smallint;
+}
+
+template <>
+int32_t &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT32);
+	return value_.integer;
+}
+
+template <>
+int64_t &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
+	return value_.bigint;
+}
+
+template <>
+hugeint_t &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT128);
+	return value_.hugeint;
+}
+
+template <>
+uint8_t &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::UINT8);
+	return value_.utinyint;
+}
+
+template <>
+uint16_t &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::UINT16);
+	return value_.usmallint;
+}
+
+template <>
+uint32_t &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::UINT32);
+	return value_.uinteger;
+}
+
+template <>
+uint64_t &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::UINT64);
+	return value_.ubigint;
+}
+
+template <>
+float &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::FLOAT);
+	return value_.float_;
+}
+
+template <>
+double &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::DOUBLE);
+	return value_.double_;
+}
+
+template <>
+date_t &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT32);
+	return value_.date;
+}
+
+template <>
+dtime_t &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
+	return value_.time;
+}
+
+template <>
+timestamp_t &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
+	return value_.timestamp;
+}
+
+template <>
+interval_t &Value::GetReferenceUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INTERVAL);
+	return value_.interval;
+}
+
+//===--------------------------------------------------------------------===//
+// Hash
+//===--------------------------------------------------------------------===//
+hash_t Value::Hash() const {
+	if (IsNull()) {
+		return 0;
+	}
+	switch (type_.InternalType()) {
+	case PhysicalType::BOOL:
+		return duckdb::Hash(value_.boolean);
+	case PhysicalType::INT8:
+		return duckdb::Hash(value_.tinyint);
+	case PhysicalType::INT16:
+		return duckdb::Hash(value_.smallint);
+	case PhysicalType::INT32:
+		return duckdb::Hash(value_.integer);
+	case PhysicalType::INT64:
+		return duckdb::Hash(value_.bigint);
+	case PhysicalType::UINT8:
+		return duckdb::Hash(value_.utinyint);
+	case PhysicalType::UINT16:
+		return duckdb::Hash(value_.usmallint);
+	case PhysicalType::UINT32:
+		return duckdb::Hash(value_.uinteger);
+	case PhysicalType::UINT64:
+		return duckdb::Hash(value_.ubigint);
+	case PhysicalType::INT128:
+		return duckdb::Hash(value_.hugeint);
+	case PhysicalType::FLOAT:
+		return duckdb::Hash(value_.float_);
+	case PhysicalType::DOUBLE:
+		return duckdb::Hash(value_.double_);
+	case PhysicalType::INTERVAL:
+		return duckdb::Hash(value_.interval);
+	case PhysicalType::VARCHAR:
+		return duckdb::Hash(string_t(StringValue::Get(*this)));
+	case PhysicalType::STRUCT: {
+		auto &struct_children = StructValue::GetChildren(*this);
+		hash_t hash = 0;
+		for (auto &entry : struct_children) {
+			hash ^= entry.Hash();
+		}
+		return hash;
+	}
+	case PhysicalType::LIST: {
+		auto &list_children = ListValue::GetChildren(*this);
+		hash_t hash = 0;
+		for (auto &entry : list_children) {
+			hash ^= entry.Hash();
+		}
+		return hash;
+	}
+	default:
+		throw InternalException("Unimplemented type for value hash");
+	}
 }
 
 string Value::ToString() const {
@@ -1167,6 +1329,10 @@ string Value::ToString() const {
 //===--------------------------------------------------------------------===//
 // Type-specific getters
 //===--------------------------------------------------------------------===//
+bool BooleanValue::Get(const Value &value) {
+	return value.GetValueUnsafe<bool>();
+}
+
 int8_t TinyIntValue::Get(const Value &value) {
 	return value.GetValueUnsafe<int8_t>();
 }
@@ -1203,7 +1369,7 @@ uint64_t UBigIntValue::Get(const Value &value) {
 	return value.GetValueUnsafe<uint64_t>();
 }
 
-double FloatValue::Get(const Value &value) {
+float FloatValue::Get(const Value &value) {
 	return value.GetValueUnsafe<float>();
 }
 

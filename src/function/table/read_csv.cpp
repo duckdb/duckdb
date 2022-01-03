@@ -35,11 +35,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 
 	for (auto &kv : named_parameters) {
 		if (kv.first == "auto_detect") {
-			options.auto_detect = kv.second.value_.boolean;
+			options.auto_detect = BooleanValue::Get(kv.second);
 		} else if (kv.first == "sep" || kv.first == "delim") {
 			options.SetDelimiter(StringValue::Get(kv.second));
 		} else if (kv.first == "header") {
-			options.header = kv.second.value_.boolean;
+			options.header = BooleanValue::Get(kv.second);
 			options.has_header = true;
 		} else if (kv.first == "quote") {
 			options.quote = StringValue::Get(kv.second);
@@ -79,7 +79,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 				throw BinderException("Unsupported parameter for SAMPLE_CHUNKS: cannot be smaller than 1");
 			}
 		} else if (kv.first == "all_varchar") {
-			options.all_varchar = kv.second.value_.boolean;
+			options.all_varchar = BooleanValue::Get(kv.second);
 		} else if (kv.first == "dateformat") {
 			options.has_format[LogicalTypeId::DATE] = true;
 			auto &date_format = options.date_format[LogicalTypeId::DATE];
@@ -97,7 +97,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
 			}
 		} else if (kv.first == "normalize_names") {
-			options.normalize_names = kv.second.value_.boolean;
+			options.normalize_names = BooleanValue::Get(kv.second);
 		} else if (kv.first == "columns") {
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
@@ -120,7 +120,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 		} else if (kv.first == "compression") {
 			options.compression = FileCompressionTypeFromString(StringValue::Get(kv.second));
 		} else if (kv.first == "filename") {
-			result->include_file_name = kv.second.value_.boolean;
+			result->include_file_name = BooleanValue::Get(kv.second);
 		} else if (kv.first == "skip") {
 			options.skip_rows = kv.second.GetValue<int64_t>();
 		}

@@ -208,7 +208,7 @@ public:
 		ParquetOptions parquet_options(context);
 		for (auto &kv : named_parameters) {
 			if (kv.first == "binary_as_string") {
-				parquet_options.binary_as_string = kv.second.value_.boolean;
+				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
 			}
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
@@ -237,7 +237,7 @@ public:
 		ParquetOptions parquet_options(context);
 		for (auto &kv : named_parameters) {
 			if (kv.first == "binary_as_string") {
-				parquet_options.binary_as_string = kv.second.value_.boolean;
+				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
 			}
 		}
 		return ParquetScanBindInternal(context, move(files), return_types, names, parquet_options);

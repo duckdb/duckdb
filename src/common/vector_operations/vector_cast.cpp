@@ -683,13 +683,13 @@ void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enu
 		uint64_t enum_idx;
 		switch (enum_physical_type) {
 		case PhysicalType::UINT8:
-			enum_idx = src_val.value_.utinyint;
+			enum_idx = UTinyIntValue::Get(src_val);
 			break;
 		case PhysicalType::UINT16:
-			enum_idx = src_val.value_.usmallint;
+			enum_idx = USmallIntValue::Get(src_val);
 			break;
 		case PhysicalType::UINT32:
-			enum_idx = src_val.value_.uinteger;
+			enum_idx = UIntegerValue::Get(src_val);
 			break;
 		default:
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");

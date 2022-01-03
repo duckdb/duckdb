@@ -456,7 +456,7 @@ double sqlite3_column_double(sqlite3_stmt *stmt, int iCol) {
 	if (!sqlite3_column_has_value(stmt, iCol, LogicalType::DOUBLE, val)) {
 		return 0;
 	}
-	return val.value_.double_;
+	return DoubleValue::Get(val);
 }
 
 int sqlite3_column_int(sqlite3_stmt *stmt, int iCol) {
@@ -464,7 +464,7 @@ int sqlite3_column_int(sqlite3_stmt *stmt, int iCol) {
 	if (!sqlite3_column_has_value(stmt, iCol, LogicalType::INTEGER, val)) {
 		return 0;
 	}
-	return val.value_.integer;
+	return IntegerValue::Get(val);
 }
 
 sqlite3_int64 sqlite3_column_int64(sqlite3_stmt *stmt, int iCol) {
@@ -472,7 +472,7 @@ sqlite3_int64 sqlite3_column_int64(sqlite3_stmt *stmt, int iCol) {
 	if (!sqlite3_column_has_value(stmt, iCol, LogicalType::BIGINT, val)) {
 		return 0;
 	}
-	return val.value_.bigint;
+	return BigIntValue::Get(val);
 }
 
 const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {

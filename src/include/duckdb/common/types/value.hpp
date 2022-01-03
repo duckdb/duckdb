@@ -148,17 +148,22 @@ public:
 
 	template <class T>
 	T GetValue() const {
-		throw NotImplementedException("Unimplemented template type for Value::GetValue");
+		throw InternalException("Unimplemented template type for Value::GetValue");
 	}
 	template <class T>
 	static Value CreateValue(T value) {
-		throw NotImplementedException("Unimplemented template type for Value::CreateValue");
+		throw InternalException("Unimplemented template type for Value::CreateValue");
 	}
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
 	// type of the value. Only use this if you know what you are doing.
 	template <class T>
 	T GetValueUnsafe() const {
-		throw NotImplementedException("Unimplemented template type for Value::GetValueUnsafe");
+		throw InternalException("Unimplemented template type for Value::GetValueUnsafe");
+	}
+	//! Returns a reference to the internal value. This can only be used for primitive types.
+	template <class T>
+	T &GetReferenceUnsafe() {
+		throw InternalException("Unimplemented template type for Value::GetReferenceUnsafe");
 	}
 
 	//! Return a copy of this value
@@ -166,6 +171,8 @@ public:
 		return Value(*this);
 	}
 
+	//! Hashes the Value
+	DUCKDB_API hash_t Hash() const;
 	//! Convert this value to a string
 	DUCKDB_API string ToString() const;
 
@@ -229,7 +236,6 @@ private:
 	//! Whether or not the value is NULL
 	bool is_null;
 
-public:
 	//! The value of the object, if it is of a constant size Type
 	union Val {
 		int8_t boolean;
@@ -269,6 +275,10 @@ private:
 //===--------------------------------------------------------------------===//
 // Note that these are equivalent to calling GetValueUnsafe<X>, meaning no cast will be performed
 // instead, an assertion will be triggered if the value is not of the correct type
+struct BooleanValue {
+	static bool Get(const Value &value);
+};
+
 struct TinyIntValue {
 	static int8_t Get(const Value &value);
 };
@@ -306,7 +316,7 @@ struct UBigIntValue {
 };
 
 struct FloatValue {
-	static double Get(const Value &value);
+	static float Get(const Value &value);
 };
 
 struct DoubleValue {
@@ -408,6 +418,8 @@ template <>
 DUCKDB_API interval_t Value::GetValue() const;
 
 template <>
+DUCKDB_API bool Value::GetValueUnsafe() const;
+template <>
 DUCKDB_API int8_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API int16_t Value::GetValueUnsafe() const;
@@ -428,6 +440,8 @@ DUCKDB_API uint64_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API string Value::GetValueUnsafe() const;
 template <>
+DUCKDB_API string_t Value::GetValueUnsafe() const;
+template <>
 DUCKDB_API float Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API double Value::GetValueUnsafe() const;
@@ -439,6 +453,37 @@ template <>
 DUCKDB_API timestamp_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API interval_t Value::GetValueUnsafe() const;
+
+template <>
+DUCKDB_API int8_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API int16_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API int32_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API int64_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API hugeint_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API uint8_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API uint16_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API uint32_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API uint64_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API float &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API double &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API date_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API dtime_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API timestamp_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API interval_t &Value::GetReferenceUnsafe();
 
 template <>
 DUCKDB_API bool Value::IsValid(float value);

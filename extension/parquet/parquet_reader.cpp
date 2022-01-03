@@ -564,72 +564,52 @@ void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_ma
 	}
 }
 
+template <class T, class OP>
+void TemplatedFilterOperation(Vector &v, const Value &constant, parquet_filter_t &filter_mask, idx_t count) {
+	TemplatedFilterOperation<T, OP>(v, constant.template GetValueUnsafe<T>(), filter_mask, count);
+}
+
 template <class OP>
 static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &filter_mask, idx_t count) {
 	if (filter_mask.none() || count == 0) {
 		return;
 	}
-	switch (v.GetType().id()) {
-	case LogicalTypeId::BOOLEAN:
-		TemplatedFilterOperation<bool, OP>(v, constant.value_.boolean, filter_mask, count);
+	switch (v.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+		TemplatedFilterOperation<bool, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::UTINYINT:
-		TemplatedFilterOperation<uint8_t, OP>(v, constant.value_.utinyint, filter_mask, count);
+	case PhysicalType::UINT8:
+		TemplatedFilterOperation<uint8_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::USMALLINT:
-		TemplatedFilterOperation<uint16_t, OP>(v, constant.value_.usmallint, filter_mask, count);
+	case PhysicalType::UINT16:
+		TemplatedFilterOperation<uint16_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::UINTEGER:
-		TemplatedFilterOperation<uint32_t, OP>(v, constant.value_.uinteger, filter_mask, count);
+	case PhysicalType::UINT32:
+		TemplatedFilterOperation<uint32_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::UBIGINT:
-		TemplatedFilterOperation<uint64_t, OP>(v, constant.value_.ubigint, filter_mask, count);
+	case PhysicalType::UINT64:
+		TemplatedFilterOperation<uint64_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::TINYINT:
-		TemplatedFilterOperation<int8_t, OP>(v, constant.value_.tinyint, filter_mask, count);
+	case PhysicalType::INT8:
+		TemplatedFilterOperation<int8_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::SMALLINT:
-		TemplatedFilterOperation<int16_t, OP>(v, constant.value_.smallint, filter_mask, count);
+	case PhysicalType::INT16:
+		TemplatedFilterOperation<int16_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::INTEGER:
-		TemplatedFilterOperation<int32_t, OP>(v, constant.value_.integer, filter_mask, count);
+	case PhysicalType::INT32:
+		TemplatedFilterOperation<int32_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::BIGINT:
-		TemplatedFilterOperation<int64_t, OP>(v, constant.value_.bigint, filter_mask, count);
+	case PhysicalType::INT64:
+		TemplatedFilterOperation<int64_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::FLOAT:
-		TemplatedFilterOperation<float, OP>(v, constant.value_.float_, filter_mask, count);
+	case PhysicalType::FLOAT:
+		TemplatedFilterOperation<float, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::DOUBLE:
-		TemplatedFilterOperation<double, OP>(v, constant.value_.double_, filter_mask, count);
+	case PhysicalType::DOUBLE:
+		TemplatedFilterOperation<double, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::DATE:
-		TemplatedFilterOperation<date_t, OP>(v, constant.value_.date, filter_mask, count);
-		break;
-	case LogicalTypeId::TIMESTAMP:
-		TemplatedFilterOperation<timestamp_t, OP>(v, constant.value_.timestamp, filter_mask, count);
-		break;
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::VARCHAR:
-		TemplatedFilterOperation<string_t, OP>(v, string_t(StringValue::Get(constant)), filter_mask, count);
-		break;
-	case LogicalTypeId::DECIMAL:
-		switch (v.GetType().InternalType()) {
-		case PhysicalType::INT16:
-			TemplatedFilterOperation<int16_t, OP>(v, constant.value_.smallint, filter_mask, count);
-			break;
-		case PhysicalType::INT32:
-			TemplatedFilterOperation<int32_t, OP>(v, constant.value_.integer, filter_mask, count);
-			break;
-		case PhysicalType::INT64:
-			TemplatedFilterOperation<int64_t, OP>(v, constant.value_.bigint, filter_mask, count);
-			break;
-		case PhysicalType::INT128:
-			TemplatedFilterOperation<hugeint_t, OP>(v, constant.value_.hugeint, filter_mask, count);
-			break;
-		default:
-			throw InternalException("Unsupported internal type for decimal");
-		}
+	case PhysicalType::VARCHAR:
+		TemplatedFilterOperation<string_t, OP>(v, constant, filter_mask, count);
 		break;
 	default:
 		throw NotImplementedException("Unsupported type for filter %s", v.ToString());
