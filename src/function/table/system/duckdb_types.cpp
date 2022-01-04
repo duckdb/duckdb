@@ -104,7 +104,6 @@ void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data, 
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::INTERVAL:
-		case LogicalTypeId::DATE_TZ:
 		case LogicalTypeId::TIME_TZ:
 		case LogicalTypeId::TIMESTAMP_TZ:
 			category = "DATETIME";

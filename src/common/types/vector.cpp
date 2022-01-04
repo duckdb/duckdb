@@ -311,7 +311,6 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		((int16_t *)data)[index] = val.value_.smallint;
 		break;
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ:
 	case LogicalTypeId::INTEGER:
 		((int32_t *)data)[index] = val.value_.integer;
 		break;
@@ -466,8 +465,6 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::INTEGER(((int32_t *)data)[index]);
 	case LogicalTypeId::DATE:
 		return Value::DATE(((date_t *)data)[index]);
-	case LogicalTypeId::DATE_TZ:
-		return Value::DATETZ(((date_t *)data)[index]);
 	case LogicalTypeId::TIME:
 		return Value::TIME(((dtime_t *)data)[index]);
 	case LogicalTypeId::TIME_TZ:
@@ -1503,7 +1500,6 @@ vector<idx_t> ListVector::Search(Vector &list, Value &key, idx_t row) {
 		                                       entry.length);
 		break;
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ:
 		::duckdb::TemplatedSearchInMap<date_t>(list, key.value_.date, offsets, key.is_null, entry.offset, entry.length);
 		break;
 	case LogicalTypeId::TIME:

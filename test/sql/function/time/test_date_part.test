@@ -62,10 +62,14 @@ SELECT date_part(s, d) FROM times;
 10
 10001
 
+foreach datepart timezone timezone_hour timezone_minute
+
 query I
-select date_part('offset', time '10:00:00');
+select date_part('${datepart}', time '10:00:00');
 ----
 0
+
+endloop
 
 # time gives errors for date-only parts
 statement error
@@ -132,6 +136,17 @@ select date_part('era', time '10:00:00');
 # Structs
 #
 
+# Correctness: Compare against scalar extract
+foreach partcode hour minute second millisecond microsecond epoch timezone timezone_hour timezone_minute
+
+query III
+SELECT d, DATE_PART('${partcode}', d) AS p, DATE_PART(['${partcode}'], d) AS st
+FROM times
+WHERE p <> st['${partcode}'];
+----
+
+endloop
+
 # Time parts
 query II
 SELECT d, DATE_PART(['hour', 'minute', 'microsecond'], d) AS parts
@@ -145,14 +160,14 @@ ORDER BY 1;
 
 # Miscellaneous parts
 query II
-SELECT d, DATE_PART(['epoch', 'second', 'offset'], d) AS parts
+SELECT d, DATE_PART(['epoch', 'second', 'timezone', 'timezone_hour', 'timezone_minute'], d) AS parts
 FROM times
 ORDER BY 1;
 ----
-00:01:20	{'epoch': 80, 'second': 20, 'offset': 0}
-20:08:10.001	{'epoch': 72490, 'second': 10, 'offset': 0}
-20:08:10.33	{'epoch': 72490, 'second': 10, 'offset': 0}
-20:08:10.998	{'epoch': 72490, 'second': 10, 'offset': 0}
+00:01:20	{'epoch': 80, 'second': 20, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+20:08:10.001	{'epoch': 72490, 'second': 10, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+20:08:10.33	{'epoch': 72490, 'second': 10, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+20:08:10.998	{'epoch': 72490, 'second': 10, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
 
 # Invalid parts
 
