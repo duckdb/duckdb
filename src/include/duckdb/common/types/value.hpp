@@ -271,7 +271,6 @@ public:
 		interval_t interval;
 	} value_;
 
-private:
 	//! The value of the object, if it is of a variable size type
 	string str_value;
 
