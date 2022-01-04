@@ -12,6 +12,7 @@ void BuiltinFunctions::RegisterDateFunctions() {
 	Register<CurrentDateFun>();
 	Register<CurrentTimestampFun>();
 	Register<EpochFun>();
+	Register<MakeDateFun>();
 	Register<StrfTimeFun>();
 	Register<StrpTimeFun>();
 	Register<ToIntervalFun>();

@@ -6,6 +6,7 @@
 #include "include/icu-datepart.hpp"
 #include "include/icu-datesub.hpp"
 #include "include/icu-datetrunc.hpp"
+#include "include/icu-makedate.hpp"
 
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/connection.hpp"
@@ -72,9 +73,9 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 	int32_t buffer_size = 0;
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 		// create a sort key from the string
-		int32_t string_size = ICUGetSortKey(collator, input, buffer, buffer_size);
+		const auto string_size = idx_t(ICUGetSortKey(collator, input, buffer, buffer_size));
 		// convert the sort key to hexadecimal
-		auto str_result = StringVector::EmptyString(result, idx_t(string_size - 1) * 2);
+		auto str_result = StringVector::EmptyString(result, (string_size - 1) * 2);
 		auto str_data = str_result.GetDataWriteable();
 		for (idx_t i = 0; i < string_size - 1; i++) {
 			uint8_t byte = uint8_t(buffer[i]);
@@ -267,6 +268,7 @@ void ICUExtension::Load(DuckDB &db) {
 	RegisterICUDatePartFunctions(*con.context);
 	RegisterICUDateSubFunctions(*con.context);
 	RegisterICUDateTruncFunctions(*con.context);
+	RegisterICUMakeDateFunctions(*con.context);
 
 	con.Commit();
 }
