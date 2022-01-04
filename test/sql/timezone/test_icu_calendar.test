@@ -66,13 +66,7 @@ CREATE TABLE timestamps AS SELECT ts::TIMESTAMPTZ AS ts, era FROM (VALUES
 	('2022-01-01 00:00:00+00', 'Reiwa')
 ) tbl(ts, era);
 
-# ICU appears to have the start of the Meiji era incorrect with regard to:
-#	* the accession of Mutsuhito (1867-02-03)
-#	* the resignation of the Shogun (1867-11-09)
-#	* the imperial restoration (1868-01-03)
-#	* their own comments (1868-01-09)
-#	* the fall of Edo (1868-07)
-# and a bunch of other dates in that period.
+# See http://www.meijigakuin.ac.jp/~watson/ref/mtsh.html for details on recent era boundaries.
 query III
 SELECT era, ts, DATE_PART(['era', 'year', 'month', 'day'], ts)
 FROM timestamps
