@@ -95,9 +95,9 @@ TEST_CASE("Test random integers", "[arrow]") {
 				auto col_chunk = result->Fetch();
 				while (col_chunk) {
 					for (size_t i = 0; i < col_chunk->size(); i++) {
-						REQUIRE(IntegerValue::Get(col_chunk->GetValue(0, i)) == expected_a++);
-						REQUIRE(IntegerValue::Get(col_chunk->GetValue(1, i)) == expected_b++);
-						REQUIRE(IntegerValue::Get(col_chunk->GetValue(2, i)) == expected_c++);
+						REQUIRE(duckdb::IntegerValue::Get(col_chunk->GetValue(0, i)) == expected_a++);
+						REQUIRE(duckdb::IntegerValue::Get(col_chunk->GetValue(1, i)) == expected_b++);
+						REQUIRE(duckdb::IntegerValue::Get(col_chunk->GetValue(2, i)) == expected_c++);
 					}
 					col_chunk = result->Fetch();
 				}
