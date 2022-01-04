@@ -35,7 +35,7 @@ void ParameterExpression::Serialize(Serializer &serializer) {
 unique_ptr<ParsedExpression> ParameterExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	auto expression = make_unique<ParameterExpression>();
 	expression->parameter_nr = source.Read<idx_t>();
-	return move(expression);
+	return expression;
 }
 
 } // namespace duckdb

@@ -52,7 +52,7 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type
 	expression->subquery = move(subquery);
 	expression->child = source.ReadOptional<ParsedExpression>();
 	expression->comparison_type = source.Read<ExpressionType>();
-	return move(expression);
+	return expression;
 }
 
 } // namespace duckdb

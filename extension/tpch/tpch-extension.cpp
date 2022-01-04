@@ -44,7 +44,7 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, vector<Value> 
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
-	return move(result);
+	return result;
 }
 
 static void DbgenFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
@@ -68,7 +68,7 @@ struct TPCHData : public FunctionOperatorData {
 unique_ptr<FunctionOperatorData> TPCHInit(ClientContext &context, const FunctionData *bind_data,
                                           const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<TPCHData>();
-	return move(result);
+	return result;
 }
 
 static unique_ptr<FunctionData> TPCHQueryBind(ClientContext &context, vector<Value> &inputs,

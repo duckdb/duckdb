@@ -85,7 +85,7 @@ unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType typ
 		column_names.push_back(source.Read<string>());
 	}
 	auto expression = make_unique<ColumnRefExpression>(move(column_names));
-	return move(expression);
+	return expression;
 }
 
 } // namespace duckdb

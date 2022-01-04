@@ -66,7 +66,7 @@ unique_ptr<FunctionOperatorData> DuckDBDependenciesInit(ClientContext &context, 
 		result->entries.push_back(info);
 	});
 
-	return move(result);
+	return result;
 }
 
 void DuckDBDependenciesFunction(ClientContext &context, const FunctionData *bind_data,

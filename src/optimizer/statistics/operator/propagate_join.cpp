@@ -206,7 +206,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 			}
 		}
 	}
-	return move(node_stats);
+	return node_stats;
 }
 
 } // namespace duckdb

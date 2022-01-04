@@ -37,7 +37,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		auto node = make_unique<PhysicalTableInOutFunction>(op.returned_types, op.function, move(op.bind_data),
 		                                                    op.column_ids, op.estimated_cardinality);
 		node->children.push_back(CreatePlan(move(op.children[0])));
-		return move(node);
+		return node;
 	}
 
 	unique_ptr<TableFilterSet> table_filters;
@@ -66,7 +66,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 				// a projection is not necessary if all columns have been requested in-order
 				// in that case we just return the node
 
-				return move(node);
+				return node;
 			}
 		}
 		// push a projection on top that does the projection

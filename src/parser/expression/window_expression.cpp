@@ -264,7 +264,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	expr->offset_expr = source.ReadOptional<ParsedExpression>();
 	expr->default_expr = source.ReadOptional<ParsedExpression>();
 	expr->ignore_nulls = source.Read<bool>();
-	return move(expr);
+	return expr;
 }
 
 } // namespace duckdb

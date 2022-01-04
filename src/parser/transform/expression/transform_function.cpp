@@ -192,7 +192,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		TransformWindowDef(window_ref, expr.get());
 		TransformWindowFrame(window_spec, expr.get());
 		expr->query_location = root->location;
-		return move(expr);
+		return expr;
 	}
 
 	if (root->agg_ignore_nulls) {
@@ -258,7 +258,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		check.then_expr = move(children[1]);
 		expr->case_checks.push_back(move(check));
 		expr->else_expr = move(children[2]);
-		return move(expr);
+		return expr;
 	} else if (lowercase_name == "construct_array") {
 		auto construct_array = make_unique<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
 		construct_array->children = move(children);

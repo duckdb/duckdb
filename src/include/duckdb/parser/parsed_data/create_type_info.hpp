@@ -31,7 +31,7 @@ public:
 		CopyProperties(*result);
 		result->name = name;
 		result->type = make_unique<LogicalType>(*type);
-		return move(result);
+		return result;
 	}
 };
 

@@ -47,7 +47,7 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value>
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
-	return move(result);
+	return result;
 }
 
 static void DsdgenFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
@@ -71,7 +71,7 @@ struct TPCDSData : public FunctionOperatorData {
 unique_ptr<FunctionOperatorData> TPCDSInit(ClientContext &context, const FunctionData *bind_data,
                                            const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<TPCDSData>();
-	return move(result);
+	return result;
 }
 
 static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, vector<Value> &inputs,

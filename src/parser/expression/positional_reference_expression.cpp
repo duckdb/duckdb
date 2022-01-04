@@ -38,7 +38,7 @@ void PositionalReferenceExpression::Serialize(Serializer &serializer) {
 
 unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	auto expression = make_unique<PositionalReferenceExpression>(source.Read<idx_t>());
-	return move(expression);
+	return expression;
 }
 
 } // namespace duckdb

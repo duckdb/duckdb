@@ -262,7 +262,7 @@ public:
 		}
 		result->reader = bind_data.initial_reader;
 		result->reader->InitializeScan(result->scan_state, column_ids, move(group_ids), filters->table_filters);
-		return move(result);
+		return result;
 	}
 
 	static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p) {
@@ -286,7 +286,7 @@ public:
 		if (!ParquetParallelStateNext(context, bind_data_p, result.get(), parallel_state_p)) {
 			return nullptr;
 		}
-		return move(result);
+		return result;
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, const FunctionData *bind_data_p,
@@ -344,7 +344,7 @@ public:
 		result->current_reader = bind_data.initial_reader;
 		result->row_group_index = 0;
 		result->file_index = 0;
-		return move(result);
+		return result;
 	}
 
 	static bool ParquetParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,

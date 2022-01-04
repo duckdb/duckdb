@@ -1286,7 +1286,7 @@ unique_ptr<ColumnWriterState> StructColumnWriter::InitializeWriteState(duckdb_pa
 	for (auto &child_writer : child_writers) {
 		result->child_states.push_back(child_writer->InitializeWriteState(row_group));
 	}
-	return move(result);
+	return result;
 }
 
 void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
@@ -1370,7 +1370,7 @@ public:
 unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) {
 	auto result = make_unique<ListColumnWriterState>(row_group, row_group.columns.size());
 	result->child_state = child_writer->InitializeWriteState(row_group);
-	return move(result);
+	return result;
 }
 
 void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {

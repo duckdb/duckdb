@@ -190,7 +190,7 @@ unique_ptr<FunctionOperatorData> TestAllTypesInit(ClientContext &context, const 
 		result->entries[1].push_back(move(test_type.max_value));
 		result->entries[2].emplace_back(move(test_type.type));
 	}
-	return move(result);
+	return result;
 }
 
 void TestAllTypesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,

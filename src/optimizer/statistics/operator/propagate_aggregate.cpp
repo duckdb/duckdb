@@ -36,7 +36,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 		statistics_map[aggregate_binding] = move(stats);
 	}
 	// the max cardinality of an aggregate is the max cardinality of the input (i.e. when every row is a unique group)
-	return move(node_stats);
+	return node_stats;
 }
 
 } // namespace duckdb

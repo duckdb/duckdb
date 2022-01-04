@@ -36,7 +36,7 @@ unique_ptr<FunctionOperatorData> PragmaCollateInit(ClientContext &context, const
 		             [&](CatalogEntry *entry) { result->entries.push_back(entry->name); });
 	});
 
-	return move(result);
+	return result;
 }
 
 static void PragmaCollateFunction(ClientContext &context, const FunctionData *bind_data,

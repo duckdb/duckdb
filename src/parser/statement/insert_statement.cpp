@@ -11,7 +11,7 @@ unique_ptr<SQLStatement> InsertStatement::Copy() const {
 	result->columns = columns;
 	result->table = table;
 	result->schema = schema;
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

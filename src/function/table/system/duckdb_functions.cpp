@@ -80,7 +80,7 @@ unique_ptr<FunctionOperatorData> DuckDBFunctionsInit(ClientContext &context, con
 
 	std::sort(result->entries.begin(), result->entries.end(),
 	          [&](CatalogEntry *a, CatalogEntry *b) { return (int)a->type < (int)b->type; });
-	return move(result);
+	return result;
 }
 
 struct ScalarFunctionExtractor {

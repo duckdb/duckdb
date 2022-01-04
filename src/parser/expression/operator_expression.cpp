@@ -68,7 +68,7 @@ void OperatorExpression::Serialize(Serializer &serializer) {
 unique_ptr<ParsedExpression> OperatorExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	auto expression = make_unique<OperatorExpression>(type);
 	source.ReadList<ParsedExpression>(expression->children);
-	return move(expression);
+	return expression;
 }
 
 } // namespace duckdb

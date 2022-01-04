@@ -28,7 +28,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExpression
 		expr_scan->EvaluateExpression(expression_idx, nullptr, chunk);
 		chunk_scan->owned_collection->Append(chunk);
 	}
-	return move(chunk_scan);
+	return chunk_scan;
 }
 
 } // namespace duckdb

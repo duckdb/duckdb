@@ -86,7 +86,7 @@ unique_ptr<FunctionOperatorData> DuckDBColumnsInit(ClientContext &context, const
 	// check the temp schema as well
 	context.temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
 	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
-	return move(result);
+	return result;
 }
 
 namespace { // anonymous namespace for the ColumnHelper classes for working with tables/views

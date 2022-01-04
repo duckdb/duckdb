@@ -38,7 +38,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 		throw Exception("Referenced recursive CTE does not exist.");
 	}
 	chunk_scan->collection = cte->second.get();
-	return move(chunk_scan);
+	return chunk_scan;
 }
 
 } // namespace duckdb
