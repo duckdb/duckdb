@@ -210,7 +210,8 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
 	std::function<SQLRETURN(duckdb::OdbcHandle *, duckdb::OdbcHandleType)> func_write_diag =
 	    [&](duckdb::OdbcHandle *hdl, duckdb::OdbcHandleType target_type) {
 		    if (hdl->type != target_type) {
-			    std::string msg_str("Handle type is not an OdbcHandleDesc.");
+			    std::string msg_str("Handle type " + duckdb::OdbcHandleTypeToString(hdl->type) + " mismatch with " +
+			                        duckdb::OdbcHandleTypeToString(target_type));
 			    duckdb::OdbcUtils::WriteString(msg_str, message_text, buffer_length, text_length_ptr);
 			    return SQL_SUCCESS;
 		    }

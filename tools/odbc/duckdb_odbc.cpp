@@ -8,6 +8,21 @@
 using duckdb::OdbcHandleDbc;
 using duckdb::OdbcHandleDesc;
 using duckdb::OdbcHandleStmt;
+using duckdb::OdbcHandleType;
+
+std::string OdbcHandleTypeToString(OdbcHandleType type) {
+	switch (type) {
+	case OdbcHandleType::ENV:
+		return "ENV";
+	case OdbcHandleType::DBC:
+		return "DBC";
+	case OdbcHandleType::STMT:
+		return "STMT";
+	case OdbcHandleType::DESC:
+		return "DESC";
+	}
+	return "INVALID";
+}
 
 //! OdbcHandleDbc functions ***************************************************
 OdbcHandleDbc::~OdbcHandleDbc() {

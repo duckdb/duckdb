@@ -22,6 +22,8 @@ class ParameterDescriptor;
 class RowDescriptor;
 
 enum OdbcHandleType { ENV, DBC, STMT, DESC };
+std::string OdbcHandleTypeToString(OdbcHandleType type);
+
 struct OdbcHandle {
 	explicit OdbcHandle(OdbcHandleType type_p) : type(type_p) {};
 	OdbcHandleType type;
