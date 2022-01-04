@@ -112,7 +112,7 @@ static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &schema, c
 			bind_info->temporary = true;
 			bind_info->internal = true;
 			bind_info->function = move(result);
-			return move(bind_info);
+			return bind_info;
 		}
 	}
 	return nullptr;

@@ -32,7 +32,7 @@ public:
 		set.functions = functions;
 		auto result = make_unique<CreateTableFunctionInfo>(move(set));
 		CopyProperties(*result);
-		return move(result);
+		return result;
 	}
 };
 

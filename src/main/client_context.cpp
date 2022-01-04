@@ -222,7 +222,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		auto stream_result =
 		    make_unique<StreamQueryResult>(pending.statement_type, shared_from_this(), pending.types, pending.names);
 		active_query->open_result = stream_result.get();
-		return move(stream_result);
+		return stream_result;
 	}
 	// create a materialized result by continuously fetching
 	auto result = make_unique<MaterializedQueryResult>(pending.statement_type, pending.types, pending.names);
