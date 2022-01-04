@@ -11,7 +11,7 @@ public:
 	}
 	OdbcHandleDesc *GetIRD();
 	OdbcHandleDesc *GetARD();
-    void Clear();
+	void Clear();
 	void SetCurrentARD(OdbcHandleDesc *new_ard);
 	void Reset();
 	void ResetCurrentARD();

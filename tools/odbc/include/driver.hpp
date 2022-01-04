@@ -7,6 +7,6 @@ namespace duckdb {
 
 SQLRETURN FreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle);
 
-} // namespace
+} // namespace duckdb
 
 #endif

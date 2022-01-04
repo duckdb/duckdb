@@ -3,7 +3,7 @@
 using duckdb::OdbcHandleDesc;
 using duckdb::RowDescriptor;
 
-RowDescriptor::RowDescriptor(OdbcHandleStmt *stmt_ptr): stmt(stmt_ptr) {
+RowDescriptor::RowDescriptor(OdbcHandleStmt *stmt_ptr) : stmt(stmt_ptr) {
 	ard = make_unique<OdbcHandleDesc>(stmt->dbc);
 	ird = make_unique<OdbcHandleDesc>(stmt->dbc);
 
