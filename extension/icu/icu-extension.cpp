@@ -36,11 +36,11 @@ struct IcuBindData : public FunctionData {
 		if (locale.isBogus()) {
 			throw InternalException("Locale is bogus!?");
 		}
-		this->collator = std::unique_ptr<icu::Collator>(
-		    icu::Collator::createInstance(locale, status));
+		this->collator = std::unique_ptr<icu::Collator>(icu::Collator::createInstance(locale, status));
 		if (U_FAILURE(status)) {
 			auto error_name = u_errorName(status);
-			throw InternalException("Failed to create ICU collator: %s (language: %s, country: %s)", error_name, language, country);
+			throw InternalException("Failed to create ICU collator: %s (language: %s, country: %s)", error_name,
+			                        language, country);
 		}
 	}
 

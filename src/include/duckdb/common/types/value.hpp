@@ -243,6 +243,9 @@ private:
 	//! The logical of the value
 	LogicalType type_;
 
+#if DUCKDB_API_VERSION < DUCKDB_API_0_3_2
+public:
+#endif
 	//! Whether or not the value is NULL
 	bool is_null;
 
