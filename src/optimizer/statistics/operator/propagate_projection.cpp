@@ -9,7 +9,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalProj
 	node_stats = PropagateStatistics(proj.children[0]);
 	if (proj.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
 		ReplaceWithEmptyResult(*node_ptr);
-		return node_stats;
+		return move(node_stats);
 	}
 
 	// then propagate to each of the expressions
@@ -20,7 +20,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalProj
 			statistics_map.insert(make_pair(binding, move(stats)));
 		}
 	}
-	return node_stats;
+	return move(node_stats);
 }
 
 } // namespace duckdb

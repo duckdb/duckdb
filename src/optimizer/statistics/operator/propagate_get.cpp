@@ -37,7 +37,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 	}
 	if (!get.function.statistics) {
 		// no column statistics to get
-		return node_stats;
+		return move(node_stats);
 	}
 	for (idx_t i = 0; i < get.column_ids.size(); i++) {
 		auto stats = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
@@ -93,7 +93,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 			break;
 		}
 	}
-	return node_stats;
+	return move(node_stats);
 }
 
 } // namespace duckdb

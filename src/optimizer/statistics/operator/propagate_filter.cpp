@@ -241,7 +241,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 		}
 	}
 	// the max cardinality of a filter is the cardinality of the input (i.e. no tuples get filtered)
-	return node_stats;
+	return move(node_stats);
 }
 
 } // namespace duckdb
