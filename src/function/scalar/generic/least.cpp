@@ -119,7 +119,6 @@ static void RegisterLeastGreatest(BuiltinFunctions &set, const string &fun_name)
 
 	fun_set.AddFunction(GetLeastGreatestFunction<timestamp_t, OP>(LogicalType::TIMESTAMP_TZ));
 	fun_set.AddFunction(GetLeastGreatestFunction<time_t, OP>(LogicalType::TIME_TZ));
-	fun_set.AddFunction(GetLeastGreatestFunction<date_t, OP>(LogicalType::DATE_TZ));
 
 	set.AddFunction(fun_set);
 }

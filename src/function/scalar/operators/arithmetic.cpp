@@ -266,7 +266,7 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 		}
 		break;
 	case LogicalTypeId::INTEGER:
-		if (right_type.id() == LogicalTypeId::DATE || right_type.id() == LogicalTypeId::DATE_TZ) {
+		if (right_type.id() == LogicalTypeId::DATE) {
 			return ScalarFunction("+", {left_type, right_type}, right_type,
 			                      ScalarFunction::BinaryFunction<int32_t, date_t, date_t, AddOperator>);
 		}
@@ -298,12 +298,6 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 			                      ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, AddOperator>);
 		}
 		break;
-	case LogicalTypeId::DATE_TZ:
-		if (right_type.id() == LogicalTypeId::INTEGER) {
-			return ScalarFunction("+", {left_type, right_type}, left_type,
-			                      ScalarFunction::BinaryFunction<date_t, int32_t, date_t, AddOperator>);
-		}
-		break;
 	default:
 		break;
 	}
@@ -324,8 +318,6 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	// we can add integers to dates
 	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::INTEGER));
 	functions.AddFunction(GetFunction(LogicalType::INTEGER, LogicalType::DATE));
-	functions.AddFunction(GetFunction(LogicalType::DATE_TZ, LogicalType::INTEGER));
-	functions.AddFunction(GetFunction(LogicalType::INTEGER, LogicalType::DATE_TZ));
 	// we can add intervals together
 	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::INTERVAL));
 	// we can add intervals to dates/times/timestamps
@@ -496,15 +488,6 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 			                      ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, SubtractTimeOperator>);
 		}
 		break;
-	case LogicalTypeId::DATE_TZ:
-		if (right_type.id() == LogicalTypeId::DATE_TZ) {
-			return ScalarFunction("-", {left_type, right_type}, LogicalType::BIGINT,
-			                      ScalarFunction::BinaryFunction<date_t, date_t, int64_t, SubtractOperator>);
-		} else if (right_type.id() == LogicalTypeId::INTEGER) {
-			return ScalarFunction("-", {left_type, right_type}, left_type,
-			                      ScalarFunction::BinaryFunction<date_t, int32_t, date_t, SubtractOperator>);
-		}
-		break;
 	default:
 		break;
 	}
@@ -524,10 +507,8 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	}
 	// we can subtract dates from each other
 	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::DATE));
-	functions.AddFunction(GetFunction(LogicalType::DATE_TZ, LogicalType::DATE_TZ));
 	// we can subtract integers from dates
 	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::INTEGER));
-	functions.AddFunction(GetFunction(LogicalType::DATE_TZ, LogicalType::INTEGER));
 	// we can subtract timestamps from each other
 	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::TIMESTAMP));
 	// we can subtract intervals from each other

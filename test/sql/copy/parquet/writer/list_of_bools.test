@@ -54,11 +54,11 @@ FROM (SELECT unnest(l) b FROM many_ints)
 43872	33934	22622
 
 statement ok
-COPY many_ints TO 'many_ints.parquet' (FORMAT PARQUET)
+COPY many_ints TO '__TEST_DIR__/many_ints.parquet' (FORMAT PARQUET)
 
 query III
 SELECT COUNT(*), COUNT(b), SUM(b)
-FROM (SELECT unnest(l) b FROM 'many_ints.parquet')
+FROM (SELECT unnest(l) b FROM '__TEST_DIR__/many_ints.parquet')
 ----
 43872	33934	22622
 

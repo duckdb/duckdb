@@ -70,7 +70,7 @@ SELECT decade(ts), decade(ts::TIMESTAMP) FROM timestamps;
 query II
 SELECT century(ts), century(ts::TIMESTAMP) FROM timestamps;
 ----
-1	1
+-1	-1
 20	20
 21	21
 21	21
@@ -82,7 +82,7 @@ SELECT century(ts), century(ts::TIMESTAMP) FROM timestamps;
 query II
 SELECT millennium(ts), millennium(ts::TIMESTAMP) FROM timestamps;
 ----
-1	1
+-1	-1
 2	2
 3	3
 3	3
@@ -215,7 +215,7 @@ SELECT quarter(ts), quarter(ts::TIMESTAMP) FROM timestamps;
 query II
 SELECT yearweek(ts), yearweek(ts::TIMESTAMP) FROM timestamps;
 ----
-4411	-4289
+4411	-4311
 196231	196231
 202053	202153
 202105	202105
@@ -280,7 +280,19 @@ SELECT DATE_PART('era', '0044-03-15 (BC) 12:00:00'::TIMESTAMPTZ);
 0
 
 query I
-SELECT DATE_PART('offset', ts) / (60::BIGINT * 60 * 1000 * 1000) FROM timestamps;
+SELECT DATE_PART('timezone', ts) FROM timestamps;
+----
+-28378
+-25200
+-28800
+-28800
+-28800
+-28800
+-28800
+-28800
+
+query I
+SELECT DATE_PART('timezone_hour', ts) FROM timestamps;
 ----
 -7
 -7
@@ -292,9 +304,31 @@ SELECT DATE_PART('offset', ts) / (60::BIGINT * 60 * 1000 * 1000) FROM timestamps
 -8
 
 query I
-SELECT DATE_PART('offset', '2021-07-31 00:00:00-07'::TIMESTAMPTZ) / (60::BIGINT * 60 * 1000 * 1000);
+SELECT DATE_PART('timezone_minute', ts) FROM timestamps;
+----
+-52
+0
+0
+0
+0
+0
+0
+0
+
+query I
+SELECT DATE_PART('timezone', '2021-07-31 00:00:00-07'::TIMESTAMPTZ);
+----
+-25200
+
+query I
+SELECT DATE_PART('timezone_hour', '2021-07-31 00:00:00-07'::TIMESTAMPTZ);
 ----
 -7
+
+query I
+SELECT DATE_PART('timezone_minute', '2021-07-31 00:00:00-07'::TIMESTAMPTZ);
+----
+0
 
 # Multiple extractions
 query IIIII
@@ -349,6 +383,17 @@ SELECT weekofyear(ts), weekofyear(ts::TIMESTAMP) FROM timestamps;
 # Struct parts
 #
 
+# Correctness: Compare struct values with scalar values
+foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek epoch timezone timezone_hour timezone_minute
+
+query III
+SELECT ts, DATE_PART('${partcode}', ts) AS pc, DATE_PART(['${partcode}'], ts) AS st
+FROM timestamps
+WHERE pc <> st['${partcode}'];
+----
+
+endloop
+
 # Date parts
 query II
 SELECT DATE_PART(['era', 'year', 'month', 'day'], ts), ts
@@ -385,7 +430,7 @@ SELECT DATE_PART(['millennium', 'century', 'decade', 'quarter'], ts), ts
 FROM timestamps
 ORDER BY 2
 ----
-{'millennium': 1, 'century': 1, 'decade': 4, 'quarter': 1}	0044-03-13 (BC) 09:33:41.987654+00
+{'millennium': -1, 'century': -1, 'decade': 4, 'quarter': 1}	0044-03-13 (BC) 09:33:41.987654+00
 {'millennium': 2, 'century': 20, 'decade': 196, 'quarter': 3}	1962-07-31 12:20:48.123456+00
 {'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-01-01 00:00:00+00
 {'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 1}	2021-02-02 00:00:00+00
@@ -411,22 +456,22 @@ ORDER BY 2
 
 # Miscellaneous parts
 query II
-SELECT DATE_PART(['epoch', 'second', 'offset'], ts), ts
+SELECT DATE_PART(['epoch', 'second', 'timezone', 'timezone_hour', 'timezone_minute'], ts), ts
 FROM timestamps
 ORDER BY 2
 ----
-{'epoch': -63517990756, 'second': 43, 'offset': -28378000000}	0044-03-13 (BC) 09:33:41.987654+00
-{'epoch': -234211151, 'second': 48, 'offset': -25200000000}	1962-07-31 12:20:48.123456+00
-{'epoch': 1609430400, 'second': 0, 'offset': -28800000000}	2021-01-01 00:00:00+00
-{'epoch': 1612195200, 'second': 0, 'offset': -28800000000}	2021-02-02 00:00:00+00
-{'epoch': 1636939800, 'second': 0, 'offset': -28800000000}	2021-11-15 09:30:00+00
-{'epoch': 1636943400, 'second': 0, 'offset': -28800000000}	2021-11-15 10:30:00+00
-{'epoch': 1637892913, 'second': 13, 'offset': -28800000000}	2021-11-26 10:15:13.123456+00
-{'epoch': 1640354400, 'second': 0, 'offset': -28800000000}	2021-12-24 22:00:00+00
+{'epoch': -63517990756, 'second': 43, 'timezone': -28378, 'timezone_hour': -7, 'timezone_minute': -52}	0044-03-13 (BC) 09:33:41.987654+00
+{'epoch': -234211151, 'second': 48, 'timezone': -25200, 'timezone_hour': -7, 'timezone_minute': 0}	1962-07-31 12:20:48.123456+00
+{'epoch': 1609430400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-01-01 00:00:00+00
+{'epoch': 1612195200, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-02-02 00:00:00+00
+{'epoch': 1636939800, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 09:30:00+00
+{'epoch': 1636943400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 10:30:00+00
+{'epoch': 1637892913, 'second': 13, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-26 10:15:13.123456+00
+{'epoch': 1640354400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-12-24 22:00:00+00
 
 # Invalid parts
 statement error
-SELECT DATE_PART(['duck', 'minute', 'microsecond', 'offset'], ts), ts
+SELECT DATE_PART(['duck', 'minute', 'microsecond', 'timezone'], ts), ts
 FROM timestamps
 ORDER BY 2
 
@@ -462,18 +507,39 @@ FROM (VALUES
 query TTT
 SELECT ts, LAST_DAY(ts), LAST_DAY(ts::TIMESTAMP) FROM februaries;
 ----
-1900-02-12 00:00:00+00	1900-02-28+00	1900-02-28
-1992-02-12 00:00:00+00	1992-02-29+00	1992-02-29
-2000-02-12 00:00:00+00	2000-02-29+00	2000-02-29
+1900-02-12 00:00:00+00	1900-02-28	1900-02-28
+1992-02-12 00:00:00+00	1992-02-29	1992-02-29
+2000-02-12 00:00:00+00	2000-02-29	2000-02-29
 
 query TTT
 SELECT ts, LAST_DAY(ts), LAST_DAY(ts::TIMESTAMP) FROM timestamps;
 ----
-0044-03-13 (BC) 09:33:41.987654+00	0044-03-29 (BC)+00	0044-03-31 (BC)
-1962-07-31 12:20:48.123456+00	1962-07-31+00	1962-07-31
-2021-01-01 00:00:00+00	2020-12-31+00	2021-01-31
-2021-02-02 00:00:00+00	2021-02-28+00	2021-02-28
-2021-11-26 10:15:13.123456+00	2021-11-30+00	2021-11-30
-2021-11-15 10:30:00+00	2021-11-30+00	2021-11-30
-2021-11-15 09:30:00+00	2021-11-30+00	2021-11-30
-2021-12-24 22:00:00+00	2021-12-31+00	2021-12-31
+0044-03-13 (BC) 09:33:41.987654+00	0044-03-29 (BC)	0044-03-31 (BC)
+1962-07-31 12:20:48.123456+00	1962-07-31	1962-07-31
+2021-01-01 00:00:00+00	2020-12-31	2021-01-31
+2021-02-02 00:00:00+00	2021-02-28	2021-02-28
+2021-11-26 10:15:13.123456+00	2021-11-30	2021-11-30
+2021-11-15 10:30:00+00	2021-11-30	2021-11-30
+2021-11-15 09:30:00+00	2021-11-30	2021-11-30
+2021-12-24 22:00:00+00	2021-12-31	2021-12-31
+
+#
+# Fractional Time Zones
+#
+
+statement ok
+SET TimeZone='Asia/Kathmandu';
+
+query I
+SELECT DATE_PART(['timezone', 'timezone_hour', 'timezone_minute'], '2021-12-22'::TIMESTAMPTZ);
+----
+{'timezone': 20700, 'timezone_hour': 5, 'timezone_minute': 45}
+
+statement ok
+SET TimeZone='Canada/Newfoundland';
+
+query I
+SELECT DATE_PART(['timezone', 'timezone_hour', 'timezone_minute'], '2021-12-22'::TIMESTAMPTZ);
+----
+{'timezone': -12600, 'timezone_hour': -3, 'timezone_minute': -30}
+
