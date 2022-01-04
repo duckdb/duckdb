@@ -80,6 +80,14 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = move(win);
 	}
 
+	if (statement.qualify) {
+		PlanSubqueries(&statement.qualify, &root);
+		auto qualify = make_unique<LogicalFilter>(move(statement.qualify));
+
+		qualify->AddChild(move(root));
+		root = move(qualify);
+	}
+
 	if (!statement.unnests.empty()) {
 		auto unnest = make_unique<LogicalUnnest>(statement.unnest_index);
 		unnest->expressions = move(statement.unnests);

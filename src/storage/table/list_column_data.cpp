@@ -188,7 +188,7 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 
 	VectorData vdata;
 	vdata.validity = list_validity;
-	vdata.sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	vdata.sel = FlatVector::IncrementalSelectionVector(count, vdata.owned_sel);
 	vdata.data = (data_ptr_t)append_offsets.get();
 
 	// append the list offsets
@@ -218,7 +218,7 @@ idx_t ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result
 }
 
 void ListColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                            idx_t offset, idx_t update_count) {
+                            idx_t update_count) {
 	throw NotImplementedException("List Update is not supported.");
 }
 

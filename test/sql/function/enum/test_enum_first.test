@@ -1,0 +1,17 @@
+# name: test/sql/function/enum/test_enum_first.test
+# description: Enum First Function
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE rainbow AS ENUM ('red', 'orange', 'yellow', 'green', 'blue', 'purple');
+
+query I
+SELECT enum_first(null::rainbow)
+----
+red
+
+statement error
+SELECT enum_first('bla')

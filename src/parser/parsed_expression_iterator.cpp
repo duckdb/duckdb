@@ -209,6 +209,9 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		if (sel_node.having) {
 			callback(sel_node.having);
 		}
+		if (sel_node.qualify) {
+			callback(sel_node.qualify);
+		}
 
 		EnumerateTableRefChildren(*sel_node.from_table.get(), callback);
 		break;

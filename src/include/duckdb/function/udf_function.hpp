@@ -296,7 +296,7 @@ private:
 	}
 
 	template <typename T>
-	static bool TypesMatch(LogicalType sql_type) {
+	static bool TypesMatch(const LogicalType &sql_type) {
 		switch (sql_type.id()) {
 		case LogicalTypeId::BOOLEAN:
 			return std::is_same<T, bool>();
@@ -309,13 +309,16 @@ private:
 		case LogicalTypeId::BIGINT:
 			return std::is_same<T, int64_t>();
 		case LogicalTypeId::DATE:
+		case LogicalTypeId::DATE_TZ:
 			return std::is_same<T, date_t>();
 		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIME_TZ:
 			return std::is_same<T, dtime_t>();
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_TZ:
 			return std::is_same<T, timestamp_t>();
 		case LogicalTypeId::FLOAT:
 			return std::is_same<T, float>();

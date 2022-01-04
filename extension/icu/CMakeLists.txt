@@ -4,11 +4,20 @@ project(ICUExtension)
 
 include_directories(include)
 
-add_library(icu_extension STATIC icu-collate.cpp icu-extension.cpp)
+set(ICU_EXTENSION_FILES
+    icu-collate.cpp
+    icu-extension.cpp
+    icu-dateadd.cpp
+    icu-datefunc.cpp
+    icu-datepart.cpp
+    icu-datesub.cpp
+    icu-datetrunc.cpp)
+
+add_library(icu_extension STATIC ${ICU_EXTENSION_FILES})
 link_threads(icu_extension)
 disable_target_warnings(icu_extension)
 
-build_loadable_extension(icu icu-collate.cpp icu-extension.cpp)
+build_loadable_extension(icu ${ICU_EXTENSION_FILES})
 install(
   TARGETS icu_extension
   EXPORT "${DUCKDB_EXPORT_SET}"

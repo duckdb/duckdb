@@ -65,9 +65,9 @@ static void GenerateUUIDFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 void UUIDFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunction uuid_function({}, LogicalType::UUID, GenerateUUIDFunction, true, UUIDRandomBind);
 	// generate a random uuid
-	set.AddFunction(
-	    ScalarFunction("gen_random_uuid", {}, LogicalType::UUID, GenerateUUIDFunction, true, UUIDRandomBind));
+	set.AddFunction({"uuid", "gen_random_uuid"}, uuid_function);
 }
 
 } // namespace duckdb

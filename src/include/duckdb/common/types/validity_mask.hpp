@@ -22,14 +22,14 @@ struct TemplatedValidityData {
 	static constexpr const V MAX_ENTRY = ~V(0);
 
 public:
-	DUCKDB_API explicit TemplatedValidityData(idx_t count) {
+	inline explicit TemplatedValidityData(idx_t count) {
 		auto entry_count = EntryCount(count);
 		owned_data = unique_ptr<V[]>(new V[entry_count]);
 		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			owned_data[entry_idx] = MAX_ENTRY;
 		}
 	}
-	DUCKDB_API TemplatedValidityData(const V *validity_mask, idx_t count) {
+	inline TemplatedValidityData(const V *validity_mask, idx_t count) {
 		D_ASSERT(validity_mask);
 		auto entry_count = EntryCount(count);
 		owned_data = unique_ptr<V[]>(new V[entry_count]);
@@ -41,7 +41,7 @@ public:
 	unique_ptr<V[]> owned_data;
 
 public:
-	DUCKDB_API static inline idx_t EntryCount(idx_t count) {
+	static inline idx_t EntryCount(idx_t count) {
 		return (count + (BITS_PER_VALUE - 1)) / BITS_PER_VALUE;
 	}
 };
@@ -65,24 +65,24 @@ public:
 	static constexpr const int STANDARD_MASK_SIZE = STANDARD_ENTRY_COUNT * sizeof(validity_t);
 
 public:
-	DUCKDB_API TemplatedValidityMask() : validity_mask(nullptr) {
+	inline TemplatedValidityMask() : validity_mask(nullptr) {
 	}
-	DUCKDB_API explicit TemplatedValidityMask(idx_t max_count) {
+	inline explicit TemplatedValidityMask(idx_t max_count) {
 		Initialize(max_count);
 	}
-	DUCKDB_API explicit TemplatedValidityMask(V *ptr) : validity_mask(ptr) {
+	inline explicit TemplatedValidityMask(V *ptr) : validity_mask(ptr) {
 	}
-	DUCKDB_API TemplatedValidityMask(const TemplatedValidityMask &original, idx_t count) {
+	inline TemplatedValidityMask(const TemplatedValidityMask &original, idx_t count) {
 		Copy(original, count);
 	}
 
-	DUCKDB_API static inline idx_t ValidityMaskSize(idx_t count = STANDARD_VECTOR_SIZE) {
+	static inline idx_t ValidityMaskSize(idx_t count = STANDARD_VECTOR_SIZE) {
 		return ValidityBuffer::EntryCount(count) * sizeof(V);
 	}
-	DUCKDB_API inline bool AllValid() const {
+	inline bool AllValid() const {
 		return !validity_mask;
 	}
-	DUCKDB_API bool CheckAllValid(idx_t count) const {
+	inline bool CheckAllValid(idx_t count) const {
 		if (AllValid()) {
 			return true;
 		}
@@ -94,7 +94,7 @@ public:
 		return valid_count == entry_count;
 	}
 
-	DUCKDB_API bool CheckAllValid(idx_t to, idx_t from) const {
+	inline bool CheckAllValid(idx_t to, idx_t from) const {
 		if (AllValid()) {
 			return true;
 		}
@@ -106,40 +106,40 @@ public:
 		return true;
 	}
 
-	DUCKDB_API inline V *GetData() const {
+	inline V *GetData() const {
 		return validity_mask;
 	}
-	DUCKDB_API void Reset() {
+	inline void Reset() {
 		validity_mask = nullptr;
 		validity_data.reset();
 	}
 
-	DUCKDB_API static inline idx_t EntryCount(idx_t count) {
+	static inline idx_t EntryCount(idx_t count) {
 		return ValidityBuffer::EntryCount(count);
 	}
-	DUCKDB_API inline V GetValidityEntry(idx_t entry_idx) const {
+	inline V GetValidityEntry(idx_t entry_idx) const {
 		if (!validity_mask) {
 			return ValidityBuffer::MAX_ENTRY;
 		}
 		return validity_mask[entry_idx];
 	}
-	DUCKDB_API static inline bool AllValid(V entry) {
+	static inline bool AllValid(V entry) {
 		return entry == ValidityBuffer::MAX_ENTRY;
 	}
-	DUCKDB_API static inline bool NoneValid(V entry) {
+	static inline bool NoneValid(V entry) {
 		return entry == 0;
 	}
-	DUCKDB_API static inline bool RowIsValid(V entry, idx_t idx_in_entry) {
+	static inline bool RowIsValid(V entry, idx_t idx_in_entry) {
 		return entry & (V(1) << V(idx_in_entry));
 	}
-	DUCKDB_API static inline void GetEntryIndex(idx_t row_idx, idx_t &entry_idx, idx_t &idx_in_entry) {
+	static inline void GetEntryIndex(idx_t row_idx, idx_t &entry_idx, idx_t &idx_in_entry) {
 		entry_idx = row_idx / BITS_PER_VALUE;
 		idx_in_entry = row_idx % BITS_PER_VALUE;
 	}
 
 	//! RowIsValidUnsafe should only be used if AllValid() is false: it achieves the same as RowIsValid but skips a
 	//! not-null check
-	DUCKDB_API inline bool RowIsValidUnsafe(idx_t row_idx) const {
+	inline bool RowIsValidUnsafe(idx_t row_idx) const {
 		D_ASSERT(validity_mask);
 		idx_t entry_idx, idx_in_entry;
 		GetEntryIndex(row_idx, entry_idx, idx_in_entry);
@@ -148,7 +148,7 @@ public:
 	}
 
 	//! Returns true if a row is valid (i.e. not null), false otherwise
-	DUCKDB_API inline bool RowIsValid(idx_t row_idx) const {
+	inline bool RowIsValid(idx_t row_idx) const {
 		if (!validity_mask) {
 			return true;
 		}
@@ -156,7 +156,7 @@ public:
 	}
 
 	//! Same as SetValid, but skips a null check on validity_mask
-	DUCKDB_API inline void SetValidUnsafe(idx_t row_idx) {
+	inline void SetValidUnsafe(idx_t row_idx) {
 		D_ASSERT(validity_mask);
 		idx_t entry_idx, idx_in_entry;
 		GetEntryIndex(row_idx, entry_idx, idx_in_entry);
@@ -164,7 +164,7 @@ public:
 	}
 
 	//! Marks the entry at the specified row index as valid (i.e. not-null)
-	DUCKDB_API inline void SetValid(idx_t row_idx) {
+	inline void SetValid(idx_t row_idx) {
 		if (!validity_mask) {
 			// if AllValid() we don't need to do anything
 			// the row is already valid
@@ -174,20 +174,20 @@ public:
 	}
 
 	//! Marks the bit at the specified entry as invalid (i.e. null)
-	DUCKDB_API inline void SetInvalidUnsafe(idx_t entry_idx, idx_t idx_in_entry) {
+	inline void SetInvalidUnsafe(idx_t entry_idx, idx_t idx_in_entry) {
 		D_ASSERT(validity_mask);
 		validity_mask[entry_idx] &= ~(V(1) << V(idx_in_entry));
 	}
 
 	//! Marks the bit at the specified row index as invalid (i.e. null)
-	DUCKDB_API inline void SetInvalidUnsafe(idx_t row_idx) {
+	inline void SetInvalidUnsafe(idx_t row_idx) {
 		idx_t entry_idx, idx_in_entry;
 		GetEntryIndex(row_idx, entry_idx, idx_in_entry);
 		SetInvalidUnsafe(entry_idx, idx_in_entry);
 	}
 
 	//! Marks the entry at the specified row index as invalid (i.e. null)
-	DUCKDB_API inline void SetInvalid(idx_t row_idx) {
+	inline void SetInvalid(idx_t row_idx) {
 		if (!validity_mask) {
 			D_ASSERT(row_idx <= STANDARD_VECTOR_SIZE);
 			Initialize(STANDARD_VECTOR_SIZE);
@@ -196,7 +196,7 @@ public:
 	}
 
 	//! Mark the entry at the specified index as either valid or invalid (non-null or null)
-	DUCKDB_API inline void Set(idx_t row_idx, bool valid) {
+	inline void Set(idx_t row_idx, bool valid) {
 		if (valid) {
 			SetValid(row_idx);
 		} else {
@@ -205,14 +205,14 @@ public:
 	}
 
 	//! Ensure the validity mask is writable, allocating space if it is not initialized
-	DUCKDB_API inline void EnsureWritable() {
+	inline void EnsureWritable() {
 		if (!validity_mask) {
 			Initialize();
 		}
 	}
 
 	//! Marks "count" entries in the validity mask as invalid (null)
-	DUCKDB_API inline void SetAllInvalid(idx_t count) {
+	inline void SetAllInvalid(idx_t count) {
 		EnsureWritable();
 		for (idx_t i = 0; i < ValidityBuffer::EntryCount(count); i++) {
 			validity_mask[i] = 0;
@@ -220,14 +220,14 @@ public:
 	}
 
 	//! Marks "count" entries in the validity mask as valid (not null)
-	DUCKDB_API inline void SetAllValid(idx_t count) {
+	inline void SetAllValid(idx_t count) {
 		EnsureWritable();
 		for (idx_t i = 0; i < ValidityBuffer::EntryCount(count); i++) {
 			validity_mask[i] = ValidityBuffer::MAX_ENTRY;
 		}
 	}
 
-	DUCKDB_API inline bool IsMaskSet() const {
+	inline bool IsMaskSet() const {
 		if (validity_mask) {
 			return true;
 		}
@@ -235,19 +235,19 @@ public:
 	}
 
 public:
-	DUCKDB_API void Initialize(validity_t *validity) {
+	inline void Initialize(validity_t *validity) {
 		validity_data.reset();
 		validity_mask = validity;
 	}
-	DUCKDB_API void Initialize(const TemplatedValidityMask &other) {
+	inline void Initialize(const TemplatedValidityMask &other) {
 		validity_mask = other.validity_mask;
 		validity_data = other.validity_data;
 	}
-	DUCKDB_API void Initialize(idx_t count = STANDARD_VECTOR_SIZE) {
+	inline void Initialize(idx_t count = STANDARD_VECTOR_SIZE) {
 		validity_data = make_buffer<ValidityBuffer>(count);
 		validity_mask = validity_data->owned_data.get();
 	}
-	DUCKDB_API void Copy(const TemplatedValidityMask &other, idx_t count) {
+	inline void Copy(const TemplatedValidityMask &other, idx_t count) {
 		if (other.AllValid()) {
 			validity_data = nullptr;
 			validity_mask = nullptr;
@@ -264,13 +264,13 @@ protected:
 
 struct ValidityMask : public TemplatedValidityMask<validity_t> {
 public:
-	DUCKDB_API ValidityMask() : TemplatedValidityMask(nullptr) {
+	inline ValidityMask() : TemplatedValidityMask(nullptr) {
 	}
-	DUCKDB_API explicit ValidityMask(idx_t max_count) : TemplatedValidityMask(max_count) {
+	inline explicit ValidityMask(idx_t max_count) : TemplatedValidityMask(max_count) {
 	}
-	DUCKDB_API explicit ValidityMask(validity_t *ptr) : TemplatedValidityMask(ptr) {
+	inline explicit ValidityMask(validity_t *ptr) : TemplatedValidityMask(ptr) {
 	}
-	DUCKDB_API ValidityMask(const ValidityMask &original, idx_t count) : TemplatedValidityMask(original, count) {
+	inline ValidityMask(const ValidityMask &original, idx_t count) : TemplatedValidityMask(original, count) {
 	}
 
 public:

@@ -137,7 +137,7 @@ public:
 
 private:
 	//! Selection vector and addresses for scattering the data to rows
-	const SelectionVector &sel_ptr = FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	const SelectionVector &sel_ptr = *FlatVector::IncrementalSelectionVector();
 	Vector addresses = Vector(LogicalType::POINTER);
 };
 
@@ -149,12 +149,28 @@ public:
 	void PerformInMergeRound();
 
 private:
+	//! The global sorting state
+	GlobalSortState &state;
+	//! The sorting and payload layouts
+	BufferManager &buffer_manager;
+	const SortLayout &sort_layout;
+
+	//! The left and right reader
+	unique_ptr<SBScanState> left;
+	unique_ptr<SBScanState> right;
+
+	//! Input and output blocks
+	unique_ptr<SortedBlock> left_input;
+	unique_ptr<SortedBlock> right_input;
+	SortedBlock *result;
+
+private:
 	//! Computes the left and right block that will be merged next (Merge Path partition)
 	void GetNextPartition();
 	//! Finds the boundary of the next partition using binary search
-	void GetIntersection(SortedBlock &l, SortedBlock &r, const idx_t diagonal, idx_t &l_idx, idx_t &r_idx);
+	void GetIntersection(const idx_t diagonal, idx_t &l_idx, idx_t &r_idx);
 	//! Compare values within SortedBlocks using a global index
-	int CompareUsingGlobalIndex(SortedBlock &l, SortedBlock &r, const idx_t l_idx, const idx_t r_idx);
+	int CompareUsingGlobalIndex(SBScanState &l, SBScanState &r, const idx_t l_idx, const idx_t r_idx);
 
 	//! Finds the next partition and merges it
 	void MergePartition();
@@ -166,7 +182,7 @@ private:
 	void MergeRadix(const idx_t &count, const bool left_smaller[]);
 	//! Merges SortedData according to the 'left_smaller' array
 	void MergeData(SortedData &result_data, SortedData &l_data, SortedData &r_data, const idx_t &count,
-	               const bool left_smaller[], idx_t next_entry_sizes[]);
+	               const bool left_smaller[], idx_t next_entry_sizes[], bool reset_indices);
 	//! Merges constant size rows according to the 'left_smaller' array
 	void MergeRows(data_ptr_t &l_ptr, idx_t &l_entry_idx, const idx_t &l_count, data_ptr_t &r_ptr, idx_t &r_entry_idx,
 	               const idx_t &r_count, RowDataBlock *target_block, data_ptr_t &target_ptr, const idx_t &entry_size,
@@ -180,18 +196,6 @@ private:
 	                idx_t &source_entry_idx, data_ptr_t &source_heap_ptr, RowDataBlock *target_data_block,
 	                data_ptr_t &target_data_ptr, RowDataBlock *target_heap_block, BufferHandle &target_heap_handle,
 	                data_ptr_t &target_heap_ptr, idx_t &copied, const idx_t &count);
-
-private:
-	//! The global sorting state
-	GlobalSortState &state;
-	//! The sorting and payload layouts
-	BufferManager &buffer_manager;
-	const SortLayout &sort_layout;
-
-	//! The left, right and result blocks of the current partition
-	unique_ptr<SortedBlock> left_block;
-	unique_ptr<SortedBlock> right_block;
-	SortedBlock *result;
 };
 
 } // namespace duckdb

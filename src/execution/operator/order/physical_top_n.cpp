@@ -22,7 +22,7 @@ PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> o
 class TopNHeap;
 
 struct TopNScanState {
-	unique_ptr<SortedDataScanner> scanner;
+	unique_ptr<PayloadScanner> scanner;
 	idx_t pos;
 	bool exclude_offset;
 };
@@ -152,7 +152,7 @@ void TopNSortState::InitializeScan(TopNScanState &state, bool exclude_offset) {
 		state.scanner = nullptr;
 	} else {
 		D_ASSERT(global_state->sorted_blocks.size() == 1);
-		state.scanner = make_unique<SortedDataScanner>(*global_state->sorted_blocks[0]->payload_data, *global_state);
+		state.scanner = make_unique<PayloadScanner>(*global_state->sorted_blocks[0]->payload_data, *global_state);
 	}
 	state.pos = 0;
 	state.exclude_offset = exclude_offset && heap.offset > 0;

@@ -1,3 +1,5 @@
+#define DUCKDB_EXTENSION_MAIN
+
 #include "duckdb.hpp"
 #include "httpfs-extension.hpp"
 

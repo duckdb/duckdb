@@ -58,7 +58,7 @@ public:
 	static string ToString(const interval_t &val);
 
 	//! Convert milliseconds to a normalised interval
-	static interval_t FromMicro(int64_t micros);
+	DUCKDB_API static interval_t FromMicro(int64_t micros);
 
 	//! Get Interval in milliseconds
 	static int64_t GetMilli(const interval_t &val);
@@ -77,6 +77,8 @@ public:
 
 	//! Add an interval to a date
 	static date_t Add(date_t left, interval_t right);
+	//! Add an interval to a timestamp
+	static timestamp_t Add(timestamp_t left, interval_t right);
 	//! Add an interval to a time. In case the time overflows or underflows, modify the date by the overflow.
 	//! For example if we go from 23:00 to 02:00, we add a day to the date
 	static dtime_t Add(dtime_t left, interval_t right, date_t &date);

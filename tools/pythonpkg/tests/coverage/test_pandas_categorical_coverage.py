@@ -22,7 +22,8 @@ def check_create_table(category):
     'k': pd.Categorical(category, ordered=True),
     })
 
-    df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
+    df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data")
+    df_out = df_out.df()
     assert df_in.equals(df_out)
 
     conn.execute("CREATE TABLE t1 AS SELECT * FROM df_in")

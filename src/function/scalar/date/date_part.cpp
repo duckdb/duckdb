@@ -1,10 +1,14 @@
 #include "duckdb/function/scalar/date_functions.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 namespace duckdb {
@@ -15,7 +19,7 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 		result = DatePartSpecifier::YEAR;
 	} else if (specifier == "month" || specifier == "mon" || specifier == "months" || specifier == "mons") {
 		result = DatePartSpecifier::MONTH;
-	} else if (specifier == "day" || specifier == "days" || specifier == "d") {
+	} else if (specifier == "day" || specifier == "days" || specifier == "d" || specifier == "dayofmonth") {
 		result = DatePartSpecifier::DAY;
 	} else if (specifier == "decade" || specifier == "decades") {
 		result = DatePartSpecifier::DECADE;
@@ -37,13 +41,13 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 	} else if (specifier == "epoch") {
 		// seconds since 1970-01-01
 		result = DatePartSpecifier::EPOCH;
-	} else if (specifier == "dow" || specifier == "dayofweek") {
+	} else if (specifier == "dow" || specifier == "dayofweek" || specifier == "weekday") {
 		// day of the week (Sunday = 0, Saturday = 6)
 		result = DatePartSpecifier::DOW;
 	} else if (specifier == "isodow") {
 		// isodow (Monday = 1, Sunday = 7)
 		result = DatePartSpecifier::ISODOW;
-	} else if (specifier == "week" || specifier == "weeks" || specifier == "w") {
+	} else if (specifier == "week" || specifier == "weeks" || specifier == "w" || specifier == "weekofyear") {
 		// week number
 		result = DatePartSpecifier::WEEK;
 	} else if (specifier == "doy" || specifier == "dayofyear") {
@@ -55,6 +59,10 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 	} else if (specifier == "yearweek") {
 		// Combined year and week YYYYWW
 		result = DatePartSpecifier::YEARWEEK;
+	} else if (specifier == "era") {
+		result = DatePartSpecifier::ERA;
+	} else if (specifier == "offset") {
+		result = DatePartSpecifier::OFFSET;
 	} else {
 		return false;
 	}
@@ -67,6 +75,73 @@ DatePartSpecifier GetDatePartSpecifier(const string &specifier) {
 		throw ConversionException("extract specifier \"%s\" not recognized", specifier);
 	}
 	return result;
+}
+
+DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType &type) {
+	const auto part = GetDatePartSpecifier(specifier);
+	switch (type.id()) {
+	case LogicalType::TIMESTAMP:
+	case LogicalType::TIMESTAMP_TZ:
+		return part;
+	case LogicalType::DATE:
+		switch (part) {
+		case DatePartSpecifier::YEAR:
+		case DatePartSpecifier::MONTH:
+		case DatePartSpecifier::DAY:
+		case DatePartSpecifier::DECADE:
+		case DatePartSpecifier::CENTURY:
+		case DatePartSpecifier::MILLENNIUM:
+		case DatePartSpecifier::DOW:
+		case DatePartSpecifier::ISODOW:
+		case DatePartSpecifier::WEEK:
+		case DatePartSpecifier::QUARTER:
+		case DatePartSpecifier::DOY:
+		case DatePartSpecifier::YEARWEEK:
+		case DatePartSpecifier::ERA:
+			return part;
+		default:
+			break;
+		}
+		break;
+	case LogicalType::TIME:
+		switch (part) {
+		case DatePartSpecifier::MICROSECONDS:
+		case DatePartSpecifier::MILLISECONDS:
+		case DatePartSpecifier::SECOND:
+		case DatePartSpecifier::MINUTE:
+		case DatePartSpecifier::HOUR:
+		case DatePartSpecifier::EPOCH:
+		case DatePartSpecifier::OFFSET:
+			return part;
+		default:
+			break;
+		}
+		break;
+	case LogicalType::INTERVAL:
+		switch (part) {
+		case DatePartSpecifier::YEAR:
+		case DatePartSpecifier::MONTH:
+		case DatePartSpecifier::DAY:
+		case DatePartSpecifier::DECADE:
+		case DatePartSpecifier::CENTURY:
+		case DatePartSpecifier::QUARTER:
+		case DatePartSpecifier::MILLENNIUM:
+		case DatePartSpecifier::MICROSECONDS:
+		case DatePartSpecifier::MILLISECONDS:
+		case DatePartSpecifier::SECOND:
+		case DatePartSpecifier::MINUTE:
+		case DatePartSpecifier::HOUR:
+		case DatePartSpecifier::EPOCH:
+			return part;
+		default:
+			break;
+		}
+		break;
+	default:
+		break;
+	}
+
+	throw NotImplementedException("\"%s\" units \"%s\" not recognized", LogicalTypeIdToString(type.id()), specifier);
 }
 
 template <class T>
@@ -373,6 +448,166 @@ struct DatePart {
 			return PropagateDatePartStatistics<T, EpochOperator>(child_stats);
 		}
 	};
+
+	struct EraOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return Date::ExtractYear(input) > 0 ? 1 : 0;
+		}
+
+		template <class T>
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+		                                                      FunctionData *bind_data,
+		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+			return PropagateSimpleDatePartStatistics<0, 1>(child_stats);
+		}
+	};
+
+	struct OffsetOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			// Regular timestamps are UTC.
+			return 0;
+		}
+
+		template <class T>
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+		                                                      FunctionData *bind_data,
+		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+			return PropagateSimpleDatePartStatistics<0, 0>(child_stats);
+		}
+	};
+
+	struct StructOperator {
+		using part_codes_t = vector<DatePartSpecifier>;
+		using part_mask_t = uint64_t;
+
+		enum MaskBits : uint8_t {
+			YMD = 1 << 0,
+			DOW = 1 << 1,
+			DOY = 1 << 2,
+			EPOCH = 1 << 3,
+			TIME = 1 << 4,
+			ZONE = 1 << 5
+		};
+
+		static part_mask_t GetMask(const part_codes_t &part_codes) {
+			part_mask_t mask = 0;
+			for (const auto &part_code : part_codes) {
+				switch (part_code) {
+				case DatePartSpecifier::YEAR:
+				case DatePartSpecifier::MONTH:
+				case DatePartSpecifier::DAY:
+				case DatePartSpecifier::DECADE:
+				case DatePartSpecifier::CENTURY:
+				case DatePartSpecifier::MILLENNIUM:
+				case DatePartSpecifier::QUARTER:
+				case DatePartSpecifier::ERA:
+					mask |= YMD;
+					break;
+				case DatePartSpecifier::YEARWEEK:
+					mask |= YMD;
+					mask |= DOW;
+					break;
+				case DatePartSpecifier::DOW:
+				case DatePartSpecifier::ISODOW:
+				case DatePartSpecifier::WEEK:
+					mask |= DOW;
+					break;
+				case DatePartSpecifier::DOY:
+					mask |= DOY;
+					break;
+				case DatePartSpecifier::EPOCH:
+					mask |= EPOCH;
+					break;
+				case DatePartSpecifier::MICROSECONDS:
+				case DatePartSpecifier::MILLISECONDS:
+				case DatePartSpecifier::SECOND:
+				case DatePartSpecifier::MINUTE:
+				case DatePartSpecifier::HOUR:
+					mask |= TIME;
+					break;
+				case DatePartSpecifier::OFFSET:
+					mask |= ZONE;
+					break;
+				}
+			}
+			return mask;
+		}
+
+		template <typename P>
+		static inline P HasPartValue(P *part_values, DatePartSpecifier part) {
+			return part_values[int(part)];
+		}
+
+		template <class TA, class TR>
+		static inline void Operation(TR **part_values, const TA &input, const idx_t idx, const part_mask_t mask) {
+			TR *part_data;
+			// YMD calculations
+			int32_t yyyy = 1970;
+			int32_t mm = 0;
+			int32_t dd = 1;
+			if (mask & YMD) {
+				Date::Convert(input, yyyy, mm, dd);
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::YEAR))) {
+					part_data[idx] = yyyy;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::MONTH))) {
+					part_data[idx] = mm;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DAY))) {
+					part_data[idx] = dd;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DECADE))) {
+					part_data[idx] = yyyy / 10;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::CENTURY))) {
+					part_data[idx] = (yyyy - 1) / 100 + 1;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::MILLENNIUM))) {
+					part_data[idx] = (yyyy - 1) / 1000 + 1;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::QUARTER))) {
+					part_data[idx] = (mm - 1) / Interval::MONTHS_PER_QUARTER + 1;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::ERA))) {
+					part_data[idx] = yyyy > 0 ? 1 : 0;
+				}
+			}
+
+			// Week calculations
+			int32_t isodow = 0;
+			int32_t ww = 0;
+			if (mask & DOW) {
+				isodow = Date::ExtractISODayOfTheWeek(input);
+				ww = Date::ExtractISOWeekNumber(input);
+				int32_t dow = isodow % 7;
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DOW))) {
+					part_data[idx] = dow;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::ISODOW))) {
+					part_data[idx] = isodow;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::WEEK))) {
+					part_data[idx] = ww;
+				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::YEARWEEK))) {
+					part_data[idx] = yyyy * 100 + ww;
+				}
+			}
+
+			if (mask & EPOCH) {
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH))) {
+					part_data[idx] = Date::Epoch(input);
+				}
+			}
+			if (mask & DOY) {
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DOY))) {
+					part_data[idx] = Date::ExtractDayOfTheYear(input);
+				}
+			}
+		}
+	};
 };
 
 template <>
@@ -647,7 +882,140 @@ DatePart::EpochOperator::PropagateStatistics<dtime_t>(ClientContext &context, Bo
 	return PropagateSimpleDatePartStatistics<0, 86400>(child_stats);
 }
 
-template <class T>
+template <>
+int64_t DatePart::EraOperator::Operation(timestamp_t input) {
+	return EraOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+template <>
+int64_t DatePart::EraOperator::Operation(interval_t input) {
+	throw NotImplementedException("interval units \"era\" not recognized");
+}
+
+template <>
+int64_t DatePart::EraOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"era\" not recognized");
+}
+
+template <>
+int64_t DatePart::OffsetOperator::Operation(timestamp_t input) {
+	return 0;
+}
+
+template <>
+int64_t DatePart::OffsetOperator::Operation(interval_t input) {
+	throw NotImplementedException("\"interval\" units \"offset\" not recognized");
+}
+
+template <>
+int64_t DatePart::OffsetOperator::Operation(dtime_t input) {
+	return 0;
+}
+
+template <>
+void DatePart::StructOperator::Operation(int64_t **part_values, const dtime_t &input, const idx_t idx,
+                                         const part_mask_t mask) {
+	int64_t *part_data;
+	if (mask & TIME) {
+		const auto micros = MicrosecondsOperator::Operation<dtime_t, int64_t>(input);
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MICROSECONDS))) {
+			part_data[idx] = micros;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MILLISECONDS))) {
+			part_data[idx] = micros / Interval::MICROS_PER_MSEC;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::SECOND))) {
+			part_data[idx] = micros / Interval::MICROS_PER_SEC;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MINUTE))) {
+			part_data[idx] = MinutesOperator::Operation<dtime_t, int64_t>(input);
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::HOUR))) {
+			part_data[idx] = HoursOperator::Operation<dtime_t, int64_t>(input);
+		}
+	}
+
+	if (mask & EPOCH) {
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH))) {
+			part_data[idx] = EpochOperator::Operation<dtime_t, int64_t>(input);
+			;
+		}
+	}
+
+	if (mask & ZONE) {
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::OFFSET))) {
+			part_data[idx] = 0;
+		}
+	}
+}
+
+template <>
+void DatePart::StructOperator::Operation(int64_t **part_values, const timestamp_t &input, const idx_t idx,
+                                         const part_mask_t mask) {
+	date_t d;
+	dtime_t t;
+	Timestamp::Convert(input, d, t);
+	// Time first because they both define epoch.
+	Operation(part_values, t, idx, mask);
+	Operation(part_values, d, idx, mask);
+}
+
+template <>
+void DatePart::StructOperator::Operation(int64_t **part_values, const interval_t &input, const idx_t idx,
+                                         const part_mask_t mask) {
+	int64_t *part_data;
+	if (mask & YMD) {
+		const auto mm = input.months % Interval::MONTHS_PER_YEAR;
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::YEAR))) {
+			part_data[idx] = input.months / Interval::MONTHS_PER_YEAR;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MONTH))) {
+			part_data[idx] = mm;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::DAY))) {
+			part_data[idx] = input.days;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::DECADE))) {
+			part_data[idx] = input.months / Interval::MONTHS_PER_DECADE;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::CENTURY))) {
+			part_data[idx] = input.months / Interval::MONTHS_PER_CENTURY;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MILLENNIUM))) {
+			part_data[idx] = input.months / Interval::MONTHS_PER_MILLENIUM;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::QUARTER))) {
+			part_data[idx] = mm / Interval::MONTHS_PER_QUARTER + 1;
+		}
+	}
+
+	if (mask & TIME) {
+		const auto micros = MicrosecondsOperator::Operation<interval_t, int64_t>(input);
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MICROSECONDS))) {
+			part_data[idx] = micros;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MILLISECONDS))) {
+			part_data[idx] = micros / Interval::MICROS_PER_MSEC;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::SECOND))) {
+			part_data[idx] = micros / Interval::MICROS_PER_SEC;
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MINUTE))) {
+			part_data[idx] = MinutesOperator::Operation<interval_t, int64_t>(input);
+		}
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::HOUR))) {
+			part_data[idx] = HoursOperator::Operation<interval_t, int64_t>(input);
+		}
+	}
+
+	if (mask & EPOCH) {
+		if ((part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH))) {
+			part_data[idx] = EpochOperator::Operation<interval_t, int64_t>(input);
+		}
+	}
+}
+
+template <typename T>
 static int64_t ExtractElement(DatePartSpecifier type, T element) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
@@ -686,6 +1054,10 @@ static int64_t ExtractElement(DatePartSpecifier type, T element) {
 		return DatePart::MinutesOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::HOUR:
 		return DatePart::HoursOperator::template Operation<T, int64_t>(element);
+	case DatePartSpecifier::ERA:
+		return DatePart::EraOperator::template Operation<T, int64_t>(element);
+	case DatePartSpecifier::OFFSET:
+		return DatePart::OffsetOperator::template Operation<T, int64_t>(element);
 	default:
 		throw NotImplementedException("Specifier type not implemented for DATEPART");
 	}
@@ -783,6 +1155,164 @@ struct DayNameOperator {
 	}
 };
 
+struct StructDatePart {
+	using part_codes_t = vector<DatePartSpecifier>;
+
+	struct BindData : public VariableReturnBindData {
+		part_codes_t part_codes;
+
+		explicit BindData(const LogicalType &stype, const part_codes_t &part_codes_p)
+		    : VariableReturnBindData(stype), part_codes(part_codes_p) {
+		}
+
+		unique_ptr<FunctionData> Copy() override {
+			return make_unique<BindData>(stype, part_codes);
+		}
+	};
+
+	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                     vector<unique_ptr<Expression>> &arguments) {
+		// collect names and deconflict, construct return type
+		if (!arguments[0]->IsFoldable()) {
+			throw BinderException("%s can only take constant lists of part names", bound_function.name);
+		}
+
+		case_insensitive_set_t name_collision_set;
+		child_list_t<LogicalType> struct_children;
+		part_codes_t part_codes;
+
+		Value parts_list = ExpressionExecutor::EvaluateScalar(*arguments[0]);
+		if (parts_list.type().id() == LogicalTypeId::LIST) {
+			if (parts_list.list_value.empty()) {
+				throw BinderException("%s requires non-empty lists of part names", bound_function.name);
+			}
+			for (const auto &part_value : parts_list.list_value) {
+				if (part_value.is_null) {
+					throw BinderException("NULL struct entry name in %s", bound_function.name);
+				}
+				const auto part_name = part_value.ToString();
+				const auto part_code = GetDateTypePartSpecifier(part_name, arguments[1]->return_type);
+				if (name_collision_set.find(part_name) != name_collision_set.end()) {
+					throw BinderException("Duplicate struct entry name \"%s\" in %s", part_name, bound_function.name);
+				}
+				name_collision_set.insert(part_name);
+				part_codes.emplace_back(part_code);
+				struct_children.emplace_back(make_pair(part_name, LogicalType::BIGINT));
+			}
+		} else {
+			throw BinderException("%s can only take constant lists of part names", bound_function.name);
+		}
+
+		arguments.erase(arguments.begin());
+		bound_function.arguments.erase(bound_function.arguments.begin());
+		bound_function.return_type = LogicalType::STRUCT(move(struct_children));
+		return make_unique<BindData>(bound_function.return_type, part_codes);
+	}
+
+	template <typename INPUT_TYPE>
+	static void Function(DataChunk &args, ExpressionState &state, Vector &result) {
+		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &info = (BindData &)*func_expr.bind_info;
+		D_ASSERT(args.ColumnCount() == 1);
+
+		const auto count = args.size();
+		Vector &input = args.data[0];
+		vector<int64_t *> part_values(int(DatePartSpecifier::OFFSET) + 1, nullptr);
+		const auto part_mask = DatePart::StructOperator::GetMask(info.part_codes);
+
+		auto &child_entries = StructVector::GetEntries(result);
+
+		// The first computer of a part "owns" it
+		// and other requestors just reference the owner
+		vector<size_t> owners(int(DatePartSpecifier::OFFSET) + 1, child_entries.size());
+		for (size_t col = 0; col < child_entries.size(); ++col) {
+			const auto part_index = size_t(info.part_codes[col]);
+			if (owners[part_index] == child_entries.size()) {
+				owners[part_index] = col;
+			}
+		}
+
+		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+
+			if (ConstantVector::IsNull(input)) {
+				ConstantVector::SetNull(result, true);
+			} else {
+				ConstantVector::SetNull(result, false);
+				for (size_t col = 0; col < child_entries.size(); ++col) {
+					auto &child_entry = child_entries[col];
+					ConstantVector::SetNull(*child_entry, false);
+					const auto part_index = size_t(info.part_codes[col]);
+					if (owners[part_index] == col) {
+						part_values[part_index] = ConstantVector::GetData<int64_t>(*child_entry);
+					}
+				}
+				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
+				DatePart::StructOperator::Operation(part_values.data(), tdata[0], 0, part_mask);
+			}
+		} else {
+			VectorData rdata;
+			input.Orrify(count, rdata);
+
+			const auto &arg_valid = rdata.validity;
+			auto tdata = (const INPUT_TYPE *)rdata.data;
+
+			// Start with a valid flat vector
+			result.SetVectorType(VectorType::FLAT_VECTOR);
+			auto &res_valid = FlatVector::Validity(result);
+			if (res_valid.GetData()) {
+				res_valid.SetAllValid(count);
+			}
+
+			// Start with valid children
+			for (size_t col = 0; col < child_entries.size(); ++col) {
+				auto &child_entry = child_entries[col];
+				child_entry->SetVectorType(VectorType::FLAT_VECTOR);
+				auto &child_validity = FlatVector::Validity(*child_entry);
+				if (child_validity.GetData()) {
+					child_validity.SetAllValid(count);
+				}
+
+				// Pre-multiplex
+				const auto part_index = size_t(info.part_codes[col]);
+				if (owners[part_index] == col) {
+					part_values[part_index] = FlatVector::GetData<int64_t>(*child_entry);
+				}
+			}
+
+			for (idx_t i = 0; i < count; ++i) {
+				const auto idx = rdata.sel->get_index(i);
+				if (arg_valid.RowIsValid(idx)) {
+					DatePart::StructOperator::Operation(part_values.data(), tdata[idx], idx, part_mask);
+				} else {
+					res_valid.SetInvalid(idx);
+					for (auto &child_entry : child_entries) {
+						FlatVector::Validity(*child_entry).SetInvalid(idx);
+					}
+				}
+			}
+		}
+
+		// Reference any duplicate parts
+		for (size_t col = 0; col < child_entries.size(); ++col) {
+			const auto part_index = size_t(info.part_codes[col]);
+			const auto owner = owners[part_index];
+			if (owner != col) {
+				child_entries[col]->Reference(*child_entries[owner]);
+			}
+		}
+
+		result.Verify(count);
+	}
+
+	template <typename INPUT_TYPE>
+	static ScalarFunction GetFunction(const LogicalType &temporal_type) {
+		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
+		auto result_type = LogicalType::STRUCT({});
+		return ScalarFunction({part_type, temporal_type}, result_type, Function<INPUT_TYPE>, false, Bind);
+	}
+};
+
 void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	// register the individual operators
 	AddGenericDatePartOperator(set, "year", LastYearFunction<date_t>, LastYearFunction<timestamp_t>,
@@ -799,6 +1329,7 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	AddDatePartOperator<DatePart::ISODayOfWeekOperator>(set, "isodow");
 	AddDatePartOperator<DatePart::DayOfYearOperator>(set, "dayofyear");
 	AddDatePartOperator<DatePart::WeekOperator>(set, "week");
+	AddDatePartOperator<DatePart::EraOperator>(set, "era");
 	AddTimePartOperator<DatePart::EpochOperator>(set, "epoch");
 	AddTimePartOperator<DatePart::MicrosecondsOperator>(set, "microsecond");
 	AddTimePartOperator<DatePart::MillisecondsOperator>(set, "millisecond");
@@ -848,6 +1379,13 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME}, LogicalType::BIGINT, DatePartFunction<dtime_t>));
 	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::BIGINT,
 	                                     DatePartFunction<interval_t>));
+
+	// struct variants
+	date_part.AddFunction(StructDatePart::GetFunction<date_t>(LogicalType::DATE));
+	date_part.AddFunction(StructDatePart::GetFunction<timestamp_t>(LogicalType::TIMESTAMP));
+	date_part.AddFunction(StructDatePart::GetFunction<dtime_t>(LogicalType::TIME));
+	date_part.AddFunction(StructDatePart::GetFunction<interval_t>(LogicalType::INTERVAL));
+
 	set.AddFunction(date_part);
 	date_part.name = "datepart";
 	set.AddFunction(date_part);

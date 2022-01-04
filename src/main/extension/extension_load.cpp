@@ -21,7 +21,7 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &extension) {
 	auto &config = DBConfig::GetConfig(db);
 	if (!config.enable_external_access) {
-		throw Exception("Loading external extensions is disabled");
+		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto filename = fs.ConvertSeparators(extension);
@@ -29,7 +29,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &
 	// shorthand case
 	if (!StringUtil::Contains(extension, ".") && !StringUtil::Contains(extension, fs.PathSeparator())) {
 		string local_path = fs.GetHomeDirectory();
-		for (auto &path_ele : PATH_COMPONENTS) {
+		auto path_components = PathComponents();
+		for (auto &path_ele : path_components) {
 			local_path = fs.JoinPath(local_path, path_ele);
 		}
 		filename = fs.JoinPath(local_path, extension + ".duckdb_extension");

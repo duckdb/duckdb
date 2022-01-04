@@ -128,12 +128,12 @@ bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, con
 	return true;
 }
 
-int PandasScanFunction::PandasProgress(ClientContext &context, const FunctionData *bind_data_p) {
+double PandasScanFunction::PandasProgress(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 	if (bind_data.row_count == 0) {
 		return 100;
 	}
-	auto percentage = bind_data.lines_read * 100 / bind_data.row_count;
+	auto percentage = (bind_data.lines_read * 100.0) / bind_data.row_count;
 	return percentage;
 }
 

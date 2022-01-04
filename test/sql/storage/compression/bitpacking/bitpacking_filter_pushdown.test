@@ -1,0 +1,30 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_filter_pushdown.test
+# description: Filter pushdown with Bitpacking columns
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+statement ok
+CREATE TABLE test (id VARCHAR, col INTEGER)
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR id, i b FROM range(10000) tbl(i)
+
+statement ok
+CHECKPOINT
+
+# filter on the bitpacking column
+query IIII
+SELECT SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE col >= 5000
+----
+37497500	5000	9999	5000
+
+# filter on non-bitpacking column
+query IIIIII
+SELECT MIN(id), MAX(id), SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000'
+----
+5000	5000	5000	5000	5000	1

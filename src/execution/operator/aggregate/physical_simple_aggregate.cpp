@@ -167,8 +167,9 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState
 		aggregate.function.combine(source_state, dest_state, 1);
 	}
 
+	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &source.child_executor, "child_executor", 0);
-	context.client.profiler->Flush(context.thread.profiler);
+	client_profiler.Flush(context.thread.profiler);
 }
 
 SinkFinalizeType PhysicalSimpleAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,

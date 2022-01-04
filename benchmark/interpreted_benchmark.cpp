@@ -1,13 +1,15 @@
 #include "interpreted_benchmark.hpp"
+
 #include "benchmark_runner.hpp"
 #include "duckdb.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/query_profiler.hpp"
+#include "test_helpers.hpp"
 
 #include <fstream>
 #include <sstream>
-#include "duckdb/main/query_profiler.hpp"
-#include "duckdb/main/extension_helper.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -36,7 +38,10 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	DuckDB db;
 	Connection con;
 	unique_ptr<MaterializedQueryResult> result;
-	InterpretedBenchmarkState() : benchmark_config(GetBenchmarkConfig()), db(nullptr, benchmark_config.get()), con(db) {
+
+	explicit InterpretedBenchmarkState(string path)
+	    : benchmark_config(GetBenchmarkConfig()), db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()),
+	      con(db) {
 		con.EnableProfiling();
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
@@ -144,6 +149,22 @@ void InterpretedBenchmark::LoadBenchmark() {
 				throw std::runtime_error(reader.FormatException("cache requires a single parameter"));
 			}
 			data_cache = splits[1];
+		} else if (splits[0] == "storage") {
+			if (splits.size() != 2) {
+				throw std::runtime_error(reader.FormatException("storage requires a single parameter"));
+			}
+			if (splits[1] == "transient") {
+				in_memory = true;
+			} else if (splits[1] == "persistent") {
+				in_memory = false;
+			} else {
+				throw std::runtime_error(reader.FormatException("Invalid argument for storage"));
+			}
+		} else if (splits[0] == "require_reinit") {
+			if (splits.size() != 1) {
+				throw std::runtime_error(reader.FormatException("require_reinit does not take any parameters"));
+			}
+			require_reinit = true;
 		} else if (splits[0] == "name" || splits[0] == "group" || splits[0] == "subgroup") {
 			if (splits.size() == 1) {
 				throw std::runtime_error(reader.FormatException(splits[0] + " requires a parameter"));
@@ -255,7 +276,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfiguration &config) {
 	unique_ptr<QueryResult> result;
 	LoadBenchmark();
-	auto state = make_unique<InterpretedBenchmarkState>();
+	auto state = make_unique<InterpretedBenchmarkState>(GetDatabasePath());
 	for (auto &extension : extensions) {
 		auto result = ExtensionHelper::LoadExtension(state->db, extension);
 		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
@@ -333,6 +354,16 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 	}
 }
 
+string InterpretedBenchmark::GetDatabasePath() {
+	if (!InMemory()) {
+		string path = "duckdb_benchmark_db.db";
+		DeleteDatabase(path);
+		return path;
+	} else {
+		return string();
+	}
+}
+
 string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 	if (!state.result->success) {
@@ -394,7 +425,8 @@ string InterpretedBenchmark::BenchmarkInfo() {
 
 string InterpretedBenchmark::GetLogOutput(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
-	return state.con.context->profiler->ToJSON();
+	auto &profiler = QueryProfiler::Get(*state.con.context);
+	return profiler.ToJSON();
 }
 
 string InterpretedBenchmark::DisplayName() {

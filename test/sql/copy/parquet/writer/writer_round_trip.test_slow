@@ -1,0 +1,35 @@
+# name: test/sql/copy/parquet/writer/writer_round_trip.test_slow
+# description: Parquet read and re-write various files
+# group: [writer]
+
+require parquet
+
+foreach parquet_file data/parquet-testing/manyrowgroups.parquet data/parquet-testing/map.parquet data/parquet-testing/arrow/int32_decimal.parquet data/parquet-testing/arrow/nonnullable.impala.parquet data/parquet-testing/bug687_nulls.parquet data/parquet-testing/bug1554.parquet data/parquet-testing/apkwan.parquet data/parquet-testing/arrow/nested_lists.snappy.parquet data/parquet-testing/arrow/nulls.snappy.parquet data/parquet-testing/nan-float.parquet data/parquet-testing/manyrowgroups2.parquet data/parquet-testing/struct.parquet data/parquet-testing/arrow/list_columns.parquet data/parquet-testing/timestamp-ms.parquet data/parquet-testing/arrow/alltypes_dictionary.parquet data/parquet-testing/arrow/binary.parquet data/parquet-testing/arrow/nation.dict-malformed.parquet data/parquet-testing/lineitem-top10000.gzip.parquet data/parquet-testing/arrow/nested_maps.snappy.parquet data/parquet-testing/arrow/dict-page-offset-zero.parquet data/parquet-testing/silly-names.parquet data/parquet-testing/zstd.parquet data/parquet-testing/bug1618_struct_strings.parquet data/parquet-testing/arrow/single_nan.parquet data/parquet-testing/arrow/int64_decimal.parquet data/parquet-testing/filter_bug1391.parquet data/parquet-testing/arrow/fixed_length_decimal_legacy.parquet data/parquet-testing/timestamp.parquet data/parquet-testing/arrow/fixed_length_decimal.parquet data/parquet-testing/leftdate3_192_loop_1.parquet data/parquet-testing/blob.parquet data/parquet-testing/bug1588.parquet data/parquet-testing/bug1589.parquet data/parquet-testing/arrow/alltypes_plain.parquet data/parquet-testing/arrow/repeated_no_annotation.parquet data/parquet-testing/data-types.parquet data/parquet-testing/unsigned.parquet data/parquet-testing/pandas-date.parquet data/parquet-testing/date.parquet data/parquet-testing/arrow/nullable.impala.parquet data/parquet-testing/fixed.parquet data/parquet-testing/arrow/alltypes_plain.snappy.parquet data/parquet-testing/decimal/int32_decimal.parquet data/parquet-testing/decimal/pandas_decimal.parquet data/parquet-testing/decimal/decimal_dc.parquet data/parquet-testing/decimal/int64_decimal.parquet data/parquet-testing/decimal/fixed_length_decimal_legacy.parquet data/parquet-testing/decimal/fixed_length_decimal.parquet data/parquet-testing/glob2/t1.parquet data/parquet-testing/cache/cache1.parquet data/parquet-testing/cache/cache2.parquet data/parquet-testing/glob/t2.parquet data/parquet-testing/glob/t1.parquet data/parquet-testing/bug2557.parquet
+
+statement ok
+CREATE TABLE parquet_read AS SELECT * FROM parquet_scan('${parquet_file}');
+
+statement ok
+COPY parquet_read TO '__TEST_DIR__/test_round_trip.parquet'
+
+statement ok
+CREATE TABLE parquet_write AS SELECT * FROM parquet_scan('__TEST_DIR__/test_round_trip.parquet');
+
+# verify that the count is the same
+query I
+SELECT COUNT(*) FROM parquet_read EXCEPT SELECT COUNT(*) FROM parquet_write
+----
+
+# verify that the data is the same
+query I
+SELECT COUNT(*) FROM (SELECT * FROM parquet_read EXCEPT SELECT * FROM parquet_write)
+----
+0
+
+statement ok
+DROP TABLE parquet_read
+
+statement ok
+DROP TABLE parquet_write
+
+endloop

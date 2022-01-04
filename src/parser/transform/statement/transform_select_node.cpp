@@ -10,7 +10,7 @@ namespace duckdb {
 
 unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSelectStmt *stmt) {
 	D_ASSERT(stmt->type == duckdb_libpgquery::T_PGSelectStmt);
-	StackCheck();
+	auto stack_checker = StackCheck();
 
 	unique_ptr<QueryNode> node;
 
@@ -69,6 +69,8 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 		TransformGroupBy(stmt->groupClause, result->groups);
 		// having
 		result->having = TransformExpression(stmt->havingClause);
+		// qualify
+		result->qualify = TransformExpression(stmt->qualifyClause);
 		// sample
 		result->sample = TransformSampleOptions(stmt->sampleOptions);
 		break;

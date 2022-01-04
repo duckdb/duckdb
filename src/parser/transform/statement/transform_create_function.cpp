@@ -36,7 +36,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 				if (macro_func->default_parameters.find(param->alias) != macro_func->default_parameters.end()) {
 					throw ParserException("Duplicate default parameter: '%s'", param->alias);
 				}
-				macro_func->default_parameters[param->alias] = move(param);
+				auto alias = param->alias;
+				macro_func->default_parameters[alias] = move(param);
 			} else if (param->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 				// positional parameters
 				if (!macro_func->default_parameters.empty()) {

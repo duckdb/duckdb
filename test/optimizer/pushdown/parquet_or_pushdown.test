@@ -1,0 +1,50 @@
+# name: test/optimizer/pushdown/parquet_or_pushdown.test
+# description: Test Parquet With Pushing Down of OR Filters
+# group: [pushdown]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+# Multiple column in the root OR node, don't push down
+query II
+EXPLAIN  SELECT tbl.a, tbl.b FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a, b) WHERE a=1 OR b=false
+----
+physical_plan	<!REGEX>:.*PARQUET_SCAN.*Filters:.*
+
+
+# Single column in the root OR node
+query II
+EXPLAIN SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR a=2
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a=1 OR a=2.*
+
+# Single column + root OR node with AND
+query II
+EXPLAIN SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR (a>3 AND a<5)
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a=1 OR a>3 AND a<5|.*
+
+
+# Single column multiple ORs
+query II
+EXPLAIN SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR a>3 OR a<5
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a=1 OR a>3 OR a<5|.*
+
+
+
+# Testing not equal
+query II
+EXPLAIN SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a!=1 OR a>3 OR a<2
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a!=1 OR a>3 OR a<2|.*
+
+
+# Multiple OR filters connected with ANDs
+query II
+EXPLAIN SELECT tbl.a, tbl.b, tbl.c FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a,b,c) WHERE (a<2 OR a>3) AND (a=1 OR a=4) AND (b=false OR c=1);
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a<2 OR a>3 AND a=1.*OR a=4.*
+

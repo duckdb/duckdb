@@ -27,10 +27,13 @@ static AggregateFunction GetUnaryAggregate(LogicalType type) {
 	case LogicalTypeId::SMALLINT:
 		return AggregateFunction::UnaryAggregate<MinMaxState<int16_t>, int16_t, int16_t, OP>(type, type);
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 	case LogicalTypeId::INTEGER:
 		return AggregateFunction::UnaryAggregate<MinMaxState<int32_t>, int32_t, int32_t, OP>(type, type);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::BIGINT:
 		return AggregateFunction::UnaryAggregate<MinMaxState<int64_t>, int64_t, int64_t, OP>(type, type);
 	case LogicalTypeId::UTINYINT:
@@ -522,7 +525,7 @@ static AggregateFunction GetMinMaxFunction(const LogicalType &type) {
 
 template <class OP, class OP_STRING, class OP_VECTOR>
 static void AddMinMaxOperator(AggregateFunctionSet &set) {
-	for (auto &type : LogicalType::ALL_TYPES) {
+	for (auto &type : LogicalType::AllTypes()) {
 		if (type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::BLOB) {
 			set.AddFunction(
 			    AggregateFunction::UnaryAggregateDestructor<MinMaxState<string_t>, string_t, string_t, OP_STRING>(

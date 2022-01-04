@@ -14,7 +14,12 @@
 namespace duckdb {
 class CatalogEntry;
 
-enum class DependencyType { DEPENDENCY_REGULAR = 0, DEPENDENCY_AUTOMATIC = 1 };
+enum class DependencyType {
+	DEPENDENCY_REGULAR = 0,
+	DEPENDENCY_AUTOMATIC = 1,
+	DEPENDENCY_OWNS = 2,
+	DEPENDENCY_OWNED_BY = 3
+};
 
 struct Dependency {
 	Dependency(CatalogEntry *entry, DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR)

@@ -232,10 +232,13 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 		return GetFirstAggregateTemplated<int16_t, LAST>(type);
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 		return GetFirstAggregateTemplated<int32_t, LAST>(type);
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return GetFirstAggregateTemplated<int64_t, LAST>(type);
 	case LogicalTypeId::UTINYINT:
 		return GetFirstAggregateTemplated<uint8_t, LAST>(type);
@@ -295,7 +298,7 @@ unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunct
 void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet first("first");
 	AggregateFunctionSet last("last");
-	for (auto &type : LogicalType::ALL_TYPES) {
+	for (auto &type : LogicalType::AllTypes()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			first.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 			                                    BindDecimalFirst<false>, nullptr, nullptr, nullptr));
