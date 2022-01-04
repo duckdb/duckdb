@@ -104,7 +104,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	                                            distinct, is_operator);
 	copy->schema = schema;
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 void FunctionExpression::Serialize(Serializer &serializer) {

@@ -31,7 +31,7 @@ unique_ptr<Constraint> UniqueConstraint::Copy() {
 	} else {
 		auto result = make_unique<UniqueConstraint>(index, is_primary_key);
 		result->columns = columns;
-		return move(result);
+		return result;
 	}
 }
 
@@ -60,7 +60,7 @@ unique_ptr<Constraint> UniqueConstraint::Deserialize(Deserializer &source) {
 		// single column parsed constraint
 		auto result = make_unique<UniqueConstraint>(index, is_primary_key);
 		result->columns = move(columns);
-		return move(result);
+		return result;
 	} else {
 		// column list parsed constraint
 		return make_unique<UniqueConstraint>(move(columns), is_primary_key);

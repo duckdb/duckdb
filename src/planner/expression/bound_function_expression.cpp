@@ -63,7 +63,7 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() {
 	auto copy = make_unique<BoundFunctionExpression>(return_type, function, move(new_children), move(new_bind_info),
 	                                                 is_operator);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 } // namespace duckdb

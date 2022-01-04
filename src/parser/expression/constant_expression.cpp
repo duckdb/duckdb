@@ -25,7 +25,7 @@ hash_t ConstantExpression::Hash() const {
 unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
 	auto copy = make_unique<ConstantExpression>(value);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 void ConstantExpression::Serialize(Serializer &serializer) {

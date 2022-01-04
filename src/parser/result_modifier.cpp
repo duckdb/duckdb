@@ -53,7 +53,7 @@ unique_ptr<ResultModifier> LimitModifier::Copy() {
 	if (offset) {
 		copy->offset = offset->Copy();
 	}
-	return move(copy);
+	return copy;
 }
 
 void LimitModifier::Serialize(Serializer &serializer) {
@@ -66,7 +66,7 @@ unique_ptr<ResultModifier> LimitModifier::Deserialize(Deserializer &source) {
 	auto mod = make_unique<LimitModifier>();
 	mod->limit = source.ReadOptional<ParsedExpression>();
 	mod->offset = source.ReadOptional<ParsedExpression>();
-	return move(mod);
+	return mod;
 }
 
 bool DistinctModifier::Equals(const ResultModifier *other_p) const {
@@ -85,7 +85,7 @@ unique_ptr<ResultModifier> DistinctModifier::Copy() {
 	for (auto &expr : distinct_on_targets) {
 		copy->distinct_on_targets.push_back(expr->Copy());
 	}
-	return move(copy);
+	return copy;
 }
 
 void DistinctModifier::Serialize(Serializer &serializer) {
@@ -96,7 +96,7 @@ void DistinctModifier::Serialize(Serializer &serializer) {
 unique_ptr<ResultModifier> DistinctModifier::Deserialize(Deserializer &source) {
 	auto mod = make_unique<DistinctModifier>();
 	source.ReadList<ParsedExpression>(mod->distinct_on_targets);
-	return move(mod);
+	return mod;
 }
 
 bool OrderModifier::Equals(const ResultModifier *other_p) const {
@@ -123,7 +123,7 @@ unique_ptr<ResultModifier> OrderModifier::Copy() {
 	for (auto &order : orders) {
 		copy->orders.emplace_back(order.type, order.null_order, order.expression->Copy());
 	}
-	return move(copy);
+	return copy;
 }
 
 string OrderByNode::ToString() const {
@@ -169,7 +169,7 @@ unique_ptr<ResultModifier> OrderModifier::Deserialize(Deserializer &source) {
 	for (int64_t i = 0; i < order_count; i++) {
 		mod->orders.push_back(OrderByNode::Deserialize((source)));
 	}
-	return move(mod);
+	return mod;
 }
 
 bool LimitPercentModifier::Equals(const ResultModifier *other_p) const {
@@ -194,7 +194,7 @@ unique_ptr<ResultModifier> LimitPercentModifier::Copy() {
 	if (offset) {
 		copy->offset = offset->Copy();
 	}
-	return move(copy);
+	return copy;
 }
 
 void LimitPercentModifier::Serialize(Serializer &serializer) {
@@ -207,7 +207,7 @@ unique_ptr<ResultModifier> LimitPercentModifier::Deserialize(Deserializer &sourc
 	auto mod = make_unique<LimitPercentModifier>();
 	mod->limit = source.ReadOptional<ParsedExpression>();
 	mod->offset = source.ReadOptional<ParsedExpression>();
-	return move(mod);
+	return mod;
 }
 
 } // namespace duckdb

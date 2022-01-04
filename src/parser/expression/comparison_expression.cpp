@@ -30,7 +30,7 @@ bool ComparisonExpression::Equals(const ComparisonExpression *a, const Compariso
 unique_ptr<ParsedExpression> ComparisonExpression::Copy() const {
 	auto copy = make_unique<ComparisonExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 void ComparisonExpression::Serialize(Serializer &serializer) {

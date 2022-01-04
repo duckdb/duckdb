@@ -63,7 +63,7 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode 
 		throw InternalException("Unknown pragma type");
 	}
 
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

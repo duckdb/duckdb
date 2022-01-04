@@ -40,7 +40,7 @@ unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(const string &o
 	// built-in operator function
 	auto result = make_unique<FunctionExpression>(schema, op, move(children));
 	result->is_operator = true;
-	return move(result);
+	return result;
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &op, unique_ptr<ParsedExpression> left,
@@ -59,7 +59,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &
 		if (invert_similar) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
 		} else {
-			return move(result);
+			return result;
 		}
 	} else {
 		auto target_type = OperatorToExpressionType(op);
@@ -70,7 +70,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &
 		// not a special operator: convert to a function expression
 		auto result = make_unique<FunctionExpression>(schema, op, move(children));
 		result->is_operator = true;
-		return move(result);
+		return result;
 	}
 }
 
@@ -124,7 +124,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 		auto result = make_unique<OperatorExpression>(operator_type, move(left_expr));
 		result->query_location = root->location;
 		TransformExpressionList(*((duckdb_libpgquery::PGList *)root->rexpr), result->children);
-		return move(result);
+		return result;
 	}
 	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END
 	case duckdb_libpgquery::PG_AEXPR_NULLIF: {
@@ -189,7 +189,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 		if (invert_similar) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
 		} else {
-			return move(result);
+			return result;
 		}
 	}
 	case duckdb_libpgquery::PG_AEXPR_NOT_DISTINCT: {

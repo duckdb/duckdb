@@ -110,7 +110,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 			any_join->condition = make_unique<BoundConjunctionExpression>(
 			    ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(arbitrary_expressions[i]));
 		}
-		return move(any_join);
+		return any_join;
 	} else {
 		// we successfully converted expressions into JoinConditions
 		// create a LogicalComparisonJoin
@@ -127,9 +127,9 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 			}
 			LogicalFilter::SplitPredicates(filter->expressions);
 			filter->children.push_back(move(comp_join));
-			return move(filter);
+			return filter;
 		}
-		return move(comp_join);
+		return comp_join;
 	}
 }
 
@@ -174,7 +174,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 			PlanSubqueries(&expression, &root);
 		}
 		filter->AddChild(move(root));
-		return move(filter);
+		return filter;
 	}
 
 	// split the expressions by the AND clause

@@ -17,7 +17,7 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 	if (input.validity_stats) {
 		stats->validity_stats = input.validity_stats->Copy();
 	}
-	return move(stats);
+	return stats;
 }
 
 static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatistics *input, const LogicalType &target) {

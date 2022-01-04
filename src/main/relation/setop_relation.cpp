@@ -19,7 +19,7 @@ unique_ptr<QueryNode> SetOpRelation::GetQueryNode() {
 	result->left = left->GetQueryNode();
 	result->right = right->GetQueryNode();
 	result->setop_type = setop_type;
-	return move(result);
+	return result;
 }
 
 string SetOpRelation::GetAlias() {

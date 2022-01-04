@@ -32,7 +32,7 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &source) {
 	result->table_name = source.Read<string>();
 	source.ReadStringVector(result->column_name_alias);
 
-	return move(result);
+	return result;
 }
 
 unique_ptr<TableRef> BaseTableRef::Copy() {
@@ -43,6 +43,6 @@ unique_ptr<TableRef> BaseTableRef::Copy() {
 	copy->column_name_alias = column_name_alias;
 	CopyProperties(*copy);
 
-	return move(copy);
+	return copy;
 }
 } // namespace duckdb

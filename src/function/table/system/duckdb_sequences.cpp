@@ -75,7 +75,7 @@ unique_ptr<FunctionOperatorData> DuckDBSequencesInit(ClientContext &context, con
 	// check the temp schema as well
 	context.temporary_objects->Scan(context, CatalogType::SEQUENCE_ENTRY,
 	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
-	return move(result);
+	return result;
 }
 
 void DuckDBSequencesFunction(ClientContext &context, const FunctionData *bind_data,

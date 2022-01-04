@@ -72,7 +72,7 @@ unique_ptr<FunctionOperatorData> DuckDBSettingsInit(ClientContext &context, cons
 
 		result->settings.push_back(move(value));
 	}
-	return move(result);
+	return result;
 }
 
 void DuckDBSettingsFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,

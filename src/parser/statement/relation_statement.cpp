@@ -8,7 +8,7 @@ RelationStatement::RelationStatement(shared_ptr<Relation> relation)
 
 unique_ptr<SQLStatement> RelationStatement::Copy() const {
 	auto result = make_unique<RelationStatement>(relation);
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

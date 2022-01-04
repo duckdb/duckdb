@@ -18,7 +18,7 @@ unique_ptr<SQLStatement> UpdateStatement::Copy() const {
 	for (auto &expr : expressions) {
 		result->expressions.push_back(expr->Copy());
 	}
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

@@ -31,7 +31,7 @@ unique_ptr<QueryNode> TableFunctionRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
 	result->from_table = GetTableRef();
-	return move(result);
+	return result;
 }
 
 unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {

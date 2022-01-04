@@ -110,7 +110,7 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 	// for perfect hash join
 	state->perfect_join_executor =
 	    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, perfect_join_statistics);
-	return move(state);
+	return state;
 }
 
 unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext &context) const {
@@ -122,7 +122,7 @@ unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext 
 		state->build_executor.AddExpression(*cond.right);
 	}
 	state->join_keys.Initialize(condition_types);
-	return move(state);
+	return state;
 }
 
 SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
@@ -212,7 +212,7 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ClientContext &cont
 			state->probe_executor.AddExpression(*cond.left);
 		}
 	}
-	return move(state);
+	return state;
 }
 
 OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

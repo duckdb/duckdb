@@ -39,7 +39,7 @@ unique_ptr<TableRef> ExpressionListRef::Copy() {
 	result->expected_names = expected_names;
 	result->expected_types = expected_types;
 	CopyProperties(*result);
-	return move(result);
+	return result;
 }
 
 void ExpressionListRef::Serialize(Serializer &serializer) {
@@ -75,7 +75,7 @@ unique_ptr<TableRef> ExpressionListRef::Deserialize(Deserializer &source) {
 		source.ReadList<ParsedExpression>(value_list);
 		result->values.push_back(move(value_list));
 	}
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

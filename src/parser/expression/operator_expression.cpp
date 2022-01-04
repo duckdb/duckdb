@@ -57,7 +57,7 @@ unique_ptr<ParsedExpression> OperatorExpression::Copy() const {
 	for (auto &it : children) {
 		copy->children.push_back(it->Copy());
 	}
-	return move(copy);
+	return copy;
 }
 
 void OperatorExpression::Serialize(Serializer &serializer) {

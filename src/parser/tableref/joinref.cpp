@@ -33,7 +33,7 @@ unique_ptr<TableRef> JoinRef::Copy() {
 	copy->is_natural = is_natural;
 	copy->alias = alias;
 	copy->using_columns = using_columns;
-	return move(copy);
+	return copy;
 }
 
 void JoinRef::Serialize(Serializer &serializer) {
@@ -63,7 +63,7 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &source) {
 	for (idx_t i = 0; i < count; i++) {
 		result->using_columns.push_back(source.Read<string>());
 	}
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

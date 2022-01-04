@@ -10,7 +10,7 @@ AlterStatement::AlterStatement(unique_ptr<AlterInfo> info)
 
 unique_ptr<SQLStatement> AlterStatement::Copy() const {
 	auto result = make_unique<AlterStatement>(info->Copy());
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

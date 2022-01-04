@@ -23,7 +23,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::DOUBLE: {
 		auto result = make_unique<NumericStatistics>(input.type(), input, input);
 		result->validity_stats = make_unique<ValidityStatistics>(input.is_null, !input.is_null);
-		return move(result);
+		return result;
 	}
 	case PhysicalType::VARCHAR: {
 		auto result = make_unique<StringStatistics>(input.type());
@@ -32,7 +32,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 			string_t str(input.str_value.c_str(), input.str_value.size());
 			result->Update(str);
 		}
-		return move(result);
+		return result;
 	}
 	case PhysicalType::STRUCT: {
 		auto result = make_unique<StructStatistics>(input.type());
@@ -47,7 +47,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 				result->child_stats[i] = StatisticsFromValue(input.struct_value[i]);
 			}
 		}
-		return move(result);
+		return result;
 	}
 	case PhysicalType::LIST: {
 		auto result = make_unique<ListStatistics>(input.type());
@@ -64,7 +64,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 				}
 			}
 		}
-		return move(result);
+		return result;
 	}
 	default:
 		return nullptr;

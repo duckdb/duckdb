@@ -147,7 +147,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 		return_types.emplace_back(LogicalType::VARCHAR);
 		names.emplace_back("filename");
 	}
-	return move(result);
+	return result;
 }
 
 struct ReadCSVOperatorData : public FunctionOperatorData {
@@ -171,7 +171,7 @@ static unique_ptr<FunctionOperatorData> ReadCSVInit(ClientContext &context, cons
 	bind_data.bytes_read = 0;
 	bind_data.file_size = result->csv_reader->GetFileSize();
 	result->file_index = 1;
-	return move(result);
+	return result;
 }
 
 static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, vector<Value> &inputs,

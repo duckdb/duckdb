@@ -234,7 +234,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		result->condition = binder.Bind(ref.condition);
 	}
 	D_ASSERT(result->condition);
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

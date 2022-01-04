@@ -36,7 +36,7 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 			result->replace_list.insert(make_pair(move(exclude_entry), move(replace_expression)));
 		}
 	}
-	return move(result);
+	return result;
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformColumnRef(duckdb_libpgquery::PGColumnRef *root) {

@@ -207,7 +207,7 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 	}
 	auto projection = make_unique<PhysicalProjection>(move(types), move(expressions), child->estimated_cardinality);
 	projection->children.push_back(move(child));
-	return move(projection);
+	return projection;
 }
 
 } // namespace duckdb

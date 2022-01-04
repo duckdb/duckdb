@@ -54,7 +54,7 @@ unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {
 	}
 	auto copy = make_unique<ConjunctionExpression>(type, move(copy_children));
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 void ConjunctionExpression::Serialize(Serializer &serializer) {
@@ -65,7 +65,7 @@ void ConjunctionExpression::Serialize(Serializer &serializer) {
 unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	auto result = make_unique<ConjunctionExpression>(type);
 	source.ReadList<ParsedExpression>(result->children);
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

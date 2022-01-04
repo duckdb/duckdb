@@ -45,7 +45,7 @@ unique_ptr<FunctionOperatorData> DuckDBSchemasInit(ClientContext &context, const
 	// get the temp schema as well
 	result->entries.push_back(context.temporary_objects.get());
 
-	return move(result);
+	return result;
 }
 
 void DuckDBSchemasFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,

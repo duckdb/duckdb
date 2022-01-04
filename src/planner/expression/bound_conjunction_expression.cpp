@@ -36,7 +36,7 @@ unique_ptr<Expression> BoundConjunctionExpression::Copy() {
 		copy->children.push_back(expr->Copy());
 	}
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 } // namespace duckdb

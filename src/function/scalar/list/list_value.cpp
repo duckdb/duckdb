@@ -55,10 +55,10 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, BoundFunctionE
 			list_stats->child_stats->Merge(*child_stats[i]);
 		} else {
 			list_stats->child_stats.reset();
-			return move(list_stats);
+			return list_stats;
 		}
 	}
-	return move(list_stats);
+	return list_stats;
 }
 
 void ListValueFun::RegisterFunction(BuiltinFunctions &set) {

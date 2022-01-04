@@ -116,7 +116,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 	// finally bind the types of the ORDER/DISTINCT clause expressions
 	BindModifierTypes(*result, result->types, result->setop_index);
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

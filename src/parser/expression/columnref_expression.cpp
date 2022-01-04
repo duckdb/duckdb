@@ -67,7 +67,7 @@ hash_t ColumnRefExpression::Hash() const {
 unique_ptr<ParsedExpression> ColumnRefExpression::Copy() const {
 	auto copy = make_unique<ColumnRefExpression>(column_names);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 void ColumnRefExpression::Serialize(Serializer &serializer) {

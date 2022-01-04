@@ -10,7 +10,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	auto copy = make_unique<PhysicalCopyToFile>(op.types, op.function, move(op.bind_data), op.estimated_cardinality);
 
 	copy->children.push_back(move(plan));
-	return move(copy);
+	return copy;
 }
 
 } // namespace duckdb

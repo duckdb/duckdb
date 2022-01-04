@@ -155,7 +155,7 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 	}
 	auto stats = make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max));
 	stats->validity_stats = ValidityStatistics::Combine(lstats.validity_stats, rstats.validity_stats);
-	return move(stats);
+	return stats;
 }
 
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
@@ -421,7 +421,7 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, B
 	if (istats.validity_stats) {
 		stats->validity_stats = istats.validity_stats->Copy();
 	}
-	return move(stats);
+	return stats;
 }
 
 ScalarFunction SubtractFun::GetFunction(const LogicalType &type) {

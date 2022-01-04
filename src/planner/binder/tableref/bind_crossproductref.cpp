@@ -18,7 +18,7 @@ unique_ptr<BoundTableRef> Binder::Bind(CrossProductRef &ref) {
 	bind_context.AddContext(move(right_binder.bind_context));
 	MoveCorrelatedExpressions(left_binder);
 	MoveCorrelatedExpressions(right_binder);
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

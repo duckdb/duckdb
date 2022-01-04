@@ -74,7 +74,7 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	auto copy = make_unique<BoundAggregateExpression>(function, move(new_children), move(new_filter),
 	                                                  move(new_bind_info), distinct);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 } // namespace duckdb

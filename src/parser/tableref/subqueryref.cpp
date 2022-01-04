@@ -22,7 +22,7 @@ unique_ptr<TableRef> SubqueryRef::Copy() {
 	auto copy = make_unique<SubqueryRef>(unique_ptr_cast<SQLStatement, SelectStatement>(subquery->Copy()), alias);
 	copy->column_name_alias = column_name_alias;
 	CopyProperties(*copy);
-	return move(copy);
+	return copy;
 }
 
 void SubqueryRef::Serialize(Serializer &serializer) {
@@ -38,7 +38,7 @@ unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &source) {
 	}
 	auto result = make_unique<SubqueryRef>(move(subquery));
 	source.ReadStringVector(result->column_name_alias);
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

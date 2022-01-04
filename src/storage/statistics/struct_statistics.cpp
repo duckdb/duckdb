@@ -43,7 +43,7 @@ unique_ptr<BaseStatistics> StructStatistics::Copy() {
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		copy->child_stats[i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
 	}
-	return move(copy);
+	return copy;
 }
 
 void StructStatistics::Serialize(Serializer &serializer) {
@@ -68,7 +68,7 @@ unique_ptr<BaseStatistics> StructStatistics::Deserialize(Deserializer &source, L
 			result->child_stats[i].reset();
 		}
 	}
-	return move(result);
+	return result;
 }
 
 string StructStatistics::ToString() {

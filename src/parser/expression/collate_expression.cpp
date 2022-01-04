@@ -28,7 +28,7 @@ bool CollateExpression::Equals(const CollateExpression *a, const CollateExpressi
 unique_ptr<ParsedExpression> CollateExpression::Copy() const {
 	auto copy = make_unique<CollateExpression>(collation, child->Copy());
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 void CollateExpression::Serialize(Serializer &serializer) {

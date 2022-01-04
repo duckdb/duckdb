@@ -17,7 +17,7 @@ unique_ptr<ParsedExpression> Transformer::TransformCoalesce(duckdb_libpgquery::P
 		auto value_expr = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(cell->data.ptr_value));
 		coalesce_op->children.push_back(move(value_expr));
 	}
-	return move(coalesce_op);
+	return coalesce_op;
 }
 
 } // namespace duckdb

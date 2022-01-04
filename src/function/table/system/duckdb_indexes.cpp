@@ -69,7 +69,7 @@ unique_ptr<FunctionOperatorData> DuckDBIndexesInit(ClientContext &context, const
 	// check the temp schema as well
 	context.temporary_objects->Scan(context, CatalogType::INDEX_ENTRY,
 	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
-	return move(result);
+	return result;
 }
 
 void DuckDBIndexesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,

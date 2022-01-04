@@ -55,7 +55,7 @@ unique_ptr<FunctionOperatorData> PragmaFunctionsInit(ClientContext &context, con
 		             [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	});
 
-	return move(result);
+	return result;
 }
 
 void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is_aggregate) {

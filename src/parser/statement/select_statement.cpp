@@ -7,7 +7,7 @@ namespace duckdb {
 unique_ptr<SQLStatement> SelectStatement::Copy() const {
 	auto result = make_unique<SelectStatement>();
 	result->node = node->Copy();
-	return move(result);
+	return result;
 }
 
 void SelectStatement::Serialize(Serializer &serializer) {

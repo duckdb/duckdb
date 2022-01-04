@@ -8,7 +8,7 @@ DropStatement::DropStatement() : SQLStatement(StatementType::DROP_STATEMENT), in
 unique_ptr<SQLStatement> DropStatement::Copy() const {
 	auto result = make_unique<DropStatement>();
 	result->info = info->Copy();
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

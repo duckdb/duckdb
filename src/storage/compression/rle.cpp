@@ -281,7 +281,7 @@ struct RLEScanState : public SegmentScanState {
 template <class T>
 unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
 	auto result = make_unique<RLEScanState<T>>(segment);
-	return move(result);
+	return result;
 }
 
 //===--------------------------------------------------------------------===//

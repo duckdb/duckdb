@@ -35,7 +35,7 @@ unique_ptr<QueryNode> FilterRelation::GetQueryNode() {
 		result->select_list.push_back(make_unique<StarExpression>());
 		result->from_table = child->GetTableRef();
 		result->where_clause = condition->Copy();
-		return move(result);
+		return result;
 	}
 }
 

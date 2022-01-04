@@ -56,7 +56,7 @@ RangeFunctionBind(ClientContext &context, vector<Value> &inputs, unordered_map<s
 	} else {
 		names.emplace_back("range");
 	}
-	return move(result);
+	return result;
 }
 
 struct RangeFunctionState : public FunctionOperatorData {
@@ -167,7 +167,7 @@ RangeDateTimeBind(ClientContext &context, vector<Value> &inputs, unordered_map<s
 		result->inclusive_bound = false;
 		names.emplace_back("range");
 	}
-	return move(result);
+	return result;
 }
 
 struct RangeDateTimeState : public FunctionOperatorData {

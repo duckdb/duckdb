@@ -15,7 +15,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	if (op.explain_type == ExplainType::EXPLAIN_ANALYZE) {
 		auto result = make_unique<PhysicalExplainAnalyze>(op.types);
 		result->children.push_back(move(plan));
-		return move(result);
+		return result;
 	}
 
 	op.physical_plan = plan->ToString();
@@ -56,7 +56,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	    make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN, op.estimated_cardinality);
 	chunk_scan->owned_collection = move(collection);
 	chunk_scan->collection = chunk_scan->owned_collection.get();
-	return move(chunk_scan);
+	return chunk_scan;
 }
 
 } // namespace duckdb

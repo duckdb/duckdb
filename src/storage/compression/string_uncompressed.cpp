@@ -139,7 +139,7 @@ unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSeg
 	auto result = make_unique<StringScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
-	return move(result);
+	return result;
 }
 
 //===--------------------------------------------------------------------===//

@@ -265,7 +265,7 @@ unique_ptr<FunctionData> AggregateFunction::BindSortedAggregate(AggregateFunctio
 	    SortedAggregateFunction::Finalize, SortedAggregateFunction::SimpleUpdate, nullptr,
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>);
 
-	return move(sorted_bind);
+	return sorted_bind;
 }
 
 } // namespace duckdb

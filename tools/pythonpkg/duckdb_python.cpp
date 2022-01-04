@@ -62,7 +62,7 @@ static py::object PyTokenize(const string &query) {
 		}
 		result.append(tuple);
 	}
-	return move(result);
+	return result;
 }
 
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {

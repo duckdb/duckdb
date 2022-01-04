@@ -36,7 +36,7 @@ bool BoundUnnestExpression::Equals(const BaseExpression *other_p) const {
 unique_ptr<Expression> BoundUnnestExpression::Copy() {
 	auto copy = make_unique<BoundUnnestExpression>(return_type);
 	copy->child = child->Copy();
-	return move(copy);
+	return copy;
 }
 
 } // namespace duckdb

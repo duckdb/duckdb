@@ -8,7 +8,7 @@ CreateStatement::CreateStatement() : SQLStatement(StatementType::CREATE_STATEMEN
 unique_ptr<SQLStatement> CreateStatement::Copy() const {
 	auto result = make_unique<CreateStatement>();
 	result->info = info->Copy();
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

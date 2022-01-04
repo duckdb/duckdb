@@ -240,7 +240,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 #endif
 		result->collection.Append(*chunk);
 	}
-	return move(result);
+	return result;
 }
 
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query,

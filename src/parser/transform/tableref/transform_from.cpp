@@ -31,7 +31,7 @@ unique_ptr<TableRef> Transformer::TransformFrom(duckdb_libpgquery::PGList *root)
 			list_size++;
 			StackCheck(list_size);
 		}
-		return move(result);
+		return result;
 	}
 
 	auto n = reinterpret_cast<duckdb_libpgquery::PGNode *>(root->head->data.ptr_value);

@@ -43,7 +43,7 @@ unique_ptr<Expression> BoundParameterExpression::Copy() {
 	result->value = value;
 	result->return_type = return_type;
 	result->CopyProperties(*this);
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

@@ -34,7 +34,7 @@ public:
 	unique_ptr<CreateInfo> Copy() const override {
 		auto result = make_unique<CreateAggregateFunctionInfo>(functions);
 		CopyProperties(*result);
-		return move(result);
+		return result;
 	}
 };
 

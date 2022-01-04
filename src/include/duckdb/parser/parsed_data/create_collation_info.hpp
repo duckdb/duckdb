@@ -35,7 +35,7 @@ public:
 	unique_ptr<CreateInfo> Copy() const override {
 		auto result = make_unique<CreateCollationInfo>(name, function, combinable, not_required_for_equality);
 		CopyProperties(*result);
-		return move(result);
+		return result;
 	}
 };
 

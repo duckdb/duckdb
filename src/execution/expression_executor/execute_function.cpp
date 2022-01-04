@@ -13,7 +13,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunct
 	if (expr.function.init_local_state) {
 		result->local_state = expr.function.init_local_state(expr, expr.bind_info.get());
 	}
-	return move(result);
+	return result;
 }
 
 void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, ExpressionState *state,

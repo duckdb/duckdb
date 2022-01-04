@@ -34,7 +34,7 @@ unique_ptr<Expression> BoundBetweenExpression::Copy() {
 	auto copy = make_unique<BoundBetweenExpression>(input->Copy(), lower->Copy(), upper->Copy(), lower_inclusive,
 	                                                upper_inclusive);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 } // namespace duckdb

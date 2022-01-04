@@ -24,7 +24,7 @@ unique_ptr<QueryNode> ReadCSVRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
 	result->from_table = GetTableRef();
-	return move(result);
+	return result;
 }
 
 unique_ptr<TableRef> ReadCSVRelation::GetTableRef() {
@@ -48,7 +48,7 @@ unique_ptr<TableRef> ReadCSVRelation::GetTableRef() {
 		                                                     make_unique<ConstantExpression>(Value::BOOLEAN(true))));
 	}
 	table_ref->function = make_unique<FunctionExpression>("read_csv", move(children));
-	return move(table_ref);
+	return table_ref;
 }
 
 string ReadCSVRelation::GetAlias() {

@@ -32,7 +32,7 @@ bool CastExpression::Equals(const CastExpression *a, const CastExpression *b) {
 unique_ptr<ParsedExpression> CastExpression::Copy() const {
 	auto copy = make_unique<CastExpression>(cast_type, child->Copy(), try_cast);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 void CastExpression::Serialize(Serializer &serializer) {

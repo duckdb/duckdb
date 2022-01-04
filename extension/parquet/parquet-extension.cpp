@@ -106,7 +106,7 @@ public:
 		}
 		ParquetOptions parquet_options(context);
 		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options);
-		return move(result);
+		return result;
 	}
 
 	static unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
@@ -184,7 +184,7 @@ public:
 		return_types = result->initial_reader->return_types;
 
 		names = result->initial_reader->names;
-		return move(result);
+		return result;
 	}
 
 	static vector<string> ParquetGlob(FileSystem &fs, const string &glob) {

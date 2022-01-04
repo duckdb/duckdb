@@ -36,7 +36,7 @@ public:
 		result->aliases = aliases;
 		result->types = types;
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
-		return move(result);
+		return result;
 	}
 };
 

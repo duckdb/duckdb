@@ -26,7 +26,7 @@ unique_ptr<BaseStatistics> StringStatistics::Copy() {
 	if (validity_stats) {
 		stats->validity_stats = validity_stats->Copy();
 	}
-	return move(stats);
+	return stats;
 }
 
 void StringStatistics::Serialize(Serializer &serializer) {
@@ -45,7 +45,7 @@ unique_ptr<BaseStatistics> StringStatistics::Deserialize(Deserializer &source, L
 	stats->has_unicode = source.Read<bool>();
 	stats->max_string_length = source.Read<uint32_t>();
 	stats->has_overflow_strings = source.Read<bool>();
-	return move(stats);
+	return stats;
 }
 
 static int StringValueComparison(const_data_ptr_t data, idx_t len, const_data_ptr_t comparison) {

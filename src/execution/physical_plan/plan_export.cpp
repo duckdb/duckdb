@@ -17,7 +17,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExport &op
 		auto plan = CreatePlan(*op.children[0]);
 		export_node->children.push_back(move(plan));
 	}
-	return move(export_node);
+	return export_node;
 }
 
 } // namespace duckdb

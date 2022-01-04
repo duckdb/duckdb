@@ -143,7 +143,7 @@ unique_ptr<OperatorState> PerfectHashJoinExecutor::GetOperatorState(ClientContex
 	state->build_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
 	state->probe_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
 	state->seq_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
-	return move(state);
+	return state;
 }
 
 OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &input,

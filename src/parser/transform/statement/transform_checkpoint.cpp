@@ -12,7 +12,7 @@ unique_ptr<SQLStatement> Transformer::TransformCheckpoint(duckdb_libpgquery::PGN
 	auto result = make_unique<CallStatement>();
 	result->function =
 	    make_unique<FunctionExpression>(checkpoint->force ? "force_checkpoint" : "checkpoint", move(children));
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

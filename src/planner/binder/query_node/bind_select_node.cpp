@@ -64,7 +64,7 @@ unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 			result->offset_val = val.GetValue<int64_t>();
 		}
 	}
-	return move(result);
+	return result;
 }
 
 unique_ptr<BoundResultModifier> Binder::BindLimitPercent(LimitPercentModifier &limit_mod) {
@@ -86,7 +86,7 @@ unique_ptr<BoundResultModifier> Binder::BindLimitPercent(LimitPercentModifier &l
 			result->offset_val = val.GetValue<int64_t>();
 		}
 	}
-	return move(result);
+	return result;
 }
 
 void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result) {
@@ -372,7 +372,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	// now that the SELECT list is bound, we set the types of DISTINCT/ORDER BY expressions
 	BindModifierTypes(*result, internal_sql_types, result->projection_index);
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

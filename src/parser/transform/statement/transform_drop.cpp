@@ -60,7 +60,7 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGNode *n
 	}
 	info.cascade = stmt->behavior == duckdb_libpgquery::PGDropBehavior::PG_DROP_CASCADE;
 	info.if_exists = stmt->missing_ok;
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

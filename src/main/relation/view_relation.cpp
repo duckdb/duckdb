@@ -16,14 +16,14 @@ unique_ptr<QueryNode> ViewRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
 	result->from_table = GetTableRef();
-	return move(result);
+	return result;
 }
 
 unique_ptr<TableRef> ViewRelation::GetTableRef() {
 	auto table_ref = make_unique<BaseTableRef>();
 	table_ref->schema_name = schema_name;
 	table_ref->table_name = view_name;
-	return move(table_ref);
+	return table_ref;
 }
 
 string ViewRelation::GetAlias() {

@@ -86,7 +86,7 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(ExpressionType type, De
 		auto expr = ParsedExpression::Deserialize(source);
 		result->replace_list.insert(make_pair(name, move(expr)));
 	}
-	return move(result);
+	return result;
 }
 
 unique_ptr<ParsedExpression> StarExpression::Copy() const {
@@ -96,7 +96,7 @@ unique_ptr<ParsedExpression> StarExpression::Copy() const {
 		copy->replace_list[entry.first] = entry.second->Copy();
 	}
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 } // namespace duckdb

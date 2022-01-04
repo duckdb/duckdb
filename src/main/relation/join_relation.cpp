@@ -30,7 +30,7 @@ unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
 	result->from_table = GetTableRef();
-	return move(result);
+	return result;
 }
 
 unique_ptr<TableRef> JoinRelation::GetTableRef() {
@@ -42,7 +42,7 @@ unique_ptr<TableRef> JoinRelation::GetTableRef() {
 	}
 	join_ref->using_columns = using_columns;
 	join_ref->type = join_type;
-	return move(join_ref);
+	return join_ref;
 }
 
 const vector<ColumnDefinition> &JoinRelation::Columns() {

@@ -51,7 +51,7 @@ unique_ptr<FunctionOperatorData> DuckDBTypesInit(ClientContext &context, const F
 	auto result = make_unique<DuckDBTypesData>();
 	result->types = LogicalType::AllTypes();
 	// FIXME: add user-defined types here (when we have them)
-	return move(result);
+	return result;
 }
 
 void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,

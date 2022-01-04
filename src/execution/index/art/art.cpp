@@ -58,7 +58,7 @@ unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &trans
 	auto result = make_unique<ARTIndexScanState>();
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
-	return move(result);
+	return result;
 }
 
 unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transaction, Value low_value,
@@ -69,7 +69,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 	result->expressions[0] = low_expression_type;
 	result->values[1] = high_value;
 	result->expressions[1] = high_expression_type;
-	return move(result);
+	return result;
 }
 
 //===--------------------------------------------------------------------===//

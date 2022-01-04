@@ -23,7 +23,7 @@ bool PositionalReferenceExpression::Equals(const PositionalReferenceExpression *
 unique_ptr<ParsedExpression> PositionalReferenceExpression::Copy() const {
 	auto copy = make_unique<PositionalReferenceExpression>(index);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 hash_t PositionalReferenceExpression::Hash() const {

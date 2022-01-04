@@ -22,7 +22,7 @@ unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref, CommonTableExpressionIn
 	auto result = make_unique<BoundSubqueryRef>(move(binder), move(subquery));
 	bind_context.AddSubquery(bind_index, alias, ref, *result->subquery);
 	MoveCorrelatedExpressions(*result->binder);
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

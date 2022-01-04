@@ -188,7 +188,7 @@ unique_ptr<FunctionData> RegexpReplaceBindData::Copy() {
 	auto copy = make_unique<RegexpReplaceBindData>();
 	copy->options = options;
 	copy->global_replace = global_replace;
-	return move(copy);
+	return copy;
 }
 
 static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarFunction &bound_function,

@@ -30,7 +30,7 @@ hash_t BoundConstantExpression::Hash() const {
 unique_ptr<Expression> BoundConstantExpression::Copy() {
 	auto copy = make_unique<BoundConstantExpression>(value);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 } // namespace duckdb

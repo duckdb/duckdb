@@ -28,7 +28,7 @@ bool BoundComparisonExpression::Equals(const BaseExpression *other_p) const {
 unique_ptr<Expression> BoundComparisonExpression::Copy() {
 	auto copy = make_unique<BoundComparisonExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 } // namespace duckdb

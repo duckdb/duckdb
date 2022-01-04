@@ -38,7 +38,7 @@ static unique_ptr<FunctionOperatorData> TableScanInit(ClientContext &context, co
 	result->scan_state.table_filters = filters->table_filters;
 	bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->column_ids,
 	                                         filters->table_filters);
-	return move(result);
+	return result;
 }
 
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
@@ -59,7 +59,7 @@ static unique_ptr<FunctionOperatorData> TableScanParallelInit(ClientContext &con
 	result->column_ids = column_ids;
 	result->scan_state.table_filters = filters->table_filters;
 	TableScanParallelStateNext(context, bind_data_p, result.get(), state);
-	return move(result);
+	return result;
 }
 
 static void TableScanFunc(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *operator_state,
@@ -91,7 +91,7 @@ unique_ptr<ParallelState> TableScanInitParallelState(ClientContext &context, con
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto result = make_unique<ParallelTableFunctionScanState>();
 	bind_data.table->storage->InitializeParallelScan(context, result->state);
-	return move(result);
+	return result;
 }
 
 bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
@@ -166,7 +166,7 @@ static unique_ptr<FunctionOperatorData> IndexScanInit(ClientContext &context, co
 	                                   filters->table_filters);
 
 	result->finished = false;
-	return move(result);
+	return result;
 }
 
 static void IndexScanFunction(ClientContext &context, const FunctionData *bind_data_p,

@@ -209,7 +209,7 @@ unique_ptr<SegmentScanState> ValidityInitScan(ColumnSegment &segment) {
 	auto result = make_unique<ValidityScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
-	return move(result);
+	return result;
 }
 
 //===--------------------------------------------------------------------===//

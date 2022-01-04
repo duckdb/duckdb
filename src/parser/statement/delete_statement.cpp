@@ -14,7 +14,7 @@ unique_ptr<SQLStatement> DeleteStatement::Copy() const {
 	for (auto &using_clause : using_clauses) {
 		result->using_clauses.push_back(using_clause->Copy());
 	}
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

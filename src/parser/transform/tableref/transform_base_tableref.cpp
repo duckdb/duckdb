@@ -17,7 +17,7 @@ unique_ptr<TableRef> Transformer::TransformRangeVar(duckdb_libpgquery::PGRangeVa
 		result->sample = TransformSampleOptions(root->sample);
 	}
 	result->query_location = root->location;
-	return move(result);
+	return result;
 }
 
 QualifiedName Transformer::TransformQualifiedName(duckdb_libpgquery::PGRangeVar *root) {

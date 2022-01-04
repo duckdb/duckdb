@@ -60,13 +60,13 @@ unique_ptr<GlobalSinkState> PhysicalDelimJoin::GetGlobalSinkState(ClientContext 
 	if (delim_scans.size() > 1) {
 		PhysicalHashAggregate::SetMultiScan(*distinct->sink_state);
 	}
-	return move(state);
+	return state;
 }
 
 unique_ptr<LocalSinkState> PhysicalDelimJoin::GetLocalSinkState(ExecutionContext &context) const {
 	auto state = make_unique<DelimJoinLocalState>();
 	state->distinct_state = distinct->GetLocalSinkState(context);
-	return move(state);
+	return state;
 }
 
 SinkResultType PhysicalDelimJoin::Sink(ExecutionContext &context, GlobalSinkState &state_p, LocalSinkState &lstate_p,

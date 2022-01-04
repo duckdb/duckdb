@@ -179,7 +179,7 @@ static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<
 	if (child_stats[0]->validity_stats) {
 		result->validity_stats = child_stats[0]->validity_stats->Copy();
 	}
-	return move(result);
+	return result;
 }
 
 template <int64_t MIN, int64_t MAX>
@@ -193,7 +193,7 @@ static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<uniqu
 	} else if (child_stats[0]->validity_stats) {
 		result->validity_stats = child_stats[0]->validity_stats->Copy();
 	}
-	return move(result);
+	return result;
 }
 
 struct DatePart {

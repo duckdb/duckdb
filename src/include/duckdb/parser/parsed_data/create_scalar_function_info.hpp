@@ -36,7 +36,7 @@ public:
 		set.functions = functions;
 		auto result = make_unique<CreateScalarFunctionInfo>(move(set));
 		CopyProperties(*result);
-		return move(result);
+		return result;
 	}
 };
 

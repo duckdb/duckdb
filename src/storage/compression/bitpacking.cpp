@@ -467,7 +467,7 @@ public:
 template <class T>
 unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 	auto result = make_unique<BitpackingScanState<T>>(segment);
-	return move(result);
+	return result;
 }
 
 //===--------------------------------------------------------------------===//

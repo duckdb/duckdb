@@ -183,7 +183,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &sc
 			result->alias = binding->names[column_index];
 		}
 	}
-	return move(result);
+	return result;
 }
 
 Binding *BindContext::GetCTEBinding(const string &ctename) {

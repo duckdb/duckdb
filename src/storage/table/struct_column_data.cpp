@@ -235,7 +235,7 @@ public:
 			stats->child_stats[i] = child_states[i]->GetStatistics();
 			D_ASSERT(stats->child_stats[i]);
 		}
-		return move(stats);
+		return stats;
 	}
 
 	void FlushToDisk() override {

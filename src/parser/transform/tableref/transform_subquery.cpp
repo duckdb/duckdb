@@ -14,7 +14,7 @@ unique_ptr<TableRef> Transformer::TransformRangeSubselect(duckdb_libpgquery::PGR
 	if (root->sample) {
 		result->sample = TransformSampleOptions(root->sample);
 	}
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

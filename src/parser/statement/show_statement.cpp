@@ -8,7 +8,7 @@ ShowStatement::ShowStatement() : SQLStatement(StatementType::SHOW_STATEMENT), in
 unique_ptr<SQLStatement> ShowStatement::Copy() const {
 	auto result = make_unique<ShowStatement>();
 	result->info = info->Copy();
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

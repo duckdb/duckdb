@@ -44,7 +44,7 @@ public:
 		if (query) {
 			result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 		}
-		return move(result);
+		return result;
 	}
 };
 

@@ -32,7 +32,7 @@ unique_ptr<ParsedExpression> SubqueryExpression::Copy() const {
 	copy->subquery_type = subquery_type;
 	copy->child = child ? child->Copy() : nullptr;
 	copy->comparison_type = comparison_type;
-	return move(copy);
+	return copy;
 }
 
 void SubqueryExpression::Serialize(Serializer &serializer) {

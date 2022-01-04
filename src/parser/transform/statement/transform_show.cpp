@@ -23,7 +23,7 @@ unique_ptr<SQLStatement> Transformer::TransformShow(duckdb_libpgquery::PGNode *n
 		select->from_table = move(basetable);
 
 		info.query = move(select);
-		return move(result);
+		return result;
 	}
 
 	auto result = make_unique<PragmaStatement>();
@@ -38,7 +38,7 @@ unique_ptr<SQLStatement> Transformer::TransformShow(duckdb_libpgquery::PGNode *n
 		info.parameters.emplace_back(stmt->name);
 	}
 
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

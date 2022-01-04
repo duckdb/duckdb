@@ -24,7 +24,7 @@ static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, vector<
 	result->files = fs.Glob(inputs[0].str_value);
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("file");
-	return move(result);
+	return result;
 }
 
 struct GlobFunctionState : public FunctionOperatorData {

@@ -441,7 +441,7 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 
 	handle.reset();
 	DeleteTemporaryFile(id);
-	return move(buffer);
+	return buffer;
 }
 
 void BufferManager::DeleteTemporaryFile(block_id_t id) {

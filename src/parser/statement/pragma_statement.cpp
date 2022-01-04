@@ -8,7 +8,7 @@ PragmaStatement::PragmaStatement() : SQLStatement(StatementType::PRAGMA_STATEMEN
 unique_ptr<SQLStatement> PragmaStatement::Copy() const {
 	auto result = make_unique<PragmaStatement>();
 	result->info = info->Copy();
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

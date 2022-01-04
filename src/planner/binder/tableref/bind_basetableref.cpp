@@ -57,7 +57,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 			result->types = b->types;
 			result->bound_columns = move(names);
-			return move(result);
+			return result;
 		}
 	}
 	// not a CTE

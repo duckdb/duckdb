@@ -9,7 +9,7 @@ unique_ptr<SQLStatement> PrepareStatement::Copy() const {
 	auto result = make_unique<PrepareStatement>();
 	result->statement = statement->Copy();
 	result->name = name;
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

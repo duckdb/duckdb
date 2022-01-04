@@ -36,7 +36,7 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 	} else {
 		stats->max.is_null = true;
 	}
-	return move(stats);
+	return stats;
 }
 
 Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,

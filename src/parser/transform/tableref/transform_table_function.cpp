@@ -44,7 +44,7 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(duckdb_libpgquery::PGRa
 	if (root->sample) {
 		result->sample = TransformSampleOptions(root->sample);
 	}
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

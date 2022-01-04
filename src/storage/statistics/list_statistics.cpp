@@ -32,7 +32,7 @@ unique_ptr<BaseStatistics> ListStatistics::Copy() {
 	auto copy = make_unique<ListStatistics>(type);
 	copy->validity_stats = validity_stats ? validity_stats->Copy() : nullptr;
 	copy->child_stats = child_stats ? child_stats->Copy() : nullptr;
-	return move(copy);
+	return copy;
 }
 
 void ListStatistics::Serialize(Serializer &serializer) {
@@ -45,7 +45,7 @@ unique_ptr<BaseStatistics> ListStatistics::Deserialize(Deserializer &source, Log
 	auto result = make_unique<ListStatistics>(move(type));
 	auto &child_type = ListType::GetChildType(result->type);
 	result->child_stats = BaseStatistics::Deserialize(source, child_type);
-	return move(result);
+	return result;
 }
 
 string ListStatistics::ToString() {

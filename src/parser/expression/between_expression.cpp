@@ -28,7 +28,7 @@ bool BetweenExpression::Equals(const BetweenExpression *a, const BetweenExpressi
 unique_ptr<ParsedExpression> BetweenExpression::Copy() const {
 	auto copy = make_unique<BetweenExpression>(input->Copy(), lower->Copy(), upper->Copy());
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 void BetweenExpression::Serialize(Serializer &serializer) {

@@ -14,7 +14,7 @@ string DefaultExpression::ToString() const {
 unique_ptr<ParsedExpression> DefaultExpression::Copy() const {
 	auto copy = make_unique<DefaultExpression>();
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
 
 unique_ptr<ParsedExpression> DefaultExpression::Deserialize(ExpressionType type, Deserializer &source) {

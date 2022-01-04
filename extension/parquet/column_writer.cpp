@@ -280,7 +280,7 @@ unique_ptr<ColumnWriterState> ColumnWriter::InitializeWriteState(duckdb_parquet:
 	column_chunk.meta_data.type = writer.file_meta_data.schema[schema_idx].type;
 	row_group.columns.push_back(move(column_chunk));
 
-	return move(result);
+	return result;
 }
 
 void ColumnWriter::HandleRepeatLevels(ColumnWriterState &state, ColumnWriterState *parent, idx_t count,

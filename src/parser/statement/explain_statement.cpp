@@ -8,7 +8,7 @@ ExplainStatement::ExplainStatement(unique_ptr<SQLStatement> stmt, ExplainType ex
 
 unique_ptr<SQLStatement> ExplainStatement::Copy() const {
 	auto result = make_unique<ExplainStatement>(stmt->Copy(), explain_type);
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

@@ -13,7 +13,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalChunkGet &
 	    make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN, op.estimated_cardinality);
 	chunk_scan->owned_collection = move(op.collection);
 	chunk_scan->collection = chunk_scan->owned_collection.get();
-	return move(chunk_scan);
+	return chunk_scan;
 }
 
 } // namespace duckdb

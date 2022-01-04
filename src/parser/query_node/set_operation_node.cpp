@@ -28,7 +28,7 @@ unique_ptr<QueryNode> SetOperationNode::Copy() {
 	result->left = left->Copy();
 	result->right = right->Copy();
 	this->CopyProperties(*result);
-	return move(result);
+	return result;
 }
 
 void SetOperationNode::Serialize(Serializer &serializer) {
@@ -43,7 +43,7 @@ unique_ptr<QueryNode> SetOperationNode::Deserialize(Deserializer &source) {
 	result->setop_type = source.Read<SetOperationType>();
 	result->left = QueryNode::Deserialize(source);
 	result->right = QueryNode::Deserialize(source);
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb

@@ -242,7 +242,7 @@ unique_ptr<FunctionOperatorData> ArrowTableFunction::ArrowScanInit(ClientContext
 	result->column_ids = column_ids;
 	auto &data = (const ArrowScanFunctionData &)*bind_data;
 	result->stream = ProduceArrowScan(data, column_ids, filters);
-	return move(result);
+	return result;
 }
 
 void ShiftRight(unsigned char *ar, int size, int shift) {
@@ -1063,7 +1063,7 @@ unique_ptr<ParallelState> ArrowTableFunction::ArrowScanInitParallelState(ClientC
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
 	auto result = make_unique<ParallelArrowScanState>();
 	result->stream = ProduceArrowScan(bind_data, column_ids, filters);
-	return move(result);
+	return result;
 }
 
 bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
@@ -1095,7 +1095,7 @@ ArrowTableFunction::ArrowScanParallelInit(ClientContext &context, const Function
 	result->column_ids = column_ids;
 	result->filters = filters;
 	ArrowScanParallelStateNext(context, bind_data_p, result.get(), state);
-	return move(result);
+	return result;
 }
 
 unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContext &context, const FunctionData *data) {

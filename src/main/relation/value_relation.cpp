@@ -33,7 +33,7 @@ unique_ptr<QueryNode> ValueRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
 	result->from_table = GetTableRef();
-	return move(result);
+	return result;
 }
 
 unique_ptr<TableRef> ValueRelation::GetTableRef() {
@@ -61,7 +61,7 @@ unique_ptr<TableRef> ValueRelation::GetTableRef() {
 		table_ref->values.push_back(move(copied_list));
 	}
 	table_ref->alias = GetAlias();
-	return move(table_ref);
+	return table_ref;
 }
 
 string ValueRelation::GetAlias() {

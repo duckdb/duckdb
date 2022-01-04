@@ -66,7 +66,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto delim_scan = make_unique<LogicalDelimGet>(delim_index, delim_types);
 		cross_product->children.push_back(move(delim_scan));
 		cross_product->children.push_back(move(plan));
-		return move(cross_product);
+		return cross_product;
 	}
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_UNNEST:
@@ -152,7 +152,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			base_binding.table_index = left_index;
 			this->delim_offset = base_binding.column_index = 0;
 			this->data_offset = 0;
-			return move(left_outer_join);
+			return left_outer_join;
 		} else {
 			// update the delim_index
 			base_binding.table_index = aggr.group_index;
@@ -195,7 +195,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		join->children.push_back(move(plan->children[0]));
 		join->children.push_back(move(plan->children[1]));
-		return move(join);
+		return join;
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = (LogicalComparisonJoin &)*plan;

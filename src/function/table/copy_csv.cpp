@@ -177,7 +177,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	bind_data->Finalize();
 	bind_data->is_simple = bind_data->options.delimiter.size() == 1 && bind_data->options.escape.size() == 1 &&
 	                       bind_data->options.quote.size() == 1;
-	return move(bind_data);
+	return bind_data;
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
@@ -263,7 +263,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		options.force_not_null.resize(expected_types.size(), false);
 	}
 	bind_data->Finalize();
-	return move(bind_data);
+	return bind_data;
 }
 
 //===--------------------------------------------------------------------===//

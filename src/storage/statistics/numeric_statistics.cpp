@@ -181,7 +181,7 @@ unique_ptr<BaseStatistics> NumericStatistics::Copy() {
 	if (validity_stats) {
 		stats->validity_stats = validity_stats->Copy();
 	}
-	return move(stats);
+	return stats;
 }
 
 bool NumericStatistics::IsConstant() {

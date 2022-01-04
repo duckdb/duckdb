@@ -46,7 +46,7 @@ unique_ptr<ParsedExpression> CaseExpression::Copy() const {
 		copy->case_checks.push_back(move(new_check));
 	}
 	copy->else_expr = else_expr->Copy();
-	return move(copy);
+	return copy;
 }
 
 void CaseExpression::Serialize(Serializer &serializer) {
@@ -69,7 +69,7 @@ unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, De
 		result->case_checks.push_back(move(new_check));
 	}
 	result->else_expr = ParsedExpression::Deserialize(source);
-	return move(result);
+	return result;
 }
 
 } // namespace duckdb
