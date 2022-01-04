@@ -116,7 +116,7 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 		auto &list_values = ListValue::GetChildren(val);
 
 		py::list list;
-		for (auto list_elem : list_values) {
+		for (auto &list_elem : list_values) {
 			list.append(GetValueToPython(list_elem, ListType::GetChildType(type)));
 		}
 		return std::move(list);
@@ -131,7 +131,7 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 			auto &child_entry = child_types[i];
 			auto &child_name = child_entry.first;
 			auto &child_type = child_entry.second;
-			py_struct[child_name.c_str()] = GetValueToPython(val.struct_value[i], child_type);
+			py_struct[child_name.c_str()] = GetValueToPython(struct_values[i], child_type);
 		}
 		return std::move(py_struct);
 	}
