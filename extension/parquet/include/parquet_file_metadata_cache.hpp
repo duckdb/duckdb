@@ -31,5 +31,14 @@ public:
 
 	//! read time
 	time_t read_time;
+
+public:
+	static string ObjectType() {
+		return "parquet_metadata";
+	}
+
+	string GetObjectType() override {
+		return ObjectType();
+	}
 };
 } // namespace duckdb

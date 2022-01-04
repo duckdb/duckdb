@@ -52,7 +52,7 @@ struct ActiveQueryContext {
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : profiler(make_unique<QueryProfiler>(*this)), query_profiler_history(make_unique<QueryProfilerHistory>()),
+    : profiler(make_shared<QueryProfiler>(*this)), query_profiler_history(make_unique<QueryProfilerHistory>()),
       db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false),
       temporary_objects(make_unique<SchemaCatalogEntry>(&db->GetCatalog(), TEMP_SCHEMA, true)),
       catalog_search_path(make_unique<CatalogSearchPath>(*this)),
@@ -147,7 +147,7 @@ string ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bo
 			auto &prev_profilers = query_profiler_history->GetPrevProfilers();
 			prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(profiler));
 			// Reinitialize the query profiler
-			profiler = make_unique<QueryProfiler>(*this);
+			profiler = make_shared<QueryProfiler>(*this);
 			// Propagate settings of the saved query into the new profiler.
 			profiler->Propagate(*prev_profilers.back().second);
 			if (prev_profilers.size() >= query_profiler_history->GetPrevProfilersSize()) {
@@ -798,8 +798,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	} catch (std::exception &ex) {
 		original_result->error = ex.what();
 		original_result->success = false;
-		interrupted = false;
 	}
+	interrupted = false;
 
 	// check explain, only if q does not already contain EXPLAIN
 	if (original_result->success) {
@@ -819,8 +819,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	} catch (std::exception &ex) {
 		copied_result->error = ex.what();
 		copied_result->success = false;
-		interrupted = false;
 	}
+	interrupted = false;
 	// now execute the deserialized statement
 	try {
 		auto result = RunStatementInternal(lock, query, move(deserialized_stmt), false, false);
@@ -828,8 +828,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	} catch (std::exception &ex) {
 		deserialized_result->error = ex.what();
 		deserialized_result->success = false;
-		interrupted = false;
 	}
+	interrupted = false;
 	// now execute the unoptimized statement
 	config.enable_optimizer = false;
 	try {
@@ -838,8 +838,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	} catch (std::exception &ex) {
 		unoptimized_result->error = ex.what();
 		unoptimized_result->success = false;
-		interrupted = false;
 	}
+	interrupted = false;
 	config.enable_optimizer = true;
 
 	if (profiling_is_enabled) {

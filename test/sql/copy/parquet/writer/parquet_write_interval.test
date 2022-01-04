@@ -1,0 +1,34 @@
+# name: test/sql/copy/parquet/writer/parquet_write_interval.test
+# description: Parquet interval round trip
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE IF NOT EXISTS intervals (i interval);
+
+statement ok
+INSERT INTO intervals VALUES
+       (interval '1' day),
+       (interval '00:00:01'),
+       (NULL),
+       (interval '0' month),
+       (interval '1' month)
+
+statement ok
+COPY intervals TO '__TEST_DIR__/intervals.parquet'
+
+query I
+SELECT * FROM '__TEST_DIR__/intervals.parquet' ORDER BY 1
+----
+NULL
+00:00:00
+00:00:01
+1 day
+1 month
+
+statement error
+COPY (SELECT -interval '1 day') TO '__TEST_DIR__/intervals.parquet'

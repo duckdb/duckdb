@@ -106,8 +106,6 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return MinimumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_MS);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
-	case LogicalTypeId::DATE_TZ:
-		return Value::DATETZ(date_t(NumericLimits<int32_t>::Minimum()));
 	case LogicalTypeId::TIME_TZ:
 		return Value::TIMETZ(dtime_t(0));
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -177,8 +175,6 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Maximum()));
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return MaximumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_S);
-	case LogicalTypeId::DATE_TZ:
-		return Value::DATETZ(date_t(NumericLimits<int32_t>::Maximum()));
 	case LogicalTypeId::TIME_TZ:
 		return Value::TIMETZ(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -389,13 +385,6 @@ Value Value::POINTER(uintptr_t value) {
 
 Value Value::DATE(date_t value) {
 	Value result(LogicalType::DATE);
-	result.value_.date = value;
-	result.is_null = false;
-	return result;
-}
-
-Value Value::DATETZ(date_t value) {
-	Value result(LogicalType::DATE_TZ);
 	result.value_.date = value;
 	result.is_null = false;
 	return result;
@@ -701,7 +690,6 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::UUID:
 		return Cast::Operation<hugeint_t, T>(value_.hugeint);
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ:
 		return Cast::Operation<date_t, T>(value_.date);
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
@@ -883,8 +871,6 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::TIMESTAMPMS(timestamp_t(value));
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Value::TIMESTAMPSEC(timestamp_t(value));
-	case LogicalTypeId::DATE_TZ:
-		return Value::DATETZ(date_t(value));
 	case LogicalTypeId::TIME_TZ:
 		return Value::TIMETZ(dtime_t(value));
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -1064,8 +1050,6 @@ string Value::ToString() const {
 		return Time::ToString(value_.time);
 	case LogicalTypeId::TIMESTAMP:
 		return Timestamp::ToString(value_.timestamp);
-	case LogicalTypeId::DATE_TZ:
-		return Date::ToString(value_.date) + Time::ToUTCOffset(0, 0);
 	case LogicalTypeId::TIME_TZ:
 		return Time::ToString(value_.time) + Time::ToUTCOffset(0, 0);
 	case LogicalTypeId::TIMESTAMP_TZ:

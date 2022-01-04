@@ -67,8 +67,8 @@ public:
 	//! Fetch a value of the specific row id and append it to the result
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 
-	static void FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
-	                            idx_t &approved_tuple_count, ValidityMask &mask);
+	static idx_t FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
+	                             idx_t &approved_tuple_count, ValidityMask &mask);
 
 	//! Skip a scan forward to the row_index specified in the scan state
 	void Skip(ColumnScanState &state);

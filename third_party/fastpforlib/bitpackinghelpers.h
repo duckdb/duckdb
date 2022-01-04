@@ -7,6 +7,7 @@
 #pragma once
 #include "bitpacking.h"
 
+
 #include <stdexcept>
 
 namespace duckdb_fastpforlib {

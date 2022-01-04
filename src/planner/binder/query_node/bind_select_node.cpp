@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/group_binder.hpp"
 #include "duckdb/planner/expression_binder/having_binder.hpp"
+#include "duckdb/planner/expression_binder/qualify_binder.hpp"
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
@@ -309,6 +310,13 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 		result->having = having_binder.Bind(statement.having);
 	}
 
+	// bind the QUALIFY clause, if any
+	if (statement.qualify) {
+		QualifyBinder qualify_binder(*this, context, *result, info, alias_map);
+		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
+		result->qualify = qualify_binder.Bind(statement.qualify);
+	}
+
 	// after that, we bind to the SELECT list
 	SelectBinder select_binder(*this, context, *result, info);
 	vector<LogicalType> internal_sql_types;
@@ -354,6 +362,12 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 				                bound_columns[0].name));
 			}
 		}
+	}
+
+	// QUALIFY clause requires at least one window function to be specified in at least one of the SELECT column list or
+	// the filter predicate of the QUALIFY clause
+	if (statement.qualify && result->windows.empty()) {
+		throw BinderException("at least one window function must appear in the SELECT column or QUALIFY clause");
 	}
 
 	// now that the SELECT list is bound, we set the types of DISTINCT/ORDER BY expressions

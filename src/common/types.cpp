@@ -55,7 +55,6 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::UINT16;
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ:
 	case LogicalTypeId::INTEGER:
 		return PhysicalType::INT32;
 	case LogicalTypeId::UINTEGER:
@@ -162,7 +161,6 @@ constexpr const LogicalTypeId LogicalType::TIMESTAMP_S;
 
 constexpr const LogicalTypeId LogicalType::TIME;
 
-constexpr const LogicalTypeId LogicalType::DATE_TZ;
 constexpr const LogicalTypeId LogicalType::TIME_TZ;
 constexpr const LogicalTypeId LogicalType::TIMESTAMP_TZ;
 
@@ -197,13 +195,13 @@ const vector<LogicalType> LogicalType::Integral() {
 
 const vector<LogicalType> LogicalType::AllTypes() {
 	vector<LogicalType> types = {
-	    LogicalType::BOOLEAN,  LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
-	    LogicalType::BIGINT,   LogicalType::DATE,      LogicalType::TIMESTAMP, LogicalType::DOUBLE,
-	    LogicalType::FLOAT,    LogicalType::VARCHAR,   LogicalType::BLOB,      LogicalType::INTERVAL,
-	    LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,  LogicalType::USMALLINT,
-	    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,      LogicalTypeId::LIST,
-	    LogicalTypeId::STRUCT, LogicalType::DATE_TZ,   LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ,
-	    LogicalTypeId::MAP,    LogicalType::UUID};
+	    LogicalType::BOOLEAN,  LogicalType::TINYINT,   LogicalType::SMALLINT,     LogicalType::INTEGER,
+	    LogicalType::BIGINT,   LogicalType::DATE,      LogicalType::TIMESTAMP,    LogicalType::DOUBLE,
+	    LogicalType::FLOAT,    LogicalType::VARCHAR,   LogicalType::BLOB,         LogicalType::INTERVAL,
+	    LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,     LogicalType::USMALLINT,
+	    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,         LogicalTypeId::LIST,
+	    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,
+	    LogicalType::UUID};
 	return types;
 }
 
@@ -390,8 +388,6 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "TIMESTAMP WITH TIME ZONE";
 	case LogicalTypeId::TIME_TZ:
 		return "TIME WITH TIME ZONE";
-	case LogicalTypeId::DATE_TZ:
-		return "DATE WITH TIME ZONE";
 	case LogicalTypeId::FLOAT:
 		return "FLOAT";
 	case LogicalTypeId::DOUBLE:
@@ -553,8 +549,6 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		return LogicalTypeId::TIMESTAMP_TZ;
 	} else if (lower_str == "timetz") {
 		return LogicalTypeId::TIME_TZ;
-	} else if (lower_str == "datetz") {
-		return LogicalTypeId::DATE_TZ;
 	} else {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder
@@ -975,6 +969,9 @@ LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	return LogicalType(LogicalTypeId::STRUCT, move(info));
 }
 
+//===--------------------------------------------------------------------===//
+// Map Type
+//===--------------------------------------------------------------------===//
 LogicalType LogicalType::MAP(child_list_t<LogicalType> children) {
 	auto info = make_shared<StructTypeInfo>(move(children));
 	return LogicalType(LogicalTypeId::MAP, move(info));
@@ -985,6 +982,16 @@ LogicalType LogicalType::MAP(LogicalType key, LogicalType value) {
 	child_types.push_back({"key", LogicalType::LIST(move(key))});
 	child_types.push_back({"value", LogicalType::LIST(move(value))});
 	return LogicalType::MAP(move(child_types));
+}
+
+const LogicalType &MapType::KeyType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::MAP);
+	return StructType::GetChildTypes(type)[0].second;
+}
+
+const LogicalType &MapType::ValueType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::MAP);
+	return StructType::GetChildTypes(type)[1].second;
 }
 
 //===--------------------------------------------------------------------===//

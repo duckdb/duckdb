@@ -5,7 +5,6 @@
 
 #include "boolean_column_reader.hpp"
 #include "callback_column_reader.hpp"
-#include "decimal_column_reader.hpp"
 #include "list_column_reader.hpp"
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
@@ -86,11 +85,14 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	return make_shared<ParquetFileMetadataCache>(move(metadata), current_time);
 }
 
-LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
+LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string) {
 	// inner node
 	D_ASSERT(s_ele.__isset.type && s_ele.num_children == 0);
 	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
 		throw IOException("FIXED_LEN_BYTE_ARRAY requires length to be set");
+	}
+	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && s_ele.__isset.logicalType && s_ele.logicalType.__isset.UUID) {
+		return LogicalType::UUID;
 	}
 	if (s_ele.__isset.converted_type) {
 		switch (s_ele.converted_type) {
@@ -177,15 +179,21 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 			default:
 				throw IOException("UTF8 converted type can only be set for Type::(FIXED_LEN_)BYTE_ARRAY");
 			}
+		case ConvertedType::TIME_MILLIS:
+		case ConvertedType::TIME_MICROS:
+			if (s_ele.type == Type::INT64) {
+				return LogicalType::TIME;
+			} else {
+				throw IOException("TIME_MICROS converted type can only be set for value of Type::INT64");
+			}
+		case ConvertedType::INTERVAL:
+			return LogicalType::INTERVAL;
 		case ConvertedType::MAP:
 		case ConvertedType::MAP_KEY_VALUE:
 		case ConvertedType::LIST:
 		case ConvertedType::ENUM:
-		case ConvertedType::TIME_MILLIS:
-		case ConvertedType::TIME_MICROS:
 		case ConvertedType::JSON:
 		case ConvertedType::BSON:
-		case ConvertedType::INTERVAL:
 		default:
 			throw IOException("Unsupported converted type");
 		}
@@ -207,7 +215,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 			return LogicalType::DOUBLE;
 		case Type::BYTE_ARRAY:
 		case Type::FIXED_LEN_BYTE_ARRAY:
-			if (parquet_options.binary_as_string) {
+			if (binary_as_string) {
 				return LogicalType::VARCHAR;
 			}
 			return LogicalType::BLOB;
@@ -215,6 +223,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 			return LogicalType::INVALID;
 		}
 	}
+}
+
+LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
+	return DeriveLogicalType(s_ele, parquet_options.binary_as_string);
 }
 
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData *file_meta_data, idx_t depth,
@@ -257,8 +269,37 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 		D_ASSERT(!child_types.empty());
 		unique_ptr<ColumnReader> result;
 		LogicalType result_type;
-		// if we only have a single child no reason to create a struct ay
-		if (child_types.size() > 1 || depth == 0) {
+
+		bool is_repeated = s_ele.repetition_type == FieldRepetitionType::REPEATED;
+		bool is_list = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::LIST;
+		bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
+		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
+		if (!is_map_kv && this_idx > 0) {
+			// check if the parent node of this is a map
+			auto &p_ele = file_meta_data->schema[this_idx - 1];
+			bool parent_is_map = p_ele.__isset.converted_type && p_ele.converted_type == ConvertedType::MAP;
+			bool parent_has_children = p_ele.__isset.num_children && p_ele.num_children == 1;
+			is_map_kv = parent_is_map && parent_has_children;
+		}
+
+		if (is_map_kv) {
+			if (child_types.size() != 2) {
+				throw IOException("MAP_KEY_VALUE requires two children");
+			}
+			if (!is_repeated) {
+				throw IOException("MAP_KEY_VALUE needs to be repeated");
+			}
+			result_type = LogicalType::MAP(move(child_types[0].second), move(child_types[1].second));
+			for (auto &child_reader : child_readers) {
+				auto child_type = LogicalType::LIST(child_reader->Type());
+				child_reader = make_unique<ListColumnReader>(*this, move(child_type), s_ele, this_idx, max_define,
+				                                             max_repeat, move(child_reader));
+			}
+			result = make_unique<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define - 1,
+			                                         max_repeat - 1, move(child_readers));
+			return result;
+		}
+		if (child_types.size() > 1 || (!is_list && !is_map && !is_repeated)) {
 			result_type = LogicalType::STRUCT(move(child_types));
 			result = make_unique<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
 			                                         move(child_readers));
@@ -267,14 +308,13 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			result_type = child_types[0].second;
 			result = move(child_readers[0]);
 		}
-		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
+		if (is_repeated) {
 			result_type = LogicalType::LIST(result_type);
 			return make_unique<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
 			                                     move(result));
 		}
 		return result;
 	} else { // leaf node
-
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
 			const auto derived_type = DeriveLogicalType(s_ele);
 			auto list_type = LogicalType::LIST(derived_type);
@@ -370,6 +410,11 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 	file_name = move(file_name_p);
 	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
 	                          FileSystem::DEFAULT_COMPRESSION, file_opener);
+	if (!file_handle->CanSeek()) {
+		throw NotImplementedException(
+		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
+		    "metadata is located at the end of the file. Write the stream to disk first and read from there instead.");
+	}
 	// If object cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
@@ -377,8 +422,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 	if (!ObjectCache::ObjectCacheEnabled(context_p)) {
 		metadata = LoadMetadata(allocator, *file_handle);
 	} else {
-		metadata =
-		    std::dynamic_pointer_cast<ParquetFileMetadataCache>(ObjectCache::GetObjectCache(context_p).Get(file_name));
+		metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
 		if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
 			metadata = LoadMetadata(allocator, *file_handle);
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);

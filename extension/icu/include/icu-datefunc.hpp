@@ -25,6 +25,7 @@ struct ICUDateFunc {
 
 		CalendarPtr calendar;
 
+		bool Equals(FunctionData &other_p) override;
 		unique_ptr<FunctionData> Copy() override;
 	};
 
@@ -32,6 +33,8 @@ struct ICUDateFunc {
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments);
 
+	//! Gets the timestamp from the calendar, throwing if it is not in range.
+	static timestamp_t GetTime(icu::Calendar *calendar, uint64_t micros = 0);
 	//! Gets the timestamp from the calendar, assuming it is in range.
 	static timestamp_t GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros = 0);
 	//! Sets the calendar to the timestamp, returning the unused µs part
