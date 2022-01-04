@@ -10,7 +10,7 @@ using duckdb::OdbcHandleDesc;
 using duckdb::OdbcHandleStmt;
 using duckdb::OdbcHandleType;
 
-std::string OdbcHandleTypeToString(OdbcHandleType type) {
+std::string duckdb::OdbcHandleTypeToString(OdbcHandleType type) {
 	switch (type) {
 	case OdbcHandleType::ENV:
 		return "ENV";
