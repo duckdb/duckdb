@@ -16,6 +16,15 @@ CREATE TABLE integers2(i INTEGER, j INTEGER)
 statement ok
 INSERT INTO integers2 VALUES (1, 1), (2, 1), (3, 3), (4, 4)
 
+# test with duplicate on column j
+query II
+SELECT integers2.i, integers2.j FROM integers JOIN integers2 ON (integers.j = integers2.j) ORDER BY integers2.i;
+----
+1	1
+2	1
+3	3
+4	4
+
 # test join with unique keys
 query II
 SELECT * FROM integers;
