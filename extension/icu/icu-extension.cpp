@@ -33,15 +33,20 @@ struct IcuBindData : public FunctionData {
 
 	IcuBindData(string language_p, string country_p) : language(move(language_p)), country(move(country_p)) {
 		UErrorCode status = U_ZERO_ERROR;
-		this->collator = std::unique_ptr<icu::Collator>(
-		    icu::Collator::createInstance(icu::Locale(language.c_str(), country.c_str()), status));
+		auto locale = icu::Locale(language.c_str(), country.c_str());
+		if (locale.isBogus()) {
+			throw InternalException("Locale is bogus!?");
+		}
+		this->collator = std::unique_ptr<icu::Collator>(icu::Collator::createInstance(locale, status));
 		if (U_FAILURE(status)) {
-			throw Exception("Failed to create ICU collator!");
+			auto error_name = u_errorName(status);
+			throw InternalException("Failed to create ICU collator: %s (language: %s, country: %s)", error_name,
+			                        language, country);
 		}
 	}
 
 	unique_ptr<FunctionData> Copy() override {
-		return make_unique<IcuBindData>(language.c_str(), country.c_str());
+		return make_unique<IcuBindData>(language, country);
 	}
 };
 
@@ -106,10 +111,10 @@ static unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, ScalarFun
 		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) with non-constant collation is not supported");
 	}
 	Value val = ExpressionExecutor::EvaluateScalar(*arguments[1]).CastAs(LogicalType::VARCHAR);
-	if (val.is_null) {
+	if (val.IsNull()) {
 		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) expected a non-null collation");
 	}
-	auto splits = StringUtil::Split(val.str_value, "_");
+	auto splits = StringUtil::Split(StringValue::Get(val), "_");
 	if (splits.size() == 1) {
 		return make_unique<IcuBindData>(splits[0], "");
 	} else if (splits.size() == 2) {
@@ -125,7 +130,7 @@ static ScalarFunction GetICUFunction(const string &collation) {
 }
 
 static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
-	icu::StringPiece utf8(parameter.Value::GetValueUnsafe<string>());
+	icu::StringPiece utf8(StringValue::Get(parameter));
 	const auto uid = icu::UnicodeString::fromUTF8(utf8);
 	std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(uid));
 	if (*tz == icu::TimeZone::getUnknown()) {

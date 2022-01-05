@@ -53,7 +53,7 @@
  * Side Effects:
  * TODO: None
  */
-int printReleaseInfo(char *param_name, char *msg) {
+int printReleaseInfo(const char *param_name, const char *msg) {
 	fprintf(stderr, "%s Population Generator (Version %d.%d.%d%s)\n", get_str("PROG"), VERSION, RELEASE, MODIFICATION,
 	        PATCH);
 	fprintf(stderr, "Copyright %s %s\n", COPYRIGHT, C_DATES);

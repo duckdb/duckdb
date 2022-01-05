@@ -1117,7 +1117,7 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(ClientContext &conte
 static double CheckQuantile(const Value &quantile_val) {
 	auto quantile = quantile_val.GetValue<double>();
 
-	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
+	if (quantile_val.IsNull() || quantile < 0 || quantile > 1) {
 		throw BinderException("QUANTILE can only take parameters in the range [0, 1]");
 	}
 
@@ -1134,7 +1134,7 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 	if (quantile_val.type().id() != LogicalTypeId::LIST) {
 		quantiles.push_back(CheckQuantile(quantile_val));
 	} else {
-		for (const auto &element_val : quantile_val.list_value) {
+		for (const auto &element_val : ListValue::GetChildren(quantile_val)) {
 			quantiles.push_back(CheckQuantile(element_val));
 		}
 	}

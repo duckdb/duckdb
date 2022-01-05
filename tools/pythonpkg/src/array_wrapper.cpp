@@ -233,8 +233,9 @@ struct UUIDConvert {
 struct ListConvert {
 	static py::list ConvertValue(Vector &input, idx_t chunk_offset) {
 		auto val = input.GetValue(chunk_offset);
+		auto &list_children = ListValue::GetChildren(val);
 		py::list list;
-		for (auto &list_elem : val.list_value) {
+		for (auto &list_elem : list_children) {
 			list.append(DuckDBPyResult::GetValueToPython(list_elem, ListType::GetChildType(input.GetType())));
 		}
 		return list;
@@ -246,12 +247,13 @@ struct StructMapConvert {
 		py::dict py_struct;
 		auto val = input.GetValue(chunk_offset);
 		auto &child_types = StructType::GetChildTypes(input.GetType());
+		auto &struct_children = StructValue::GetChildren(val);
 
-		for (idx_t i = 0; i < val.struct_value.size(); i++) {
+		for (idx_t i = 0; i < struct_children.size(); i++) {
 			auto &child_entry = child_types[i];
 			auto &child_name = child_entry.first;
 			auto &child_type = child_entry.second;
-			py_struct[child_name.c_str()] = DuckDBPyResult::GetValueToPython(val.struct_value[i], child_type);
+			py_struct[child_name.c_str()] = DuckDBPyResult::GetValueToPython(struct_children[i], child_type);
 		}
 		return py_struct;
 	}

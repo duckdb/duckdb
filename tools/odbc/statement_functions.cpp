@@ -233,7 +233,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 
 		Value val;
 		stmt->odbc_fetcher->GetValue(col_or_param_num - 1, val);
-		if (val.is_null) {
+		if (val.IsNull()) {
 			if (!str_len_or_ind_ptr) {
 				return SQL_ERROR;
 			}

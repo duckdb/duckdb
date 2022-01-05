@@ -45,7 +45,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	if (limit == DConstants::INVALID_INDEX) {
 		limit = 1ULL << 62ULL;
 		Value val = GetDelimiter(input, limit_expression.get());
-		if (!val.is_null) {
+		if (!val.IsNull()) {
 			limit = val.GetValue<idx_t>();
 		}
 		if (limit > 1ULL << 62ULL) {
@@ -55,7 +55,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	if (offset == DConstants::INVALID_INDEX) {
 		offset = 0;
 		Value val = GetDelimiter(input, offset_expression.get());
-		if (!val.is_null) {
+		if (!val.IsNull()) {
 			offset = val.GetValue<idx_t>();
 		}
 		if (offset > 1ULL << 62ULL) {

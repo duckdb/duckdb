@@ -27,14 +27,14 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 	} else if (parquet_stats.__isset.min_value) {
 		stats->min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value).CastAs(type);
 	} else {
-		stats->min.is_null = true;
+		stats->min = Value(type);
 	}
 	if (parquet_stats.__isset.max) {
 		stats->max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max).CastAs(type);
 	} else if (parquet_stats.__isset.max_value) {
 		stats->max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max_value).CastAs(type);
 	} else {
-		stats->max.is_null = true;
+		stats->max = Value(type);
 	}
 	return move(stats);
 }

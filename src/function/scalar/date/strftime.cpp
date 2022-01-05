@@ -587,7 +587,7 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, Sca
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	StrfTimeFormat format;
-	if (!options_str.is_null && options_str.type().id() == LogicalTypeId::VARCHAR) {
+	if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
 		auto format_string = options_str.GetValue<string>();
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {
@@ -1096,7 +1096,7 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	StrpTimeFormat format;
-	if (!options_str.is_null && options_str.type().id() == LogicalTypeId::VARCHAR) {
+	if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
 		string format_string = options_str.ToString();
 		format.format_specifier = format_string;
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);

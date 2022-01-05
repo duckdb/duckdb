@@ -40,7 +40,7 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 	if (out->__deprecated_row_count > 0 && StatementTypeReturnChanges(result->statement_type)) {
 		// update total changes
 		auto row_changes = result->GetValue(0, 0);
-		if (!row_changes.is_null && row_changes.TryCastAs(LogicalType::BIGINT)) {
+		if (!row_changes.IsNull() && row_changes.TryCastAs(LogicalType::BIGINT)) {
 			out->__deprecated_rows_changed = row_changes.GetValue<int64_t>();
 		}
 	}

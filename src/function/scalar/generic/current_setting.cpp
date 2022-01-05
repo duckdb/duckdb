@@ -36,14 +36,15 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
-	if (key_val.is_null || key_val.str_value.empty()) {
+	auto &key_str = StringValue::Get(key_val);
+	if (key_val.IsNull() || key_str.empty()) {
 		throw ParserException("Key name for current_setting needs to be neither NULL nor empty");
 	}
 
-	auto key = StringUtil::Lower(key_val.str_value);
+	auto key = StringUtil::Lower(key_str);
 	Value val;
 	if (!context.TryGetCurrentSetting(key, val)) {
-		throw InvalidInputException("unrecognized configuration parameter \"%s\"", key_val.str_value);
+		throw InvalidInputException("unrecognized configuration parameter \"%s\"", key_str);
 	}
 
 	bound_function.return_type = val.type();
