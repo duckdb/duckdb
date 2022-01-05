@@ -459,10 +459,14 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 	idx_t l_entry_idx = 0;
 	const auto lhs_not_null = lstate.lhs_count - lstate.lhs_has_null;
 	MergeJoinPinSortingBlock(lread, l_block_idx);
+	auto l_ptr = MergeJoinRadixPtr(lread, l_entry_idx);
 
 	D_ASSERT(rsort.sorted_blocks.size() == 1);
 	SBScanState rread(rsort.buffer_manager, rsort);
 	rread.sb = rsort.sorted_blocks[0].get();
+
+	const auto cmp_size = lsort.sort_layout.comparison_size;
+	const auto entry_size = lsort.sort_layout.entry_size;
 
 	idx_t right_base = 0;
 	for (idx_t r_block_idx = 0; r_block_idx < rread.sb->radix_sorting_data.size(); r_block_idx++) {
@@ -484,11 +488,9 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 		// now we start from the current lpos value and check if we found a new value that is [<= OR <] the max RHS
 		// value
 		while (true) {
-			auto l_ptr = MergeJoinRadixPtr(lread, l_entry_idx);
-
 			int comp_res;
 			if (all_constant) {
-				comp_res = memcmp(l_ptr, r_ptr, lsort.sort_layout.comparison_size);
+				comp_res = memcmp(l_ptr, r_ptr, cmp_size);
 			} else {
 				comp_res = Comparators::CompareTuple(lread, rread, l_ptr, r_ptr, lsort.sort_layout, external);
 			}
@@ -497,6 +499,7 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 				// found a match for lpos, set it in the found_match vector
 				found_match[l_entry_idx] = true;
 				l_entry_idx++;
+				l_ptr += entry_size;
 				if (l_entry_idx >= lhs_not_null) {
 					// early out: we exhausted the entire LHS and they all match
 					return 0;
@@ -580,6 +583,8 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 	lread.sb = l.state.sorted_blocks[0].get();
 	D_ASSERT(lread.sb->radix_sorting_data.size() == 1);
 	MergeJoinPinSortingBlock(lread, l.block_idx);
+	auto l_start = MergeJoinRadixPtr(lread, 0);
+	auto l_ptr = MergeJoinRadixPtr(lread, l.entry_idx);
 
 	D_ASSERT(r.state.sorted_blocks.size() == 1);
 	SBScanState rread(r.state.buffer_manager, r.state);
@@ -592,14 +597,15 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 	MergeJoinPinSortingBlock(rread, r.block_idx);
 	auto r_ptr = MergeJoinRadixPtr(rread, r.entry_idx);
 
+	const auto cmp_size = l.state.sort_layout.comparison_size;
+	const auto entry_size = l.state.sort_layout.entry_size;
+
 	idx_t result_count = 0;
 	while (true) {
 		if (l.entry_idx < l.not_null) {
-			auto l_ptr = MergeJoinRadixPtr(lread, l.entry_idx);
-
 			int comp_res;
 			if (all_constant) {
-				comp_res = memcmp(l_ptr, r_ptr, l.state.sort_layout.comparison_size);
+				comp_res = memcmp(l_ptr, r_ptr, cmp_size);
 			} else {
 				comp_res = Comparators::CompareTuple(lread, rread, l_ptr, r_ptr, l.state.sort_layout, external);
 			}
@@ -611,6 +617,7 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 				result_count++;
 				// move left side forward
 				l.entry_idx++;
+				l_ptr += entry_size;
 				if (result_count == STANDARD_VECTOR_SIZE) {
 					// out of space!
 					break;
@@ -620,13 +627,14 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 		}
 		// right side smaller or equal, or left side exhausted: move
 		// right pointer forward reset left side to start
-		l.entry_idx = 0;
 		r.entry_idx++;
 		if (r.entry_idx >= r.not_null) {
 			break;
 		}
+		r_ptr += entry_size;
 
-		r_ptr = MergeJoinRadixPtr(rread, r.entry_idx);
+		l_ptr = l_start;
+		l.entry_idx = 0;
 	}
 
 	return result_count;
