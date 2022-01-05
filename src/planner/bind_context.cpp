@@ -260,8 +260,10 @@ bool BindContext::CheckExclusionList(StarExpression &expr, Binding *binding, con
 	}
 	auto entry = expr.replace_list.find(column_name);
 	if (entry != expr.replace_list.end()) {
+		auto new_entry = entry->second->Copy();
+		new_entry->alias = entry->first;
 		excluded_columns.insert(entry->first);
-		new_select_list.push_back(entry->second->Copy());
+		new_select_list.push_back(move(new_entry));
 		return true;
 	}
 	return false;

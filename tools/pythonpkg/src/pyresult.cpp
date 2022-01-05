@@ -103,8 +103,7 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 		duckdb::Time::Convert(time, hour, min, sec, microsec);
 		return py::cast<py::object>(PyTime_FromTime(hour, min, sec, microsec));
 	}
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ: {
+	case LogicalTypeId::DATE: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT32);
 
 		auto date = val.GetValueUnsafe<date_t>();
@@ -411,8 +410,7 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::TIME_TZ: {
 		return py::str("Time");
 	}
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ: {
+	case LogicalTypeId::DATE: {
 		return py::str("Date");
 	}
 	case LogicalTypeId::MAP:

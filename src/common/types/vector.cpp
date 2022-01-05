@@ -416,8 +416,6 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::INTEGER(((int32_t *)data)[index]);
 	case LogicalTypeId::DATE:
 		return Value::DATE(((date_t *)data)[index]);
-	case LogicalTypeId::DATE_TZ:
-		return Value::DATETZ(((date_t *)data)[index]);
 	case LogicalTypeId::TIME:
 		return Value::TIME(((dtime_t *)data)[index]);
 	case LogicalTypeId::TIME_TZ:

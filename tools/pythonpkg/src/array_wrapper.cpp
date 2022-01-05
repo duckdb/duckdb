@@ -477,7 +477,6 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTERVAL:
-	case LogicalTypeId::DATE_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		type_width = sizeof(int64_t);
 		break;
@@ -541,7 +540,6 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ:
 		dtype = "datetime64[ns]";
 		break;
 	case LogicalTypeId::INTERVAL:
@@ -679,7 +677,6 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		    current_offset, dataptr, maskptr, idata, count);
 		break;
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ:
 		may_have_null = ConvertColumn<date_t, int64_t, duckdb_py_convert::DateConvert>(current_offset, dataptr, maskptr,
 		                                                                               idata, count);
 		break;

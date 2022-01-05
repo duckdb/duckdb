@@ -22,7 +22,7 @@
 
 #ifdef _WIN32
 // Need to come before any Windows.h includes
-#include <Winsock2.h>
+#include <winsock2.h>
 #endif
 
 #include "thrift/transport/TTransport.h"

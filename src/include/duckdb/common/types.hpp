@@ -352,7 +352,6 @@ enum class LogicalTypeId : uint8_t {
 	UINTEGER = 30,
 	UBIGINT = 31,
 	TIMESTAMP_TZ = 32,
-	DATE_TZ = 33,
 	TIME_TZ = 34,
 
 
@@ -455,7 +454,6 @@ public:
 	static constexpr const LogicalTypeId TIMESTAMP_NS = LogicalTypeId::TIMESTAMP_NS;
 	static constexpr const LogicalTypeId TIME = LogicalTypeId::TIME;
 	static constexpr const LogicalTypeId TIMESTAMP_TZ = LogicalTypeId::TIMESTAMP_TZ;
-	static constexpr const LogicalTypeId DATE_TZ = LogicalTypeId::DATE_TZ;
 	static constexpr const LogicalTypeId TIME_TZ = LogicalTypeId::TIME_TZ;
 	static constexpr const LogicalTypeId VARCHAR = LogicalTypeId::VARCHAR;
 	static constexpr const LogicalTypeId ANY = LogicalTypeId::ANY;

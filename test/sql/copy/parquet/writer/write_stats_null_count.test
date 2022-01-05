@@ -73,10 +73,10 @@ statement ok
 CREATE TABLE structs AS SELECT {'a': NULL, 'b': 'hello'} i UNION ALL SELECT NULL UNION ALL SELECT {'a': 84, 'b': 'world'};
 
 statement ok
-COPY structs TO 'stats.parquet' (FORMAT PARQUET);
+COPY structs TO '__TEST_DIR__/stats.parquet' (FORMAT PARQUET);
 
 query I
-SELECT stats_null_count FROM parquet_metadata('stats.parquet')
+SELECT stats_null_count FROM parquet_metadata('__TEST_DIR__/stats.parquet')
 ----
 2
 1

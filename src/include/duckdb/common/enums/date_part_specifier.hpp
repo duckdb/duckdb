@@ -32,7 +32,9 @@ enum class DatePartSpecifier : uint8_t {
 	DOY,
 	YEARWEEK,
 	ERA,
-	OFFSET
+	TIMEZONE,
+	TIMEZONE_HOUR,
+	TIMEZONE_MINUTE
 };
 
 DUCKDB_API bool TryGetDatePartSpecifier(const string &specifier, DatePartSpecifier &result);

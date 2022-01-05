@@ -45,7 +45,6 @@ static vector<TestType> GetTestTypes() {
 	result.emplace_back(LogicalType::TIMESTAMP_S, "timestamp_s");
 	result.emplace_back(LogicalType::TIMESTAMP_MS, "timestamp_ms");
 	result.emplace_back(LogicalType::TIMESTAMP_NS, "timestamp_ns");
-	result.emplace_back(LogicalType::DATE_TZ, "date_tz");
 	result.emplace_back(LogicalType::TIME_TZ, "time_tz");
 	result.emplace_back(LogicalType::TIMESTAMP_TZ, "timestamp_tz");
 	result.emplace_back(LogicalType::FLOAT, "float");

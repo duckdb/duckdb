@@ -556,7 +556,6 @@ AggregateFunction GetDiscreteQuantileAggregateFunction(const LogicalType &type) 
 		break;
 
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ:
 		return GetTypedDiscreteQuantileAggregateFunction<int32_t, int32_t>(type);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -748,7 +747,6 @@ AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &ty
 		break;
 
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ:
 		return GetTypedDiscreteQuantileListAggregateFunction<date_t, date_t>(type);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -1179,8 +1177,6 @@ unique_ptr<FunctionData> BindContinuousQuantileDecimalList(ClientContext &contex
 
 static bool CanInterpolate(const LogicalType &type) {
 	switch (type.id()) {
-	case LogicalTypeId::DATE_TZ:
-		// DATE_TZ cannot be interpolated without a time zone
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::VARCHAR:
 		return false;
@@ -1231,11 +1227,11 @@ AggregateFunction GetContinuousQuantileListAggregate(const LogicalType &type) {
 }
 
 void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
-	const vector<LogicalType> QUANTILES = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
-	                                       LogicalType::BIGINT,  LogicalType::HUGEINT,  LogicalType::FLOAT,
-	                                       LogicalType::DOUBLE,  LogicalType::DATE,     LogicalType::TIMESTAMP,
-	                                       LogicalType::TIME,    LogicalType::DATE_TZ,  LogicalType::TIMESTAMP_TZ,
-	                                       LogicalType::TIME_TZ, LogicalType::INTERVAL, LogicalType::VARCHAR};
+	const vector<LogicalType> QUANTILES = {LogicalType::TINYINT,  LogicalType::SMALLINT,     LogicalType::INTEGER,
+	                                       LogicalType::BIGINT,   LogicalType::HUGEINT,      LogicalType::FLOAT,
+	                                       LogicalType::DOUBLE,   LogicalType::DATE,         LogicalType::TIMESTAMP,
+	                                       LogicalType::TIME,     LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
+	                                       LogicalType::INTERVAL, LogicalType::VARCHAR};
 
 	AggregateFunctionSet median("median");
 	median.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,

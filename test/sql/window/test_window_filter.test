@@ -1,0 +1,29 @@
+# name: test/sql/window/test_window_filter.test
+# description: Test errors in binding window functions
+# group: [window]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE testing AS
+	select
+		 x
+		,ROUND(x * 0.333,0) % 3 AS y
+		,ROUND(x * 0.333,0) % 3 AS z
+	FROM GENERATE_SERIES(0,10) tbl(x);
+
+# The x_filtered_window and z_filtered_window columns
+# should return a different output than plain_window
+statement error
+SELECT
+	 x
+	,y
+	,z
+	,AVG(x) OVER (PARTITION BY y) AS plain_window
+	,AVG(x) FILTER (WHERE x = 0) OVER (PARTITION BY y) AS x_filtered_window
+	,AVG(x) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+FROM testing
+ORDER BY y;
