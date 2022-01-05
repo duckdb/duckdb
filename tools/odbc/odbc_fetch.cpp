@@ -431,3 +431,7 @@ void OdbcFetch::SetLastFetchedLength(size_t new_len) {
 size_t OdbcFetch::GetLastFetchedLength() {
 	return last_fetched_variable_val.length;
 }
+
+bool OdbcFetch::IsInExecutionState() {
+	return !chunks.empty() && current_chunk != nullptr;
+}

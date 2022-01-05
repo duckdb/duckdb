@@ -1,4 +1,5 @@
 #include "duckdb_odbc.hpp"
+#include "driver.hpp"
 
 SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                     SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
@@ -63,15 +64,15 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		SQLHDBC stmt;
 
 		if (!SQL_SUCCEEDED(SQLAllocHandle(SQL_HANDLE_STMT, connection_handle, &stmt))) {
-			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
 		if (!SQL_SUCCEEDED(SQLExecDirect(stmt, (SQLCHAR *)"SELECT library_version FROM pragma_version()", SQL_NTS))) {
-			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
 		if (!SQL_SUCCEEDED(SQLFetch(stmt))) {
-			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
 
@@ -84,11 +85,11 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 			ret = SQLGetData(stmt, 1, SQL_C_CHAR, info_value_ptr, buffer_length, nullptr);
 		}
 		if (!SQL_SUCCEEDED(ret)) {
-			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
 
-		SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+		duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
 		return SQL_SUCCESS;
 	}
 	case SQL_NON_NULLABLE_COLUMNS:
