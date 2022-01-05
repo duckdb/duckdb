@@ -199,11 +199,11 @@ TEST_CASE("Test ARRAY_AGG with OrderBy", "[api][array_agg]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2 (a INT, b INT, c INT)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO t2 VALUES (1,1,1), (1,2,2), (2,1,3), (2,2,4)"));
 
-	idx_t row_count = 0;
-	auto result = con.Query("select a,array_agg(c order by b) from t2 group by a");
-	for (auto &name : (*result).names) {
-		printf("%s\n", name.c_str());
-	}
+	auto result = con.Query("select a, ARRAY_AGG(c ORDER BY b) from t2 GROUP BY a");
+	REQUIRE(result->names[1] == "ARRAY_AGG(c ORDER BY b)");
+	// for (auto &name : (*result).names) {
+	// 	printf("%s\n", name.c_str());
+	// }
 
 	// for (auto &row : *result) {
 	// 	auto uuid = row.GetValue<string>(0);
