@@ -696,7 +696,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 				}
 			}
 			if (gstate.rhs_found_match) {
-				idx_t base_index = state.right_chunk_index * STANDARD_VECTOR_SIZE;
+				//	Absolute position of the block + start position inside that block
+				const idx_t base_index = state.right_base + right_info.base_idx;
 				for (idx_t i = 0; i < result_count; i++) {
 					gstate.rhs_found_match[base_index + right_info.result[i]] = true;
 				}
@@ -747,12 +748,13 @@ OperatorResultType PhysicalPiecewiseMergeJoin::Execute(ExecutionContext &context
 //===--------------------------------------------------------------------===//
 class PiecewiseJoinScanState : public GlobalSourceState {
 public:
-	explicit PiecewiseJoinScanState(const PhysicalPiecewiseMergeJoin &op) : op(op) {
+	explicit PiecewiseJoinScanState(const PhysicalPiecewiseMergeJoin &op) : op(op), right_outer_position(0) {
 	}
 
 	mutex lock;
 	const PhysicalPiecewiseMergeJoin &op;
 	unique_ptr<PayloadScanner> scanner;
+	idx_t right_outer_position;
 
 public:
 	idx_t MaxThreads() override {
@@ -787,11 +789,11 @@ void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &r
 	const auto found_match = sink.rhs_found_match.get();
 
 	// ConstructFullOuterJoinResult(sink.rhs_found_match.get(), sink.right_chunks, chunk, state.right_outer_position);
+	DataChunk rhs_chunk;
+	rhs_chunk.Initialize(children[1]->types);
 	SelectionVector rsel(STANDARD_VECTOR_SIZE);
 	for (;;) {
 		// Read the next sorted chunk
-		DataChunk rhs_chunk;
-		rhs_chunk.Initialize(children[1]->types);
 		state.scanner->Scan(rhs_chunk);
 
 		const auto count = rhs_chunk.size();
@@ -802,10 +804,12 @@ void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &r
 		idx_t result_count = 0;
 		// figure out which tuples didn't find a match in the RHS
 		for (idx_t i = 0; i < count; i++) {
-			if (!found_match[i]) {
+			if (!found_match[state.right_outer_position + i]) {
 				rsel.set_index(result_count++, i);
 			}
 		}
+		state.right_outer_position += count;
+
 		if (result_count > 0) {
 			// if there were any tuples that didn't find a match, output them
 			const idx_t left_column_count = result.ColumnCount() - rhs_chunk.ColumnCount();
