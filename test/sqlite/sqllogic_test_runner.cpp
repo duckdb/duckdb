@@ -81,7 +81,20 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 }
 
 string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator_name, string replacement) {
-	return StringUtil::Replace(text, "${" + loop_iterator_name + "}", replacement);
+	if (StringUtil::Contains(loop_iterator_name, ",")) {
+		auto name_splits = StringUtil::Split(loop_iterator_name, ",");
+		auto replacement_splits = StringUtil::Split(replacement, ",");
+		if (name_splits.size() != replacement_splits.size()) {
+			FAIL("foreach loop: number of commas in loop iterator (" + loop_iterator_name +
+			     ") does not match number of commas in replacement (" + replacement + ")");
+		}
+		for (idx_t i = 0; i < name_splits.size(); i++) {
+			text = StringUtil::Replace(text, "${" + name_splits[i] + "}", replacement_splits[i]);
+		}
+		return text;
+	} else {
+		return StringUtil::Replace(text, "${" + loop_iterator_name + "}", replacement);
+	}
 }
 
 string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinition *> &loops) {

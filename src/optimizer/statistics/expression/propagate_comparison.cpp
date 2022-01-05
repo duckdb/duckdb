@@ -28,7 +28,7 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 	}
 	auto &lstats = (NumericStatistics &)left;
 	auto &rstats = (NumericStatistics &)right;
-	if (lstats.min.is_null || lstats.max.is_null || rstats.min.is_null || rstats.max.is_null) {
+	if (lstats.min.IsNull() || lstats.max.IsNull() || rstats.min.IsNull() || rstats.max.IsNull()) {
 		// no stats available: nothing to prune
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

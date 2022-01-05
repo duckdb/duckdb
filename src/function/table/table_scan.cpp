@@ -300,23 +300,23 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				break;
 			}
 		}
-		if (!equal_value.is_null || !low_value.is_null || !high_value.is_null) {
+		if (!equal_value.IsNull() || !low_value.IsNull() || !high_value.IsNull()) {
 			// we can scan this index using this predicate: try a scan
 			auto &transaction = Transaction::GetTransaction(context);
 			unique_ptr<IndexScanState> index_state;
-			if (!equal_value.is_null) {
+			if (!equal_value.IsNull()) {
 				// equality predicate
 				index_state =
 				    index.InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
-			} else if (!low_value.is_null && !high_value.is_null) {
+			} else if (!low_value.IsNull() && !high_value.IsNull()) {
 				// two-sided predicate
 				index_state = index.InitializeScanTwoPredicates(transaction, low_value, low_comparison_type, high_value,
 				                                                high_comparison_type);
-			} else if (!low_value.is_null) {
+			} else if (!low_value.IsNull()) {
 				// less than predicate
 				index_state = index.InitializeScanSinglePredicate(transaction, low_value, low_comparison_type);
 			} else {
-				D_ASSERT(!high_value.is_null);
+				D_ASSERT(!high_value.IsNull());
 				index_state = index.InitializeScanSinglePredicate(transaction, high_value, high_comparison_type);
 			}
 			if (index.Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {

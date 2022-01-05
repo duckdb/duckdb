@@ -389,7 +389,7 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 	for (int64_t r = 0; r < (int64_t)result_values.size(); r++) {
 		for (int64_t c = 0; c < result_column_count; c++) {
 			auto value = state.result->collection.GetValue(c, r);
-			if (result_values[r][c] == "NULL" && value.is_null) {
+			if (result_values[r][c] == "NULL" && value.IsNull()) {
 				continue;
 			}
 
@@ -399,7 +399,7 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 					continue;
 				}
 				verify_val = verify_val.CastAs(state.result->types[c]);
-				if (result_values[r][c] == "(empty)" && (verify_val.ToString() == "" || value.is_null)) {
+				if (result_values[r][c] == "(empty)" && (verify_val.ToString() == "" || value.IsNull())) {
 					continue;
 				}
 			} catch (...) {

@@ -164,7 +164,7 @@ static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<
 		return nullptr;
 	}
 	auto &nstats = (NumericStatistics &)*child_stats[0];
-	if (nstats.min.is_null || nstats.max.is_null) {
+	if (nstats.min.IsNull() || nstats.max.IsNull()) {
 		return nullptr;
 	}
 	// run the operator on both the min and the max, this gives us the [min, max] bound
@@ -1263,11 +1263,12 @@ struct StructDatePart {
 
 		Value parts_list = ExpressionExecutor::EvaluateScalar(*arguments[0]);
 		if (parts_list.type().id() == LogicalTypeId::LIST) {
-			if (parts_list.list_value.empty()) {
+			auto &list_children = ListValue::GetChildren(parts_list);
+			if (list_children.empty()) {
 				throw BinderException("%s requires non-empty lists of part names", bound_function.name);
 			}
-			for (const auto &part_value : parts_list.list_value) {
-				if (part_value.is_null) {
+			for (const auto &part_value : list_children) {
+				if (part_value.IsNull()) {
 					throw BinderException("NULL struct entry name in %s", bound_function.name);
 				}
 				const auto part_name = part_value.ToString();

@@ -86,7 +86,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 
 	// and when the build range is smaller than the threshold
 	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
-	if (stats_build->min.is_null || stats_build->max.is_null) {
+	if (stats_build->min.IsNull() || stats_build->max.IsNull()) {
 		return;
 	}
 	int64_t min_value, max_value;
@@ -109,7 +109,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	join_state.build_max = stats_build->max;
 	join_state.estimated_cardinality = op.estimated_cardinality;
 	join_state.build_range = build_range;
-	if (join_state.build_range > MAX_BUILD_SIZE || stats_probe->max.is_null || stats_probe->min.is_null) {
+	if (join_state.build_range > MAX_BUILD_SIZE || stats_probe->max.IsNull() || stats_probe->min.IsNull()) {
 		return;
 	}
 	if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {

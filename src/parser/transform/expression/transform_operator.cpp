@@ -170,7 +170,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 			throw NotImplementedException("Custom escape in SIMILAR TO");
 		}
 		auto &constant = (ConstantExpression &)*similar_func.children[1];
-		if (!constant.value.is_null) {
+		if (!constant.value.IsNull()) {
 			throw NotImplementedException("Custom escape in SIMILAR TO");
 		}
 		// take the child of the similar_func

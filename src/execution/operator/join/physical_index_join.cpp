@@ -151,7 +151,7 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &inpu
 		auto equal_value = state.join_keys.GetValue(0, i);
 		auto index_state = art.InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
 		state.rhs_rows[i].clear();
-		if (!equal_value.is_null) {
+		if (!equal_value.IsNull()) {
 			if (fetch_types.empty()) {
 				IndexLock lock;
 				index->InitializeLock(lock);

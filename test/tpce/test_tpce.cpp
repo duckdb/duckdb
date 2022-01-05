@@ -22,7 +22,7 @@ TEST_CASE("Test TPC-E", "[tpce][.]") {
 	for (size_t i = 0; i < result->collection.Count(); i++) {
 		auto table_name = result->collection.GetValue(1, i);
 
-		REQUIRE_NO_FAIL(con.Query("SELECT COUNT(*) FROM " + table_name.str_value));
+		REQUIRE_NO_FAIL(con.Query("SELECT COUNT(*) FROM " + StringValue::Get(table_name)));
 
 		// result2->Print();
 
