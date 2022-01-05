@@ -62,20 +62,7 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 	calendar->add(UCAL_DATE, interval.days, status);
 	calendar->add(UCAL_MONTH, interval.months, status);
 
-	// Extract the new time
-	millis = int64_t(calendar->getTime(status));
-	if (U_FAILURE(status)) {
-		throw Exception("Unable to compute ICU DATEADD.");
-	}
-
-	// UDate is a double, so it can't overflow (it just loses accuracy), but converting back to µs can.
-	millis = MultiplyOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(millis, Interval::MICROS_PER_MSEC);
-	millis = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(millis, micros);
-
-	// Now make sure the value is in range
-	Timestamp::Convert(timestamp_t(millis), d, t);
-
-	return timestamp_t(millis);
+	return ICUDateFunc::GetTime(calendar, micros);
 }
 
 template <>
