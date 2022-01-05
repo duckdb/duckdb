@@ -225,6 +225,76 @@ static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind
 	output.SetCardinality(index);
 }
 
+struct ICUCalendarData : public FunctionOperatorData {
+	ICUCalendarData() {
+		// All calendars are available in all locales
+		UErrorCode status = U_ZERO_ERROR;
+		calendars.reset(icu::Calendar::getKeywordValuesForLocale("calendar", icu::Locale::getDefault(), false, status));
+	}
+
+	std::unique_ptr<icu::StringEnumeration> calendars;
+};
+
+static unique_ptr<FunctionData> ICUCalendarBind(ClientContext &context, vector<Value> &inputs,
+                                                unordered_map<string, Value> &named_parameters,
+                                                vector<LogicalType> &input_table_types,
+                                                vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                                vector<string> &names) {
+	names.emplace_back("name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	return nullptr;
+}
+
+static unique_ptr<FunctionOperatorData> ICUCalendarInit(ClientContext &context, const FunctionData *bind_data,
+                                                        const vector<column_t> &column_ids,
+                                                        TableFilterCollection *filters) {
+	return make_unique<ICUCalendarData>();
+}
+
+static void ICUCalendarFunction(ClientContext &context, const FunctionData *bind_data,
+                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+	auto &data = (ICUCalendarData &)*operator_state;
+	idx_t index = 0;
+	while (index < STANDARD_VECTOR_SIZE) {
+		if (!data.calendars) {
+			break;
+		}
+
+		UErrorCode status = U_ZERO_ERROR;
+		auto calendar = data.calendars->snext(status);
+		if (U_FAILURE(status) || !calendar) {
+			break;
+		}
+
+		//	The calendar name is all we have
+		std::string utf8;
+		calendar->toUTF8String(utf8);
+		output.SetValue(0, index, Value(utf8));
+
+		++index;
+	}
+	output.SetCardinality(index);
+}
+
+static void ICUCalendarCleanup(ClientContext &context, const FunctionData *bind_data,
+                               FunctionOperatorData *operator_state) {
+	auto &data = (ICUCalendarData &)*operator_state;
+	(void)data.calendars.release();
+}
+
+static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parameter) {
+	const auto name = parameter.Value::GetValueUnsafe<string>();
+	string locale_key = "@calendar=" + name;
+	icu::Locale locale(locale_key.c_str());
+
+	UErrorCode status = U_ZERO_ERROR;
+	std::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(locale, status));
+	if (U_FAILURE(status) || name != cal->getType()) {
+		throw NotImplementedException("Unknown Calendar setting");
+	}
+}
+
 void ICUExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
@@ -274,6 +344,17 @@ void ICUExtension::Load(DuckDB &db) {
 	RegisterICUDateSubFunctions(*con.context);
 	RegisterICUDateTruncFunctions(*con.context);
 	RegisterICUMakeDateFunctions(*con.context);
+
+	// Calendars
+	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, SetICUCalendar);
+	UErrorCode status = U_ZERO_ERROR;
+	std::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(status));
+	config.set_variables["Calendar"] = Value(cal->getType());
+
+	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit, nullptr,
+	                        ICUCalendarCleanup);
+	CreateTableFunctionInfo cal_names_info(move(cal_names));
+	catalog.CreateTableFunction(*con.context, &cal_names_info);
 
 	con.Commit();
 }
