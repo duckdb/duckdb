@@ -191,24 +191,13 @@ TEST_CASE("Test UUID", "[api][uuid]") {
 	REQUIRE(row_count == 2);
 }
 
-
-TEST_CASE("Test ARRAY_AGG with OrderBy", "[api][array_agg]") {
+TEST_CASE("Test ARRAY_AGG with ORDER BY", "[api][array_agg]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2 (a INT, b INT, c INT)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO t2 VALUES (1,1,1), (1,2,2), (2,1,3), (2,2,4)"));
 
-	auto result = con.Query("select a, ARRAY_AGG(c ORDER BY b) from t2 GROUP BY a");
-	REQUIRE(result->names[1] == "ARRAY_AGG(c ORDER BY b)");
-	// for (auto &name : (*result).names) {
-	// 	printf("%s\n", name.c_str());
-	// }
-
-	// for (auto &row : *result) {
-	// 	auto uuid = row.GetValue<string>(0);
-	// 	REQUIRE(uuid == "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11");
-	// 	row_count++;
-	// }
-	// REQUIRE(row_count == 2);
+	auto result = con.Query("select a, array_agg(c ORDER BY b) from t2 GROUP BY a");
+	REQUIRE(result->names[1] == "array_agg(c ORDER BY b)");
 }
