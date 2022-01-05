@@ -128,7 +128,6 @@ unique_ptr<ResultModifier> OrderModifier::Copy() {
 
 string OrderByNode::ToString() const {
 	auto str = expression->ToString();
-	// str += (type == OrderType::ASCENDING) ? " ASC" : " DESC";
 	switch (type) {
 		case OrderType::ASCENDING:
 			str += " ASC";
@@ -139,6 +138,7 @@ string OrderByNode::ToString() const {
 		default:
 			break;
 	}
+	
 	switch (null_order) {
 	case OrderByNullType::NULLS_FIRST:
 		str += " NULLS FIRST";
@@ -149,7 +149,6 @@ string OrderByNode::ToString() const {
 	default:
 		break;
 	}
-	printf("\nRESULTMODIFIER - %s, type=%d expression=%s, \n", str.c_str(), type, expression->ToString().c_str());
 	return str;
 }
 
