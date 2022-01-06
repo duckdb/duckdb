@@ -142,7 +142,7 @@ static idx_t PiecewiseMergeNulls(DataChunk &keys) {
 			}
 		}
 		return 0;
-	} else {
+	} else if (keys.ColumnCount() > 1) {
 		//	Normalify the primary, as it will need to merge arbitrary validity masks
 		primary.Normalify(count);
 		auto &pvalidity = FlatVector::Validity(primary);
@@ -166,6 +166,37 @@ static idx_t PiecewiseMergeNulls(DataChunk &keys) {
 			}
 		}
 		return count - pvalidity.CountValid(count);
+	} else {
+		return count - primary.CountValid(count);
+	}
+}
+
+static inline void FuseDataChunk(DataChunk &lhs, DataChunk &rhs) {
+	if (lhs.data.empty()) {
+		lhs.data.reserve(rhs.data.size());
+		for (auto &v : rhs.data) {
+			lhs.data.emplace_back(Vector(v));
+		}
+		lhs.SetCardinality(rhs);
+	} else {
+		D_ASSERT(lhs.size() == rhs.size());
+		for (auto &v : rhs.data) {
+			lhs.data.emplace_back(Vector(v));
+		}
+	}
+}
+
+static inline void SinkPiecewiseMergeChunk(LocalSortState &sort_state, DataChunk &join_keys, DataChunk &input) {
+	if (join_keys.data.size() > 1) {
+		// Append the tail of the join conditions to the end of the payload
+		DataChunk join_tail;
+		join_keys.Split(join_tail, 1);
+		DataChunk payload;
+		FuseDataChunk(payload, input);
+		FuseDataChunk(payload, join_tail);
+		sort_state.SinkChunk(join_keys, payload);
+	} else {
+		sort_state.SinkChunk(join_keys, input);
 	}
 }
 
@@ -192,7 +223,7 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, Globa
 	lstate.rhs_count += join_keys.size();
 
 	// Sink the data into the local sort state
-	local_sort_state.SinkChunk(join_keys, input);
+	SinkPiecewiseMergeChunk(local_sort_state, join_keys, input);
 
 	// When sorting data reaches a certain size, we sort it
 	if (local_sort_state.SizeInBytes() >= gstate.memory_per_thread) {
@@ -367,7 +398,7 @@ public:
 		lhs_global_state = make_unique<GlobalSortState>(buffer_manager, op.lhs_orders, lhs_layout);
 		lhs_local_state = make_unique<LocalSortState>();
 		lhs_local_state->Initialize(*lhs_global_state, buffer_manager);
-		lhs_local_state->SinkChunk(lhs_keys, input);
+		SinkPiecewiseMergeChunk(*lhs_local_state, lhs_keys, input);
 
 		// Set external (can be force with the PRAGMA)
 		lhs_global_state->external = force_external;
