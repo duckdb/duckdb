@@ -49,7 +49,7 @@ unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
 	return make_unique<LambdaExpression>(parameters, expression->Copy());
 }
 
-void LambdaExpression::Serialize(Serializer &serializer) {
+void LambdaExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.Write<uint32_t>(parameters.size());
 	for (auto &parameter : parameters) {

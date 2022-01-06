@@ -31,7 +31,7 @@ unique_ptr<ParsedExpression> CollateExpression::Copy() const {
 	return move(copy);
 }
 
-void CollateExpression::Serialize(Serializer &serializer) {
+void CollateExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	child->Serialize(serializer);
 	serializer.WriteString(collation);

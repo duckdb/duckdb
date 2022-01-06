@@ -35,7 +35,7 @@ unique_ptr<ParsedExpression> CastExpression::Copy() const {
 	return move(copy);
 }
 
-void CastExpression::Serialize(Serializer &serializer) {
+void CastExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	child->Serialize(serializer);
 	cast_type.Serialize(serializer);

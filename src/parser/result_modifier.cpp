@@ -11,7 +11,7 @@ bool ResultModifier::Equals(const ResultModifier *other) const {
 	return type == other->type;
 }
 
-void ResultModifier::Serialize(Serializer &serializer) {
+void ResultModifier::Serialize(Serializer &serializer) const {
 	serializer.Write<ResultModifierType>(type);
 }
 
@@ -45,7 +45,7 @@ bool LimitModifier::Equals(const ResultModifier *other_p) const {
 	return true;
 }
 
-unique_ptr<ResultModifier> LimitModifier::Copy() {
+unique_ptr<ResultModifier> LimitModifier::Copy() const {
 	auto copy = make_unique<LimitModifier>();
 	if (limit) {
 		copy->limit = limit->Copy();
@@ -56,7 +56,7 @@ unique_ptr<ResultModifier> LimitModifier::Copy() {
 	return move(copy);
 }
 
-void LimitModifier::Serialize(Serializer &serializer) {
+void LimitModifier::Serialize(Serializer &serializer) const {
 	ResultModifier::Serialize(serializer);
 	serializer.WriteOptional(limit);
 	serializer.WriteOptional(offset);
@@ -80,7 +80,7 @@ bool DistinctModifier::Equals(const ResultModifier *other_p) const {
 	return true;
 }
 
-unique_ptr<ResultModifier> DistinctModifier::Copy() {
+unique_ptr<ResultModifier> DistinctModifier::Copy() const {
 	auto copy = make_unique<DistinctModifier>();
 	for (auto &expr : distinct_on_targets) {
 		copy->distinct_on_targets.push_back(expr->Copy());
@@ -88,7 +88,7 @@ unique_ptr<ResultModifier> DistinctModifier::Copy() {
 	return move(copy);
 }
 
-void DistinctModifier::Serialize(Serializer &serializer) {
+void DistinctModifier::Serialize(Serializer &serializer) const {
 	ResultModifier::Serialize(serializer);
 	serializer.WriteList(distinct_on_targets);
 }
@@ -118,7 +118,7 @@ bool OrderModifier::Equals(const ResultModifier *other_p) const {
 	return true;
 }
 
-unique_ptr<ResultModifier> OrderModifier::Copy() {
+unique_ptr<ResultModifier> OrderModifier::Copy() const {
 	auto copy = make_unique<OrderModifier>();
 	for (auto &order : orders) {
 		copy->orders.emplace_back(order.type, order.null_order, order.expression->Copy());
@@ -142,7 +142,7 @@ string OrderByNode::ToString() const {
 	return str;
 }
 
-void OrderByNode::Serialize(Serializer &serializer) {
+void OrderByNode::Serialize(Serializer &serializer) const {
 	serializer.Write<OrderType>(type);
 	serializer.Write<OrderByNullType>(null_order);
 	expression->Serialize(serializer);
@@ -155,7 +155,7 @@ OrderByNode OrderByNode::Deserialize(Deserializer &source) {
 	return OrderByNode(type, null_order, move(expression));
 }
 
-void OrderModifier::Serialize(Serializer &serializer) {
+void OrderModifier::Serialize(Serializer &serializer) const {
 	ResultModifier::Serialize(serializer);
 	serializer.Write<int64_t>(orders.size());
 	for (auto &order : orders) {
@@ -186,7 +186,7 @@ bool LimitPercentModifier::Equals(const ResultModifier *other_p) const {
 	return true;
 }
 
-unique_ptr<ResultModifier> LimitPercentModifier::Copy() {
+unique_ptr<ResultModifier> LimitPercentModifier::Copy() const {
 	auto copy = make_unique<LimitPercentModifier>();
 	if (limit) {
 		copy->limit = limit->Copy();
@@ -197,7 +197,7 @@ unique_ptr<ResultModifier> LimitPercentModifier::Copy() {
 	return move(copy);
 }
 
-void LimitPercentModifier::Serialize(Serializer &serializer) {
+void LimitPercentModifier::Serialize(Serializer &serializer) const {
 	ResultModifier::Serialize(serializer);
 	serializer.WriteOptional(limit);
 	serializer.WriteOptional(offset);

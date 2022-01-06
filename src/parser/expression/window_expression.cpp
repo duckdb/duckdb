@@ -224,7 +224,7 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	return move(new_window);
 }
 
-void WindowExpression::Serialize(Serializer &serializer) {
+void WindowExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WriteString(function_name);
 	serializer.WriteString(schema);

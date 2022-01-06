@@ -31,7 +31,7 @@ hash_t PositionalReferenceExpression::Hash() const {
 	return CombineHash(duckdb::Hash(index), result);
 }
 
-void PositionalReferenceExpression::Serialize(Serializer &serializer) {
+void PositionalReferenceExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.Write<idx_t>(index);
 }

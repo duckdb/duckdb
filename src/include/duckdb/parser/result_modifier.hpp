@@ -37,9 +37,9 @@ public:
 	virtual bool Equals(const ResultModifier *other) const;
 
 	//! Create a copy of this ResultModifier
-	virtual unique_ptr<ResultModifier> Copy() = 0;
+	virtual unique_ptr<ResultModifier> Copy() const = 0;
 	//! Serializes a ResultModifier to a stand-alone binary blob
-	virtual void Serialize(Serializer &serializer);
+	virtual void Serialize(Serializer &serializer) const;
 	//! Deserializes a blob back into a ResultModifier
 	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
 };
@@ -58,7 +58,7 @@ struct OrderByNode {
 	unique_ptr<ParsedExpression> expression;
 
 public:
-	void Serialize(Serializer &serializer);
+	void Serialize(Serializer &serializer) const;
 	string ToString() const;
 	static OrderByNode Deserialize(Deserializer &source);
 };
@@ -75,8 +75,8 @@ public:
 
 public:
 	bool Equals(const ResultModifier *other) const override;
-	unique_ptr<ResultModifier> Copy() override;
-	void Serialize(Serializer &serializer) override;
+	unique_ptr<ResultModifier> Copy() const override;
+	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
 };
 
@@ -90,8 +90,8 @@ public:
 
 public:
 	bool Equals(const ResultModifier *other) const override;
-	unique_ptr<ResultModifier> Copy() override;
-	void Serialize(Serializer &serializer) override;
+	unique_ptr<ResultModifier> Copy() const override;
+	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
 };
 
@@ -105,8 +105,8 @@ public:
 
 public:
 	bool Equals(const ResultModifier *other) const override;
-	unique_ptr<ResultModifier> Copy() override;
-	void Serialize(Serializer &serializer) override;
+	unique_ptr<ResultModifier> Copy() const override;
+	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
 };
 
@@ -122,8 +122,8 @@ public:
 
 public:
 	bool Equals(const ResultModifier *other) const override;
-	unique_ptr<ResultModifier> Copy() override;
-	void Serialize(Serializer &serializer) override;
+	unique_ptr<ResultModifier> Copy() const override;
+	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
 };
 

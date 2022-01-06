@@ -57,7 +57,7 @@ unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {
 	return move(copy);
 }
 
-void ConjunctionExpression::Serialize(Serializer &serializer) {
+void ConjunctionExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WriteList<ParsedExpression>(children);
 }

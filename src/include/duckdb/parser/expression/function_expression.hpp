@@ -47,7 +47,7 @@ public:
 	hash_t Hash() const override;
 
 	//! Serializes a FunctionExpression to a stand-alone binary blob
-	void Serialize(Serializer &serializer) override;
+	void Serialize(Serializer &serializer) const override;
 	//! Deserializes a blob back into an FunctionExpression
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
 };

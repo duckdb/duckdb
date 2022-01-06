@@ -107,7 +107,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	return move(copy);
 }
 
-void FunctionExpression::Serialize(Serializer &serializer) {
+void FunctionExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WriteString(function_name);
 	serializer.WriteString(schema);

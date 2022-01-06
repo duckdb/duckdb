@@ -31,7 +31,7 @@ unique_ptr<ParsedExpression> BetweenExpression::Copy() const {
 	return move(copy);
 }
 
-void BetweenExpression::Serialize(Serializer &serializer) {
+void BetweenExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	input->Serialize(serializer);
 	lower->Serialize(serializer);

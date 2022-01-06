@@ -49,7 +49,7 @@ unique_ptr<ParsedExpression> CaseExpression::Copy() const {
 	return move(copy);
 }
 
-void CaseExpression::Serialize(Serializer &serializer) {
+void CaseExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.Write<uint32_t>(case_checks.size());
 	for (auto &check : case_checks) {

@@ -59,7 +59,7 @@ bool StarExpression::Equals(const StarExpression *a, const StarExpression *b) {
 	return true;
 }
 
-void StarExpression::Serialize(Serializer &serializer) {
+void StarExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WriteString(relation_name);
 	serializer.Write<uint32_t>(exclude_list.size());

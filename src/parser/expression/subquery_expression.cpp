@@ -35,7 +35,7 @@ unique_ptr<ParsedExpression> SubqueryExpression::Copy() const {
 	return move(copy);
 }
 
-void SubqueryExpression::Serialize(Serializer &serializer) {
+void SubqueryExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.Write<SubqueryType>(subquery_type);
 	subquery->Serialize(serializer);

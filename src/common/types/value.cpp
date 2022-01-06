@@ -1540,7 +1540,7 @@ bool Value::TryCastAs(const LogicalType &target_type, bool strict) {
 	return true;
 }
 
-void Value::Serialize(Serializer &serializer) {
+void Value::Serialize(Serializer &serializer) const {
 	type_.Serialize(serializer);
 	serializer.Write<bool>(IsNull());
 	if (!IsNull()) {

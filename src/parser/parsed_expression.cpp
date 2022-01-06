@@ -97,7 +97,7 @@ hash_t ParsedExpression::Hash() const {
 	return hash;
 }
 
-void ParsedExpression::Serialize(Serializer &serializer) {
+void ParsedExpression::Serialize(Serializer &serializer) const {
 	serializer.Write<ExpressionClass>(GetExpressionClass());
 	serializer.Write<ExpressionType>(type);
 	serializer.WriteString(alias);

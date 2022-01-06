@@ -60,7 +60,7 @@ unique_ptr<ParsedExpression> OperatorExpression::Copy() const {
 	return move(copy);
 }
 
-void OperatorExpression::Serialize(Serializer &serializer) {
+void OperatorExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WriteList(children);
 }

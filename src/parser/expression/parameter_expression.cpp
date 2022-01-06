@@ -27,7 +27,7 @@ hash_t ParameterExpression::Hash() const {
 	return CombineHash(duckdb::Hash(parameter_nr), result);
 }
 
-void ParameterExpression::Serialize(Serializer &serializer) {
+void ParameterExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.Write<idx_t>(parameter_nr);
 }

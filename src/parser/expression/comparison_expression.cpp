@@ -33,7 +33,7 @@ unique_ptr<ParsedExpression> ComparisonExpression::Copy() const {
 	return move(copy);
 }
 
-void ComparisonExpression::Serialize(Serializer &serializer) {
+void ComparisonExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	left->Serialize(serializer);
 	right->Serialize(serializer);

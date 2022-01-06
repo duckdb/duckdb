@@ -28,7 +28,7 @@ unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
 	return move(copy);
 }
 
-void ConstantExpression::Serialize(Serializer &serializer) {
+void ConstantExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	value.Serialize(serializer);
 }

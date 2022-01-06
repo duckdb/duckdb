@@ -27,16 +27,13 @@ public:
 		WriteData((const_data_ptr_t)&element, sizeof(T));
 	}
 
-	//! Write data from a string buffer directly (wihtout length prefix)
+	//! Write data from a string buffer directly (without length prefix)
 	void WriteBufferData(const string &str) {
 		WriteData((const_data_ptr_t)str.c_str(), str.size());
 	}
 	//! Write a string with a length prefix
 	void WriteString(const string &val) {
-		Write<uint32_t>((uint32_t)val.size());
-		if (!val.empty()) {
-			WriteData((const_data_ptr_t)val.c_str(), val.size());
-		}
+		WriteStringLen((const_data_ptr_t)val.c_str(), val.size());
 	}
 	void WriteStringLen(const_data_ptr_t val, idx_t len) {
 		Write<uint32_t>((uint32_t)len);
@@ -46,7 +43,7 @@ public:
 	}
 
 	template <class T>
-	void WriteList(vector<unique_ptr<T>> &list) {
+	void WriteList(const vector<unique_ptr<T>> &list) {
 		Write<uint32_t>((uint32_t)list.size());
 		for (auto &child : list) {
 			child->Serialize(*this);

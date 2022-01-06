@@ -70,7 +70,7 @@ unique_ptr<ParsedExpression> ColumnRefExpression::Copy() const {
 	return move(copy);
 }
 
-void ColumnRefExpression::Serialize(Serializer &serializer) {
+void ColumnRefExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.Write<idx_t>(column_names.size());
 	for (auto &column_name : column_names) {
