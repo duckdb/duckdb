@@ -64,7 +64,8 @@ struct RowOperations {
 	                   const Predicates &predicates, SelectionVector &sel, idx_t count, SelectionVector *no_match,
 	                   idx_t &no_match_count);
 	static idx_t MatchRows(Vector &rows_left, const SelectionVector &left_sel, const RowLayout &layout,
-	                       Vector &rows_right, const SelectionVector &right_sel, idx_t rows_count);
+	                       const idx_t keys_count, Vector &rows_right, const SelectionVector &right_sel,
+	                       idx_t rows_count);
 
 	//===--------------------------------------------------------------------===//
 	// Heap Operators

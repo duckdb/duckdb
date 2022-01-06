@@ -292,6 +292,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 		// For inner/right joins we check whether the build is composed of unique keys
 		InsertHashesAndCheckUniqueness(count_tuples, indices, key_locations, pointers); // inlined
 	} else {
+		has_unique_keys = false;
 		for (idx_t i = 0; i < count_tuples; i++) {
 			// For each tuple, the hash_value will be replaced by a pointer to the next_entry in the hash_map
 			auto index = indices[i];
@@ -331,12 +332,12 @@ void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *i
 	if (has_unique_keys && conflict_count > 0) {
 		Vector ht_rows(LogicalType::POINTER, (data_ptr_t)key_locations);
 		Vector conflict_rows(LogicalType::POINTER, (data_ptr_t)conflict_entries);
-		auto matches = RowOperations::MatchRows(ht_rows, pointers_sel, layout, conflict_rows,
+		auto matches = RowOperations::MatchRows(ht_rows, pointers_sel, layout, condition_types.size(), conflict_rows,
 		                                        FlatVector::INCREMENTAL_SELECTION_VECTOR, conflict_count);
 		if (matches > 0) {
 			has_unique_keys = false;
 		}
-	} 
+	}
 }
 
 /* void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *indices, data_ptr_t key_locations[],

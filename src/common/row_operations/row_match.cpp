@@ -296,16 +296,15 @@ static void TemplatedMatchRowsType(Vector &rows_left, const SelectionVector &lef
 
 template <class OP>
 static void TemplatedMatchRowsOp(Vector &rows_left, const SelectionVector &left_sel, const RowLayout &layout,
-                                 Vector &rows_right, const SelectionVector &right_sel, idx_t rows_count,
-                                 idx_t &matches) {
+                                 const idx_t keys_count, Vector &rows_right, const SelectionVector &right_sel,
+                                 idx_t rows_count, idx_t &matches) {
 	if (rows_count == 0) {
 		return;
 	}
-	// check whether all the keys are equals
 	auto col_offsets = layout.GetOffsets();
 	auto condition_types = layout.GetTypes();
-
-	for (idx_t key_idx = 0; key_idx != condition_types.size(); ++key_idx) {
+	// for each key_type check whether there is a match
+	for (idx_t key_idx = 0; key_idx != keys_count; ++key_idx) {
 		auto key_type = condition_types[key_idx];
 		auto key_offset = col_offsets[key_idx];
 		switch (key_type.InternalType()) {
@@ -374,9 +373,11 @@ static void TemplatedMatchRowsOp(Vector &rows_left, const SelectionVector &left_
 }
 
 idx_t RowOperations::MatchRows(Vector &rows_left, const SelectionVector &left_sel, const RowLayout &layout,
-                               Vector &rows_right, const SelectionVector &right_sel, idx_t rows_count) {
+                               const idx_t keys_count, Vector &rows_right, const SelectionVector &right_sel,
+                               idx_t rows_count) {
 	idx_t match_count = 0;
-	TemplatedMatchRowsOp<Equals>(rows_left, left_sel, layout, rows_right, right_sel, rows_count, match_count);
+	TemplatedMatchRowsOp<Equals>(rows_left, left_sel, layout, keys_count, rows_right, right_sel, rows_count,
+	                             match_count);
 	return match_count > 0;
 }
 

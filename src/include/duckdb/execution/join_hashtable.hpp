@@ -136,9 +136,9 @@ public:
 	BufferManager &buffer_manager;
 	//! The types of the keys used in equality comparison
 	vector<LogicalType> equality_types;
-	//! The types of the keys
+	//! The types of the conditions
 	vector<LogicalType> condition_types;
-	//! The types of all conditions
+	//! The types of the keys in the build side
 	vector<LogicalType> build_types;
 	//! The comparison predicates
 	vector<ExpressionType> predicates;
