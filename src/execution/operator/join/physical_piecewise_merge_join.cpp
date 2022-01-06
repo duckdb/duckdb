@@ -1,13 +1,15 @@
 #include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
-#include "duckdb/parallel/event.hpp"
-#include "duckdb/parallel/thread_context.hpp"
+
+#include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/comparators.hpp"
 #include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 
@@ -490,7 +492,7 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 		while (true) {
 			int comp_res;
 			if (all_constant) {
-				comp_res = memcmp(l_ptr, r_ptr, cmp_size);
+				comp_res = FastMemcmp(l_ptr, r_ptr, cmp_size);
 			} else {
 				comp_res = Comparators::CompareTuple(lread, rread, l_ptr, r_ptr, lsort.sort_layout, external);
 			}
@@ -605,7 +607,7 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 		if (l.entry_idx < l.not_null) {
 			int comp_res;
 			if (all_constant) {
-				comp_res = memcmp(l_ptr, r_ptr, cmp_size);
+				comp_res = FastMemcmp(l_ptr, r_ptr, cmp_size);
 			} else {
 				comp_res = Comparators::CompareTuple(lread, rread, l_ptr, r_ptr, l.state.sort_layout, external);
 			}
