@@ -121,6 +121,54 @@ unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(Executi
 	return move(result);
 }
 
+static idx_t PiecewiseMergeNulls(DataChunk &keys) {
+	// Merge the validity masks of the comparison keys into the primary
+	// Return the number of NULLs in the resulting chunk
+	D_ASSERT(keys.ColumnCount() > 0);
+	const auto count = keys.size();
+
+	size_t all_constant = 0;
+	for (auto &v : keys.data) {
+		all_constant += int(v.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	}
+
+	auto &primary = keys.data[0];
+	if (all_constant == keys.data.size()) {
+		//	Either all NULL or no NULLs
+		for (auto &v : keys.data) {
+			if (ConstantVector::IsNull(v)) {
+				ConstantVector::SetNull(primary, true);
+				return count;
+			}
+		}
+		return 0;
+	} else {
+		//	Normalify the primary, as it will need to merge arbitrary validity masks
+		primary.Normalify(count);
+		auto &pvalidity = FlatVector::Validity(primary);
+		for (size_t c = 1; c < keys.data.size(); ++c) {
+			//	Orrify the rest, as the sort code will do this anyway.
+			auto &v = keys.data[c];
+			VectorData vdata;
+			v.Orrify(count, vdata);
+			auto &vvalidity = vdata.validity;
+			if (vvalidity.AllValid()) {
+				continue;
+			}
+			pvalidity.EnsureWritable();
+			auto pmask = pvalidity.GetData();
+			if (v.GetVectorType() == VectorType::FLAT_VECTOR) {
+				//	Merge entire entries
+				const auto entry_count = pvalidity.EntryCount(count);
+				for (idx_t entry_idx = 0; entry_idx < entry_count; ++entry_idx) {
+					pmask[entry_idx] &= vvalidity.GetValidityEntry(entry_idx);
+				}
+			}
+		}
+		return count - pvalidity.CountValid(count);
+	}
+}
+
 SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p,
                                                 LocalSinkState &lstate_p, DataChunk &input) const {
 	auto &gstate = (MergeJoinGlobalState &)gstate_p;
@@ -140,12 +188,8 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, Globa
 	lstate.rhs_executor.Execute(input, join_keys);
 
 	// Count the NULLs so we can exclude them later
-	// TODO: Sort any comparison NULLs to the end using an initial sort column
-	const auto count = join_keys.size();
-	for (auto &key : join_keys.data) {
-		lstate.rhs_has_null += (count - key.CountValid(count));
-	}
-	lstate.rhs_count += count;
+	lstate.rhs_has_null = PiecewiseMergeNulls(join_keys);
+	lstate.rhs_count += join_keys.size();
 
 	// Sink the data into the local sort state
 	local_sort_state.SinkChunk(join_keys, input);
@@ -273,9 +317,9 @@ public:
 	    : op(op), buffer_manager(buffer_manager), force_external(force_external), left_position(0), first_fetch(true),
 	      finished(true), right_position(0), right_chunk_index(0) {
 		vector<LogicalType> condition_types;
-		for (auto &cond : op.conditions) {
-			lhs_executor.AddExpression(*cond.left);
-			condition_types.push_back(cond.left->return_type);
+		for (auto &order : op.lhs_orders) {
+			lhs_executor.AddExpression(*order.expression);
+			condition_types.push_back(order.expression->return_type);
 		}
 		lhs_keys.Initialize(condition_types);
 		if (IsLeftOuterJoin(op.join_type)) {
@@ -316,12 +360,8 @@ public:
 		lhs_executor.Execute(input, lhs_keys);
 
 		// Count the NULLs so we can exclude them later
-		// TODO: Sort any multi-comparison NULLs to the end using an initial sort column
 		lhs_count = lhs_keys.size();
-		for (auto &key : lhs_keys.data) {
-			lhs_has_null = lhs_count - key.CountValid(lhs_count);
-			break;
-		}
+		lhs_has_null = PiecewiseMergeNulls(lhs_keys);
 
 		// sort by join key
 		lhs_global_state = make_unique<GlobalSortState>(buffer_manager, op.lhs_orders, lhs_layout);
