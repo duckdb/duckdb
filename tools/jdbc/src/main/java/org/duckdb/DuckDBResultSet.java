@@ -459,16 +459,13 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Timestamp getTimestamp(int columnIndex) throws SQLException {
-		String string_value = getLazyString(columnIndex);
-		if (string_value == null) {
+		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		try {
-
-			return Timestamp.valueOf(getLazyString(columnIndex));
-		} catch (Exception e) {
-			return null;
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
+			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong());
 		}
+        return null;
 	}
 
 	static class DuckDBBlobResult implements Blob {

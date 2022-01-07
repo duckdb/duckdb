@@ -26,6 +26,7 @@ import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
 import org.duckdb.DuckDBDatabase;
 import org.duckdb.DuckDBDriver;
+import org.duckdb.DuckDBTimestamp;
 
 public class TestDuckDBJDBC {
 
@@ -320,6 +321,47 @@ public class TestDuckDBJDBC {
 		conn1.close();
 		stmt1.close();
 	}
+
+    public static void test_duckdb_timestamp() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		stmt.execute("CREATE TABLE a (ts TIMESTAMP)");
+
+        // Generat tests without database
+        Timestamp ts0 = Timestamp.valueOf("1970-01-01 00:00:00");
+        Timestamp ts1 = Timestamp.valueOf("2021-07-29 21:13:11");
+        Timestamp ts2 = Timestamp.valueOf("2021-07-29 21:13:11.123456");
+
+        Timestamp cts0 = new DuckDBTimestamp(ts0).toSqlTimestamp();
+        Timestamp cts1 = new DuckDBTimestamp(ts1).toSqlTimestamp();
+        Timestamp cts2 = new DuckDBTimestamp(ts2).toSqlTimestamp();
+        
+        assertTrue(ts0.getTime() == cts0.getTime());
+        assertTrue(ts0.compareTo(cts0) == 0);
+        assertTrue(ts1.getTime() == cts1.getTime());
+        assertTrue(ts1.compareTo(cts1) == 0);
+        assertTrue(ts2.getTime() == cts2.getTime());
+        assertTrue(ts2.compareTo(cts2) == 0);
+
+        assertTrue(DuckDBTimestamp.getMicroseconds(DuckDBTimestamp.toSqlTimestamp(5678912345L)) == 5678912345L);
+
+        DuckDBTimestamp dts4 = new DuckDBTimestamp(ts1);
+        assertTrue(dts4.toSqlTimestamp().compareTo(ts1) == 0);
+        DuckDBTimestamp dts5 = new DuckDBTimestamp(ts2);
+        assertTrue(dts5.toSqlTimestamp().compareTo(ts2) == 0);
+
+        // Insert and read a timestamp 
+        stmt.execute("INSERT INTO a (ts) VALUES ('2005-11-02 07:59:58')");
+		ResultSet rs = stmt.executeQuery(
+				"SELECT * FROM a");
+		assertTrue(rs.next());
+		assertEquals(rs.getObject("ts"), Timestamp.valueOf("2005-11-02 07:59:58"));
+		assertEquals(rs.getTimestamp("ts"), Timestamp.valueOf("2005-11-02 07:59:58"));
+    
+		rs.close();
+		stmt.close();
+		conn.close();
+    }
 
 	public static void test_big_data() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
