@@ -1,0 +1,25 @@
+# name: test/sql/aggregate/group/group_by_all.test
+# description: Test GROUP BY ALL
+# group: [group]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(g integer, i integer);
+
+statement ok
+INSERT INTO integers values (0, 1), (0, 2), (1, 3), (1, NULL);
+
+query II
+SELECT g, SUM(i) FROM integers GROUP BY ALL ORDER BY 1
+----
+0	3
+1	3
+
+# multiple aggregates
+query IIIII
+SELECT g, SUM(i), COUNT(*), COUNT(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1
+----
+0	3	2	2	0
+1	3	2	1	2

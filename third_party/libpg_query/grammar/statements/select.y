@@ -624,6 +624,11 @@ first_or_next: FIRST_P								{ $$ = 0; }
  */
 group_clause:
 			GROUP_P BY group_by_list				{ $$ = $3; }
+			| GROUP_P BY ALL
+				{
+					PGNode *node = (PGNode *) makeGroupingSet(GROUPING_SET_ALL, NIL, @3);
+					$$ = list_make1(node);
+				}
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
 
