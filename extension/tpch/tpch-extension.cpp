@@ -114,7 +114,7 @@ static unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, vect
 	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("scale_factor");
-	return_types.emplace_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::DOUBLE);
 
 	names.emplace_back("answer");
 	return_types.emplace_back(LogicalType::VARCHAR);
