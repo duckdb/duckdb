@@ -360,7 +360,63 @@ public class TestDuckDBJDBC {
     
 		rs.close();
 		stmt.close();
+
+		PreparedStatement ps = conn.prepareStatement(
+				"SELECT COUNT(ts) FROM a WHERE ts = ?");
+		ps.setTimestamp(1, Timestamp.valueOf("2005-11-02 07:59:58"));
+        ResultSet rs2 = ps.executeQuery();
+		assertTrue(rs2.next());
+        assertEquals(rs2.getInt(1), 1);
+        rs2.close();
+        ps.close();
+
+		ps = conn.prepareStatement(
+				"SELECT COUNT(ts) FROM a WHERE ts = ?");
+		ps.setObject(1, Timestamp.valueOf("2005-11-02 07:59:58"));
+        ResultSet rs3 = ps.executeQuery();
+		assertTrue(rs3.next());
+        assertEquals(rs3.getInt(1), 1);
+        rs3.close();
+        ps.close();
+
+		ps = conn.prepareStatement(
+				"SELECT COUNT(ts) FROM a WHERE ts = ?");
+		ps.setObject(1, Timestamp.valueOf("2005-11-02 07:59:58"), Types.TIMESTAMP);
+        ResultSet rs4 = ps.executeQuery();
+		assertTrue(rs4.next());
+        assertEquals(rs4.getInt(1), 1);
+        rs4.close();
+        ps.close();
+
 		conn.close();
+    }
+    
+    // Longer, resource intensive test - might be commented out for a quick test run
+    public static void test_lots_of_timestamps() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		stmt.execute("CREATE TABLE a (ts TIMESTAMP)");
+
+        Timestamp ts = Timestamp.valueOf("1970-01-01 01:01:01");
+
+        for (long i = 134234533L; i < 13423453300L; i=i+73512) {
+            ts.setTime(i);
+            stmt.execute("INSERT INTO a (ts) VALUES ('" + ts +"')");
+        }
+
+		stmt.close();
+
+        for (long i = 134234533L; i < 13423453300L; i=i+73512) {
+            PreparedStatement ps = conn.prepareStatement(
+                    "SELECT COUNT(ts) FROM a WHERE ts = ?");
+            ts.setTime(i);
+            ps.setTimestamp(1, ts);
+            ResultSet rs = ps.executeQuery();
+            assertTrue(rs.next());
+            assertEquals(rs.getInt(1), 1);
+            rs.close();
+            ps.close();
+        }
     }
 
 	public static void test_big_data() throws Exception {
