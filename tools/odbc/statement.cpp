@@ -5,6 +5,7 @@
 #include "parameter_descriptor.hpp"
 #include "row_descriptor.hpp"
 #include "statement_functions.hpp"
+#include <sqlext.h>
 
 using duckdb::LogicalTypeId;
 
@@ -112,10 +113,8 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 		}
 		case SQL_ATTR_ASYNC_ENABLE:
 			break;
-#if (ODBCVER >= 0x0380)
 		case SQL_ATTR_ASYNC_STMT_EVENT:
 			break;
-#endif
 		case SQL_ATTR_CONCURRENCY:
 			break;
 		case SQL_ATTR_CURSOR_SCROLLABLE:
