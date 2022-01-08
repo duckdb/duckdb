@@ -57,7 +57,7 @@ jobs:
         ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
     - name: Build
-      run: STATIC_LIBCPP=1 make
+      run: STATIC_LIBCPP=1 BUILD_ODBC=1 make
 
     - name: Test
       run: make allunit
