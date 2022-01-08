@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/parquet2.test
+# name: test/sql/copy/parquet/parquet2strings.test
 # description: Issue #2261: TPC-H Q6 fails on Parquet input
 # group: [parquet]
 
@@ -15,6 +15,9 @@
 # ref2.show(10)
 # ref2.write.parquet("p2strings.parquet")
 # ref2.write.csv("p2strings.csv")
+
+# for now
+mode skip
 
 require parquet
 

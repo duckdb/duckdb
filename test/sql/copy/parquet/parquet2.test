@@ -270,3 +270,16 @@ query IIII
 select min(id_int), max(id_int), sum(id_int), count(id_int) from 'data/parquet-testing/p2.parquet'
 ----
 42	9998	19999680	3984
+
+
+# from bug 2882
+query I
+select * from 'data/parquet-testing/7-set.snappy.arrow2.parquet';
+----
+0
+1
+2
+3
+4
+5
+6

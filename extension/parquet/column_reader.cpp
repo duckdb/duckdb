@@ -159,7 +159,6 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		break;
 
 	case CompressionCodec::SNAPPY: {
-
 		// TODO move allocation outta here
 		ResizeableBuffer compressed_bytes_buffer(reader.allocator, possibly_compressed_bytes);
 		trans.read((uint8_t *)compressed_bytes_buffer.ptr, possibly_compressed_bytes);
@@ -283,6 +282,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		block->inc(block->len);
 		break;
 	}
+		/*
 	case Encoding::DELTA_BYTE_ARRAY: {
 		dbp_decoder = make_unique<DbpDecoder>((const uint8_t *)block->ptr, block->len);
 		auto prefix_buffer = make_shared<ResizeableBuffer>();
@@ -300,10 +300,10 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		auto string_buffer = dbp_decoder->BufferPtr();
 
 		for (idx_t i = 0 ; i < page_hdr.data_page_header_v2.num_rows; i++) {
-			auto suffix_length = (uint32_t*) suffix_buffer->ptr;
-			string str( suffix_length[i] + 1, '\0');
-			string_buffer.copy_to((char*) str.data(), suffix_length[i]);
-			printf("%s\n", str.c_str());
+		    auto suffix_length = (uint32_t*) suffix_buffer->ptr;
+		    string str( suffix_length[i] + 1, '\0');
+		    string_buffer.copy_to((char*) str.data(), suffix_length[i]);
+		    printf("%s\n", str.c_str());
 		}
 		throw std::runtime_error("eek");
 
@@ -317,6 +317,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		// TODO actually do something here
 		break;
 	}
+		 */
 	case Encoding::PLAIN:
 		// nothing to do here, will be read directly below
 		break;
