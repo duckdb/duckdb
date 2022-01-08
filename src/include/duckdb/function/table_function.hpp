@@ -61,7 +61,7 @@ typedef unique_ptr<FunctionOperatorData> (*table_function_init_parallel_t)(Clien
                                                                            TableFilterCollection *filters);
 typedef bool (*table_function_parallel_state_next_t)(ClientContext &context, const FunctionData *bind_data,
                                                      FunctionOperatorData *state, ParallelState *parallel_state);
-typedef int (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data);
+typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data);
 typedef void (*table_function_dependency_t)(unordered_set<CatalogEntry *> &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);

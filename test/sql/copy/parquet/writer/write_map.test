@@ -1,0 +1,101 @@
+# name: test/sql/copy/parquet/writer/write_map.test
+# description: Write maps
+# group: [writer]
+
+require parquet
+
+# int -> int map
+statement ok
+CREATE TABLE int_maps(m MAP(INTEGER,INTEGER));
+
+statement ok
+INSERT INTO int_maps VALUES 
+	(MAP([42, 84], [1, 2])), 
+	(MAP([101, 201, 301], [3, NULL, 5])),
+	(MAP([55, 66, 77], [6, 7, NULL]))
+;
+
+statement ok
+COPY int_maps TO '__TEST_DIR__/int_map.parquet' (FORMAT PARQUET)
+
+query I
+SELECT * FROM '__TEST_DIR__/int_map.parquet'
+----
+{42=1, 84=2}
+{101=3, 201=NULL, 301=5}
+{55=6, 66=7, 77=NULL}
+
+statement ok
+INSERT INTO int_maps VALUES
+	(MAP([NULL], [NULL]))
+;
+
+# parquet does not support keys with null values
+statement error
+COPY string_map TO '__TEST_DIR__/int_maps.parquet' (FORMAT PARQUET)
+
+# string -> string map
+statement ok
+CREATE TABLE string_map(m MAP(VARCHAR,VARCHAR));
+
+statement ok
+INSERT INTO string_map VALUES 
+	(MAP(['key1', 'key2'], ['value1', 'value2'])), 
+	(MAP(['best band', 'best boyband', 'richest person'], ['Tenacious D', 'Backstreet Boys', 'Jon Lajoie'])),
+	(MAP([], [])),
+	(NULL),
+	(MAP(['option'], [NULL]))
+;
+
+statement ok
+COPY string_map TO '__TEST_DIR__/string_map.parquet' (FORMAT PARQUET)
+
+query I
+SELECT * FROM '__TEST_DIR__/string_map.parquet'
+----
+{key1=value1, key2=value2}
+{best band=Tenacious D, best boyband=Backstreet Boys, richest person=Jon Lajoie}
+{}
+NULL
+{option=NULL}
+
+statement ok
+INSERT INTO string_map VALUES
+	(MAP([NULL], [NULL]))
+;
+
+# parquet does not support keys with null values
+statement error
+COPY string_map TO '__TEST_DIR__/string_map.parquet' (FORMAT PARQUET)
+
+# list -> list map
+statement ok
+CREATE TABLE list_map(m MAP(INT[],INT[]));
+
+statement ok
+INSERT INTO list_map VALUES 
+	(MAP([[1, 2, 3], [], [4, 5]], [[6, 7, 8], NULL, [NULL]])),
+	(MAP([], [])),
+	(MAP([[1]], [NULL])),
+	(MAP([[10, 12, 14, 16, 18, 20], [], []], [[1], [2], [3]]))
+;
+
+statement ok
+COPY list_map TO '__TEST_DIR__/list_map.parquet' (FORMAT PARQUET)
+
+query I
+SELECT * FROM '__TEST_DIR__/list_map.parquet'
+----
+{[1, 2, 3]=[6, 7, 8], []=NULL, [4, 5]=[NULL]}
+{}
+{[1]=NULL}
+{[10, 12, 14, 16, 18, 20]=[1], []=[2], []=[3]}
+
+statement ok
+INSERT INTO list_map VALUES
+	(MAP([NULL], [NULL]))
+;
+
+# parquet does not support keys with null values
+statement error
+COPY list_map TO '__TEST_DIR__/list_map.parquet' (FORMAT PARQUET)

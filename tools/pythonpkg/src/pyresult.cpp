@@ -7,7 +7,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb_python/array_wrapper.hpp"
-
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/arrow_wrapper.hpp"
 
 namespace duckdb {
@@ -22,8 +22,10 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	    .def("fetchdf", &DuckDBPyResult::FetchDF)
 	    .def("fetch_df", &DuckDBPyResult::FetchDF)
 	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk)
-	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable)
-	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader)
+	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch Result as an Arrow Table",
+	         py::arg("stream") = false, py::arg("num_of_vectors") = 1, py::arg("return_table") = true)
+	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader,
+	         "Fetch Result as an Arrow Record Batch Reader", py::arg("approx_batch_size"))
 	    .def("fetch_arrow_chunk", &DuckDBPyResult::FetchArrowTableChunk)
 	    .def("arrow", &DuckDBPyResult::FetchArrowTable)
 	    .def("df", &DuckDBPyResult::FetchDF);
@@ -31,8 +33,8 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	PyDateTime_IMPORT;
 }
 
-py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type) {
-	if (val.is_null) {
+py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType &type) {
+	if (val.IsNull()) {
 		return py::none();
 	}
 	switch (type.id()) {
@@ -67,13 +69,14 @@ py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type)
 	case LogicalTypeId::ENUM:
 		return py::cast(EnumType::GetValue(val));
 	case LogicalTypeId::VARCHAR:
-		return py::cast(val.GetValue<string>());
+		return py::cast(StringValue::Get(val));
 	case LogicalTypeId::BLOB:
-		return py::bytes(val.GetValueUnsafe<string>());
+		return py::bytes(StringValue::Get(val));
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_SEC: {
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_TZ: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
 		auto timestamp = val.GetValueUnsafe<timestamp_t>();
 		if (type.id() == LogicalTypeId::TIMESTAMP_MS) {
@@ -91,7 +94,8 @@ py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type)
 		Time::Convert(time, hour, min, sec, micros);
 		return py::cast<py::object>(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
 	}
-	case LogicalTypeId::TIME: {
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
 
 		int32_t hour, min, sec, microsec;
@@ -108,24 +112,40 @@ py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type)
 		return py::cast<py::object>(PyDate_FromDate(year, month, day));
 	}
 	case LogicalTypeId::LIST: {
+		auto &list_values = ListValue::GetChildren(val);
+
 		py::list list;
-		for (auto list_elem : val.list_value) {
+		for (auto &list_elem : list_values) {
 			list.append(GetValueToPython(list_elem, ListType::GetChildType(type)));
 		}
 		return std::move(list);
 	}
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT: {
+		auto &struct_values = StructValue::GetChildren(val);
+
 		py::dict py_struct;
 		auto &child_types = StructType::GetChildTypes(type);
-		for (idx_t i = 0; i < val.struct_value.size(); i++) {
+		for (idx_t i = 0; i < struct_values.size(); i++) {
 			auto &child_entry = child_types[i];
 			auto &child_name = child_entry.first;
 			auto &child_type = child_entry.second;
-			py_struct[child_name.c_str()] = GetValueToPython(val.struct_value[i], child_type);
+			py_struct[child_name.c_str()] = GetValueToPython(struct_values[i], child_type);
 		}
 		return std::move(py_struct);
 	}
+	case LogicalTypeId::UUID: {
+		auto uuid_value = val.GetValueUnsafe<hugeint_t>();
+		return py::cast<py::object>(py::module::import("uuid").attr("UUID")(UUID::ToString(uuid_value)));
+	}
+	case LogicalTypeId::INTERVAL: {
+		auto interval_value = val.GetValueUnsafe<interval_t>();
+		uint64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
+		return py::cast<py::object>(
+		    py::module::import("datetime")
+		        .attr("timedelta")(py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
+	}
+
 	default:
 		throw NotImplementedException("unsupported type: " + type.ToString());
 	}
@@ -229,36 +249,25 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 		}
 		materialized.collection.Reset();
 	} else {
+		D_ASSERT(result->type == QueryResultType::STREAM_RESULT);
 		if (!stream) {
-			while (true) {
-				unique_ptr<DataChunk> chunk;
-				{
-					py::gil_scoped_release release;
-					chunk = FetchNextRaw(*result);
-				}
-				if (!chunk || chunk->size() == 0) {
-					//! finished
-					break;
-				}
-				conversion.Append(*chunk, &categories);
+			vectors_per_chunk = NumericLimits<idx_t>::Maximum();
+		}
+		auto stream_result = (StreamQueryResult *)result.get();
+		for (idx_t count_vec = 0; count_vec < vectors_per_chunk; count_vec++) {
+			if (!stream_result->IsOpen()) {
+				break;
 			}
-		} else {
-			auto stream_result = (StreamQueryResult *)result.get();
-			for (idx_t count_vec = 0; count_vec < vectors_per_chunk; count_vec++) {
-				if (!stream_result->is_open) {
-					break;
-				}
-				unique_ptr<DataChunk> chunk;
-				{
-					py::gil_scoped_release release;
-					chunk = FetchNextRaw(*stream_result);
-				}
-				if (!chunk || chunk->size() == 0) {
-					//! finished
-					break;
-				}
-				conversion.Append(*chunk, &categories);
+			unique_ptr<DataChunk> chunk;
+			{
+				py::gil_scoped_release release;
+				chunk = FetchNextRaw(*stream_result);
 			}
+			if (!chunk || chunk->size() == 0) {
+				//! finished
+				break;
+			}
+			conversion.Append(*chunk, &categories);
 		}
 	}
 
@@ -295,7 +304,7 @@ bool FetchArrowChunk(QueryResult *result, py::list &batches,
                      bool copy = false) {
 	if (result->type == QueryResultType::STREAM_RESULT) {
 		auto stream_result = (StreamQueryResult *)result;
-		if (!stream_result->is_open) {
+		if (!stream_result->IsOpen()) {
 			return false;
 		}
 	}
@@ -391,12 +400,14 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::BLOB:
 		return py::str("BINARY");
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC: {
 		return py::str("DATETIME");
 	}
-	case LogicalTypeId::TIME: {
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ: {
 		return py::str("Time");
 	}
 	case LogicalTypeId::DATE: {

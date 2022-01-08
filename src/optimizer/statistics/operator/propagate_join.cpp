@@ -189,7 +189,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 	// LEFT, FULL and RIGHT OUTER joins can introduce null values
 	// this requires us to alter the statistics after this point in the query plan
 	if (IsLeftOuterJoin(join_type)) {
-		// left or full outer join: set is_null to true for all rhs statistics
+		// left or full outer join: set IsNull() to true for all rhs statistics
 		for (auto &binding : right_bindings) {
 			auto stats = statistics_map.find(binding);
 			if (stats != statistics_map.end()) {
@@ -198,7 +198,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 		}
 	}
 	if (IsRightOuterJoin(join_type)) {
-		// right or full outer join: set is_null to true for all lhs statistics
+		// right or full outer join: set IsNull() to true for all lhs statistics
 		for (auto &binding : left_bindings) {
 			auto stats = statistics_map.find(binding);
 			if (stats != statistics_map.end()) {

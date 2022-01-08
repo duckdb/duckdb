@@ -1,7 +1,19 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// parquet_rle_bp_decoder.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
+#include "parquet_types.h"
+#include "thrift_tools.hpp"
+#include "resizable_buffer.hpp"
 #include "decode_utils.hpp"
 
 namespace duckdb {
+
 class RleBpDecoder {
 public:
 	/// Create a decoder object. buffer/buffer_len is the decoded data.
@@ -48,6 +60,17 @@ public:
 		if (values_read != batch_size) {
 			throw std::runtime_error("RLE decode did not find enough values");
 		}
+	}
+
+	static uint8_t ComputeBitWidth(idx_t val) {
+		if (val == 0) {
+			return 0;
+		}
+		uint8_t ret = 1;
+		while (((idx_t)(1 << ret) - 1) < val) {
+			ret++;
+		}
+		return ret;
 	}
 
 private:

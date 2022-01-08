@@ -145,8 +145,9 @@ public:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP>
 	static idx_t Select(Vector &a, Vector &b, Vector &c, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel) {
+		SelectionVector owned_sel;
 		if (!sel) {
-			sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+			sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
 		}
 		VectorData adata, bdata, cdata;
 		a.Orrify(count, adata);

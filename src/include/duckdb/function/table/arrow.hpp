@@ -158,7 +158,7 @@ private:
 	//! Gets Arrow Table's Cardinality
 	static unique_ptr<NodeStatistics> ArrowScanCardinality(ClientContext &context, const FunctionData *bind_data);
 	//! Gets the progress on the table scan, used for Progress Bars
-	static int ArrowProgress(ClientContext &context, const FunctionData *bind_data_p);
+	static double ArrowProgress(ClientContext &context, const FunctionData *bind_data_p);
 };
 
 } // namespace duckdb

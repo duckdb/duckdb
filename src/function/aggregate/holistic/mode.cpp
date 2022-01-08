@@ -289,14 +289,14 @@ unique_ptr<FunctionData> BindModeDecimal(ClientContext &context, AggregateFuncti
 }
 
 void ModeFun::RegisterFunction(BuiltinFunctions &set) {
-	const vector<LogicalType> TEMPORAL = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::TIME,
-	                                      LogicalType::INTERVAL};
+	const vector<LogicalType> TEMPORAL = {LogicalType::DATE,         LogicalType::TIMESTAMP, LogicalType::TIME,
+	                                      LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,   LogicalType::INTERVAL};
 
 	AggregateFunctionSet mode("mode");
 	mode.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
 	                                   nullptr, nullptr, nullptr, BindModeDecimal));
 
-	for (const auto &type : LogicalType::NUMERIC) {
+	for (const auto &type : LogicalType::Numeric()) {
 		if (type.id() != LogicalTypeId::DECIMAL) {
 			mode.AddFunction(GetModeAggregate(type));
 		}

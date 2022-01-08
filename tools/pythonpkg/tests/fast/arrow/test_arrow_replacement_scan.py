@@ -49,8 +49,6 @@ class TestArrowReplacementScan(object):
         assert con.execute("select count(*) from userdata_parquet_dataset").fetchone() ==  (1000,)
 
     def test_replacement_scan_fail(self, duckdb_cursor):
-        if not can_run:
-            return
         random_object = "I love salmiak rondos"
         with pytest.raises(Exception):
             con.execute("select count(*) from random_object").fetchone()

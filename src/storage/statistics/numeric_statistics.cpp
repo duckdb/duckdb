@@ -5,72 +5,6 @@
 namespace duckdb {
 
 template <>
-void NumericStatistics::Update<int8_t>(SegmentStatistics &stats, int8_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateValue<int8_t>(new_value, nstats.min.value_.tinyint, nstats.max.value_.tinyint);
-}
-
-template <>
-void NumericStatistics::Update<int16_t>(SegmentStatistics &stats, int16_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateValue<int16_t>(new_value, nstats.min.value_.smallint, nstats.max.value_.smallint);
-}
-
-template <>
-void NumericStatistics::Update<int32_t>(SegmentStatistics &stats, int32_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateValue<int32_t>(new_value, nstats.min.value_.integer, nstats.max.value_.integer);
-}
-
-template <>
-void NumericStatistics::Update<int64_t>(SegmentStatistics &stats, int64_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateValue<int64_t>(new_value, nstats.min.value_.bigint, nstats.max.value_.bigint);
-}
-
-template <>
-void NumericStatistics::Update<uint8_t>(SegmentStatistics &stats, uint8_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateValue<uint8_t>(new_value, nstats.min.value_.utinyint, nstats.max.value_.utinyint);
-}
-
-template <>
-void NumericStatistics::Update<uint16_t>(SegmentStatistics &stats, uint16_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateValue<uint16_t>(new_value, nstats.min.value_.usmallint, nstats.max.value_.usmallint);
-}
-
-template <>
-void NumericStatistics::Update<uint32_t>(SegmentStatistics &stats, uint32_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateValue<uint32_t>(new_value, nstats.min.value_.uinteger, nstats.max.value_.uinteger);
-}
-
-template <>
-void NumericStatistics::Update<uint64_t>(SegmentStatistics &stats, uint64_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateValue<uint64_t>(new_value, nstats.min.value_.ubigint, nstats.max.value_.ubigint);
-}
-
-template <>
-void NumericStatistics::Update<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateValue<hugeint_t>(new_value, nstats.min.value_.hugeint, nstats.max.value_.hugeint);
-}
-
-template <>
-void NumericStatistics::Update<float>(SegmentStatistics &stats, float new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateValue<float>(new_value, nstats.min.value_.float_, nstats.max.value_.float_);
-}
-
-template <>
-void NumericStatistics::Update<double>(SegmentStatistics &stats, double new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateValue<double>(new_value, nstats.min.value_.double_, nstats.max.value_.double_);
-}
-
-template <>
 void NumericStatistics::Update<interval_t>(SegmentStatistics &stats, interval_t new_value) {
 }
 
@@ -91,23 +25,23 @@ NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_
 void NumericStatistics::Merge(const BaseStatistics &other_p) {
 	BaseStatistics::Merge(other_p);
 	auto &other = (const NumericStatistics &)other_p;
-	if (other.min.is_null || min.is_null) {
-		min.is_null = true;
+	if (other.min.IsNull() || min.IsNull()) {
+		min = Value(type);
 	} else if (other.min < min) {
 		min = other.min;
 	}
-	if (other.max.is_null || max.is_null) {
-		max.is_null = true;
+	if (other.max.IsNull() || max.IsNull()) {
+		max = Value(type);
 	} else if (other.max > max) {
 		max = other.max;
 	}
 }
 
 FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
-	if (constant.is_null) {
+	if (constant.IsNull()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	if (min.is_null || max.is_null) {
+	if (min.IsNull() || max.IsNull()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	switch (comparison_type) {
@@ -119,6 +53,14 @@ FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+	case ExpressionType::COMPARE_NOTEQUAL:
+		if (constant < min || constant > max) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (min == max && min == constant) {
+			// corner case of a cluster with one numeric equal to the target constant
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		// X >= C
 		// this can be true only if max(X) >= C
@@ -209,11 +151,11 @@ void NumericStatistics::TemplatedVerify(Vector &vector, const SelectionVector &s
 		if (!vdata.validity.RowIsValid(index)) {
 			continue;
 		}
-		if (!min.is_null && LessThan::Operation(data[index], min.GetValueUnsafe<T>())) { // LCOV_EXCL_START
+		if (!min.IsNull() && LessThan::Operation(data[index], min.GetValueUnsafe<T>())) { // LCOV_EXCL_START
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
 		} // LCOV_EXCL_STOP
-		if (!max.is_null && GreaterThan::Operation(data[index], max.GetValueUnsafe<T>())) {
+		if (!max.IsNull() && GreaterThan::Operation(data[index], max.GetValueUnsafe<T>())) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
 		}

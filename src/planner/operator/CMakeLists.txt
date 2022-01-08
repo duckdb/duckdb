@@ -8,8 +8,10 @@ add_library_unity(
   logical_cross_product.cpp
   logical_filter.cpp
   logical_get.cpp
+  logical_limit.cpp
   logical_join.cpp
   logical_projection.cpp
+  logical_sample.cpp
   logical_unnest.cpp
   logical_window.cpp
   logical_distinct.cpp)

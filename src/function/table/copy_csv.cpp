@@ -34,7 +34,7 @@ static bool ParseBoolean(vector<Value> &set) {
 	    set[0].type().id() == LogicalTypeId::DECIMAL) {
 		throw BinderException("Expected a boolean value (e.g. TRUE or 1)");
 	}
-	return set[0].CastAs(LogicalType::BOOLEAN).value_.boolean;
+	return BooleanValue::Get(set[0].CastAs(LogicalType::BOOLEAN));
 }
 
 static string ParseString(vector<Value> &set) {

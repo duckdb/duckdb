@@ -13,6 +13,9 @@
   <a href="https://app.codecov.io/gh/duckdb/duckdb">
     <img src="https://codecov.io/gh/duckdb/duckdb/branch/master/graph/badge.svg?token=FaxjcfFghN" alt="codecov"/>
   </a>
+  <a href="https://discord.gg/tcvwpjfnZx">
+    <img src="https://shields.io/discord/909674491309850675" alt="discord" />
+  </a>
 </p>
 
 ## DuckDB

@@ -461,7 +461,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 	DWORD desired_access;
 	DWORD share_mode;
 	DWORD creation_disposition = OPEN_EXISTING;
-	DWORD flags_and_attributes = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED;
+	DWORD flags_and_attributes = FILE_ATTRIBUTE_NORMAL;
 	bool open_read = flags & FileFlags::FILE_FLAGS_READ;
 	bool open_write = flags & FileFlags::FILE_FLAGS_WRITE;
 	if (open_read && open_write) {
@@ -481,9 +481,6 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 			creation_disposition = OPEN_ALWAYS;
 		} else if (flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW) {
 			creation_disposition = CREATE_ALWAYS;
-		}
-		if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
-			flags_and_attributes |= FILE_FLAG_WRITE_THROUGH;
 		}
 	}
 	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
@@ -514,7 +511,6 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 
 static DWORD FSInternalRead(FileHandle &handle, HANDLE hFile, void *buffer, int64_t nr_bytes, idx_t location) {
 	DWORD bytes_read = 0;
-	bool overlapped_read = false;
 	OVERLAPPED ov = {};
 	ov.Internal = 0;
 	ov.InternalHigh = 0;
@@ -522,20 +518,9 @@ static DWORD FSInternalRead(FileHandle &handle, HANDLE hFile, void *buffer, int6
 	ov.OffsetHigh = location >> 32;
 	ov.hEvent = 0;
 	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, &ov);
-	if (rc == 0) {
-		if (GetLastError() != ERROR_IO_PENDING) {
-			auto error = GetLastErrorAsString();
-			throw IOException("Could not read file \"%s\" (error in ReadFile): %s", handle.path, error);
-		} else {
-			overlapped_read = true;
-		}
-	}
-	if (overlapped_read) {
-		rc = GetOverlappedResult(hFile, &ov, &bytes_read, true);
-		if (rc == 0) {
-			auto error = GetLastErrorAsString();
-			throw IOException("Could not read file \"%s\" (error in GetOverlappedResult): %s", handle.path, error);
-		}
+	if (!rc) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not read file \"%s\" (error in ReadFile): %s", handle.path, error);
 	}
 	return bytes_read;
 }
@@ -560,7 +545,6 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 
 static DWORD FSInternalWrite(FileHandle &handle, HANDLE hFile, void *buffer, int64_t nr_bytes, idx_t location) {
 	DWORD bytes_written = 0;
-	bool overlapped_write = false;
 	OVERLAPPED ov = {};
 	ov.Internal = 0;
 	ov.InternalHigh = 0;
@@ -568,20 +552,9 @@ static DWORD FSInternalWrite(FileHandle &handle, HANDLE hFile, void *buffer, int
 	ov.OffsetHigh = location >> 32;
 	ov.hEvent = 0;
 	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, &bytes_written, &ov);
-	if (rc == 0) {
-		if (GetLastError() != ERROR_IO_PENDING) {
-			auto error = GetLastErrorAsString();
-			throw IOException("Could not write file \"%s\" (error in WriteFile): %s", handle.path, error);
-		} else {
-			overlapped_write = true;
-		}
-	}
-	if (overlapped_write) {
-		rc = GetOverlappedResult(hFile, &ov, &bytes_written, true);
-		if (rc == 0) {
-			auto error = GetLastErrorAsString();
-			throw IOException("Could not write file \"%s\" (error in GetOverlappedResult): %s", handle.path, error);
-		}
+	if (!rc) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not write file \"%s\" (error in WriteFile): %s", handle.path, error);
 	}
 	return bytes_written;
 }

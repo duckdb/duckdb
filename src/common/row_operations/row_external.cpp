@@ -12,46 +12,44 @@ namespace duckdb {
 
 void RowOperations::SwizzleColumns(const RowLayout &layout, const data_ptr_t base_row_ptr, const idx_t count) {
 	const idx_t row_width = layout.GetRowWidth();
-	const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
-	// Swizzle the blob columns one by one
-	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
-		auto physical_type = layout.GetTypes()[col_idx].InternalType();
-		if (TypeIsConstantSize(physical_type)) {
-			continue;
+	data_ptr_t heap_row_ptrs[STANDARD_VECTOR_SIZE];
+	idx_t done = 0;
+	while (done != count) {
+		const idx_t next = MinValue<idx_t>(count - done, STANDARD_VECTOR_SIZE);
+		const data_ptr_t row_ptr = base_row_ptr + done * row_width;
+		// Load heap row pointers
+		data_ptr_t heap_ptr_ptr = row_ptr + layout.GetHeapPointerOffset();
+		for (idx_t i = 0; i < next; i++) {
+			heap_row_ptrs[i] = Load<data_ptr_t>(heap_ptr_ptr);
+			heap_ptr_ptr += row_width;
 		}
-		data_ptr_t row_ptr = base_row_ptr;
-		const idx_t &col_offset = layout.GetOffsets()[col_idx];
-		if (physical_type == PhysicalType::VARCHAR) {
-			// Replace the pointer with the computed offset (if non-inlined)
-			const idx_t string_pointer_offset = sizeof(uint32_t) + string_t::PREFIX_LENGTH;
-			for (idx_t i = 0; i < count; i++) {
-				const string_t str = Load<string_t>(row_ptr + col_offset);
-				if (!str.IsInlined()) {
-					// Load the pointer to the start of the row in the heap
-					data_ptr_t heap_row_ptr = Load<data_ptr_t>(row_ptr + heap_pointer_offset);
-					// This is where the pointer that points to the heap is stored in the RowLayout
-					data_ptr_t col_ptr = row_ptr + col_offset + string_pointer_offset;
-					// Load the pointer to the data of this column in the same heap row
-					data_ptr_t heap_col_ptr = Load<data_ptr_t>(col_ptr);
-					// Overwrite the column data pointer with the within-row offset (pointer arithmetic)
-					Store<idx_t>(heap_col_ptr - heap_row_ptr, col_ptr);
+		// Loop through the blob columns
+		for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+			auto physical_type = layout.GetTypes()[col_idx].InternalType();
+			if (TypeIsConstantSize(physical_type)) {
+				continue;
+			}
+			data_ptr_t col_ptr = row_ptr + layout.GetOffsets()[col_idx];
+			if (physical_type == PhysicalType::VARCHAR) {
+				data_ptr_t string_ptr = col_ptr + sizeof(uint32_t) + string_t::PREFIX_LENGTH;
+				for (idx_t i = 0; i < next; i++) {
+					if (Load<uint32_t>(col_ptr) > string_t::INLINE_LENGTH) {
+						// Overwrite the string pointer with the within-row offset (if not inlined)
+						Store<idx_t>(Load<data_ptr_t>(string_ptr) - heap_row_ptrs[i], string_ptr);
+					}
+					col_ptr += row_width;
+					string_ptr += row_width;
 				}
-				row_ptr += row_width;
-			}
-		} else {
-			// Replace the pointer with the computed offset
-			for (idx_t i = 0; i < count; i++) {
-				// Load the pointer to the start of the row in the heap
-				data_ptr_t heap_row_ptr = Load<data_ptr_t>(row_ptr + heap_pointer_offset);
-				// This is where the pointer that points to the heap is stored in the RowLayout
-				data_ptr_t col_ptr = row_ptr + col_offset;
-				// Load the pointer to the data of this column in the same heap row
-				data_ptr_t heap_col_ptr = Load<data_ptr_t>(col_ptr);
-				// Overwrite the column data pointer with the within-row offset (pointer arithmetic)
-				Store<idx_t>(heap_col_ptr - heap_row_ptr, col_ptr);
-				row_ptr += row_width;
+			} else {
+				// Non-varchar blob columns
+				for (idx_t i = 0; i < next; i++) {
+					// Overwrite the column data pointer with the within-row offset
+					Store<idx_t>(Load<data_ptr_t>(col_ptr) - heap_row_ptrs[i], col_ptr);
+					col_ptr += row_width;
+				}
 			}
 		}
+		done += next;
 	}
 }
 
@@ -67,59 +65,48 @@ void RowOperations::SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_p
 	}
 }
 
-void RowOperations::UnswizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
-                                         const idx_t count) {
+void RowOperations::UnswizzlePointers(const RowLayout &layout, const data_ptr_t base_row_ptr,
+                                      const data_ptr_t base_heap_ptr, const idx_t count) {
 	const idx_t row_width = layout.GetRowWidth();
-	row_ptr += layout.GetHeapPointerOffset();
-	for (idx_t i = 0; i < count; i++) {
-		idx_t heap_row_offset = Load<idx_t>(row_ptr);
-		Store<data_ptr_t>(heap_base_ptr + heap_row_offset, row_ptr);
-		row_ptr += row_width;
-	}
-}
-
-void RowOperations::UnswizzleColumns(const RowLayout &layout, const data_ptr_t base_row_ptr, const idx_t count) {
-	const idx_t row_width = layout.GetRowWidth();
-	const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
-	// Unswizzle the columns one by one
-	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
-		auto physical_type = layout.GetTypes()[col_idx].InternalType();
-		if (TypeIsConstantSize(physical_type)) {
-			continue;
+	data_ptr_t heap_row_ptrs[STANDARD_VECTOR_SIZE];
+	idx_t done = 0;
+	while (done != count) {
+		const idx_t next = MinValue<idx_t>(count - done, STANDARD_VECTOR_SIZE);
+		const data_ptr_t row_ptr = base_row_ptr + done * row_width;
+		// Restore heap row pointers
+		data_ptr_t heap_ptr_ptr = row_ptr + layout.GetHeapPointerOffset();
+		for (idx_t i = 0; i < next; i++) {
+			heap_row_ptrs[i] = base_heap_ptr + Load<idx_t>(heap_ptr_ptr);
+			Store<data_ptr_t>(heap_row_ptrs[i], heap_ptr_ptr);
+			heap_ptr_ptr += row_width;
 		}
-		const idx_t col_offset = layout.GetOffsets()[col_idx];
-		data_ptr_t row_ptr = base_row_ptr;
-		if (physical_type == PhysicalType::VARCHAR) {
-			// Replace offset with the pointer (if non-inlined)
-			const idx_t string_pointer_offset = sizeof(uint32_t) + string_t::PREFIX_LENGTH;
-			for (idx_t i = 0; i < count; i++) {
-				const string_t str = Load<string_t>(row_ptr + col_offset);
-				if (!str.IsInlined()) {
-					// Load the pointer to the start of the row in the heap
-					data_ptr_t heap_row_ptr = Load<data_ptr_t>(row_ptr + heap_pointer_offset);
-					// This is where the pointer that points to the heap is stored in the RowLayout
-					data_ptr_t col_ptr = row_ptr + col_offset + string_pointer_offset;
-					// Load the offset to the data of this column in the same heap row
-					idx_t heap_col_offset = Load<idx_t>(col_ptr);
-					// Overwrite the column data offset with the pointer
-					Store<data_ptr_t>(heap_row_ptr + heap_col_offset, col_ptr);
+		// Loop through the blob columns
+		for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+			auto physical_type = layout.GetTypes()[col_idx].InternalType();
+			if (TypeIsConstantSize(physical_type)) {
+				continue;
+			}
+			data_ptr_t col_ptr = row_ptr + layout.GetOffsets()[col_idx];
+			if (physical_type == PhysicalType::VARCHAR) {
+				data_ptr_t string_ptr = col_ptr + sizeof(uint32_t) + string_t::PREFIX_LENGTH;
+				for (idx_t i = 0; i < next; i++) {
+					if (Load<uint32_t>(col_ptr) > string_t::INLINE_LENGTH) {
+						// Overwrite the string offset with the pointer (if not inlined)
+						Store<data_ptr_t>(heap_row_ptrs[i] + Load<idx_t>(string_ptr), string_ptr);
+					}
+					col_ptr += row_width;
+					string_ptr += row_width;
 				}
-				row_ptr += row_width;
-			}
-		} else {
-			// Replace the offset with the pointer
-			for (idx_t i = 0; i < count; i++) {
-				// Load the pointer to the start of the row in the heap
-				data_ptr_t heap_row_ptr = Load<data_ptr_t>(row_ptr + heap_pointer_offset);
-				// This is where the pointer that points to the heap is stored in the RowLayout
-				data_ptr_t col_ptr = row_ptr + col_offset;
-				// Load the offset to the data of this column in the same heap row
-				idx_t heap_col_offset = Load<idx_t>(col_ptr);
-				// Overwrite the column data offset with the pointer
-				Store<data_ptr_t>(heap_row_ptr + heap_col_offset, col_ptr);
-				row_ptr += row_width;
+			} else {
+				// Non-varchar blob columns
+				for (idx_t i = 0; i < next; i++) {
+					// Overwrite the column data offset with the pointer
+					Store<data_ptr_t>(heap_row_ptrs[i] + Load<idx_t>(col_ptr), col_ptr);
+					col_ptr += row_width;
+				}
 			}
 		}
+		done += next;
 	}
 }
 

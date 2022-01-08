@@ -426,7 +426,7 @@ static void ScanSortedPartition(WindowOperatorState &state, ChunkCollection &inp
 	payload_types.insert(payload_types.end(), over_types.begin(), over_types.end());
 
 	// scan the sorted row data
-	SortedDataScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
+	PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 	for (;;) {
 		DataChunk payload_chunk;
 		payload_chunk.Initialize(payload_types);

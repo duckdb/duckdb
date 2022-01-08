@@ -1,0 +1,58 @@
+# name: test/sql/function/timestamp/test_icu_datediff.test
+# description: Test ICU date difference function
+# group: [timestamp]
+
+require icu
+
+statement ok
+SET TimeZone = 'America/Los_Angeles';
+
+#
+# TIMESTAMP
+#
+statement ok
+CREATE TABLE datetime1 AS
+SELECT '2005-12-31 23:59:59.9999999-08'::TIMESTAMPTZ AS startdate, '2006-01-01 00:00:00.0000000-08'::TIMESTAMPTZ AS enddate;
+
+foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond'
+
+query I
+SELECT DATEDIFF(${datepart}, startdate, enddate) FROM datetime1
+----
+1
+
+endloop
+
+foreach datepart 'decade' 'century' 'millennium' 'week' 'yearweek'
+
+query I
+SELECT DATEDIFF(${datepart}, startdate, enddate) FROM datetime1
+----
+0
+
+endloop
+
+# Negation
+foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week' 'yearweek'
+
+query I
+SELECT DATEDIFF(${datepart}, startdate, enddate) + DATEDIFF(${datepart}, enddate, startdate) FROM datetime1
+----
+0
+
+endloop
+
+# Table
+foreach datepart year month day hour minute second millisecond microsecond
+
+query I
+SELECT DATEDIFF('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+FROM (SELECT '2021-07-30'::TIMESTAMP + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
+----
+1
+1
+1
+1
+1
+
+endloop

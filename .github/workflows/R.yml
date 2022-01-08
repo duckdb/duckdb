@@ -19,7 +19,6 @@ jobs:
 
     env:
       LIBARROW_BINARY : 'true'
-      DUCKDB_BUILD_UNITY: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -78,9 +77,6 @@ jobs:
       name: R Package Windows
       runs-on: windows-latest
       needs: rstats-linux
-
-      env:
-        DUCKDB_BUILD_UNITY: 1
 
       steps:
       - uses: actions/checkout@v2

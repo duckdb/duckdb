@@ -135,29 +135,44 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 
 		for (duckdb::idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
 			Napi::Value value;
+			// set up a new Napi::Object for some data types, e.g. INTERVAL
+			Napi::Object object_value;
+
+			bool is_object_value {false};
 
 			auto dval = chunk.GetValue(col_idx, row_idx);
-			if (dval.is_null) {
+			if (dval.IsNull()) {
 				row_result.Set(node_names[col_idx], env.Null());
 				continue;
 			}
 
 			// TODO templateroo here
 			switch (chunk.data[col_idx].GetType().id()) {
+			case duckdb::LogicalTypeId::BOOLEAN: {
+				value = Napi::Boolean::New(env, duckdb::BooleanValue::Get(dval));
+			} break;
 			case duckdb::LogicalTypeId::INTEGER: {
-				value = Napi::Number::New(env, dval.value_.integer);
+				value = Napi::Number::New(env, duckdb::IntegerValue::Get(dval));
 			} break;
 			case duckdb::LogicalTypeId::FLOAT: {
-				value = Napi::Number::New(env, dval.value_.float_);
+				value = Napi::Number::New(env, duckdb::FloatValue::Get(dval));
 			} break;
 			case duckdb::LogicalTypeId::DOUBLE: {
-				value = Napi::Number::New(env, dval.value_.double_);
+				value = Napi::Number::New(env, duckdb::DoubleValue::Get(dval));
 			} break;
 			case duckdb::LogicalTypeId::BIGINT: {
-				value = Napi::Number::New(env, dval.value_.bigint);
+				value = Napi::Number::New(env, duckdb::BigIntValue::Get(dval));
 			} break;
 			case duckdb::LogicalTypeId::HUGEINT: {
 				value = Napi::Number::New(env, dval.GetValue<double>());
+			} break;
+			case duckdb::LogicalTypeId::INTERVAL: {
+				auto interval = duckdb::IntervalValue::Get(dval);
+				is_object_value = true;
+				object_value = Napi::Object::New(env);
+				object_value.Set("months", interval.months);
+				object_value.Set("days", interval.days);
+				object_value.Set("micros", interval.micros);
 			} break;
 #if (NAPI_VERSION > 4)
 			case duckdb::LogicalTypeId::DATE: {
@@ -169,10 +184,11 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 			} break;
 #endif
 			case duckdb::LogicalTypeId::VARCHAR: {
-				value = Napi::String::New(env, dval.str_value);
+				value = Napi::String::New(env, duckdb::StringValue::Get(dval));
 			} break;
 			case duckdb::LogicalTypeId::BLOB: {
-				value = Napi::Buffer<char>::Copy(env, dval.str_value.c_str(), dval.str_value.length());
+				auto &blob = duckdb::StringValue::Get(dval);
+				value = Napi::Buffer<char>::Copy(env, blob.c_str(), blob.length());
 			} break;
 			case duckdb::LogicalTypeId::SQLNULL: {
 				value = env.Null();
@@ -182,7 +198,11 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 				    .ThrowAsJavaScriptException();
 				return env.Null();
 			}
-			row_result.Set(node_names[col_idx], value);
+			if (is_object_value == true) {
+				row_result.Set(node_names[col_idx], object_value);
+			} else {
+				row_result.Set(node_names[col_idx], value);
+			}
 		}
 		result.Set(row_idx, row_result);
 	}

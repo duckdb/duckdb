@@ -32,7 +32,7 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery:
 		return nullptr;
 	}
 
-	StackCheck();
+	auto stack_checker = StackCheck();
 
 	switch (node->type) {
 	case duckdb_libpgquery::T_PGColumnRef:

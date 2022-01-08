@@ -1,0 +1,84 @@
+# name: test/sql/copy/parquet/writer/parquet_write_tpch_nested.test_slow
+# description: Parquet TPC-H tests
+# group: [writer]
+
+require parquet
+
+require tpch
+
+statement ok
+CREATE SCHEMA tpch;
+
+statement ok
+CALL dbgen(sf=0.1, schema='tpch');
+
+
+# transform lineitem into a list of structs
+statement ok
+CREATE VIEW lineitem_array_view AS SELECT LIST({'l_orderkey': l_orderkey,
+	'l_partkey': l_partkey,
+	'l_suppkey': l_suppkey,
+	'l_linenumber': l_linenumber,
+	'l_quantity': l_quantity,
+	'l_extendedprice': l_extendedprice,
+	'l_discount': l_discount,
+	'l_tax': l_tax,
+	'l_returnflag': l_returnflag,
+	'l_linestatus': l_linestatus,
+	'l_shipdate': l_shipdate,
+	'l_commitdate': l_commitdate,
+	'l_receiptdate': l_receiptdate,
+	'l_shipinstruct': l_shipinstruct,
+	'l_shipmode': l_shipmode,
+	'l_comment': l_comment}) lineitem_array FROM tpch.lineitem
+
+statement ok
+COPY lineitem_array_view TO '__TEST_DIR__/lineitem.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
+
+statement ok
+CREATE VIEW lineitem AS SELECT
+	s.l_orderkey AS l_orderkey,
+	s.l_partkey AS l_partkey,
+	s.l_suppkey AS l_suppkey,
+	s.l_linenumber AS l_linenumber,
+	s.l_quantity AS l_quantity,
+	s.l_extendedprice AS l_extendedprice,
+	s.l_discount AS l_discount,
+	s.l_tax AS l_tax,
+	s.l_returnflag AS l_returnflag,
+	s.l_linestatus AS l_linestatus,
+	s.l_shipdate AS l_shipdate,
+	s.l_commitdate AS l_commitdate,
+	s.l_receiptdate AS l_receiptdate,
+	s.l_shipinstruct AS l_shipinstruct,
+	s.l_shipmode AS l_shipmode,
+	s.l_comment AS l_comment
+	FROM (SELECT UNNEST(lineitem_array) s FROM parquet_scan('__TEST_DIR__/lineitem.parquet'));
+
+foreach tbl nation orders supplier part partsupp region customer
+
+statement ok
+COPY tpch.${tbl} TO '__TEST_DIR__/${tbl}.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
+
+statement ok
+CREATE VIEW ${tbl} AS SELECT * FROM parquet_scan('__TEST_DIR__/${tbl}.parquet');
+
+endloop
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q${i}.csv
+
+endloop

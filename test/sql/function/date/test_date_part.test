@@ -9,7 +9,11 @@ statement ok
 CREATE TABLE dates(d DATE, s VARCHAR);
 
 statement ok
-INSERT INTO dates VALUES ('1992-01-01', 'year'), ('1992-03-03', 'month'), ('1992-05-05', 'day');
+INSERT INTO dates VALUES
+	('1992-01-01', 'year'),
+	('1992-03-03', 'month'),
+	('1992-05-05', 'day'),
+	('044-03-15 (BC)', 'millennium');
 
 # test date_part with different combinations of constant/non-constant columns
 query I
@@ -18,10 +22,12 @@ SELECT date_part(NULL::VARCHAR, NULL::TIMESTAMP) FROM dates;
 NULL
 NULL
 NULL
+NULL
 
 query I
 SELECT date_part(s, NULL::TIMESTAMP) FROM dates;
 ----
+NULL
 NULL
 NULL
 NULL
@@ -33,6 +39,7 @@ SELECT date_part(NULL, d) FROM dates;
 NULL
 NULL
 NULL
+NULL
 
 query I
 SELECT date_part(s, DATE '1992-01-01') FROM dates;
@@ -40,6 +47,7 @@ SELECT date_part(s, DATE '1992-01-01') FROM dates;
 1992
 1
 1
+2
 
 query I
 SELECT date_part('year', d) FROM dates;
@@ -47,6 +55,7 @@ SELECT date_part('year', d) FROM dates;
 1992
 1992
 1992
+-43
 
 query I
 SELECT date_part(s, d) FROM dates;
@@ -54,11 +63,30 @@ SELECT date_part(s, d) FROM dates;
 1992
 3
 5
+-1
+
+query I
+SELECT date_part('era', d) FROM dates;
+----
+1
+1
+1
+0
+
+statement error
+SELECT date_part('timezone', d) FROM dates;
+
+statement error
+SELECT date_part('timezone_hour', d) FROM dates;
+
+statement error
+SELECT date_part('timezone_minute', d) FROM dates;
 
 # timestamps
 query I
 SELECT date_part(NULL, d::TIMESTAMP) FROM dates;
 ----
+NULL
 NULL
 NULL
 NULL
@@ -69,6 +97,7 @@ SELECT date_part(s, TIMESTAMP '1992-01-01') FROM dates;
 1992
 1
 1
+2
 
 query I
 SELECT date_part('year', d::TIMESTAMP) FROM dates;
@@ -76,6 +105,7 @@ SELECT date_part('year', d::TIMESTAMP) FROM dates;
 1992
 1992
 1992
+-43
 
 query I
 SELECT date_part(s, d::TIMESTAMP) FROM dates;
@@ -83,6 +113,39 @@ SELECT date_part(s, d::TIMESTAMP) FROM dates;
 1992
 3
 5
+-1
+
+query I
+SELECT date_part('era', d::TIMESTAMP) FROM dates;
+----
+1
+1
+1
+0
+
+query I
+SELECT date_part('timezone', d::TIMESTAMP) FROM dates;
+----
+0
+0
+0
+0
+
+query I
+SELECT date_part('timezone_hour', d::TIMESTAMP) FROM dates;
+----
+0
+0
+0
+0
+
+query I
+SELECT date_part('timezone_minute', d::TIMESTAMP) FROM dates;
+----
+0
+0
+0
+0
 
 #  last_day
 query TTT
@@ -96,6 +159,7 @@ SELECT LAST_DAY(d) FROM dates;
 1992-01-31
 1992-03-31
 1992-05-31
+0044-03-31 (BC)
 
 query T
 SELECT LAST_DAY(d::timestamp) FROM dates;
@@ -103,6 +167,7 @@ SELECT LAST_DAY(d::timestamp) FROM dates;
 1992-01-31
 1992-03-31
 1992-05-31
+0044-03-31 (BC)
 
 #  monthname
 query T
@@ -111,6 +176,7 @@ SELECT MONTHNAME(d) FROM dates;
 January
 March
 May
+March
 
 #  dayname
 query T
@@ -119,6 +185,7 @@ SELECT DAYNAME(d) FROM dates;
 Wednesday
 Tuesday
 Tuesday
+Friday
 
 #  yearweek
 query I
@@ -127,6 +194,7 @@ SELECT YEARWEEK(d) FROM dates;
 199201
 199209
 199218
+-4311
 
 #  aliases
 query I
@@ -135,6 +203,7 @@ SELECT DAYOFMONTH(d) FROM dates;
 1
 3
 5
+15
 
 query I
 SELECT WEEKDAY(d) FROM dates;
@@ -142,6 +211,7 @@ SELECT WEEKDAY(d) FROM dates;
 3
 2
 2
+5
 
 query I
 SELECT WEEKOFYEAR(d) FROM dates;
@@ -149,6 +219,7 @@ SELECT WEEKOFYEAR(d) FROM dates;
 1
 9
 18
+11
 
 query IIIIIIIIIIII
 select
@@ -166,3 +237,62 @@ date_part('quarter', DATE '1992-11-20'),
 date_part('quarter', DATE '1992-12-20')
 ----
 1	1	1	2	2	2	3	3	3	4	4	4
+
+#
+# Structs
+#
+
+# Correctness: Compare struct values with scalar values
+foreach partcode era millennium century decade year quarter month day week weekday isodow doy yearweek
+
+query III
+SELECT d, DATE_PART('${partcode}', d) AS p, DATE_PART(['${partcode}'], d) AS st
+FROM dates
+WHERE p <> st['${partcode}'];
+----
+
+endloop
+
+# Date parts
+query II
+SELECT d, DATE_PART(['year', 'month', 'day'], d) AS parts
+FROM dates
+ORDER BY 1;
+----
+0044-03-15 (BC)	{'year': -43, 'month': 3, 'day': 15}
+1992-01-01	{'year': 1992, 'month': 1, 'day': 1}
+1992-03-03	{'year': 1992, 'month': 3, 'day': 3}
+1992-05-05	{'year': 1992, 'month': 5, 'day': 5}
+
+# Year parts
+query II
+SELECT d, DATE_PART(['era', 'millennium', 'century', 'decade', 'quarter'], d) AS parts
+FROM dates
+ORDER BY 1;
+----
+0044-03-15 (BC)	{'era': 0, 'millennium': -1, 'century': -1, 'decade': -4, 'quarter': 1}
+1992-01-01	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 1}
+1992-03-03	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 1}
+1992-05-05	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 2}
+
+# Day parts
+query II
+SELECT d, DATE_PART(['weekday', 'isodow', 'week', 'yearweek', 'doy'], d) AS parts
+FROM dates
+ORDER BY 1;
+----
+0044-03-15 (BC)	{'weekday': 5, 'isodow': 5, 'week': 11, 'yearweek': -4311, 'doy': 74}
+1992-01-01	{'weekday': 3, 'isodow': 3, 'week': 1, 'yearweek': 199201, 'doy': 1}
+1992-03-03	{'weekday': 2, 'isodow': 2, 'week': 9, 'yearweek': 199209, 'doy': 63}
+1992-05-05	{'weekday': 2, 'isodow': 2, 'week': 18, 'yearweek': 199218, 'doy': 126}
+
+# Invalid parts
+
+foreach hour minute second millisecond microsecond timezone timezone_hour timezone_minute
+
+statement error
+SELECT d, DATE_PART(['${datepart}'], d) AS parts
+FROM dates
+ORDER BY 1;
+
+endloop

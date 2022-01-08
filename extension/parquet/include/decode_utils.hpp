@@ -1,5 +1,7 @@
 #pragma once
 
+#include "resizable_buffer.hpp"
+
 namespace duckdb {
 class ParquetDecodeUtils {
 

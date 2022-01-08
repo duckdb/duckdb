@@ -84,6 +84,7 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 	if (zVfs) { /* unsupported so if set we complain */
 		return SQLITE_ERROR;
 	}
+	int rc = SQLITE_OK;
 	sqlite3 *pDb = nullptr;
 	try {
 		pDb = new sqlite3();
@@ -99,10 +100,10 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 			pDb->last_error = ex.what();
 			pDb->errCode = SQLITE_ERROR;
 		}
-		return SQLITE_ERROR;
+		rc = SQLITE_ERROR;
 	}
 	*ppDb = pDb;
-	return SQLITE_OK;
+	return rc;
 }
 
 int sqlite3_close(sqlite3 *db) {
@@ -235,7 +236,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		if (StatementTypeReturnChanges(statement_type) && pStmt->current_chunk->size() > 0) {
 			// update total changes
 			auto row_changes = pStmt->current_chunk->GetValue(0, 0);
-			if (!row_changes.is_null && row_changes.TryCastAs(LogicalType::BIGINT)) {
+			if (!row_changes.IsNull() && row_changes.TryCastAs(LogicalType::BIGINT)) {
 				pStmt->db->last_changes = row_changes.GetValue<int64_t>();
 				pStmt->db->total_changes += row_changes.GetValue<int64_t>();
 			}
@@ -455,7 +456,7 @@ double sqlite3_column_double(sqlite3_stmt *stmt, int iCol) {
 	if (!sqlite3_column_has_value(stmt, iCol, LogicalType::DOUBLE, val)) {
 		return 0;
 	}
-	return val.value_.double_;
+	return DoubleValue::Get(val);
 }
 
 int sqlite3_column_int(sqlite3_stmt *stmt, int iCol) {
@@ -463,7 +464,7 @@ int sqlite3_column_int(sqlite3_stmt *stmt, int iCol) {
 	if (!sqlite3_column_has_value(stmt, iCol, LogicalType::INTEGER, val)) {
 		return 0;
 	}
-	return val.value_.integer;
+	return IntegerValue::Get(val);
 }
 
 sqlite3_int64 sqlite3_column_int64(sqlite3_stmt *stmt, int iCol) {
@@ -471,7 +472,7 @@ sqlite3_int64 sqlite3_column_int64(sqlite3_stmt *stmt, int iCol) {
 	if (!sqlite3_column_has_value(stmt, iCol, LogicalType::BIGINT, val)) {
 		return 0;
 	}
-	return val.value_.bigint;
+	return BigIntValue::Get(val);
 }
 
 const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
@@ -487,9 +488,10 @@ const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
 		auto &entry = pStmt->current_text[iCol];
 		if (!entry.data) {
 			// not initialized yet, convert the value and initialize it
-			entry.data = unique_ptr<char[]>(new char[val.str_value.size() + 1]);
-			memcpy(entry.data.get(), val.str_value.c_str(), val.str_value.size() + 1);
-			entry.data_len = val.str_value.length();
+			auto &str_val = StringValue::Get(val);
+			entry.data = unique_ptr<char[]>(new char[str_val.size() + 1]);
+			memcpy(entry.data.get(), str_val.c_str(), str_val.size() + 1);
+			entry.data_len = str_val.length();
 		}
 		return (const unsigned char *)entry.data.get();
 	} catch (...) {
@@ -511,9 +513,10 @@ const void *sqlite3_column_blob(sqlite3_stmt *pStmt, int iCol) {
 		auto &entry = pStmt->current_text[iCol];
 		if (!entry.data) {
 			// not initialized yet, convert the value and initialize it
-			entry.data = unique_ptr<char[]>(new char[val.str_value.size() + 1]);
-			memcpy(entry.data.get(), val.str_value.c_str(), val.str_value.size() + 1);
-			entry.data_len = val.str_value.length();
+			auto &str_val = StringValue::Get(val);
+			entry.data = unique_ptr<char[]>(new char[str_val.size() + 1]);
+			memcpy(entry.data.get(), str_val.c_str(), str_val.size() + 1);
+			entry.data_len = str_val.length();
 		}
 		return (const unsigned char *)entry.data.get();
 	} catch (...) {
@@ -594,7 +597,7 @@ int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, 
 	if (length < 0) {
 		value = string(val);
 	} else {
-		value = string(val, val + length);
+		value = string(val, length);
 	}
 	if (free_func && ((ptrdiff_t)free_func) != -1) {
 		free_func((void *)val);
@@ -1169,26 +1172,23 @@ int sqlite3_create_function(sqlite3 *db, const char *zFunctionName, int nArg, in
 	string fname = string(zFunctionName);
 
 	// Scalar function
-	if (xFunc) {
-		auto udf_sqlite3 = SQLiteUDFWrapper::CreateSQLiteScalarFunction(xFunc, db, pApp);
-		LogicalType varargs = LogicalType::INVALID;
-		if (nArg == -1) {
-			varargs = LogicalType::ANY;
-			nArg = 0;
-		}
-
-		vector<LogicalType> argv_types(nArg);
-		for (idx_t i = 0; i < (idx_t)nArg; ++i) {
-			argv_types[i] = LogicalType::ANY;
-		}
-
-		UDFWrapper::RegisterFunction(fname, argv_types, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context),
-		                             varargs);
-
-		return SQLITE_OK;
+	if (!xFunc) {
+		return SQLITE_MISUSE;
+	}
+	auto udf_sqlite3 = SQLiteUDFWrapper::CreateSQLiteScalarFunction(xFunc, db, pApp);
+	LogicalType varargs = LogicalType::INVALID;
+	if (nArg == -1) {
+		varargs = LogicalType::ANY;
+		nArg = 0;
 	}
 
-	return SQLITE_MISUSE;
+	vector<LogicalType> argv_types(nArg);
+	for (idx_t i = 0; i < (idx_t)nArg; ++i) {
+		argv_types[i] = LogicalType::ANY;
+	}
+
+	UDFWrapper::RegisterFunction(fname, argv_types, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context), varargs);
+	return SQLITE_OK;
 }
 
 int sqlite3_create_function_v2(sqlite3 *db, const char *zFunctionName, int nArg, int eTextRep, void *pApp,
@@ -1606,14 +1606,15 @@ const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 			pVal->db->errCode = SQLITE_NOMEM;
 			return nullptr;
 		}
-		size_t str_len = value.str_value.size();
+		auto &str_val = StringValue::Get(value);
+		size_t str_len = str_val.size();
 		pVal->zMalloc = (char *)malloc(sizeof(char) * (str_len + 1));
 		if (!pVal->zMalloc) {
 			pVal->db->errCode = SQLITE_NOMEM;
 			return nullptr;
 		}
 		pVal->szMalloc = str_len + 1; // +1 null-terminated char
-		memcpy(pVal->zMalloc, value.str_value.c_str(), pVal->szMalloc);
+		memcpy(pVal->zMalloc, str_val.c_str(), pVal->szMalloc);
 
 		pVal->str_t = string_t(pVal->zMalloc, pVal->szMalloc - 1); // -1 null-terminated char
 		pVal->n = pVal->str_t.GetSize();

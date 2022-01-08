@@ -80,6 +80,16 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT: {
+		auto &limit = (LogicalLimitPercent &)op;
+		if (limit.limit) {
+			callback(&limit.limit);
+		}
+		if (limit.offset) {
+			callback(&limit.offset);
+		}
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &aggr = (LogicalAggregate &)op;
 		for (auto &group : aggr.groups) {

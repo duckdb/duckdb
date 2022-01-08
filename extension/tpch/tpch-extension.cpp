@@ -1,3 +1,5 @@
+#define DUCKDB_EXTENSION_MAIN
+
 #include "tpch-extension.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
@@ -31,13 +33,13 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, vector<Value> 
 	auto result = make_unique<DBGenFunctionData>();
 	for (auto &kv : named_parameters) {
 		if (kv.first == "sf") {
-			result->sf = kv.second.value_.double_;
+			result->sf = DoubleValue::Get(kv.second);
 		} else if (kv.first == "schema") {
-			result->schema = kv.second.str_value;
+			result->schema = StringValue::Get(kv.second);
 		} else if (kv.first == "suffix") {
-			result->suffix = kv.second.str_value;
+			result->suffix = StringValue::Get(kv.second);
 		} else if (kv.first == "overwrite") {
-			result->overwrite = kv.second.value_.boolean;
+			result->overwrite = BooleanValue::Get(kv.second);
 		}
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);

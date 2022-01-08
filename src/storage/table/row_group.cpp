@@ -350,7 +350,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 			if (count != max_count) {
 				sel.Initialize(valid_sel);
 			} else {
-				sel.Initialize(FlatVector::INCREMENTAL_SELECTION_VECTOR);
+				sel.Initialize(nullptr);
 			}
 			//! first, we scan the columns with filters, fetch their data and generate a selection vector.
 			//! get runtime statistics
@@ -608,7 +608,13 @@ void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, row_t *
 		auto column = column_ids[i];
 		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
 		D_ASSERT(columns[column]->type.id() == update_chunk.data[i].GetType().id());
-		columns[column]->Update(transaction, column, update_chunk.data[i], ids, offset, count);
+		if (offset > 0) {
+			Vector sliced_vector(update_chunk.data[i], offset);
+			sliced_vector.Normalify(count);
+			columns[column]->Update(transaction, column, sliced_vector, ids + offset, count);
+		} else {
+			columns[column]->Update(transaction, column, update_chunk.data[i], ids, count);
+		}
 		MergeStatistics(column, *columns[column]->GetUpdateStatistics());
 	}
 }

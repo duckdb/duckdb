@@ -17,6 +17,8 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
+#include "duckdb/common/types/uuid.hpp"
+
 namespace duckdb {
 
 DataChunk::DataChunk() : count(0), capacity(STANDARD_VECTOR_SIZE) {
@@ -419,6 +421,79 @@ void SetStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &
 	}
 }
 
+struct ArrowUUIDConversion {
+	using internal_type_t = uint64_t;
+
+	static unique_ptr<Vector> InitializeVector(Vector &data, idx_t size) {
+		return make_unique<Vector>(LogicalType::VARCHAR, size);
+	}
+
+	static idx_t GetStringLength(uint64_t value) {
+		return UUID::STRING_SIZE;
+	}
+
+	static string_t ConvertValue(Vector &tgt_vec, string_t *tgt_ptr, internal_type_t *src_ptr, idx_t row) {
+		auto str_value = UUID::ToString(src_ptr[row]);
+		// Have to store this string
+		tgt_ptr[row] = StringVector::AddStringOrBlob(tgt_vec, str_value);
+		return tgt_ptr[row];
+	}
+};
+
+struct ArrowVarcharConversion {
+	using internal_type_t = string_t;
+
+	static unique_ptr<Vector> InitializeVector(Vector &data, idx_t size) {
+		return make_unique<Vector>(data);
+	}
+	static idx_t GetStringLength(string_t value) {
+		return value.GetSize();
+	}
+
+	static string_t ConvertValue(Vector &tgt_vec, string_t *tgt_ptr, internal_type_t *src_ptr, idx_t row) {
+		return src_ptr[row];
+	}
+};
+
+template <class CONVERT, class VECTOR_TYPE>
+void SetVarchar(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size) {
+	auto &child = child_holder.array;
+	child_holder.vector = CONVERT::InitializeVector(data, size);
+	auto target_data_ptr = FlatVector::GetData<string_t>(data);
+	child.n_buffers = 3;
+	child_holder.offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size + 1)]);
+	child.buffers[1] = child_holder.offsets.get();
+	D_ASSERT(child.buffers[1]);
+	//! step 1: figure out total string length:
+	idx_t total_string_length = 0;
+	auto source_ptr = FlatVector::GetData<VECTOR_TYPE>(data);
+	auto &mask = FlatVector::Validity(data);
+	for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+		if (!mask.RowIsValid(row_idx)) {
+			continue;
+		}
+		total_string_length += CONVERT::GetStringLength(source_ptr[row_idx]);
+	}
+	//! step 2: allocate this much
+	child_holder.data = unique_ptr<data_t[]>(new data_t[total_string_length]);
+	child.buffers[2] = child_holder.data.get();
+	D_ASSERT(child.buffers[2]);
+	//! step 3: assign buffers
+	idx_t current_heap_offset = 0;
+	auto target_ptr = (uint32_t *)child.buffers[1];
+
+	for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+		target_ptr[row_idx] = current_heap_offset;
+		if (!mask.RowIsValid(row_idx)) {
+			continue;
+		}
+		string_t str = CONVERT::ConvertValue(*child_holder.vector, target_data_ptr, source_ptr, row_idx);
+		memcpy((void *)((uint8_t *)child.buffers[2] + current_heap_offset), str.GetDataUnsafe(), str.GetSize());
+		current_heap_offset += str.GetSize();
+	}
+	target_ptr[size] = current_heap_offset; //! need to terminate last string!
+}
+
 void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size) {
 	auto &child = child_holder.array;
 	switch (type.id()) {
@@ -466,6 +541,8 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIME_TZ:
 		child_holder.vector = make_unique<Vector>(data);
 		child.n_buffers = 2;
 		child.buffers[1] = (void *)FlatVector::GetData(*child_holder.vector);
@@ -521,39 +598,11 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 	}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR: {
-		child_holder.vector = make_unique<Vector>(data);
-		child.n_buffers = 3;
-		child_holder.offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size + 1)]);
-		child.buffers[1] = child_holder.offsets.get();
-		D_ASSERT(child.buffers[1]);
-		//! step 1: figure out total string length:
-		idx_t total_string_length = 0;
-		auto string_t_ptr = FlatVector::GetData<string_t>(*child_holder.vector);
-		auto &mask = FlatVector::Validity(*child_holder.vector);
-		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			if (!mask.RowIsValid(row_idx)) {
-				continue;
-			}
-			total_string_length += string_t_ptr[row_idx].GetSize();
-		}
-		//! step 2: allocate this much
-		child_holder.data = unique_ptr<data_t[]>(new data_t[total_string_length]);
-		child.buffers[2] = child_holder.data.get();
-		D_ASSERT(child.buffers[2]);
-		//! step 3: assign buffers
-		idx_t current_heap_offset = 0;
-		auto target_ptr = (uint32_t *)child.buffers[1];
-
-		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			target_ptr[row_idx] = current_heap_offset;
-			if (!mask.RowIsValid(row_idx)) {
-				continue;
-			}
-			auto &str = string_t_ptr[row_idx];
-			memcpy((void *)((uint8_t *)child.buffers[2] + current_heap_offset), str.GetDataUnsafe(), str.GetSize());
-			current_heap_offset += str.GetSize();
-		}
-		target_ptr[size] = current_heap_offset; //! need to terminate last string!
+		SetVarchar<ArrowVarcharConversion, string_t>(child_holder, type, data, size);
+		break;
+	}
+	case LogicalTypeId::UUID: {
+		SetVarchar<ArrowUUIDConversion, uint64_t>(child_holder, type, data, size);
 		break;
 	}
 	case LogicalTypeId::LIST: {
@@ -607,6 +656,23 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
 			target_ptr[row_idx] = Interval::GetMilli(source_ptr[row_idx]);
 		}
+		break;
+	}
+	case LogicalTypeId::ENUM: {
+		// We need to initialize our dictionary
+		child_holder.children.resize(1);
+		idx_t dict_size = EnumType::GetSize(type);
+		InitializeChild(child_holder.children[0], dict_size);
+		Vector dictionary(EnumType::GetValuesInsertOrder(type));
+		SetArrowChild(child_holder.children[0], dictionary.GetType(), dictionary, dict_size);
+		child_holder.children_ptrs.push_back(&child_holder.children[0].array);
+
+		// now we set the data
+		child.dictionary = child_holder.children_ptrs[0];
+		child_holder.vector = make_unique<Vector>(data);
+		child.n_buffers = 2;
+		child.buffers[1] = (void *)FlatVector::GetData(*child_holder.vector);
+
 		break;
 	}
 	default:
