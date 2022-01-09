@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 namespace duckdb_libpgquery {
 
@@ -16,6 +17,18 @@ enum class PGSimplifiedTokenType : uint8_t {
 struct PGSimplifiedToken {
 	PGSimplifiedTokenType type;
 	int32_t start;
+};
+
+enum class PGKeywordCategory : uint8_t {
+	PG_KEYWORD_RESERVED,
+	PG_KEYWORD_UNRESERVED,
+	PG_KEYWORD_TYPE_FUNC,
+	PG_KEYWORD_COL_NAME
+};
+
+struct PGKeyword {
+	std::string text;
+	PGKeywordCategory category;
 };
 
 }
