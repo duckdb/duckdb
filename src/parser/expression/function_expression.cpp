@@ -11,10 +11,10 @@ namespace duckdb {
 FunctionExpression::FunctionExpression(string schema, const string &function_name,
                                        vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys_p,
-                                       bool distinct, bool is_operator)
+                                       bool distinct, bool is_operator, bool is_select_macro)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(std::move(schema)),
       function_name(StringUtil::Lower(function_name)), is_operator(is_operator), children(move(children_p)),
-      distinct(distinct), filter(move(filter)), order_bys(move(order_bys_p)) {
+      distinct(distinct), is_select_macro(is_select_macro), filter(move(filter)), order_bys(move(order_bys_p)) {
 	if (!order_bys) {
 		order_bys = make_unique<OrderModifier>();
 	}
@@ -22,9 +22,9 @@ FunctionExpression::FunctionExpression(string schema, const string &function_nam
 
 FunctionExpression::FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys,
-                                       bool distinct, bool is_operator)
+                                       bool distinct, bool is_operator, bool is_select_macro)
     : FunctionExpression(INVALID_SCHEMA, function_name, move(children_p), move(filter), move(order_bys), distinct,
-                         is_operator) {
+                         is_operator, is_select_macro) {
 }
 
 string FunctionExpression::ToString() const {
@@ -101,7 +101,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	}
 
 	auto copy = make_unique<FunctionExpression>(function_name, move(copy_children), move(filter_copy), move(order_copy),
-	                                            distinct, is_operator);
+	                                            distinct, is_operator, is_select_macro);
 	copy->schema = schema;
 	copy->CopyProperties(*this);
 	return move(copy);
@@ -116,6 +116,7 @@ void FunctionExpression::Serialize(Serializer &serializer) {
 	order_bys->Serialize(serializer);
 	serializer.Write<bool>(distinct);
 	serializer.Write<bool>(is_operator);
+	serializer.Write<bool>(is_select_macro);
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type, Deserializer &source) {
@@ -127,9 +128,10 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 	unique_ptr<OrderModifier> order_bys(static_cast<OrderModifier *>(ResultModifier::Deserialize(source).release()));
 	auto distinct = source.Read<bool>();
 	auto is_operator = source.Read<bool>();
+	auto is_select_macro = source.Read<bool>();
 	unique_ptr<FunctionExpression> function;
 	function = make_unique<FunctionExpression>(function_name, move(children), move(filter), move(order_bys), distinct,
-	                                           is_operator);
+	                                           is_operator,is_select_macro);
 	function->schema = schema;
 	return move(function);
 }

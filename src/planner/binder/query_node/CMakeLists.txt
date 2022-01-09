@@ -8,7 +8,8 @@ add_library_unity(
   plan_recursive_cte_node.cpp
   plan_select_node.cpp
   plan_setop.cpp
-  plan_subquery.cpp)
+  plan_subquery.cpp
+  bind_macro_select_node.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_bind_query_node>
     PARENT_SCOPE)

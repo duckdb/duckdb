@@ -69,51 +69,91 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	base.types = query_node.types;
 }
 
-SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
-	auto &base = (CreateMacroInfo &)info;
+    SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
+        auto &base = (CreateMacroInfo &)info;
 
-	if (base.function->expression->HasParameter()) {
-		throw BinderException("Parameter expressions within macro's are not supported!");
-	}
+	    /* different types */
+	    bool is_query=base.function->is_query();
 
-	// create macro binding in order to bind the function
-	vector<LogicalType> dummy_types;
-	vector<string> dummy_names;
-	// positional parameters
-	for (idx_t i = 0; i < base.function->parameters.size(); i++) {
-		auto param = (ColumnRefExpression &)*base.function->parameters[i];
-		if (param.IsQualified()) {
-			throw BinderException("Invalid parameter name '%s': must be unqualified", param.ToString());
-		}
-		dummy_types.emplace_back(LogicalType::SQLNULL);
-		dummy_names.push_back(param.GetColumnName());
-	}
-	// default parameters
-	for (auto it = base.function->default_parameters.begin(); it != base.function->default_parameters.end(); it++) {
-		auto &val = (ConstantExpression &)*it->second;
-		dummy_types.push_back(val.value.type());
-		dummy_names.push_back(it->first);
-	}
-	auto this_macro_binding = make_unique<MacroBinding>(dummy_types, dummy_names, base.name);
-	macro_binding = this_macro_binding.get();
-	ExpressionBinder::QualifyColumnNames(*this, base.function->expression);
+        if (!is_query && base.function->expression->HasParameter()) {
+            throw BinderException("Parameter expressions within macro's are not supported!");
+        }
 
-	// create a copy of the expression because we do not want to alter the original
-	auto expression = base.function->expression->Copy();
+        // create macro binding in order to bind the function
+        vector<LogicalType> dummy_types;
+        vector<string> dummy_names;
 
-	// bind it to verify the function was defined correctly
-	string error;
-	auto sel_node = make_unique<BoundSelectNode>();
-	auto group_info = make_unique<BoundGroupInformation>();
-	SelectBinder binder(*this, context, *sel_node, *group_info);
-	error = binder.Bind(&expression, 0, false);
+        // positional parameters
+        for (idx_t i = 0; i < base.function->parameters.size(); i++) {
+            auto param = (ColumnRefExpression &)*base.function->parameters[i];
+            if (param.IsQualified()) {
+                throw BinderException("Invalid parameter name '%s': must be unqualified", param.ToString());
+            }
+            dummy_types.emplace_back(LogicalType::SQLNULL);
+            dummy_names.push_back(param.GetColumnName());
+        }
+        // default parameters
+        for (auto it = base.function->default_parameters.begin(); it != base.function->default_parameters.end(); it++) {
+            auto &val = (ConstantExpression &)*it->second;
+            dummy_types.push_back(val.value.type());
+            dummy_names.push_back(it->first);
+        }
+        auto this_macro_binding = make_unique<MacroBinding>(dummy_types, dummy_names, base.name);
+        macro_binding = this_macro_binding.get();
 
-	if (!error.empty()) {
-		throw BinderException(error);
-	}
 
-	return BindSchema(info);
-}
+	    if(!is_query)
+        	ExpressionBinder::QualifyColumnNames(*this, base.function->expression);
+
+
+	    if(is_query)
+	    {
+
+            unique_ptr<QueryNode> node=base.function->query_node->Copy();
+
+		    string error;
+		    auto sel_node = make_unique<BoundSelectNode>();
+		    auto group_info = make_unique<BoundGroupInformation>();
+            // if it doesn't crash out then it parses and binds
+		    switch ( node->type){
+		    	case SELECT_NODE:
+			        BindNode((SelectNode &) (*node) );
+			      	break;
+
+		        case SET_OPERATION_NODE:
+			         BindNode( (SetOperationNode&) (*node));
+                     break;
+
+		        case  BOUND_SUBQUERY_NODE:
+			          //BindNode( (SubqueryExpression&) (*node));
+			          break;
+
+		        case  RECURSIVE_CTE_NODE:
+			        BindNode( (RecursiveCTENode&) (*node));
+			           break;
+
+		        }
+
+	    }
+	    else
+	    {
+
+		    auto expression = base.function->expression->Copy();
+		    // bind it to verify the function was defined correctly
+		    string error;
+		    auto sel_node = make_unique<BoundSelectNode>();
+		    auto group_info = make_unique<BoundGroupInformation>();
+		    SelectBinder binder(*this, context, *sel_node, *group_info);
+		    error = binder.Bind(&expression, 0, false);
+
+		    if (!error.empty()) {
+			    throw BinderException(error);
+		    }
+	    }
+        return BindSchema(info);
+    }
+
+
 
 void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const string &schema) {
 	if (type.id() == LogicalTypeId::LIST) {
@@ -172,7 +212,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::MACRO_ENTRY: {
-		auto schema = BindCreateFunctionInfo(*stmt.info);
+		auto schema= BindCreateFunctionInfo(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, move(stmt.info), schema);
 		break;
 	}

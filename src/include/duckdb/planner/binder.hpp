@@ -206,6 +206,8 @@ private:
 	BoundStatement Bind(SetStatement &stmt);
 	BoundStatement Bind(LoadStatement &stmt);
 
+	unique_ptr<QueryNode> BindNodeMacro(SelectNode &statement);
+
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);
 	unique_ptr<BoundQueryNode> BindNode(RecursiveCTENode &node);

@@ -119,10 +119,6 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("ORDER BY is not implemented for window functions!");
 		}
 
-		if (root->agg_filter) {
-			throw ParserException("FILTER is not implemented for window functions!");
-		}
-
 		const auto win_fun_type = WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
 			throw InternalException("Unknown/unsupported window function");
@@ -275,8 +271,10 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		return move(coalesce_op);
 	}
 
+
 	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), move(children), move(filter_expr),
-	                                                move(order_bys), root->agg_distinct);
+	                                                move(order_bys), root->agg_distinct,false,root->is_select_macro);
+
 	function->query_location = root->location;
 	return move(function);
 }

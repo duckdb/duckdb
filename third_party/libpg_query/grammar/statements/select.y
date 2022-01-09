@@ -2290,7 +2290,23 @@ c_expr:		columnref								{ $$ = $1; }
 			  }
 		;
 
-func_application: func_name '(' ')'
+func_application:
+                        FUNCTION func_name '(' ')'
+				{
+				  	PGFuncCall *n = makeFuncCall($2, NIL, @2);
+					n->is_select_macro = true;
+					$$ = (PGNode *)n;
+					
+				}
+			| FUNCTION  func_name '(' func_arg_list opt_sort_clause opt_ignore_nulls ')'
+				{
+					PGFuncCall *n = makeFuncCall($2, $4, @2);
+					n->agg_order = $5;
+					n->agg_ignore_nulls = $6;
+					n->is_select_macro = true;
+					$$ = (PGNode *)n;
+				}
+                        | func_name '(' ')'
 				{
 					$$ = (PGNode *) makeFuncCall($1, NIL, @1);
 				}

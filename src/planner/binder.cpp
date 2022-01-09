@@ -9,6 +9,8 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
+#include "duckdb/parser/expression/function_expression.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -78,16 +80,39 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	} // LCOV_EXCL_STOP
 }
 
+
 unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
+	bool HasSelectMacro;
+	unique_ptr<BoundQueryNode> result;
+	unique_ptr<QueryNode> new_node;
+
 	// first we visit the set of CTEs and add them to the bind context
 	for (auto &cte_it : node.cte_map) {
 		AddCTE(cte_it.first, cte_it.second.get());
 	}
+
+	HasSelectMacro=false;
+	if (node.type ==QueryNodeType::SELECT_NODE && !node.GetSelectList().empty() &&
+	    node.GetSelectList().size() == 1 && node.GetSelectList()[0]->type == ExpressionType::FUNCTION) {
+		auto &fe = (FunctionExpression &)(*node.GetSelectList()[0]);
+		if(fe.is_select_macro)
+			HasSelectMacro = true;
+	}
+
+
+
 	// now we bind the node
-	unique_ptr<BoundQueryNode> result;
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		result = BindNode((SelectNode &)node);
+
+		if(HasSelectMacro)
+			new_node=   BindNodeMacro((SelectNode &)node);
+
+		if(new_node)
+			result = BindNode((SelectNode &)*new_node);
+		else
+			result = BindNode((SelectNode &)node);
+
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 		result = BindNode((RecursiveCTENode &)node);

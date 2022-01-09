@@ -285,6 +285,7 @@ PGFuncCall *makeFuncCall(PGList *name, PGList *args, int location) {
 	n->agg_star = false;
 	n->agg_distinct = false;
 	n->func_variadic = false;
+	n->is_select_macro = false;
 	n->over = NULL;
 	n->location = location;
 	return n;

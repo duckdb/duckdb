@@ -18,10 +18,10 @@ class FunctionExpression : public ParsedExpression {
 public:
 	FunctionExpression(string schema_name, const string &function_name, vector<unique_ptr<ParsedExpression>> children,
 	                   unique_ptr<ParsedExpression> filter = nullptr, unique_ptr<OrderModifier> order_bys = nullptr,
-	                   bool distinct = false, bool is_operator = false);
+	                   bool distinct = false, bool is_operator = false, bool is_select_macro = false);
 	FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children,
 	                   unique_ptr<ParsedExpression> filter = nullptr, unique_ptr<OrderModifier> order_bys = nullptr,
-	                   bool distinct = false, bool is_operator = false);
+	                   bool distinct = false, bool is_operator = false, bool is_select_macro = false);
 
 	//! Schema of the function
 	string schema;
@@ -33,6 +33,8 @@ public:
 	vector<unique_ptr<ParsedExpression>> children;
 	//! Whether or not the aggregate function is distinct, only used for aggregates
 	bool distinct;
+	// |Function is to be used only as a select macro
+	bool is_select_macro;
 	//! Expression representing a filter, only used for aggregates
 	unique_ptr<ParsedExpression> filter;
 	//! Modifier representing an ORDER BY, only used for aggregates
