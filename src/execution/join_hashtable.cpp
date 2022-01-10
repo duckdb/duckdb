@@ -489,7 +489,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
 		if (ht.has_unique_keys) {
-			NextInnerUniqueKeysJoin(keys, left, result);
+			NextInnerJoin(keys, left, result);
 		} else {
 			NextInnerJoin(keys, left, result);
 		}
