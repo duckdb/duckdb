@@ -465,7 +465,7 @@ public class DuckDBResultSet implements ResultSet {
 		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
 			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong());
 		}
-        return null;
+		return null;
 	}
 
 	static class DuckDBBlobResult implements Blob {
