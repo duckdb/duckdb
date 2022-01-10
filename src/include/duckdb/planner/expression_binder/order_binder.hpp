@@ -32,6 +32,7 @@ public:
 	idx_t MaxCount() {
 		return max_count;
 	}
+
 private:
 	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, idx_t index);
 

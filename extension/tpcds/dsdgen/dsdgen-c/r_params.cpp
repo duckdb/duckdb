@@ -238,7 +238,6 @@ double get_dbl(char *var) {
 		return (atof(params[options[nParam].index]));
 	else
 		return (0);
-
 }
 
 /*

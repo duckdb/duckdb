@@ -19,4 +19,4 @@ enum class AggregateHandling : uint8_t {
 	FORCE_AGGREGATES       // force aggregates: any non-aggregate select list entry will become a GROUP
 };
 
-}
+} // namespace duckdb

@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-SelectNode::SelectNode() : QueryNode(QueryNodeType::SELECT_NODE), aggregate_handling(AggregateHandling::STANDARD_HANDLING) {
+SelectNode::SelectNode()
+    : QueryNode(QueryNodeType::SELECT_NODE), aggregate_handling(AggregateHandling::STANDARD_HANDLING) {
 }
 
 bool SelectNode::Equals(const QueryNode *other_p) const {

@@ -1,6 +1,6 @@
 # name: test/sql/order/order_by_all.test
 # description: Test ORDER BY ALL
-# group: [group]
+# group: [order]
 
 statement ok
 PRAGMA enable_verification

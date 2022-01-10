@@ -1,6 +1,6 @@
 # name: test/sql/aggregate/group/tpch_group_by_all.test_slow
 # description: Test TPC-H SF0.01 GROUP BY ALL
-# group: [tpch]
+# group: [group]
 
 require tpch
 

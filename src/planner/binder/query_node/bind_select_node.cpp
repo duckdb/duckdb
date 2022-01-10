@@ -124,8 +124,9 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 				auto null_order = order.orders[0].null_order;
 
 				vector<OrderByNode> new_orders;
-				for(idx_t i = 0; i < order_binder.MaxCount(); i++) {
-					new_orders.emplace_back(order_type, null_order, make_unique<ConstantExpression>(Value::INTEGER(i + 1)));
+				for (idx_t i = 0; i < order_binder.MaxCount(); i++) {
+					new_orders.emplace_back(order_type, null_order,
+					                        make_unique<ConstantExpression>(Value::INTEGER(i + 1)));
 				}
 				order.orders = move(new_orders);
 			}
