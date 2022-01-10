@@ -39,4 +39,8 @@ bool PostgresParser::IsKeyword(const std::string &text) {
 	return duckdb_libpgquery::is_keyword(text.c_str());
 }
 
+vector<duckdb_libpgquery::PGKeyword> PostgresParser::KeywordList() {
+	return duckdb_libpgquery::keyword_list();
+}
+
 }
