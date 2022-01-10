@@ -7,14 +7,7 @@ try:
 except:
     can_run = False
 
-def answer_munge(cell):
-    try:
-        cell = round(float(cell), 2)
-    except ValueError:
-        cell = str(cell)
-    return cell
-
-def result_munge(cell):
+def munge(cell):
     try:
         cell = round(float(cell), 2)
     except (ValueError, TypeError):
@@ -28,8 +21,8 @@ def check_result(result,answers):
         # The end of the rows, continue
         if cq_results == [''] and str(db_result) == 'None' or str(db_result[0]) == 'None':
             continue
-        ans_result = [answer_munge(cell) for cell in cq_results]
-        db_result = [result_munge(cell) for cell in db_result]
+        ans_result = [munge(cell) for cell in cq_results]
+        db_result = [munge(cell) for cell in db_result]
 
         assert ans_result == db_result
     return True
