@@ -190,3 +190,14 @@ TEST_CASE("Test UUID", "[api][uuid]") {
 	}
 	REQUIRE(row_count == 2);
 }
+
+TEST_CASE("Test ARRAY_AGG with ORDER BY", "[api][array_agg]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2 (a INT, b INT, c INT)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t2 VALUES (1,1,1), (1,2,2), (2,1,3), (2,2,4)"));
+
+	auto result = con.Query("select a, array_agg(c ORDER BY b) from t2 GROUP BY a");
+	REQUIRE(result->names[1] == "array_agg(c ORDER BY b)");
+}
