@@ -378,6 +378,26 @@ opt_sort_clause:
 
 sort_clause:
 			ORDER BY sortby_list					{ $$ = $3; }
+			| ORDER BY ALL opt_asc_desc opt_nulls_order
+				{
+					PGSortBy *sort = makeNode(PGSortBy);
+					sort->node = (PGNode *) makeNode(PGAStar);
+					sort->sortby_dir = $4;
+					sort->sortby_nulls = $5;
+					sort->useOp = NIL;
+					sort->location = -1;		/* no operator */
+					$$ = list_make1(sort);
+				}
+			| ORDER BY '*' opt_asc_desc opt_nulls_order
+				{
+					PGSortBy *sort = makeNode(PGSortBy);
+					sort->node = (PGNode *) makeNode(PGAStar);
+					sort->sortby_dir = $4;
+					sort->sortby_nulls = $5;
+					sort->useOp = NIL;
+					sort->location = -1;		/* no operator */
+					$$ = list_make1(sort);
+				}
 		;
 
 sortby_list:
@@ -625,6 +645,11 @@ first_or_next: FIRST_P								{ $$ = 0; }
 group_clause:
 			GROUP_P BY group_by_list				{ $$ = $3; }
 			| GROUP_P BY ALL
+				{
+					PGNode *node = (PGNode *) makeGroupingSet(GROUPING_SET_ALL, NIL, @3);
+					$$ = list_make1(node);
+				}
+			| GROUP_P BY '*'
 				{
 					PGNode *node = (PGNode *) makeGroupingSet(GROUPING_SET_ALL, NIL, @3);
 					$$ = list_make1(node);

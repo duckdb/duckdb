@@ -1,0 +1,58 @@
+# name: test/sql/order/order_by_all.test
+# description: Test ORDER BY ALL
+# group: [group]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(g integer, i integer);
+
+statement ok
+INSERT INTO integers values (0, 1), (0, 2), (1, 3), (1, NULL);
+
+# standard usage of ORDER BY ALL
+query II
+SELECT * FROM integers ORDER BY ALL
+----
+0	1
+0	2
+1	NULL
+1	3
+
+query II
+SELECT * FROM integers ORDER BY * DESC
+----
+1	NULL
+1	3
+0	2
+0	1
+
+query II
+SELECT * FROM integers ORDER BY * DESC NULLS LAST
+----
+1	3
+1	NULL
+0	2
+0	1
+
+# ORDER BY ALL with set operations
+query II
+SELECT * FROM integers UNION ALL SELECT * FROM integers ORDER BY ALL
+----
+0	1
+0	1
+0	2
+0	2
+1	NULL
+1	NULL
+1	3
+1	3
+
+query II
+SELECT * FROM integers UNION SELECT * FROM integers ORDER BY ALL
+----
+0	1
+0	2
+1	NULL
+1	3
