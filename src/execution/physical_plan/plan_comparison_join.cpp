@@ -217,7 +217,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		                                     op.estimated_cardinality, perfect_join_stats);
 
 	} else {
-		if (op.conditions.size() == 1 && !has_inequality) {
+		if (!has_inequality) {
 			D_ASSERT(!has_null_equal_conditions); // we support this for this join for now
 			// range join: use piecewise merge join
 			plan = make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions),
