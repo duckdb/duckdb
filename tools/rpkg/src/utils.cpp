@@ -198,48 +198,35 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 	if (val.IsNull()) {
 		return R_NilValue;
 	}
-	RProtector r;
-	SEXP res;
+
 	switch (val.type().id()) {
 	case LogicalTypeId::BOOLEAN:
-		res = r.Protect(NEW_LOGICAL(1));
-		LOGICAL_POINTER(res)[0] = val.GetValue<bool>();
-		return res;
+		return cpp11::logicals({ val.GetValue<bool>() });
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
-		res = r.Protect(NEW_INTEGER(1));
-		INTEGER_POINTER(res)[0] = val.GetValue<int32_t>();
-		return res;
+		return cpp11::integers({ val.GetValue<int32_t>() });
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
-		res = r.Protect(NEW_NUMERIC(1));
-		NUMERIC_POINTER(res)[0] = val.GetValue<double>();
-		return res;
+		return cpp11::doubles({ val.GetValue<double>() });
 	case LogicalTypeId::VARCHAR:
-		res = r.Protect(NEW_STRING(1));
-		SET_STRING_ELT(res, 0, cpp_str_to_charsexp(val.ToString()));
-		return res;
+		return RApi::StringsToSexp({ val.ToString() });
 	case LogicalTypeId::TIMESTAMP: {
+		cpp11::doubles res({ (double)Timestamp::GetEpochSeconds(val.GetValue<timestamp_t>()) });
 		// TODO bit of duplication here with statement.cpp, fix this
-		res = r.Protect(NEW_NUMERIC(1));
-		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
-		dest_ptr[0] = (double)Timestamp::GetEpochSeconds(val.GetValue<timestamp_t>());
 		// some dresssup for R
 		SET_CLASS(res, RStrings::get().POSIXct_POSIXt_str);
 		Rf_setAttrib(res, RStrings::get().tzone_sym, RStrings::get().UTC_str);
 		return res;
 	}
 	case LogicalTypeId::TIME: {
-		res = r.Protect(NEW_NUMERIC(1));
-		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
-		dest_ptr[0] = ((double)val.GetValue<dtime_t>().micros) / Interval::MICROS_PER_SEC;
+		cpp11::doubles res({ (double)val.GetValue<dtime_t>().micros / Interval::MICROS_PER_SEC });
 		// some dresssup for R
 		RProtector r_time;
 		SEXP cl = r_time.Protect(NEW_STRING(2));
@@ -252,9 +239,7 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 	}
 
 	case LogicalTypeId::DATE: {
-		res = r.Protect(NEW_NUMERIC(1));
-		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
-		dest_ptr[0] = (double)int32_t(val.GetValue<date_t>());
+		cpp11::doubles res({ (double)int32_t(val.GetValue<date_t>()) });
 		// some dresssup for R
 		SET_CLASS(res, RStrings::get().Date_str);
 		return res;
