@@ -489,7 +489,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
 		if (ht.has_unique_keys) {
-			NextInnerJoin(keys, left, result);
+			NextInnerUniqueKeysJoin(keys, left, result);
 		} else {
 			NextInnerJoin(keys, left, result);
 		}
@@ -578,6 +578,31 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vect
 	GatherResult(result, FlatVector::INCREMENTAL_SELECTION_VECTOR, sel_vector, count, col_idx);
 }
 
+idx_t ScanStructure::ScanKeyMatches(DataChunk &keys, SelectionVector &result_sel) {
+	// the semi-join, anti-join and mark-join we handle a differently from the inner join
+	// since there can be at most STANDARD_VECTOR_SIZE results
+	// we handle the entire chunk in one call to Next().
+	// for every pointer, we keep chasing pointers and doing comparisons.
+	// this results in a boolean array indicating whether or not the tuple has a match
+	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
+	idx_t result_count = 0;
+	while (this->count > 0) {
+		// resolve the predicates for the current set of pointers
+		idx_t match_count = ResolvePredicates(keys, match_sel, &no_match_sel);
+		idx_t no_match_count = this->count - match_count;
+
+		// mark each of the matches as found
+		for (idx_t i = 0; i < match_count; i++) {
+			auto sel_index = match_sel.get_index(i);
+			found_match[sel_index] = true;
+			result_sel.set_index(result_count++, sel_index);
+		}
+		// continue searching for the ones where we did not find a match yet
+		AdvancePointers(no_match_sel, no_match_count);
+	}
+	return result_count;
+}
+
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	D_ASSERT(result.ColumnCount() == left.ColumnCount() + ht.build_types.size());
 	if (this->count == 0) {
@@ -612,31 +637,6 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		}
 		AdvancePointers();
 	}
-}
-
-idx_t ScanStructure::ScanKeyMatches(DataChunk &keys, SelectionVector &result_sel) {
-	// the semi-join, anti-join and mark-join we handle a differently from the inner join
-	// since there can be at most STANDARD_VECTOR_SIZE results
-	// we handle the entire chunk in one call to Next().
-	// for every pointer, we keep chasing pointers and doing comparisons.
-	// this results in a boolean array indicating whether or not the tuple has a match
-	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
-	idx_t result_count = 0;
-	while (this->count > 0) {
-		// resolve the predicates for the current set of pointers
-		idx_t match_count = ResolvePredicates(keys, match_sel, &no_match_sel);
-		idx_t no_match_count = this->count - match_count;
-
-		// mark each of the matches as found
-		for (idx_t i = 0; i < match_count; i++) {
-			auto sel_index = match_sel.get_index(i);
-			found_match[sel_index] = true;
-			result_sel.set_index(result_count++, sel_index);
-		}
-		// continue searching for the ones where we did not find a match yet
-		AdvancePointers(no_match_sel, no_match_count);
-	}
-	return result_count;
 }
 
 template <bool MATCH>
