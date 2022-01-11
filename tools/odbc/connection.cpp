@@ -1,6 +1,8 @@
 #include "duckdb_odbc.hpp"
 #include "driver.hpp"
 
+using std::ptrdiff_t;
+
 SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                     SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
 
