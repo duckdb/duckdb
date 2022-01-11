@@ -520,6 +520,8 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 			if (all_constant) {
 				comp_res = FastMemcmp(l_ptr, r_ptr, cmp_size);
 			} else {
+				lread.entry_idx = l_entry_idx;
+				rread.entry_idx = r_entry_idx;
 				comp_res = Comparators::CompareTuple(lread, rread, l_ptr, r_ptr, lsort.sort_layout, external);
 			}
 
@@ -635,6 +637,8 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 			if (all_constant) {
 				comp_res = FastMemcmp(l_ptr, r_ptr, cmp_size);
 			} else {
+				lread.entry_idx = l.entry_idx;
+				rread.entry_idx = r.entry_idx;
 				comp_res = Comparators::CompareTuple(lread, rread, l_ptr, r_ptr, l.state.sort_layout, external);
 			}
 
