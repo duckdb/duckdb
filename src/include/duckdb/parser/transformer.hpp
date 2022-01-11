@@ -228,8 +228,8 @@ private:
 	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName *name);
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression
-	bool TransformGroupBy(duckdb_libpgquery::PGList *group, GroupByNode &result);
-	void TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, GroupByNode &result,
+	bool TransformGroupBy(duckdb_libpgquery::PGList *group, SelectNode &result);
+	void TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, SelectNode &result,
 	                          vector<GroupingSet> &result_sets);
 	void AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map, GroupByNode &result,
 	                          vector<idx_t> &result_set);
