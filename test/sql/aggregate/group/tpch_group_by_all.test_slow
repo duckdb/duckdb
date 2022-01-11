@@ -24,9 +24,7 @@ FROM
 WHERE
     l_shipdate <= CAST('1998-09-02' AS date)
 GROUP BY ALL
-ORDER BY
-    l_returnflag,
-    l_linestatus;
+ORDER BY ALL;
 ----
 <FILE>:extension/tpch/dbgen/answers/sf0.01/q01.csv
 
