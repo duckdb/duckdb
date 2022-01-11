@@ -183,8 +183,7 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 		Rf_error("duckdb_bind_R: bind parameter values need to have length one for arrow queries");
 	}
 
-	RProtector r;
-	auto out = r.Protect(NEW_LIST(n_rows));
+	cpp11::list out(NEW_LIST(n_rows));
 
 	for (idx_t row_idx = 0; row_idx < (size_t)n_rows; ++row_idx) {
 		for (idx_t param_idx = 0; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
