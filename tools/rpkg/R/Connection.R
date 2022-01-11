@@ -26,7 +26,7 @@ setClass("duckdb_connection",
 duckdb_connection <- function(duckdb_driver, debug) {
   new(
     "duckdb_connection",
-    conn_ref = .Call(duckdb_connect_R, duckdb_driver@database_ref),
+    conn_ref = .Call(`_duckdb_connect_R`, duckdb_driver@database_ref),
     driver = duckdb_driver,
     debug = debug,
     timezone_out = "UTC",
