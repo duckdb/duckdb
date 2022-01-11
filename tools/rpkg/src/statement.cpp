@@ -68,7 +68,7 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 	auto stmtholder = new RStatement();
 	stmtholder->stmt = move(stmt);
 
-	SEXP retlist = r.Protect(NEW_LIST(6));
+	cpp11::list retlist(NEW_LIST(6));
 
 	SEXP stmtsexp = r.Protect(R_MakeExternalPtr(stmtholder, R_NilValue, R_NilValue));
 	R_RegisterCFinalizer(stmtsexp, (void (*)(SEXP))duckdb_finalize_statement_R);
