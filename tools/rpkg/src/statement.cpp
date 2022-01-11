@@ -376,7 +376,6 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		RProtector list_prot;
 		// figure out the total and max element length of the list vector child
 		auto src_data = ListVector::GetData(src_vec);
 		auto &child_type = ListType::GetChildType(src_vec.GetType());
