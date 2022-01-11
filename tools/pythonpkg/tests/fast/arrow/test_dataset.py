@@ -1,6 +1,5 @@
 import duckdb
 import os
-import pytest
 try:
     import pyarrow
     import pyarrow.parquet
