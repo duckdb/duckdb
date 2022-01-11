@@ -464,7 +464,6 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 }
 
 static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
-	RProtector r;
 	// step 2: create result data frame and allocate columns
 	uint32_t ncols = result->types.size();
 	if (ncols == 0) {
@@ -472,7 +471,7 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 	}
 
 	uint64_t nrows = result->collection.Count();
-	SEXP retlist = r.Protect(NEW_LIST(ncols));
+	cpp11::list retlist(NEW_LIST(ncols));
 	SET_NAMES(retlist, RApi::StringsToSexp(result->names));
 
 	for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
