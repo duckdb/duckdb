@@ -112,8 +112,8 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 		}
 		case SQL_ATTR_ASYNC_ENABLE:
 			break;
-		case SQL_ATTR_ASYNC_STMT_EVENT:
-			break;
+		// case SQL_ATTR_ASYNC_STMT_EVENT:
+		//	break;
 		case SQL_ATTR_CONCURRENCY:
 			break;
 		case SQL_ATTR_CURSOR_SCROLLABLE:

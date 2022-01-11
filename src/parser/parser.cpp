@@ -75,6 +75,8 @@ vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 		case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_COMMENT: // LCOV_EXCL_START
 			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT;
 			break;
+		default:
+			throw InternalException("Unrecognized token category");
 		} // LCOV_EXCL_STOP
 		token.start = pg_token.start;
 		result.push_back(token);
@@ -84,6 +86,33 @@ vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 
 bool Parser::IsKeyword(const string &text) {
 	return PostgresParser::IsKeyword(text);
+}
+
+vector<ParserKeyword> Parser::KeywordList() {
+	auto keywords = PostgresParser::KeywordList();
+	vector<ParserKeyword> result;
+	for (auto &kw : keywords) {
+		ParserKeyword res;
+		res.name = kw.text;
+		switch (kw.category) {
+		case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_RESERVED:
+			res.category = KeywordCategory::KEYWORD_RESERVED;
+			break;
+		case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_UNRESERVED:
+			res.category = KeywordCategory::KEYWORD_UNRESERVED;
+			break;
+		case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_TYPE_FUNC:
+			res.category = KeywordCategory::KEYWORD_TYPE_FUNC;
+			break;
+		case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_COL_NAME:
+			res.category = KeywordCategory::KEYWORD_COL_NAME;
+			break;
+		default:
+			throw InternalException("Unrecognized keyword category");
+		}
+		result.push_back(res);
+	}
+	return result;
 }
 
 vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &select_list) {
