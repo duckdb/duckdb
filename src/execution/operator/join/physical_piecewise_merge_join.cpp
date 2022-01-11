@@ -97,6 +97,32 @@ unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(Clien
 	return move(state);
 }
 
+static idx_t CountValid(Vector &v, const idx_t count) {
+	idx_t valid = 0;
+
+	VectorData vdata;
+	v.Orrify(count, vdata);
+	if (vdata.validity.AllValid()) {
+		return count;
+	}
+	switch (v.GetVectorType()) {
+	case VectorType::FLAT_VECTOR:
+		valid += vdata.validity.CountValid(count);
+		break;
+	case VectorType::CONSTANT_VECTOR:
+		valid += vdata.validity.CountValid(1) * count;
+		break;
+	default:
+		for (idx_t i = 0; i < count; ++i) {
+			const auto row_idx = vdata.sel->get_index(i);
+			valid += int(vdata.validity.RowIsValid(row_idx));
+		}
+		break;
+	}
+
+	return valid;
+}
+
 class MergeJoinLocalState : public LocalSinkState {
 public:
 	explicit MergeJoinLocalState() : rhs_has_null(0), rhs_count(0) {
@@ -172,7 +198,7 @@ static idx_t PiecewiseMergeNulls(DataChunk &keys) {
 		}
 		return count - pvalidity.CountValid(count);
 	} else {
-		return count - primary.CountValid(count);
+		return count - CountValid(primary, count);
 	}
 }
 
@@ -221,7 +247,7 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, Globa
 	lstate.rhs_executor.Execute(input, join_keys);
 
 	// Count the NULLs so we can exclude them later
-	lstate.rhs_has_null = PiecewiseMergeNulls(join_keys);
+	lstate.rhs_has_null += PiecewiseMergeNulls(join_keys);
 	lstate.rhs_count += join_keys.size();
 
 	// Sink the data into the local sort state
@@ -563,7 +589,7 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 
 		auto &rblock = rread.sb->radix_sorting_data[r_block_idx];
 		const auto r_not_null = SortedBlockNotNull(right_base, rblock.count, rstate.rhs_count - rstate.rhs_has_null);
-		if (0 == r_not_null) {
+		if (r_not_null == 0) {
 			break;
 		}
 		const auto r_entry_idx = r_not_null - 1;
@@ -578,6 +604,8 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 			if (all_constant) {
 				comp_res = FastMemcmp(l_ptr, r_ptr, cmp_size);
 			} else {
+				lread.entry_idx = l_entry_idx;
+				rread.entry_idx = r_entry_idx;
 				comp_res = Comparators::CompareTuple(lread, rread, l_ptr, r_ptr, lsort.sort_layout, external);
 			}
 
@@ -693,6 +721,8 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 			if (all_constant) {
 				comp_res = FastMemcmp(l_ptr, r_ptr, cmp_size);
 			} else {
+				lread.entry_idx = l.entry_idx;
+				rread.entry_idx = r.entry_idx;
 				comp_res = Comparators::CompareTuple(lread, rread, l_ptr, r_ptr, l.state.sort_layout, external);
 			}
 
