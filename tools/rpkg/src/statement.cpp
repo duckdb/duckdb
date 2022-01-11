@@ -1,3 +1,4 @@
+#include "cpp11.hpp"
 #include "altrepstring.hpp"
 #include "duckdb/common/arrow.hpp"
 #include "duckdb/common/types/timestamp.hpp"
