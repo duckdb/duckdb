@@ -1,3 +1,4 @@
+#include "cpp11.hpp"
 #include "rapi.hpp"
 #include "typesr.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -12,16 +13,15 @@ SEXP RApi::PointerToString(SEXP extptr) {
 	if (TYPEOF(extptr) != EXTPTRSXP) {
 		Rf_error("duckdb_ptr_to_str: Need external pointer parameter");
 	}
-	RProtector r;
-	SEXP ret = r.Protect(NEW_STRING(1));
-	SET_STRING_ELT(ret, 0, NA_STRING);
+
 	void *ptr = R_ExternalPtrAddr(extptr);
 	if (ptr != NULL) {
 		char buf[100];
 		snprintf(buf, 100, "%p", ptr);
-		SET_STRING_ELT(ret, 0, Rf_mkChar(buf));
+		return cpp11::strings({ buf });
+	} else {
+		return cpp11::strings(NA_STRING);
 	}
-	return ret;
 }
 
 static SEXP cstr_to_charsexp(const char *s) {
