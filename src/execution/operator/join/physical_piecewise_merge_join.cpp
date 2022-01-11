@@ -92,6 +92,32 @@ unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(Clien
 	return move(state);
 }
 
+static idx_t CountValid(Vector &v, const idx_t count) {
+	idx_t valid = 0;
+
+	VectorData vdata;
+	v.Orrify(count, vdata);
+	if (vdata.validity.AllValid()) {
+		return count;
+	}
+	switch (v.GetVectorType()) {
+	case VectorType::FLAT_VECTOR:
+		valid += vdata.validity.CountValid(count);
+		break;
+	case VectorType::CONSTANT_VECTOR:
+		valid += vdata.validity.CountValid(1) * count;
+		break;
+	default:
+		for (idx_t i = 0; i < count; ++i) {
+			const auto row_idx = vdata.sel->get_index(i);
+			valid += int(vdata.validity.RowIsValid(row_idx));
+		}
+		break;
+	}
+
+	return valid;
+}
+
 class MergeJoinLocalState : public LocalSinkState {
 public:
 	explicit MergeJoinLocalState() : rhs_has_null(0), rhs_count(0) {
@@ -143,7 +169,7 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, Globa
 	// TODO: Sort any comparison NULLs to the end using an initial sort column
 	const auto count = join_keys.size();
 	for (auto &key : join_keys.data) {
-		lstate.rhs_has_null += (count - key.CountValid(count));
+		lstate.rhs_has_null += (count - CountValid(key, count));
 	}
 	lstate.rhs_count += count;
 
@@ -319,7 +345,7 @@ public:
 		// TODO: Sort any multi-comparison NULLs to the end using an initial sort column
 		lhs_count = lhs_keys.size();
 		for (auto &key : lhs_keys.data) {
-			lhs_has_null = lhs_count - key.CountValid(lhs_count);
+			lhs_has_null = lhs_count - CountValid(key, lhs_count);
 			break;
 		}
 
@@ -479,7 +505,7 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 
 		auto &rblock = rread.sb->radix_sorting_data[r_block_idx];
 		const auto r_not_null = SortedBlockNotNull(right_base, rblock.count, rstate.rhs_count - rstate.rhs_has_null);
-		if (0 == r_not_null) {
+		if (r_not_null == 0) {
 			break;
 		}
 		const auto r_entry_idx = r_not_null - 1;
