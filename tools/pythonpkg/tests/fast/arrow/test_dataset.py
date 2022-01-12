@@ -52,3 +52,30 @@ class TestArrowDataset(object):
         rel = duckdb_conn.register("dataset",userdata_parquet_dataset)
 
         assert duckdb_conn.execute("Select count(*) from dataset where first_name = 'Jose' and salary > 134708.82").fetchone()[0] == 12
+
+    def test_parallel_dataset_roundtrip(self,duckdb_cursor):
+        if not can_run:
+            return
+
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.execute("PRAGMA threads=4")
+        duckdb_conn.execute("PRAGMA verify_parallelism")
+
+        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','userdata1.parquet')
+
+        userdata_parquet_dataset= pyarrow.dataset.dataset([
+            parquet_filename,
+            parquet_filename,
+            parquet_filename,
+        ]
+        , format="parquet")
+
+        rel = duckdb_conn.register("dataset",userdata_parquet_dataset)
+
+        query = duckdb_conn.execute("SELECT * FROM dataset order by id" )
+        record_batch_reader = query.fetch_record_batch(2048)
+
+        df1 = record_batch_reader.read_pandas()
+        # reorder since order of rows isn't deterministic
+        df2 = userdata_parquet_dataset.to_table().to_pandas().sort_values('id').reset_index(drop=True)
+        assert df1.equals(df2)
