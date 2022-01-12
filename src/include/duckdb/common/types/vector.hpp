@@ -69,7 +69,7 @@ public:
 	*/
 	DUCKDB_API Vector(LogicalType type, bool create_data, bool zero_data, idx_t capacity = STANDARD_VECTOR_SIZE);
 	// implicit copying of Vectors is not allowed
-//	DUCKDB_API Vector(const Vector &) = delete;
+	Vector(const Vector &) = delete;
 	// but moving of vectors is allowed
 	DUCKDB_API Vector(Vector &&other) noexcept;
 
