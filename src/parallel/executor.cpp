@@ -26,7 +26,7 @@ Executor::~Executor() {
 }
 
 Executor &Executor::Get(ClientContext &context) {
-	return context.executor;
+	return context.GetExecutor();
 }
 
 void Executor::AddEvent(shared_ptr<Event> event) {
@@ -255,16 +255,6 @@ void Executor::VerifyPipelines() {
 #endif
 }
 
-void Executor::WorkOnTasks() {
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-
-	unique_ptr<Task> task;
-	while (scheduler.GetTaskFromProducer(*producer, task)) {
-		task->Execute();
-		task.reset();
-	}
-}
-
 void Executor::Initialize(PhysicalOperator *plan) {
 	Reset();
 
@@ -273,7 +263,8 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		lock_guard<mutex> elock(executor_lock);
 		physical_plan = plan;
 
-		context.profiler->Initialize(physical_plan);
+		this->profiler = context.profiler;
+		profiler->Initialize(physical_plan);
 		this->producer = scheduler.CreateProducer();
 
 		auto root_pipeline = make_shared<Pipeline>(*this);
@@ -289,60 +280,102 @@ void Executor::Initialize(PhysicalOperator *plan) {
 
 		ScheduleEvents();
 	}
+}
 
-	// now execute tasks from this producer until all pipelines are completed
-	while (completed_pipelines < total_pipelines) {
-		WorkOnTasks();
-		if (!HasError()) {
-			// no exceptions: continue
-			continue;
+void Executor::CancelTasks() {
+	task.reset();
+	// we do this by creating weak pointers to all pipelines
+	// then clearing our references to the pipelines
+	// and waiting until all pipelines have been destroyed
+	vector<weak_ptr<Pipeline>> weak_references;
+	{
+		lock_guard<mutex> elock(executor_lock);
+		if (pipelines.empty()) {
+			return;
 		}
-
-		// an exception has occurred executing one of the pipelines
-		// we need to wait until all threads are finished
-		// we do this by creating weak pointers to all pipelines
-		// then clearing our references to the pipelines
-		// and waiting until all pipelines have been destroyed
-		vector<weak_ptr<Pipeline>> weak_references;
-		{
-			lock_guard<mutex> elock(executor_lock);
-			weak_references.reserve(pipelines.size());
-			for (auto &pipeline : pipelines) {
+		weak_references.reserve(pipelines.size());
+		for (auto &pipeline : pipelines) {
+			weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+		}
+		for (auto &kv : union_pipelines) {
+			for (auto &pipeline : kv.second) {
 				weak_references.push_back(weak_ptr<Pipeline>(pipeline));
 			}
-			for (auto &kv : union_pipelines) {
-				for (auto &pipeline : kv.second) {
-					weak_references.push_back(weak_ptr<Pipeline>(pipeline));
-				}
-			}
-			for (auto &kv : child_pipelines) {
-				for (auto &pipeline : kv.second) {
-					weak_references.push_back(weak_ptr<Pipeline>(pipeline));
-				}
-			}
-			pipelines.clear();
-			union_pipelines.clear();
-			child_pipelines.clear();
-			events.clear();
 		}
-		for (auto &weak_ref : weak_references) {
-			while (true) {
-				auto weak = weak_ref.lock();
-				if (!weak) {
-					break;
-				}
+		for (auto &kv : child_pipelines) {
+			for (auto &pipeline : kv.second) {
+				weak_references.push_back(weak_ptr<Pipeline>(pipeline));
 			}
 		}
+		pipelines.clear();
+		union_pipelines.clear();
+		child_pipelines.clear();
+		events.clear();
+	}
+	WorkOnTasks();
+	for (auto &weak_ref : weak_references) {
+		while (true) {
+			auto weak = weak_ref.lock();
+			if (!weak) {
+				break;
+			}
+		}
+	}
+}
+
+void Executor::WorkOnTasks() {
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+
+	unique_ptr<Task> task;
+	while (scheduler.GetTaskFromProducer(*producer, task)) {
+		task->Execute(TaskExecutionMode::PROCESS_ALL);
+		task.reset();
+	}
+}
+
+PendingExecutionResult Executor::ExecuteTask() {
+	if (execution_result != PendingExecutionResult::RESULT_NOT_READY) {
+		return execution_result;
+	}
+	// check if there are any incomplete pipelines
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	while (completed_pipelines < total_pipelines) {
+		// there are! if we don't already have a task, fetch one
+		if (!task) {
+			scheduler.GetTaskFromProducer(*producer, task);
+		}
+		if (task) {
+			// if we have a task, partially process it
+			auto result = task->Execute(TaskExecutionMode::PROCESS_PARTIAL);
+			if (result != TaskExecutionResult::TASK_NOT_FINISHED) {
+				// if the task is finished, clean it up
+				task.reset();
+			}
+		}
+		if (!HasError()) {
+			// we (partially) processed a task and no exceptions were thrown
+			// give back control to the caller
+			return PendingExecutionResult::RESULT_NOT_READY;
+		}
+		execution_result = PendingExecutionResult::EXECUTION_ERROR;
+
+		// an exception has occurred executing one of the pipelines
+		// we need to cancel all tasks associated with this executor
+		CancelTasks();
 		ThrowException();
 	}
+	D_ASSERT(!task);
 
 	lock_guard<mutex> elock(executor_lock);
 	pipelines.clear();
 	NextExecutor();
 	if (!exceptions.empty()) { // LCOV_EXCL_START
 		// an exception has occurred executing one of the pipelines
+		execution_result = PendingExecutionResult::EXECUTION_ERROR;
 		ThrowExceptionInternal();
 	} // LCOV_EXCL_STOP
+	execution_result = PendingExecutionResult::RESULT_READY;
+	return execution_result;
 }
 
 void Executor::Reset() {
@@ -361,6 +394,7 @@ void Executor::Reset() {
 	union_pipelines.clear();
 	child_pipelines.clear();
 	child_dependencies.clear();
+	execution_result = PendingExecutionResult::RESULT_NOT_READY;
 }
 
 void Executor::AddChildPipeline(Pipeline *current) {
@@ -410,6 +444,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		case PhysicalOperatorType::TOP_N:
 		case PhysicalOperatorType::COPY_TO_FILE:
 		case PhysicalOperatorType::LIMIT:
+		case PhysicalOperatorType::LIMIT_PERCENT:
 		case PhysicalOperatorType::EXPLAIN_ANALYZE:
 			D_ASSERT(op->children.size() == 1);
 			// single operator:
@@ -640,11 +675,10 @@ void Executor::ThrowExceptionInternal() { // LCOV_EXCL_START
 } // LCOV_EXCL_STOP
 
 void Executor::Flush(ThreadContext &tcontext) {
-	lock_guard<mutex> elock(executor_lock);
-	context.profiler->Flush(tcontext.profiler);
+	profiler->Flush(tcontext.profiler);
 }
 
-bool Executor::GetPipelinesProgress(int &current_progress) { // LCOV_EXCL_START
+bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_START
 	lock_guard<mutex> elock(executor_lock);
 
 	if (!pipelines.empty()) {

@@ -110,7 +110,7 @@ interval_parse_time : {
 	// parse the remainder of the time as a Time type
 	dtime_t time;
 	idx_t pos;
-	if (!Time::TryConvertTime(str + start_pos, len, pos, time)) {
+	if (!Time::TryConvertTime(str + start_pos, len - start_pos, pos, time)) {
 		return false;
 	}
 	result.micros += time.micros;
@@ -474,6 +474,15 @@ dtime_t Interval::Add(dtime_t left, interval_t right, date_t &date) {
 		date.days--;
 	}
 	return left;
+}
+
+timestamp_t Interval::Add(timestamp_t left, interval_t right) {
+	date_t date;
+	dtime_t time;
+	Timestamp::Convert(left, date, time);
+	auto new_date = Interval::Add(date, right);
+	auto new_time = Interval::Add(time, right, new_date);
+	return Timestamp::FromDatetime(new_date, new_time);
 }
 
 } // namespace duckdb

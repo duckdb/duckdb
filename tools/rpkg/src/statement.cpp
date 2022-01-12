@@ -185,7 +185,7 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 	RProtector r;
 	auto out = r.Protect(NEW_LIST(n_rows));
 
-	for (idx_t row_idx = 0; row_idx < n_rows; ++row_idx) {
+	for (idx_t row_idx = 0; row_idx < (size_t)n_rows; ++row_idx) {
 		for (idx_t param_idx = 0; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
 			SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
 			auto val = RApiTypes::SexpToValue(valsexp, row_idx);
@@ -447,7 +447,14 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 		}
 
 		RProtector r;
-		auto levels_sexp = r.Protect(RApi::StringsToSexp(EnumType::GetValuesInsertOrder(src_vec.GetType())));
+		auto &str_vec = EnumType::GetValuesInsertOrder(src_vec.GetType());
+		auto size = EnumType::GetSize(src_vec.GetType());
+		vector<string> str_c_vec(size);
+		for (idx_t i = 0; i < size; i++) {
+			str_c_vec[i] = str_vec.GetValue(i).ToString();
+		}
+
+		auto levels_sexp = r.Protect(RApi::StringsToSexp(str_c_vec));
 		SET_LEVELS(dest, levels_sexp);
 		SET_CLASS(dest, RStrings::get().factor_str);
 		break;
@@ -537,7 +544,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
                      ArrowSchema &arrow_schema, SEXP &batch_import_from_c, SEXP &arrow_namespace) {
 	if (result->type == QueryResultType::STREAM_RESULT) {
 		auto stream_result = (StreamQueryResult *)result;
-		if (!stream_result->is_open) {
+		if (!stream_result->IsOpen()) {
 			return false;
 		}
 	}
@@ -586,7 +593,7 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 	// create data batches
 	AppendableRList batches_list;
 	if (stream) {
-		for (idx_t i = 0; i < num_of_vectors; i++) {
+		for (idx_t i = 0; i < (size_t)num_of_vectors; i++) {
 			if (!FetchArrowChunk(result, batches_list, arrow_data, arrow_schema, batch_import_from_c,
 			                     arrow_namespace)) {
 				break;

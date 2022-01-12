@@ -94,14 +94,14 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 	result.SetVectorType(result_type);
 }
 
+template <typename T, class OP>
+ScalarFunction GetLeastGreatestFunction(const LogicalType &type) {
+	return ScalarFunction({type}, type, LeastGreatestFunction<T, OP>, false, nullptr, nullptr, nullptr, nullptr, type);
+}
+
 template <class OP>
 static void RegisterLeastGreatest(BuiltinFunctions &set, const string &fun_name) {
 	ScalarFunctionSet fun_set(fun_name);
-	fun_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE, LeastGreatestFunction<date_t, OP>, false,
-	                                   nullptr, nullptr, nullptr, nullptr, LogicalType::DATE));
-	fun_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
-	                                   LeastGreatestFunction<timestamp_t, OP>, false, nullptr, nullptr, nullptr,
-	                                   nullptr, LogicalType::TIMESTAMP));
 	fun_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::BIGINT, LeastGreatestFunction<int64_t, OP>,
 	                                   false, nullptr, nullptr, nullptr, nullptr, LogicalType::BIGINT));
 	fun_set.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::HUGEINT,
@@ -112,6 +112,14 @@ static void RegisterLeastGreatest(BuiltinFunctions &set, const string &fun_name)
 	fun_set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                                   LeastGreatestFunction<string_t, OP, true>, false, nullptr, nullptr, nullptr,
 	                                   nullptr, LogicalType::VARCHAR));
+
+	fun_set.AddFunction(GetLeastGreatestFunction<timestamp_t, OP>(LogicalType::TIMESTAMP));
+	fun_set.AddFunction(GetLeastGreatestFunction<time_t, OP>(LogicalType::TIME));
+	fun_set.AddFunction(GetLeastGreatestFunction<date_t, OP>(LogicalType::DATE));
+
+	fun_set.AddFunction(GetLeastGreatestFunction<timestamp_t, OP>(LogicalType::TIMESTAMP_TZ));
+	fun_set.AddFunction(GetLeastGreatestFunction<time_t, OP>(LogicalType::TIME_TZ));
+
 	set.AddFunction(fun_set);
 }
 

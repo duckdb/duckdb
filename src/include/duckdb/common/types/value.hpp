@@ -21,7 +21,9 @@ class Serializer;
 //! The Value object holds a single arbitrary value of any type that can be
 //! stored in the database.
 class Value {
-	friend class Vector;
+	friend struct StringValue;
+	friend struct StructValue;
+	friend struct ListValue;
 
 public:
 	//! Create an empty NULL value of the specified type
@@ -42,9 +44,23 @@ public:
 	DUCKDB_API Value(string_t val); // NOLINT: Allow implicit conversion from `string_t`
 	//! Create a VARCHAR value
 	DUCKDB_API Value(string val); // NOLINT: Allow implicit conversion from `string`
+	//! Copy constructor
+	DUCKDB_API Value(const Value &other);
+	//! Move constructor
+	DUCKDB_API Value(Value &&other) noexcept;
+	//! Destructor
+	DUCKDB_API ~Value();
+
+	// copy assignment
+	DUCKDB_API Value &operator=(const Value &other);
+	// move assignment
+	DUCKDB_API Value &operator=(Value &&other) noexcept;
 
 	inline const LogicalType &type() const {
 		return type_;
+	}
+	inline bool IsNull() const {
+		return is_null;
 	}
 
 	//! Create the lowest possible value of a given type (numeric only)
@@ -89,15 +105,17 @@ public:
 	DUCKDB_API static Value DATE(int32_t year, int32_t month, int32_t day);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(dtime_t time);
+	DUCKDB_API static Value TIMETZ(dtime_t time);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros);
 	//! Create a timestamp Value from a specified date/time combination
 	DUCKDB_API static Value TIMESTAMP(date_t date, dtime_t time);
 	//! Create a timestamp Value from a specified timestamp
 	DUCKDB_API static Value TIMESTAMP(timestamp_t timestamp);
-	DUCKDB_API static Value TimestampNs(timestamp_t timestamp);
-	DUCKDB_API static Value TimestampMs(timestamp_t timestamp);
-	DUCKDB_API static Value TimestampSec(timestamp_t timestamp);
+	DUCKDB_API static Value TIMESTAMPNS(timestamp_t timestamp);
+	DUCKDB_API static Value TIMESTAMPMS(timestamp_t timestamp);
+	DUCKDB_API static Value TIMESTAMPSEC(timestamp_t timestamp);
+	DUCKDB_API static Value TIMESTAMPTZ(timestamp_t timestamp);
 	//! Create a timestamp Value from a specified timestamp in separate values
 	DUCKDB_API static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
 	                                  int32_t micros);
@@ -118,9 +136,12 @@ public:
 	DUCKDB_API static Value DOUBLE(double value);
 	//! Create a struct value with given list of entries
 	DUCKDB_API static Value STRUCT(child_list_t<Value> values);
-	//! Create a list value with the given entries
+	//! Create a list value with the given entries, list type is inferred from children
+	//! Cannot be called with an empty list, use either EMPTYLIST or LIST with a type instead
 	DUCKDB_API static Value LIST(vector<Value> values);
-	//! Create an empty list with the specified type
+	//! Create a list value with the given entries
+	DUCKDB_API static Value LIST(LogicalType child_type, vector<Value> values);
+	//! Create an empty list with the specified child-type
 	DUCKDB_API static Value EMPTYLIST(LogicalType child_type);
 	//! Creat a map value from a (key, value) pair
 	DUCKDB_API static Value MAP(Value key, Value value);
@@ -135,17 +156,22 @@ public:
 
 	template <class T>
 	T GetValue() const {
-		throw NotImplementedException("Unimplemented template type for Value::GetValue");
+		throw InternalException("Unimplemented template type for Value::GetValue");
 	}
 	template <class T>
 	static Value CreateValue(T value) {
-		throw NotImplementedException("Unimplemented template type for Value::CreateValue");
+		throw InternalException("Unimplemented template type for Value::CreateValue");
 	}
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
 	// type of the value. Only use this if you know what you are doing.
 	template <class T>
-	T &GetValueUnsafe() {
-		throw NotImplementedException("Unimplemented template type for Value::GetValueUnsafe");
+	T GetValueUnsafe() const {
+		throw InternalException("Unimplemented template type for Value::GetValueUnsafe");
+	}
+	//! Returns a reference to the internal value. This can only be used for primitive types.
+	template <class T>
+	T &GetReferenceUnsafe() {
+		throw InternalException("Unimplemented template type for Value::GetReferenceUnsafe");
 	}
 
 	//! Return a copy of this value
@@ -153,6 +179,8 @@ public:
 		return Value(*this);
 	}
 
+	//! Hashes the Value
+	DUCKDB_API hash_t Hash() const;
 	//! Convert this value to a string
 	DUCKDB_API string ToString() const;
 
@@ -170,15 +198,6 @@ public:
 	DUCKDB_API void Serialize(Serializer &serializer);
 	//! Deserializes a Value from a blob
 	DUCKDB_API static Value Deserialize(Deserializer &source);
-
-	//===--------------------------------------------------------------------===//
-	// Numeric Operators
-	//===--------------------------------------------------------------------===//
-	DUCKDB_API Value operator+(const Value &rhs) const;
-	DUCKDB_API Value operator-(const Value &rhs) const;
-	DUCKDB_API Value operator*(const Value &rhs) const;
-	DUCKDB_API Value operator/(const Value &rhs) const;
-	DUCKDB_API Value operator%(const Value &rhs) const;
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operators
@@ -223,7 +242,9 @@ private:
 	//! The logical of the value
 	LogicalType type_;
 
+#if DUCKDB_API_VERSION < DUCKDB_API_0_3_2
 public:
+#endif
 	//! Whether or not the value is NULL
 	bool is_null;
 
@@ -258,17 +279,93 @@ public:
 private:
 	template <class T>
 	T GetValueInternal() const;
-	//! Templated helper function for casting
-	template <class DST, class OP>
-	static DST _cast(const Value &v);
+};
 
-	//! Templated helper function for binary operations
-	template <class OP>
-	static void _templated_binary_operation(const Value &left, const Value &right, Value &result, bool ignore_null);
+//===--------------------------------------------------------------------===//
+// Type-specific getters
+//===--------------------------------------------------------------------===//
+// Note that these are equivalent to calling GetValueUnsafe<X>, meaning no cast will be performed
+// instead, an assertion will be triggered if the value is not of the correct type
+struct BooleanValue {
+	DUCKDB_API static bool Get(const Value &value);
+};
 
-	//! Templated helper function for boolean operations
-	template <class OP>
-	static bool _templated_boolean_operation(const Value &left, const Value &right);
+struct TinyIntValue {
+	DUCKDB_API static int8_t Get(const Value &value);
+};
+
+struct SmallIntValue {
+	DUCKDB_API static int16_t Get(const Value &value);
+};
+
+struct IntegerValue {
+	DUCKDB_API static int32_t Get(const Value &value);
+};
+
+struct BigIntValue {
+	DUCKDB_API static int64_t Get(const Value &value);
+};
+
+struct HugeIntValue {
+	DUCKDB_API static hugeint_t Get(const Value &value);
+};
+
+struct UTinyIntValue {
+	DUCKDB_API static uint8_t Get(const Value &value);
+};
+
+struct USmallIntValue {
+	DUCKDB_API static uint16_t Get(const Value &value);
+};
+
+struct UIntegerValue {
+	DUCKDB_API static uint32_t Get(const Value &value);
+};
+
+struct UBigIntValue {
+	DUCKDB_API static uint64_t Get(const Value &value);
+};
+
+struct FloatValue {
+	DUCKDB_API static float Get(const Value &value);
+};
+
+struct DoubleValue {
+	DUCKDB_API static double Get(const Value &value);
+};
+
+struct StringValue {
+	DUCKDB_API static const string &Get(const Value &value);
+};
+
+struct DateValue {
+	DUCKDB_API static date_t Get(const Value &value);
+};
+
+struct TimeValue {
+	DUCKDB_API static dtime_t Get(const Value &value);
+};
+
+struct TimestampValue {
+	DUCKDB_API static timestamp_t Get(const Value &value);
+};
+
+struct IntervalValue {
+	DUCKDB_API static interval_t Get(const Value &value);
+};
+
+struct StructValue {
+	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
+};
+
+struct ListValue {
+	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
+};
+
+//! Return the internal integral value for any type that is stored as an integral value internally
+//! This can be used on values of type integer, uinteger, but also date, timestamp, decimal, etc
+struct IntegralValue {
+	static hugeint_t Get(const Value &value);
 };
 
 template <>
@@ -348,37 +445,72 @@ template <>
 DUCKDB_API interval_t Value::GetValue() const;
 
 template <>
-DUCKDB_API int8_t &Value::GetValueUnsafe();
+DUCKDB_API bool Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API int16_t &Value::GetValueUnsafe();
+DUCKDB_API int8_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API int32_t &Value::GetValueUnsafe();
+DUCKDB_API int16_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API int64_t &Value::GetValueUnsafe();
+DUCKDB_API int32_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API hugeint_t &Value::GetValueUnsafe();
+DUCKDB_API int64_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API uint8_t &Value::GetValueUnsafe();
+DUCKDB_API hugeint_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API uint16_t &Value::GetValueUnsafe();
+DUCKDB_API uint8_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API uint32_t &Value::GetValueUnsafe();
+DUCKDB_API uint16_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API uint64_t &Value::GetValueUnsafe();
+DUCKDB_API uint32_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API string &Value::GetValueUnsafe();
+DUCKDB_API uint64_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API float &Value::GetValueUnsafe();
+DUCKDB_API string Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API double &Value::GetValueUnsafe();
+DUCKDB_API string_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API date_t &Value::GetValueUnsafe();
+DUCKDB_API float Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API dtime_t &Value::GetValueUnsafe();
+DUCKDB_API double Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API timestamp_t &Value::GetValueUnsafe();
+DUCKDB_API date_t Value::GetValueUnsafe() const;
 template <>
-DUCKDB_API interval_t &Value::GetValueUnsafe();
+DUCKDB_API dtime_t Value::GetValueUnsafe() const;
+template <>
+DUCKDB_API timestamp_t Value::GetValueUnsafe() const;
+template <>
+DUCKDB_API interval_t Value::GetValueUnsafe() const;
+
+template <>
+DUCKDB_API int8_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API int16_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API int32_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API int64_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API hugeint_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API uint8_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API uint16_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API uint32_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API uint64_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API float &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API double &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API date_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API dtime_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API timestamp_t &Value::GetReferenceUnsafe();
+template <>
+DUCKDB_API interval_t &Value::GetReferenceUnsafe();
 
 template <>
 DUCKDB_API bool Value::IsValid(float value);

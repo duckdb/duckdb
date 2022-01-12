@@ -68,12 +68,7 @@ date_t AddOperator::Operation(interval_t left, date_t right) {
 
 template <>
 timestamp_t AddOperator::Operation(timestamp_t left, interval_t right) {
-	date_t date;
-	dtime_t time;
-	Timestamp::Convert(left, date, time);
-	auto new_date = Interval::Add(date, right);
-	auto new_time = Interval::Add(time, right, new_date);
-	return Timestamp::FromDatetime(new_date, new_time);
+	return Interval::Add(left, right);
 }
 
 template <>

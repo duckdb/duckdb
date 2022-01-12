@@ -165,16 +165,12 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
                                                            vector<LogicalType> &input_table_types,
                                                            vector<string> &input_table_names,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
-	auto stream_factory_ptr = inputs[0].GetPointer();
-	unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce)(
+	typedef unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce_t)(
 	    uintptr_t stream_factory_ptr,
 	    std::pair<std::unordered_map<idx_t, string>, std::vector<string>> & project_columns,
-	    TableFilterCollection * filters) =
-	    (unique_ptr<ArrowArrayStreamWrapper>(*)(uintptr_t stream_factory_ptr,
-	                                            std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &
-	                                                project_columns,
-	                                            TableFilterCollection * filters)) inputs[1]
-	        .GetPointer();
+	    TableFilterCollection * filters);
+	auto stream_factory_ptr = inputs[0].GetPointer();
+	auto stream_factory_produce = (stream_factory_produce_t)inputs[1].GetPointer();
 	auto rows_per_thread = inputs[2].GetValue<uint64_t>();
 	std::pair<std::unordered_map<idx_t, string>, std::vector<string>> project_columns;
 #ifndef DUCKDB_NO_THREADS
@@ -1103,12 +1099,12 @@ unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContex
 	return make_unique<NodeStatistics>(bind_data.number_of_rows, bind_data.number_of_rows);
 }
 
-int ArrowTableFunction::ArrowProgress(ClientContext &context, const FunctionData *bind_data_p) {
+double ArrowTableFunction::ArrowProgress(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
 	if (bind_data.number_of_rows == 0) {
 		return 100;
 	}
-	auto percentage = bind_data.lines_read * 100 / bind_data.number_of_rows;
+	auto percentage = bind_data.lines_read * 100.0 / bind_data.number_of_rows;
 	return percentage;
 }
 

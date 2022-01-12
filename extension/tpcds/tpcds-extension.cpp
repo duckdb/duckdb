@@ -1,3 +1,5 @@
+#define DUCKDB_EXTENSION_MAIN
+
 #include "tpcds-extension.hpp"
 
 #include "dsdgen.hpp"
@@ -34,9 +36,9 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value>
 		if (kv.first == "sf") {
 			result->sf = kv.second.GetValue<double>();
 		} else if (kv.first == "schema") {
-			result->schema = kv.second.str_value;
+			result->schema = StringValue::Get(kv.second);
 		} else if (kv.first == "suffix") {
-			result->suffix = kv.second.str_value;
+			result->suffix = StringValue::Get(kv.second);
 		} else if (kv.first == "overwrite") {
 			result->overwrite = kv.second.GetValue<bool>();
 		} else if (kv.first == "keys") {

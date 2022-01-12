@@ -43,7 +43,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, Express
 		return;
 	}
 	auto &numeric_stats = (NumericStatistics &)stats;
-	if (numeric_stats.min.is_null || numeric_stats.max.is_null) {
+	if (numeric_stats.min.IsNull() || numeric_stats.max.IsNull()) {
 		// no stats available: skip this
 		return;
 	}
@@ -83,7 +83,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 	}
 	auto &left_stats = (NumericStatistics &)lstats;
 	auto &right_stats = (NumericStatistics &)rstats;
-	if (left_stats.min.is_null || left_stats.max.is_null || right_stats.min.is_null || right_stats.max.is_null) {
+	if (left_stats.min.IsNull() || left_stats.max.IsNull() || right_stats.min.IsNull() || right_stats.max.IsNull()) {
 		// no stats available: skip this
 		return;
 	}

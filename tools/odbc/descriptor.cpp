@@ -29,7 +29,8 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_ARRAY_SIZE: {
 		auto size = *((SQLULEN *)value_ptr);
 		if (size <= 0) {
-			stmt->error_messages.emplace_back("Invalid attribute/option identifier.");
+			// TODO throw exception
+			error_messages.emplace_back("Invalid attribute/option identifier.");
 			return SQL_ERROR;
 		}
 		header.sql_desc_array_size = size;
@@ -38,7 +39,7 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	default:
 		break;
 	}
-	return SQL_SUCCESS;
+	return SQL_ERROR;
 }
 
 void OdbcHandleDesc::Clear() {

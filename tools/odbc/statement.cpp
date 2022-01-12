@@ -1,8 +1,10 @@
 #include "duckdb_odbc.hpp"
 #include "api_info.hpp"
+#include "driver.hpp"
 #include "odbc_fetch.hpp"
-#include "statement_functions.hpp"
 #include "parameter_descriptor.hpp"
+#include "row_descriptor.hpp"
+#include "statement_functions.hpp"
 
 using duckdb::LogicalTypeId;
 
@@ -64,6 +66,18 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 		case SQL_ATTR_CONCURRENCY:
 			// needs to be implemented
 			return SQL_SUCCESS;
+		case SQL_ATTR_APP_ROW_DESC: {
+			stmt->SetARD((duckdb::OdbcHandleDesc *)value_ptr);
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_APP_PARAM_DESC: {
+			stmt->SetAPD((duckdb::OdbcHandleDesc *)value_ptr);
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_PARAM_BIND_OFFSET_PTR: {
+			stmt->param_desc->apd->header.sql_desc_bind_offset_ptr = (SQLLEN *)value_ptr;
+			return SQL_SUCCESS;
+		}
 		default:
 			stmt->error_messages.emplace_back("Unsupported attribute type.");
 			return SQL_ERROR;
@@ -89,17 +103,17 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 				*((HSTMT *)value_ptr) = stmt->param_desc->GetIPD();
 			}
 			if (attribute == SQL_ATTR_APP_ROW_DESC) {
-				*((HSTMT *)value_ptr) = stmt->ard.get();
+				*((HSTMT *)value_ptr) = stmt->row_desc->GetARD();
 			}
 			if (attribute == SQL_ATTR_IMP_ROW_DESC) {
-				*((HSTMT *)value_ptr) = stmt->ird.get();
+				*((HSTMT *)value_ptr) = stmt->row_desc->GetIRD();
 			}
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_ASYNC_ENABLE:
 			break;
-		case SQL_ATTR_ASYNC_STMT_EVENT:
-			break;
+		// case SQL_ATTR_ASYNC_STMT_EVENT:
+		//	break;
 		case SQL_ATTR_CONCURRENCY:
 			break;
 		case SQL_ATTR_CURSOR_SCROLLABLE:
@@ -122,8 +136,10 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 			break;
 		case SQL_ATTR_NOSCAN:
 			break;
-		case SQL_ATTR_PARAM_BIND_OFFSET_PTR:
-			break;
+		case SQL_ATTR_PARAM_BIND_OFFSET_PTR: {
+			*((SQLLEN *)value_ptr) = *stmt->param_desc->apd->header.sql_desc_bind_offset_ptr;
+			return SQL_SUCCESS;
+		}
 		case SQL_ATTR_PARAM_BIND_TYPE:
 			break;
 		case SQL_ATTR_PARAM_OPERATION_PTR:
@@ -347,7 +363,7 @@ SQLRETURN SQL_API SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
 		if (option == SQL_DROP) {
 			// mapping FreeStmt with DROP option to SQLFreeHandle
-			return SQLFreeHandle(SQL_HANDLE_STMT, statement_handle);
+			return duckdb::FreeHandle(SQL_HANDLE_STMT, statement_handle);
 		}
 		if (option == SQL_UNBIND) {
 			stmt->bound_cols.clear();

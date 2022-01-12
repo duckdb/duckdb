@@ -9,8 +9,9 @@
 #pragma once
 
 #include "duckdb/catalog/standard_entry.hpp"
-#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
 namespace duckdb {
 class Serializer;
@@ -58,5 +59,7 @@ public:
 	static unique_ptr<CreateSequenceInfo> Deserialize(Deserializer &source);
 
 	string ToSQL() override;
+
+	CatalogEntry *AlterOwnership(ClientContext &context, AlterInfo *info);
 };
 } // namespace duckdb

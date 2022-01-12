@@ -109,9 +109,11 @@ static void ExecuteListExtractInternal(const idx_t count, VectorData &list, Vect
 		ListExtractTemplate<date_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 		ListExtractTemplate<dtime_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		ListExtractTemplate<timestamp_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::BLOB:

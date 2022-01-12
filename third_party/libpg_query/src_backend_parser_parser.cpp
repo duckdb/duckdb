@@ -72,6 +72,30 @@ bool is_keyword(const char *text) {
 	return ScanKeywordLookup(text, ScanKeywords, NumScanKeywords) != NULL;
 }
 
+std::vector<PGKeyword> keyword_list() {
+    std::vector<PGKeyword> result;
+	for(size_t i = 0; i < NumScanKeywords; i++) {
+		PGKeyword keyword;
+		keyword.text = ScanKeywords[i].name;
+		switch(ScanKeywords[i].category) {
+		case UNRESERVED_KEYWORD:
+			keyword.category = PGKeywordCategory::PG_KEYWORD_UNRESERVED;
+			break;
+		case RESERVED_KEYWORD:
+			keyword.category = PGKeywordCategory::PG_KEYWORD_RESERVED;
+			break;
+		case TYPE_FUNC_NAME_KEYWORD:
+			keyword.category = PGKeywordCategory::PG_KEYWORD_TYPE_FUNC;
+			break;
+		case COL_NAME_KEYWORD:
+			keyword.category = PGKeywordCategory::PG_KEYWORD_COL_NAME;
+			break;
+		}
+		result.push_back(keyword);
+	}
+	return result;
+}
+
 std::vector<PGSimplifiedToken> tokenize(const char *str) {
 	core_yyscan_t yyscanner;
 	base_yy_extra_type yyextra;

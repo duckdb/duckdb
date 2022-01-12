@@ -45,6 +45,24 @@ test_that("duckdb_register_arrow() works with datasets", {
 })
 
 
+test_that("duckdb_register_arrow() works with datasets and async arrow scanner", {
+    con <- dbConnect(duckdb::duckdb())
+    on.exit(dbDisconnect(con, shutdown = TRUE))
+
+    # Registering a dataset + aggregation
+    ds <- arrow::open_dataset("data/userdata1.parquet")
+    duckdb::duckdb_register_arrow(con, "mydatasetreader", ds, use_async = TRUE)
+    res1 <- dbGetQuery(con, "SELECT count(*) FROM mydatasetreader")
+    res2 <- dbGetQuery(con, "SELECT count(*) FROM parquet_scan('data/userdata1.parquet')")
+    expect_true(identical(res1, res2))
+    # we can read with > 3 cores
+    dbExecute(con, "PRAGMA threads=4")
+    res3 <- dbGetQuery(con, "SELECT count(*) FROM mydatasetreader")
+    expect_true(identical(res2, res3))
+    duckdb::duckdb_unregister_arrow(con, "mydatasetreader")
+})
+
+
 test_that("duckdb_register_arrow() performs projection pushdown", {
     con <- dbConnect(duckdb::duckdb())
     on.exit(dbDisconnect(con, shutdown = TRUE))

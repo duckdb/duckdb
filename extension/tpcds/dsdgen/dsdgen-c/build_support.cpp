@@ -180,7 +180,7 @@ int set_locale(int nRegion, decimal_t *longitude, decimal_t *latitude) {
  * Side Effects:
  * TODO: None
  */
-void bitmap_to_dist(void *pDest, char *distname, ds_key_t *modulus, int vset, int stream) {
+void bitmap_to_dist(void *pDest, const char *distname, ds_key_t *modulus, int vset, int stream) {
 	int32_t m, s;
 	char msg[80];
 
@@ -209,7 +209,7 @@ void bitmap_to_dist(void *pDest, char *distname, ds_key_t *modulus, int vset, in
  * Side Effects:
  * TODO: None
  */
-void dist_to_bitmap(int *pDest, char *szDistName, int nValue, int nWeight, int nStream) {
+void dist_to_bitmap(int *pDest, const char *szDistName, int nValue, int nWeight, int nStream) {
 	*pDest *= distsize(szDistName);
 	*pDest += pick_distribution(NULL, szDistName, nValue, nWeight, nStream);
 
@@ -251,7 +251,7 @@ void random_to_bitmap(int *pDest, int nDist, int nMin, int nMax, int nMean, int 
  * Side Effects:
  * TODO:
  */
-void mk_word(char *dest, char *syl_set, ds_key_t src, int char_cnt, int col) {
+void mk_word(char *dest, const char *syl_set, ds_key_t src, int char_cnt, int col) {
 	ds_key_t i = src, nSyllableCount;
 	char *cp;
 
@@ -323,7 +323,7 @@ void mk_bkey(char *szDest, ds_key_t kPrimary, int nStream) {
  * Side Effects:
  * TODO: None
  */
-int embed_string(char *szDest, char *szDist, int nValue, int nWeight, int nStream) {
+int embed_string(char *szDest, const char *szDist, int nValue, int nWeight, int nStream) {
 	int nPosition;
 	char *szWord = NULL;
 
@@ -348,7 +348,7 @@ int embed_string(char *szDest, char *szDist, int nValue, int nWeight, int nStrea
  * Side Effects:
  * TODO: None
  */
-int SetScaleIndex(char *szName, char *szValue) {
+int SetScaleIndex(const char *szName, const char *szValue) {
 	int nScale;
 	char szScale[2];
 

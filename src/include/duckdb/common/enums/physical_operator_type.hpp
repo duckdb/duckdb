@@ -19,6 +19,7 @@ enum class PhysicalOperatorType : uint8_t {
 	INVALID,
 	ORDER_BY,
 	LIMIT,
+	LIMIT_PERCENT,
 	TOP_N,
 	WINDOW,
 	UNNEST,
@@ -30,6 +31,7 @@ enum class PhysicalOperatorType : uint8_t {
 	COPY_TO_FILE,
 	RESERVOIR_SAMPLE,
 	STREAMING_SAMPLE,
+	STREAMING_WINDOW,
 	// -----------------------------
 	// Scans
 	// -----------------------------

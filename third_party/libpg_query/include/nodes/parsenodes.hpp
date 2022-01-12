@@ -945,7 +945,8 @@ typedef enum {
 	GROUPING_SET_SIMPLE,
 	GROUPING_SET_ROLLUP,
 	GROUPING_SET_CUBE,
-	GROUPING_SET_SETS
+	GROUPING_SET_SETS,
+	GROUPING_SET_ALL
 } GroupingSetKind;
 
 typedef struct PGGroupingSet {
@@ -1177,6 +1178,7 @@ typedef struct PGSelectStmt {
 	PGList *groupClause;      /* GROUP BY clauses */
 	PGNode *havingClause;     /* HAVING conditional-expression */
 	PGList *windowClause;     /* WINDOW window_name AS (...), ... */
+	PGNode *qualifyClause;    /* QUALIFY conditional-expression */
 
 	/*
 	 * In a "leaf" node representing a VALUES list, the above fields are all
@@ -1983,6 +1985,14 @@ typedef struct PGSampleOptions {
 	int location;             /* token location, or -1 if unknown */
 } PGSampleOptions;
 
+/* ----------------------
+ *              Limit Percentage
+ * ----------------------
+ */
+typedef struct PGLimitPercent {
+	PGNodeTag type;
+    PGNode* limit_percent;  /* limit percent */
+} PGLimitPercent;
 
 /* ----------------------
  *		Lambda Function

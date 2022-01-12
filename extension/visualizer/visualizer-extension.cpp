@@ -1,3 +1,4 @@
+#define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
 #include "visualizer-extension.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"

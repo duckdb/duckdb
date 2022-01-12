@@ -1,0 +1,171 @@
+# name: test/sql/optimizer/expression/test_move_constants.test
+# description: Test queries involving constants that can be moved
+# group: [expression]
+
+statement ok
+PRAGMA enable_verification
+
+# move constants with signed value extremes
+
+# tinyint
+foreach type,min,max tinyint,-128,127 smallint,-32768,32767 integer,-2147483648,2147483647 bigint,-9223372036854775808,9223372036854775807 hugeint,-170141183460469231731687303715884105727,170141183460469231731687303715884105727
+
+statement ok
+CREATE OR REPLACE TABLE vals(v ${type});
+
+statement ok
+INSERT INTO vals VALUES (2), (NULL);
+
+# +
+query I
+SELECT * FROM vals WHERE v+(${max}-10)::${type}=-100::${type};
+----
+
+query I
+SELECT v+(${max}-10)::${type}=-100::${type} FROM vals;
+----
+false
+NULL
+
+# -
+query I
+SELECT * FROM vals WHERE v-${max}::${type}=${max}::${type};
+----
+
+query I
+SELECT * FROM vals WHERE (${min}+100)::${type}-v=${max}::${type};
+----
+
+# *
+# multiply by 0
+query I
+SELECT * FROM vals WHERE v*0::${type}=1::${type};
+----
+
+query I
+SELECT * FROM vals WHERE v*0::${type}=0::${type};
+----
+2
+
+query I
+SELECT v*0::${type}=0::${type} FROM vals;
+----
+true
+NULL
+
+query I
+SELECT v*0::${type}=1::${type} FROM vals;
+----
+false
+NULL
+
+# negative numbers
+query I
+SELECT * FROM vals WHERE v*(-1)::${type}=(${min})::${type};
+----
+
+endloop
+
+# move constants with unsigned values
+foreach utype utinyint usmallint uinteger ubigint
+
+statement ok
+CREATE OR REPLACE TABLE vals(v ${utype});
+
+statement ok
+INSERT INTO vals VALUES (2), (NULL);
+
+# +
+query I
+SELECT * FROM vals WHERE v+5::${utype}=3::${utype};
+----
+
+query I
+SELECT v+5::${utype}=3::${utype} FROM vals;
+----
+false
+NULL
+
+query I
+SELECT * FROM vals WHERE 5::${utype}+v=3::${utype};
+----
+
+query I
+SELECT * FROM vals WHERE v+1::${utype}=3::${utype};
+----
+2
+
+query I
+SELECT * FROM vals WHERE 1::${utype}+v=3::${utype};
+----
+2
+
+# -
+query I
+SELECT * FROM vals WHERE v-2::${utype}=255::${utype};
+----
+
+query I
+SELECT * FROM vals WHERE 2::${utype}-v=3::${utype};
+----
+
+query I
+SELECT * FROM vals WHERE v-1::${utype}=1::${utype};
+----
+2
+
+query I
+SELECT * FROM vals WHERE 4::${utype}-v=2::${utype};
+----
+2
+
+# *
+# multiply by 0
+query I
+SELECT * FROM vals WHERE v*0::${utype}=1::${utype};
+----
+
+query I
+SELECT * FROM vals WHERE v*0::${utype}=0::${utype};
+----
+2
+
+query I
+SELECT v*0::${utype}=0::${utype} FROM vals;
+----
+true
+NULL
+
+query I
+SELECT v*0::${utype}=1::${utype} FROM vals;
+----
+false
+NULL
+
+# rhs value is not cleanly divisible
+# this is always false, since there is no integer value for which x*3=7
+query I
+SELECT * FROM vals WHERE v*3::${utype}=7::${utype};
+----
+
+query I
+SELECT v*3::${utype}=7::${utype} FROM vals;
+----
+false
+NULL
+
+query I
+SELECT * FROM vals WHERE v*3::${utype}=6::${utype};
+----
+2
+
+query I
+SELECT v*3::${utype}=6::${utype} FROM vals;
+----
+true
+NULL
+
+statement ok
+DROP TABLE vals
+
+endloop

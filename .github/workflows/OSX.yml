@@ -18,19 +18,31 @@ jobs:
     runs-on: macos-latest
 
     env:
-      CC: ccache gcc-10
-      CXX: ccache g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
-      GEN: ninja
 
     steps:
     - uses: actions/checkout@v2
       with:
-          ref: ${{ github.event.workflow_run.head_branch }}
+        fetch-depth: 0
 
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
 
-    - name: Fast Test
-      run: python scripts/ci_test.py
+    - name: Build
+      run: make debug
+
+    - name: Test
+      run: make unittestci
+
+    - name: Amalgamation
+      run: |
+        python scripts/amalgamation.py --extended
+        python scripts/parquet_amalgamation.py
+        cd src/amalgamation
+        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
 
   xcode-release:
     name: OSX Release
@@ -112,13 +124,12 @@ jobs:
     - name: Build
       run: make
 
-    - name: Unit Test
-      run: make allunit
-
     - name: Deploy
       run: |
-          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
-            ./scripts/extension-upload.sh osx-amd64
+            ./scripts/extension-upload.sh osx_amd64
+            ./scripts/extension-upload-test.sh
+          else
+            ./scripts/extension-upload-test.sh local
           fi
-

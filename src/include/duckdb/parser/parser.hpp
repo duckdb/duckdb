@@ -28,6 +28,10 @@ class Parser {
 public:
 	Parser();
 
+	//! The parsed SQL statements from an invocation to ParseQuery.
+	vector<unique_ptr<SQLStatement>> statements;
+
+public:
 	//! Attempts to parse a query into a series of SQL statements. Returns
 	//! whether or not the parsing was successful. If the parsing was
 	//! successful, the parsed statements will be stored in the statements
@@ -39,6 +43,8 @@ public:
 
 	//! Returns true if the given text matches a keyword of the parser
 	static bool IsKeyword(const string &text);
+	//! Returns a list of all keywords in the parser
+	static vector<ParserKeyword> KeywordList();
 
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
 	static vector<unique_ptr<ParsedExpression>> ParseExpressionList(const string &select_list);
@@ -51,14 +57,5 @@ public:
 	static vector<vector<unique_ptr<ParsedExpression>>> ParseValuesList(const string &value_list);
 	//! Parses a column list (i.e. as found in a CREATE TABLE statement)
 	static vector<ColumnDefinition> ParseColumnList(const string &column_list);
-
-	//! The parsed SQL statements from an invocation to ParseQuery.
-	vector<unique_ptr<SQLStatement>> statements;
-
-private:
-	//! Transform a Postgres parse tree into a set of SQL Statements
-	bool TransformList(duckdb_libpgquery::PGList *tree);
-	//! Transform a single Postgres parse node into a SQL Statement.
-	unique_ptr<SQLStatement> TransformNode(duckdb_libpgquery::PGNode *stmt);
 };
 } // namespace duckdb

@@ -85,8 +85,9 @@ unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &c
 
 void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
 	auto &state = (InsertLocalState &)lstate;
+	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &state.default_executor, "default_executor", 1);
-	context.client.profiler->Flush(context.thread.profiler);
+	client_profiler.Flush(context.thread.profiler);
 }
 
 //===--------------------------------------------------------------------===//

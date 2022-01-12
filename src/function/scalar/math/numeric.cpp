@@ -150,7 +150,7 @@ unique_ptr<FunctionData> DecimalUnaryOpBind(ClientContext &context, ScalarFuncti
 
 void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet abs("abs");
-	for (auto &type : LogicalType::NUMERIC) {
+	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			abs.AddFunction(ScalarFunction({type}, type, nullptr, false, DecimalUnaryOpBind<AbsOperator>));
 		} else {
@@ -208,7 +208,7 @@ struct SignOperator {
 
 void SignFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet sign("sign");
-	for (auto &type : LogicalType::NUMERIC) {
+	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			continue;
 		} else {
@@ -284,7 +284,7 @@ struct CeilDecimalOperator {
 
 void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet ceil("ceil");
-	for (auto &type : LogicalType::NUMERIC) {
+	for (auto &type : LogicalType::Numeric()) {
 		scalar_function_t func = nullptr;
 		bind_scalar_function_t bind_func = nullptr;
 		if (type.IsIntegral()) {
@@ -340,7 +340,7 @@ struct FloorDecimalOperator {
 
 void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet floor("floor");
-	for (auto &type : LogicalType::NUMERIC) {
+	for (auto &type : LogicalType::Numeric()) {
 		scalar_function_t func = nullptr;
 		bind_scalar_function_t bind_func = nullptr;
 		if (type.IsIntegral()) {
@@ -484,7 +484,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 		throw NotImplementedException("ROUND(DECIMAL, INTEGER) with non-constant precision is not supported");
 	}
 	Value val = ExpressionExecutor::EvaluateScalar(*arguments[1]).CastAs(LogicalType::INTEGER);
-	if (val.is_null) {
+	if (val.IsNull()) {
 		throw NotImplementedException("ROUND(DECIMAL, INTEGER) with non-constant precision is not supported");
 	}
 	// our new precision becomes the round value
@@ -492,7 +492,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 	// but ONLY if the round value is positive
 	// if it is negative the scale becomes zero
 	// i.e. ROUND(DECIMAL(18,3), -1) -> DECIMAL(18,0)
-	int32_t round_value = val.value_.integer;
+	int32_t round_value = IntegerValue::Get(val);
 	uint8_t target_scale;
 	auto width = DecimalType::GetWidth(decimal_type);
 	auto scale = DecimalType::GetScale(decimal_type);
@@ -542,7 +542,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 
 void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet round("round");
-	for (auto &type : LogicalType::NUMERIC) {
+	for (auto &type : LogicalType::Numeric()) {
 		scalar_function_t round_prec_func = nullptr;
 		scalar_function_t round_func = nullptr;
 		bind_scalar_function_t bind_func = nullptr;

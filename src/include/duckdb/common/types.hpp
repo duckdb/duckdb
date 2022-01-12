@@ -20,6 +20,7 @@ class Serializer;
 class Deserializer;
 class Value;
 class TypeCatalogEntry;
+class Vector;
 //! Type used to represent dates (days since 1970-01-01)
 struct date_t {
 	int32_t days;
@@ -350,6 +351,8 @@ enum class LogicalTypeId : uint8_t {
 	USMALLINT = 29,
 	UINTEGER = 30,
 	UBIGINT = 31,
+	TIMESTAMP_TZ = 32,
+	TIME_TZ = 34,
 
 
 	HUGEINT = 50,
@@ -394,7 +397,7 @@ struct LogicalType {
 		return *this;
 	}
 	// move assignment
-	inline LogicalType& operator=(LogicalType&& other) {
+	inline LogicalType& operator=(LogicalType&& other) noexcept {
 		id_ = other.id_;
 		physical_type_ = other.physical_type_;
 		type_info_ = move(other.type_info_);
@@ -450,6 +453,8 @@ public:
 	static constexpr const LogicalTypeId TIMESTAMP_MS = LogicalTypeId::TIMESTAMP_MS;
 	static constexpr const LogicalTypeId TIMESTAMP_NS = LogicalTypeId::TIMESTAMP_NS;
 	static constexpr const LogicalTypeId TIME = LogicalTypeId::TIME;
+	static constexpr const LogicalTypeId TIMESTAMP_TZ = LogicalTypeId::TIMESTAMP_TZ;
+	static constexpr const LogicalTypeId TIME_TZ = LogicalTypeId::TIME_TZ;
 	static constexpr const LogicalTypeId VARCHAR = LogicalTypeId::VARCHAR;
 	static constexpr const LogicalTypeId ANY = LogicalTypeId::ANY;
 	static constexpr const LogicalTypeId BLOB = LogicalTypeId::BLOB;
@@ -461,20 +466,23 @@ public:
 	static constexpr const LogicalTypeId TABLE = LogicalTypeId::TABLE;
 	static constexpr const LogicalTypeId INVALID = LogicalTypeId::INVALID;
 
+	static constexpr const LogicalTypeId ROW_TYPE = LogicalTypeId::BIGINT;
+
 	// explicitly allowing these functions to be capitalized to be in-line with the remaining functions
 	DUCKDB_API static LogicalType DECIMAL(int width, int scale);                 // NOLINT
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
 	DUCKDB_API static LogicalType LIST( LogicalType child);                       // NOLINT
 	DUCKDB_API static LogicalType STRUCT( child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
-	DUCKDB_API static LogicalType ENUM(const string &enum_name, const vector<string> &ordered_data); // NOLINT
+	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
+	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
-	DUCKDB_API static const vector<LogicalType> NUMERIC;
+	DUCKDB_API static const vector<LogicalType> Numeric();
 	//! A list of all INTEGRAL types
-	DUCKDB_API static const vector<LogicalType> INTEGRAL;
+	DUCKDB_API static const vector<LogicalType> Integral();
 	//! A list of ALL SQL types
-	DUCKDB_API static const vector<LogicalType> ALL_TYPES;
+	DUCKDB_API static const vector<LogicalType> AllTypes();
 };
 
 struct DecimalType {
@@ -497,9 +505,9 @@ struct UserType{
 struct EnumType{
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
 	DUCKDB_API static int64_t GetPos(const LogicalType &type, const string& key);
-	DUCKDB_API static const vector<string> &GetValuesInsertOrder(const LogicalType &type);
+	DUCKDB_API static Vector &GetValuesInsertOrder(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
-	DUCKDB_API static const string& GetValue(const Value &val);
+	DUCKDB_API static const string GetValue(const Value &val);
 	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
 	DUCKDB_API static TypeCatalogEntry* GetCatalog(const LogicalType &type);
 	DUCKDB_API static PhysicalType GetPhysicalType(idx_t size);
@@ -510,6 +518,11 @@ struct StructType {
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type, idx_t index);
 	DUCKDB_API static const string &GetChildName(const LogicalType &type, idx_t index);
 	DUCKDB_API static idx_t GetChildCount(const LogicalType &type);
+};
+
+struct MapType {
+	DUCKDB_API static const LogicalType &KeyType(const LogicalType &type);
+	DUCKDB_API static const LogicalType &ValueType(const LogicalType &type);
 };
 
 
@@ -570,10 +583,9 @@ bool IsValidType() {
 }
 
 //! The PhysicalType used by the row identifiers column
-extern const LogicalType LOGICAL_ROW_TYPE;
 extern const PhysicalType ROW_TYPE;
 
-string TypeIdToString(PhysicalType type);
+DUCKDB_API string TypeIdToString(PhysicalType type);
 idx_t GetTypeIdSize(PhysicalType type);
 bool TypeIsConstantSize(PhysicalType type);
 bool TypeIsIntegral(PhysicalType type);

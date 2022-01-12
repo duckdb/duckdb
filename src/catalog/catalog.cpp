@@ -181,6 +181,15 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 	lookup.schema->DropEntry(context, info);
 }
 
+CatalogEntry *Catalog::AddFunction(ClientContext &context, CreateFunctionInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	return AddFunction(context, schema, info);
+}
+
+CatalogEntry *Catalog::AddFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateFunctionInfo *info) {
+	return schema->AddFunction(context, info);
+}
+
 SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &schema_name, bool if_exists,
                                        QueryErrorContext error_context) {
 	D_ASSERT(!schema_name.empty());
@@ -281,6 +290,19 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 	}
 
 	return {nullptr, nullptr};
+}
+
+CatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema, const string &name) {
+	vector<CatalogType> entry_types {CatalogType::TABLE_ENTRY, CatalogType::SEQUENCE_ENTRY};
+
+	for (auto entry_type : entry_types) {
+		CatalogEntry *result = GetEntry(context, entry_type, schema, name, true);
+		if (result != nullptr) {
+			return result;
+		}
+	}
+
+	throw CatalogException("CatalogElement \"%s.%s\" does not exist!", schema, name);
 }
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name, const string &name,

@@ -79,7 +79,7 @@ public:
 	vector<unique_ptr<PhysicalOperator>> children;
 	//! The types returned by this physical operator
 	vector<LogicalType> types;
-	//! The extimated cardinality of this physical operator
+	//! The estimated cardinality of this physical operator
 	idx_t estimated_cardinality;
 	//! The global sink state of this operator
 	unique_ptr<GlobalSinkState> sink_state;

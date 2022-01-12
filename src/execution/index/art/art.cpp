@@ -464,32 +464,31 @@ static unique_ptr<Key> CreateKey(ART &art, PhysicalType type, Value &value) {
 	D_ASSERT(type == value.type().InternalType());
 	switch (type) {
 	case PhysicalType::BOOL:
-		return Key::CreateKey<bool>(value.value_.boolean, art.is_little_endian);
+		return Key::CreateKey<bool>(value, art.is_little_endian);
 	case PhysicalType::INT8:
-		return Key::CreateKey<int8_t>(value.value_.tinyint, art.is_little_endian);
+		return Key::CreateKey<int8_t>(value, art.is_little_endian);
 	case PhysicalType::INT16:
-		return Key::CreateKey<int16_t>(value.value_.smallint, art.is_little_endian);
+		return Key::CreateKey<int16_t>(value, art.is_little_endian);
 	case PhysicalType::INT32:
-		return Key::CreateKey<int32_t>(value.value_.integer, art.is_little_endian);
+		return Key::CreateKey<int32_t>(value, art.is_little_endian);
 	case PhysicalType::INT64:
-		return Key::CreateKey<int64_t>(value.value_.bigint, art.is_little_endian);
+		return Key::CreateKey<int64_t>(value, art.is_little_endian);
 	case PhysicalType::UINT8:
-		return Key::CreateKey<uint8_t>(value.value_.utinyint, art.is_little_endian);
+		return Key::CreateKey<uint8_t>(value, art.is_little_endian);
 	case PhysicalType::UINT16:
-		return Key::CreateKey<uint16_t>(value.value_.usmallint, art.is_little_endian);
+		return Key::CreateKey<uint16_t>(value, art.is_little_endian);
 	case PhysicalType::UINT32:
-		return Key::CreateKey<uint32_t>(value.value_.uinteger, art.is_little_endian);
+		return Key::CreateKey<uint32_t>(value, art.is_little_endian);
 	case PhysicalType::UINT64:
-		return Key::CreateKey<uint64_t>(value.value_.ubigint, art.is_little_endian);
+		return Key::CreateKey<uint64_t>(value, art.is_little_endian);
 	case PhysicalType::INT128:
-		return Key::CreateKey<hugeint_t>(value.value_.hugeint, art.is_little_endian);
+		return Key::CreateKey<hugeint_t>(value, art.is_little_endian);
 	case PhysicalType::FLOAT:
-		return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);
+		return Key::CreateKey<float>(value, art.is_little_endian);
 	case PhysicalType::DOUBLE:
-		return Key::CreateKey<double>(value.value_.double_, art.is_little_endian);
+		return Key::CreateKey<double>(value, art.is_little_endian);
 	case PhysicalType::VARCHAR:
-		return Key::CreateKey<string_t>(string_t(value.str_value.c_str(), value.str_value.size()),
-		                                art.is_little_endian);
+		return Key::CreateKey<string_t>(value, art.is_little_endian);
 	default:
 		throw InternalException("Invalid type for index");
 	}
@@ -828,7 +827,7 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 
 	vector<row_t> row_ids;
 	bool success = true;
-	if (state->values[1].is_null) {
+	if (state->values[1].IsNull()) {
 		lock_guard<mutex> l(lock);
 		// single predicate
 		switch (state->expressions[0]) {

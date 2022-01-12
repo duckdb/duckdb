@@ -45,7 +45,8 @@ jobs:
         choco install zip -y --force
         zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
         zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
+        zip -j duckdb_odbc-windows-amd64.zip tools/odbc/bin/Release/*
+        python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar duckdb_odbc-windows-amd64.zip
 
     - uses: actions/upload-artifact@v2
       with:
@@ -207,12 +208,12 @@ jobs:
       run: |
         make
 
-    - name: Test
-      run: build/release/test/Debug/unittest.exe
-
     - name: Deploy
       run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           pip install awscli
-          ./scripts/extension-upload.sh windows-amd64
+          ./scripts/extension-upload.sh windows_amd64
+          ./scripts/extension-upload-test.sh
+        else
+          ./scripts/extension-upload-test.sh local
         fi

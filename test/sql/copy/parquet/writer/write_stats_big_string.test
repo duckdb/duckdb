@@ -1,0 +1,35 @@
+# name: test/sql/copy/parquet/writer/write_stats_big_string.test
+# description: We avoid writing min/max stats of large strings
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE varchar(v VARCHAR);
+
+statement ok
+INSERT INTO varchar VALUES (NULL), ('hello'), (NULL), ('world'), (NULL)
+
+# we write stats when there are only small strings
+statement ok
+COPY varchar TO '__TEST_DIR__/bigvarchar.parquet'
+
+query IIII
+SELECT stats_min_value, stats_max_value, stats_min, stats_max FROM parquet_metadata('__TEST_DIR__/bigvarchar.parquet')
+----
+hello	world	hello	world
+
+# we stop writing stats when we encounter a very large string
+statement ok
+INSERT INTO varchar SELECT repeat('A', 100000) v
+
+statement ok
+COPY varchar TO '__TEST_DIR__/bigvarchar.parquet'
+
+query IIII
+SELECT stats_min_value, stats_max_value, stats_min, stats_max FROM parquet_metadata('__TEST_DIR__/bigvarchar.parquet')
+----
+NULL	NULL	NULL	NULL

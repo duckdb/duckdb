@@ -1,0 +1,75 @@
+# name: test/sql/storage/compression/compression_null.test
+# description: Test storage with compression and many null values
+# group: [compression]
+
+# load the DB from disk
+load __TEST_DIR__/test_rle.db
+
+foreach compression <compression>
+
+statement ok
+PRAGMA force_compression = '${compression}'
+
+# single NULL value
+statement ok
+CREATE TABLE nulls(i INTEGER)
+
+statement ok
+INSERT INTO nulls VALUES (NULL)
+
+query I
+SELECT * FROM nulls
+----
+NULL
+
+restart
+
+query I
+SELECT * FROM nulls
+----
+NULL
+
+statement ok
+DROP TABLE nulls
+
+# many null values
+statement ok
+CREATE TABLE nulls(i INTEGER)
+
+statement ok
+INSERT INTO nulls SELECT NULL FROM range(70000)
+
+query III
+SELECT COUNT(*), COUNT(i), SUM(i) FROM nulls
+----
+70000	0	NULL
+
+restart
+
+query III
+SELECT COUNT(*), COUNT(i), SUM(i) FROM nulls
+----
+70000	0	NULL
+
+# mix with non-null values
+statement ok
+INSERT INTO nulls VALUES (1), (1), (1), (2), (2), (2)
+
+query III
+SELECT COUNT(*), COUNT(i), SUM(i) FROM nulls
+----
+70006	6	9
+
+restart
+
+query III
+SELECT COUNT(*), COUNT(i), SUM(i) FROM nulls
+----
+70006	6	9
+
+statement ok
+DROP TABLE nulls
+
+endloop
+
+

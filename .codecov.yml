@@ -1,5 +1,8 @@
 comment: false
 coverage:
+  precision: 2
+  round: down
+  range: "94...100"
   status:
     project:
       default:
@@ -10,7 +13,7 @@ coverage:
          # advanced settings
         if_not_found: failure
         if_ci_failed: failure
-        informational: false
+        informational: true
         only_pulls: false
     patch:
       default:

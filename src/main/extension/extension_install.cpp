@@ -1,23 +1,26 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
 
+#ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #include "httplib.hpp"
+#endif
 #include "duckdb/common/windows_undefs.hpp"
 
 #include <fstream>
 
 namespace duckdb {
 
-const vector<string> ExtensionHelper::PATH_COMPONENTS = {".duckdb", "extensions", DuckDB::SourceID(),
-                                                         DuckDB::Platform()};
-
 //===--------------------------------------------------------------------===//
 // Install Extension
 //===--------------------------------------------------------------------===//
+const vector<string> ExtensionHelper::PathComponents() {
+	return vector<string> {".duckdb", "extensions", DuckDB::SourceID(), DuckDB::Platform()};
+}
+
 void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &extension, bool force_install) {
 	auto &config = DBConfig::GetConfig(db);
 	if (!config.enable_external_access) {
-		throw Exception("Installing extensions is disabled");
+		throw PermissionException("Installing extensions is disabled through configuration");
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 
@@ -25,7 +28,8 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 	if (!fs.DirectoryExists(local_path)) {
 		throw InternalException("Can't find the home directory at " + local_path);
 	}
-	for (auto &path_ele : PATH_COMPONENTS) {
+	auto path_components = PathComponents();
+	for (auto &path_ele : path_components) {
 		local_path = fs.JoinPath(local_path, path_ele);
 		if (!fs.DirectoryExists(local_path)) {
 			fs.CreateDirectory(local_path);
@@ -57,6 +61,9 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 		throw IOException("Failed to read extension from \"%s\": no such file", extension);
 	}
 
+#ifdef DISABLE_DUCKDB_REMOTE_INSTALL
+	throw BinderException("Remote extension installation is disabled through configuration");
+#else
 	string url_template = "http://extensions.duckdb.org/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension.gz";
 
 	if (is_http_url) {
@@ -95,6 +102,7 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 	if (out.bad()) {
 		throw IOException("Failed to write extension to %s", local_extension_path);
 	}
+#endif
 }
 
 } // namespace duckdb

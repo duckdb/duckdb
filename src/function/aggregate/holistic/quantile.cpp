@@ -558,8 +558,10 @@ AggregateFunction GetDiscreteQuantileAggregateFunction(const LogicalType &type) 
 	case LogicalTypeId::DATE:
 		return GetTypedDiscreteQuantileAggregateFunction<int32_t, int32_t>(type);
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return GetTypedDiscreteQuantileAggregateFunction<int64_t, int64_t>(type);
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 		return GetTypedDiscreteQuantileAggregateFunction<int64_t, int64_t>(type);
 	case LogicalTypeId::INTERVAL:
 		return GetTypedDiscreteQuantileAggregateFunction<interval_t, interval_t>(type);
@@ -747,8 +749,10 @@ AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &ty
 	case LogicalTypeId::DATE:
 		return GetTypedDiscreteQuantileListAggregateFunction<date_t, date_t>(type);
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return GetTypedDiscreteQuantileListAggregateFunction<timestamp_t, timestamp_t>(type);
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 		return GetTypedDiscreteQuantileListAggregateFunction<dtime_t, dtime_t>(type);
 	case LogicalTypeId::INTERVAL:
 		return GetTypedDiscreteQuantileListAggregateFunction<interval_t, interval_t>(type);
@@ -806,8 +810,10 @@ AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type
 	case LogicalTypeId::DATE:
 		return GetTypedContinuousQuantileAggregateFunction<date_t, timestamp_t>(type, LogicalType::TIMESTAMP);
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return GetTypedContinuousQuantileAggregateFunction<timestamp_t, timestamp_t>(type, type);
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 		return GetTypedContinuousQuantileAggregateFunction<dtime_t, dtime_t>(type, type);
 
 	default:
@@ -860,8 +866,10 @@ AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &
 	case LogicalTypeId::DATE:
 		return GetTypedContinuousQuantileListAggregateFunction<date_t, timestamp_t>(type, LogicalType::TIMESTAMP);
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return GetTypedContinuousQuantileListAggregateFunction<timestamp_t, timestamp_t>(type, type);
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 		return GetTypedContinuousQuantileListAggregateFunction<dtime_t, dtime_t>(type, type);
 
 	default:
@@ -1072,9 +1080,11 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType 
 		return GetTypedMedianAbsoluteDeviationAggregateFunction<date_t, timestamp_t, interval_t>(type,
 		                                                                                         LogicalType::INTERVAL);
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return GetTypedMedianAbsoluteDeviationAggregateFunction<timestamp_t, timestamp_t, interval_t>(
 		    type, LogicalType::INTERVAL);
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 		return GetTypedMedianAbsoluteDeviationAggregateFunction<dtime_t, dtime_t, interval_t>(type,
 		                                                                                      LogicalType::INTERVAL);
 
@@ -1107,7 +1117,7 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(ClientContext &conte
 static double CheckQuantile(const Value &quantile_val) {
 	auto quantile = quantile_val.GetValue<double>();
 
-	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
+	if (quantile_val.IsNull() || quantile < 0 || quantile > 1) {
 		throw BinderException("QUANTILE can only take parameters in the range [0, 1]");
 	}
 
@@ -1124,7 +1134,7 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 	if (quantile_val.type().id() != LogicalTypeId::LIST) {
 		quantiles.push_back(CheckQuantile(quantile_val));
 	} else {
-		for (const auto &element_val : quantile_val.list_value) {
+		for (const auto &element_val : ListValue::GetChildren(quantile_val)) {
 			quantiles.push_back(CheckQuantile(element_val));
 		}
 	}
@@ -1217,10 +1227,11 @@ AggregateFunction GetContinuousQuantileListAggregate(const LogicalType &type) {
 }
 
 void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
-	const vector<LogicalType> QUANTILES = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
-	                                       LogicalType::BIGINT,  LogicalType::HUGEINT,  LogicalType::FLOAT,
-	                                       LogicalType::DOUBLE,  LogicalType::DATE,     LogicalType::TIMESTAMP,
-	                                       LogicalType::TIME,    LogicalType::INTERVAL, LogicalType::VARCHAR};
+	const vector<LogicalType> QUANTILES = {LogicalType::TINYINT,  LogicalType::SMALLINT,     LogicalType::INTEGER,
+	                                       LogicalType::BIGINT,   LogicalType::HUGEINT,      LogicalType::FLOAT,
+	                                       LogicalType::DOUBLE,   LogicalType::DATE,         LogicalType::TIMESTAMP,
+	                                       LogicalType::TIME,     LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
+	                                       LogicalType::INTERVAL, LogicalType::VARCHAR};
 
 	AggregateFunctionSet median("median");
 	median.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
@@ -1263,8 +1274,9 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	mad.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
 	                                  nullptr, nullptr, nullptr, BindMedianAbsoluteDeviationDecimal));
 
-	const vector<LogicalType> MADS = {LogicalType::FLOAT, LogicalType::DOUBLE, LogicalType::DATE,
-	                                  LogicalType::TIMESTAMP, LogicalType::TIME};
+	const vector<LogicalType> MADS = {LogicalType::FLOAT,     LogicalType::DOUBLE, LogicalType::DATE,
+	                                  LogicalType::TIMESTAMP, LogicalType::TIME,   LogicalType::TIMESTAMP_TZ,
+	                                  LogicalType::TIME_TZ};
 	for (const auto &type : MADS) {
 		mad.AddFunction(GetMedianAbsoluteDeviationAggregateFunction(type));
 	}

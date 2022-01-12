@@ -25,7 +25,8 @@ string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionE
 			} else if (defaults.find(arg->alias) != defaults.end()) {
 				return StringUtil::Format("Duplicate default parameters %s!", arg->alias);
 			}
-			defaults[arg->alias] = move(arg);
+			auto alias = arg->alias;
+			defaults[alias] = move(arg);
 		} else if (!defaults.empty()) {
 			return "Positional parameters cannot come after parameters with a default value!";
 		} else {

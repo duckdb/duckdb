@@ -20,7 +20,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	for (auto &stats : group_stats) {
 		D_ASSERT(stats);
 		auto &nstats = (NumericStatistics &)*stats;
-		D_ASSERT(!nstats.min.is_null);
+		D_ASSERT(!nstats.min.IsNull());
 		group_minima.push_back(move(nstats.min));
 	}
 	for (auto &expr : groups) {

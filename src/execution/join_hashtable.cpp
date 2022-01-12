@@ -129,7 +129,7 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_
 	key_data = keys.Orrify();
 
 	// figure out which keys are NULL, and create a selection vector out of them
-	current_sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	current_sel = FlatVector::IncrementalSelectionVector();
 	idx_t added_count = keys.size();
 	if (build_side && IsRightOuterJoin(join_type)) {
 		// in case of a right or full outer join, we cannot remove NULL keys from the build side
@@ -575,7 +575,7 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_v
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count,
                                  const idx_t col_idx) {
-	GatherResult(result, FlatVector::INCREMENTAL_SELECTION_VECTOR, sel_vector, count, col_idx);
+	GatherResult(result, *FlatVector::IncrementalSelectionVector(), sel_vector, count, col_idx);
 }
 
 idx_t ScanStructure::ScanKeyMatches(DataChunk &keys, SelectionVector &result_sel) {
@@ -929,7 +929,7 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	result.SetCardinality(found_entries);
 	if (found_entries > 0) {
 		idx_t left_column_count = result.ColumnCount() - build_types.size();
-		const auto &sel_vector = FlatVector::INCREMENTAL_SELECTION_VECTOR;
+		const auto &sel_vector = *FlatVector::IncrementalSelectionVector();
 		// set the left side as a constant NULL
 		for (idx_t i = 0; i < left_column_count; i++) {
 			Vector &vec = result.data[i];

@@ -20,6 +20,7 @@ add_library_unity(
   database.cpp
   extension.cpp
   materialized_query_result.cpp
+  pending_query_result.cpp
   prepared_statement.cpp
   prepared_statement_data.cpp
   relation.cpp
