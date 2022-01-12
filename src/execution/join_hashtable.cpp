@@ -333,7 +333,7 @@ void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *i
 		Vector ht_rows(LogicalType::POINTER, (data_ptr_t)key_locations);
 		Vector conflict_rows(LogicalType::POINTER, (data_ptr_t)conflict_entries);
 		auto matches = RowOperations::MatchRows(ht_rows, pointers_sel, layout, condition_types.size(), conflict_rows,
-		                                        FlatVector::INCREMENTAL_SELECTION_VECTOR, conflict_count);
+		                                        *FlatVector::IncrementalSelectionVector(), conflict_count);
 		if (matches > 0) {
 			has_unique_keys = false;
 		}
