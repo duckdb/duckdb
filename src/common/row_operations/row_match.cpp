@@ -364,7 +364,7 @@ static void TemplatedMatchRowsOp(Vector &rows_left, const SelectionVector &left_
 		case PhysicalType::LIST:
 		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
-			// TemplatedMatchRowsNested<OP>(rows_left, left_sel, rows_right, right_sel, rows_count, key_offset);
+			matches = 1;// not handling nested types because it requires multiples passes over the hashtable
 			break;
 		default:
 			throw InternalException("Unsupported column type for RowOperations::Match");

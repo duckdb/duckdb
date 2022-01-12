@@ -699,7 +699,7 @@ void ScanStructure::NextInnerUniqueKeysJoin(DataChunk &keys, DataChunk &left, Da
 	}
 	// like the SEMI, ANTI, Single and MARK join types, the UNIQUE KEYS join only ever does one pass over the HT per
 	// input chunk
-	finished = true;
+	//finished = true;
 }
 
 void ScanStructure::NextSemiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
