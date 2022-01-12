@@ -60,6 +60,16 @@ char *downcase_truncate_identifier(const char *ident, int len, bool warn) {
 	return downcase_identifier(ident, len, warn, true);
 }
 
+static bool pg_downcase_identifier = false;
+
+void set_downcase_identifier(bool downcase) {
+	pg_downcase_identifier = downcase;
+}
+
+bool get_downcase_identifier() {
+	return pg_downcase_identifier;
+}
+
 /*
  * a workhorse for downcase_truncate_identifier
  */
@@ -83,10 +93,12 @@ char *downcase_identifier(const char *ident, int len, bool warn, bool truncate) 
 	for (i = 0; i < len; i++) {
 		unsigned char ch = (unsigned char)ident[i];
 
-		if (ch >= 'A' && ch <= 'Z')
-			ch += 'a' - 'A';
-		else if (enc_is_single_byte && IS_HIGHBIT_SET(ch) && isupper(ch))
-			ch = tolower(ch);
+		if (pg_downcase_identifier) {
+			if (ch >= 'A' && ch <= 'Z')
+				ch += 'a' - 'A';
+			else if (enc_is_single_byte && IS_HIGHBIT_SET(ch) && isupper(ch))
+				ch = tolower(ch);
+		}
 		result[i] = (char)ch;
 	}
 	result[i] = '\0';

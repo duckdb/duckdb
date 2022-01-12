@@ -1,0 +1,31 @@
+# name: test/sql/settings/setting_preserve_identifier_case.test
+# description: Test preserve_identifier_case setting
+# group: [settings]
+
+statement ok
+CREATE SCHEMA MYSCHEMA;
+
+statement ok
+CREATE TABLE MYSCHEMA.INTEGERS(I INTEGER);
+
+query III
+SELECT duckdb_tables.schema_name, duckdb_tables.table_name, column_name FROM duckdb_tables JOIN duckdb_columns USING (table_oid);
+----
+MYSCHEMA	INTEGERS	I
+
+statement ok
+DROP SCHEMA MYSCHEMA CASCADE
+
+statement ok
+SET preserve_identifier_case TO false;
+
+statement ok
+CREATE SCHEMA MYSCHEMA;
+
+statement ok
+CREATE TABLE MYSCHEMA.INTEGERS(I INTEGER);
+
+query III
+SELECT duckdb_tables.schema_name, duckdb_tables.table_name, column_name FROM duckdb_tables JOIN duckdb_columns USING (table_oid);
+----
+myschema	integers	i

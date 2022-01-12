@@ -177,6 +177,14 @@ struct PerfectHashThresholdSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct PreserveIdentifierCase {
+	static constexpr const char *Name = "preserve_identifier_case";
+	static constexpr const char *Description = "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ProfilerHistorySize {
 	static constexpr const char *Name = "profiler_history_size";
 	static constexpr const char *Description = "Sets the profiler history size";

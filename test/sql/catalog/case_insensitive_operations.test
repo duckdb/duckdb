@@ -1,0 +1,87 @@
+# name: test/sql/catalog/case_insensitive_operations.test
+# description: Test case insensitive operations
+# group: [catalog]
+
+statement ok
+PRAGMA enable_verification
+
+loop i 0 2
+
+statement ok
+CREATE TABLE INTEGERS(I INTEGER);
+
+statement ok
+INSERT INTO integers (i) VALUES (1), (2), (3), (NULL);
+
+query I
+SELECT integers.i FROM integers ORDER BY i;
+----
+NULL
+1
+2
+3
+
+query I
+UPDATE integers SET i=integers.i+1
+----
+4
+
+query I
+SELECT i FROM integers ORDER BY integers.i;
+----
+NULL
+2
+3
+4
+
+query I
+DELETE FROM integers WHERE i IS NULL;
+----
+1
+
+query I
+SELECT i FROM integers ORDER BY integers.i;
+----
+2
+3
+4
+
+statement ok
+ALTER TABLE integers ADD COLUMN J INTEGER;
+
+query II
+SELECT i, j FROM integers ORDER BY integers.i;
+----
+2	NULL
+3	NULL
+4	NULL
+
+query I
+UPDATE integers SET j=integers.i;
+----
+3
+
+statement ok
+ALTER TABLE integers DROP COLUMN i;
+
+query I
+SELECT j FROM integers ORDER BY integers.j;
+----
+2
+3
+4
+
+query I
+SELECT tbl.k FROM (SELECT j FROM integers) TBL(K) ORDER BY K;
+----
+2
+3
+4
+
+statement ok
+DROP TABLE integers;
+
+statement ok
+PRAGMA preserve_identifier_case=false;
+
+endloop

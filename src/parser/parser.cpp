@@ -115,6 +115,14 @@ vector<ParserKeyword> Parser::KeywordList() {
 	return result;
 }
 
+void Parser::SetDowncaseIdentifier(bool downcase) {
+	PostgresParser::SetDowncaseIdentifier(downcase);
+}
+
+bool Parser::GetDowncaseIdentifier() {
+	return PostgresParser::GetDowncaseIdentifier();
+}
+
 vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &select_list) {
 	// construct a mock query prefixed with SELECT
 	string mock_query = "SELECT " + select_list;

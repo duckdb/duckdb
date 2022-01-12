@@ -46,6 +46,11 @@ public:
 	//! Returns a list of all keywords in the parser
 	static vector<ParserKeyword> KeywordList();
 
+	//! Set whether or not to convert unquoted identifiers to lower case
+	static void SetDowncaseIdentifier(bool downcase);
+	//! Returns whether or not unquoted identifiers are converted to lower case
+	static bool GetDowncaseIdentifier();
+
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
 	static vector<unique_ptr<ParsedExpression>> ParseExpressionList(const string &select_list);
 	//! Parses a list as found in an ORDER BY expression (i.e. including optional ASCENDING/DESCENDING modifiers)
