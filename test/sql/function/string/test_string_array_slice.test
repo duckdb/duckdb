@@ -37,6 +37,15 @@ wo
 NULL
 NULL
 
+# list_slice alias
+query T
+SELECT list_slice(s, 0, 2) FROM strings
+----
+he
+wo
+NULL
+NULL
+
 # index out of range
 query T
 SELECT array_slice(s, 1, 3) FROM strings
