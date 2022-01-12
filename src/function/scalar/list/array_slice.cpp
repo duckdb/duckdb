@@ -193,6 +193,8 @@ void ArraySliceFun::RegisterFunction(BuiltinFunctions &set) {
 	                   ArraySliceFunction, false, ArraySliceBind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
+	fun.name = "list_slice"; // alias to conform to list_* name scheme
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb
