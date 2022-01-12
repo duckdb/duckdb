@@ -282,7 +282,7 @@ static void TemplatedMatchRowsType(Vector &rows_left, const SelectionVector &lef
 		auto right_row = right_ptrs[right_idx];
 		ValidityBytes left_row_mask(left_row);
 		ValidityBytes right_row_mask(right_row);
-		//auto isnull = !left_row_mask.RowIsValid(left_row_mask.GetValidityEntry(entry_idx), idx_in_entry);
+		// auto isnull = !left_row_mask.RowIsValid(left_row_mask.GetValidityEntry(entry_idx), idx_in_entry);
 
 		auto right_value = Load<T>(right_row + col_offset);
 		auto left_value = Load<T>(left_row + col_offset);
@@ -364,7 +364,7 @@ static void TemplatedMatchRowsOp(Vector &rows_left, const SelectionVector &left_
 		case PhysicalType::LIST:
 		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
-			matches = 1;// not handling nested types because it requires multiples passes over the hashtable
+			matches = 1; // not handling nested types because it requires multiples passes over the hashtable
 			break;
 		default:
 			throw InternalException("Unsupported column type for RowOperations::Match");
