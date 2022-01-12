@@ -282,11 +282,11 @@ static void TemplatedMatchRowsType(Vector &rows_left, const SelectionVector &lef
 		auto right_row = right_ptrs[right_idx];
 		ValidityBytes left_row_mask(left_row);
 		ValidityBytes right_row_mask(right_row);
-		auto isnull = !left_row_mask.RowIsValid(left_row_mask.GetValidityEntry(entry_idx), idx_in_entry);
+		//auto isnull = !left_row_mask.RowIsValid(left_row_mask.GetValidityEntry(entry_idx), idx_in_entry);
 
 		auto right_value = Load<T>(right_row + col_offset);
 		auto left_value = Load<T>(left_row + col_offset);
-		if (!isnull && OP::template Operation<T>(left_value, right_value)) {
+		if (OP::template Operation<T>(left_value, right_value)) {
 			match_count++;
 		}
 	}
