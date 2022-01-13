@@ -75,7 +75,10 @@ class TestArrowDataset(object):
         query = duckdb_conn.execute("SELECT * FROM dataset order by id" )
         record_batch_reader = query.fetch_record_batch(2048)
 
-        df1 = record_batch_reader.read_pandas()
+        arrow_table = record_batch_reader.read_all()
         # reorder since order of rows isn't deterministic
-        df2 = userdata_parquet_dataset.to_table().to_pandas().sort_values('id').reset_index(drop=True)
-        assert df1.equals(df2)
+        df = userdata_parquet_dataset.to_table().to_pandas().sort_values('id').reset_index(drop=True)
+        # turn it into an arrow table
+        arrow_table_2 = pyarrow.Table.from_pandas(df)
+
+        assert arrow_table.equals(arrow_table_2)
