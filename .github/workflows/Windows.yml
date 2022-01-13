@@ -37,14 +37,7 @@ jobs:
 
     - name: Install OpenSSL
       run: |
-        choco install wget -y --force
-        wget https://www.openssl.org/source/openssl-1.1.1l.tar.gz
-        tar xvf openssl-1.1.1l.tar.gz
-        cd openssl-1.1.1l
-        ./config
-        make
-        export OPENSSL_ROOT_DIR=`pwd`
-        cd ..
+        choco install openssl -y --force
 
     - name: Build
       run: |
