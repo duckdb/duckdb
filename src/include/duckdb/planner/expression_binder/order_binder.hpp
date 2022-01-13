@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
