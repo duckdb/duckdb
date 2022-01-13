@@ -1,0 +1,460 @@
+name: LinuxRelease
+on: [push, pull_request]
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
+  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+
+jobs:
+ linux-release-64:
+    name: Linux (64 Bit)
+    runs-on: ubuntu-latest
+    container: ubuntu:16.04
+    env:
+      GEN: ninja
+      BUILD_BENCHMARK: 1
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_FTS: 1
+      BUILD_REST: 1
+      BUILD_JDBC: 1
+      TREAT_WARNINGS_AS_ERRORS: 1
+      FORCE_WARN_UNUSED: 1
+
+    steps:
+    - name: Install
+      run: |
+        apt-get update -y -qq
+        apt-get install -y -qq software-properties-common
+        add-apt-repository ppa:deadsnakes/ppa
+        add-apt-repository ppa:git-core/ppa
+        apt-get update -y -qq
+        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3.7 zip python3-pip maven unixodbc-dev
+        python3.7 -m pip install pip
+        python3.7 -m pip install requests
+
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Version Check
+      run: |
+        ldd --version ldd
+        python3.7 --version
+        git --version
+
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+        chmod +x cmake-3.21.3-linux-x86_64.sh
+        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+
+    - name: Build
+      run: STATIC_LIBCPP=1 BUILD_ODBC=1 make
+
+    - name: Test
+      run: make allunit
+
+    - name: Tools Tests
+      run: |
+        python3.7 tools/shell/shell-test.py build/release/duckdb
+        python3.7 tools/rest/test_the_rest.py build/release/tools/rest
+        java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+
+    - name: Examples
+      run: |
+        (cd examples/embedded-c; make)
+        (cd examples/embedded-c++; make)
+        (cd examples/jdbc; make; make maven)
+        build/release/benchmark/benchmark_runner benchmark/tpch/sf1/q01.benchmark
+        build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
+
+    - name: Deploy
+      run: |
+        python3.7 scripts/amalgamation.py
+        zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
+        zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
+        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
+        zip -j duckdb_rest-linux-amd64.zip build/release/tools/rest/duckdb_rest_server
+        zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so
+        python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_rest-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar duckdb_odbc-linux-amd64.zip
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-linux
+        path: |
+          libduckdb-linux-amd64.zip
+          duckdb_cli-linux-amd64.zip
+          build/release/tools/jdbc/duckdb_jdbc.jar
+
+
+ linux-extensions-64:
+    name: Linux Extensions (64 Bit)
+    runs-on: ubuntu-latest
+    container: ubuntu:16.04
+    needs: linux-release-64
+    env:
+      GEN: ninja
+      BUILD_VISUALIZER: 1
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      TREAT_WARNINGS_AS_ERRORS: 1
+      FORCE_WARN_UNUSED: 1
+      AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
+      AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+      AWS_DEFAULT_REGION: us-east-1
+
+    steps:
+    - name: Install
+      run: |
+        apt-get update -y -qq
+        apt-get install -y -qq software-properties-common
+        add-apt-repository ppa:deadsnakes/ppa
+        add-apt-repository ppa:git-core/ppa
+        apt-get update -y -qq
+        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3.7 zip python3-pip maven
+        python3.7 -m pip install pip
+        python3.7 -m pip install requests awscli
+
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Version Check
+      run: |
+        ldd --version ldd
+        python3.7 --version
+        git --version
+
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+        chmod +x cmake-3.21.3-linux-x86_64.sh
+        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+
+    - name: Build
+      run: make
+
+    - name: Deploy
+      run: |
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          ./scripts/extension-upload.sh linux_amd64
+          ./scripts/extension-upload-test.sh
+        else
+          ./scripts/extension-upload-test.sh local
+        fi
+
+
+
+ linux-release-32:
+    name: Linux (32 Bit)
+    runs-on: ubuntu-latest
+    container: ubuntu:16.04
+    needs: linux-release-64
+    env:
+      GEN: ninja
+
+    steps:
+    - name: Install
+      run: |
+        apt-get update -y -qq
+        apt-get install -y -qq software-properties-common
+        add-apt-repository ppa:deadsnakes/ppa
+        add-apt-repository ppa:git-core/ppa
+        apt-get update -y -qq
+        apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk python3.7 zip
+
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Version Check
+      run: |
+        ldd --version ldd
+        python3.7 --version
+        git --version
+
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+        chmod +x cmake-3.21.3-linux-x86_64.sh
+        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+
+    - name: Build
+      run: |
+        mkdir -p build/release
+        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+
+    - name: Test
+      run: build/release/test/unittest "*"
+
+    - name: Deploy
+      run: |
+        python3.7 scripts/amalgamation.py
+        zip -j duckdb_cli-linux-i386.zip build/release/duckdb
+        zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
+        python3.7 scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip duckdb_jdbc-linux-i386.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-linux
+        path: |
+          libduckdb-linux-i386.zip
+          duckdb_cli-linux-i386.zip
+          build/release/tools/jdbc/duckdb_jdbc.jar
+
+
+ linux-rpi:
+    name: Linux (Raspberry Pi)
+    runs-on: ubuntu-20.04
+    needs: linux-release-64
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      run: |
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        git clone https://github.com/raspberrypi/tools --depth=1 rpi-tools
+
+    - name: Build
+      run: |
+        export TOOLCHAIN=`pwd`/rpi-tools
+        mkdir -p build/release
+        cd build/release
+        cmake -G Ninja -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
+        cmake --build .
+        file duckdb
+
+    - name: Deploy
+      run: |
+        python scripts/amalgamation.py
+        zip -j duckdb_cli-linux-rpi.zip build/release/duckdb
+        zip -j libduckdb-linux-rpi.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
+        python scripts/asset-upload-gha.py libduckdb-linux-rpi.zip duckdb_cli-linux-rpi.zip
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-rpi
+        path: |
+          libduckdb-linux-rpi.zip
+          duckdb_cli-linux-rpi.zip
+
+
+
+
+ old-gcc:
+    name: GCC 4.8
+    runs-on: ubuntu-18.04
+    needs: linux-release-64
+
+    env:
+      CC: gcc-4.8
+      CXX: g++-4.8
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
+
+    - name: Build
+      run: make release
+
+    - name: Test
+      run: make allunit
+
+ centos:
+    name: CentOS 7
+    runs-on: ubuntu-latest
+    container: centos:7
+    needs: linux-release-64
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: yum install -y gcc gcc-c++ git cmake make
+
+    - name: Build
+      run: make release
+
+    - name: Test
+      run: ./build/release/test/unittest
+
+ release-assert:
+    name: Release Assertions
+    runs-on: ubuntu-20.04
+    needs: linux-release-64
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      DISABLE_SANITIZER: 1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Build
+      run: make relassert
+
+    - name: Test
+      run: |
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"
+
+
+ vector-sizes:
+    name: Vector Sizes
+    runs-on: ubuntu-20.04
+    needs: linux-release-64
+    env:
+      CC: gcc-10
+      CXX: g++-10
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Test
+      run: python scripts/test_vector_sizes.py
+
+ linux-wasm-release:
+    name: WebAssembly Release
+    runs-on: ubuntu-20.04
+    needs: linux-release-64
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Build Amalgamation
+      run: python scripts/amalgamation.py
+
+    - name: Setup
+      run: ./scripts/wasm_configure.sh
+
+    - name: Build Library Module
+      run: ./scripts/wasm_build_lib.sh Release
+
+    - name: Build Test Module
+      run: ./scripts/wasm_build_test.sh Release
+
+    - name: Test WASM Module
+      run: node ./test/wasm/hello_wasm_test.js
+
+    - name: Package
+      run: |
+        zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
+        python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-wasm32-nothreads
+        path: |
+          duckdb-wasm32-nothreads.zip
+
+ symbol-leakage:
+    name: Symbol Leakage
+    runs-on: ubuntu-20.04
+    needs: linux-release-64
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Build
+      run: make
+
+    - name: Symbol Leakage Test
+      run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
+
+ linux-httpfs:
+    name: Linux HTTPFS
+    runs-on: ubuntu-20.04
+    needs: linux-release-64
+    env:
+      BUILD_VISUALIZER: 1
+      BUILD_HTTPFS: 1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Build
+      run: make
+
+    - name: Test
+      run: make allunit
+
+ amalgamation-tests:
+    name: Amalgamation Tests
+    runs-on: ubuntu-20.04
+    env:
+      CC: clang
+      CXX: clang++
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "10.0"
+
+    - name: Generate Amalgamation
+      run:  |
+          python scripts/amalgamation.py --extended
+          python scripts/parquet_amalgamation.py
+          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/parquet-amalgamation.cpp src/amalgamation/duckdb.cpp -emit-llvm -S -O0
