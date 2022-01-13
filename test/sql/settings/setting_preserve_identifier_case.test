@@ -2,6 +2,11 @@
 # description: Test preserve_identifier_case setting
 # group: [settings]
 
+query I
+SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
+----
+True
+
 statement ok
 CREATE SCHEMA MYSCHEMA;
 
@@ -18,6 +23,11 @@ DROP SCHEMA MYSCHEMA CASCADE
 
 statement ok
 SET preserve_identifier_case TO false;
+
+query I
+SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
+----
+False
 
 statement ok
 CREATE SCHEMA MYSCHEMA;
