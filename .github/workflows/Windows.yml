@@ -46,7 +46,7 @@ jobs:
 
     - name: Uninstall OpenSSL
       run: |
-        choco uninstall openssl -y --force --remove-dependencies
+        choco uninstall openssl -y --force
 
     - name: Deploy
       run: |
