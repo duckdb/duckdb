@@ -5,6 +5,7 @@
 #include "duckdb/main/relation/delete_relation.hpp"
 #include "duckdb/main/relation/update_relation.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
