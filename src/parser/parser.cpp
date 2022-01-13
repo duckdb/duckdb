@@ -14,12 +14,13 @@
 
 namespace duckdb {
 
-Parser::Parser() {
+Parser::Parser(ParserOptions options_p) : options(move(options_p)) {
 }
 
 void Parser::ParseQuery(const string &query) {
 	Transformer transformer;
 	{
+		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
 		PostgresParser parser;
 		parser.Parse(query);
 
@@ -115,19 +116,11 @@ vector<ParserKeyword> Parser::KeywordList() {
 	return result;
 }
 
-void Parser::SetDowncaseIdentifier(bool downcase) {
-	PostgresParser::SetDowncaseIdentifier(downcase);
-}
-
-bool Parser::GetDowncaseIdentifier() {
-	return PostgresParser::GetDowncaseIdentifier();
-}
-
-vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &select_list) {
+vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &select_list, ParserOptions options) {
 	// construct a mock query prefixed with SELECT
 	string mock_query = "SELECT " + select_list;
 	// parse the query
-	Parser parser;
+	Parser parser(options);
 	parser.ParseQuery(mock_query);
 	// check the statements
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
@@ -141,11 +134,11 @@ vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &s
 	return move(select_node.select_list);
 }
 
-vector<OrderByNode> Parser::ParseOrderList(const string &select_list) {
+vector<OrderByNode> Parser::ParseOrderList(const string &select_list, ParserOptions options) {
 	// construct a mock query
 	string mock_query = "SELECT * FROM tbl ORDER BY " + select_list;
 	// parse the query
-	Parser parser;
+	Parser parser(options);
 	parser.ParseQuery(mock_query);
 	// check the statements
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
@@ -165,11 +158,11 @@ vector<OrderByNode> Parser::ParseOrderList(const string &select_list) {
 }
 
 void Parser::ParseUpdateList(const string &update_list, vector<string> &update_columns,
-                             vector<unique_ptr<ParsedExpression>> &expressions) {
+                             vector<unique_ptr<ParsedExpression>> &expressions, ParserOptions options) {
 	// construct a mock query
 	string mock_query = "UPDATE tbl SET " + update_list;
 	// parse the query
-	Parser parser;
+	Parser parser(options);
 	parser.ParseQuery(mock_query);
 	// check the statements
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::UPDATE_STATEMENT) {
@@ -180,11 +173,11 @@ void Parser::ParseUpdateList(const string &update_list, vector<string> &update_c
 	expressions = move(update.expressions);
 }
 
-vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const string &value_list) {
+vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const string &value_list, ParserOptions options) {
 	// construct a mock query
 	string mock_query = "VALUES " + value_list;
 	// parse the query
-	Parser parser;
+	Parser parser(options);
 	parser.ParseQuery(mock_query);
 	// check the statements
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
@@ -202,9 +195,9 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const strin
 	return move(values_list.values);
 }
 
-vector<ColumnDefinition> Parser::ParseColumnList(const string &column_list) {
+vector<ColumnDefinition> Parser::ParseColumnList(const string &column_list, ParserOptions options) {
 	string mock_query = "CREATE TABLE blabla (" + column_list + ")";
-	Parser parser;
+	Parser parser(options);
 	parser.ParseQuery(mock_query);
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::CREATE_STATEMENT) {
 		throw ParserException("Expected a single CREATE statement");

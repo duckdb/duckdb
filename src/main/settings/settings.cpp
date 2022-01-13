@@ -410,12 +410,12 @@ Value PerfectHashThresholdSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // PreserveIdentifierCase
 //===--------------------------------------------------------------------===//
-void PreserveIdentifierCase::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	Parser::SetDowncaseIdentifier(!input.GetValue<bool>());
+void PreserveIdentifierCase::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).preserve_identifier_case = input.GetValue<bool>();
 }
 
 Value PreserveIdentifierCase::GetSetting(ClientContext &context) {
-	return Value::BOOLEAN(!Parser::GetDowncaseIdentifier());
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).preserve_identifier_case);
 }
 
 //===--------------------------------------------------------------------===//

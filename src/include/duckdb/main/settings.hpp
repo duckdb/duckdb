@@ -182,7 +182,7 @@ struct PreserveIdentifierCase {
 	static constexpr const char *Description =
 	    "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
 };
 

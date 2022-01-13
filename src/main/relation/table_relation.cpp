@@ -38,9 +38,9 @@ string TableRelation::ToString(idx_t depth) {
 	return RenderWhitespace(depth) + "Scan Table [" + description->table + "]";
 }
 
-static unique_ptr<ParsedExpression> ParseCondition(const string &condition) {
+static unique_ptr<ParsedExpression> ParseCondition(ClientContext &context, const string &condition) {
 	if (!condition.empty()) {
-		auto expression_list = Parser::ParseExpressionList(condition);
+		auto expression_list = Parser::ParseExpressionList(condition, context.GetParserOptions());
 		if (expression_list.size() != 1) {
 			throw ParserException("Expected a single expression as filter condition");
 		}
@@ -53,15 +53,15 @@ static unique_ptr<ParsedExpression> ParseCondition(const string &condition) {
 void TableRelation::Update(const string &update_list, const string &condition) {
 	vector<string> update_columns;
 	vector<unique_ptr<ParsedExpression>> expressions;
-	auto cond = ParseCondition(condition);
-	Parser::ParseUpdateList(update_list, update_columns, expressions);
+	auto cond = ParseCondition(context, condition);
+	Parser::ParseUpdateList(update_list, update_columns, expressions, context.GetParserOptions());
 	auto update = make_shared<UpdateRelation>(context, move(cond), description->schema, description->table,
 	                                          move(update_columns), move(expressions));
 	update->Execute();
 }
 
 void TableRelation::Delete(const string &condition) {
-	auto cond = ParseCondition(condition);
+	auto cond = ParseCondition(context, condition);
 	auto del = make_shared<DeleteRelation>(context, move(cond), description->schema, description->table);
 	del->Execute();
 }

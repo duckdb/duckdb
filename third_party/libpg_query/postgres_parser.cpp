@@ -44,12 +44,8 @@ vector<duckdb_libpgquery::PGKeyword> PostgresParser::KeywordList() {
 	return duckdb_libpgquery::keyword_list();
 }
 
-void PostgresParser::SetDowncaseIdentifier(bool downcase) {
-	duckdb_libpgquery::set_downcase_identifier(downcase);
-}
-
-bool PostgresParser::GetDowncaseIdentifier() {
-	return duckdb_libpgquery::get_downcase_identifier();
+void PostgresParser::SetPreserveIdentifierCase(bool preserve) {
+	duckdb_libpgquery::set_preserve_identifier_case(preserve);
 }
 
 }
