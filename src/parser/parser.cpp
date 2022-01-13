@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-Parser::Parser(ParserOptions options_p) : options(move(options_p)) {
+Parser::Parser(ParserOptions options_p) : options(options_p) {
 }
 
 void Parser::ParseQuery(const string &query) {
