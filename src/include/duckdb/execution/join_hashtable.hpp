@@ -127,8 +127,6 @@ public:
 	idx_t Count() {
 		return block_collection->count;
 	}
-	//! Compare Switch function to specify the type in which the keys will be compared
-	bool CompareKeysSwitch(data_ptr_t left_entry, data_ptr_t right_entry, const LogicalType &key_type);
 	//! Insert Hashes and check for primary key
 	inline void InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *indices, data_ptr_t key_locations[],
 	                                           data_ptr_t *pointers);
