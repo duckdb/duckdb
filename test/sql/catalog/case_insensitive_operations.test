@@ -49,6 +49,12 @@ NULL
 2
 3
 
+statement error
+WITH "CTE"("ZZZ") AS (
+	SELECT integers.i AS "ZZZ" FROM integers GROUP BY "zzz"
+),
+	"cte" AS (SELECT 42)
+
 query I
 UPDATE integers SET i=integers.i+1
 ----
