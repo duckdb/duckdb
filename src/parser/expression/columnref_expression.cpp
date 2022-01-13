@@ -57,7 +57,7 @@ bool ColumnRefExpression::Equals(const ColumnRefExpression *a, const ColumnRefEx
 	if (a->column_names.size() != b->column_names.size()) {
 		return false;
 	}
-	for(idx_t i = 0; i < a->column_names.size(); i++) {
+	for (idx_t i = 0; i < a->column_names.size(); i++) {
 		auto lcase_a = StringUtil::Lower(a->column_names[i]);
 		auto lcase_b = StringUtil::Lower(b->column_names[i]);
 		if (lcase_a != lcase_b) {

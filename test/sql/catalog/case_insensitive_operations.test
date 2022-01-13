@@ -30,7 +30,19 @@ NULL
 3
 
 query I
-SELECT integers.i AS "i" FROM integers GROUP BY "I" ORDER BY "INTEGERS"."i";
+SELECT integers.i AS "ZZZ" FROM integers GROUP BY "zzz" ORDER BY "INTEGERS"."i";
+----
+NULL
+1
+2
+3
+
+
+query I
+WITH "CTE"("ZZZ") AS (
+	SELECT integers.i AS "ZZZ" FROM integers GROUP BY "zzz"
+)
+SELECT * FROM cte ORDER BY zZz;
 ----
 NULL
 1
