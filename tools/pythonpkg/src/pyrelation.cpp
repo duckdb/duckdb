@@ -33,7 +33,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("join", &DuckDBPyRelation::Join,
 	         "Join the relation object with another relation object in other_rel using the join condition expression "
 	         "in join_condition. Types supported are 'inner' and 'left'",
-	         py::arg("other_rel"), py::arg("condition"), py::arg("type") = "left")
+	         py::arg("other_rel"), py::arg("condition"), py::arg("type") = "inner")
 	    .def("distinct", &DuckDBPyRelation::Distinct, "Retrieve distinct rows from this relation object")
 	    .def("limit", &DuckDBPyRelation::Limit, "Only retrieve the first n rows from this relation object",
 	         py::arg("n"))
