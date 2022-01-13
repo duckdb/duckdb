@@ -43,6 +43,10 @@ jobs:
       run: |
         make
 
+    - name: Uninstall OpenSSL
+      run: |
+        choco uninstall openssl -y --force --remove-dependencies
+
     - name: Deploy
       run: |
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
