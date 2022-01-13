@@ -1,4 +1,5 @@
 #include "httpfs.hpp"
+#include "duckdb/function/scalar/strftime.hpp"
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
 
@@ -185,8 +186,20 @@ void HTTPFileHandle::InitializeMetadata() {
 	}
 	length = std::atoll(res->headers["Content-Length"].c_str());
 
-	struct tm tm;
-	strptime(res->headers["Last-Modified"].c_str(), "%a, %d %h %Y %T %Z", &tm);
+	auto last_modified = res->headers["Last-Modified"];
+	if (last_modified.empty()) {
+		return;
+	}
+	auto result = StrpTimeFormat::Parse("%a, %d %h %Y %T %Z", last_modified);
+
+	struct tm tm {};
+	tm.tm_year = result.data[0] - 1900;
+	tm.tm_mon = result.data[1] - 1;
+	tm.tm_mday = result.data[2];
+	tm.tm_hour = result.data[3];
+	tm.tm_min = result.data[4];
+	tm.tm_sec = result.data[5];
+	tm.tm_isdst = 0;
 	last_modified = std::mktime(&tm);
 }
 

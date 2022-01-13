@@ -117,8 +117,13 @@ public:
 		timestamp_t ToTimestamp();
 		string FormatError(string_t input, const string &format_specifier);
 	};
+
+public:
 	//! The full format specifier, for error messages
 	string format_specifier;
+
+public:
+	static ParseResult Parse(const string &format, const string &text);
 
 	bool Parse(string_t str, ParseResult &result);
 
