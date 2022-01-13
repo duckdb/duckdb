@@ -105,9 +105,10 @@ public:
 	DUCKDB_API static FileSystem &GetFileSystem(DatabaseInstance &db);
 	DUCKDB_API static FileOpener *GetFileOpener(ClientContext &context);
 
-	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
-	                                        FileCompressionType compression = DEFAULT_COMPRESSION,
-	                                        FileOpener *opener = nullptr);
+	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags,
+	                                                   FileLockType lock = DEFAULT_LOCK,
+	                                                   FileCompressionType compression = DEFAULT_COMPRESSION,
+	                                                   FileOpener *opener = nullptr);
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
