@@ -22,6 +22,22 @@ NULL
 3
 
 query I
+SELECT integers.i AS i FROM integers GROUP BY I ORDER BY "integers"."I";
+----
+NULL
+1
+2
+3
+
+query I
+SELECT integers.i AS "i" FROM integers GROUP BY "I" ORDER BY "INTEGERS"."i";
+----
+NULL
+1
+2
+3
+
+query I
 UPDATE integers SET i=integers.i+1
 ----
 4
@@ -80,6 +96,31 @@ SELECT tbl.k FROM (SELECT j FROM integers) TBL(K) ORDER BY K;
 
 statement ok
 DROP TABLE integers;
+
+# structs
+statement ok
+CREATE TABLE STRUCTS(S ROW(I ROW(K INTEGER)));
+
+statement ok
+INSERT INTO structs VALUES ({'i': {'k': 42}});
+
+query III
+SELECT structs.S.i.K, "STRUCTS"."S"."I"."K", "structs"."s"."i"."k" FROM structs
+----
+42	42	42
+
+query I
+SELECT "STRUCTS"."S"."I"."K" FROM structs GROUP BY "STRUCTS"."S"."I"."K"
+----
+42
+
+query I
+SELECT structs.S.i.K FROM structs GROUP BY structs.S.i.K
+----
+42
+
+statement ok
+DROP TABLE structs;
 
 statement ok
 PRAGMA preserve_identifier_case=false;
