@@ -34,22 +34,23 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 	}
 
 	for (auto &kv : named_parameters) {
-		if (kv.first == "auto_detect") {
+		auto loption = StringUtil::Lower(kv.first);
+		if (loption == "auto_detect") {
 			options.auto_detect = BooleanValue::Get(kv.second);
-		} else if (kv.first == "sep" || kv.first == "delim") {
+		} else if (loption == "sep" || loption == "delim") {
 			options.SetDelimiter(StringValue::Get(kv.second));
-		} else if (kv.first == "header") {
+		} else if (loption == "header") {
 			options.header = BooleanValue::Get(kv.second);
 			options.has_header = true;
-		} else if (kv.first == "quote") {
+		} else if (loption == "quote") {
 			options.quote = StringValue::Get(kv.second);
 			options.has_quote = true;
-		} else if (kv.first == "escape") {
+		} else if (loption == "escape") {
 			options.escape = StringValue::Get(kv.second);
 			options.has_escape = true;
-		} else if (kv.first == "nullstr") {
+		} else if (loption == "nullstr") {
 			options.null_str = StringValue::Get(kv.second);
-		} else if (kv.first == "sample_size") {
+		} else if (loption == "sample_size") {
 			int64_t sample_size = kv.second.GetValue<int64_t>();
 			if (sample_size < 1 && sample_size != -1) {
 				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
@@ -64,7 +65,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
 				options.sample_chunks = sample_size / STANDARD_VECTOR_SIZE;
 			}
-		} else if (kv.first == "sample_chunk_size") {
+		} else if (loption == "sample_chunk_size") {
 			options.sample_chunk_size = kv.second.GetValue<int64_t>();
 			if (options.sample_chunk_size > STANDARD_VECTOR_SIZE) {
 				throw BinderException(
@@ -73,14 +74,14 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 			} else if (options.sample_chunk_size < 1) {
 				throw BinderException("Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be smaller than 1");
 			}
-		} else if (kv.first == "sample_chunks") {
+		} else if (loption == "sample_chunks") {
 			options.sample_chunks = kv.second.GetValue<int64_t>();
 			if (options.sample_chunks < 1) {
 				throw BinderException("Unsupported parameter for SAMPLE_CHUNKS: cannot be smaller than 1");
 			}
-		} else if (kv.first == "all_varchar") {
+		} else if (loption == "all_varchar") {
 			options.all_varchar = BooleanValue::Get(kv.second);
-		} else if (kv.first == "dateformat") {
+		} else if (loption == "dateformat") {
 			options.has_format[LogicalTypeId::DATE] = true;
 			auto &date_format = options.date_format[LogicalTypeId::DATE];
 			date_format.format_specifier = StringValue::Get(kv.second);
@@ -88,7 +89,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 			if (!error.empty()) {
 				throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
 			}
-		} else if (kv.first == "timestampformat") {
+		} else if (loption == "timestampformat") {
 			options.has_format[LogicalTypeId::TIMESTAMP] = true;
 			auto &timestamp_format = options.date_format[LogicalTypeId::TIMESTAMP];
 			timestamp_format.format_specifier = StringValue::Get(kv.second);
@@ -96,9 +97,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 			if (!error.empty()) {
 				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
 			}
-		} else if (kv.first == "normalize_names") {
+		} else if (loption == "normalize_names") {
 			options.normalize_names = BooleanValue::Get(kv.second);
-		} else if (kv.first == "columns") {
+		} else if (loption == "columns") {
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException("read_csv columns requires a a struct as input");
@@ -117,12 +118,14 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
-		} else if (kv.first == "compression") {
+		} else if (loption == "compression") {
 			options.compression = FileCompressionTypeFromString(StringValue::Get(kv.second));
-		} else if (kv.first == "filename") {
+		} else if (loption == "filename") {
 			result->include_file_name = BooleanValue::Get(kv.second);
-		} else if (kv.first == "skip") {
+		} else if (loption == "skip") {
 			options.skip_rows = kv.second.GetValue<int64_t>();
+		} else {
+			throw InternalException("Unrecognized parameter %s", kv.first);
 		}
 	}
 	if (!options.auto_detect && return_types.empty()) {
