@@ -26,11 +26,17 @@ public:
 	OrderBinder(vector<Binder *> binders, idx_t projection_index, SelectNode &node,
 	            unordered_map<string, idx_t> &alias_map, expression_map_t<idx_t> &projection_map);
 
+public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> expr);
+
+	idx_t MaxCount() {
+		return max_count;
+	}
 
 private:
 	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, idx_t index);
 
+private:
 	vector<Binder *> binders;
 	idx_t projection_index;
 	idx_t max_count;
