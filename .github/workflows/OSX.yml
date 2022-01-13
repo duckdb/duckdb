@@ -40,6 +40,7 @@ jobs:
     - name: Install OpenSSL
       run: |
         brew install openssl
+        export OPENSSL_ROOT_DIR=`brew --prefix openssl`
 
     - name: Build
       run: make
