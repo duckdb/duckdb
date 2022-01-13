@@ -945,7 +945,8 @@ typedef enum {
 	GROUPING_SET_SIMPLE,
 	GROUPING_SET_ROLLUP,
 	GROUPING_SET_CUBE,
-	GROUPING_SET_SETS
+	GROUPING_SET_SETS,
+	GROUPING_SET_ALL
 } GroupingSetKind;
 
 typedef struct PGGroupingSet {
