@@ -1,14 +1,10 @@
 #include "duckdb_odbc.hpp"
+
 #include <iostream>
 
 //! ODBC stub functions not implemented yet,
 //! when implementing the function must be moved to the proper source file
 //! Using std::cout instead of throw execptions because of MVSC's warning C4297
-
-SQLRETURN SQL_API SQLCloseCursor(SQLHSTMT statement_handle) {
-	std::cout << "***** SQLCloseCursor" << std::endl;
-	return SQL_ERROR;
-}
 
 SQLRETURN SQL_API SQLCopyDesc(SQLHDESC source_desc_handle, SQLHDESC target_desc_handle) {
 	std::cout << "***** SQLCopyDesc" << std::endl;
@@ -30,12 +26,6 @@ SQLRETURN SQL_API SQLDrivers(SQLHENV environment_handle, SQLUSMALLINT direction,
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLGetCursorName(SQLHSTMT statement_handle, SQLCHAR *cursor_name, SQLSMALLINT buffer_length,
-                                   SQLSMALLINT *name_length_ptr) {
-	std::cout << "***** SQLGetCursorName" << std::endl;
-	return SQL_ERROR;
-}
-
 SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT field_identifier,
                                   SQLPOINTER value_ptr, SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
 	std::cout << "***** SQLGetDescField" << std::endl;
@@ -51,11 +41,6 @@ SQLRETURN SQL_API SQLGetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 SQLRETURN SQL_API SQLNativeSql(SQLHDBC connection_handle, SQLCHAR *in_statement_text, SQLINTEGER text_length1,
                                SQLCHAR *out_statement_text, SQLINTEGER buffer_length, SQLINTEGER *text_length2_ptr) {
 	std::cout << "***** SQLNativeSql" << std::endl;
-	return SQL_ERROR;
-}
-
-SQLRETURN SQL_API SQLSetCursorName(SQLHSTMT statement_handle, SQLCHAR *cursor_name, SQLSMALLINT name_length) {
-	std::cout << "***** SQLSetCursorName" << std::endl;
 	return SQL_ERROR;
 }
 
