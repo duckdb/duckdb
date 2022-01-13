@@ -32,8 +32,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         py::arg("other_rel"))
 	    .def("join", &DuckDBPyRelation::Join,
 	         "Join the relation object with another relation object in other_rel using the join condition expression "
-	         "in join_condition",
-	         py::arg("other_rel"), py::arg("join_condition"))
+	         "in join_condition. Types supported are 'inner' and 'left'",
+	         py::arg("other_rel"), py::arg("condition"), py::arg("type") = "left")
 	    .def("distinct", &DuckDBPyRelation::Distinct, "Retrieve distinct rows from this relation object")
 	    .def("limit", &DuckDBPyRelation::Limit, "Only retrieve the first n rows from this relation object",
 	         py::arg("n"))
@@ -225,8 +225,19 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Intersect(DuckDBPyRelation *other
 	return make_unique<DuckDBPyRelation>(rel->Intersect(other->rel));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, const string &condition) {
-	return make_unique<DuckDBPyRelation>(rel->Join(other->rel, condition));
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, const string &condition,
+                                                    const string &type) {
+	JoinType dtype;
+	string type_string = StringUtil::Lower(type);
+	StringUtil::Trim(type_string);
+	if (type_string == "inner") {
+		dtype = JoinType::INNER;
+	} else if (type_string == "left") {
+		dtype = JoinType::LEFT;
+	} else {
+		throw std::runtime_error("Unsupported join type " + type_string + ", try 'inner' or 'left'");
+	}
+	return make_unique<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
 }
 
 void DuckDBPyRelation::WriteCsv(const string &file) {
