@@ -44,7 +44,7 @@ static py::handle FunctionCall(NumpyResultConversion &conversion, vector<string>
 // we call the passed function with a zero-row data frame to infer the output columns and their names.
 // they better not change in the actual execution ^^
 unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, vector<Value> &inputs,
-                                                      unordered_map<string, Value> &named_parameters,
+                                                      named_parameter_map_t &named_parameters,
                                                       vector<LogicalType> &input_table_types,
                                                       vector<string> &input_table_names,
                                                       vector<LogicalType> &return_types, vector<string> &names) {

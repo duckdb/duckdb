@@ -28,7 +28,7 @@ struct DSDGenFunctionData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value> &inputs,
-                                           unordered_map<string, Value> &named_parameters,
+                                           named_parameter_map_t &named_parameters,
                                            vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                            vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<DSDGenFunctionData>();
@@ -75,7 +75,7 @@ unique_ptr<FunctionOperatorData> TPCDSInit(ClientContext &context, const Functio
 }
 
 static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, vector<Value> &inputs,
-                                               unordered_map<string, Value> &named_parameters,
+                                               named_parameter_map_t &named_parameters,
                                                vector<LogicalType> &input_table_types,
                                                vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                vector<string> &names) {
@@ -110,7 +110,7 @@ static void TPCDSQueryFunction(ClientContext &context, const FunctionData *bind_
 }
 
 static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, vector<Value> &inputs,
-                                                     unordered_map<string, Value> &named_parameters,
+                                                     named_parameter_map_t &named_parameters,
                                                      vector<LogicalType> &input_table_types,
                                                      vector<string> &input_table_names,
                                                      vector<LogicalType> &return_types, vector<string> &names) {
