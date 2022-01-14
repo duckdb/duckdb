@@ -413,14 +413,14 @@ test('.databases', out='main:')
 
 # .dump test
 test('''
-CREATE TABLE a (I INTEGER);
+CREATE TABLE a (i INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump
 ''', 'CREATE TABLE a(i INTEGER)')
 
 test('''
-CREATE TABLE a (I INTEGER);
+CREATE TABLE a (i INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump
@@ -428,7 +428,7 @@ INSERT INTO a VALUES (42);
 
 # .dump a specific table
 test('''
-CREATE TABLE a (I INTEGER);
+CREATE TABLE a (i INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump a
@@ -436,7 +436,7 @@ INSERT INTO a VALUES (42);
 
 # .dump LIKE
 test('''
-CREATE TABLE a (I INTEGER);
+CREATE TABLE a (i INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump a%

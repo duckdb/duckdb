@@ -24,4 +24,7 @@ char *downcase_identifier(const char *ident, int len, bool warn, bool truncate);
 
 bool scanner_isspace(char ch);
 
+void set_preserve_identifier_case(bool downcase);
+bool get_preserve_identifier_case();
+
 }

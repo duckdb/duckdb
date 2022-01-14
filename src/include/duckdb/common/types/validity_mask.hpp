@@ -106,6 +106,41 @@ public:
 		return true;
 	}
 
+	idx_t CountValid(const idx_t count) const {
+		if (AllValid() || count == 0) {
+			return count;
+		}
+
+		idx_t valid = 0;
+		const auto entry_count = EntryCount(count);
+		for (idx_t entry_idx = 0; entry_idx < entry_count;) {
+			auto entry = GetValidityEntry(entry_idx++);
+			// Handle ragged end
+			if (entry_idx == entry_count) {
+				idx_t idx_in_entry;
+				GetEntryIndex(count, entry_idx, idx_in_entry);
+				for (idx_t i = 0; i < idx_in_entry; ++i) {
+					valid += idx_t(RowIsValid(entry, i));
+				}
+				break;
+			}
+
+			// Handle all set
+			if (AllValid(entry)) {
+				valid += BITS_PER_VALUE;
+				continue;
+			}
+
+			// Count partial entry (Kernighan's algorithm)
+			while (entry) {
+				entry &= (entry - 1);
+				++valid;
+			}
+		}
+
+		return valid;
+	}
+
 	inline V *GetData() const {
 		return validity_mask;
 	}
