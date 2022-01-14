@@ -135,7 +135,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		*pzTail = zSql + query.size();
 	}
 	try {
-		Parser parser;
+		Parser parser(db->con->context->GetParserOptions());
 		parser.ParseQuery(query);
 		if (parser.statements.size() == 0) {
 			return SQLITE_OK;

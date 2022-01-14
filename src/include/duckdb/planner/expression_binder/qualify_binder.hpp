@@ -17,7 +17,7 @@ namespace duckdb {
 class QualifyBinder : public SelectBinder {
 public:
 	QualifyBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
-	              unordered_map<string, idx_t> &alias_map);
+	              case_insensitive_map_t<idx_t> &alias_map);
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
