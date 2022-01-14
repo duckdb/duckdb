@@ -258,7 +258,7 @@ bool FileSystem::OnDiskFile(FileHandle &handle) {
 }
 // LCOV_EXCL_STOP
 
-FileHandle::FileHandle(FileSystem &file_system, string path) : file_system(file_system), path(path) {
+FileHandle::FileHandle(FileSystem &file_system, string path_p) : file_system(file_system), path(move(path_p)) {
 }
 
 FileHandle::~FileHandle() {
