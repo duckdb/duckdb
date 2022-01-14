@@ -134,6 +134,16 @@ void DataChunk::Split(DataChunk &other, idx_t split_idx) {
 	other.SetCardinality(*this);
 }
 
+void DataChunk::Fuse(DataChunk &other) {
+	D_ASSERT(other.size() == size());
+	const idx_t num_cols = other.data.size();
+	for (idx_t col_idx = 0; col_idx < num_cols; ++col_idx) {
+		data.emplace_back(move(other.data[col_idx]));
+		vector_caches.emplace_back(move(other.vector_caches[col_idx]));
+	}
+	other.Destroy();
+}
+
 void DataChunk::Append(const DataChunk &other, bool resize, SelectionVector *sel, idx_t sel_count) {
 	idx_t new_size = sel ? size() + sel_count : size() + other.size();
 	if (other.size() == 0) {

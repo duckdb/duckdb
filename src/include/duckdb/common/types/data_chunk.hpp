@@ -94,6 +94,9 @@ public:
 	//! Splits the DataChunk in two
 	DUCKDB_API void Split(DataChunk &other, idx_t split_idx);
 
+	//! Fuses a DataChunk onto the right of this one, and destroys the other. Inverse of Split.
+	DUCKDB_API void Fuse(DataChunk &other);
+
 	//! Turn all the vectors from the chunk into flat vectors
 	DUCKDB_API void Normalify();
 

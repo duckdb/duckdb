@@ -107,11 +107,7 @@ public:
 unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(ClientContext &context) const {
 	// Get the payload layout from the rhs types and tail predicates
 	RowLayout rhs_layout;
-	auto types = children[1]->types;
-	for (size_t comp_idx = 1; comp_idx < rhs_orders.size(); ++comp_idx) {
-		types.emplace_back(rhs_orders[comp_idx].expression->return_type);
-	}
-	rhs_layout.Initialize(types);
+	rhs_layout.Initialize(children[1]->types);
 	vector<BoundOrderByNode> rhs_order;
 	rhs_order.emplace_back(rhs_orders[0].Copy());
 	auto state = make_unique<MergeJoinGlobalState>(BufferManager::GetBufferManager(context), rhs_order, rhs_layout);
@@ -181,7 +177,7 @@ unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(Executi
 	return move(result);
 }
 
-static idx_t PiecewiseMergeNulls(DataChunk &keys) {
+static idx_t PiecewiseMergeNulls(DataChunk &keys, const vector<JoinCondition> &conditions) {
 	// Merge the validity masks of the comparison keys into the primary
 	// Return the number of NULLs in the resulting chunk
 	D_ASSERT(keys.ColumnCount() > 0);
@@ -207,6 +203,10 @@ static idx_t PiecewiseMergeNulls(DataChunk &keys) {
 		primary.Normalify(count);
 		auto &pvalidity = FlatVector::Validity(primary);
 		for (size_t c = 1; c < keys.data.size(); ++c) {
+			// Skip comparisons that accept NULLs
+			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+				continue;
+			}
 			//	Orrify the rest, as the sort code will do this anyway.
 			auto &v = keys.data[c];
 			VectorData vdata;
@@ -233,25 +233,12 @@ static idx_t PiecewiseMergeNulls(DataChunk &keys) {
 
 static inline void SinkPiecewiseMergeChunk(LocalSortState &sort_state, DataChunk &join_keys, DataChunk &input) {
 	if (join_keys.ColumnCount() > 1) {
-		// Append the tail of the join conditions to the end of the payload
-		DataChunk payload;
-		payload.data.reserve(input.ColumnCount() + join_keys.ColumnCount() - 1);
-		for (auto &v : input.data) {
-			payload.data.emplace_back(Vector(v));
-		}
-
+		//	Only sort the first key
 		DataChunk join_head;
-		for (auto &v : join_keys.data) {
-			if (join_head.data.empty()) {
-				join_head.data.emplace_back(Vector(v));
-			} else {
-				payload.data.emplace_back(Vector(v));
-			}
-		}
+		join_head.data.emplace_back(Vector(join_keys.data[0]));
 		join_head.SetCardinality(join_keys.size());
-		payload.SetCardinality(input.size());
 
-		sort_state.SinkChunk(join_head, payload);
+		sort_state.SinkChunk(join_head, input);
 	} else {
 		sort_state.SinkChunk(join_keys, input);
 	}
@@ -276,7 +263,7 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, Globa
 	lstate.rhs_executor.Execute(input, join_keys);
 
 	// Count the NULLs so we can exclude them later
-	lstate.rhs_has_null += PiecewiseMergeNulls(join_keys);
+	lstate.rhs_has_null += PiecewiseMergeNulls(join_keys, conditions);
 	lstate.rhs_count += join_keys.size();
 
 	// Sink the data into the local sort state
@@ -414,14 +401,18 @@ public:
 			lhs_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
 			memset(lhs_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 		}
-
-		// Payload plus tail comparisons
-		auto types = op.children[0]->types;
-		types.insert(types.end(), condition_types.begin() + 1, condition_types.end());
-		lhs_layout.Initialize(types);
+		lhs_layout.Initialize(op.children[0]->types);
 
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
+
+		// Set up shared data for multiple predicates
 		sel.Initialize(STANDARD_VECTOR_SIZE);
+		condition_types.clear();
+		for (auto &order : op.rhs_orders) {
+			rhs_executor.AddExpression(*order.expression);
+			condition_types.push_back(order.expression->return_type);
+		}
+		rhs_keys.Initialize(condition_types);
 	}
 
 	const PhysicalPiecewiseMergeJoin &op;
@@ -450,8 +441,10 @@ public:
 	idx_t right_base;
 
 	// Secondary predicate shared data
-	DataChunk payload;
 	SelectionVector sel;
+	DataChunk rhs_keys;
+	DataChunk rhs_input;
+	ExpressionExecutor rhs_executor;
 
 public:
 	void ResolveJoinKeys(DataChunk &input) {
@@ -461,7 +454,7 @@ public:
 
 		// Count the NULLs so we can exclude them later
 		lhs_count = lhs_keys.size();
-		lhs_has_null = PiecewiseMergeNulls(lhs_keys);
+		lhs_has_null = PiecewiseMergeNulls(lhs_keys, op.conditions);
 
 		// sort by join key
 		lhs_global_state = make_unique<GlobalSortState>(buffer_manager, lhs_order, lhs_layout);
@@ -852,49 +845,43 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		idx_t result_count = MergeJoinComplexBlocks(left_info, right_info, conditions[0].comparison);
 		auto sel = FlatVector::IncrementalSelectionVector();
 		if (result_count) {
+			// found matches: extract them
+			SliceSortedPayload(chunk, left_info, result_count, input.size());
+			SliceSortedPayload(chunk, right_info, result_count, right_info.entry_idx + 1, left_cols);
+			chunk.SetCardinality(result_count);
+
 			if (tail_cols) {
-				// Filter any secondary predicates
-				if (state.payload.data.empty()) {
-					auto types = left_info.state.payload_layout.GetTypes();
-					const auto &rtypes = right_info.state.payload_layout.GetTypes();
-					types.insert(types.end(), rtypes.begin(), rtypes.end());
-					state.payload.Initialize(types);
-				}
-
-				state.payload.Reset();
-				for (size_t c = 0; c < chunk.data.size(); ++c) {
-					if (c < input.data.size()) {
-						state.payload.data[c].Reference(chunk.data[c]);
-					} else {
-						state.payload.data[c + tail_cols].Reference(chunk.data[c]);
-					}
-				}
-
-				SliceSortedPayload(state.payload, left_info, result_count, input.size());
-				SliceSortedPayload(state.payload, right_info, result_count, right_info.entry_idx + 1,
-				                   left_cols + tail_cols);
+				// If there are more expressions to compute,
+				// split the result chunk into the left and right halves
+				// so we can compute the values for comparison.
+				chunk.Split(state.rhs_input, left_cols);
+				state.lhs_executor.SetChunk(chunk);
+				state.rhs_executor.SetChunk(state.rhs_input);
+				state.lhs_keys.Reset();
+				state.rhs_keys.Reset();
 
 				auto tail_count = result_count;
-				for (size_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
-					auto &left = state.payload.data[left_cols + cmp_idx];
-					auto &right = state.payload.data[state.payload.ColumnCount() + cmp_idx - tail_cols];
+				for (size_t cmp_idx = 1; cmp_idx < conditions.size(); ++cmp_idx) {
+					auto &left = state.lhs_keys.data[cmp_idx];
+					state.lhs_executor.ExecuteExpression(cmp_idx, left);
+
+					auto &right = state.rhs_keys.data[cmp_idx];
+					state.rhs_executor.ExecuteExpression(cmp_idx, right);
+
 					if (tail_count < result_count) {
 						left.Slice(*sel, tail_count);
 						right.Slice(*sel, tail_count);
 					}
 					tail_count =
-					    SelectJoinTail(conditions[cmp_idx + 1].comparison, left, right, sel, tail_count, &state.sel);
+					    SelectJoinTail(conditions[cmp_idx].comparison, left, right, sel, tail_count, &state.sel);
 					sel = &state.sel;
 				}
+				chunk.Fuse(state.rhs_input);
 
 				if (tail_count < result_count) {
 					result_count = tail_count;
 					chunk.Slice(*sel, result_count);
 				}
-			} else {
-				// found matches: extract them
-				SliceSortedPayload(chunk, left_info, result_count, input.size());
-				SliceSortedPayload(chunk, right_info, result_count, right_info.entry_idx + 1, input.ColumnCount());
 			}
 		}
 
