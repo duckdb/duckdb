@@ -850,3 +850,8 @@ SQLRETURN duckdb::BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT para
 		return SQL_SUCCESS;
 	});
 }
+
+SQLRETURN duckdb::CloseStmt(duckdb::OdbcHandleStmt *stmt) {
+	stmt->Close();
+	return SQL_SUCCESS;
+}
