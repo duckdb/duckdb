@@ -290,6 +290,7 @@ void PayloadScanner::Scan(DataChunk &chunk) {
 	auto count = MinValue((idx_t)STANDARD_VECTOR_SIZE, total_count - total_scanned);
 	if (count == 0) {
 		D_ASSERT(read_state.block_idx == sorted_data.data_blocks.size());
+		chunk.SetCardinality(count);
 		return;
 	}
 	// Eagerly delete references to blocks that we've passed
