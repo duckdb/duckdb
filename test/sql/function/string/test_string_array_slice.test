@@ -43,7 +43,7 @@ SELECT list_slice(s, 0, 2) FROM strings
 ----
 he
 wo
-NULL
+b
 NULL
 
 # index out of range
