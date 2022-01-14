@@ -1009,7 +1009,18 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				result_data[4] -= minute_offset;
 				break;
 			}
-
+			case StrTimeSpecifier::TZ_NAME: {
+				// skip leading spaces
+				while (pos < size && StringUtil::CharacterIsSpace(data[pos])) {
+					pos++;
+				}
+				// stop when we encounter a space or the end of the string
+				while (pos < size && !StringUtil::CharacterIsSpace(data[pos])) {
+					pos++;
+				}
+				// FIXME: actually use the timestamp...
+				break;
+			}
 			default:
 				throw NotImplementedException("Unsupported specifier for strptime");
 			}
