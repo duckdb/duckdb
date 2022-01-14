@@ -18,7 +18,28 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
                                                        JoinType join_type, idx_t estimated_cardinality)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, move(cond), join_type,
                              estimated_cardinality) {
-	// for now we only support one condition!
+	// Reorder the conditions so that ranges are at the front.
+	// TODO: use stats to improve the choice?
+	if (conditions.size() > 1) {
+		auto conditions_p = std::move(conditions);
+		conditions.resize(conditions_p.size());
+		idx_t range_position = 0;
+		idx_t other_position = conditions_p.size();
+		for (idx_t i = 0; i < conditions_p.size(); ++i) {
+			switch (conditions_p[i].comparison) {
+			case ExpressionType::COMPARE_LESSTHAN:
+			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			case ExpressionType::COMPARE_GREATERTHAN:
+			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+				conditions[range_position++] = std::move(conditions_p[i]);
+				break;
+			default:
+				conditions[--other_position] = std::move(conditions_p[i]);
+				break;
+			}
+		}
+	}
+
 	for (auto &cond : conditions) {
 		D_ASSERT(cond.left->return_type == cond.right->return_type);
 		join_key_types.push_back(cond.left->return_type);
@@ -37,8 +58,16 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
 			lhs_orders.emplace_back(BoundOrderByNode(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, move(left)));
 			rhs_orders.emplace_back(BoundOrderByNode(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, move(right)));
 			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			// Allowed in multi-predicate joins, but can't be first/sort.
+			D_ASSERT(!lhs_orders.empty());
+			lhs_orders.emplace_back(BoundOrderByNode(OrderType::INVALID, OrderByNullType::NULLS_LAST, move(left)));
+			rhs_orders.emplace_back(BoundOrderByNode(OrderType::INVALID, OrderByNullType::NULLS_LAST, move(right)));
+			break;
+
 		default:
-			// COMPARE NOT EQUAL not supported with merge join
+			// COMPARE EQUAL not supported with merge join
 			throw NotImplementedException("Unimplemented join type for merge join");
 		}
 	}
@@ -392,6 +421,7 @@ public:
 		lhs_layout.Initialize(types);
 
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
+		sel.Initialize(STANDARD_VECTOR_SIZE);
 	}
 
 	const PhysicalPiecewiseMergeJoin &op;
@@ -820,6 +850,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		                          state.right_position, rhs_not_null);
 
 		idx_t result_count = MergeJoinComplexBlocks(left_info, right_info, conditions[0].comparison);
+		auto sel = FlatVector::IncrementalSelectionVector();
 		if (result_count) {
 			if (tail_cols) {
 				// Filter any secondary predicates
@@ -828,7 +859,6 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 					const auto &rtypes = right_info.state.payload_layout.GetTypes();
 					types.insert(types.end(), rtypes.begin(), rtypes.end());
 					state.payload.Initialize(types);
-					state.sel.Initialize(STANDARD_VECTOR_SIZE);
 				}
 
 				state.payload.Reset();
@@ -844,17 +874,22 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 				SliceSortedPayload(state.payload, right_info, result_count, right_info.entry_idx + 1,
 				                   left_cols + tail_cols);
 
-				auto sel = FlatVector::IncrementalSelectionVector();
+				auto tail_count = result_count;
 				for (size_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
 					auto &left = state.payload.data[left_cols + cmp_idx];
 					auto &right = state.payload.data[state.payload.ColumnCount() + cmp_idx - tail_cols];
-					result_count =
-					    SelectJoinTail(conditions[cmp_idx + 1].comparison, left, right, sel, result_count, &state.sel);
+					if (tail_count < result_count) {
+						left.Slice(*sel, tail_count);
+						right.Slice(*sel, tail_count);
+					}
+					tail_count =
+					    SelectJoinTail(conditions[cmp_idx + 1].comparison, left, right, sel, tail_count, &state.sel);
 					sel = &state.sel;
 				}
 
-				if (result_count) {
-					chunk.Slice(state.sel, result_count);
+				if (tail_count < result_count) {
+					result_count = tail_count;
+					chunk.Slice(*sel, result_count);
 				}
 			} else {
 				// found matches: extract them
@@ -877,14 +912,14 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			// found matches: mark the found matches if required
 			if (state.lhs_found_match) {
 				for (idx_t i = 0; i < result_count; i++) {
-					state.lhs_found_match[left_info.result[state.sel.get_index(i)]] = true;
+					state.lhs_found_match[left_info.result[sel->get_index(i)]] = true;
 				}
 			}
 			if (gstate.rhs_found_match) {
 				//	Absolute position of the block + start position inside that block
 				const idx_t base_index = state.right_base + right_info.base_idx;
 				for (idx_t i = 0; i < result_count; i++) {
-					gstate.rhs_found_match[base_index + right_info.result[state.sel.get_index(i)]] = true;
+					gstate.rhs_found_match[base_index + right_info.result[sel->get_index(i)]] = true;
 				}
 			}
 			chunk.SetCardinality(result_count);
