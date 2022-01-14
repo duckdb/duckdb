@@ -1,7 +1,7 @@
 name: Cancel
 on:
   workflow_run:
-    workflows: ["Main", "LinuxRelease", "NodeJS", "OSX", "Python", "R", "Windows", "Regression"]
+    workflows: ["Main", "LinuxRelease", "NodeJS", "OSX", "Python", "R", "Windows", "Regression", "cifuzz"]
     branches-ignore:
       - master
     types:

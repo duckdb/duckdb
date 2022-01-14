@@ -35,6 +35,10 @@ struct ClientConfig {
 	//! The wait time before showing the progress bar
 	int wait_time = 2000;
 
+	//! Preserve identifier case while parsing.
+	//! If false, all unquoted identifiers are lower-cased (e.g. "MyTable" -> "mytable").
+	bool preserve_identifier_case = true;
+
 	// Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;
 	//! Enable the running of optimizers

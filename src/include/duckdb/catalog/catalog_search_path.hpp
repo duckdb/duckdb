@@ -22,7 +22,7 @@ class ClientContext;
 class CatalogSearchPath {
 public:
 	DUCKDB_API explicit CatalogSearchPath(ClientContext &client_p);
-	DUCKDB_API CatalogSearchPath(const CatalogSearchPath &other) = delete;
+	CatalogSearchPath(const CatalogSearchPath &other) = delete;
 
 	DUCKDB_API void Set(const string &new_value, bool is_set_schema);
 	DUCKDB_API const vector<string> &Get();

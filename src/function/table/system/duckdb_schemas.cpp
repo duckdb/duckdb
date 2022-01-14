@@ -16,7 +16,7 @@ struct DuckDBSchemasData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> DuckDBSchemasBind(ClientContext &context, vector<Value> &inputs,
-                                                  unordered_map<string, Value> &named_parameters,
+                                                  named_parameter_map_t &named_parameters,
                                                   vector<LogicalType> &input_table_types,
                                                   vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                   vector<string> &names) {

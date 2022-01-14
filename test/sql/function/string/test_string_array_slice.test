@@ -34,6 +34,15 @@ SELECT array_slice(s, 0, 2) FROM strings
 ----
 he
 wo
+b
+NULL
+
+# list_slice alias
+query T
+SELECT list_slice(s, 0, 2) FROM strings
+----
+he
+wo
 NULL
 NULL
 
@@ -43,7 +52,7 @@ SELECT array_slice(s, 1, 3) FROM strings
 ----
 el
 or
-NULL
+(empty)
 NULL
 
 # variable length offset/length
@@ -60,7 +69,7 @@ SELECT array_slice(s, off, 2+off) FROM strings
 ----
 he
 or
-NULL
+b
 NULL
 
 query T
@@ -185,17 +194,17 @@ NULL
 query T
 SELECT array_slice(s, (2147483647-1), 1) FROM strings
 ----
-NULL
-NULL
-NULL
+(empty)
+(empty)
+(empty)
 NULL
 
 query T
 SELECT array_slice(s, (2147483647-1), -1) FROM strings
 ----
-NULL
-NULL
-NULL
+(empty)
+(empty)
+(empty)
 NULL
 
 query T
