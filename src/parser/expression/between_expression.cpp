@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/between_expression.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -31,17 +32,16 @@ unique_ptr<ParsedExpression> BetweenExpression::Copy() const {
 	return move(copy);
 }
 
-void BetweenExpression::Serialize(Serializer &serializer) const {
-	ParsedExpression::Serialize(serializer);
-	input->Serialize(serializer);
-	lower->Serialize(serializer);
-	upper->Serialize(serializer);
+void BetweenExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializable(*input);
+	writer.WriteSerializable(*lower);
+	writer.WriteSerializable(*upper);
 }
 
-unique_ptr<ParsedExpression> BetweenExpression::Deserialize(ExpressionType type, Deserializer &source) {
-	auto input = ParsedExpression::Deserialize(source);
-	auto lower = ParsedExpression::Deserialize(source);
-	auto upper = ParsedExpression::Deserialize(source);
+unique_ptr<ParsedExpression> BetweenExpression::Deserialize(ExpressionType type, FieldReader &source) {
+	auto input = source.ReadRequiredSerializable<ParsedExpression>();
+	auto lower = source.ReadRequiredSerializable<ParsedExpression>();
+	auto upper = source.ReadRequiredSerializable<ParsedExpression>();
 	return make_unique<BetweenExpression>(move(input), move(lower), move(upper));
 }
 

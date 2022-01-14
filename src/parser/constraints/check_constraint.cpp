@@ -21,7 +21,7 @@ void CheckConstraint::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<Constraint> CheckConstraint::Deserialize(FieldReader &source) {
-	auto expression = source.ReadSerializableMandatory<ParsedExpression>();
+	auto expression = source.ReadRequiredSerializable<ParsedExpression>();
 	return make_unique<CheckConstraint>(move(expression));
 }
 

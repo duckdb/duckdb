@@ -10,6 +10,7 @@
 
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
+#include <type_traits>
 
 namespace duckdb {
 class BufferedSerializer;
@@ -22,16 +23,30 @@ public:
 public:
 	template <class T>
 	void WriteField(const T &element) {
+		static_assert(std::is_trivially_destructible<T>(), "WriteField object must be trivially destructible");
+
 		AddField();
 		WriteData((const_data_ptr_t)&element, sizeof(T));
 	}
 
-	template <class T>
-	void WriteList(const vector<T> &elements) {
+	//! Write a string with a length prefix
+	void WriteString(const string &val) {
+		WriteStringLen((const_data_ptr_t)val.c_str(), val.size());
+	}
+	void WriteStringLen(const_data_ptr_t val, idx_t len) {
+		AddField();
+		Write<uint32_t>((uint32_t)len);
+		if (len > 0) {
+			WriteData(val, len);
+		}
+	}
+
+	template <class T, class CONTAINER_TYPE=vector<T>>
+	void WriteList(const CONTAINER_TYPE &elements) {
 		AddField();
 		Write<uint32_t>(elements.size());
-		for(idx_t i = 0; i < elements.size(); i++) {
-			Write<T>(elements[i]);
+		for(auto &element : elements) {
+			Write<T>(element);
 		}
 	}
 
@@ -39,6 +54,15 @@ public:
 	void WriteSerializable(const T &element) {
 		AddField();
 		element.Serialize(*buffer);
+	}
+
+	template <class T>
+	void WriteSerializableList(const vector<unique_ptr<T>> &elements) {
+		AddField();
+		Write<uint32_t>(elements.size());
+		for(idx_t i = 0; i < elements.size(); i++) {
+			elements[i]->Serialize(*buffer);
+		}
 	}
 
 	template <class T>
@@ -52,6 +76,10 @@ public:
 
 	// Called after all fields have been written. Should always be called.
 	void Finalize();
+
+	Serializer &GetSerializer() {
+		return *buffer;
+	}
 
 private:
 	void AddField() {
@@ -72,7 +100,22 @@ private:
 };
 
 template <>
-void FieldWriter::Write(const string &element);
+void FieldWriter::Write(const string &val);
+
+class FieldDeserializer : public Deserializer {
+public:
+	FieldDeserializer(Deserializer &root);
+
+public:
+	void ReadData(data_ptr_t buffer, idx_t read_size) override;
+
+	void SetRemainingData(idx_t remaining_data);
+	idx_t RemainingData();
+
+private:
+	Deserializer &root;
+	idx_t remaining_data;
+};
 
 class FieldReader {
 public:
@@ -117,19 +160,19 @@ public:
 		return result;
 	}
 
-	template <class T, class RETURN_TYPE = T>
-	unique_ptr<RETURN_TYPE> ReadOptional(unique_ptr<RETURN_TYPE> default_value) {
+	template <class T>
+	unique_ptr<T> ReadOptional(unique_ptr<T> default_value) {
 		if (field_count >= max_field_count) {
 			// field is not there, read the default value
 			return default_value;
 		}
 		// field is there, read the actual value
 		AddField();
-		return source.template ReadOptional<T, RETURN_TYPE>();
+		return source.template ReadOptional<T>();
 	}
 
-	template<class T, class RETURN_TYPE = T>
-	unique_ptr<RETURN_TYPE> ReadSerializable(unique_ptr<RETURN_TYPE> default_value) {
+	template<class T, class RETURN_TYPE = unique_ptr<T>>
+	RETURN_TYPE ReadSerializable(RETURN_TYPE default_value) {
 		if (field_count >= max_field_count) {
 			// field is not there, read the default value
 			return default_value;
@@ -139,8 +182,8 @@ public:
 		return T::Deserialize(source);
 	}
 
-	template<class T, class RETURN_TYPE = T>
-	unique_ptr<RETURN_TYPE> ReadSerializableMandatory() {
+	template<class T, class RETURN_TYPE = unique_ptr<T>>
+	RETURN_TYPE ReadRequiredSerializable() {
 		if (field_count >= max_field_count) {
 			// field is not there, read the default value
 			throw SerializationException("Attempting to read mandatory field, but field is missing");
@@ -150,8 +193,29 @@ public:
 		return T::Deserialize(source);
 	}
 
+	template<class T, class RETURN_TYPE = unique_ptr<T>>
+	vector<RETURN_TYPE> ReadRequiredSerializableList() {
+		if (field_count >= max_field_count) {
+			// field is not there, read the default value
+			throw SerializationException("Attempting to read mandatory field, but field is missing");
+		}
+		// field is there, read the actual value
+		AddField();
+		auto result_count = source.Read<uint32_t>();
+
+		vector<RETURN_TYPE> result;
+		for(idx_t i = 0; i < result_count; i++) {
+			result.push_back(T::Deserialize(source));
+		}
+		return result;
+	}
+
 	//! Called after all fields have been read. Should always be called.
 	void Finalize();
+
+	Deserializer &GetSource() {
+		return source;
+	}
 
 private:
 	void AddField() {
@@ -159,7 +223,7 @@ private:
 	}
 
 private:
-	Deserializer &source;
+	FieldDeserializer source;
 	idx_t field_count;
 	idx_t max_field_count;
 	idx_t total_size;

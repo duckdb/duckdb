@@ -3,7 +3,7 @@
 #include <utility>
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
@@ -107,26 +107,28 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	return move(copy);
 }
 
-void FunctionExpression::Serialize(Serializer &serializer) const {
-	ParsedExpression::Serialize(serializer);
-	serializer.WriteString(function_name);
-	serializer.WriteString(schema);
-	serializer.WriteList(children);
-	serializer.WriteOptional(filter);
+void FunctionExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteString(function_name);
+	writer.WriteString(schema);
+	writer.WriteSerializableList(children);
+	writer.WriteOptional(filter);
+	// FIXME: should not use serializer here
+	auto &serializer = writer.GetSerializer();
 	order_bys->Serialize(serializer);
-	serializer.Write<bool>(distinct);
-	serializer.Write<bool>(is_operator);
+	writer.WriteField<bool>(distinct);
+	writer.WriteField<bool>(is_operator);
 }
 
-unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type, Deserializer &source) {
-	vector<unique_ptr<ParsedExpression>> children;
-	auto function_name = source.Read<string>();
-	auto schema = source.Read<string>();
-	source.ReadList<ParsedExpression>(children);
-	auto filter = source.ReadOptional<ParsedExpression>();
+unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	auto function_name = reader.ReadRequired<string>();
+	auto schema = reader.ReadRequired<string>();
+	auto children = reader.ReadRequiredSerializableList<ParsedExpression>();
+	auto filter = reader.ReadOptional<ParsedExpression>(nullptr);
+	// FIXME: should not use source here
+	auto &source = reader.GetSource();
 	unique_ptr<OrderModifier> order_bys(static_cast<OrderModifier *>(ResultModifier::Deserialize(source).release()));
-	auto distinct = source.Read<bool>();
-	auto is_operator = source.Read<bool>();
+	auto distinct = reader.ReadRequired<bool>();
+	auto is_operator = reader.ReadRequired<bool>();
 	unique_ptr<FunctionExpression> function;
 	function = make_unique<FunctionExpression>(function_name, move(children), move(filter), move(order_bys), distinct,
 	                                           is_operator);

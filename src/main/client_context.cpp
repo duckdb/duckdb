@@ -528,7 +528,12 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		auto copied_statement = statement->Copy();
 		if (statement->type == StatementType::SELECT_STATEMENT) {
 			// in case this is a select query, we verify the original statement
-			string error = VerifyQuery(lock, query, move(statement));
+			string error;
+			try {
+				error = VerifyQuery(lock, query, move(statement));
+			} catch(std::exception &ex) {
+				error = ex.what();
+			}
 			if (!error.empty()) {
 				// error in verifying query
 				return make_unique<PendingQueryResult>(error);

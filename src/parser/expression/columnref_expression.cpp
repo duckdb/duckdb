@@ -1,7 +1,6 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
@@ -70,20 +69,12 @@ unique_ptr<ParsedExpression> ColumnRefExpression::Copy() const {
 	return move(copy);
 }
 
-void ColumnRefExpression::Serialize(Serializer &serializer) const {
-	ParsedExpression::Serialize(serializer);
-	serializer.Write<idx_t>(column_names.size());
-	for (auto &column_name : column_names) {
-		serializer.WriteString(column_name);
-	}
+void ColumnRefExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteList<string>(column_names);
 }
 
-unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType type, Deserializer &source) {
-	auto column_count = source.Read<idx_t>();
-	vector<string> column_names;
-	for (idx_t i = 0; i < column_count; i++) {
-		column_names.push_back(source.Read<string>());
-	}
+unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	auto column_names = reader.ReadRequiredList<string>();
 	auto expression = make_unique<ColumnRefExpression>(move(column_names));
 	return move(expression);
 }

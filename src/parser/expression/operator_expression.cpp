@@ -1,7 +1,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -60,14 +60,13 @@ unique_ptr<ParsedExpression> OperatorExpression::Copy() const {
 	return move(copy);
 }
 
-void OperatorExpression::Serialize(Serializer &serializer) const {
-	ParsedExpression::Serialize(serializer);
-	serializer.WriteList(children);
+void OperatorExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializableList(children);
 }
 
-unique_ptr<ParsedExpression> OperatorExpression::Deserialize(ExpressionType type, Deserializer &source) {
+unique_ptr<ParsedExpression> OperatorExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto expression = make_unique<OperatorExpression>(type);
-	source.ReadList<ParsedExpression>(expression->children);
+	expression->children = reader.ReadRequiredSerializableList<ParsedExpression>();
 	return move(expression);
 }
 

@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector.hpp"
+#include <type_traits>
 
 namespace duckdb {
 
@@ -24,6 +25,8 @@ public:
 
 	template <class T>
 	void Write(T element) {
+		static_assert(std::is_trivially_destructible<T>(), "Write element must be trivially destructible");
+
 		WriteData((const_data_ptr_t)&element, sizeof(T));
 	}
 

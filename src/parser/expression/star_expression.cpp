@@ -1,7 +1,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -59,28 +59,33 @@ bool StarExpression::Equals(const StarExpression *a, const StarExpression *b) {
 	return true;
 }
 
-void StarExpression::Serialize(Serializer &serializer) const {
-	ParsedExpression::Serialize(serializer);
-	serializer.WriteString(relation_name);
-	serializer.Write<uint32_t>(exclude_list.size());
+void StarExpression::Serialize(FieldWriter &writer) const {
+	auto &serializer = writer.GetSerializer();
+
+	writer.WriteString(relation_name);
+
+	// in order to write the exclude_list/replace_list as single fields we directly use the field writers' internal serializer
+	writer.WriteField<uint32_t>(exclude_list.size());
 	for (auto &exclusion : exclude_list) {
 		serializer.WriteString(exclusion);
 	}
-	serializer.Write<uint32_t>(replace_list.size());
+	writer.WriteField<uint32_t>(replace_list.size());
 	for (auto &entry : replace_list) {
 		serializer.WriteString(entry.first);
 		entry.second->Serialize(serializer);
 	}
 }
 
-unique_ptr<ParsedExpression> StarExpression::Deserialize(ExpressionType type, Deserializer &source) {
+unique_ptr<ParsedExpression> StarExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	auto &source = reader.GetSource();
+
 	auto result = make_unique<StarExpression>();
-	result->relation_name = source.Read<string>();
-	auto exclusion_count = source.Read<uint32_t>();
+	result->relation_name = reader.ReadRequired<string>();
+	auto exclusion_count = reader.ReadRequired<uint32_t>();
 	for (idx_t i = 0; i < exclusion_count; i++) {
 		result->exclude_list.insert(source.Read<string>());
 	}
-	auto replace_count = source.Read<uint32_t>();
+	auto replace_count = reader.ReadRequired<uint32_t>();
 	for (idx_t i = 0; i < replace_count; i++) {
 		auto name = source.Read<string>();
 		auto expr = ParsedExpression::Deserialize(source);
