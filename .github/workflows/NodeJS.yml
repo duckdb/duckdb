@@ -74,7 +74,7 @@ jobs:
 
       strategy:
         matrix:
-          node: [ '10', '12', '14', '15', '17' ]
+          node: [ '10', '12', '14', '15' ]
 
       steps:
       - uses: actions/checkout@v2
