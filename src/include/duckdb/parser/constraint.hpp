@@ -45,8 +45,7 @@ public:
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	//! Serializes a Constraint to a stand-alone binary blob
 	DUCKDB_API virtual void Serialize(FieldWriter &writer) const = 0;
-	//! Deserializes a blob back into a Constraint, returns NULL if
-	//! deserialization is not possible
+	//! Deserializes a blob back into a Constraint
 	DUCKDB_API static unique_ptr<Constraint> Deserialize(Deserializer &source);
 };
 } // namespace duckdb

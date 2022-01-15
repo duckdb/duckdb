@@ -23,17 +23,22 @@ void Constraint::Serialize(Serializer &serializer) const {
 unique_ptr<Constraint> Constraint::Deserialize(Deserializer &source) {
 	FieldReader reader(source);
 	auto type = reader.ReadRequired<ConstraintType>();
+	unique_ptr<Constraint> result;
 	switch (type) {
 	case ConstraintType::NOT_NULL:
-		return NotNullConstraint::Deserialize(reader);
+		result = NotNullConstraint::Deserialize(reader);
+		break;
 	case ConstraintType::CHECK:
-		return CheckConstraint::Deserialize(reader);
+		result = CheckConstraint::Deserialize(reader);
+		break;
 	case ConstraintType::UNIQUE:
-		return UniqueConstraint::Deserialize(reader);
+		result = UniqueConstraint::Deserialize(reader);
+		break;
 	default:
 		throw InternalException("Unrecognized constraint type for serialization");
 	}
 	reader.Finalize();
+	return result;
 }
 
 void Constraint::Print() const {

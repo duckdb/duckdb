@@ -66,6 +66,15 @@ public:
 	}
 
 	template <class T>
+	void WriteRegularSerializableList(const vector<T> &elements) {
+		AddField();
+		Write<uint32_t>(elements.size());
+		for(idx_t i = 0; i < elements.size(); i++) {
+			elements[i].Serialize(*buffer);
+		}
+	}
+
+	template <class T>
 	void WriteOptional(const unique_ptr<T> &element) {
 		AddField();
 		Write<bool>(element ? true : false);
