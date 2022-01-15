@@ -146,17 +146,17 @@ struct Color {
 	const char *highlight;
 };
 static Color terminal_colors[] = {{"red", "\033[31m"},           {"green", "\033[32m"},
-								{"yellow", "\033[33m"},        {"blue", "\033[34m"},
-								{"magenta", "\033[35m"},       {"cyan", "\033[36m"},
-								{"white", "\033[37m"},         {"brightblack", "\033[90m"},
-								{"brightred", "\033[91m"},     {"brightgreen", "\033[92m"},
-								{"brightyellow", "\033[93m"},  {"brightblue", "\033[94m"},
-								{"brightmagenta", "\033[95m"}, {"brightcyan", "\033[96m"},
-								{"brightwhite", "\033[97m"},   {nullptr, nullptr}};
-const char* bold = "\033[1m";
-const char* keyword = "\033[32m\033[1m";
-const char* constant = "\033[33m";
-const char* reset = "\033[00m";	
+                                  {"yellow", "\033[33m"},        {"blue", "\033[34m"},
+                                  {"magenta", "\033[35m"},       {"cyan", "\033[36m"},
+                                  {"white", "\033[37m"},         {"brightblack", "\033[90m"},
+                                  {"brightred", "\033[91m"},     {"brightgreen", "\033[92m"},
+                                  {"brightyellow", "\033[93m"},  {"brightblue", "\033[94m"},
+                                  {"brightmagenta", "\033[95m"}, {"brightcyan", "\033[96m"},
+                                  {"brightwhite", "\033[97m"},   {nullptr, nullptr}};
+const char *bold = "\033[1m";
+const char *keyword = "\033[32m\033[1m";
+const char *constant = "\033[33m";
+const char *reset = "\033[00m";
 #endif
 
 /* The linenoiseState structure represents the state during line editing.
@@ -625,12 +625,13 @@ int linenoiseParseOption(const char **azArg, int nArg, const char **out_error) {
 		             "brightblue|brightmagenta|brightcyan|brightwhite]";
 		return 1;
 	} else if (strcmp(azArg[0], "resetcolors") == 0) {
-		if (nArg == 1){bold = "\033[1m";
+		if (nArg == 1) {
+			bold = "\033[1m";
 			keyword = "\033[32m\033[1m";
 			constant = "\033[33m";
-			reset = "\033[00m";	
+			reset = "\033[00m";
 			return 1;
-			}
+		}
 		*out_error = "Expected usage: .resetcolors";
 		return 1;
 	} else if (strcmp(azArg[0], "constant") == 0) {
@@ -647,14 +648,14 @@ int linenoiseParseOption(const char **azArg, int nArg, const char **out_error) {
 		return 1;
 	} else if (strcmp(azArg[0], "keywordcode") == 0) {
 		if (nArg == 2) {
-			keyword = azArg[1];
+			keyword = strdup(azArg[1]);
 			return 1;
 		}
 		*out_error = "Expected usage: .keywordcode [terminal_code]";
 		return 1;
 	} else if (strcmp(azArg[0], "constantcode") == 0) {
 		if (nArg == 2) {
-			constant = azArg[1];
+			constant = strdup(azArg[1]);
 			return 1;
 		}
 		*out_error = "Expected usage: .constantcode [terminal_code]";
