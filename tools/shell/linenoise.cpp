@@ -153,10 +153,10 @@ static Color terminal_colors[] = {{"red", "\033[31m"},           {"green", "\033
 								{"brightyellow", "\033[93m"},  {"brightblue", "\033[94m"},
 								{"brightmagenta", "\033[95m"}, {"brightcyan", "\033[96m"},
 								{"brightwhite", "\033[97m"},   {nullptr, nullptr}};
-char const *bold = "\033[1m";
-char const *keyword = "\033[32m\033[1m";
-char const *constant = "\033[33m";
-char const *reset = "\033[00m";	
+const char* bold = "\033[1m";
+const char* keyword = "\033[32m\033[1m";
+const char* constant = "\033[33m";
+const char* reset = "\033[00m";	
 #endif
 
 /* The linenoiseState structure represents the state during line editing.
