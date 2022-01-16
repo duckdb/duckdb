@@ -21,6 +21,7 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.Properties;
+import java.util.TimeZone;
 
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
@@ -322,7 +323,26 @@ public class TestDuckDBJDBC {
 		stmt1.close();
 	}
 
-	public static void test_duckdb_timestamp() throws Exception {
+public static void test_duckdb_timestamp() throws Exception {
+
+		duckdb_timestamp_test();
+
+		// Store default time zone
+		TimeZone defaultTZ = TimeZone.getDefault(); 
+
+		// Test with different time zones
+		TimeZone.setDefault(TimeZone.getTimeZone("America/Lima"));
+		duckdb_timestamp_test();
+
+		// Test with different time zones
+		TimeZone.setDefault(TimeZone.getTimeZone("Europe/Berlin"));
+		duckdb_timestamp_test();
+
+		// Restore default time zone
+		TimeZone.setDefault(defaultTZ);
+	}
+
+	public static void duckdb_timestamp_test() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 		stmt.execute("CREATE TABLE a (ts TIMESTAMP)");
