@@ -135,12 +135,6 @@ FROM timestamps
 WHERE p <> s['${partcode}'];
 ----
 
-query III
-SELECT ts, DATE_PART('${partcode}', ts) AS p, DATE_PART(['${partcode}'], ts) AS s
-FROM millennia
-WHERE p <> s['${partcode}'];
-----
-
 endloop
 
 # Date parts
