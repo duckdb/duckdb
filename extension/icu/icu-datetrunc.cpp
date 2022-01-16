@@ -60,6 +60,11 @@ struct ICUDateTrunc : public ICUDateFunc {
 		calendar->set(UCAL_MONTH, UCAL_JANUARY);
 	}
 
+	static void TruncISOYear(icu::Calendar *calendar, uint64_t &micros) {
+		TruncWeek(calendar, micros);
+		calendar->set(UCAL_WEEK_OF_YEAR, 1);
+	}
+
 	static void TruncDecade(icu::Calendar *calendar, uint64_t &micros) {
 		TruncYear(calendar, micros);
 		auto yyyy = ExtractField(calendar, UCAL_YEAR) / 10;
@@ -155,6 +160,8 @@ ICUDateFunc::part_trunc_t ICUDateFunc::TruncationFactory(DatePartSpecifier type)
 	case DatePartSpecifier::WEEK:
 	case DatePartSpecifier::YEARWEEK:
 		return ICUDateTrunc::TruncWeek;
+	case DatePartSpecifier::ISOYEAR:
+		return ICUDateTrunc::TruncISOYear;
 	case DatePartSpecifier::DAY:
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:

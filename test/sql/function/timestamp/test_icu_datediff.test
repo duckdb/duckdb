@@ -14,29 +14,35 @@ statement ok
 CREATE TABLE datetime1 AS
 SELECT '2005-12-31 23:59:59.9999999-08'::TIMESTAMPTZ AS startdate, '2006-01-01 00:00:00.0000000-08'::TIMESTAMPTZ AS enddate;
 
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond'
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond
 
 query I
-SELECT DATEDIFF(${datepart}, startdate, enddate) FROM datetime1
+SELECT DATEDIFF('${datepart}', startdate, enddate) FROM datetime1
 ----
 1
 
 endloop
 
-foreach datepart 'decade' 'century' 'millennium' 'week' 'yearweek'
+foreach datepart decade century millennium week yearweek isoyear
 
 query I
-SELECT DATEDIFF(${datepart}, startdate, enddate) FROM datetime1
+SELECT DATEDIFF('${datepart}', startdate, enddate) FROM datetime1
 ----
 0
 
 endloop
 
+# ISO Year boundary
+query I
+SELECT DATEDIFF('isoyear', '2021-12-26 00:00:00-08'::TIMESTAMPTZ, '2022-01-01 00:00:00-08'::TIMESTAMPTZ);
+----
+1
+
 # Negation
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week' 'yearweek'
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear
 
 query I
-SELECT DATEDIFF(${datepart}, startdate, enddate) + DATEDIFF(${datepart}, enddate, startdate) FROM datetime1
+SELECT DATEDIFF('${datepart}', startdate, enddate) + DATEDIFF('${datepart}', enddate, startdate) FROM datetime1
 ----
 0
 
