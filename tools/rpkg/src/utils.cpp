@@ -2,6 +2,7 @@
 #include "cpp11/doubles.hpp"
 #include "cpp11/integers.hpp"
 #include "cpp11/logicals.hpp"
+#include "cpp11/protect.hpp"
 
 #include "rapi.hpp"
 #include "typesr.hpp"
@@ -15,7 +16,7 @@ SEXP RApi::ToUtf8(SEXP string_sexp) {
 
 SEXP RApi::PointerToString(SEXP extptr) {
 	if (TYPEOF(extptr) != EXTPTRSXP) {
-		Rf_error("duckdb_ptr_to_str: Need external pointer parameter");
+		cpp11::stop("duckdb_ptr_to_str: Need external pointer parameter");
 	}
 
 	void *ptr = R_ExternalPtrAddr(extptr);
@@ -193,7 +194,7 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		return RIntegerType::IsNull(ts_val) ? Value(LogicalType::TIME) : Value::TIME(RTimeWeeksType::Convert(ts_val));
 	}
 	default:
-		Rf_error("duckdb_sexp_to_value: Unsupported type");
+		cpp11::stop("duckdb_sexp_to_value: Unsupported type");
 		return Value();
 	}
 }

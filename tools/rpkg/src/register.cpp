@@ -1,3 +1,5 @@
+#include "cpp11/protect.hpp"
+
 #include "rapi.hpp"
 #include "typesr.hpp"
 
@@ -12,22 +14,22 @@ using namespace duckdb;
 
 SEXP RApi::RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_register_R: Need external pointer parameter for connection");
+		cpp11::stop("duckdb_register_R: Need external pointer parameter for connection");
 	}
 	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
 	if (!conn_wrapper || !conn_wrapper->conn) {
-		Rf_error("duckdb_register_R: Invalid connection");
+		cpp11::stop("duckdb_register_R: Invalid connection");
 	}
 	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
-		Rf_error("duckdb_register_R: Need single string parameter for name");
+		cpp11::stop("duckdb_register_R: Need single string parameter for name");
 	}
 	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
 	if (name.empty()) {
-		Rf_error("duckdb_register_R: name parameter cannot be empty");
+		cpp11::stop("duckdb_register_R: name parameter cannot be empty");
 	}
 	if (TYPEOF(valuesexp) != VECSXP || Rf_length(valuesexp) < 1 ||
 	    strcmp("data.frame", CHAR(STRING_ELT(GET_CLASS(valuesexp), 0))) != 0) {
-		Rf_error("duckdb_register_R: Need at least one-column data frame parameter for value");
+		cpp11::stop("duckdb_register_R: Need at least one-column data frame parameter for value");
 	}
 	try {
 		conn_wrapper->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)valuesexp)})
@@ -35,28 +37,28 @@ SEXP RApi::RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 		auto key = Rf_install(("_registered_df_" + name).c_str());
 		Rf_setAttrib(connsexp, key, valuesexp);
 	} catch (std::exception &e) {
-		Rf_error("duckdb_register_R: Failed to register data frame: %s", e.what());
+		cpp11::stop("duckdb_register_R: Failed to register data frame: %s", e.what());
 	}
 	return R_NilValue;
 }
 
 SEXP RApi::UnregisterDataFrame(SEXP connsexp, SEXP namesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_unregister_R: Need external pointer parameter for connection");
+		cpp11::stop("duckdb_unregister_R: Need external pointer parameter for connection");
 	}
 	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
 	if (!conn_wrapper || !conn_wrapper->conn) {
-		Rf_error("duckdb_unregister_R: Invalid connection");
+		cpp11::stop("duckdb_unregister_R: Invalid connection");
 	}
 	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
-		Rf_error("duckdb_unregister_R: Need single string parameter for name");
+		cpp11::stop("duckdb_unregister_R: Need single string parameter for name");
 	}
 	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
 	auto key = Rf_install(("_registered_df_" + name).c_str());
 	Rf_setAttrib(connsexp, key, R_NilValue);
 	auto res = conn_wrapper->conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
 	if (!res->success) {
-		Rf_error(res->error.c_str());
+		cpp11::stop(res->error.c_str());
 	}
 	return R_NilValue;
 }
@@ -213,7 +215,7 @@ private:
 
 static SEXP duckdb_finalize_arrow_factory_R(SEXP factorysexp) {
 	if (TYPEOF(factorysexp) != EXTPTRSXP) {
-		Rf_error("duckdb_finalize_arrow_factory_R: Need external pointer parameter");
+		cpp11::stop("duckdb_finalize_arrow_factory_R: Need external pointer parameter");
 	}
 	auto *factoryaddr = (RArrowTabularStreamFactory *)R_ExternalPtrAddr(factorysexp);
 	if (factoryaddr) {
@@ -243,22 +245,22 @@ unique_ptr<TableFunctionRef> RApi::ArrowScanReplacement(const string &table_name
 
 SEXP RApi::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_register_R: Need external pointer parameter for connection");
+		cpp11::stop("duckdb_register_R: Need external pointer parameter for connection");
 	}
 	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
 	if (!conn_wrapper || !conn_wrapper->conn) {
-		Rf_error("duckdb_register_R: Invalid connection");
+		cpp11::stop("duckdb_register_R: Invalid connection");
 	}
 	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
-		Rf_error("duckdb_register_R: Need single string parameter for name");
+		cpp11::stop("duckdb_register_R: Need single string parameter for name");
 	}
 	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
 	if (name.empty()) {
-		Rf_error("duckdb_register_R: name parameter cannot be empty");
+		cpp11::stop("duckdb_register_R: name parameter cannot be empty");
 	}
 
 	if (!IS_LIST(export_funsexp)) {
-		Rf_error("duckdb_register_R: Need function list for export function");
+		cpp11::stop("duckdb_register_R: Need function list for export function");
 	}
 
 	RProtector r;
@@ -287,14 +289,14 @@ SEXP RApi::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP
 
 SEXP RApi::UnregisterArrow(SEXP connsexp, SEXP namesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_unregister_R: Need external pointer parameter for connection");
+		cpp11::stop("duckdb_unregister_R: Need external pointer parameter for connection");
 	}
 	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
 	if (!conn_wrapper || !conn_wrapper->conn) {
-		Rf_error("duckdb_unregister_R: Invalid connection");
+		cpp11::stop("duckdb_unregister_R: Invalid connection");
 	}
 	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
-		Rf_error("duckdb_unregister_R: Need single string parameter for name");
+		cpp11::stop("duckdb_unregister_R: Need single string parameter for name");
 	}
 
 	auto name = string(CHAR(STRING_ELT(namesexp, 0)));

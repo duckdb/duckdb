@@ -1,4 +1,4 @@
-#include "cpp11.hpp"
+#include "cpp11/R.hpp"
 #include "rapi.hpp"
 #include "altrepstring.hpp"
 #include <R_ext/Rdynload.h>

@@ -1,3 +1,5 @@
+#include "cpp11/protect.hpp"
+
 #include "rapi.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -6,7 +8,7 @@ using namespace duckdb;
 
 static SEXP duckdb_finalize_database_R(SEXP dbsexp) {
 	if (TYPEOF(dbsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_finalize_connection_R: Need external pointer parameter");
+		cpp11::stop("duckdb_finalize_connection_R: Need external pointer parameter");
 	}
 	auto db_wrapper = (DBWrapper *)R_ExternalPtrAddr(dbsexp);
 	if (db_wrapper) {
@@ -20,12 +22,12 @@ static SEXP duckdb_finalize_database_R(SEXP dbsexp) {
 
 SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
 	if (TYPEOF(dbdirsexp) != STRSXP || Rf_length(dbdirsexp) != 1) {
-		Rf_error("duckdb_startup_R: Need string parameter for dbdir");
+		cpp11::stop("duckdb_startup_R: Need string parameter for dbdir");
 	}
 	char *dbdir = (char *)CHAR(STRING_ELT(dbdirsexp, 0));
 
 	if (TYPEOF(readonlysexp) != LGLSXP || Rf_length(readonlysexp) != 1) {
-		Rf_error("duckdb_startup_R: Need string parameter for read_only");
+		cpp11::stop("duckdb_startup_R: Need string parameter for read_only");
 	}
 	bool read_only = (bool)LOGICAL_ELT(readonlysexp, 0);
 
@@ -46,12 +48,12 @@ SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
 		string val = string(CHAR(STRING_ELT(VECTOR_ELT(configsexp, i), 0)));
 		auto config_property = DBConfig::GetOptionByName(key);
 		if (!config_property) {
-			Rf_error("Unrecognized configuration property '%s'", key.c_str());
+			cpp11::stop("Unrecognized configuration property '%s'", key.c_str());
 		}
 		try {
 			config.SetOption(*config_property, Value(val));
 		} catch (std::exception &e) {
-			Rf_error("duckdb_startup_R: Failed to set configuration option: %s", e.what());
+			cpp11::stop("duckdb_startup_R: Failed to set configuration option: %s", e.what());
 		}
 	}
 
@@ -62,7 +64,7 @@ SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
 		config.replacement_scans.emplace_back(ArrowScanReplacement, wrapper);
 		wrapper->db = make_unique<DuckDB>(dbdir, &config);
 	} catch (std::exception &e) {
-		Rf_error("duckdb_startup_R: Failed to open database: %s", e.what());
+		cpp11::stop("duckdb_startup_R: Failed to open database: %s", e.what());
 	}
 	D_ASSERT(wrapper->db);
 
@@ -82,7 +84,7 @@ SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
 
 SEXP RApi::Shutdown(SEXP dbsexp) {
 	if (TYPEOF(dbsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_finalize_connection_R: Need external pointer parameter");
+		cpp11::stop("duckdb_finalize_connection_R: Need external pointer parameter");
 	}
 	auto db_wrapper = (DBWrapper *)R_ExternalPtrAddr(dbsexp);
 	if (db_wrapper) {

@@ -1,6 +1,7 @@
 #include "cpp11/list.hpp"
 #include "cpp11/doubles.hpp"
 #include "cpp11/external_pointer.hpp"
+#include "cpp11/protect.hpp"
 
 #include "altrepstring.hpp"
 #include "duckdb/common/arrow.hpp"
@@ -30,7 +31,7 @@ struct RStatement {
 
 SEXP RApi::Release(SEXP stmtsexp) {
 	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_release_R: Need external pointer parameter");
+		cpp11::stop("duckdb_release_R: Need external pointer parameter");
 	}
 	RStatement *stmtholder = (RStatement *)R_ExternalPtrAddr(stmtsexp);
 	if (stmtsexp) {
@@ -47,25 +48,25 @@ static SEXP duckdb_finalize_statement_R(SEXP stmtsexp) {
 SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 	RProtector r;
 	if (TYPEOF(querysexp) != STRSXP || Rf_length(querysexp) != 1) {
-		Rf_error("duckdb_prepare_R: Need single string parameter for query");
+		cpp11::stop("duckdb_prepare_R: Need single string parameter for query");
 	}
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_prepare_R: Need external pointer parameter for connections");
+		cpp11::stop("duckdb_prepare_R: Need external pointer parameter for connections");
 	}
 
 	char *query = (char *)CHAR(STRING_ELT(querysexp, 0));
 	if (!query) {
-		Rf_error("duckdb_prepare_R: No query");
+		cpp11::stop("duckdb_prepare_R: No query");
 	}
 
 	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
 	if (!conn_wrapper || !conn_wrapper->conn) {
-		Rf_error("duckdb_prepare_R: Invalid connection");
+		cpp11::stop("duckdb_prepare_R: Invalid connection");
 	}
 
 	auto stmt = conn_wrapper->conn->Prepare(query);
 	if (!stmt->success) {
-		Rf_error("duckdb_prepare_R: Failed to prepare query %s\nError: %s", query, stmt->error.c_str());
+		cpp11::stop("duckdb_prepare_R: Failed to prepare query %s\nError: %s", query, stmt->error.c_str());
 	}
 
 	auto stmtholder = new RStatement();
@@ -133,7 +134,7 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 			rtype = "factor";
 			break;
 		default:
-			Rf_error("duckdb_prepare_R: Unknown column type for prepare: %s", stype.ToString().c_str());
+			cpp11::stop("duckdb_prepare_R: Unknown column type for prepare: %s", stype.ToString().c_str());
 			break;
 		}
 		rtypes.push_back(rtype);
@@ -149,26 +150,26 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 
 SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_bind_R: Need external pointer parameter");
+		cpp11::stop("duckdb_bind_R: Need external pointer parameter");
 	}
 	RStatement *stmtholder = (RStatement *)R_ExternalPtrAddr(stmtsexp);
 	if (!stmtholder || !stmtholder->stmt) {
-		Rf_error("duckdb_bind_R: Invalid statement");
+		cpp11::stop("duckdb_bind_R: Invalid statement");
 	}
 
 	stmtholder->parameters.clear();
 	stmtholder->parameters.resize(stmtholder->stmt->n_param);
 
 	if (stmtholder->stmt->n_param == 0) {
-		Rf_error("duckdb_bind_R: dbBind called but query takes no parameters");
+		cpp11::stop("duckdb_bind_R: dbBind called but query takes no parameters");
 	}
 
 	if (TYPEOF(paramsexp) != VECSXP || (idx_t)Rf_length(paramsexp) != stmtholder->stmt->n_param) {
-		Rf_error("duckdb_bind_R: bind parameters need to be a list of length %i", stmtholder->stmt->n_param);
+		cpp11::stop("duckdb_bind_R: bind parameters need to be a list of length %i", stmtholder->stmt->n_param);
 	}
 
 	if (TYPEOF(arrowsexp) != LGLSXP) {
-		Rf_error("duckdb_bind_R: Need logical for third parameter");
+		cpp11::stop("duckdb_bind_R: Need logical for third parameter");
 	}
 
 	bool arrow_fetch = LOGICAL_POINTER(arrowsexp)[0] != 0;
@@ -178,12 +179,12 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 	for (idx_t param_idx = 1; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
 		SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
 		if (Rf_length(valsexp) != n_rows) {
-			Rf_error("duckdb_bind_R: bind parameter values need to have the same length");
+			cpp11::stop("duckdb_bind_R: bind parameter values need to have the same length");
 		}
 	}
 
 	if (n_rows != 1 && arrow_fetch) {
-		Rf_error("duckdb_bind_R: bind parameter values need to have length one for arrow queries");
+		cpp11::stop("duckdb_bind_R: bind parameter values need to have length one for arrow queries");
 	}
 
 	cpp11::list out(NEW_LIST(n_rows));
@@ -249,7 +250,7 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 		varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
 		break;
 	default:
-		Rf_error("duckdb_execute_R: Unknown column type for execute: %s", type.ToString().c_str());
+		cpp11::stop("duckdb_execute_R: Unknown column type for execute: %s", type.ToString().c_str());
 	}
 	if (!varvalue) {
 		throw std::bad_alloc();
@@ -437,7 +438,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 			break;
 
 		default:
-			Rf_error("duckdb_execute_R: Unknown enum type for convert: %s", TypeIdToString(physical_type).c_str());
+			cpp11::stop("duckdb_execute_R: Unknown enum type for convert: %s", TypeIdToString(physical_type).c_str());
 		}
 		// increment by one cause R factor offsets start at 1
 		auto dest_ptr = ((int32_t *)INTEGER_POINTER(dest)) + dest_offset;
@@ -460,7 +461,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 		break;
 	}
 	default:
-		Rf_error("duckdb_execute_R: Unknown column type for convert: %s", src_vec.GetType().ToString().c_str());
+		cpp11::stop("duckdb_execute_R: Unknown column type for convert: %s", src_vec.GetType().ToString().c_str());
 		break;
 	}
 }
@@ -571,13 +572,13 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 	int num_of_vectors = NUMERIC_POINTER(vector_per_chunksexp)[0];
 	bool return_table = LOGICAL_POINTER(return_tablesexp)[0] != 0;
 	if (TYPEOF(streamsexp) != LGLSXP || LENGTH(streamsexp) != 1) {
-		Rf_error("stream parameter needs to be single-value logical");
+		cpp11::stop("stream parameter needs to be single-value logical");
 	}
 	if (TYPEOF(return_tablesexp) != LGLSXP || LENGTH(return_tablesexp) != 1) {
-		Rf_error("return_table parameter needs to be single-value logical");
+		cpp11::stop("return_table parameter needs to be single-value logical");
 	}
 	if (TYPEOF(vector_per_chunksexp) != REALSXP || LENGTH(vector_per_chunksexp) != 1) {
-		Rf_error("vector_per_chunks parameter needs to be single-value numeric");
+		cpp11::stop("vector_per_chunks parameter needs to be single-value numeric");
 	}
 	// export schema setup
 	ArrowSchema arrow_schema;
@@ -621,7 +622,7 @@ SEXP RApi::DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp) 
 	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
 	int approx_batch_size = NUMERIC_POINTER(approx_batch_sizeexp)[0];
 	if (TYPEOF(approx_batch_sizeexp) != REALSXP || LENGTH(approx_batch_sizeexp) != 1) {
-		Rf_error("vector_per_chunks parameter needs to be single-value numeric");
+		cpp11::stop("vector_per_chunks parameter needs to be single-value numeric");
 	}
 	// somewhat dark magic below
 	cpp11::sexp arrow_namespace_call(Rf_lang2(RStrings::get().getNamespace_sym, RStrings::get().arrow_str));
@@ -645,20 +646,20 @@ static SEXP DuckDBFinalizeQueryR(SEXP query_resultsexp) {
 
 SEXP RApi::Execute(SEXP stmtsexp, SEXP arrowsexp) {
 	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_execute_R: Need external pointer for first parameter");
+		cpp11::stop("duckdb_execute_R: Need external pointer for first parameter");
 	}
 	if (TYPEOF(arrowsexp) != LGLSXP) {
-		Rf_error("duckdb_execute_R: Need logical for second parameter");
+		cpp11::stop("duckdb_execute_R: Need logical for second parameter");
 	}
 	RStatement *stmtholder = (RStatement *)R_ExternalPtrAddr(stmtsexp);
 	if (!stmtholder || !stmtholder->stmt) {
-		Rf_error("duckdb_execute_R: Invalid statement");
+		cpp11::stop("duckdb_execute_R: Invalid statement");
 	}
 
 	bool arrow_fetch = LOGICAL_POINTER(arrowsexp)[0] != 0;
 	auto generic_result = stmtholder->stmt->Execute(stmtholder->parameters, arrow_fetch);
 	if (!generic_result->success) {
-		Rf_error("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
+		cpp11::stop("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
 	}
 
 	if (arrow_fetch) {
