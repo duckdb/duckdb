@@ -3,6 +3,7 @@
 #include "cpp11/integers.hpp"
 #include "cpp11/logicals.hpp"
 #include "cpp11/protect.hpp"
+#include "cpp11/function.hpp"
 
 #include "rapi.hpp"
 #include "typesr.hpp"
@@ -11,7 +12,8 @@
 using namespace duckdb;
 
 SEXP RApi::ToUtf8(SEXP string_sexp) {
-	return RApi::REvalThrows(Rf_lang2(RStrings::get().enc2utf8_sym, string_sexp));
+	cpp11::function enc2utf8 = RStrings::get().enc2utf8_sym;
+	return enc2utf8(string_sexp);
 }
 
 SEXP RApi::PointerToString(SEXP extptr) {

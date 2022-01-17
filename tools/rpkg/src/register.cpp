@@ -1,3 +1,4 @@
+#include "cpp11/function.hpp"
 #include "cpp11/protect.hpp"
 
 #include "rapi.hpp"
@@ -77,11 +78,11 @@ public:
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
 		auto stream_ptr_sexp =
 		    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&res->arrow_array_stream))));
-		SEXP export_call;
 
-		auto export_fun = r.Protect(VECTOR_ELT(factory->export_fun, 0));
+		cpp11::function export_fun = VECTOR_ELT(factory->export_fun, 0);
+
 		if (project_columns.second.empty()) {
-			export_call = r.Protect(Rf_lang3(export_fun, factory->arrow_scannable, stream_ptr_sexp));
+			export_fun(factory->arrow_scannable, stream_ptr_sexp);
 		} else {
 			auto projection_sexp = r.Protect(RApi::StringsToSexp(project_columns.second));
 			SEXP filters_sexp = r.Protect(Rf_ScalarLogical(true));
@@ -89,10 +90,8 @@ public:
 
 				filters_sexp = r.Protect(TransformFilter(*filters, project_columns.first, factory->export_fun));
 			}
-			export_call = r.Protect(
-			    Rf_lang5(export_fun, factory->arrow_scannable, stream_ptr_sexp, projection_sexp, filters_sexp));
+			 export_fun(factory->arrow_scannable, stream_ptr_sexp, projection_sexp, filters_sexp);
 		}
-		RApi::REvalThrows(export_call);
 		return res;
 	}
 
@@ -184,18 +183,14 @@ private:
 	}
 
 	static SEXP CallArrowFactory(SEXP functions, idx_t idx, SEXP op1, SEXP op2 = R_NilValue, SEXP op3 = R_NilValue) {
-		RProtector r;
-		auto create_fun = r.Protect(VECTOR_ELT(functions, idx));
-		SEXP create_call;
+		cpp11::function create_fun = VECTOR_ELT(functions, idx);
 		if (Rf_isNull(op2)) {
-			create_call = r.Protect(Rf_lang2(create_fun, op1));
+			return create_fun(op1);
 		} else if (Rf_isNull(op3)) {
-			create_call = r.Protect(Rf_lang3(create_fun, op1, op2));
+			return create_fun(op1, op2);
 		} else {
-			create_call = r.Protect(Rf_lang4(create_fun, op1, op2, op3));
+			return create_fun(op1, op2, op3);
 		}
-
-		return RApi::REvalThrows(create_call);
 	}
 
 	static SEXP CreateExpression(SEXP functions, const string name, SEXP op1, SEXP op2 = R_NilValue) {
