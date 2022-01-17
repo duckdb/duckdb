@@ -10,7 +10,7 @@ static SEXP duckdb_finalize_connection_R(SEXP connsexp) {
 	}
 	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
 	if (conn_wrapper) {
-		Rf_warning("duckdb_finalize_connection_R: Connection is garbage-collected, use dbDisconnect() to avoid this.");
+		cpp11::warning("duckdb_finalize_connection_R: Connection is garbage-collected, use dbDisconnect() to avoid this.");
 		R_ClearExternalPtr(connsexp);
 		delete conn_wrapper;
 	}

@@ -12,7 +12,7 @@ static SEXP duckdb_finalize_database_R(SEXP dbsexp) {
 	}
 	auto db_wrapper = (DBWrapper *)R_ExternalPtrAddr(dbsexp);
 	if (db_wrapper) {
-		Rf_warning("duckdb_finalize_database_R: Database is garbage-collected, use dbDisconnect(con, shutdown=TRUE) or "
+		cpp11::warning("duckdb_finalize_database_R: Database is garbage-collected, use dbDisconnect(con, shutdown=TRUE) or "
 		           "duckdb::duckdb_shutdown(drv) to avoid this.");
 		R_ClearExternalPtr(dbsexp);
 		delete db_wrapper;
