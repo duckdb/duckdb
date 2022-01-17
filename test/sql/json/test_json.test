@@ -1,0 +1,63 @@
+# name: test/sql/json/test_json.test
+# description: Test JSON extension
+# group: [json]
+
+require json
+
+#statement ok
+#pragma enable_verification
+
+# yyjson cannot check if the types match
+# therefore
+query T
+select json_extract_string('{"str": 42}', 'str')
+----
+(empty)
+
+query T
+select json_extract_int('{"str": "quack"}', 'str')
+----
+0
+
+query T
+select json_extract_string('{"str": "quack"}', 'str')
+----
+quack
+
+query T
+select json_extract_string('{"str": "quack"}', 'str2')
+----
+(empty)
+
+query T
+select json_extract_string('{"str": "quack"}', NULL)
+----
+NULL
+
+query T
+select json_extract_string(NULL, 'str')
+----
+NULL
+
+statement ok
+create table test(json varchar)
+
+statement ok
+insert into test values
+    ('{"str": "quack", "int": 4, "double": 0.42, "bool": true, "arr": [], "nested": {"val": 1}}'),
+    ('{"str": "woof", "int": -4, "double": -0.42, "bool": false, "arr": [0, 1, 2], "nested": {"val": 1}}'),
+    ('{"str": null, "int": null, "double": null, "bool": null, "arr": null, "nested": null}')
+
+query T
+select json_extract_string(json, 'str') from test
+----
+quack
+woof
+(empty)
+
+query T
+select json_extract_int(json, 'str') from test
+----
+0
+0
+0

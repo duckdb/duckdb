@@ -208,6 +208,7 @@ option(BUILD_TPCDS_EXTENSION "Build the TPC-DS extension." FALSE)
 option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
 option(BUILD_HTTPFS_EXTENSION "Build the HTTP File System extension." FALSE)
 option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extension." FALSE)
+option(BUILD_JSON_EXTENSION "Build the JSON extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
@@ -474,6 +475,11 @@ function(add_extension_definitions)
     include_directories(${PROJECT_SOURCE_DIR}/extension/visualizer/include)
     add_definitions(-DBUILD_VISUALIZER_EXTENSION=${BUILD_VISUALIZER_EXTENSION})
   endif()
+
+  if(${BUILD_JSON_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/json/include)
+    add_definitions(-DBUILD_JSON_EXTENSION=${BUILD_JSON_EXTENSION})
+  endif()
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
@@ -503,6 +509,10 @@ function(add_extension_dependencies LIBRARY)
 
   if(${BUILD_VISUALIZER_EXTENSION})
     add_dependencies(${LIBRARY} visualizer_extension)
+  endif()
+
+  if(${BUILD_JSON_EXTENSION})
+    add_dependencies(${LIBRARY} json_extension)
   endif()
 endfunction()
 
@@ -534,6 +544,10 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_VISUALIZER_EXTENSION})
     target_link_libraries(${LIBRARY} visualizer_extension)
+  endif()
+
+  if(${BUILD_JSON_EXTENSION})
+    target_link_libraries(${LIBRARY} json_extension)
   endif()
 endfunction()
 

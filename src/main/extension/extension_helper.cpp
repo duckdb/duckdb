@@ -33,10 +33,14 @@
 #include "visualizer-extension.hpp"
 #endif
 
+#ifdef BUILD_JSON_EXTENSION
+#include "json-extension.hpp"
+#endif
+
 namespace duckdb {
 
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
-	unordered_set<string> extensions {"parquet", "icu", "tpch", "tpcds", "fts", "httpfs", "visualizer"};
+	unordered_set<string> extensions {"parquet", "icu", "tpch", "tpcds", "fts", "httpfs", "visualizer", "json"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -114,6 +118,13 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 #else
 		// visualizer extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
+#endif
+    } else if (extension == "json") {
+#ifdef BUILD_VISUALIZER_EXTENSION
+        db.LoadExtension<JSONExtension>();
+#else
+        // json extension required but not build: skip this test
+        return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else {
 		// unknown extension
