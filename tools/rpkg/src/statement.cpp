@@ -1,4 +1,7 @@
-#include "cpp11.hpp"
+#include "cpp11/list.hpp"
+#include "cpp11/doubles.hpp"
+#include "cpp11/external_pointer.hpp"
+
 #include "altrepstring.hpp"
 #include "duckdb/common/arrow.hpp"
 #include "duckdb/common/types/timestamp.hpp"
