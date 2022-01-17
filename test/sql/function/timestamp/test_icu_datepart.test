@@ -184,8 +184,8 @@ SELECT week(ts), week(ts::TIMESTAMP) FROM timestamps;
 53	53
 5	5
 47	47
-46	45
-46	45
+46	46
+46	46
 51	51
 
 query II
@@ -220,8 +220,8 @@ SELECT yearweek(ts), yearweek(ts::TIMESTAMP) FROM timestamps;
 202053	202053
 202105	202105
 202147	202147
-202146	202145
-202146	202145
+202146	202146
+202146	202146
 202151	202151
 
 query II
@@ -387,8 +387,8 @@ SELECT weekofyear(ts), weekofyear(ts::TIMESTAMP) FROM timestamps;
 53	53
 5	5
 47	47
-46	45
-46	45
+46	46
+46	46
 51	51
 
 # Correctness: Compare date_part to named function

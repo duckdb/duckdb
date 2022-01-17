@@ -111,6 +111,30 @@ NULL	NULL
 2021	2021-12-01 13:54:48.123456
 2021	2022-01-01 00:00:41
 
+# 2022-01-03 is the first day of ISO-2022
+query II
+SELECT DATE_PART('isoyear', ts), ts
+FROM generate_series('2021-12-26'::TIMESTAMP, '2022-01-12'::TIMESTAMP, INTERVAL 1 DAY) tbl(ts);
+----
+2021	2021-12-26 00:00:00
+2021	2021-12-27 00:00:00
+2021	2021-12-28 00:00:00
+2021	2021-12-29 00:00:00
+2021	2021-12-30 00:00:00
+2021	2021-12-31 00:00:00
+2021	2022-01-01 00:00:00
+2021	2022-01-02 00:00:00
+2022	2022-01-03 00:00:00
+2022	2022-01-04 00:00:00
+2022	2022-01-05 00:00:00
+2022	2022-01-06 00:00:00
+2022	2022-01-07 00:00:00
+2022	2022-01-08 00:00:00
+2022	2022-01-09 00:00:00
+2022	2022-01-10 00:00:00
+2022	2022-01-11 00:00:00
+2022	2022-01-12 00:00:00
+
 # Correctness: Compare date_part to named function
 foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow dayofyear yearweek isoyear epoch timezone timezone_hour timezone_minute
 
@@ -334,7 +358,7 @@ ORDER BY 1;
 1001-03-15 (BC)	{'isoyear': -1000, 'week': 11, 'yearweek': -100011}
 0044-03-15 (BC)	{'isoyear': -43, 'week': 11, 'yearweek': -4311}
 0998-02-16	{'isoyear': 998, 'week': 7, 'yearweek': 99807}
-1998-02-16	{'isoyear': 1998, 'week': 7, 'yearweek': 199807}
+1998-02-16	{'isoyear': 1998, 'week': 8, 'yearweek': 199808}
 2001-02-16	{'isoyear': 2001, 'week': 7, 'yearweek': 200107}
 
 # Time parts

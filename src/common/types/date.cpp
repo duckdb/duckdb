@@ -457,18 +457,20 @@ static int32_t GetISOYearWeek(int32_t &year, int32_t month, int32_t day) {
 	    (Date::IsLeapYear(year) ? Date::CUMULATIVE_LEAP_DAYS[month] : Date::CUMULATIVE_DAYS[month]) + day;
 	// get the first day of the first week of the year
 	// the first week is the week that has the 4th of January in it
-	auto day_of_the_fourth = Date::ExtractISODayOfTheWeek(Date::FromDate(year, 1, 4));
+	const auto weekday_of_the_fourth = Date::ExtractISODayOfTheWeek(Date::FromDate(year, 1, 4));
 	// if fourth is monday, then fourth is the first day
 	// if fourth is tuesday, third is the first day
 	// if fourth is wednesday, second is the first day
-	// if fourth is thursday - sunday, first is the first day
-	auto first_day_of_the_first_week = day_of_the_fourth >= 4 ? 0 : 5 - day_of_the_fourth;
-	if (day_of_the_year < first_day_of_the_first_week) {
-		// day is part of last year
+	// if fourth is thursday, first is the first day
+	// if fourth is friday - sunday, day is in the previous year
+	// (day is 0-based, weekday is 1-based)
+	const auto first_day_of_the_first_isoweek = 4 - weekday_of_the_fourth;
+	if (day_of_the_year < first_day_of_the_first_isoweek) {
+		// day is part of last year (13th month)
 		--year;
 		return GetISOYearWeek(year, 12, day);
 	} else {
-		return ((day_of_the_year - first_day_of_the_first_week) / 7) + 1;
+		return ((day_of_the_year - first_day_of_the_first_isoweek) / 7) + 1;
 	}
 }
 

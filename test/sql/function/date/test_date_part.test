@@ -230,8 +230,8 @@ query I
 SELECT YEARWEEK(d) FROM dates;
 ----
 199201
-199209
-199218
+199210
+199219
 202152
 -4311
 
@@ -258,8 +258,8 @@ query I
 SELECT WEEKOFYEAR(d) FROM dates;
 ----
 1
-9
-18
+10
+19
 52
 11
 
@@ -350,8 +350,8 @@ ORDER BY 1;
 ----
 0044-03-15 (BC)	{'isoyear': -43, 'week': 11, 'yearweek': -4311}
 1992-01-01	{'isoyear': 1992, 'week': 1, 'yearweek': 199201}
-1992-03-03	{'isoyear': 1992, 'week': 9, 'yearweek': 199209}
-1992-05-05	{'isoyear': 1992, 'week': 18, 'yearweek': 199218}
+1992-03-03	{'isoyear': 1992, 'week': 10, 'yearweek': 199210}
+1992-05-05	{'isoyear': 1992, 'week': 19, 'yearweek': 199219}
 2022-01-01	{'isoyear': 2021, 'week': 52, 'yearweek': 202152}
 
 # Invalid parts

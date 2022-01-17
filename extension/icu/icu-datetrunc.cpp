@@ -40,6 +40,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 
 	static void TruncWeek(icu::Calendar *calendar, uint64_t &micros) {
 		calendar->setFirstDayOfWeek(UCAL_MONDAY);
+		calendar->setMinimalDaysInFirstWeek(4);
 		TruncDay(calendar, micros);
 		calendar->set(UCAL_DAY_OF_WEEK, UCAL_MONDAY);
 	}

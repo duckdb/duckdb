@@ -63,19 +63,19 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static int64_t ExtractWeek(icu::Calendar *calendar, const uint64_t micros) {
-		calendar->setFirstDayOfWeek(UCAL_SUNDAY);
+		calendar->setFirstDayOfWeek(UCAL_MONDAY);
 		calendar->setMinimalDaysInFirstWeek(4);
 		return ExtractField(calendar, UCAL_WEEK_OF_YEAR);
 	}
 
 	static int64_t ExtractISOYear(icu::Calendar *calendar, const uint64_t micros) {
-		calendar->setFirstDayOfWeek(UCAL_SUNDAY);
+		calendar->setFirstDayOfWeek(UCAL_MONDAY);
 		calendar->setMinimalDaysInFirstWeek(4);
 		return ExtractField(calendar, UCAL_YEAR_WOY);
 	}
 
 	static int64_t ExtractYearWeek(icu::Calendar *calendar, const uint64_t micros) {
-		calendar->setFirstDayOfWeek(UCAL_SUNDAY);
+		calendar->setFirstDayOfWeek(UCAL_MONDAY);
 		calendar->setMinimalDaysInFirstWeek(4);
 		const auto iyyy = ExtractField(calendar, UCAL_YEAR_WOY);
 		const auto ww = ExtractField(calendar, UCAL_WEEK_OF_YEAR);
