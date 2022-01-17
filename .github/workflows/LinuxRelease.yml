@@ -40,7 +40,7 @@ jobs:
         apt-get install -y -qq software-properties-common libstdc++6
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk maven unixodbc-dev
+        apt-get install -y -qq git ninja-build make libssl-dev wget openjdk-8-jdk maven unixodbc-dev
         python3 -m pip install pip
         python3 -m pip install requests
 
@@ -129,7 +129,7 @@ jobs:
         apt-get install -y -qq software-properties-common libstdc++6
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk maven
+        apt-get install -y -qq git ninja-build make libssl-dev wget openjdk-8-jdk maven
         python3 -m pip install pip
         python3 -m pip install requests awscli
 
@@ -183,7 +183,7 @@ jobs:
         apt-get install -y -qq software-properties-common libstdc++6
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk
+        apt-get install -y -qq git make ninja-build libc6-dev-i386 lib32readline6-dev libssl-dev wget openjdk-8-jdk
 
     - uses: actions/checkout@v2
       with:
