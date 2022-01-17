@@ -115,6 +115,21 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			auto &order = (OrderModifier &)*mod;
 			auto bound_order = make_unique<BoundOrderModifier>();
 			auto &config = DBConfig::GetConfig(context);
+			D_ASSERT(!order.orders.empty());
+			if (order.orders[0].expression->type == ExpressionType::STAR) {
+				// ORDER BY ALL
+				// replace the order list with the maximum order by count
+				D_ASSERT(order.orders.size() == 1);
+				auto order_type = order.orders[0].type;
+				auto null_order = order.orders[0].null_order;
+
+				vector<OrderByNode> new_orders;
+				for (idx_t i = 0; i < order_binder.MaxCount(); i++) {
+					new_orders.emplace_back(order_type, null_order,
+					                        make_unique<ConstantExpression>(Value::INTEGER(i + 1)));
+				}
+				order.orders = move(new_orders);
+			}
 			for (auto &order_node : order.orders) {
 				auto order_expression = BindOrderExpression(order_binder, move(order_node.expression));
 				if (!order_expression) {

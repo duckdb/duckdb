@@ -66,7 +66,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 		// where
 		result->where_clause = TransformExpression(stmt->whereClause);
 		// group by
-		TransformGroupBy(stmt->groupClause, result->groups);
+		TransformGroupBy(stmt->groupClause, *result);
 		// having
 		result->having = TransformExpression(stmt->havingClause);
 		// qualify
