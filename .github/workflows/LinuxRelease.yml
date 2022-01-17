@@ -37,7 +37,7 @@ jobs:
     - name: Install
       run: |
         apt-get update -y -qq
-        apt-get install -y -qq software-properties-common
+        apt-get install -y -qq software-properties-common libstdc++6
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
         apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk maven unixodbc-dev
@@ -126,7 +126,7 @@ jobs:
     - name: Install
       run: |
         apt-get update -y -qq
-        apt-get install -y -qq software-properties-common
+        apt-get install -y -qq software-properties-common libstdc++6
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
         apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk maven
@@ -180,7 +180,7 @@ jobs:
     - name: Install
       run: |
         apt-get update -y -qq
-        apt-get install -y -qq software-properties-common
+        apt-get install -y -qq software-properties-common libstdc++6
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
         apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk
