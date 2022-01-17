@@ -29,10 +29,10 @@ jobs:
       FORCE_WARN_UNUSED: 1
 
     steps:
-    - name: Set up Python 3.7
+    - name: Set up Python 3.8
       uses: actions/setup-python@v2
       with:
-        python-version: '3.7'
+        python-version: '3.8'
 
     - name: Install
       run: |
@@ -118,10 +118,10 @@ jobs:
       AWS_DEFAULT_REGION: us-east-1
 
     steps:
-    - name: Set up Python 3.7
+    - name: Set up Python 3.8
       uses: actions/setup-python@v2
       with:
-        python-version: '3.7'
+        python-version: '3.8'
 
     - name: Install
       run: |
@@ -172,10 +172,10 @@ jobs:
       GEN: ninja
 
     steps:
-    - name: Set up Python 3.7
+    - name: Set up Python 3.8
       uses: actions/setup-python@v2
       with:
-        python-version: '3.7'
+        python-version: '3.8'
 
     - name: Install
       run: |
@@ -236,7 +236,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.7'
+        python-version: '3.8'
 
     - name: Install
       run: |
@@ -285,7 +285,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.7'
+        python-version: '3.8'
 
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
@@ -361,7 +361,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.7'
+        python-version: '3.8'
 
     - name: Test
       run: python scripts/test_vector_sizes.py
@@ -413,7 +413,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.7'
+        python-version: '3.8'
 
     - name: Build
       run: make
@@ -436,7 +436,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.7'
+        python-version: '3.8'
 
     - name: Build
       run: make
@@ -458,7 +458,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.7'
+        python-version: '3.8'
 
     - name: Install LLVM and Clang
       uses: KyleMayes/install-llvm-action@v1
