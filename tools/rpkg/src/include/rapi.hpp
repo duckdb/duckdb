@@ -64,9 +64,6 @@ struct RApi {
 
 	static SEXP StringsToSexp(vector<string> s);
 
-	static SEXP REvalThrows(SEXP call, SEXP env = R_GlobalEnv);
-	static SEXP REvalRerror(SEXP call, SEXP env = R_GlobalEnv);
-
 	static SEXP ToUtf8(SEXP string_sexp);
 };
 

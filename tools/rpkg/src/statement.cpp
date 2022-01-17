@@ -1,7 +1,9 @@
 #include "cpp11/list.hpp"
 #include "cpp11/doubles.hpp"
 #include "cpp11/external_pointer.hpp"
+#include "cpp11/sexp.hpp"
 #include "cpp11/protect.hpp"
+#include "cpp11/function.hpp"
 
 #include "altrepstring.hpp"
 #include "duckdb/common/arrow.hpp"
@@ -555,7 +557,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	result->ToArrowSchema(&arrow_schema);
 	data_chunk->ToArrowArray(&arrow_data);
 	batches_list.PrepAppend();
-	batches_list.Append(RApi::REvalRerror(batch_import_from_c, arrow_namespace));
+	batches_list.Append(cpp11::safe[Rf_eval](batch_import_from_c, arrow_namespace));
 	return true;
 }
 
@@ -565,8 +567,8 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
 	auto result = query_result_holder->result.get();
 	// somewhat dark magic below
-	cpp11::sexp arrow_namespace_call(Rf_lang2(RStrings::get().getNamespace_sym, RStrings::get().arrow_str));
-	cpp11::sexp arrow_namespace(RApi::REvalRerror(arrow_namespace_call, R_GlobalEnv));
+	cpp11::function getNamespace = RStrings::get().getNamespace_sym;
+	cpp11::sexp arrow_namespace(getNamespace(RStrings::get().arrow_str));
 
 	bool stream = LOGICAL_POINTER(streamsexp)[0] != 0;
 	int num_of_vectors = NUMERIC_POINTER(vector_per_chunksexp)[0];
@@ -606,13 +608,13 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 	SET_LENGTH(batches_list.the_list, batches_list.size);
 
 	result->ToArrowSchema(&arrow_schema);
-	cpp11::sexp schema_arrow_obj(RApi::REvalRerror(schema_import_from_c, arrow_namespace));
+	cpp11::sexp schema_arrow_obj(cpp11::safe[Rf_eval](schema_import_from_c, arrow_namespace));
 
 	// create arrow::Table
 	if (return_table) {
 		cpp11::sexp from_record_batches(
 		    Rf_lang3(RStrings::get().Table__from_record_batches_sym, batches_list.the_list, schema_arrow_obj));
-		return RApi::REvalRerror(from_record_batches, arrow_namespace);
+		return cpp11::safe[Rf_eval](from_record_batches, arrow_namespace);
 	}
 	return batches_list.the_list;
 }
@@ -625,14 +627,14 @@ SEXP RApi::DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp) 
 		cpp11::stop("vector_per_chunks parameter needs to be single-value numeric");
 	}
 	// somewhat dark magic below
-	cpp11::sexp arrow_namespace_call(Rf_lang2(RStrings::get().getNamespace_sym, RStrings::get().arrow_str));
-	cpp11::sexp arrow_namespace(RApi::REvalRerror(arrow_namespace_call, R_GlobalEnv));
+	cpp11::function getNamespace = RStrings::get().getNamespace_sym;
+	cpp11::sexp arrow_namespace(getNamespace(RStrings::get().arrow_str));
 
 	ResultArrowArrayStreamWrapper *result_stream =
 	    new ResultArrowArrayStreamWrapper(move(query_result_holder->result), approx_batch_size);
 	cpp11::sexp stream_ptr_sexp(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&result_stream->stream))));
 	cpp11::sexp record_batch_reader(Rf_lang2(RStrings::get().ImportRecordBatchReader_sym, stream_ptr_sexp));
-	return RApi::REvalRerror(record_batch_reader, arrow_namespace);
+	return cpp11::safe[Rf_eval](record_batch_reader, arrow_namespace);
 }
 
 static SEXP DuckDBFinalizeQueryR(SEXP query_resultsexp) {
