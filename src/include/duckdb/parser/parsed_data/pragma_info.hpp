@@ -10,7 +10,7 @@
 
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
@@ -23,7 +23,7 @@ struct PragmaInfo : public ParseInfo {
 	//! Parameter list (if any)
 	vector<Value> parameters;
 	//! Named parameter list (if any)
-	unordered_map<string, Value> named_parameters;
+	named_parameter_map_t named_parameters;
 
 public:
 	unique_ptr<PragmaInfo> Copy() const {

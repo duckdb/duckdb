@@ -14,7 +14,7 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/named_parameter_map.hpp"
 
 #include <memory>
 
@@ -122,7 +122,7 @@ public:
 	//! Create a relation from calling a table in/out function on the input relation
 	DUCKDB_API shared_ptr<Relation> TableFunction(const std::string &fname, const vector<Value> &values);
 	DUCKDB_API shared_ptr<Relation> TableFunction(const std::string &fname, const vector<Value> &values,
-	                                              const unordered_map<string, Value> &named_parameters);
+	                                              const named_parameter_map_t &named_parameters);
 
 public:
 	//! Whether or not the relation inherits column bindings from its child or not, only relevant for binding

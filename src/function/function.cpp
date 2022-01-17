@@ -208,7 +208,7 @@ string Function::CallToString(const string &name, const vector<LogicalType> &arg
 }
 
 string Function::CallToString(const string &name, const vector<LogicalType> &arguments,
-                              const unordered_map<string, LogicalType> &named_parameters) {
+                              const named_parameter_type_map_t &named_parameters) {
 	vector<string> input_arguments;
 	input_arguments.reserve(arguments.size() + named_parameters.size());
 	for (auto &arg : arguments) {

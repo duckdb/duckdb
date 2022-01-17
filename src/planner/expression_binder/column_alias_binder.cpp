@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-ColumnAliasBinder::ColumnAliasBinder(BoundSelectNode &node, const unordered_map<string, idx_t> &alias_map)
+ColumnAliasBinder::ColumnAliasBinder(BoundSelectNode &node, const case_insensitive_map_t<idx_t> &alias_map)
     : node(node), alias_map(alias_map), in_alias(false) {
 }
 

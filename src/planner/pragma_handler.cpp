@@ -28,7 +28,7 @@ void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatemen
 			if (!new_query.empty()) {
 				// this PRAGMA statement gets replaced by a new query string
 				// push the new query string through the parser again and add it to the transformer
-				Parser parser;
+				Parser parser(context.GetParserOptions());
 				parser.ParseQuery(new_query);
 				// insert the new statements and remove the old statement
 				// FIXME: off by one here maybe?

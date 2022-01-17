@@ -374,8 +374,7 @@ SQLRETURN SQL_API SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_CLOSE) {
-			stmt->Close();
-			return SQL_SUCCESS;
+			return duckdb::CloseStmt(stmt);
 		}
 		return SQL_ERROR;
 	});
