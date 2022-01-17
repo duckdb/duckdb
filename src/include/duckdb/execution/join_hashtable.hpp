@@ -17,6 +17,7 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/storage/storage_info.hpp"
+
 #include <iostream>
 
 namespace duckdb {

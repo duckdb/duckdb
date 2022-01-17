@@ -4,8 +4,8 @@
 //===--------------------------------------------------------------------===//
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/operator/constant_operators.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/operator/constant_operators.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/row_layout.hpp"
 
@@ -282,7 +282,6 @@ static void TemplatedMatchRowsType(Vector &rows_left, const SelectionVector &lef
 		auto right_row = right_ptrs[right_idx];
 		ValidityBytes left_row_mask(left_row);
 		ValidityBytes right_row_mask(right_row);
-		// auto isnull = !left_row_mask.RowIsValid(left_row_mask.GetValidityEntry(entry_idx), idx_in_entry);
 
 		auto right_value = Load<T>(right_row + col_offset);
 		auto left_value = Load<T>(left_row + col_offset);
