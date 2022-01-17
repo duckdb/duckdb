@@ -29,18 +29,13 @@ jobs:
       FORCE_WARN_UNUSED: 1
 
     steps:
-    - name: Set up Python 3.8
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.8'
-
     - name: Install
       run: |
         apt-get update -y -qq
-        apt-get install -y -qq software-properties-common libstdc++6
+        apt-get install -y -qq software-properties-common
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make libssl-dev wget openjdk-8-jdk maven unixodbc-dev
+        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3 zip python3-pip maven unixodbc-dev
         python3 -m pip install pip
         python3 -m pip install requests
 
@@ -118,18 +113,13 @@ jobs:
       AWS_DEFAULT_REGION: us-east-1
 
     steps:
-    - name: Set up Python 3.8
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.8'
-
     - name: Install
       run: |
         apt-get update -y -qq
-        apt-get install -y -qq software-properties-common libstdc++6
+        apt-get install -y -qq software-properties-common
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make libssl-dev wget openjdk-8-jdk maven
+        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3 zip python3-pip maven
         python3 -m pip install pip
         python3 -m pip install requests awscli
 
@@ -172,18 +162,13 @@ jobs:
       GEN: ninja
 
     steps:
-    - name: Set up Python 3.8
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.8'
-
     - name: Install
       run: |
         apt-get update -y -qq
-        apt-get install -y -qq software-properties-common libstdc++6
+        apt-get install -y -qq software-properties-common
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq git make ninja-build libc6-dev-i386 lib32readline6-dev libssl-dev wget openjdk-8-jdk
+        apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk python3 zip
 
     - uses: actions/checkout@v2
       with:
@@ -236,7 +221,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.8'
+        python-version: '3.7'
 
     - name: Install
       run: |
@@ -285,7 +270,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.8'
+        python-version: '3.7'
 
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
@@ -361,7 +346,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.8'
+        python-version: '3.7'
 
     - name: Test
       run: python scripts/test_vector_sizes.py
@@ -413,7 +398,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.8'
+        python-version: '3.7'
 
     - name: Build
       run: make
@@ -436,7 +421,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.8'
+        python-version: '3.7'
 
     - name: Build
       run: make
@@ -458,7 +443,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.8'
+        python-version: '3.7'
 
     - name: Install LLVM and Clang
       uses: KyleMayes/install-llvm-action@v1
