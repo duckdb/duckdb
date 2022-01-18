@@ -2320,7 +2320,7 @@ c_expr:		columnref								{ $$ = $1; }
 			  }
 		;
 
-func_application: func_name '(' ')'
+func_application:       func_name '(' ')'
 				{
 					$$ = (PGNode *) makeFuncCall($1, NIL, @1);
 				}
