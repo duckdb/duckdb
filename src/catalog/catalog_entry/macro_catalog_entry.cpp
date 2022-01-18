@@ -14,7 +14,6 @@ void MacroCatalogEntry::Serialize(Serializer &serializer) {
 	D_ASSERT(!internal);
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
-	function->expression->Serialize(serializer);
 	serializer.Write<uint32_t>((uint32_t)function->parameters.size());
 	for (auto &param : function->parameters) {
 		param->Serialize(serializer);
@@ -24,22 +23,35 @@ void MacroCatalogEntry::Serialize(Serializer &serializer) {
 		serializer.WriteString(kv.first);
 		kv.second->Serialize(serializer);
 	}
+	serializer.Write<bool>(function->isQuery() ? true : false);
+	if (function->isQuery())
+		function->query_node->Serialize(serializer);
+	else
+		function->expression->Serialize(serializer);
 }
 
 unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &source) {
+	bool is_query = false;
 	auto info = make_unique<CreateMacroInfo>();
 	info->schema = source.Read<string>();
 	info->name = source.Read<string>();
-	info->function = make_unique<MacroFunction>(ParsedExpression::Deserialize(source));
 	auto param_count = source.Read<uint32_t>();
+	info->function = make_unique<MacroFunction>();
 	for (idx_t i = 0; i < param_count; i++) {
 		info->function->parameters.push_back(ParsedExpression::Deserialize(source));
 	}
+
 	auto default_param_count = source.Read<uint32_t>();
 	for (idx_t i = 0; i < default_param_count; i++) {
 		auto name = source.Read<string>();
 		info->function->default_parameters[name] = ParsedExpression::Deserialize(source);
 	}
+
+	is_query = source.Read<bool>();
+	if (is_query)
+		info->function->query_node = unique_ptr<QueryNode>(QueryNode::Deserialize(source));
+	else
+		info->function->expression = unique_ptr<ParsedExpression>(ParsedExpression::Deserialize(source));
 	return info;
 }
 

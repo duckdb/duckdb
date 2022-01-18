@@ -20,9 +20,16 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	info->schema = qname.schema;
 	info->name = qname.name;
 
+	// function can be null here
 	auto function = TransformExpression(stmt->function);
-	D_ASSERT(function);
 	auto macro_func = make_unique<MacroFunction>(move(function));
+
+	// function is a query
+	if (stmt->query)
+		macro_func->query_node = TransformSelect(stmt->query, true)->node->Copy();
+
+	if (stmt->function == nullptr && stmt->query == nullptr)
+		throw ParserException("CreateFunctionStmt: function and query both null\n");
 
 	if (stmt->params) {
 		vector<unique_ptr<ParsedExpression>> parameters;
@@ -36,8 +43,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 				if (macro_func->default_parameters.find(param->alias) != macro_func->default_parameters.end()) {
 					throw ParserException("Duplicate default parameter: '%s'", param->alias);
 				}
-				auto alias = param->alias;
-				macro_func->default_parameters[alias] = move(param);
+				macro_func->default_parameters[param->alias] = move(param);
 			} else if (param->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 				// positional parameters
 				if (!macro_func->default_parameters.empty()) {

@@ -6,10 +6,21 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
 MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(move(expression)) {
+}
+
+MacroFunction::MacroFunction(void) {
+}
+
+bool MacroFunction::isQuery() {
+	if (query_node)
+		return true;
+	else
+		return false;
 }
 
 string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionExpression &function_expr,
@@ -25,8 +36,7 @@ string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionE
 			} else if (defaults.find(arg->alias) != defaults.end()) {
 				return StringUtil::Format("Duplicate default parameters %s!", arg->alias);
 			}
-			auto alias = arg->alias;
-			defaults[alias] = move(arg);
+			defaults[arg->alias] = move(arg);
 		} else if (!defaults.empty()) {
 			return "Positional parameters cannot come after parameters with a default value!";
 		} else {
@@ -64,7 +74,14 @@ string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionE
 }
 
 unique_ptr<MacroFunction> MacroFunction::Copy() {
-	auto result = make_unique<MacroFunction>(expression->Copy());
+	auto result = make_unique<MacroFunction>();
+
+	if (expression) {
+		result->expression = expression->Copy();
+	} else if (query_node) {
+		result->query_node = query_node->Copy();
+	}
+
 	for (auto &param : parameters) {
 		result->parameters.push_back(param->Copy());
 	}
