@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-void Binder::BindNamedParameters(unordered_map<string, LogicalType> &types, unordered_map<string, Value> &values,
+void Binder::BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
                                  QueryErrorContext &error_context, string &func_name) {
 	for (auto &kv : values) {
 		auto entry = types.find(kv.first);

@@ -2,6 +2,7 @@
 
 #include "pg_functions.hpp"
 #include "parser/parser.hpp"
+#include "parser/scansup.hpp"
 #include "common/keywords.hpp"
 
 using namespace std;
@@ -41,6 +42,10 @@ bool PostgresParser::IsKeyword(const std::string &text) {
 
 vector<duckdb_libpgquery::PGKeyword> PostgresParser::KeywordList() {
 	return duckdb_libpgquery::keyword_list();
+}
+
+void PostgresParser::SetPreserveIdentifierCase(bool preserve) {
+	duckdb_libpgquery::set_preserve_identifier_case(preserve);
 }
 
 }
