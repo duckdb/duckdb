@@ -45,7 +45,7 @@ jobs:
         mkdir -p pythonbin
         ./configure --with-ensurepip=install
         make -j
-        sudo make install
+        make install
         python3.7 --version
         python3.7 -m pip install pip
         python3.7 -m pip install requests
