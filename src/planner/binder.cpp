@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+
 namespace duckdb {
 
 shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, Binder *parent, bool inherit_ctes) {
@@ -143,9 +145,20 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::EMPTY:
 		result = Bind((EmptyTableRef &)ref);
 		break;
-	case TableReferenceType::TABLE_FUNCTION:
+	case TableReferenceType::TABLE_FUNCTION: {
+
+		// We need a copy in case Bind((TableFunctionRef ) return a null
+		// and modifies some of reference
+		auto cp_ref = ref.Copy();
 		result = Bind((TableFunctionRef &)ref);
-		break;
+
+		if (!result) {
+			// Also  note BindToMacro((TableMacroRef &)) return a BoundSubquery
+			result = BindToMacro((TableFunctionRef &)*cp_ref);
+		}
+
+	} break;
+
 	case TableReferenceType::EXPRESSION_LIST:
 		result = Bind((ExpressionListRef &)ref);
 		break;

@@ -4,6 +4,7 @@ add_library_unity(
   bind_select_node.cpp
   bind_setop_node.cpp
   bind_recursive_cte_node.cpp
+  bind_macro_select_node.cpp
   plan_query_node.cpp
   plan_recursive_cte_node.cpp
   plan_select_node.cpp

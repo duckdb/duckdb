@@ -72,13 +72,17 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = (CreateMacroInfo &)info;
 
-	if (base.function->expression->HasParameter()) {
+	/* different types */
+	bool is_query = base.function->isQuery();
+
+	if (!is_query && base.function->expression->HasParameter()) {
 		throw BinderException("Parameter expressions within macro's are not supported!");
 	}
 
 	// create macro binding in order to bind the function
 	vector<LogicalType> dummy_types;
 	vector<string> dummy_names;
+
 	// positional parameters
 	for (idx_t i = 0; i < base.function->parameters.size(); i++) {
 		auto param = (ColumnRefExpression &)*base.function->parameters[i];
@@ -96,22 +100,30 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	}
 	auto this_macro_binding = make_unique<MacroBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
-	ExpressionBinder::QualifyColumnNames(*this, base.function->expression);
 
-	// create a copy of the expression because we do not want to alter the original
-	auto expression = base.function->expression->Copy();
-
-	// bind it to verify the function was defined correctly
-	string error;
-	auto sel_node = make_unique<BoundSelectNode>();
-	auto group_info = make_unique<BoundGroupInformation>();
-	SelectBinder binder(*this, context, *sel_node, *group_info);
-	error = binder.Bind(&expression, 0, false);
-
-	if (!error.empty()) {
-		throw BinderException(error);
+	if (!is_query) {
+		ExpressionBinder::QualifyColumnNames(*this, base.function->expression);
 	}
 
+	if (is_query) {
+		// nb use a Copy as node can be modified
+		unique_ptr<QueryNode> node = base.function->query_node->Copy();
+		// not interested in the result just wish to know if can bind
+		auto result = BindNode(*node);
+	} else {
+
+		auto expression = base.function->expression->Copy();
+		// bind it to verify the function was defined correctly
+		string error;
+		auto sel_node = make_unique<BoundSelectNode>();
+		auto group_info = make_unique<BoundGroupInformation>();
+		SelectBinder binder(*this, context, *sel_node, *group_info);
+		error = binder.Bind(&expression, 0, false);
+
+		if (!error.empty()) {
+			throw BinderException(error);
+		}
+	}
 	return BindSchema(info);
 }
 
