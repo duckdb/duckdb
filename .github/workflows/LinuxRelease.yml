@@ -43,10 +43,9 @@ jobs:
         tar xvf Python-3.7.12.tgz
         cd Python-3.7.12
         mkdir -p pythonbin
-        ./configure --with-ensurepip=install --prefix=`pwd`/pythonbin
+        ./configure --with-ensurepip=install
         make -j
-        make install
-        export PATH=`pwd`/pythonbin/bin:$PATH
+        sudo make install
         python3.7 --version
         python3.7 -m pip install pip
         python3.7 -m pip install requests
