@@ -393,6 +393,11 @@ void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
 	AddGenericBinding(index, alias, names, subquery.types);
 }
+void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery) {
+	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
+	AddGenericBinding(index, alias, names, subquery.types);
+}
+
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
                                     const vector<LogicalType> &types) {

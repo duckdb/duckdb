@@ -84,6 +84,8 @@ public:
 	                      const vector<LogicalType> &types, LogicalGet &get);
 	//! Adds a subquery with a given alias to the BindContext.
 	void AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
+	//! Adds a subquery with a given alias to the BindContext.
+	void AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery);
 	//! Adds a base table with the given alias to the BindContext.
 	void AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
 	                       const vector<LogicalType> &types);
