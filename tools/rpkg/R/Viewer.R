@@ -41,7 +41,8 @@ rs_list_objects <- function(connection, catalog = NULL, schema = NULL, name = NU
     type <- paste0("%", type)
   }
   # behold
-  dbGetQuery(connection, '
+  dbGetQuery(
+    connection, '
     SELECT table_name "name",
       CASE WHEN table_type LIKE \'%TABLE\' THEN \'table\' ELSE LOWER(table_type) END "type"
     FROM information_schema.tables
@@ -49,21 +50,23 @@ rs_list_objects <- function(connection, catalog = NULL, schema = NULL, name = NU
       (?::STRING IS NULL OR table_name = ?) AND
       table_type ILIKE ?
     ORDER BY table_schema, table_type, table_name',
-    list(schema, schema, name, name, type))
+    list(schema, schema, name, name, type)
+  )
 }
 
 rs_list_columns <- function(connection, table, catalog = NULL, schema = NULL, ...) {
-
   if (is.null(schema)) {
     schema <- NA
   }
-  dbGetQuery(connection, "
+  dbGetQuery(
+    connection, "
     SELECT column_name \"name\", data_type \"field.type\"
     FROM information_schema.columns
     WHERE (?::STRING IS NULL OR table_schema = ?) AND
       table_name = ?
     ORDER BY ordinal_position",
-    list(schema, schema, table))
+    list(schema, schema, table)
+  )
 }
 
 rs_preview <- function(connection, rowLimit, table = NULL, view = NULL, schema = NULL, ...) {
@@ -168,7 +171,6 @@ rs_on_connection_opened <- function(connection, code = "") {
     disconnect = function() {
       dbDisconnect(connection)
     },
-
     listObjectTypes = function() {
       rs_list_object_types(connection)
     },

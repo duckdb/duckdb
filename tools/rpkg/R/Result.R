@@ -30,11 +30,9 @@ duckdb_result <- function(connection, stmt_lst, arrow) {
       query_result <- duckdb_execute(res)
       new_res <- new("duckdb_result", connection = connection, stmt_lst = stmt_lst, env = env, arrow = arrow, query_result = query_result)
       return(new_res)
-    }
-    else {
+    } else {
       duckdb_execute(res)
     }
-
   }
 
 
@@ -105,7 +103,8 @@ set_output_tz <- function(x, timezone, convert) {
 
   tz_convert <- switch(convert,
     with = tz_convert,
-    force = tz_force)
+    force = tz_force
+  )
 
   is_datetime <- which(vapply(x, inherits, "POSIXt", FUN.VALUE = logical(1)))
 

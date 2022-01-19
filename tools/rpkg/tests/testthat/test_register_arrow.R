@@ -137,19 +137,19 @@ numeric_operators <- function(data_type) {
 
 
 test_that("duckdb_register_arrow() performs selection pushdown numeric types", {
-  numeric_types <- c('TINYINT', 'SMALLINT', 'INTEGER', 'BIGINT', 'UTINYINT', 'USMALLINT', 'UINTEGER', 'UBIGINT',
-    'FLOAT', 'DOUBLE', 'HUGEINT')
+  numeric_types <- c(
+    'TINYINT', 'SMALLINT', 'INTEGER', 'BIGINT', 'UTINYINT', 'USMALLINT', 'UINTEGER', 'UBIGINT',
+    'FLOAT', 'DOUBLE', 'HUGEINT'
+  )
 
   for (data_type in numeric_types)
     numeric_operators(data_type)
-
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown decimal types", {
   numeric_types <- c('DECIMAL(4,1)', 'DECIMAL(9,1)', 'DECIMAL(18,4)', 'DECIMAL(30,12)')
   for (data_type in numeric_types)
     numeric_operators(data_type)
-
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown varchar type", {
@@ -326,7 +326,6 @@ test_that("duckdb_register_arrow() under many threads", {
   expect_error(dbGetQuery(con, "SELECT cyl, COUNT(mpg) FROM mtcars_arrow GROUP BY cyl"), NA)
   expect_error(dbGetQuery(con, "SELECT cyl, SUM(mpg) FROM mtcars_arrow GROUP BY cyl"), NA)
   expect_error(dbGetQuery(con, "SELECT cyl, AVG(mpg) FROM mtcars_arrow GROUP BY cyl"), NA)
-
 })
 
 test_that("we can unregister in finalizers yay", {

@@ -9,7 +9,8 @@ test_that("factors can be round tripped", {
     a = c(1, 2, 3),
     f = as.factor(c('a', 'b', NA)),
     x = c('Hello', 'World', 'Etc'),
-    stringsAsFactors = FALSE)
+    stringsAsFactors = FALSE
+  )
 
   duckdb::duckdb_register(con, "df0", df0)
   df1 <- dbReadTable(con, "df0")
@@ -58,7 +59,6 @@ test_that("non-utf things can be read", {
 
   expect_identical(df, df1)
   expect_identical(df, df2)
-
 })
 
 
@@ -71,5 +71,4 @@ test_that("single value factors round trip correctly, issue 2627", {
   df2 <- dbReadTable(con, "df")
   df1$year <- as.character(df1$year)
   expect_identical(df1, df2)
-
 })

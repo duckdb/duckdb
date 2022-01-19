@@ -59,7 +59,6 @@ is_installed <- function(pkg) {
 }
 
 check_tz <- function(timezone) {
-
   if (!is.null(timezone) && timezone == "") {
     return(Sys.timezone())
   }

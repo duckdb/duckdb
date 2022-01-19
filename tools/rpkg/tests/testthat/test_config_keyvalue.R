@@ -30,5 +30,4 @@ test_that("configuration key value pairs work as expected", {
 
   # setting a configuration option to a non-string is also an error
   expect_error(duckdb::duckdb(config = list("default_order" = "asdf")))
-
 })
