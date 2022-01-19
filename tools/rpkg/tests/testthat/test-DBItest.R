@@ -23,6 +23,7 @@ DBItest::test_all(c(
   "append_roundtrip_64_bit_numeric",
   "append_roundtrip_64_bit_character",
   "append_roundtrip_64_bit_roundtrip",
+  #
   "column_info_consistent", # won't fix: https://github.com/r-dbi/DBItest/issues/181
 
   "read_table", # these are temporarily skipped because factors can be round tripped
