@@ -10,7 +10,7 @@ statement ok
 CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR, c VARCHAR);
 
 query I
-INSERT INTO abac_tbl SELECT * FROM read_csv('test/sql/copy/csv/data/abac/abac.csv', columns=STRUCT_PACK(a := 'VARCHAR', b := 'VARCHAR', c := 'VARCHAR'), sep='ABAC', auto_detect='false')
+INSERT INTO abac_tbl SELECT * FROM read_csv('test/sql/copy/csv/data/abac/abac.csv', COLUMNS=STRUCT_PACK(a := 'VARCHAR', b := 'VARCHAR', c := 'VARCHAR'), sep='ABAC', auto_detect='false')
 ----
 1
 

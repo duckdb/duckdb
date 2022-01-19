@@ -41,6 +41,9 @@ jobs:
     - name: Node 15
       run: ./scripts/node_build.sh 15
 
+    - name: Node 17
+      run: ./scripts/node_build.sh 17
+
    osx-nodejs:
       name: node.js OSX
       runs-on: macos-latest
@@ -64,6 +67,9 @@ jobs:
 
       - name: Node 15
         run: ./scripts/node_build.sh 15
+
+      - name: Node 17
+        run: ./scripts/node_build.sh 17
 
    win-nodejs:
       name: node.js Windows

@@ -112,8 +112,8 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 		}
 		case SQL_ATTR_ASYNC_ENABLE:
 			break;
-		case SQL_ATTR_ASYNC_STMT_EVENT:
-			break;
+		// case SQL_ATTR_ASYNC_STMT_EVENT:
+		//	break;
 		case SQL_ATTR_CONCURRENCY:
 			break;
 		case SQL_ATTR_CURSOR_SCROLLABLE:
@@ -374,8 +374,7 @@ SQLRETURN SQL_API SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_CLOSE) {
-			stmt->Close();
-			return SQL_SUCCESS;
+			return duckdb::CloseStmt(stmt);
 		}
 		return SQL_ERROR;
 	});

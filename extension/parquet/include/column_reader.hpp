@@ -13,6 +13,7 @@
 #include "resizable_buffer.hpp"
 
 #include "parquet_rle_bp_decoder.hpp"
+#include "parquet_dbp_decoder.hpp"
 #include "parquet_statistics.hpp"
 
 #include "duckdb.hpp"
@@ -96,6 +97,7 @@ private:
 	void PrepareRead(parquet_filter_t &filter);
 	void PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size);
 	void PrepareDataPage(PageHeader &page_hdr);
+	void PreparePageV2(PageHeader &page_hdr);
 
 	const duckdb_parquet::format::ColumnChunk *chunk;
 
@@ -111,6 +113,7 @@ private:
 	unique_ptr<RleBpDecoder> dict_decoder;
 	unique_ptr<RleBpDecoder> defined_decoder;
 	unique_ptr<RleBpDecoder> repeated_decoder;
+	unique_ptr<DbpDecoder> dbp_decoder;
 
 	// dummies for Skip()
 	parquet_filter_t none_filter;

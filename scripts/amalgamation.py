@@ -239,7 +239,7 @@ def git_commit_hash():
 def git_dev_version():
     version = subprocess.check_output(['git','describe','--tags','--abbrev=0']).strip().decode('utf8')
     long_version = subprocess.check_output(['git','describe','--tags','--long']).strip().decode('utf8')
-    version_splits = version.lstrip('v').split('.')
+    version_splits = version.split('.')
     dev_version = long_version.split('-')[1]
     if int(dev_version) == 0:
         # directly on a tag: emit the regular version

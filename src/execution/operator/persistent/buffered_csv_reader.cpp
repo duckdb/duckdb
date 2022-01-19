@@ -921,7 +921,7 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 	// update parser info, and read, generate & set col_names based on previous findings
 	if (((!first_row_consistent || first_row_nulls) && !options.has_header) || (options.has_header && options.header)) {
 		options.header = true;
-		unordered_map<string, idx_t> name_collision_count;
+		case_insensitive_map_t<idx_t> name_collision_count;
 		// get header names from CSV
 		for (idx_t col = 0; col < options.num_cols; col++) {
 			const auto &val = best_header_row.GetValue(col, 0);
