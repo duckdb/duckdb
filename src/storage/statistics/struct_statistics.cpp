@@ -30,12 +30,12 @@ void StructStatistics::Merge(const BaseStatistics &other_p) {
 }
 
 // LCOV_EXCL_START
-FilterPropagateResult StructStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
+FilterPropagateResult StructStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) const {
 	throw InternalException("Struct zonemaps are not supported yet");
 }
 // LCOV_EXCL_STOP
 
-unique_ptr<BaseStatistics> StructStatistics::Copy() {
+unique_ptr<BaseStatistics> StructStatistics::Copy() const {
 	auto copy = make_unique<StructStatistics>(type);
 	if (validity_stats) {
 		copy->validity_stats = validity_stats->Copy();
@@ -46,8 +46,9 @@ unique_ptr<BaseStatistics> StructStatistics::Copy() {
 	return move(copy);
 }
 
-void StructStatistics::Serialize(Serializer &serializer) {
-	BaseStatistics::Serialize(serializer);
+void StructStatistics::Serialize(FieldWriter &writer) const {
+	writer.WriteField<uint32_t>(child_stats.size());
+	auto &serializer = writer.GetSerializer();
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		serializer.Write<bool>(child_stats[i] ? true : false);
 		if (child_stats[i]) {
@@ -56,10 +57,14 @@ void StructStatistics::Serialize(Serializer &serializer) {
 	}
 }
 
-unique_ptr<BaseStatistics> StructStatistics::Deserialize(Deserializer &source, LogicalType type) {
+unique_ptr<BaseStatistics> StructStatistics::Deserialize(FieldReader &reader, LogicalType type) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto result = make_unique<StructStatistics>(move(type));
 	auto &child_types = StructType::GetChildTypes(result->type);
+
+	auto child_type_count = reader.ReadRequired<uint32_t>();
+	D_ASSERT(child_types.size() == child_type_count);
+	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		auto has_child = source.Read<bool>();
 		if (has_child) {
@@ -71,7 +76,7 @@ unique_ptr<BaseStatistics> StructStatistics::Deserialize(Deserializer &source, L
 	return move(result);
 }
 
-string StructStatistics::ToString() {
+string StructStatistics::ToString() const {
 	string result;
 	result += " {";
 	auto &child_types = StructType::GetChildTypes(type);
@@ -86,7 +91,7 @@ string StructStatistics::ToString() {
 	return result;
 }
 
-void StructStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) {
+void StructStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {
 	BaseStatistics::Verify(vector, sel, count);
 
 	auto &child_entries = StructVector::GetEntries(vector);

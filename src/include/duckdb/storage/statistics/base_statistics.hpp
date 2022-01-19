@@ -19,6 +19,8 @@ struct SelectionVector;
 
 class Serializer;
 class Deserializer;
+class FieldWriter;
+class FieldReader;
 class Vector;
 class ValidityStatistics;
 
@@ -33,24 +35,27 @@ public:
 	unique_ptr<BaseStatistics> validity_stats;
 
 public:
-	bool CanHaveNull();
-	bool CanHaveNoNull();
+	bool CanHaveNull() const;
+	bool CanHaveNoNull() const;
 
-	virtual bool IsConstant() {
+	virtual bool IsConstant() const{
 		return false;
 	}
 
 	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
 
 	virtual void Merge(const BaseStatistics &other);
-	virtual unique_ptr<BaseStatistics> Copy();
-	virtual void Serialize(Serializer &serializer);
-	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
-	//! Verify that a vector does not violate the statistics
-	virtual void Verify(Vector &vector, const SelectionVector &sel, idx_t count);
-	void Verify(Vector &vector, idx_t count);
 
-	virtual string ToString();
+	virtual unique_ptr<BaseStatistics> Copy() const;
+	void Serialize(Serializer &serializer)const ;
+	virtual void Serialize(FieldWriter &writer) const;
+	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
+
+	//! Verify that a vector does not violate the statistics
+	virtual void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const;
+	void Verify(Vector &vector, idx_t count) const;
+
+	virtual string ToString() const;
 };
 
 } // namespace duckdb

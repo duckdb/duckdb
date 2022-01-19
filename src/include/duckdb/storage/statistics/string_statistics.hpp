@@ -36,14 +36,14 @@ public:
 	void Update(const string_t &value);
 	void Merge(const BaseStatistics &other) override;
 
-	unique_ptr<BaseStatistics> Copy() override;
-	void Serialize(Serializer &serializer) override;
-	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
-	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) override;
+	unique_ptr<BaseStatistics> Copy() const override;
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<BaseStatistics> Deserialize(FieldReader &reader, LogicalType type);
+	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const override;
 
-	FilterPropagateResult CheckZonemap(ExpressionType comparison_type, const string &value);
+	FilterPropagateResult CheckZonemap(ExpressionType comparison_type, const string &value) const;
 
-	string ToString() override;
+	string ToString() const override;
 };
 
 } // namespace duckdb

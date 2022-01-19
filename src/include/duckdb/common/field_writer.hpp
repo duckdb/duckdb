@@ -40,6 +40,12 @@ public:
 			WriteData(val, len);
 		}
 	}
+	void WriteBlob(const_data_ptr_t val, idx_t len) {
+		AddField();
+		if (len > 0) {
+			WriteData(val, len);
+		}
+	}
 
 	template <class T, class CONTAINER_TYPE = vector<T>>
 	void WriteList(const CONTAINER_TYPE &elements) {
@@ -218,6 +224,16 @@ public:
 		}
 		return result;
 	}
+	void ReadBlob(data_ptr_t result, idx_t read_size) {
+		if (field_count >= max_field_count) {
+			// field is not there, throw an exception
+			throw SerializationException("Attempting to read a required field, but field is missing");
+		}
+		// field is there, read the actual value
+		AddField();
+		source.ReadData(result, read_size);
+	}
+
 
 	//! Called after all fields have been read. Should always be called.
 	void Finalize();
