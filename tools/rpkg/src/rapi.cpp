@@ -1,4 +1,4 @@
-#include "cpp11/R.hpp"
+#include "cpp11.hpp"
 #include "rapi.hpp"
 #include "altrepstring.hpp"
 #include <R_ext/Rdynload.h>
@@ -8,7 +8,7 @@ using namespace duckdb;
 // When changing this file, run cpp11::cpp_register() from R
 
 [[cpp11::register]]
-SEXP startup_R(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
+cpp11::external_pointer<DBWrapper> startup_R(cpp11::strings dbdirsexp, cpp11::logicals readonlysexp, cpp11::list configsexp) {
 	return RApi::Startup(dbdirsexp, readonlysexp, configsexp);
 }
 
