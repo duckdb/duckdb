@@ -43,3 +43,8 @@ SELECT * FROM test ORDER BY 1;
 1	hello
 2	world 
 
+# test query returning error does not export to file
+query I
+COPY (SELECT nonexisting FROM test LIMIT 1) TO '__TEST_DIR__/overwrite.csv';
+----
+2
