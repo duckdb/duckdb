@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 2.8.12)
 
-project(pg_query CXX C)
+project(duckdb_pg_query CXX C)
 if(POLICY CMP0063)
     cmake_policy(SET CMP0063 NEW)
 endif()
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-add_library(pg_query STATIC
+add_library(duckdb_pg_query STATIC
             postgres_parser.cpp
             pg_functions.cpp
             src_backend_parser_parser.cpp
@@ -19,15 +19,15 @@ add_library(pg_query STATIC
             src_common_keywords.cpp)
 
 target_include_directories(
-  pg_query
+  duckdb_pg_query
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-set_target_properties(pg_query PROPERTIES EXPORT_NAME duckdb_pg_query)
+set_target_properties(duckdb_pg_query PROPERTIES EXPORT_NAME duckdb_duckdb_pg_query)
 
-install(TARGETS pg_query
+install(TARGETS duckdb_pg_query
         EXPORT "${DUCKDB_EXPORT_SET}"
         LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
         ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
 
-disable_target_warnings(pg_query)
+disable_target_warnings(duckdb_pg_query)
 
-set_target_properties(pg_query PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(duckdb_pg_query PROPERTIES POSITION_INDEPENDENT_CODE ON)
