@@ -22,6 +22,7 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.Properties;
 import java.util.TimeZone;
+import java.time.LocalDateTime;
 
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
@@ -410,7 +411,63 @@ public static void test_duckdb_timestamp() throws Exception {
 
 		conn.close();
 	}
+
+	public static void test_duckdb_localdatetime() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		stmt.execute("CREATE TABLE x (ts TIMESTAMP)");
+
+		LocalDateTime ldt = LocalDateTime.parse("2021-01-18T21:20:07");
+
+		PreparedStatement ps1 = conn.prepareStatement("INSERT INTO x VALUES (?)");
+		ps1.setObject(1, ldt);
+		ps1.execute();
+		ps1.close();
+		
+		PreparedStatement ps2 = conn.prepareStatement("SELECT * FROM x");
+		ResultSet rs2 = ps2.executeQuery();
+
+		rs2.next();
+		assertEquals(rs2.getTimestamp(1), rs2.getObject(1, Timestamp.class));
+		assertEquals(rs2.getObject(1, LocalDateTime.class), ldt);
+
+		rs2.close();
+		ps2.close();
+		stmt.close();
+		conn.close();
+	}
 	
+	public static void test_duckdb_getObject_with_class() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		stmt.execute("CREATE TABLE b (vchar VARCHAR, bo BOOLEAN, sint SMALLINT, nint INTEGER, bigi BIGINT,"
+			+ " flt FLOAT, dbl DOUBLE, dte DATE, tme TIME, ts TIMESTAMP, dec16 DECIMAL(3,1),"
+			+ " dec32 DECIMAL(9,8), dec64 DECIMAL(16,1), dec128 DECIMAL(30,10))");
+		stmt.execute("INSERT INTO b VALUES ('varchary', true, 6, 42, 666, 42.666, 666.42,"
+			+ " '1970-01-02', '01:00:34', '1970-01-03 03:42:23', 42.2, 1.23456789, 987654321012345.6, 111112222233333.44444)");
+
+		PreparedStatement ps = conn.prepareStatement("SELECT * FROM b");
+		ResultSet rs = ps.executeQuery();
+
+		rs.next();
+		assertEquals(rs.getString(1), rs.getObject(1, String.class));
+		assertEquals(rs.getBoolean(2), rs.getObject(2, Boolean.class));
+		assertEquals(rs.getShort(3), rs.getObject(3, Short.class));
+		assertEquals(rs.getInt(4), rs.getObject(4, Integer.class));
+		assertEquals(rs.getLong(5), rs.getObject(5, Long.class));
+		assertEquals(rs.getFloat(6), rs.getObject(6, Float.class));
+		assertEquals(rs.getDouble(7), rs.getObject(7, Double.class));
+		assertEquals(rs.getDate(8), rs.getObject(8, Date.class));
+		assertEquals(rs.getTime(9), rs.getObject(9, Time.class));
+		assertEquals(rs.getTimestamp(10), rs.getObject(10, Timestamp.class));
+		assertEquals(rs.getObject(10, LocalDateTime.class), LocalDateTime.parse("1970-01-03T03:42:23"));
+
+		rs.close();
+		ps.close();
+		stmt.close();
+		conn.close();
+	}
+
 	// Longer, resource intensive test - might be commented out for a quick test run
 	public static void test_lots_of_timestamps() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
