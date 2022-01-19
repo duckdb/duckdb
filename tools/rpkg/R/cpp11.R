@@ -5,7 +5,7 @@ startup_R <- function(dbdirsexp, readonlysexp, configsexp) {
 }
 
 shutdown_R <- function(dbsexp) {
-  .Call(`_duckdb_shutdown_R`, dbsexp)
+  invisible(.Call(`_duckdb_shutdown_R`, dbsexp))
 }
 
 connect_R <- function(dbsexp) {
@@ -13,7 +13,7 @@ connect_R <- function(dbsexp) {
 }
 
 disconnect_R <- function(connsexp) {
-  .Call(`_duckdb_disconnect_R`, connsexp)
+  invisible(.Call(`_duckdb_disconnect_R`, connsexp))
 }
 
 prepare_R <- function(connsexp, querysexp) {
@@ -41,19 +41,19 @@ release_R <- function(stmtsexp) {
 }
 
 register_R <- function(connsexp, namesexp, valuesexp) {
-  .Call(`_duckdb_register_R`, connsexp, namesexp, valuesexp)
+  invisible(.Call(`_duckdb_register_R`, connsexp, namesexp, valuesexp))
 }
 
 unregister_R <- function(connsexp, namesexp) {
-  .Call(`_duckdb_unregister_R`, connsexp, namesexp)
+  invisible(.Call(`_duckdb_unregister_R`, connsexp, namesexp))
 }
 
 register_arrow_R <- function(connsexp, namesexp, export_funsexp, valuesexp) {
-  .Call(`_duckdb_register_arrow_R`, connsexp, namesexp, export_funsexp, valuesexp)
+  invisible(.Call(`_duckdb_register_arrow_R`, connsexp, namesexp, export_funsexp, valuesexp))
 }
 
 unregister_arrow_R <- function(connsexp, namesexp) {
-  .Call(`_duckdb_unregister_arrow_R`, connsexp, namesexp)
+  invisible(.Call(`_duckdb_unregister_arrow_R`, connsexp, namesexp))
 }
 
 ptr_to_str <- function(extptr) {

@@ -82,7 +82,7 @@ SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
 	return dbsexp;
 }
 
-SEXP RApi::Shutdown(SEXP dbsexp) {
+void RApi::Shutdown(SEXP dbsexp) {
 	if (TYPEOF(dbsexp) != EXTPTRSXP) {
 		cpp11::stop("duckdb_finalize_connection_R: Need external pointer parameter");
 	}
@@ -91,6 +91,4 @@ SEXP RApi::Shutdown(SEXP dbsexp) {
 		R_ClearExternalPtr(dbsexp);
 		delete db_wrapper;
 	}
-
-	return R_NilValue;
 }

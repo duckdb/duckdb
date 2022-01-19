@@ -37,7 +37,7 @@ SEXP RApi::Connect(SEXP dbsexp) {
 	return connsexp;
 }
 
-SEXP RApi::Disconnect(SEXP connsexp) {
+void RApi::Disconnect(SEXP connsexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		cpp11::stop("duckdb_disconnect_R: Need external pointer parameter");
 	}
@@ -46,5 +46,4 @@ SEXP RApi::Disconnect(SEXP connsexp) {
 		R_ClearExternalPtr(connsexp);
 		delete conn_wrapper;
 	}
-	return R_NilValue;
 }

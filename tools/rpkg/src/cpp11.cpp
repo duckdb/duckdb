@@ -13,10 +13,11 @@ extern "C" SEXP _duckdb_startup_R(SEXP dbdirsexp, SEXP readonlysexp, SEXP config
   END_CPP11
 }
 // rapi.cpp
-SEXP shutdown_R(SEXP dbsexp);
+void shutdown_R(SEXP dbsexp);
 extern "C" SEXP _duckdb_shutdown_R(SEXP dbsexp) {
   BEGIN_CPP11
-    return cpp11::as_sexp(shutdown_R(cpp11::as_cpp<cpp11::decay_t<SEXP>>(dbsexp)));
+    shutdown_R(cpp11::as_cpp<cpp11::decay_t<SEXP>>(dbsexp));
+    return R_NilValue;
   END_CPP11
 }
 // rapi.cpp
@@ -27,10 +28,11 @@ extern "C" SEXP _duckdb_connect_R(SEXP dbsexp) {
   END_CPP11
 }
 // rapi.cpp
-SEXP disconnect_R(SEXP connsexp);
+void disconnect_R(SEXP connsexp);
 extern "C" SEXP _duckdb_disconnect_R(SEXP connsexp) {
   BEGIN_CPP11
-    return cpp11::as_sexp(disconnect_R(cpp11::as_cpp<cpp11::decay_t<SEXP>>(connsexp)));
+    disconnect_R(cpp11::as_cpp<cpp11::decay_t<SEXP>>(connsexp));
+    return R_NilValue;
   END_CPP11
 }
 // rapi.cpp
@@ -76,31 +78,35 @@ extern "C" SEXP _duckdb_release_R(SEXP stmtsexp) {
   END_CPP11
 }
 // rapi.cpp
-SEXP register_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp);
+void register_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp);
 extern "C" SEXP _duckdb_register_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
   BEGIN_CPP11
-    return cpp11::as_sexp(register_R(cpp11::as_cpp<cpp11::decay_t<SEXP>>(connsexp), cpp11::as_cpp<cpp11::decay_t<SEXP>>(namesexp), cpp11::as_cpp<cpp11::decay_t<SEXP>>(valuesexp)));
+    register_R(cpp11::as_cpp<cpp11::decay_t<SEXP>>(connsexp), cpp11::as_cpp<cpp11::decay_t<SEXP>>(namesexp), cpp11::as_cpp<cpp11::decay_t<SEXP>>(valuesexp));
+    return R_NilValue;
   END_CPP11
 }
 // rapi.cpp
-SEXP unregister_R(SEXP connsexp, SEXP namesexp);
+void unregister_R(SEXP connsexp, SEXP namesexp);
 extern "C" SEXP _duckdb_unregister_R(SEXP connsexp, SEXP namesexp) {
   BEGIN_CPP11
-    return cpp11::as_sexp(unregister_R(cpp11::as_cpp<cpp11::decay_t<SEXP>>(connsexp), cpp11::as_cpp<cpp11::decay_t<SEXP>>(namesexp)));
+    unregister_R(cpp11::as_cpp<cpp11::decay_t<SEXP>>(connsexp), cpp11::as_cpp<cpp11::decay_t<SEXP>>(namesexp));
+    return R_NilValue;
   END_CPP11
 }
 // rapi.cpp
-SEXP register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp);
+void register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp);
 extern "C" SEXP _duckdb_register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp) {
   BEGIN_CPP11
-    return cpp11::as_sexp(register_arrow_R(cpp11::as_cpp<cpp11::decay_t<SEXP>>(connsexp), cpp11::as_cpp<cpp11::decay_t<SEXP>>(namesexp), cpp11::as_cpp<cpp11::decay_t<SEXP>>(export_funsexp), cpp11::as_cpp<cpp11::decay_t<SEXP>>(valuesexp)));
+    register_arrow_R(cpp11::as_cpp<cpp11::decay_t<SEXP>>(connsexp), cpp11::as_cpp<cpp11::decay_t<SEXP>>(namesexp), cpp11::as_cpp<cpp11::decay_t<SEXP>>(export_funsexp), cpp11::as_cpp<cpp11::decay_t<SEXP>>(valuesexp));
+    return R_NilValue;
   END_CPP11
 }
 // rapi.cpp
-SEXP unregister_arrow_R(SEXP connsexp, SEXP namesexp);
+void unregister_arrow_R(SEXP connsexp, SEXP namesexp);
 extern "C" SEXP _duckdb_unregister_arrow_R(SEXP connsexp, SEXP namesexp) {
   BEGIN_CPP11
-    return cpp11::as_sexp(unregister_arrow_R(cpp11::as_cpp<cpp11::decay_t<SEXP>>(connsexp), cpp11::as_cpp<cpp11::decay_t<SEXP>>(namesexp)));
+    unregister_arrow_R(cpp11::as_cpp<cpp11::decay_t<SEXP>>(connsexp), cpp11::as_cpp<cpp11::decay_t<SEXP>>(namesexp));
+    return R_NilValue;
   END_CPP11
 }
 // rapi.cpp

@@ -13,7 +13,7 @@ cpp11::external_pointer<DBWrapper> startup_R(cpp11::strings dbdirsexp, cpp11::lo
 }
 
 [[cpp11::register]]
-SEXP shutdown_R(SEXP dbsexp) {
+void shutdown_R(SEXP dbsexp) {
 	return RApi::Shutdown(dbsexp);
 }
 
@@ -23,7 +23,7 @@ SEXP connect_R(SEXP dbsexp) {
 }
 
 [[cpp11::register]]
-SEXP disconnect_R(SEXP connsexp) {
+void disconnect_R(SEXP connsexp) {
 	return RApi::Disconnect(connsexp);
 }
 
@@ -58,22 +58,22 @@ SEXP release_R(SEXP stmtsexp) {
 }
 
 [[cpp11::register]]
-SEXP register_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
+void register_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	return RApi::RegisterDataFrame(connsexp, namesexp, valuesexp);
 }
 
 [[cpp11::register]]
-SEXP unregister_R(SEXP connsexp, SEXP namesexp) {
+void unregister_R(SEXP connsexp, SEXP namesexp) {
 	return RApi::UnregisterDataFrame(connsexp, namesexp);
 }
 
 [[cpp11::register]]
-SEXP register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp) {
+void register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp) {
 	return RApi::RegisterArrow(connsexp, namesexp, export_funsexp, valuesexp);
 }
 
 [[cpp11::register]]
-SEXP unregister_arrow_R(SEXP connsexp, SEXP namesexp) {
+void unregister_arrow_R(SEXP connsexp, SEXP namesexp) {
 	return RApi::UnregisterArrow(connsexp, namesexp);
 }
 

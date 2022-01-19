@@ -30,11 +30,11 @@ struct RApi {
 
 	static SEXP Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp);
 
-	static SEXP Shutdown(SEXP dbsexp);
+	static void Shutdown(SEXP dbsexp);
 
 	static SEXP Connect(SEXP dbsexp);
 
-	static SEXP Disconnect(SEXP connsexp);
+	static void Disconnect(SEXP connsexp);
 
 	static SEXP Prepare(SEXP connsexp, SEXP querysexp);
 
@@ -49,13 +49,13 @@ struct RApi {
 
 	static SEXP Release(SEXP stmtsexp);
 
-	static SEXP RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp);
+	static void RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp);
 
-	static SEXP UnregisterDataFrame(SEXP connsexp, SEXP namesexp);
+	static void UnregisterDataFrame(SEXP connsexp, SEXP namesexp);
 
-	static SEXP RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp);
+	static void RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp);
 
-	static SEXP UnregisterArrow(SEXP connsexp, SEXP namesexp);
+	static void UnregisterArrow(SEXP connsexp, SEXP namesexp);
 
 	static SEXP PointerToString(SEXP extptr);
 

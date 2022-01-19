@@ -13,7 +13,7 @@
 
 using namespace duckdb;
 
-SEXP RApi::RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
+void RApi::RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		cpp11::stop("duckdb_register_R: Need external pointer parameter for connection");
 	}
@@ -40,10 +40,9 @@ SEXP RApi::RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	} catch (std::exception &e) {
 		cpp11::stop("duckdb_register_R: Failed to register data frame: %s", e.what());
 	}
-	return R_NilValue;
 }
 
-SEXP RApi::UnregisterDataFrame(SEXP connsexp, SEXP namesexp) {
+void RApi::UnregisterDataFrame(SEXP connsexp, SEXP namesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		cpp11::stop("duckdb_unregister_R: Need external pointer parameter for connection");
 	}
@@ -61,7 +60,6 @@ SEXP RApi::UnregisterDataFrame(SEXP connsexp, SEXP namesexp) {
 	if (!res->success) {
 		cpp11::stop(res->error.c_str());
 	}
-	return R_NilValue;
 }
 
 class RArrowTabularStreamFactory {
@@ -238,7 +236,7 @@ unique_ptr<TableFunctionRef> RApi::ArrowScanReplacement(const string &table_name
 	return nullptr;
 }
 
-SEXP RApi::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp) {
+void RApi::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		cpp11::stop("duckdb_register_R: Need external pointer parameter for connection");
 	}
@@ -278,11 +276,9 @@ SEXP RApi::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP
 
 	auto key = Rf_install(("_registered_arrow_" + name).c_str());
 	Rf_setAttrib(conn_wrapper->db_sexp, key, state_list);
-
-	return R_NilValue;
 }
 
-SEXP RApi::UnregisterArrow(SEXP connsexp, SEXP namesexp) {
+void RApi::UnregisterArrow(SEXP connsexp, SEXP namesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		cpp11::stop("duckdb_unregister_R: Need external pointer parameter for connection");
 	}
@@ -303,6 +299,4 @@ SEXP RApi::UnregisterArrow(SEXP connsexp, SEXP namesexp) {
 	}
 	auto key = Rf_install(("_registered_arrow_" + name).c_str());
 	Rf_setAttrib(conn_wrapper->db_sexp, key, R_NilValue);
-
-	return R_NilValue;
 }
