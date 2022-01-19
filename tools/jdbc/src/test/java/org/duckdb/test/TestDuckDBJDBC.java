@@ -442,28 +442,35 @@ public static void test_duckdb_timestamp() throws Exception {
 		Statement stmt = conn.createStatement();
 		stmt.execute("CREATE TABLE b (vchar VARCHAR, bo BOOLEAN, sint SMALLINT, nint INTEGER, bigi BIGINT,"
 			+ " flt FLOAT, dbl DOUBLE, dte DATE, tme TIME, ts TIMESTAMP, dec16 DECIMAL(3,1),"
-			+ " dec32 DECIMAL(9,8), dec64 DECIMAL(16,1), dec128 DECIMAL(30,10))");
+            + " dec32 DECIMAL(9,8), dec64 DECIMAL(16,1), dec128 DECIMAL(30,10))");
 		stmt.execute("INSERT INTO b VALUES ('varchary', true, 6, 42, 666, 42.666, 666.42,"
 			+ " '1970-01-02', '01:00:34', '1970-01-03 03:42:23', 42.2, 1.23456789, 987654321012345.6, 111112222233333.44444)");
 
 		PreparedStatement ps = conn.prepareStatement("SELECT * FROM b");
 		ResultSet rs = ps.executeQuery();
 
-		rs.next();
-		assertEquals(rs.getString(1), rs.getObject(1, String.class));
-		assertEquals(rs.getBoolean(2), rs.getObject(2, Boolean.class));
-		assertEquals(rs.getShort(3), rs.getObject(3, Short.class));
-		assertEquals(rs.getInt(4), rs.getObject(4, Integer.class));
-		assertEquals(rs.getLong(5), rs.getObject(5, Long.class));
-		assertEquals(rs.getFloat(6), rs.getObject(6, Float.class));
-		assertEquals(rs.getDouble(7), rs.getObject(7, Double.class));
-		assertEquals(rs.getDate(8), rs.getObject(8, Date.class));
-		assertEquals(rs.getTime(9), rs.getObject(9, Time.class));
-		assertEquals(rs.getTimestamp(10), rs.getObject(10, Timestamp.class));
-		assertEquals(rs.getObject(10, LocalDateTime.class), LocalDateTime.parse("1970-01-03T03:42:23"));
+        rs.next();
+        assertEquals(rs.getString(1), rs.getObject(1, String.class));
+        assertEquals(rs.getBoolean(2), rs.getObject(2, Boolean.class));
+        assertEquals(rs.getShort(3), rs.getObject(3, Short.class));
+        assertEquals(rs.getInt(4), rs.getObject(4, Integer.class));
+        assertEquals(rs.getLong(5), rs.getObject(5, Long.class));
+        assertEquals(rs.getFloat(6), rs.getObject(6, Float.class));
+        assertEquals(rs.getDouble(7), rs.getObject(7, Double.class));
+        assertEquals(rs.getDate(8), rs.getObject(8, Date.class));
+        assertEquals(rs.getTime(9), rs.getObject(9, Time.class));
+        assertEquals(rs.getTimestamp(10), rs.getObject(10, Timestamp.class));
+        assertEquals(rs.getBigDecimal(11), rs.getObject(11, BigDecimal.class)); 
+        assertEquals(rs.getBigDecimal(12), rs.getObject(12, BigDecimal.class)); 
+        assertEquals(rs.getBigDecimal(13), rs.getObject(13, BigDecimal.class)); 
+        assertEquals(rs.getBigDecimal(14), rs.getObject(14, BigDecimal.class)); 
+        System.out.println(rs.getBigDecimal(11));
+        System.out.println(rs.getBigDecimal(12));
+        System.out.println(rs.getBigDecimal(13));
+        System.out.println(rs.getBigDecimal(14));
 
-		rs.close();
-		ps.close();
+        rs.close();
+        ps.close();
 		stmt.close();
 		conn.close();
 	}
@@ -495,6 +502,7 @@ public static void test_duckdb_timestamp() throws Exception {
 			ps.close();
 		}
 	}
+
 
 	public static void test_big_data() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
