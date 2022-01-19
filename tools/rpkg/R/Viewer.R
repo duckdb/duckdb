@@ -143,7 +143,7 @@ rs_on_connection_opened <- function(connection, code = "") {
   # append the server name if we know it, and it isn't the same as the database name
   # (this can happen for serverless, nameless databases such as SQLite)
   if (!is.null(server_name) && nzchar(server_name) &&
-      !identical(server_name, display_name)) {
+    !identical(server_name, display_name)) {
     display_name <- paste(display_name, "-", server_name)
   }
 

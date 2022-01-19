@@ -9,7 +9,7 @@ encode_values <- function(value) {
   value[is_factor] <- lapply(value[is_factor], function(x) {
     levels(x) <- enc2utf8(levels(x))
     x
-   })
+  })
 
   is_posixlt <- vapply(value, inherits, "POSIXlt", FUN.VALUE = logical(1))
   value[is_posixlt] <- lapply(value[is_posixlt], as.POSIXct)
@@ -71,12 +71,12 @@ duckdb_unregister <- function(conn, name) {
 duckdb_register_arrow <- function(conn, name, arrow_scannable, use_async = FALSE) {
   stopifnot(dbIsValid(conn))
 
-    # create some R functions to pass to c-land
-    export_fun <- function(arrow_scannable, stream_ptr, projection = NULL, filter = TRUE) {
-        arrow::Scanner$create(arrow_scannable, projection, filter, use_async = use_async)$ToRecordBatchReader()$export_to_c(stream_ptr)
-    }
-   # pass some functions to c land so we don't have to look them up there
-   function_list <- list(export_fun, arrow::Expression$create, arrow::Expression$field_ref, arrow::Expression$scalar)
+  # create some R functions to pass to c-land
+  export_fun <- function(arrow_scannable, stream_ptr, projection = NULL, filter = TRUE) {
+    arrow::Scanner$create(arrow_scannable, projection, filter, use_async = use_async)$ToRecordBatchReader()$export_to_c(stream_ptr)
+  }
+  # pass some functions to c land so we don't have to look them up there
+  function_list <- list(export_fun, arrow::Expression$create, arrow::Expression$field_ref, arrow::Expression$scalar)
   .Call(duckdb_register_arrow_R, conn@conn_ref, enc2utf8(as.character(name)), function_list, arrow_scannable)
   invisible(TRUE)
 }
@@ -91,5 +91,5 @@ duckdb_unregister_arrow <- function(conn, name) {
 #' @rdname duckdb_register_arrow
 #' @export
 duckdb_list_arrow <- function(conn) {
-    sort(gsub("_registered_arrow_", "", names(attributes(conn@driver@database_ref)), fixed = TRUE))
+  sort(gsub("_registered_arrow_", "", names(attributes(conn@driver@database_ref)), fixed = TRUE))
 }

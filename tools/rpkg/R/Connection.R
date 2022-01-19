@@ -17,10 +17,10 @@ setClass("duckdb_driver", contains = "DBIDriver", slots = list(database_ref = "e
 setClass("duckdb_connection",
   contains = "DBIConnection",
   slots = list(conn_ref = "externalptr",
-               driver = "duckdb_driver",
-               debug = "logical",
-               timezone_out = "character",
-               tz_out_convert = "character")
+    driver = "duckdb_driver",
+    debug = "logical",
+    timezone_out = "character",
+    tz_out_convert = "character")
 )
 
 duckdb_connection <- function(duckdb_driver, debug) {

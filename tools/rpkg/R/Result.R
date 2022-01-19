@@ -85,7 +85,7 @@ fix_rownames <- function(df) {
 #' @export
 duckdb_fetch_arrow <- function(res, stream = FALSE, vector_per_chunk = 1, return_table = FALSE) {
   if (vector_per_chunk < 0) {
-      stop("cannot fetch negative vector_per_chunk")
+    stop("cannot fetch negative vector_per_chunk")
   }
   result <- .Call(duckdb_fetch_arrow_R, res@query_result, stream, vector_per_chunk, return_table)
   return(result)
@@ -104,8 +104,8 @@ set_output_tz <- function(x, timezone, convert) {
   if (timezone == "UTC") return(x)
 
   tz_convert <- switch(convert,
-                       with = tz_convert,
-                       force = tz_force)
+    with = tz_convert,
+    force = tz_force)
 
   is_datetime <- which(vapply(x, inherits, "POSIXt", FUN.VALUE = logical(1)))
 

@@ -76,7 +76,7 @@ test_that("mock observer hooray", {
   mock <- list(connectionOpened = function(host, ...) {
     called_connection_opened <<- TRUE
   }, connectionClosed = function(...) {
-      called_connection_closed <<- TRUE
+    called_connection_closed <<- TRUE
   }, connectionUpdated = function(...) {
     called_connection_updated <<- TRUE
   })
