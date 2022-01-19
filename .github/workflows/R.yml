@@ -69,7 +69,8 @@ jobs:
 
     - name: Coverage
       run: |
-        R -q -e 'covr::codecov("tools/rpkg")'
+        cov <- covr::codecov("tools/rpkg")
+      shell: Rscript {0}
 
     - name: Print R log on failure
       if: ${{ failure() }}
