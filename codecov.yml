@@ -1,0 +1,4 @@
+fixes:
+  - "R/::tools/rpkg/R/"
+  - "src/duckdb/src/::tools/rpkg/src/"
+
