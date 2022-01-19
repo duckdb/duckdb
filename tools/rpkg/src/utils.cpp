@@ -25,7 +25,8 @@ SEXP RApi::PointerToString(SEXP extptr) {
 	if (ptr != NULL) {
 		char buf[100];
 		snprintf(buf, 100, "%p", ptr);
-		return cpp11::strings({ buf });
+		cpp11::strings a;
+		return cpp11::writable::strings({ buf });
 	} else {
 		return cpp11::strings(NA_STRING);
 	}
