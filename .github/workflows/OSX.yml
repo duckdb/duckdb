@@ -96,8 +96,6 @@ jobs:
           duckdb_cli-osx-amd64.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
 
-
-
   xcode-extensions:
     name: OSX Extensions Release
     runs-on: macos-latest
@@ -108,24 +106,32 @@ jobs:
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
+      BUILD_HTTPFS: 1
       AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
       AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
       AWS_DEFAULT_REGION: us-east-1
 
     steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
 
-    - name: Build
-      run: make
+      - name: Install OpenSSL
+        run: |
+          brew install openssl
 
-    - name: Deploy
-      run: |
+      - name: Build
+        run: |
+          export OPENSSL_ROOT_DIR=`brew --prefix openssl`
+          echo $OPENSSL_ROOT_DIR
+          make
+
+      - name: Deploy
+        run: |
           if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
             ./scripts/extension-upload.sh osx_amd64

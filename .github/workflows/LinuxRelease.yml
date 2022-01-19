@@ -33,10 +33,20 @@ jobs:
       run: |
         apt-get update -y -qq
         apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:deadsnakes/ppa
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3.7 zip python3-pip maven unixodbc-dev
+        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev
+
+    - name: Install Python 3.7
+      run: |
+        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
+        tar xvf Python-3.7.12.tgz
+        cd Python-3.7.12
+        mkdir -p pythonbin
+        ./configure --with-ensurepip=install
+        make -j
+        make install
+        python3.7 --version
         python3.7 -m pip install pip
         python3.7 -m pip install requests
 
@@ -118,10 +128,20 @@ jobs:
       run: |
         apt-get update -y -qq
         apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:deadsnakes/ppa
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3.7 zip python3-pip maven
+        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev
+
+    - name: Install Python 3.7
+      run: |
+        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
+        tar xvf Python-3.7.12.tgz
+        cd Python-3.7.12
+        mkdir -p pythonbin
+        ./configure --with-ensurepip=install
+        make -j
+        make install
+        python3.7 --version
         python3.7 -m pip install pip
         python3.7 -m pip install requests awscli
 
@@ -168,10 +188,22 @@ jobs:
       run: |
         apt-get update -y -qq
         apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:deadsnakes/ppa
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk python3.7 zip
+        apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk zip
+
+    - name: Install Python 3.7
+      run: |
+        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
+        tar xvf Python-3.7.12.tgz
+        cd Python-3.7.12
+        mkdir -p pythonbin
+        ./configure --with-ensurepip=install
+        make -j
+        make install
+        python3.7 --version
+        python3.7 -m pip install pip
+        python3.7 -m pip install requests
 
     - uses: actions/checkout@v2
       with:

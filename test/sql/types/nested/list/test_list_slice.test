@@ -76,7 +76,7 @@ SELECT s[0:2] FROM lists
 ----
 [h, e]
 [w, o]
-NULL
+[b]
 NULL
 
 # index out of range
@@ -85,7 +85,7 @@ SELECT s[1:3] FROM lists
 ----
 [e, l]
 [o, r]
-NULL
+[]
 NULL
 
 # variable length offset/length
@@ -102,7 +102,7 @@ SELECT s[off:2+off] FROM lists
 ----
 [h, e]
 [o, r]
-NULL
+[b]
 NULL
 
 query T
@@ -227,17 +227,17 @@ NULL
 query T
 SELECT s[(2147483647-1):1] FROM lists
 ----
-NULL
-NULL
-NULL
+[]
+[]
+[]
 NULL
 
 query T
 SELECT s[(2147483647-1):-1] FROM lists
 ----
-NULL
-NULL
-NULL
+[]
+[]
+[]
 NULL
 
 query T
