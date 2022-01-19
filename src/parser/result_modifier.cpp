@@ -12,23 +12,34 @@ bool ResultModifier::Equals(const ResultModifier *other) const {
 }
 
 void ResultModifier::Serialize(Serializer &serializer) const {
-	serializer.Write<ResultModifierType>(type);
+	FieldWriter writer(serializer);
+	writer.WriteField<ResultModifierType>(type);
+	Serialize(writer);
+	writer.Finalize();
 }
 
 unique_ptr<ResultModifier> ResultModifier::Deserialize(Deserializer &source) {
-	auto type = source.Read<ResultModifierType>();
+	FieldReader reader(source);
+	auto type = reader.ReadRequired<ResultModifierType>();
+
+	unique_ptr<ResultModifier> result;
 	switch (type) {
 	case ResultModifierType::LIMIT_MODIFIER:
-		return LimitModifier::Deserialize(source);
+		result = LimitModifier::Deserialize(reader);
+		break;
 	case ResultModifierType::ORDER_MODIFIER:
-		return OrderModifier::Deserialize(source);
+		result = OrderModifier::Deserialize(reader);
+		break;
 	case ResultModifierType::DISTINCT_MODIFIER:
-		return DistinctModifier::Deserialize(source);
+		result = DistinctModifier::Deserialize(reader);
+		break;
 	case ResultModifierType::LIMIT_PERCENT_MODIFIER:
-		return LimitPercentModifier::Deserialize(source);
+		result = LimitPercentModifier::Deserialize(reader);
+		break;
 	default:
 		throw InternalException("Unrecognized ResultModifierType for Deserialization");
 	}
+	return result;
 }
 
 bool LimitModifier::Equals(const ResultModifier *other_p) const {
@@ -56,16 +67,15 @@ unique_ptr<ResultModifier> LimitModifier::Copy() const {
 	return move(copy);
 }
 
-void LimitModifier::Serialize(Serializer &serializer) const {
-	ResultModifier::Serialize(serializer);
-	serializer.WriteOptional(limit);
-	serializer.WriteOptional(offset);
+void LimitModifier::Serialize(FieldWriter &writer) const {
+	writer.WriteOptional(limit);
+	writer.WriteOptional(offset);
 }
 
-unique_ptr<ResultModifier> LimitModifier::Deserialize(Deserializer &source) {
+unique_ptr<ResultModifier> LimitModifier::Deserialize(FieldReader &reader) {
 	auto mod = make_unique<LimitModifier>();
-	mod->limit = source.ReadOptional<ParsedExpression>();
-	mod->offset = source.ReadOptional<ParsedExpression>();
+	mod->limit = reader.ReadOptional<ParsedExpression>(nullptr);
+	mod->offset = reader.ReadOptional<ParsedExpression>(nullptr);
 	return move(mod);
 }
 
@@ -88,14 +98,13 @@ unique_ptr<ResultModifier> DistinctModifier::Copy() const {
 	return move(copy);
 }
 
-void DistinctModifier::Serialize(Serializer &serializer) const {
-	ResultModifier::Serialize(serializer);
-	serializer.WriteList(distinct_on_targets);
+void DistinctModifier::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializableList(distinct_on_targets);
 }
 
-unique_ptr<ResultModifier> DistinctModifier::Deserialize(Deserializer &source) {
+unique_ptr<ResultModifier> DistinctModifier::Deserialize(FieldReader &reader) {
 	auto mod = make_unique<DistinctModifier>();
-	source.ReadList<ParsedExpression>(mod->distinct_on_targets);
+	mod->distinct_on_targets = reader.ReadRequiredSerializableList<ParsedExpression>();
 	return move(mod);
 }
 
@@ -143,32 +152,28 @@ string OrderByNode::ToString() const {
 }
 
 void OrderByNode::Serialize(Serializer &serializer) const {
-	serializer.Write<OrderType>(type);
-	serializer.Write<OrderByNullType>(null_order);
-	expression->Serialize(serializer);
+	FieldWriter writer(serializer);
+	writer.WriteField<OrderType>(type);
+	writer.WriteField<OrderByNullType>(null_order);
+	writer.WriteSerializable(*expression);
+	writer.Finalize();
 }
 
 OrderByNode OrderByNode::Deserialize(Deserializer &source) {
-	auto type = source.Read<OrderType>();
-	auto null_order = source.Read<OrderByNullType>();
-	auto expression = ParsedExpression::Deserialize(source);
+	FieldReader reader(source);
+	auto type = reader.ReadRequired<OrderType>();
+	auto null_order = reader.ReadRequired<OrderByNullType>();
+	auto expression = reader.ReadRequiredSerializable<ParsedExpression>();
 	return OrderByNode(type, null_order, move(expression));
 }
 
-void OrderModifier::Serialize(Serializer &serializer) const {
-	ResultModifier::Serialize(serializer);
-	serializer.Write<int64_t>(orders.size());
-	for (auto &order : orders) {
-		order.Serialize(serializer);
-	}
+void OrderModifier::Serialize(FieldWriter &writer) const {
+	writer.WriteRegularSerializableList(orders);
 }
 
-unique_ptr<ResultModifier> OrderModifier::Deserialize(Deserializer &source) {
+unique_ptr<ResultModifier> OrderModifier::Deserialize(FieldReader &reader) {
 	auto mod = make_unique<OrderModifier>();
-	auto order_count = source.Read<int64_t>();
-	for (int64_t i = 0; i < order_count; i++) {
-		mod->orders.push_back(OrderByNode::Deserialize((source)));
-	}
+	mod->orders = reader.ReadRequiredSerializableList<OrderByNode, OrderByNode>();
 	return move(mod);
 }
 
@@ -197,16 +202,15 @@ unique_ptr<ResultModifier> LimitPercentModifier::Copy() const {
 	return move(copy);
 }
 
-void LimitPercentModifier::Serialize(Serializer &serializer) const {
-	ResultModifier::Serialize(serializer);
-	serializer.WriteOptional(limit);
-	serializer.WriteOptional(offset);
+void LimitPercentModifier::Serialize(FieldWriter &writer) const {
+	writer.WriteOptional(limit);
+	writer.WriteOptional(offset);
 }
 
-unique_ptr<ResultModifier> LimitPercentModifier::Deserialize(Deserializer &source) {
+unique_ptr<ResultModifier> LimitPercentModifier::Deserialize(FieldReader &reader) {
 	auto mod = make_unique<LimitPercentModifier>();
-	mod->limit = source.ReadOptional<ParsedExpression>();
-	mod->offset = source.ReadOptional<ParsedExpression>();
+	mod->limit = reader.ReadOptional<ParsedExpression>(nullptr);
+	mod->offset = reader.ReadOptional<ParsedExpression>(nullptr);
 	return move(mod);
 }
 

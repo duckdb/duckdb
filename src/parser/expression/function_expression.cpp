@@ -112,9 +112,7 @@ void FunctionExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteString(schema);
 	writer.WriteSerializableList(children);
 	writer.WriteOptional(filter);
-	// FIXME: should not use serializer here
-	auto &serializer = writer.GetSerializer();
-	order_bys->Serialize(serializer);
+	writer.WriteSerializable((ResultModifier &)*order_bys);
 	writer.WriteField<bool>(distinct);
 	writer.WriteField<bool>(is_operator);
 }
@@ -124,9 +122,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 	auto schema = reader.ReadRequired<string>();
 	auto children = reader.ReadRequiredSerializableList<ParsedExpression>();
 	auto filter = reader.ReadOptional<ParsedExpression>(nullptr);
-	// FIXME: should not use source here
-	auto &source = reader.GetSource();
-	unique_ptr<OrderModifier> order_bys(static_cast<OrderModifier *>(ResultModifier::Deserialize(source).release()));
+	auto order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(reader.ReadRequiredSerializable<ResultModifier>());
 	auto distinct = reader.ReadRequired<bool>();
 	auto is_operator = reader.ReadRequired<bool>();
 	unique_ptr<FunctionExpression> function;
