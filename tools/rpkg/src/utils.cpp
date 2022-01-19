@@ -239,8 +239,7 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 	case LogicalTypeId::TIME: {
 		res = r.Protect(NEW_NUMERIC(1));
 		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
-		dest_ptr[0] = ((double)val.GetValue<dtime_t>().micros) / 1000;
-		NUMERIC_POINTER(res)[0] = val.GetValue<dtime_t>().micros;
+		dest_ptr[0] = ((double)val.GetValue<dtime_t>().micros) / Interval::MICROS_PER_SEC;
 		// some dresssup for R
 		RProtector r_time;
 		SEXP cl = r_time.Protect(NEW_STRING(2));

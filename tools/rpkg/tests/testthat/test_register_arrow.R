@@ -211,37 +211,38 @@ test_that("duckdb_register_arrow() performs selection pushdown bool type", {
     duckdb::duckdb_unregister_arrow(con, "testarrow")
 })
 
-# NotImplemented: Function equal has no kernel matching input types (array[time64[us]], scalar[time32[s]])
 test_that("duckdb_register_arrow() performs selection pushdown time type", {
     con <- dbConnect(duckdb::duckdb())
     on.exit(dbDisconnect(con, shutdown = TRUE))
 
     dbExecute(con, paste0("CREATE TABLE test (a  TIME, b TIME, c TIME)"))
-    dbExecute(con, "INSERT INTO  test VALUES ('00:01:00','00:01:00','00:01:00'),('00:10:00','00:10:00','00:10:00'),('01:00:00','00:10:00','01:00:00'),(NULL,NULL,NULL)")
-    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
+
+    time <- structure(c(60, 600, 3600, NA), class = "difftime", units = "secs")
+    arrow_table <- arrow::arrow_table(a = time, b = time, c = time)
     duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
 
     # Try ==
-    expect_error(dbGetQuery(con, "SELECT count(*) from testarrow where a ='00:01:00'"))
+    expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a ='00:01:00'")[[1]], 1)
     # # Try >
-    # expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a >'00:01:00'")[[1]], 2)
+    expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a >'00:01:00'")[[1]], 2)
     # # Try >=
-    # expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a >='00:10:00'")[[1]], 2)
+    expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a >='00:10:00'")[[1]], 2)
     # # Try <
-    # expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a <'00:10:00'")[[1]], 1)
+    expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a <'00:10:00'")[[1]], 1)
     # # Try <=
-    # expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a <='00:10:00'")[[1]], 2)
+    expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a <='00:10:00'")[[1]], 2)
 
     # # Try Is Null
-    # expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a IS NULL")[[1]], 1)
+    expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a IS NULL")[[1]], 1)
     # # Try Is Not Null
-    # expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a IS NOT NULL")[[1]], 3)
+    expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a IS NOT NULL")[[1]], 3)
 
     # # Try And
-    # expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a='00:10:00' and b ='00:01:00'")[[1]], 0)
-    # expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a ='01:00:00' and b = '00:10:00' and c = '01:00:00'")[[1]], 1)
+    expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a='00:10:00' and b ='00:01:00'")[[1]], 0)
+    expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a ='01:00:00' and b = '01:00:00' and c = '01:00:00'")[[1]], 1)
+    expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a ='01:00:00' and b = '00:10:00' and c = '01:00:00'")[[1]], 0)
     # # Try Or
-    # expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a = '01:00:00' or b ='00:01:00'")[[1]], 2)
+    expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a = '01:00:00' or b ='00:01:00'")[[1]], 2)
 
     duckdb::duckdb_unregister_arrow(con, "testarrow")
 })
