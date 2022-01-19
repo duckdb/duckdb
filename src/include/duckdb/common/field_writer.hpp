@@ -41,11 +41,11 @@ public:
 		}
 	}
 
-	template <class T, class CONTAINER_TYPE=vector<T>>
+	template <class T, class CONTAINER_TYPE = vector<T>>
 	void WriteList(const CONTAINER_TYPE &elements) {
 		AddField();
 		Write<uint32_t>(elements.size());
-		for(auto &element : elements) {
+		for (auto &element : elements) {
 			Write<T>(element);
 		}
 	}
@@ -60,7 +60,7 @@ public:
 	void WriteSerializableList(const vector<unique_ptr<T>> &elements) {
 		AddField();
 		Write<uint32_t>(elements.size());
-		for(idx_t i = 0; i < elements.size(); i++) {
+		for (idx_t i = 0; i < elements.size(); i++) {
 			elements[i]->Serialize(*buffer);
 		}
 	}
@@ -69,7 +69,7 @@ public:
 	void WriteRegularSerializableList(const vector<T> &elements) {
 		AddField();
 		Write<uint32_t>(elements.size());
-		for(idx_t i = 0; i < elements.size(); i++) {
+		for (idx_t i = 0; i < elements.size(); i++) {
 			elements[i].Serialize(*buffer);
 		}
 	}
@@ -132,7 +132,7 @@ public:
 	~FieldReader();
 
 public:
-	template<class T>
+	template <class T>
 	T ReadRequired() {
 		if (field_count >= max_field_count) {
 			// field is not there, throw an exception
@@ -143,7 +143,7 @@ public:
 		return source.Read<T>();
 	}
 
-	template<class T>
+	template <class T>
 	T ReadField(T default_value) {
 		if (field_count >= max_field_count) {
 			// field is not there, read the default value
@@ -163,7 +163,7 @@ public:
 		AddField();
 		auto result_count = source.Read<uint32_t>();
 		vector<T> result;
-		for(idx_t i = 0; i < result_count; i++) {
+		for (idx_t i = 0; i < result_count; i++) {
 			result.push_back(source.Read<T>());
 		}
 		return result;
@@ -180,7 +180,7 @@ public:
 		return source.template ReadOptional<T>();
 	}
 
-	template<class T, class RETURN_TYPE = unique_ptr<T>>
+	template <class T, class RETURN_TYPE = unique_ptr<T>>
 	RETURN_TYPE ReadSerializable(RETURN_TYPE default_value) {
 		if (field_count >= max_field_count) {
 			// field is not there, read the default value
@@ -191,7 +191,7 @@ public:
 		return T::Deserialize(source);
 	}
 
-	template<class T, class RETURN_TYPE = unique_ptr<T>>
+	template <class T, class RETURN_TYPE = unique_ptr<T>>
 	RETURN_TYPE ReadRequiredSerializable() {
 		if (field_count >= max_field_count) {
 			// field is not there, read the default value
@@ -202,7 +202,7 @@ public:
 		return T::Deserialize(source);
 	}
 
-	template<class T, class RETURN_TYPE = unique_ptr<T>>
+	template <class T, class RETURN_TYPE = unique_ptr<T>>
 	vector<RETURN_TYPE> ReadRequiredSerializableList() {
 		if (field_count >= max_field_count) {
 			// field is not there, read the default value
@@ -213,7 +213,7 @@ public:
 		auto result_count = source.Read<uint32_t>();
 
 		vector<RETURN_TYPE> result;
-		for(idx_t i = 0; i < result_count; i++) {
+		for (idx_t i = 0; i < result_count; i++) {
 			result.push_back(T::Deserialize(source));
 		}
 		return result;

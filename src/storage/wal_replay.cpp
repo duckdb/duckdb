@@ -313,18 +313,13 @@ void ReplayState::ReplayDropSchema() {
 // Replay Custom Type
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateType() {
-	CreateTypeInfo info;
-
-	info.schema = source.Read<string>();
-	info.name = source.Read<string>();
-	info.type = make_unique<LogicalType>(LogicalType::Deserialize(source));
-
+	auto info = TypeCatalogEntry::Deserialize(source);
 	if (deserialize_only) {
 		return;
 	}
 
 	auto &catalog = Catalog::GetCatalog(context);
-	catalog.CreateType(context, &info);
+	catalog.CreateType(context, info.get());
 }
 
 void ReplayState::ReplayDropType() {

@@ -64,7 +64,8 @@ void StarExpression::Serialize(FieldWriter &writer) const {
 
 	writer.WriteString(relation_name);
 
-	// in order to write the exclude_list/replace_list as single fields we directly use the field writers' internal serializer
+	// in order to write the exclude_list/replace_list as single fields we directly use the field writers' internal
+	// serializer
 	writer.WriteField<uint32_t>(exclude_list.size());
 	for (auto &exclusion : exclude_list) {
 		serializer.WriteString(exclusion);

@@ -5,8 +5,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Field Writer
 //===--------------------------------------------------------------------===//
-FieldWriter::FieldWriter(Serializer &serializer_p) :
-      serializer(serializer_p), buffer(make_unique<BufferedSerializer>()), field_count(0) {
+FieldWriter::FieldWriter(Serializer &serializer_p)
+    : serializer(serializer_p), buffer(make_unique<BufferedSerializer>()), field_count(0) {
 }
 
 FieldWriter::~FieldWriter() {
@@ -43,9 +43,7 @@ void FieldWriter::Finalize() {
 //===--------------------------------------------------------------------===//
 // Field Deserializer
 //===--------------------------------------------------------------------===//
-FieldDeserializer::FieldDeserializer(Deserializer &root) :
-	root(root), remaining_data(idx_t(-1)) {
-
+FieldDeserializer::FieldDeserializer(Deserializer &root) : root(root), remaining_data(idx_t(-1)) {
 }
 
 void FieldDeserializer::ReadData(data_ptr_t buffer, idx_t read_size) {
@@ -73,14 +71,16 @@ FieldReader::FieldReader(Deserializer &source_p) : source(source_p), field_count
 	source.SetRemainingData(total_size);
 }
 
-FieldReader::~FieldReader() {}
+FieldReader::~FieldReader() {
+}
 
 void FieldReader::Finalize() {
 	if (field_count < max_field_count) {
 		// we can handle this case by calling source.ReadData(buffer, source.RemainingData())
-		throw SerializationException("Not all fields were read. This file might have been written with a newer version of DuckDB and is incompatible with this version of DuckDB.");
+		throw SerializationException("Not all fields were read. This file might have been written with a newer version "
+		                             "of DuckDB and is incompatible with this version of DuckDB.");
 	}
 	D_ASSERT(source.RemainingData() == 0);
 }
 
-}
+} // namespace duckdb

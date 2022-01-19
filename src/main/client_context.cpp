@@ -531,7 +531,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			string error;
 			try {
 				error = VerifyQuery(lock, query, move(statement));
-			} catch(std::exception &ex) {
+			} catch (std::exception &ex) {
 				error = ex.what();
 			}
 			if (!error.empty()) {
