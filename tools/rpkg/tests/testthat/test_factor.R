@@ -7,8 +7,8 @@ test_that("factors can be round tripped", {
 
   df0 <- data.frame(
     a = c(1, 2, 3),
-    f = as.factor(c('a', 'b', NA)),
-    x = c('Hello', 'World', 'Etc'),
+    f = as.factor(c("a", "b", NA)),
+    x = c("Hello", "World", "Etc"),
     stringsAsFactors = FALSE
   )
 

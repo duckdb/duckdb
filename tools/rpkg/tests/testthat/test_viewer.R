@@ -69,9 +69,9 @@ test_that("rs_actions", {
 })
 
 test_that("mock observer hooray", {
-  called_connection_opened = FALSE
-  called_connection_closed = FALSE
-  called_connection_updated = FALSE
+  called_connection_opened <- FALSE
+  called_connection_closed <- FALSE
+  called_connection_updated <- FALSE
 
   mock <- list(connectionOpened = function(host, ...) {
     called_connection_opened <<- TRUE

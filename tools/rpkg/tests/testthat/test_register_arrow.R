@@ -138,18 +138,20 @@ numeric_operators <- function(data_type) {
 
 test_that("duckdb_register_arrow() performs selection pushdown numeric types", {
   numeric_types <- c(
-    'TINYINT', 'SMALLINT', 'INTEGER', 'BIGINT', 'UTINYINT', 'USMALLINT', 'UINTEGER', 'UBIGINT',
-    'FLOAT', 'DOUBLE', 'HUGEINT'
+    "TINYINT", "SMALLINT", "INTEGER", "BIGINT", "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT",
+    "FLOAT", "DOUBLE", "HUGEINT"
   )
 
-  for (data_type in numeric_types)
+  for (data_type in numeric_types) {
     numeric_operators(data_type)
+  }
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown decimal types", {
-  numeric_types <- c('DECIMAL(4,1)', 'DECIMAL(9,1)', 'DECIMAL(18,4)', 'DECIMAL(30,12)')
-  for (data_type in numeric_types)
+  numeric_types <- c("DECIMAL(4,1)", "DECIMAL(9,1)", "DECIMAL(18,4)", "DECIMAL(30,12)")
+  for (data_type in numeric_types) {
     numeric_operators(data_type)
+  }
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown varchar type", {

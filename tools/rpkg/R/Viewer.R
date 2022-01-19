@@ -117,7 +117,9 @@ rs_check_disabled <- function(observer) {
 rs_on_connection_closed <- function(connection) {
   # make sure we have an observer
   observer <- getOption("connectionObserver")
-  if (rs_check_disabled(observer)) return(invisible(NULL))
+  if (rs_check_disabled(observer)) {
+    return(invisible(NULL))
+  }
 
   type <- "DuckDB"
   host <- connection@driver@dbdir
@@ -127,7 +129,9 @@ rs_on_connection_closed <- function(connection) {
 rs_on_connection_updated <- function(connection, hint) {
   # make sure we have an observer
   observer <- getOption("connectionObserver")
-  if (rs_check_disabled(observer)) return(invisible(NULL))
+  if (rs_check_disabled(observer)) {
+    return(invisible(NULL))
+  }
 
   type <- "DuckDB"
   host <- connection@driver@dbdir
@@ -137,7 +141,9 @@ rs_on_connection_updated <- function(connection, hint) {
 rs_on_connection_opened <- function(connection, code = "") {
   # make sure we have an observer
   observer <- getOption("connectionObserver")
-  if (rs_check_disabled(observer)) return(invisible(NULL))
+  if (rs_check_disabled(observer)) {
+    return(invisible(NULL))
+  }
 
   # use the database name as the display name
   display_name <- "DuckDB"

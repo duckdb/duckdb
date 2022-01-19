@@ -99,7 +99,9 @@ duckdb_fetch_record_batch <- function(res, approx_batch_size = 1) {
 }
 
 set_output_tz <- function(x, timezone, convert) {
-  if (timezone == "UTC") return(x)
+  if (timezone == "UTC") {
+    return(x)
+  }
 
   tz_convert <- switch(convert,
     with = tz_convert,
