@@ -4,6 +4,7 @@ add_library_unity(
   aggregate_relation.cpp
   create_table_relation.cpp
   create_view_relation.cpp
+  cross_product_relation.cpp
   delete_relation.cpp
   distinct_relation.cpp
   explain_relation.cpp
