@@ -5,6 +5,8 @@
 
 using namespace duckdb;
 
+// When changing this file, run cpp11::cpp_register() from R
+
 [[cpp11::register]]
 SEXP startup_R(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
 	return RApi::Startup(dbdirsexp, readonlysexp, configsexp);
