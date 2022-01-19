@@ -67,6 +67,10 @@ jobs:
         export NOT_CRAN='false'
         R CMD check --use-valgrind -o /tmp duckdb_*.tar.gz
 
+    - name: Coverage
+      run: |
+        R -q -e 'covr::codecov("tools/rpkg")'
+
     - name: Print R log on failure
       if: ${{ failure() }}
       run: |
