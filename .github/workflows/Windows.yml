@@ -1,6 +1,11 @@
 name: Windows
 on: [push, pull_request]
 
+concurrency:
+  # when copy-pasting workflow files, change the group name!
+  group: windows-${{ github.ref }}-${{ github.head_ref }}-${{ github.base_ref }}
+  cancel-in-progress: true
+
 defaults:
   run:
     shell: bash
@@ -183,37 +188,47 @@ jobs:
       run: cat ODBC_TRACE.log
 
  win-extensions-64:
-    name: Windows Extensions (64-bit)
-    runs-on: windows-latest
-    needs: win-release-64
-    env:
-      BUILD_VISUALIZER: 1
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-      AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
-      AWS_DEFAULT_REGION: us-east-1
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+   name: Windows Extensions (64-bit)
+   runs-on: windows-latest
+   needs: win-release-64
+   env:
+     BUILD_VISUALIZER: 1
+     BUILD_ICU: 1
+     BUILD_TPCH: 1
+     BUILD_TPCDS: 1
+     BUILD_FTS: 1
+     BUILD_HTTPFS: 1
+     STATIC_OPENSSL: 1
+     AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
+     AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+     AWS_DEFAULT_REGION: us-east-1
+   steps:
+     - uses: actions/checkout@v2
+       with:
+         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
+     - uses: actions/setup-python@v2
+       with:
+         python-version: '3.7'
 
-    - name: Build
-      run: |
-        make
+     - name: Install OpenSSL
+       run: |
+         choco install openssl -y --force
 
-    - name: Deploy
-      run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          pip install awscli
-          ./scripts/extension-upload.sh windows_amd64
-          ./scripts/extension-upload-test.sh
-        else
-          ./scripts/extension-upload-test.sh local
-        fi
+     - name: Build
+       run: |
+         make
+
+     - name: Uninstall OpenSSL
+       run: |
+         choco uninstall openssl -y --force
+
+     - name: Deploy
+       run: |
+         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+           pip install awscli
+           ./scripts/extension-upload.sh windows_amd64
+           ./scripts/extension-upload-test.sh
+         else
+           ./scripts/extension-upload-test.sh local
+         fi

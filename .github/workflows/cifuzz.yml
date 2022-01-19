@@ -1,6 +1,10 @@
 name: CIFuzz
 on: [pull_request]
 
+concurrency:
+  group: ${{ github.ref }}-${{ github.head_ref }}-${{ github.base_ref }}
+  cancel-in-progress: true
+
 jobs:
   Fuzzing:
     runs-on: ubuntu-latest

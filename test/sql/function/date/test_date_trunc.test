@@ -12,7 +12,12 @@ statement ok
 CREATE TABLE timestamps(d TIMESTAMP, s VARCHAR);
 
 statement ok
-INSERT INTO dates VALUES ('1992-12-02', 'year'), ('1993-03-03', 'month'), ('1994-05-05', 'day');
+INSERT INTO dates VALUES
+	('1992-12-02', 'year'),
+	('1993-03-03', 'month'),
+	('1994-05-05', 'day'),
+	('2022-01-01', 'isoyear')
+;
 
 statement ok
 INSERT INTO timestamps VALUES
@@ -37,6 +42,7 @@ SELECT date_trunc(NULL::VARCHAR, NULL::TIMESTAMP) FROM dates;
 NULL
 NULL
 NULL
+NULL
 
 query T
 SELECT date_trunc(s, NULL::TIMESTAMP) FROM dates;
@@ -44,10 +50,12 @@ SELECT date_trunc(s, NULL::TIMESTAMP) FROM dates;
 NULL
 NULL
 NULL
+NULL
 
 query T
 SELECT date_trunc(NULL, d) FROM dates;
 ----
+NULL
 NULL
 NULL
 NULL
@@ -85,6 +93,7 @@ SELECT date_trunc(s, d) FROM dates;
 1992-01-01 00:00:00
 1993-03-01 00:00:00
 1994-05-05 00:00:00
+2021-01-04 00:00:00
 
 # Timestamps should return timestamp type
 query T
@@ -205,6 +214,35 @@ query T
 SELECT date_trunc('epoch', TIMESTAMP '2019-01-06 04:03:02.5') FROM timestamps LIMIT 1;
 ----
 2019-01-06 04:03:02
+
+query II
+SELECT d::DATE, DATE_TRUNC('isoyear', d)::DATE
+FROM generate_series('2000-01-01'::TIMESTAMP, '2023-01-01'::TIMESTAMP, INTERVAL 1 YEAR) tbl(d);
+----
+2000-01-01	1999-01-04
+2001-01-01	2001-01-01
+2002-01-01	2001-01-01
+2003-01-01	2001-12-31
+2004-01-01	2002-12-30
+2005-01-01	2003-12-29
+2006-01-01	2005-01-03
+2007-01-01	2007-01-01
+2008-01-01	2007-01-01
+2009-01-01	2007-12-31
+2010-01-01	2008-12-29
+2011-01-01	2010-01-04
+2012-01-01	2011-01-03
+2013-01-01	2012-01-02
+2014-01-01	2012-12-31
+2015-01-01	2013-12-30
+2016-01-01	2014-12-29
+2017-01-01	2016-01-04
+2018-01-01	2018-01-01
+2019-01-01	2018-01-01
+2020-01-01	2018-12-31
+2021-01-01	2019-12-30
+2022-01-01	2021-01-04
+2023-01-01	2022-01-03
 
 # Unknown specifier should fail
 statement error
