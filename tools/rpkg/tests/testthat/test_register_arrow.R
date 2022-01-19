@@ -11,7 +11,7 @@ test_that("duckdb_register_arrow() works", {
   con <- dbConnect(duckdb::duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
-  res <- arrow::read_parquet("data/userdata1.parquet", as_data_frame=FALSE)
+  res <- arrow::read_parquet("data/userdata1.parquet", as_data_frame = FALSE)
   duckdb::duckdb_register_arrow(con, "myreader", res)
   res1 <- dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 10")
   res2 <- dbGetQuery(con, "SELECT first_name, last_name FROM parquet_scan('data/userdata1.parquet') LIMIT 10")
@@ -104,9 +104,9 @@ numeric_operators <- function(data_type) {
     con <- dbConnect(duckdb::duckdb())
     on.exit(dbDisconnect(con, shutdown = TRUE))
 
-    dbExecute(con, paste0("CREATE TABLE test (a ",data_type,", b ",data_type,", c ",data_type,")"))
+    dbExecute(con, paste0("CREATE TABLE test (a ", data_type, ", b ", data_type, ", c ", data_type, ")"))
     dbExecute(con, "INSERT INTO  test VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
-    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
+    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE), return_table = TRUE)
     duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
 
     # Try ==
@@ -146,7 +146,7 @@ test_that("duckdb_register_arrow() performs selection pushdown numeric types", {
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown decimal types", {
-    numeric_types <- c('DECIMAL(4,1)','DECIMAL(9,1)','DECIMAL(18,4)','DECIMAL(30,12)')
+    numeric_types <- c('DECIMAL(4,1)', 'DECIMAL(9,1)', 'DECIMAL(18,4)', 'DECIMAL(30,12)')
     for (data_type in numeric_types)
         numeric_operators(data_type)
 
@@ -158,7 +158,7 @@ test_that("duckdb_register_arrow() performs selection pushdown varchar type", {
 
     dbExecute(con, paste0("CREATE TABLE test (a  VARCHAR, b VARCHAR, c VARCHAR)"))
     dbExecute(con, "INSERT INTO  test VALUES ('1','1','1'),('10','10','10'),('100','10','100'),(NULL,NULL,NULL)")
-    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
+    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE), return_table = TRUE)
     duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
 
     # Try ==
@@ -192,7 +192,7 @@ test_that("duckdb_register_arrow() performs selection pushdown bool type", {
 
     dbExecute(con, paste0("CREATE TABLE test (a  BOOL, b BOOL)"))
     dbExecute(con, "INSERT INTO  test VALUES (TRUE,TRUE),(TRUE,FALSE),(FALSE,TRUE),(NULL,NULL)")
-    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
+    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE), return_table = TRUE)
     duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
 
     # Try ==
@@ -253,7 +253,7 @@ test_that("duckdb_register_arrow() performs selection pushdown timestamp type", 
 
     dbExecute(con, paste0("CREATE TABLE test (a  TIMESTAMP, b TIMESTAMP, c TIMESTAMP)"))
     dbExecute(con, "INSERT INTO  test VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),(NULL,NULL,NULL)")
-    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
+    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE), return_table = TRUE)
     duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
 
     # Try ==
@@ -287,7 +287,7 @@ test_that("duckdb_register_arrow() performs selection pushdown date type", {
 
     dbExecute(con, paste0("CREATE TABLE test (a  DATE, b DATE, c DATE)"))
     dbExecute(con, "INSERT INTO  test VALUES ('2000-01-01','2000-01-01','2000-01-01'),('2000-10-01','2000-10-01','2000-10-01'),('2010-01-01','2000-10-01','2010-01-01'),(NULL,NULL,NULL)")
-    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
+    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE), return_table = TRUE)
     duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
 
     # Try ==
@@ -323,9 +323,9 @@ test_that("duckdb_register_arrow() under many threads", {
     duckdb::duckdb_register_arrow(con, "mtcars_arrow", ds)
     dbExecute(con, "PRAGMA threads=32")
     dbExecute(con, "PRAGMA verify_parallelism")
-    expect_error(dbGetQuery(con, "SELECT cyl, COUNT(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
-    expect_error(dbGetQuery(con, "SELECT cyl, SUM(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
-    expect_error(dbGetQuery(con, "SELECT cyl, AVG(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
+    expect_error(dbGetQuery(con, "SELECT cyl, COUNT(mpg) FROM mtcars_arrow GROUP BY cyl"), NA)
+    expect_error(dbGetQuery(con, "SELECT cyl, SUM(mpg) FROM mtcars_arrow GROUP BY cyl"), NA)
+    expect_error(dbGetQuery(con, "SELECT cyl, AVG(mpg) FROM mtcars_arrow GROUP BY cyl"), NA)
 
 })
 

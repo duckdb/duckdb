@@ -68,12 +68,12 @@ duckdb_unregister <- function(conn, name) {
 #' @param use_async Switched to the asynchronous scanner. default FALSE
 #' @return These functions are called for their side effect.
 #' @export
-duckdb_register_arrow <- function(conn, name, arrow_scannable, use_async=FALSE) {
+duckdb_register_arrow <- function(conn, name, arrow_scannable, use_async = FALSE) {
   stopifnot(dbIsValid(conn))
 
     # create some R functions to pass to c-land
-    export_fun <- function(arrow_scannable, stream_ptr, projection=NULL, filter=TRUE) {
-        arrow::Scanner$create(arrow_scannable, projection, filter, use_async=use_async)$ToRecordBatchReader()$export_to_c(stream_ptr)
+    export_fun <- function(arrow_scannable, stream_ptr, projection = NULL, filter = TRUE) {
+        arrow::Scanner$create(arrow_scannable, projection, filter, use_async = use_async)$ToRecordBatchReader()$export_to_c(stream_ptr)
     }
    # pass some functions to c land so we don't have to look them up there
    function_list <- list(export_fun, arrow::Expression$create, arrow::Expression$field_ref, arrow::Expression$scalar)
@@ -91,5 +91,5 @@ duckdb_unregister_arrow <- function(conn, name) {
 #' @rdname duckdb_register_arrow
 #' @export
 duckdb_list_arrow <- function(conn) {
-    sort(gsub("_registered_arrow_", "", names(attributes(conn@driver@database_ref)), fixed=TRUE))
+    sort(gsub("_registered_arrow_", "", names(attributes(conn@driver@database_ref)), fixed = TRUE))
 }

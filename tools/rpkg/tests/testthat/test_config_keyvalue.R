@@ -7,14 +7,14 @@ test_that("configuration key value pairs work as expected", {
   drv <- duckdb::duckdb()
   duckdb::duckdb_shutdown(drv)
 
-  drv <- duckdb::duckdb(config=list())
+  drv <- duckdb::duckdb(config = list())
   duckdb::duckdb_shutdown(drv)
 
 # but we should throw an error on non-existent options
-  expect_error(duckdb::duckdb(config=list(a="a")))
+  expect_error(duckdb::duckdb(config = list(a = "a")))
 
 # but setting a legal option is fine
-  drv <- duckdb::duckdb(config=list("default_order" = "DESC"))
+  drv <- duckdb::duckdb(config = list("default_order" = "DESC"))
 
 # the option actually does something
   con <- dbConnect(drv)
@@ -26,9 +26,9 @@ test_that("configuration key value pairs work as expected", {
   duckdb::duckdb_shutdown(drv)
 
 # setting a configuration option to a non-string is an error
-  expect_error(duckdb::duckdb(config=list("default_order" = 42)))
+  expect_error(duckdb::duckdb(config = list("default_order" = 42)))
 
 # setting a configuration option to a non-string is also an error
-  expect_error(duckdb::duckdb(config=list("default_order" = "asdf")))
+  expect_error(duckdb::duckdb(config = list("default_order" = "asdf")))
 
 })

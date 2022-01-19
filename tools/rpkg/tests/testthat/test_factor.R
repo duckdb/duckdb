@@ -6,10 +6,10 @@ test_that("factors can be round tripped", {
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
   df0 <- data.frame(
-    a=c(1,2, 3),
-    f=as.factor(c('a', 'b', NA)),
-    x=c('Hello', 'World', 'Etc'),
-    stringsAsFactors=FALSE)
+    a = c(1, 2, 3),
+    f = as.factor(c('a', 'b', NA)),
+    x = c('Hello', 'World', 'Etc'),
+    stringsAsFactors = FALSE)
 
   duckdb::duckdb_register(con, "df0", df0)
   df1 <- dbReadTable(con, "df0")
@@ -42,7 +42,7 @@ test_that("non-utf things can be read", {
     Encoding(horrid_string) <- "latin1"
 
     # both column name and factor level and plain string are latin1
-    df <- data.frame(a=factor(horrid_string), b=horrid_string, stringsAsFactors=FALSE)
+    df <- data.frame(a = factor(horrid_string), b = horrid_string, stringsAsFactors = FALSE)
     names(df) <- c(horrid_string, "less_horrid")
 
     duckdb::duckdb_register(con, "df", df)

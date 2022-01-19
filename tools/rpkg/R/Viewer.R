@@ -131,7 +131,7 @@ rs_on_connection_updated <- function(connection, hint) {
   observer$connectionUpdated(type, host, hint = hint)
 }
 
-rs_on_connection_opened <- function(connection, code="") {
+rs_on_connection_opened <- function(connection, code = "") {
   # make sure we have an observer
   observer <- getOption("connectionObserver")
   if (rs_check_disabled(observer)) return(invisible(NULL))
@@ -159,7 +159,7 @@ rs_on_connection_opened <- function(connection, code="") {
     host = connection@driver@dbdir,
 
     # icon for connection
-    icon = system.file("icons/duckdb.png", package="duckdb"),
+    icon = system.file("icons/duckdb.png", package = "duckdb"),
 
     # connection code
     connectCode = code,
@@ -169,7 +169,7 @@ rs_on_connection_opened <- function(connection, code="") {
       dbDisconnect(connection)
     },
 
-    listObjectTypes = function () {
+    listObjectTypes = function() {
       rs_list_object_types(connection)
     },
 
