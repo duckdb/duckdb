@@ -26,11 +26,6 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 	}
 }
 
-struct RStatement {
-	unique_ptr<PreparedStatement> stmt;
-	vector<Value> parameters;
-};
-
 SEXP RApi::Release(SEXP stmtsexp) {
 	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
 		cpp11::stop("duckdb_release_R: Need external pointer parameter");

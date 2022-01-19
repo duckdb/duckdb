@@ -26,6 +26,11 @@ struct ConnWrapper {
 	SEXP db_sexp;
 };
 
+struct RStatement {
+	unique_ptr<PreparedStatement> stmt;
+	vector<Value> parameters;
+};
+
 struct RApi {
 
 	static SEXP Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp);
