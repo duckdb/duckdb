@@ -38,7 +38,7 @@ public:
 	bool CanHaveNull() const;
 	bool CanHaveNoNull() const;
 
-	virtual bool IsConstant() const{
+	virtual bool IsConstant() const {
 		return false;
 	}
 
@@ -47,7 +47,7 @@ public:
 	virtual void Merge(const BaseStatistics &other);
 
 	virtual unique_ptr<BaseStatistics> Copy() const;
-	void Serialize(Serializer &serializer)const ;
+	void Serialize(Serializer &serializer) const;
 	virtual void Serialize(FieldWriter &writer) const;
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
 

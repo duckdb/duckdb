@@ -234,7 +234,6 @@ public:
 		source.ReadData(result, read_size);
 	}
 
-
 	//! Called after all fields have been read. Should always be called.
 	void Finalize();
 

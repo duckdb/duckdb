@@ -93,7 +93,6 @@ void BaseStatistics::Serialize(Serializer &serializer) const {
 }
 
 void BaseStatistics::Serialize(FieldWriter &writer) const {
-
 }
 
 unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, LogicalType type) {
