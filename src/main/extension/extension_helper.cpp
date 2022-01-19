@@ -119,12 +119,12 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		// visualizer extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
-    } else if (extension == "json") {
+	} else if (extension == "json") {
 #ifdef BUILD_VISUALIZER_EXTENSION
-        db.LoadExtension<JSONExtension>();
+		db.LoadExtension<JSONExtension>();
 #else
-        // json extension required but not build: skip this test
-        return ExtensionLoadResult::NOT_LOADED;
+		// json extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else {
 		// unknown extension

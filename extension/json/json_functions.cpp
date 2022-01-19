@@ -6,6 +6,56 @@
 
 namespace duckdb {
 
+static inline bool ConvertToPath(const string_t &input, string &result, idx_t &len) {
+	len = input.GetSize();
+	if (len == 0) {
+		return false;
+	}
+	const char *ptr = input.GetDataUnsafe();
+	if (*ptr == '/') {
+		// Already a path string
+		result = input.GetString();
+	} else if (*ptr == '$') {
+		// Dollar/dot syntax
+		len--;
+		result = StringUtil::Replace(string(ptr + 1, len), ".", "/");
+	} else {
+		// Plain tag/array index, prepend slash
+		len++;
+		result = "/" + input.GetString();
+	}
+	return true;
+}
+
+struct JSONFunctionData : public FunctionData {
+public:
+	explicit JSONFunctionData(string path_p, idx_t len) : path(move(path_p)), len(len) {
+	}
+
+	unique_ptr<FunctionData> Copy() override {
+		return make_unique<JSONFunctionData>(path, len);
+	}
+
+public:
+	const string path;
+	const size_t len;
+};
+
+template <PhysicalType TYPE>
+static unique_ptr<FunctionData> JSONBind(ClientContext &context, ScalarFunction &bound_function,
+                                         vector<unique_ptr<Expression>> &arguments) {
+	D_ASSERT(bound_function.arguments.size() == 2);
+	string path = "";
+	idx_t len = 0;
+	if (arguments[1]->return_type.id() != LogicalTypeId::SQLNULL && arguments[1]->IsFoldable()) {
+		auto val = ExpressionExecutor::EvaluateScalar(*arguments[1]).GetValueUnsafe<string_t>();
+		if (!ConvertToPath(val, path, len)) {
+			throw InvalidInputException("Invalid path string");
+		}
+	}
+	return make_unique<JSONFunctionData>(path, len);
+}
+
 template <class T>
 inline bool GetVal(yyjson_val *val, T &result) {
 	throw NotImplementedException("Cannot extract JSON of this type");
@@ -65,81 +115,13 @@ inline bool GetVal(yyjson_val *val, string_t &result) {
 	return valid;
 }
 
-struct JSONFunctionData : public FunctionData {
-public:
-	explicit JSONFunctionData(string arg_p) : arg(move(arg_p)), path_ptr(arg.c_str()) {
-	}
-
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<JSONFunctionData>(arg);
-	}
-
-	template <class T>
-	static inline bool TemplatedExtract(const string_t &input, const char *path_ptr_p, T &result) {
-		// TODO: check if YYJSON_READ_ALLOW_INF_AND_NAN may be better?
-		yyjson_doc *doc = yyjson_read(input.GetDataUnsafe(), input.GetSize(), YYJSON_READ_NOFLAG);
-		yyjson_val *val = yyjson_doc_get_pointer(doc, path_ptr_p);
-		return GetVal<T>(val, result);
-	}
-
-	template <class T>
-	inline bool TemplatedExtract(const string_t &input, T &result) const {
-		return TemplatedExtract<T>(input, path_ptr, result);
-	}
-
-public:
-	const string arg;
-	const char *path_ptr;
-};
-
-static inline string ConvertToPath(const string &str) {
-	if (str.rfind('/', 0) == 0) {
-		// Already a path string
-		return str;
-	} else if (str.rfind('$', 0) == 0) {
-		// Dollar/dot syntax
-		return StringUtil::Replace(str, ".", "/");
-	} else {
-		// Plain tag/array index
-		return "/" + str;
-	}
+template <class T>
+static inline bool TemplatedExtract(const string_t &input, const char *ptr, const idx_t &len, T &result) {
+	// TODO: check if YYJSON_READ_ALLOW_INF_AND_NAN may be better?
+	yyjson_doc *doc = yyjson_read(input.GetDataUnsafe(), input.GetSize(), YYJSON_READ_NOFLAG);
+	yyjson_val *val = unsafe_yyjson_get_pointer(yyjson_doc_get_root(doc), ptr, len);
+	return GetVal<T>(val, result);
 }
-
-template <PhysicalType TYPE>
-static unique_ptr<FunctionData> JSONBind(ClientContext &context, ScalarFunction &bound_function,
-                                         vector<unique_ptr<Expression>> &arguments) {
-	D_ASSERT(bound_function.arguments.size() == 2);
-	string path = "";
-	if (arguments[1]->return_type.id() != LogicalTypeId::SQLNULL && arguments[1]->IsFoldable()) {
-		auto str = StringValue::Get(ExpressionExecutor::EvaluateScalar(*arguments[1]));
-		path = ConvertToPath(str);
-	}
-	return make_unique<JSONFunctionData>(path);
-}
-
-struct UnaryExtractWrapper {
-	template <class FUNC, class T>
-	static inline T Operation(string_t input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto fun = (FUNC *)dataptr;
-		T result;
-		if (!(*fun)(input, result)) {
-			mask.SetInvalid(idx);
-		}
-		return result;
-	}
-};
-
-struct BinaryExtractWrapper {
-	template <class FUNC, class T>
-	static inline T Operation(string_t input, string_t path, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto fun = (FUNC *)dataptr;
-		T result;
-		if (!(*fun)(input, result)) {
-			mask.SetInvalid(idx);
-		}
-		return result;
-	}
-};
 
 template <class T>
 static void TemplatedExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -147,18 +129,31 @@ static void TemplatedExtractFunction(DataChunk &args, ExpressionState &state, Ve
 	const auto &info = (JSONFunctionData &)*func_expr.bind_info;
 
 	auto &strings = args.data[0];
-	if (info.arg.empty()) {
+	if (info.len == 0) {
 		// Column tag
-		auto &paths = args.data[1];
-		BinaryExecutor::Execute<string_t, string_t, T, BinaryExtractWrapper>(strings, paths, result, args.size());
+		auto &queries = args.data[1];
+		BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
+		    strings, queries, result, args.size(), [&](string_t input, string_t query, ValidityMask &mask, idx_t idx) {
+			    string path;
+			    idx_t len;
+			    T result_val {};
+			    if (!ConvertToPath(query, path, len) || !TemplatedExtract<T>(input, path.c_str(), len, result_val)) {
+				    mask.SetInvalid(idx);
+			    }
+			    return result_val;
+		    });
 	} else {
 		// Constant tag
-		using lambda_fun = std::function<bool(string_t input, T &result)>;
-//		const char *path_ptr = info.arg.c_str();
-//		bool (*lambda)(string_t, T &) = [&](string_t input, T &result) {
-//			return info.TemplatedExtract<T>(input, path_ptr, result);
-//		};
-		UnaryExecutor::GenericExecute<string_t, T, UnaryExtractWrapper>(strings, result, args.size(), (void *)lambda);
+		const char *ptr = info.path.c_str();
+		const idx_t &len = info.len;
+		UnaryExecutor::ExecuteWithNulls<string_t, T>(strings, result, args.size(),
+		                                             [&](string_t input, ValidityMask &mask, idx_t idx) {
+			                                             T result_val {};
+			                                             if (!TemplatedExtract<T>(input, ptr, len, result_val)) {
+				                                             mask.SetInvalid(idx);
+			                                             }
+			                                             return result_val;
+		                                             });
 	}
 }
 

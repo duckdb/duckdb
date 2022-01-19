@@ -56,6 +56,17 @@ struct BinaryLambdaWrapper {
 	}
 };
 
+struct BinaryLambdaWrapperWithNulls {
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
+		return fun(left, right, mask, idx);
+	}
+
+	static bool AddsNulls() {
+		return true;
+	}
+};
+
 struct BinaryExecutor {
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
@@ -252,6 +263,13 @@ public:
 	static void ExecuteStandard(Vector &left, Vector &right, Vector &result, idx_t count) {
 		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryStandardOperatorWrapper, OP, bool>(left, right, result,
 		                                                                                           count, false);
+	}
+
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE,
+	          class FUNC = std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE, ValidityMask &, idx_t)>>
+	static void ExecuteWithNulls(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryLambdaWrapperWithNulls, bool, FUNC>(left, right, result,
+		                                                                                            count, fun);
 	}
 
 public:
