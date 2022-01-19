@@ -165,12 +165,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		if (params.length == 0) {
 			params = new Object[getParameterMetaData().getParameterCount()];
 		}
-        // Change sql.Timestamp to DuckDBTimestamp
-        if (x instanceof Timestamp) {
-            x = new DuckDBTimestamp((Timestamp)x);
-        } else if (x instanceof LocalDateTime) {
-            x = new DuckDBTimestamp((LocalDateTime) x);
-        }
+		// Change sql.Timestamp to DuckDBTimestamp
+		if (x instanceof Timestamp) {
+			x = new DuckDBTimestamp((Timestamp)x);
+		} else if (x instanceof LocalDateTime) {
+			x = new DuckDBTimestamp((LocalDateTime) x);
+		}
 		params[parameterIndex - 1] = x;
 	}
 
@@ -603,15 +603,15 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 				setObject(parameterIndex, x.toString());
 			}
 			break;
-        case Types.TIMESTAMP:
-            if (x instanceof Timestamp) {
-                setObject(parameterIndex, x);
-            } else if (x instanceof LocalDateTime) {
-                setObject(parameterIndex, x);
+		case Types.TIMESTAMP:
+			if (x instanceof Timestamp) {
+				setObject(parameterIndex, x);
+			} else if (x instanceof LocalDateTime) {
+				setObject(parameterIndex, x);
 			} else {
 				throw new SQLException("Can't convert value to timestamp " + x.getClass().toString());
-            }
-            break;
+			}
+			break;
 		default:
 			throw new SQLException("Unknown target type " + targetSqlType);
 		}
