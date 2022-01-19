@@ -132,6 +132,19 @@ select extract(era from time '10:00:00');
 statement error
 select date_part('era', time '10:00:00');
 
+# Correctness: Compare date_part against function value
+foreach partcode hour minute second millisecond microsecond epoch
+
+query III
+SELECT * FROM (
+	SELECT d, DATE_PART('${partcode}', d) AS p, ${partcode}(d) AS f
+	FROM times
+) tbl
+WHERE p <> f;
+----
+
+endloop
+
 #
 # Structs
 #
@@ -171,7 +184,7 @@ ORDER BY 1;
 
 # Invalid parts
 
-foreach datepart year month day decade century millennium quarter dow isodow doy week yearweek era
+foreach datepart year month day decade century millennium quarter dow isodow doy week isoyear yearweek era
 
 statement error
 SELECT d, DATE_PART(['${datepart}'], d) AS parts
