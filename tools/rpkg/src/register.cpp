@@ -1,6 +1,3 @@
-#include "cpp11/function.hpp"
-#include "cpp11/protect.hpp"
-
 #include "rapi.hpp"
 #include "typesr.hpp"
 

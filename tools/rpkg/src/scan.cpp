@@ -1,5 +1,3 @@
-#include "cpp11/protect.hpp"
-
 #include "rapi.hpp"
 #include "typesr.hpp"
 #include "altrepstring.hpp"

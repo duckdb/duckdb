@@ -1,16 +1,9 @@
-#include "cpp11/list.hpp"
-#include "cpp11/doubles.hpp"
-#include "cpp11/external_pointer.hpp"
-#include "cpp11/sexp.hpp"
-#include "cpp11/protect.hpp"
-#include "cpp11/function.hpp"
-
-#include "altrepstring.hpp"
-#include "duckdb/common/arrow.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 #include "rapi.hpp"
 #include "typesr.hpp"
+#include "altrepstring.hpp"
 
+#include "duckdb/common/arrow.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/arrow_wrapper.hpp"
 
 using namespace duckdb;

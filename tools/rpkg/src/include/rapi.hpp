@@ -1,8 +1,8 @@
 #pragma once
 
-#define R_NO_REMAP
-#include <Rdefines.h>
+#include "cpp11.hpp"
 
+#include <Rdefines.h>
 #include <R_ext/Altrep.h>
 
 #include "duckdb.hpp"

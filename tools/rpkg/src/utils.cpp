@@ -1,10 +1,3 @@
-#include "cpp11/strings.hpp"
-#include "cpp11/doubles.hpp"
-#include "cpp11/integers.hpp"
-#include "cpp11/logicals.hpp"
-#include "cpp11/protect.hpp"
-#include "cpp11/function.hpp"
-
 #include "rapi.hpp"
 #include "typesr.hpp"
 #include "duckdb/common/types/timestamp.hpp"
