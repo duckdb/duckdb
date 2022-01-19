@@ -9,4 +9,3 @@ test_that("we can register a data frame on a read only connection", {
   duckdb::duckdb_register(con, "mtcars", mtcars)
   dbDisconnect(con, shutdown = TRUE)
 })
-

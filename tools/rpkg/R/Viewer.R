@@ -42,9 +42,9 @@ rs_list_objects <- function(connection, catalog = NULL, schema = NULL, name = NU
   }
   # behold
   dbGetQuery(connection, '
-    SELECT table_name "name", 
-      CASE WHEN table_type LIKE \'%TABLE\' THEN \'table\' ELSE LOWER(table_type) END "type" 
-    FROM information_schema.tables 
+    SELECT table_name "name",
+      CASE WHEN table_type LIKE \'%TABLE\' THEN \'table\' ELSE LOWER(table_type) END "type"
+    FROM information_schema.tables
     WHERE (?::STRING IS NULL OR table_schema = ?) AND
       (?::STRING IS NULL OR table_name = ?) AND
       table_type ILIKE ?
@@ -58,11 +58,11 @@ rs_list_columns <- function(connection, table, catalog = NULL, schema = NULL, ..
     schema <- NA
   }
   dbGetQuery(connection, "
-    SELECT column_name \"name\", data_type \"field.type\" 
-    FROM information_schema.columns 
+    SELECT column_name \"name\", data_type \"field.type\"
+    FROM information_schema.columns
     WHERE (?::STRING IS NULL OR table_schema = ?) AND
       table_name = ?
-    ORDER BY ordinal_position", 
+    ORDER BY ordinal_position",
     list(schema, schema, table))
 }
 

@@ -6,11 +6,11 @@ test_that("factors can be round tripped", {
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
   df0 <- data.frame(
-    a=c(1,2, 3), 
-    f=as.factor(c('a', 'b', NA)), 
-    x=c('Hello', 'World', 'Etc'), 
+    a=c(1,2, 3),
+    f=as.factor(c('a', 'b', NA)),
+    x=c('Hello', 'World', 'Etc'),
     stringsAsFactors=FALSE)
-  
+
   duckdb::duckdb_register(con, "df0", df0)
   df1 <- dbReadTable(con, "df0")
   expect_equal(df0, df1)

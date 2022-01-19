@@ -12,7 +12,7 @@ test_that("duckdb_fetch_arrow() test table over vector size", {
     on.exit(dbDisconnect(con, shutdown = TRUE))
 
     dbExecute(con, paste0("CREATE table test as select range a from range(10000);"))
-    dbExecute(con, "INSERT INTO  test VALUES(NULL);") 
+    dbExecute(con, "INSERT INTO  test VALUES(NULL);")
     arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
     duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
 
@@ -41,7 +41,7 @@ test_that("duckdb_fetch_arrow() table with only nulls", {
 
     dbExecute(con, paste0("CREATE TABLE test (a  INTEGER)"))
 
-    dbExecute(con, "INSERT INTO  test VALUES(NULL);") 
+    dbExecute(con, "INSERT INTO  test VALUES(NULL);")
     arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
     duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
 
@@ -57,7 +57,7 @@ test_that("duckdb_fetch_arrow() table with prepared statement", {
     dbExecute(con, paste0("CREATE TABLE test (a  INTEGER)"))
     dbExecute(con, paste0("PREPARE s1 AS INSERT INTO test VALUES ($1), ($2 / 2)"))
     for (value in 1:1500){
-      dbExecute(con, sprintf("EXECUTE s1 (%d, %d);", value,value*2)) 
+      dbExecute(con, sprintf("EXECUTE s1 (%d, %d);", value,value*2))
     }
     arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
     duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
@@ -77,10 +77,10 @@ test_that("duckdb_fetch_arrow() streaming test", {
     res <- dbSendQuery(con, "SELECT * FROM t", arrow=TRUE)
     cur_chunk <- duckdb::duckdb_fetch_arrow(res, stream=TRUE,return_table=TRUE)
     expect_equal(1024,cur_chunk$column(0)$length())
-    
+
     cur_chunk <- duckdb::duckdb_fetch_arrow(res, stream=TRUE,return_table=TRUE)
     expect_equal(1024,cur_chunk$column(0)$length())
-    
+
     cur_chunk <- duckdb::duckdb_fetch_arrow(res, stream=TRUE,return_table=TRUE)
     expect_equal(952,cur_chunk$column(0)$length())
 
@@ -99,10 +99,10 @@ test_that("duckdb_fetch_arrow() streaming test with vector_per_chunk parameter",
 
     cur_chunk <- duckdb::duckdb_fetch_arrow(res, TRUE,2,return_table=TRUE)
     expect_equal(2048,cur_chunk$column(0)$length())
-    
+
     cur_chunk <- duckdb::duckdb_fetch_arrow(res, stream=TRUE,return_table=TRUE)
     expect_equal(1024,cur_chunk$column(0)$length())
-    
+
     cur_chunk <- duckdb::duckdb_fetch_arrow(res, stream=TRUE,vector_per_chunk=3,return_table=TRUE)
     expect_equal(3072,cur_chunk$column(0)$length())
 
@@ -209,7 +209,7 @@ test_that("duckdb_fetch_arrow() record_batch_reader multiple vectors per chunk",
     expect_equal(904,cur_batch$num_rows)
 
     record_batch_reader$read_next_batch()
-    
+
     dbDisconnect(con, shutdown = T)
 })
 
