@@ -4,6 +4,8 @@
   register_s3_method("dbplyr", "sql_translation", "duckdb_connection")
   register_s3_method("dbplyr", "dbplyr_fill0", "duckdb_connection")
   register_s3_method("dbplyr", "sql_expr_matches", "duckdb_connection")
+  register_s3_method("dbplyr", "sql_escape_date", "duckdb_connection")
+  register_s3_method("dbplyr", "sql_escape_datetime", "duckdb_connection")
 }
 
 # From: dbplyr zzz.R (https://github.com/tidyverse/dbplyr/blob/main/R/zzz.R)
