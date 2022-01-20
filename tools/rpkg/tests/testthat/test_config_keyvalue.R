@@ -3,20 +3,20 @@ library("DBI")
 
 test_that("configuration key value pairs work as expected", {
 
-# setting nothing or empty list should work
+  # setting nothing or empty list should work
   drv <- duckdb::duckdb()
   duckdb::duckdb_shutdown(drv)
 
-  drv <- duckdb::duckdb(config=list())
+  drv <- duckdb::duckdb(config = list())
   duckdb::duckdb_shutdown(drv)
 
-# but we should throw an error on non-existent options
-  expect_error(duckdb::duckdb(config=list(a="a")))
+  # but we should throw an error on non-existent options
+  expect_error(duckdb::duckdb(config = list(a = "a")))
 
-# but setting a legal option is fine
-  drv <- duckdb::duckdb(config=list("default_order" = "DESC"))
+  # but setting a legal option is fine
+  drv <- duckdb::duckdb(config = list("default_order" = "DESC"))
 
-# the option actually does something
+  # the option actually does something
   con <- dbConnect(drv)
   dbExecute(con, "create table a (i integer)")
   dbExecute(con, "insert into a values (44), (42)")
@@ -25,10 +25,9 @@ test_that("configuration key value pairs work as expected", {
   expect_equal(res$i, c(44, 42))
   duckdb::duckdb_shutdown(drv)
 
-# setting a configuration option to a non-string is an error
-  expect_error(duckdb::duckdb(config=list("default_order" = 42)))
+  # setting a configuration option to a non-string is an error
+  expect_error(duckdb::duckdb(config = list("default_order" = 42)))
 
-# setting a configuration option to a non-string is also an error
-  expect_error(duckdb::duckdb(config=list("default_order" = "asdf")))
-
+  # setting a configuration option to a non-string is also an error
+  expect_error(duckdb::duckdb(config = list("default_order" = "asdf")))
 })
