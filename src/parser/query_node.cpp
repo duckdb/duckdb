@@ -4,6 +4,7 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 

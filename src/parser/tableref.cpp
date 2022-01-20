@@ -1,7 +1,7 @@
 #include "duckdb/parser/tableref.hpp"
 
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 
 namespace duckdb {

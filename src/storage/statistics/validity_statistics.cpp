@@ -1,6 +1,6 @@
 #include "duckdb/storage/statistics/validity_statistics.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {

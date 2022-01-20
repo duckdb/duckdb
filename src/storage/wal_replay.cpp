@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
@@ -17,7 +18,9 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
+
 namespace duckdb {
+
 class ReplayState {
 public:
 	ReplayState(DatabaseInstance &db, ClientContext &context, Deserializer &source)

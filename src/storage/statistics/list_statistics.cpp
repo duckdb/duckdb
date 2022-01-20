@@ -1,5 +1,6 @@
 #include "duckdb/storage/statistics/list_statistics.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 

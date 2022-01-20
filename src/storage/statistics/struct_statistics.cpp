@@ -1,6 +1,6 @@
 #include "duckdb/storage/statistics/struct_statistics.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -63,7 +63,9 @@ unique_ptr<BaseStatistics> StructStatistics::Deserialize(FieldReader &reader, Lo
 	auto &child_types = StructType::GetChildTypes(result->type);
 
 	auto child_type_count = reader.ReadRequired<uint32_t>();
-	D_ASSERT(child_types.size() == child_type_count);
+	if (child_types.size() != child_type_count) {
+		throw InternalException("Struct stats deserialization failure: child count does not match type count!");
+	}
 	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		auto has_child = source.Read<bool>();
