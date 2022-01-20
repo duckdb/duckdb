@@ -4,8 +4,23 @@
 
 namespace duckdb {
 
-static inline bool Type(const string_t &input, const char *ptr, const idx_t &len, string_t &result) {
-	yyjson_val *val = JSONCommon::GetVal(input, ptr, len);
+static inline bool GetType(const string_t &input, string_t &result) {
+	yyjson_val *val = JSONCommon::GetRoot(input);
+	switch (yyjson_get_type(val)) {
+	case YYJSON_TYPE_ARR:
+		result = string_t("array");
+		break;
+	case YYJSON_TYPE_OBJ:
+		result = string_t("object");
+		break;
+	default:
+		return false;
+	}
+	return true;
+}
+
+static inline bool GetType(const string_t &input, const char *ptr, const idx_t &len, string_t &result) {
+	yyjson_val *val = JSONCommon::GetPointer(input, ptr, len);
 	switch (yyjson_get_type(val)) {
 	case YYJSON_TYPE_NULL:
 		result = string_t("null");
@@ -41,19 +56,31 @@ static inline bool Type(const string_t &input, const char *ptr, const idx_t &len
 	return true;
 }
 
-static void TypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static void UnaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &inputs = args.data[0];
+	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(inputs, result, args.size(),
+	                                                    [&](string_t input, ValidityMask &mask, idx_t idx) {
+		                                                    string_t result_val {};
+		                                                    if (!GetType(input, result_val)) {
+			                                                    mask.SetInvalid(idx);
+		                                                    }
+		                                                    return result_val;
+	                                                    });
+}
+
+static void BinaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	const auto &info = (JSONFunctionData &)*func_expr.bind_info;
 
-	auto &strings = args.data[0];
+	auto &inputs = args.data[0];
 	if (info.constant) {
 		// Constant query
 		const char *ptr = info.path.c_str();
 		const idx_t &len = info.len;
-		UnaryExecutor::ExecuteWithNulls<string_t, string_t>(strings, result, args.size(),
+		UnaryExecutor::ExecuteWithNulls<string_t, string_t>(inputs, result, args.size(),
 		                                                    [&](string_t input, ValidityMask &mask, idx_t idx) {
 			                                                    string_t result_val {};
-			                                                    if (!Type(input, ptr, len, result_val)) {
+			                                                    if (!GetType(input, ptr, len, result_val)) {
 				                                                    mask.SetInvalid(idx);
 			                                                    }
 			                                                    return result_val;
@@ -62,11 +89,11 @@ static void TypeFunction(DataChunk &args, ExpressionState &state, Vector &result
 		// Columnref query
 		auto &queries = args.data[1];
 		BinaryExecutor::ExecuteWithNulls<string_t, string_t, string_t>(
-		    strings, queries, result, args.size(), [&](string_t input, string_t query, ValidityMask &mask, idx_t idx) {
+		    inputs, queries, result, args.size(), [&](string_t input, string_t query, ValidityMask &mask, idx_t idx) {
 			    string path;
 			    idx_t len;
 			    string_t result_val {};
-			    if (!JSONCommon::ConvertToPath(query, path, len) || !Type(input, path.c_str(), len, result_val)) {
+			    if (!JSONCommon::ConvertToPath(query, path, len) || !GetType(input, path.c_str(), len, result_val)) {
 				    mask.SetInvalid(idx);
 			    }
 			    return result_val;
@@ -74,9 +101,15 @@ static void TypeFunction(DataChunk &args, ExpressionState &state, Vector &result
 	}
 }
 
-ScalarFunction JSONFunctions::GetTypeFunction() {
-	return ScalarFunction("json_type", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, TypeFunction,
-	                      false, JSONFunctionData::Bind, nullptr, nullptr);
+void JSONFunctions::AddTypeFunction(ClientContext &context) {
+	auto &catalog = Catalog::GetCatalog(context);
+	ScalarFunctionSet set("json_type");
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTypeFunction, false, nullptr,
+	                               nullptr, nullptr));
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                               BinaryTypeFunction, false, JSONFunctionData::Bind, nullptr, nullptr));
+	CreateScalarFunctionInfo type_fun(move(set));
+	catalog.CreateFunction(context, &type_fun);
 }
 
 } // namespace duckdb

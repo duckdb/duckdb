@@ -9,12 +9,7 @@ void JSONExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
-	auto &catalog = Catalog::GetCatalog(*con.context);
-
-	for (const auto &fun : JSONFunctions::GetFunctions()) {
-		CreateScalarFunctionInfo get_object_info(fun);
-		catalog.CreateFunction(*con.context, &get_object_info);
-	}
+	JSONFunctions::AddFunctions(*con.context);
 
 	con.Commit();
 }

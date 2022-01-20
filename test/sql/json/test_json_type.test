@@ -7,6 +7,24 @@ require json
 statement ok
 pragma enable_verification
 
+# unary type function
+query T
+select json_type('{"str": 42}')
+----
+object
+
+query T
+select json_type('[1, 2, 3]')
+----
+array
+
+# this does not work as it is not valid JSON
+query T
+select json_type('"other"')
+----
+NULL
+
+# binary type function
 # tests with constant input and constant query
 query T
 select json_type('{"str": 42}', 'str')

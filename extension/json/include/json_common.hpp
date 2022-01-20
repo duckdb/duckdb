@@ -39,10 +39,14 @@ public:
 		return true;
 	}
 
+	//! Get root of JSON document
+	static inline yyjson_val *GetRoot(const string_t &input) {
+		return yyjson_doc_get_root(yyjson_read(input.GetDataUnsafe(), input.GetSize(), YYJSON_READ_NOFLAG));
+	}
+
 	//! Get JSON value using JSON path query
-	static inline yyjson_val *GetVal(const string_t &input, const char *ptr, const idx_t &len) {
-		yyjson_doc *doc = yyjson_read(input.GetDataUnsafe(), input.GetSize(), YYJSON_READ_NOFLAG);
-		return unsafe_yyjson_get_pointer(yyjson_doc_get_root(doc), ptr, len);
+	static inline yyjson_val *GetPointer(const string_t &input, const char *ptr, const idx_t &len) {
+		return unsafe_yyjson_get_pointer(GetRoot(input), ptr, len);
 	}
 };
 

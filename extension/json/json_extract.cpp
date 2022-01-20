@@ -65,7 +65,7 @@ inline bool ExtractFromVal(yyjson_val *val, string_t &result) {
 
 template <class T>
 static inline bool TemplatedExtract(const string_t &input, const char *ptr, const idx_t &len, T &result) {
-	return ExtractFromVal<T>(JSONCommon::GetVal(input, ptr, len), result);
+	return ExtractFromVal<T>(JSONCommon::GetPointer(input, ptr, len), result);
 }
 
 template <class T>
@@ -73,12 +73,12 @@ static void TemplatedExtractFunction(DataChunk &args, ExpressionState &state, Ve
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	const auto &info = (JSONFunctionData &)*func_expr.bind_info;
 
-	auto &strings = args.data[0];
+	auto &inputs = args.data[0];
 	if (info.constant) {
 		// Constant query
 		const char *ptr = info.path.c_str();
 		const idx_t &len = info.len;
-		UnaryExecutor::ExecuteWithNulls<string_t, T>(strings, result, args.size(),
+		UnaryExecutor::ExecuteWithNulls<string_t, T>(inputs, result, args.size(),
 		                                             [&](string_t input, ValidityMask &mask, idx_t idx) {
 			                                             T result_val {};
 			                                             if (!TemplatedExtract<T>(input, ptr, len, result_val)) {
@@ -90,7 +90,7 @@ static void TemplatedExtractFunction(DataChunk &args, ExpressionState &state, Ve
 		// Columnref query
 		auto &queries = args.data[1];
 		BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
-		    strings, queries, result, args.size(), [&](string_t input, string_t query, ValidityMask &mask, idx_t idx) {
+		    inputs, queries, result, args.size(), [&](string_t input, string_t query, ValidityMask &mask, idx_t idx) {
 			    string path;
 			    idx_t len;
 			    T result_val {};
@@ -103,27 +103,33 @@ static void TemplatedExtractFunction(DataChunk &args, ExpressionState &state, Ve
 	}
 }
 
-vector<ScalarFunction> JSONFunctions::GetExtractFunctions() {
-	vector<ScalarFunction> extract_functions;
-	extract_functions.push_back(ScalarFunction("json_extract_bool", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                           LogicalType::BOOLEAN, TemplatedExtractFunction<bool>, false,
-	                                           JSONFunctionData::Bind, nullptr, nullptr));
-	extract_functions.push_back(ScalarFunction("json_extract_int", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                           LogicalType::INTEGER, TemplatedExtractFunction<int32_t>, false,
-	                                           JSONFunctionData::Bind, nullptr, nullptr));
-	extract_functions.push_back(ScalarFunction("json_extract_bigint", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                           LogicalType::BIGINT, TemplatedExtractFunction<int64_t>, false,
-	                                           JSONFunctionData::Bind, nullptr, nullptr));
-	extract_functions.push_back(ScalarFunction("json_extract_ubigint", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                           LogicalType::UBIGINT, TemplatedExtractFunction<uint64_t>, false,
-	                                           JSONFunctionData::Bind, nullptr, nullptr));
-	extract_functions.push_back(ScalarFunction("json_extract_double", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                           LogicalType::DOUBLE, TemplatedExtractFunction<double>, false,
-	                                           JSONFunctionData::Bind, nullptr, nullptr));
-	extract_functions.push_back(ScalarFunction("json_extract_string", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                           LogicalType::VARCHAR, TemplatedExtractFunction<string_t>, false,
-	                                           JSONFunctionData::Bind, nullptr, nullptr));
-	return extract_functions;
+void JSONFunctions::AddExtractFunction(ClientContext &context) {
+	auto bool_fun = CreateScalarFunctionInfo(
+	    ScalarFunction("json_extract_bool", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                   TemplatedExtractFunction<bool>, false, JSONFunctionData::Bind, nullptr, nullptr));
+	auto int_fun = CreateScalarFunctionInfo(
+	    ScalarFunction("json_extract_int", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::INTEGER,
+	                   TemplatedExtractFunction<int32_t>, false, JSONFunctionData::Bind, nullptr, nullptr));
+	auto bigint_fun = CreateScalarFunctionInfo(
+	    ScalarFunction("json_extract_bigint", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                   TemplatedExtractFunction<int64_t>, false, JSONFunctionData::Bind, nullptr, nullptr));
+	auto ubigint_fun = CreateScalarFunctionInfo(
+	    ScalarFunction("json_extract_ubigint", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::UBIGINT,
+	                   TemplatedExtractFunction<uint64_t>, false, JSONFunctionData::Bind, nullptr, nullptr));
+	auto double_fun = CreateScalarFunctionInfo(
+	    ScalarFunction("json_extract_double", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::DOUBLE,
+	                   TemplatedExtractFunction<double>, false, JSONFunctionData::Bind, nullptr, nullptr));
+	auto string_fun = CreateScalarFunctionInfo(
+	    ScalarFunction("json_extract_string", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                   TemplatedExtractFunction<string_t>, false, JSONFunctionData::Bind, nullptr, nullptr));
+
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateFunction(context, &bool_fun);
+	catalog.CreateFunction(context, &int_fun);
+	catalog.CreateFunction(context, &bigint_fun);
+	catalog.CreateFunction(context, &ubigint_fun);
+	catalog.CreateFunction(context, &double_fun);
+	catalog.CreateFunction(context, &string_fun);
 }
 
 } // namespace duckdb

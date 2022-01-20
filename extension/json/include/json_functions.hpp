@@ -8,22 +8,20 @@
 
 #pragma once
 
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+
 namespace duckdb {
 
 class JSONFunctions {
 public:
-	static vector<ScalarFunction> GetFunctions() {
-		vector<ScalarFunction> functions;
-		for (const auto &extract_fun : GetExtractFunctions()) {
-			functions.push_back(extract_fun);
-		}
-		functions.push_back(GetTypeFunction());
-		return functions;
+	static void AddFunctions(ClientContext &context) {
+		AddExtractFunction(context);
+		AddTypeFunction(context);
 	}
 
 private:
-	static vector<ScalarFunction> GetExtractFunctions();
-	static ScalarFunction GetTypeFunction();
+	static void AddExtractFunction(ClientContext &context);
+	static void AddTypeFunction(ClientContext &context);
 };
 
 } // namespace duckdb
