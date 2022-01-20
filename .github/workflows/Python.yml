@@ -2,8 +2,7 @@ name: Python
 on: [push, pull_request]
 
 concurrency:
-  # when copy-pasting workflow files, change the group name!
-  group: python-${{ github.ref }}-${{ github.head_ref }}-${{ github.base_ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}
   cancel-in-progress: true
 
 defaults:
