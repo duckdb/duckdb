@@ -62,7 +62,7 @@ void ChangeOwnershipInfo::Serialize(FieldWriter &writer) const {
 // AlterTableInfo
 //===--------------------------------------------------------------------===//
 AlterTableInfo::AlterTableInfo(AlterTableType type, string schema_p, string table_p)
-    : AlterInfo(AlterType::ALTER_TABLE, move(move(schema_p)), table_p), alter_table_type(type) {
+    : AlterInfo(AlterType::ALTER_TABLE, move(move(schema_p)), move(table_p)), alter_table_type(type) {
 }
 AlterTableInfo::~AlterTableInfo() {
 }
@@ -173,9 +173,9 @@ unique_ptr<AlterInfo> AddColumnInfo::Deserialize(FieldReader &reader, string sch
 //===--------------------------------------------------------------------===//
 // RemoveColumnInfo
 //===--------------------------------------------------------------------===//
-RemoveColumnInfo::RemoveColumnInfo(string schema, string table, string removed_column, bool if_exists)
-    : AlterTableInfo(AlterTableType::REMOVE_COLUMN, schema, table), removed_column(move(removed_column)),
-      if_exists(if_exists) {
+RemoveColumnInfo::RemoveColumnInfo(string schema_p, string table_p, string removed_column, bool if_exists)
+    : AlterTableInfo(AlterTableType::REMOVE_COLUMN, move(schema_p), move(table_p)),
+      removed_column(move(removed_column)), if_exists(if_exists) {
 }
 RemoveColumnInfo::~RemoveColumnInfo() {
 }
@@ -228,9 +228,9 @@ unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(FieldReader &reader, str
 //===--------------------------------------------------------------------===//
 // SetDefaultInfo
 //===--------------------------------------------------------------------===//
-SetDefaultInfo::SetDefaultInfo(string schema, string table, string column_name,
+SetDefaultInfo::SetDefaultInfo(string schema_p, string table_p, string column_name_p,
                                unique_ptr<ParsedExpression> new_default)
-    : AlterTableInfo(AlterTableType::SET_DEFAULT, schema, table), column_name(move(column_name)),
+    : AlterTableInfo(AlterTableType::SET_DEFAULT, move(schema_p), move(table_p)), column_name(move(column_name_p)),
       expression(move(new_default)) {
 }
 SetDefaultInfo::~SetDefaultInfo() {
