@@ -5,6 +5,7 @@
 #include "typesr.hpp"
 
 #include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/result_arrow_wrapper.hpp"
 
 using namespace duckdb;
 

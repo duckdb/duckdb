@@ -1024,6 +1024,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 	output.SetCardinality(output_size);
 	ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size);
 	output.Verify();
+	output.arrow_array = state.chunk;
 	state.chunk_offset += output.size();
 }
 
@@ -1041,6 +1042,7 @@ void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const
 	output.SetCardinality(output_size);
 	ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size);
 	output.Verify();
+	output.arrow_array = state.chunk;
 	state.chunk_offset += output.size();
 }
 

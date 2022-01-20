@@ -285,6 +285,7 @@ struct DuckDBArrowArrayHolder {
 	vector<DuckDBArrowArrayChildHolder> children = {};
 	vector<ArrowArray *> children_ptrs = {};
 	array<const void *, 1> buffers = {{nullptr}};
+	shared_ptr<ArrowArrayWrapper> arrow_original_array;
 };
 
 static void ReleaseDuckDBArrowArray(ArrowArray *array) {
@@ -690,6 +691,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	// Allocate the children
 	root_holder->children.resize(ColumnCount());
 	root_holder->children_ptrs.resize(ColumnCount(), nullptr);
+	root_holder->arrow_original_array = arrow_array;
 	for (size_t i = 0; i < ColumnCount(); ++i) {
 		root_holder->children_ptrs[i] = &root_holder->children[i].array;
 	}
