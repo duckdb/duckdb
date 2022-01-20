@@ -175,6 +175,57 @@ EXCEPT
 (SELECT 1 UNION ALL SELECT 3)
 ORDER BY 1;
 
+-- group by all
+CREATE VIEW cv7 AS
+SELECT i % 2, SUM(i)
+FROM base_table
+GROUP BY ALL
+ORDER BY ALL;
+
+-- values
+CREATE VIEW cv8 AS
+VALUES (1), (2), (3), (NULL);
+
+-- subqueries
+CREATE VIEW cv9 AS
+SELECT DISTINCT (SELECT tbl.i+1)
+FROM (
+    SELECT * FROM base_table WHERE i>1
+) tbl(i)
+ORDER BY (SELECT tbl.i);
+
+-- samples
+CREATE VIEW cv10 AS
+SELECT *
+FROM base_table TABLESAMPLE 10 ROWS
+USING SAMPLE 100%
+ORDER BY ALL;
+
+-- grouping sets
+CREATE VIEW cv11 AS
+SELECT GROUPING_ID(k, i), i%2 AS k, i, SUM(i)
+FROM base_table
+GROUP BY GROUPING SETS ((), (k), (k, i))
+ORDER BY ALL;
+
+-- window clause
+CREATE VIEW cv12 AS
+SELECT
+    i,
+    sum(i) over(w)
+FROM base_table
+WINDOW w AS (partition by i%2 order by i asc)
+ORDER BY ALL;
+
+-- limit order by
+CREATE VIEW cv13 AS
+SELECT *
+FROM base_table
+ORDER BY i DESC
+LIMIT 2
+OFFSET 1;
+
+
 -- v29: IGNORE NULLS
 CREATE FUNCTION V29(x) AS LAST_VALUE(x IGNORE NULLS) OVER(ORDER BY x NULLS LAST);
 

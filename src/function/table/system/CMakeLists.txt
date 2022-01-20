@@ -5,6 +5,7 @@ add_library_unity(
   duckdb_constraints.cpp
   duckdb_dependencies.cpp
   duckdb_functions.cpp
+  duckdb_keywords.cpp
   duckdb_indexes.cpp
   duckdb_schemas.cpp
   duckdb_sequences.cpp

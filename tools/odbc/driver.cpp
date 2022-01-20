@@ -3,7 +3,6 @@
 #include "odbc_fetch.hpp"
 
 #include <odbcinst.h>
-#include <codecvt>
 #include <locale>
 
 using std::string;

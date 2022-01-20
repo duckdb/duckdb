@@ -137,7 +137,17 @@ unique_ptr<ResultModifier> OrderModifier::Copy() const {
 
 string OrderByNode::ToString() const {
 	auto str = expression->ToString();
-	str += (type == OrderType::ASCENDING) ? " ASC" : " DESC";
+	switch (type) {
+	case OrderType::ASCENDING:
+		str += " ASC";
+		break;
+	case OrderType::DESCENDING:
+		str += " DESC";
+		break;
+	default:
+		break;
+	}
+
 	switch (null_order) {
 	case OrderByNullType::NULLS_FIRST:
 		str += " NULLS FIRST";

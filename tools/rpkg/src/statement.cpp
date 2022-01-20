@@ -185,7 +185,7 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 	RProtector r;
 	auto out = r.Protect(NEW_LIST(n_rows));
 
-	for (idx_t row_idx = 0; row_idx < n_rows; ++row_idx) {
+	for (idx_t row_idx = 0; row_idx < (size_t)n_rows; ++row_idx) {
 		for (idx_t param_idx = 0; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
 			SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
 			auto val = RApiTypes::SexpToValue(valsexp, row_idx);
@@ -309,7 +309,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 				dest_ptr[row_idx] = NA_REAL;
 			} else {
 				dtime_t n = src_data[row_idx];
-				dest_ptr[row_idx] = n.micros / 1000000.0;
+				dest_ptr[row_idx] = n.micros / Interval::MICROS_PER_SEC;
 			}
 		}
 
@@ -593,7 +593,7 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 	// create data batches
 	AppendableRList batches_list;
 	if (stream) {
-		for (idx_t i = 0; i < num_of_vectors; i++) {
+		for (idx_t i = 0; i < (size_t)num_of_vectors; i++) {
 			if (!FetchArrowChunk(result, batches_list, arrow_data, arrow_schema, batch_import_from_c,
 			                     arrow_namespace)) {
 				break;

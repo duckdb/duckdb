@@ -4,6 +4,10 @@
 
 namespace duckdb {
 
+SelectNode::SelectNode()
+    : QueryNode(QueryNodeType::SELECT_NODE), aggregate_handling(AggregateHandling::STANDARD_HANDLING) {
+}
+
 bool SelectNode::Equals(const QueryNode *other_p) const {
 	if (!QueryNode::Equals(other_p)) {
 		return false;
@@ -65,6 +69,7 @@ unique_ptr<QueryNode> SelectNode::Copy() const {
 		result->groups.group_expressions.push_back(group->Copy());
 	}
 	result->groups.grouping_sets = groups.grouping_sets;
+	result->aggregate_handling = aggregate_handling;
 	result->having = having ? having->Copy() : nullptr;
 	result->qualify = qualify ? qualify->Copy() : nullptr;
 	result->sample = sample ? sample->Copy() : nullptr;
@@ -85,6 +90,7 @@ void SelectNode::Serialize(FieldWriter &writer) const {
 			serializer.Write<idx_t>(idx);
 		}
 	}
+	writer.WriteField<AggregateHandling>(aggregate_handling);
 	writer.WriteOptional(having);
 	writer.WriteOptional(sample);
 	writer.WriteOptional(qualify);
@@ -107,6 +113,7 @@ unique_ptr<QueryNode> SelectNode::Deserialize(FieldReader &reader) {
 		}
 		result->groups.grouping_sets.push_back(grouping_set);
 	}
+	result->aggregate_handling = reader.ReadRequired<AggregateHandling>();
 	result->having = reader.ReadOptional<ParsedExpression>(nullptr);
 	result->sample = reader.ReadOptional<SampleOptions>(nullptr);
 	result->qualify = reader.ReadOptional<ParsedExpression>(nullptr);

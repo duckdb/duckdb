@@ -47,7 +47,7 @@ public:
 
 	pragma_query_t query;
 	pragma_function_t function;
-	unordered_map<string, LogicalType> named_parameters;
+	named_parameter_type_map_t named_parameters;
 
 private:
 	PragmaFunction(string name, PragmaType pragma_type, pragma_query_t query, pragma_function_t function,

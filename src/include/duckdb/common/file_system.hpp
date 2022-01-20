@@ -48,30 +48,28 @@ enum class FileType {
 
 struct FileHandle {
 public:
-	FileHandle(FileSystem &file_system, string path) : file_system(file_system), path(path) {
-	}
+	DUCKDB_API FileHandle(FileSystem &file_system, string path);
 	FileHandle(const FileHandle &) = delete;
-	virtual ~FileHandle() {
-	}
+	DUCKDB_API virtual ~FileHandle();
 
-	int64_t Read(void *buffer, idx_t nr_bytes);
-	int64_t Write(void *buffer, idx_t nr_bytes);
-	void Read(void *buffer, idx_t nr_bytes, idx_t location);
-	void Write(void *buffer, idx_t nr_bytes, idx_t location);
-	void Seek(idx_t location);
-	void Reset();
-	idx_t SeekPosition();
-	void Sync();
-	void Truncate(int64_t new_size);
-	string ReadLine();
+	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
+	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
+	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API void Write(void *buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API void Seek(idx_t location);
+	DUCKDB_API void Reset();
+	DUCKDB_API idx_t SeekPosition();
+	DUCKDB_API void Sync();
+	DUCKDB_API void Truncate(int64_t new_size);
+	DUCKDB_API string ReadLine();
 
-	bool CanSeek();
-	bool OnDiskFile();
-	idx_t GetFileSize();
-	FileType GetType();
+	DUCKDB_API bool CanSeek();
+	DUCKDB_API bool OnDiskFile();
+	DUCKDB_API idx_t GetFileSize();
+	DUCKDB_API FileType GetType();
 
 	//! Closes the file handle.
-	virtual void Close() = 0;
+	DUCKDB_API virtual void Close() = 0;
 
 public:
 	FileSystem &file_system;
@@ -98,107 +96,107 @@ public:
 
 class FileSystem {
 public:
-	virtual ~FileSystem() {
-	}
+	DUCKDB_API virtual ~FileSystem();
 
 public:
-	static constexpr FileLockType DEFAULT_LOCK = FileLockType::NO_LOCK;
-	static constexpr FileCompressionType DEFAULT_COMPRESSION = FileCompressionType::UNCOMPRESSED;
-	static FileSystem &GetFileSystem(ClientContext &context);
-	static FileSystem &GetFileSystem(DatabaseInstance &db);
-	static FileOpener *GetFileOpener(ClientContext &context);
+	DUCKDB_API static constexpr FileLockType DEFAULT_LOCK = FileLockType::NO_LOCK;
+	DUCKDB_API static constexpr FileCompressionType DEFAULT_COMPRESSION = FileCompressionType::UNCOMPRESSED;
+	DUCKDB_API static FileSystem &GetFileSystem(ClientContext &context);
+	DUCKDB_API static FileSystem &GetFileSystem(DatabaseInstance &db);
+	DUCKDB_API static FileOpener *GetFileOpener(ClientContext &context);
 
-	virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
-	                                        FileCompressionType compression = DEFAULT_COMPRESSION,
-	                                        FileOpener *opener = nullptr);
+	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags,
+	                                                   FileLockType lock = DEFAULT_LOCK,
+	                                                   FileCompressionType compression = DEFAULT_COMPRESSION,
+	                                                   FileOpener *opener = nullptr);
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
-	virtual void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location);
+	DUCKDB_API virtual void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location);
 	//! Write exactly nr_bytes to the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Write().
-	virtual void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location);
+	DUCKDB_API virtual void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location);
 	//! Read nr_bytes from the specified file into the buffer, moving the file pointer forward by nr_bytes. Returns the
 	//! amount of bytes read.
-	virtual int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes);
+	DUCKDB_API virtual int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes);
 	//! Write nr_bytes from the buffer into the file, moving the file pointer forward by nr_bytes.
-	virtual int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes);
+	DUCKDB_API virtual int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes);
 
 	//! Returns the file size of a file handle, returns -1 on error
-	virtual int64_t GetFileSize(FileHandle &handle);
+	DUCKDB_API virtual int64_t GetFileSize(FileHandle &handle);
 	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
-	virtual time_t GetLastModifiedTime(FileHandle &handle);
+	DUCKDB_API virtual time_t GetLastModifiedTime(FileHandle &handle);
 	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
-	virtual FileType GetFileType(FileHandle &handle);
+	DUCKDB_API virtual FileType GetFileType(FileHandle &handle);
 	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of
 	//! the file
-	virtual void Truncate(FileHandle &handle, int64_t new_size);
+	DUCKDB_API virtual void Truncate(FileHandle &handle, int64_t new_size);
 
 	//! Check if a directory exists
-	virtual bool DirectoryExists(const string &directory);
+	DUCKDB_API virtual bool DirectoryExists(const string &directory);
 	//! Create a directory if it does not exist
-	virtual void CreateDirectory(const string &directory);
+	DUCKDB_API virtual void CreateDirectory(const string &directory);
 	//! Recursively remove a directory and all files in it
-	virtual void RemoveDirectory(const string &directory);
+	DUCKDB_API virtual void RemoveDirectory(const string &directory);
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
-	virtual bool ListFiles(const string &directory, const std::function<void(string, bool)> &callback);
+	DUCKDB_API virtual bool ListFiles(const string &directory, const std::function<void(string, bool)> &callback);
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
-	virtual void MoveFile(const string &source, const string &target);
+	DUCKDB_API virtual void MoveFile(const string &source, const string &target);
 	//! Check if a file exists
-	virtual bool FileExists(const string &filename);
+	DUCKDB_API virtual bool FileExists(const string &filename);
 	//! Remove a file from disk
-	virtual void RemoveFile(const string &filename);
+	DUCKDB_API virtual void RemoveFile(const string &filename);
 	//! Sync a file handle to disk
-	virtual void FileSync(FileHandle &handle);
+	DUCKDB_API virtual void FileSync(FileHandle &handle);
 
 	//! Sets the working directory
-	static void SetWorkingDirectory(const string &path);
+	DUCKDB_API static void SetWorkingDirectory(const string &path);
 	//! Gets the working directory
-	static string GetWorkingDirectory();
+	DUCKDB_API static string GetWorkingDirectory();
 	//! Gets the users home directory
-	static string GetHomeDirectory();
+	DUCKDB_API static string GetHomeDirectory();
 	//! Returns the system-available memory in bytes
-	static idx_t GetAvailableMemory();
+	DUCKDB_API static idx_t GetAvailableMemory();
 	//! Path separator for the current file system
-	static string PathSeparator();
+	DUCKDB_API static string PathSeparator();
 	//! Join two paths together
-	static string JoinPath(const string &a, const string &path);
+	DUCKDB_API static string JoinPath(const string &a, const string &path);
 	//! Convert separators in a path to the local separators (e.g. convert "/" into \\ on windows)
-	static string ConvertSeparators(const string &path);
+	DUCKDB_API static string ConvertSeparators(const string &path);
 	//! Extract the base name of a file (e.g. if the input is lib/example.dll the base name is example)
-	static string ExtractBaseName(const string &path);
+	DUCKDB_API static string ExtractBaseName(const string &path);
 
 	//! Runs a glob on the file system, returning a list of matching files
-	virtual vector<string> Glob(const string &path);
+	DUCKDB_API virtual vector<string> Glob(const string &path);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
-	virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
-	virtual void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs);
+	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
+	DUCKDB_API virtual void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs);
 
 	//! Whether or not a sub-system can handle a specific file path
-	virtual bool CanHandleFile(const string &fpath);
+	DUCKDB_API virtual bool CanHandleFile(const string &fpath);
 
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
-	virtual void Seek(FileHandle &handle, idx_t location);
+	DUCKDB_API virtual void Seek(FileHandle &handle, idx_t location);
 	//! Reset a file to the beginning (equivalent to Seek(handle, 0) for simple files)
-	virtual void Reset(FileHandle &handle);
-	virtual idx_t SeekPosition(FileHandle &handle);
+	DUCKDB_API virtual void Reset(FileHandle &handle);
+	DUCKDB_API virtual idx_t SeekPosition(FileHandle &handle);
 
 	//! Whether or not we can seek into the file
-	virtual bool CanSeek();
+	DUCKDB_API virtual bool CanSeek();
 	//! Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads
 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
-	virtual bool OnDiskFile(FileHandle &handle);
+	DUCKDB_API virtual bool OnDiskFile(FileHandle &handle);
 
-	virtual unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle, bool write);
+	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle, bool write);
 
 	//! Create a LocalFileSystem.
-	static unique_ptr<FileSystem> CreateLocal();
+	DUCKDB_API static unique_ptr<FileSystem> CreateLocal();
 
 protected:
 	//! Return the name of the filesytem. Used for forming diagnosis messages.
-	virtual std::string GetName() const = 0;
+	DUCKDB_API virtual std::string GetName() const = 0;
 };
 
 } // namespace duckdb

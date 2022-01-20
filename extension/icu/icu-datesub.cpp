@@ -39,6 +39,7 @@ struct ICUCalendarSub : public ICUDateFunc {
 
 	static int64_t SubtractWeek(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
 		calendar->setFirstDayOfWeek(UCAL_MONDAY);
+		calendar->setMinimalDaysInFirstWeek(4);
 		SetTime(calendar, start_date);
 		return SubtractField(calendar, UCAL_WEEK_OF_YEAR, end_date);
 	}
@@ -57,6 +58,13 @@ struct ICUCalendarSub : public ICUDateFunc {
 	static int64_t SubtractYear(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
 		SetTime(calendar, start_date);
 		return SubtractField(calendar, UCAL_YEAR, end_date);
+	}
+
+	static int64_t SubtractISOYear(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+		calendar->setFirstDayOfWeek(UCAL_MONDAY);
+		calendar->setMinimalDaysInFirstWeek(4);
+		SetTime(calendar, start_date);
+		return SubtractField(calendar, UCAL_YEAR_WOY, end_date);
 	}
 
 	static int64_t SubtractDecade(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
@@ -145,6 +153,8 @@ ICUDateFunc::part_sub_t ICUDateFunc::SubtractFactory(DatePartSpecifier type) {
 	case DatePartSpecifier::WEEK:
 	case DatePartSpecifier::YEARWEEK:
 		return ICUCalendarSub::SubtractWeek;
+	case DatePartSpecifier::ISOYEAR:
+		return ICUCalendarSub::SubtractISOYear;
 	case DatePartSpecifier::DAY:
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:

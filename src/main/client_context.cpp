@@ -364,7 +364,7 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &qu
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
-	Parser parser;
+	Parser parser(GetParserOptions());
 	parser.ParseQuery(query);
 
 	PragmaHandler handler(*this);
@@ -1104,6 +1104,12 @@ bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) 
 
 	result = found_session_value ? session_value->second : global_value->second;
 	return true;
+}
+
+ParserOptions ClientContext::GetParserOptions() {
+	ParserOptions options;
+	options.preserve_identifier_case = ClientConfig::GetConfig(*this).preserve_identifier_case;
+	return options;
 }
 
 } // namespace duckdb

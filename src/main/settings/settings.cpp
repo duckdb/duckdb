@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
 
@@ -404,6 +405,17 @@ void PerfectHashThresholdSetting::SetLocal(ClientContext &context, const Value &
 
 Value PerfectHashThresholdSetting::GetSetting(ClientContext &context) {
 	return Value::BIGINT(ClientConfig::GetConfig(context).perfect_ht_threshold);
+}
+
+//===--------------------------------------------------------------------===//
+// PreserveIdentifierCase
+//===--------------------------------------------------------------------===//
+void PreserveIdentifierCase::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).preserve_identifier_case = input.GetValue<bool>();
+}
+
+Value PreserveIdentifierCase::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).preserve_identifier_case);
 }
 
 //===--------------------------------------------------------------------===//

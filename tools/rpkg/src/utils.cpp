@@ -239,16 +239,11 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 	case LogicalTypeId::TIME: {
 		res = r.Protect(NEW_NUMERIC(1));
 		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
-		dest_ptr[0] = ((double)val.GetValue<dtime_t>().micros) / 1000;
-		NUMERIC_POINTER(res)[0] = val.GetValue<dtime_t>().micros;
+		dest_ptr[0] = ((double)val.GetValue<dtime_t>().micros) / Interval::MICROS_PER_SEC;
 		// some dresssup for R
-		RProtector r_time;
-		SEXP cl = r_time.Protect(NEW_STRING(2));
-		SET_STRING_ELT(cl, 0, r_time.Protect(Rf_mkChar("hms")));
-		SET_STRING_ELT(cl, 1, r_time.Protect(Rf_mkChar("difftime")));
-		SET_CLASS(res, cl);
-		// hms difftime is always stored as "seconds"
-		Rf_setAttrib(res, Rf_install("units"), r_time.Protect(Rf_mkString("secs")));
+		SET_CLASS(res, RStrings::get().difftime_str);
+		// we always return difftime as "seconds"
+		Rf_setAttrib(res, RStrings::get().units_sym, RStrings::get().secs_str);
 		return res;
 	}
 

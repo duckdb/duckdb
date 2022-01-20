@@ -8,10 +8,12 @@
 
 #pragma once
 
-#include "duckdb/execution/merge_join.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
+
+class MergeJoinGlobalState;
 
 //! PhysicalPiecewiseMergeJoin represents a piecewise merge loop join between
 //! two tables
@@ -22,6 +24,8 @@ public:
 	                           idx_t estimated_cardinality);
 
 	vector<LogicalType> join_key_types;
+	vector<BoundOrderByNode> lhs_orders;
+	vector<BoundOrderByNode> rhs_orders;
 
 public:
 	// Operator Interface
@@ -59,6 +63,9 @@ public:
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          GlobalSinkState &gstate) const override;
+
+	//! Schedules tasks to merge sort the RHS data during the Finalize phase
+	static void ScheduleMergeTasks(Pipeline &pipeline, Event &event, MergeJoinGlobalState &state);
 
 	bool IsSink() const override {
 		return true;
