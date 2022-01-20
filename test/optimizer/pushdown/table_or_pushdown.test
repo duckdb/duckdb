@@ -318,6 +318,25 @@ SELECT * FROM integers WHERE a!=10 OR a>3
 4	4
 5	5
 
+# Testing the number of rows filtered (column "a" has five values: 1 .. 5)
+statement ok
+PRAGMA enable_profiling
+
+# should return 2 rows: 1 and 5
+query II
+EXPLAIN ANALYZE SELECT a FROM integers WHERE a<2 OR a>4
+----
+analyzed_plan	<REGEX>:.*SEQ_SCAN.*Filters: a<2 OR a>4.*2[ \t].*
+
+# should return 1 row: 1
+query II
+EXPLAIN ANALYZE SELECT a FROM integers WHERE a<2 OR a>5
+----
+analyzed_plan	<REGEX>:.*SEQ_SCAN.*Filters: a<2 OR a>5.*1[ \t].*
+
+statement ok
+PRAGMA disable_profiling
+
 # notequal and min == max && min == constant
 statement ok
 DROP TABLE integers
