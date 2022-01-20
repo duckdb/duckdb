@@ -14,8 +14,8 @@ static unique_ptr<FunctionData> JSONBind(ClientContext &context, ScalarFunction 
 	idx_t len = 0;
 	if (arguments[1]->return_type.id() != LogicalTypeId::SQLNULL && arguments[1]->IsFoldable()) {
 		constant = true;
-		auto val = ExpressionExecutor::EvaluateScalar(*arguments[1]).GetValueUnsafe<string_t>();
-		ConvertToPath(val, path, len);
+		auto query = ExpressionExecutor::EvaluateScalar(*arguments[1]).GetValueUnsafe<string_t>();
+		ConvertToPath(query, path, len);
 	}
 	return make_unique<JSONFunctionData>(constant, path, len);
 }
@@ -81,7 +81,6 @@ inline bool GetVal(yyjson_val *val, string_t &result) {
 
 template <class T>
 static inline bool TemplatedExtract(const string_t &input, const char *ptr, const idx_t &len, T &result) {
-	// TODO: check if YYJSON_READ_ALLOW_INF_AND_NAN may be better?
 	yyjson_doc *doc = yyjson_read(input.GetDataUnsafe(), input.GetSize(), YYJSON_READ_NOFLAG);
 	yyjson_val *val = unsafe_yyjson_get_pointer(yyjson_doc_get_root(doc), ptr, len);
 	return GetVal<T>(val, result);
@@ -94,7 +93,7 @@ static void TemplatedExtractFunction(DataChunk &args, ExpressionState &state, Ve
 
 	auto &strings = args.data[0];
 	if (info.constant) {
-		// Constant tag
+		// Constant query
 		const char *ptr = info.path.c_str();
 		const idx_t &len = info.len;
 		UnaryExecutor::ExecuteWithNulls<string_t, T>(strings, result, args.size(),
@@ -106,7 +105,7 @@ static void TemplatedExtractFunction(DataChunk &args, ExpressionState &state, Ve
 			                                             return result_val;
 		                                             });
 	} else {
-		// Columnref tag
+		// Columnref query
 		auto &queries = args.data[1];
 		BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
 		    strings, queries, result, args.size(), [&](string_t input, string_t query, ValidityMask &mask, idx_t idx) {

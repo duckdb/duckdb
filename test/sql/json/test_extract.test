@@ -41,6 +41,27 @@ select json_extract_string(NULL, 'str')
 ----
 NULL
 
+# NaN and Infinity should become NULL
+query T
+select json_extract_string('{"null": NaN}', 'null')
+----
+NULL
+
+query T
+select json_extract_string('{"null": nan}', 'null')
+----
+NULL
+
+query T
+select json_extract_string('{"null": Infinity}', 'null')
+----
+NULL
+
+query T
+select json_extract_string('{"null": -Infinity}', 'null')
+----
+NULL
+
 statement ok
 create table test(json varchar, query varchar)
 

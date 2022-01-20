@@ -12,15 +12,16 @@
 
 namespace duckdb {
 
-static inline bool ConvertToPath(const string_t &input, string &result, idx_t &len) {
-	len = input.GetSize();
+//! Converts JSON query string to JSON path string
+static inline bool ConvertToPath(const string_t &query, string &result, idx_t &len) {
+	len = query.GetSize();
 	if (len == 0) {
 		return false;
 	}
-	const char *ptr = input.GetDataUnsafe();
+	const char *ptr = query.GetDataUnsafe();
 	if (*ptr == '/') {
 		// Already a path string
-		result = input.GetString();
+		result = query.GetString();
 	} else if (*ptr == '$') {
 		// Dollar/dot/brackets syntax
 		result = StringUtil::Replace(string(ptr + 1, len - 1), ".", "/");
@@ -30,7 +31,7 @@ static inline bool ConvertToPath(const string_t &input, string &result, idx_t &l
 	} else {
 		// Plain tag/array index, prepend slash
 		len++;
-		result = "/" + input.GetString();
+		result = "/" + query.GetString();
 	}
 	return true;
 }
