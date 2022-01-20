@@ -309,7 +309,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 				dest_ptr[row_idx] = NA_REAL;
 			} else {
 				dtime_t n = src_data[row_idx];
-				dest_ptr[row_idx] = n.micros / 1000000.0;
+				dest_ptr[row_idx] = n.micros / Interval::MICROS_PER_SEC;
 			}
 		}
 

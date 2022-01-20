@@ -41,29 +41,32 @@ rs_list_objects <- function(connection, catalog = NULL, schema = NULL, name = NU
     type <- paste0("%", type)
   }
   # behold
-  dbGetQuery(connection, '
-    SELECT table_name "name", 
-      CASE WHEN table_type LIKE \'%TABLE\' THEN \'table\' ELSE LOWER(table_type) END "type" 
-    FROM information_schema.tables 
+  dbGetQuery(
+    connection, '
+    SELECT table_name "name",
+      CASE WHEN table_type LIKE \'%TABLE\' THEN \'table\' ELSE LOWER(table_type) END "type"
+    FROM information_schema.tables
     WHERE (?::STRING IS NULL OR table_schema = ?) AND
       (?::STRING IS NULL OR table_name = ?) AND
       table_type ILIKE ?
     ORDER BY table_schema, table_type, table_name',
-    list(schema, schema, name, name, type))
+    list(schema, schema, name, name, type)
+  )
 }
 
 rs_list_columns <- function(connection, table, catalog = NULL, schema = NULL, ...) {
-
   if (is.null(schema)) {
     schema <- NA
   }
-  dbGetQuery(connection, "
-    SELECT column_name \"name\", data_type \"field.type\" 
-    FROM information_schema.columns 
+  dbGetQuery(
+    connection, "
+    SELECT column_name \"name\", data_type \"field.type\"
+    FROM information_schema.columns
     WHERE (?::STRING IS NULL OR table_schema = ?) AND
       table_name = ?
-    ORDER BY ordinal_position", 
-    list(schema, schema, table))
+    ORDER BY ordinal_position",
+    list(schema, schema, table)
+  )
 }
 
 rs_preview <- function(connection, rowLimit, table = NULL, view = NULL, schema = NULL, ...) {
@@ -114,7 +117,9 @@ rs_check_disabled <- function(observer) {
 rs_on_connection_closed <- function(connection) {
   # make sure we have an observer
   observer <- getOption("connectionObserver")
-  if (rs_check_disabled(observer)) return(invisible(NULL))
+  if (rs_check_disabled(observer)) {
+    return(invisible(NULL))
+  }
 
   type <- "DuckDB"
   host <- connection@driver@dbdir
@@ -124,17 +129,21 @@ rs_on_connection_closed <- function(connection) {
 rs_on_connection_updated <- function(connection, hint) {
   # make sure we have an observer
   observer <- getOption("connectionObserver")
-  if (rs_check_disabled(observer)) return(invisible(NULL))
+  if (rs_check_disabled(observer)) {
+    return(invisible(NULL))
+  }
 
   type <- "DuckDB"
   host <- connection@driver@dbdir
   observer$connectionUpdated(type, host, hint = hint)
 }
 
-rs_on_connection_opened <- function(connection, code="") {
+rs_on_connection_opened <- function(connection, code = "") {
   # make sure we have an observer
   observer <- getOption("connectionObserver")
-  if (rs_check_disabled(observer)) return(invisible(NULL))
+  if (rs_check_disabled(observer)) {
+    return(invisible(NULL))
+  }
 
   # use the database name as the display name
   display_name <- "DuckDB"
@@ -143,7 +152,7 @@ rs_on_connection_opened <- function(connection, code="") {
   # append the server name if we know it, and it isn't the same as the database name
   # (this can happen for serverless, nameless databases such as SQLite)
   if (!is.null(server_name) && nzchar(server_name) &&
-      !identical(server_name, display_name)) {
+    !identical(server_name, display_name)) {
     display_name <- paste(display_name, "-", server_name)
   }
 
@@ -159,7 +168,7 @@ rs_on_connection_opened <- function(connection, code="") {
     host = connection@driver@dbdir,
 
     # icon for connection
-    icon = system.file("icons/duckdb.png", package="duckdb"),
+    icon = system.file("icons/duckdb.png", package = "duckdb"),
 
     # connection code
     connectCode = code,
@@ -168,8 +177,7 @@ rs_on_connection_opened <- function(connection, code="") {
     disconnect = function() {
       dbDisconnect(connection)
     },
-
-    listObjectTypes = function () {
+    listObjectTypes = function() {
       rs_list_object_types(connection)
     },
 

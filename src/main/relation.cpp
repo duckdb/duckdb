@@ -2,6 +2,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/relation/aggregate_relation.hpp"
+#include "duckdb/main/relation/cross_product_relation.hpp"
 #include "duckdb/main/relation/distinct_relation.hpp"
 #include "duckdb/main/relation/explain_relation.hpp"
 #include "duckdb/main/relation/filter_relation.hpp"
@@ -132,6 +133,10 @@ shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const str
 		// single expression that is not a column reference: use the expression as a join condition
 		return make_shared<JoinRelation>(shared_from_this(), other, move(expression_list[0]), type);
 	}
+}
+
+shared_ptr<Relation> Relation::CrossProduct(const shared_ptr<Relation> &other) {
+	return make_shared<CrossProductRelation>(shared_from_this(), other);
 }
 
 shared_ptr<Relation> Relation::Union(const shared_ptr<Relation> &other) {
