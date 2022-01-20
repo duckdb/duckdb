@@ -15,6 +15,7 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "utf8proc_wrapper.hpp"
 
+#include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/mutex.hpp"
 #include <map>
@@ -995,6 +996,9 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
 			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_convert_data,
 			                              col_idx, arrow_convert_idx);
 		} else {
+			auto arrow_buffer = make_buffer<ArrowBuffer>();
+			arrow_buffer->arrow_array = scan_state.chunk;
+			output.data[idx].SetAuxiliary(move(arrow_buffer));
 			SetValidityMask(output.data[idx], array, scan_state, output.size(), -1);
 			ColumnArrowToDuckDB(output.data[idx], array, scan_state, output.size(), arrow_convert_data, col_idx,
 			                    arrow_convert_idx);
@@ -1024,7 +1028,6 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 	output.SetCardinality(output_size);
 	ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size);
 	output.Verify();
-	output.arrow_array = state.chunk;
 	state.chunk_offset += output.size();
 }
 
@@ -1042,7 +1045,6 @@ void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const
 	output.SetCardinality(output_size);
 	ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size);
 	output.Verify();
-	output.arrow_array = state.chunk;
 	state.chunk_offset += output.size();
 }
 

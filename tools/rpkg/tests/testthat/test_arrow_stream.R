@@ -30,3 +30,26 @@ test_that("round trip arrow stream", {
   expect_true(all.equal(to_to,all_arrow))
 })
 
+test_that("round trip arrow stream with query", {
+
+  ds <- open_dataset(rep("data/userdata1.parquet", 4))
+
+
+  to_to <- ds %>%
+    select(-registration_dttm) %>% # timestamp[ns] has unrelated error
+    to_duckdb() %>%
+    mutate(new_id = id + 1) %>%
+    to_arrow() %>%
+    collect() %>%
+    arrange(id)
+
+ all_arrow <- ds %>%
+   select(-registration_dttm) %>% # timestamp[ns] has unrelated error
+   mutate(new_id = id + 1) %>%
+   collect() %>%
+   arrange(id)
+
+
+  # The full comparison
+  expect_true(all.equal(to_to,all_arrow))
+})

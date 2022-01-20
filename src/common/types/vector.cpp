@@ -973,10 +973,6 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		child.Verify(new_sel, count);
 		return;
 	}
-	if (TypeIsConstantSize(GetType().InternalType()) &&
-	    (GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR)) {
-		D_ASSERT(!auxiliary);
-	}
 	if (GetType().InternalType() == PhysicalType::DOUBLE) {
 		// verify that there are no INF or NAN values
 		switch (GetVectorType()) {

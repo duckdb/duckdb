@@ -45,8 +45,6 @@ public:
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
-	//! If this data chunk is generated through arrow we have to hold the original arrow array
-	shared_ptr<ArrowArrayWrapper> arrow_array;
 
 public:
 	inline idx_t size() const { // NOLINT

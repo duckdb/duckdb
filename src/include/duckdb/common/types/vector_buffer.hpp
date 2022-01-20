@@ -13,6 +13,8 @@
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
+#include "duckdb/common/arrow_wrapper.hpp"
+
 namespace duckdb {
 
 class BufferHandle;
@@ -28,7 +30,8 @@ enum class VectorBufferType : uint8_t {
 	STRUCT_BUFFER,       // struct buffer, holds a ordered mapping from name to child vector
 	LIST_BUFFER,         // list buffer, holds a single flatvector child
 	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
-	OPAQUE_BUFFER        // opaque buffer, can be created for example by the parquet reader
+	OPAQUE_BUFFER,       // opaque buffer, can be created for example by the parquet reader
+	ARROW_BUFFER
 };
 
 //! The VectorBuffer is a class used by the vector to hold its data
@@ -98,6 +101,13 @@ public:
 
 private:
 	SelectionVector sel_vector;
+};
+
+//! The ArrowBuffer holds an arrow vector
+class ArrowBuffer : public VectorBuffer {
+
+public:
+	shared_ptr<ArrowArrayWrapper> arrow_array;
 };
 
 class VectorStringBuffer : public VectorBuffer {

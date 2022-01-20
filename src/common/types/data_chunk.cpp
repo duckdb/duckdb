@@ -285,7 +285,7 @@ struct DuckDBArrowArrayHolder {
 	vector<DuckDBArrowArrayChildHolder> children = {};
 	vector<ArrowArray *> children_ptrs = {};
 	array<const void *, 1> buffers = {{nullptr}};
-	shared_ptr<ArrowArrayWrapper> arrow_original_array;
+	vector<shared_ptr<ArrowArrayWrapper>> arrow_original_array;
 };
 
 static void ReleaseDuckDBArrowArray(ArrowArray *array) {
@@ -691,7 +691,6 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	// Allocate the children
 	root_holder->children.resize(ColumnCount());
 	root_holder->children_ptrs.resize(ColumnCount(), nullptr);
-	root_holder->arrow_original_array = arrow_array;
 	for (size_t i = 0; i < ColumnCount(); ++i) {
 		root_holder->children_ptrs[i] = &root_holder->children[i].array;
 	}
@@ -713,6 +712,11 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 		InitializeChild(child_holder, size());
 		auto &vector = child_holder.vector;
 		auto &child = child_holder.array;
+		auto vec_buffer = data[col_idx].GetBuffer();
+		if (vec_buffer->GetBufferType() == VectorBufferType::ARROW_BUFFER) {
+			auto arrow_buffer = (ArrowBuffer *)vec_buffer.get();
+			root_holder->arrow_original_array.push_back(arrow_buffer->arrow_array);
+		}
 
 		//! We could, in theory, output other types of vectors here, currently only FLAT Vectors
 		SetArrowChild(child_holder, GetTypes()[col_idx], data[col_idx], size());
