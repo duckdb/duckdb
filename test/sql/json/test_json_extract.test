@@ -1,5 +1,5 @@
-# name: test/sql/json/test_extract.test
-# description: Test JSON extension
+# name: test/sql/json/test_json_extract.test
+# description: Test JSON extract
 # group: [json]
 
 require json

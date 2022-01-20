@@ -7,7 +7,7 @@ include_directories(include)
 add_subdirectory(yyjson)
 
 add_library(json_extension STATIC json-extension.cpp json_extract.cpp
-                                  ${YYJSON_OBJECT_FILES})
+                                  json_type.cpp ${YYJSON_OBJECT_FILES})
 
 build_loadable_extension(json json-extension.cpp ${YYJSON_OBJECT_FILES})
 

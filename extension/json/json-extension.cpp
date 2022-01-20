@@ -24,3 +24,14 @@ std::string JSONExtension::Name() {
 }
 
 } // namespace duckdb
+
+extern "C" {
+DUCKDB_EXTENSION_API void json_init(duckdb::DatabaseInstance &db) {
+	duckdb::DuckDB db_wrapper(db);
+	db_wrapper.LoadExtension<duckdb::JSONExtension>();
+}
+
+DUCKDB_EXTENSION_API const char *json_version() {
+	return duckdb::DuckDB::LibraryVersion();
+}
+}

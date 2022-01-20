@@ -1,0 +1,137 @@
+# name: test/sql/json/test_json_type.test
+# description: Test JSON type
+# group: [json]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# tests with constant input and constant query
+query T
+select json_type('{"str": 42}', 'str')
+----
+integer
+
+query T
+select json_type('{"str": "quack"}', 'str')
+----
+string
+
+query T
+select json_type('{"str": "quack"}', 'str2')
+----
+NULL
+
+query T
+select json_type('{"str": "quack"}', NULL)
+----
+NULL
+
+query T
+select json_type(NULL, 'str')
+----
+NULL
+
+# NaN and Infinity should become NULL
+query T
+select json_type('{"null": NaN}', 'null')
+----
+NULL
+
+query T
+select json_type('{"null": nan}', 'null')
+----
+NULL
+
+query T
+select json_type('{"null": Infinity}', 'null')
+----
+NULL
+
+query T
+select json_type('{"null": -Infinity}', 'null')
+----
+NULL
+
+statement ok
+create table test(json varchar, query varchar)
+
+statement ok
+insert into test values
+    ('{"str": "quack", "int": 4, "double": 0.42, "bool": true, "arr": [], "nested": {"val": 1}}', '/nested/val'),
+    ('{"str": "woof", "int": -4, "double": -0.42, "bool": false, "arr": [0, 1, 2], "nested": {"val": 42}}', '$.arr[2]'),
+    ('{"str": null, "int": null, "double": null, "bool": null, "arr": null, "nested": null}', 'bool')
+
+# tests with columnref input and constant query
+query T
+select json_type(json, 'str') from test
+----
+string
+string
+null
+
+query T
+select json_type(json, 'int') from test
+----
+integer
+integer
+null
+
+query T
+select json_type(json, 'double') from test
+----
+real
+real
+null
+
+query T
+select json_type(json, 'bool') from test
+----
+boolean
+boolean
+null
+
+query T
+select json_type(json, 'arr') from test
+----
+array
+array
+null
+
+# json path queries
+query T
+select json_type(json, '/arr/0') from test
+----
+NULL
+integer
+NULL
+
+query T
+select json_type(json, '$.arr[0]') from test
+----
+NULL
+integer
+NULL
+
+query T
+select json_type(json, '/nested/val') from test
+----
+integer
+integer
+NULL
+
+query T
+select json_type(json, '$.nested.val') from test
+----
+integer
+integer
+NULL
+
+# test with columnref input and columnref query
+query T
+select json_type(json, query) from test
+----
+integer
+integer
+null
