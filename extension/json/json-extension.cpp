@@ -11,7 +11,7 @@ void JSONExtension::Load(DuckDB &db) {
 
 	auto &catalog = Catalog::GetCatalog(*con.context);
 
-	for (const auto &fun : JSONFunctions::GetExtractFunctions()) {
+	for (const auto &fun : JSONFunctions::GetFunctions()) {
 		CreateScalarFunctionInfo get_object_info(fun);
 		catalog.CreateFunction(*con.context, &get_object_info);
 	}

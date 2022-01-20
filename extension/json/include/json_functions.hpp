@@ -8,12 +8,19 @@
 
 #pragma once
 
-#include "duckdb.hpp"
-
 namespace duckdb {
 
 class JSONFunctions {
 public:
+	static vector<ScalarFunction> GetFunctions() {
+		vector<ScalarFunction> functions;
+		for (const auto &extract_fun : GetExtractFunctions()) {
+			functions.push_back(extract_fun);
+		}
+		return functions;
+	}
+
+private:
 	static vector<ScalarFunction> GetExtractFunctions();
 };
 

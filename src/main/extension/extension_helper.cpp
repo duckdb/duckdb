@@ -120,7 +120,7 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "json") {
-#ifdef BUILD_VISUALIZER_EXTENSION
+#ifdef BUILD_JSON_EXTENSION
 		db.LoadExtension<JSONExtension>();
 #else
 		// json extension required but not build: skip this test

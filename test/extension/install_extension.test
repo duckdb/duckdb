@@ -109,3 +109,16 @@ SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubuse
 8	Harry	Howell	hhowell7@eepurl.com
 9	Jose	Foster	jfoster8@yelp.com
 10	Emily	Stewart	estewart9@opensource.org
+
+statement ok
+INSTALL 'json';
+
+statement ok
+LOAD 'json';
+
+require json
+
+query T
+select json_extract_int('{"myint": 42}', 'myint')
+----
+42

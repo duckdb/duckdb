@@ -1,59 +1,23 @@
-#include "json_functions.hpp"
-
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "json_common.hpp"
+#include "json_functions.hpp"
 #include "yyjson.hpp"
 
 namespace duckdb {
-
-static inline bool ConvertToPath(const string_t &input, string &result, idx_t &len) {
-	len = input.GetSize();
-	if (len == 0) {
-		return false;
-	}
-	const char *ptr = input.GetDataUnsafe();
-	if (*ptr == '/') {
-		// Already a path string
-		result = input.GetString();
-	} else if (*ptr == '$') {
-		// Dollar/dot syntax
-		len--;
-		result = StringUtil::Replace(string(ptr + 1, len), ".", "/");
-	} else {
-		// Plain tag/array index, prepend slash
-		len++;
-		result = "/" + input.GetString();
-	}
-	return true;
-}
-
-struct JSONFunctionData : public FunctionData {
-public:
-	explicit JSONFunctionData(string path_p, idx_t len) : path(move(path_p)), len(len) {
-	}
-
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<JSONFunctionData>(path, len);
-	}
-
-public:
-	const string path;
-	const size_t len;
-};
 
 template <PhysicalType TYPE>
 static unique_ptr<FunctionData> JSONBind(ClientContext &context, ScalarFunction &bound_function,
                                          vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
+	bool constant = false;
 	string path = "";
 	idx_t len = 0;
 	if (arguments[1]->return_type.id() != LogicalTypeId::SQLNULL && arguments[1]->IsFoldable()) {
+		constant = true;
 		auto val = ExpressionExecutor::EvaluateScalar(*arguments[1]).GetValueUnsafe<string_t>();
-		if (!ConvertToPath(val, path, len)) {
-			throw InvalidInputException("Invalid path string");
-		}
+		ConvertToPath(val, path, len);
 	}
-	return make_unique<JSONFunctionData>(path, len);
+	return make_unique<JSONFunctionData>(constant, path, len);
 }
 
 template <class T>
@@ -129,20 +93,7 @@ static void TemplatedExtractFunction(DataChunk &args, ExpressionState &state, Ve
 	const auto &info = (JSONFunctionData &)*func_expr.bind_info;
 
 	auto &strings = args.data[0];
-	if (info.len == 0) {
-		// Column tag
-		auto &queries = args.data[1];
-		BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
-		    strings, queries, result, args.size(), [&](string_t input, string_t query, ValidityMask &mask, idx_t idx) {
-			    string path;
-			    idx_t len;
-			    T result_val {};
-			    if (!ConvertToPath(query, path, len) || !TemplatedExtract<T>(input, path.c_str(), len, result_val)) {
-				    mask.SetInvalid(idx);
-			    }
-			    return result_val;
-		    });
-	} else {
+	if (info.constant) {
 		// Constant tag
 		const char *ptr = info.path.c_str();
 		const idx_t &len = info.len;
@@ -154,13 +105,26 @@ static void TemplatedExtractFunction(DataChunk &args, ExpressionState &state, Ve
 			                                             }
 			                                             return result_val;
 		                                             });
+	} else {
+		// Columnref tag
+		auto &queries = args.data[1];
+		BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
+		    strings, queries, result, args.size(), [&](string_t input, string_t query, ValidityMask &mask, idx_t idx) {
+			    string path;
+			    idx_t len;
+			    T result_val {};
+			    if (!ConvertToPath(query, path, len) || !TemplatedExtract<T>(input, path.c_str(), len, result_val)) {
+				    mask.SetInvalid(idx);
+			    }
+			    return result_val;
+		    });
 	}
 }
 
 vector<ScalarFunction> JSONFunctions::GetExtractFunctions() {
 	vector<ScalarFunction> extract_functions;
 	extract_functions.push_back(ScalarFunction("json_extract_bool", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                           LogicalType::BIGINT, TemplatedExtractFunction<bool>, false,
+	                                           LogicalType::BOOLEAN, TemplatedExtractFunction<bool>, false,
 	                                           JSONBind<PhysicalType::BOOL>, nullptr, nullptr));
 	extract_functions.push_back(ScalarFunction("json_extract_int", {LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                                           LogicalType::INTEGER, TemplatedExtractFunction<int32_t>, false,
