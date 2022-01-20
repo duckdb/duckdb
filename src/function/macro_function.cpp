@@ -17,10 +17,7 @@ MacroFunction::MacroFunction(void) {
 }
 
 bool MacroFunction::isQuery() {
-	if (query_node)
-		return true;
-	else
-		return false;
+	return (query_node != nullptr);
 }
 
 string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionExpression &function_expr,

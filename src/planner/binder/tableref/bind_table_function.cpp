@@ -94,8 +94,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	auto function =
 	    catalog.GetEntry<TableFunctionCatalogEntry>(context, fexpr->schema, fexpr->function_name, true, error_context);
 
-	if (!function)
+	if (!function) {
 		return nullptr;
+	}
 
 	// select the function based on the input parameters
 	idx_t best_function_idx = Function::BindFunction(function->name, function->functions, arguments, error);

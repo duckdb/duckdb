@@ -118,8 +118,9 @@ unique_ptr<QueryNode> Binder::BindMacroSelect(FunctionExpression &function, Macr
 	}
 
 	if (!select_node.groups.group_expressions.empty()) {
-		for (auto &group_element : select_node.groups.group_expressions)
+		for (auto &group_element : select_node.groups.group_expressions) {
 			ReplaceMacroSelectParametersRecursive(group_element, macro_binding);
+		}
 	}
 
 	if (select_node.having) {
@@ -137,7 +138,7 @@ unique_ptr<QueryNode> Binder::BindNodeMacro(SelectNode &statement) {
 
 	/* we have already checked that th e first argument in the seelect list is in fact a select macro function
 	 *  but we can check again here */
-	if (!statement.select_list.size() || statement.select_list[0]->type != ExpressionType::FUNCTION) {
+	if (statement.select_list.empty() || statement.select_list[0]->type != ExpressionType::FUNCTION) {
 		return nullptr;
 	}
 

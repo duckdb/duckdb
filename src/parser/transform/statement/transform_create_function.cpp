@@ -25,11 +25,13 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	auto macro_func = make_unique<MacroFunction>(move(function));
 
 	// function is a query
-	if (stmt->query)
+	if (stmt->query) {
 		macro_func->query_node = TransformSelect(stmt->query, true)->node->Copy();
+	}
 
-	if (stmt->function == nullptr && stmt->query == nullptr)
+	if (stmt->function == nullptr && stmt->query == nullptr) {
 		throw ParserException("CreateFunctionStmt: function and query both null\n");
+	}
 
 	if (stmt->params) {
 		vector<unique_ptr<ParsedExpression>> parameters;
