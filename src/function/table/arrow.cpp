@@ -992,13 +992,13 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
 		if (array.length != scan_state.chunk->arrow_array.length) {
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
+		auto arrow_buffer = make_buffer<ArrowBuffer>();
+		arrow_buffer->arrow_array = scan_state.chunk;
+		output.data[idx].SetAuxiliary(move(arrow_buffer));
 		if (array.dictionary) {
 			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_convert_data,
 			                              col_idx, arrow_convert_idx);
 		} else {
-			auto arrow_buffer = make_buffer<ArrowBuffer>();
-			arrow_buffer->arrow_array = scan_state.chunk;
-			output.data[idx].SetAuxiliary(move(arrow_buffer));
 			SetValidityMask(output.data[idx], array, scan_state, output.size(), -1);
 			ColumnArrowToDuckDB(output.data[idx], array, scan_state, output.size(), arrow_convert_data, col_idx,
 			                    arrow_convert_idx);
