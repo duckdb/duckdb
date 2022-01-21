@@ -85,7 +85,7 @@ duckdb_fetch_arrow <- function(res, stream = FALSE, vector_per_chunk = 1, return
   if (vector_per_chunk < 0) {
     stop("cannot fetch negative vector_per_chunk")
   }
-  result <- .Call(duckdb_fetch_arrow_R, res@query_result, stream, vector_per_chunk, return_table)
+  result <- .Call(`_duckdb_fetch_arrow_R`, res@query_result, stream, vector_per_chunk, return_table)
   return(result)
 }
 
@@ -94,7 +94,7 @@ duckdb_fetch_arrow <- function(res, stream = FALSE, vector_per_chunk = 1, return
 #' @param approx_batch_size If streaming, how many vectors per chunk we should emit
 #' @export
 duckdb_fetch_record_batch <- function(res, approx_batch_size = 1) {
-  result <- .Call(duckdb_fetch_record_batch_R, res@query_result, approx_batch_size)
+  result <- .Call(`_duckdb_fetch_record_batch_R`, res@query_result, approx_batch_size)
   return(result)
 }
 

@@ -77,7 +77,7 @@ duckdb_register_arrow <- function(conn, name, arrow_scannable, use_async = FALSE
   }
   # pass some functions to c land so we don't have to look them up there
   function_list <- list(export_fun, arrow::Expression$create, arrow::Expression$field_ref, arrow::Expression$scalar)
-  .Call(duckdb_register_arrow_R, conn@conn_ref, enc2utf8(as.character(name)), function_list, arrow_scannable)
+  .Call(`_duckdb_register_arrow_R`, conn@conn_ref, enc2utf8(as.character(name)), function_list, arrow_scannable)
   invisible(TRUE)
 }
 
