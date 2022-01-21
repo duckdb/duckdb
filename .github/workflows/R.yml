@@ -69,7 +69,7 @@ jobs:
 
     - name: Coverage
       run: |
-        cov <- covr::codecov("tools/rpkg")
+        cov <- covr::codecov("tools/rpkg", relative_path = ".")
       shell: Rscript {0}
 
     - name: Print R log on failure
