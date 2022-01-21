@@ -1,0 +1,43 @@
+# name: test/sql/transactions/test_from_update_conflict.test
+# description: Test correct checking for out-of-order row id updates
+# group: [transactions]
+statement ok con1
+CREATE TABLE test AS SELECT i AS a FROM range (2048, 5000, 1) t1(i)
+
+statement ok con1
+INSERT INTO test VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE src(b INTEGER)
+
+statement ok con1
+INSERT INTO src VALUES (3), (2), (1), (4)
+
+
+query IIII con1
+SELECT src.rowid sr, b, test.rowid tr, a FROM src, test WHERE src.b = test.a;
+----
+2	1	2952	1
+1	2	2953	2
+0	3	2954	3   
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1 
+UPDATE src SET b = 10000 WHERE src.rowid = 0 OR src.rowid = 1 OR src.rowid = 3
+
+query I con1
+SELECT b FROM src
+----
+10000
+10000
+1
+10000
+
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement error con2
+UPDATE src SET b = 20000 FROM test WHERE src.b = test.a;
