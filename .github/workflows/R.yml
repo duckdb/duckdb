@@ -46,6 +46,8 @@ jobs:
         R -f tools/rpkg/dependencies.R
 
     - name: Coverage
+      env:
+        DUCKDB_R_DEBUG=1
       run: |
         cov <- covr::codecov("tools/rpkg", relative_path = ".")
       shell: Rscript {0}
