@@ -180,7 +180,7 @@ sql_translation.duckdb_connection <- function(con) {
             "quarter"
           }
         }
-        if (with_year == TRUE) {
+        if (with_year) {
           type <- "year.quarter"
         }
         switch(type,
