@@ -1,4 +1,4 @@
-#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
 
@@ -103,33 +103,39 @@ static void TemplatedExtractFunction(DataChunk &args, ExpressionState &state, Ve
 	}
 }
 
-void JSONFunctions::AddExtractFunction(ClientContext &context) {
-	auto bool_fun = CreateScalarFunctionInfo(
-	    ScalarFunction("json_extract_bool", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                   TemplatedExtractFunction<bool>, false, JSONFunctionData::Bind, nullptr, nullptr));
-	auto int_fun = CreateScalarFunctionInfo(
-	    ScalarFunction("json_extract_int", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::INTEGER,
-	                   TemplatedExtractFunction<int32_t>, false, JSONFunctionData::Bind, nullptr, nullptr));
-	auto bigint_fun = CreateScalarFunctionInfo(
-	    ScalarFunction("json_extract_bigint", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                   TemplatedExtractFunction<int64_t>, false, JSONFunctionData::Bind, nullptr, nullptr));
-	auto ubigint_fun = CreateScalarFunctionInfo(
-	    ScalarFunction("json_extract_ubigint", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::UBIGINT,
-	                   TemplatedExtractFunction<uint64_t>, false, JSONFunctionData::Bind, nullptr, nullptr));
-	auto double_fun = CreateScalarFunctionInfo(
-	    ScalarFunction("json_extract_double", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::DOUBLE,
-	                   TemplatedExtractFunction<double>, false, JSONFunctionData::Bind, nullptr, nullptr));
-	auto string_fun = CreateScalarFunctionInfo(
-	    ScalarFunction("json_extract_string", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                   TemplatedExtractFunction<string_t>, false, JSONFunctionData::Bind, nullptr, nullptr));
+static void AddFunctionAliases(vector<CreateScalarFunctionInfo> &functions, vector<string> names, ScalarFunction fun) {
+	for (const auto &name : names) {
+		fun.name = name;
+		functions.push_back(CreateScalarFunctionInfo(fun));
+	}
+}
 
-	auto &catalog = Catalog::GetCatalog(context);
-	catalog.CreateFunction(context, &bool_fun);
-	catalog.CreateFunction(context, &int_fun);
-	catalog.CreateFunction(context, &bigint_fun);
-	catalog.CreateFunction(context, &ubigint_fun);
-	catalog.CreateFunction(context, &double_fun);
-	catalog.CreateFunction(context, &string_fun);
+vector<CreateScalarFunctionInfo> JSONFunctions::GetExtractFunctions() {
+	vector<CreateScalarFunctionInfo> functions;
+	auto bool_fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                               TemplatedExtractFunction<bool>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	auto int_fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::INTEGER,
+	                              TemplatedExtractFunction<int32_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	auto bigint_fun =
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                   TemplatedExtractFunction<int64_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	auto ubigint_fun =
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::UBIGINT,
+	                   TemplatedExtractFunction<uint64_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	auto double_fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::DOUBLE,
+	                                 TemplatedExtractFunction<double>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	auto string_fun =
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                   TemplatedExtractFunction<string_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
+
+	AddFunctionAliases(functions, {"json_extract_bool", "json_extract_boolean"}, bool_fun);
+	AddFunctionAliases(functions, {"json_extract_int", "json_extract_integer"}, int_fun);
+	AddFunctionAliases(functions, {"json_extract_bigint"}, bigint_fun);
+	AddFunctionAliases(functions, {"json_extract_ubigint"}, ubigint_fun);
+	AddFunctionAliases(functions, {"json_extract_double"}, double_fun);
+	AddFunctionAliases(functions, {"json_extract_string", "json_extract_varchar"}, string_fun);
+
+	return functions;
 }
 
 } // namespace duckdb

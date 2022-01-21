@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "yyjson.hpp"
 
@@ -24,9 +25,11 @@ public:
 		const char *ptr = query.GetDataUnsafe();
 		if (*ptr == '/') {
 			// Already a path string
+			// FIXME: avoid copying the string in this case - already OK
 			result = query.GetString();
 		} else if (*ptr == '$') {
 			// Dollar/dot/brackets syntax
+			// FIXME: this does not check for escaped strings, and does not support e.g. [#-1] : last array element
 			result = StringUtil::Replace(string(ptr + 1, len - 1), ".", "/");
 			result = StringUtil::Replace(result, "]", "");
 			result = StringUtil::Replace(result, "[", "/");

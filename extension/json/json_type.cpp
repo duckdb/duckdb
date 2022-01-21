@@ -1,4 +1,4 @@
-#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
 
@@ -101,15 +101,14 @@ static void BinaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 }
 
-void JSONFunctions::AddTypeFunction(ClientContext &context) {
-	auto &catalog = Catalog::GetCatalog(context);
+CreateScalarFunctionInfo JSONFunctions::GetTypeFunction() {
 	ScalarFunctionSet set("json_type");
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTypeFunction, false, nullptr,
 	                               nullptr, nullptr));
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                               BinaryTypeFunction, false, JSONFunctionData::Bind, nullptr, nullptr));
-	CreateScalarFunctionInfo type_fun(move(set));
-	catalog.CreateFunction(context, &type_fun);
+
+	return CreateScalarFunctionInfo(move(set));
 }
 
 } // namespace duckdb
