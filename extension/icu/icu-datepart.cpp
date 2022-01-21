@@ -63,13 +63,23 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static int64_t ExtractWeek(icu::Calendar *calendar, const uint64_t micros) {
-		calendar->setFirstDayOfWeek(UCAL_SUNDAY);
+		calendar->setFirstDayOfWeek(UCAL_MONDAY);
 		calendar->setMinimalDaysInFirstWeek(4);
 		return ExtractField(calendar, UCAL_WEEK_OF_YEAR);
 	}
 
+	static int64_t ExtractISOYear(icu::Calendar *calendar, const uint64_t micros) {
+		calendar->setFirstDayOfWeek(UCAL_MONDAY);
+		calendar->setMinimalDaysInFirstWeek(4);
+		return ExtractField(calendar, UCAL_YEAR_WOY);
+	}
+
 	static int64_t ExtractYearWeek(icu::Calendar *calendar, const uint64_t micros) {
-		return ExtractYear(calendar, micros) * 100 + ExtractWeek(calendar, micros);
+		calendar->setFirstDayOfWeek(UCAL_MONDAY);
+		calendar->setMinimalDaysInFirstWeek(4);
+		const auto iyyy = ExtractField(calendar, UCAL_YEAR_WOY);
+		const auto ww = ExtractField(calendar, UCAL_WEEK_OF_YEAR);
+		return iyyy * 100 + ((iyyy > 0) ? ww : -ww);
 	}
 
 	static int64_t ExtractDayOfYear(icu::Calendar *calendar, const uint64_t micros) {
@@ -151,6 +161,8 @@ struct ICUDatePart : public ICUDateFunc {
 			return ExtractISODayOfWeek;
 		case DatePartSpecifier::WEEK:
 			return ExtractWeek;
+		case DatePartSpecifier::ISOYEAR:
+			return ExtractISOYear;
 		case DatePartSpecifier::DOY:
 			return ExtractDayOfYear;
 		case DatePartSpecifier::QUARTER:
@@ -351,11 +363,12 @@ struct ICUDatePart : public ICUDateFunc {
 
 		Value parts_list = ExpressionExecutor::EvaluateScalar(*arguments[0]);
 		if (parts_list.type().id() == LogicalTypeId::LIST) {
-			if (parts_list.list_value.empty()) {
+			auto &list_children = ListValue::GetChildren(parts_list);
+			if (list_children.empty()) {
 				throw BinderException("%s requires non-empty lists of part names", bound_function.name);
 			}
-			for (const auto &part_value : parts_list.list_value) {
-				if (part_value.is_null) {
+			for (const auto &part_value : list_children) {
+				if (part_value.IsNull()) {
 					throw BinderException("NULL struct entry name in %s", bound_function.name);
 				}
 				const auto part_name = part_value.ToString();
@@ -453,9 +466,13 @@ void RegisterICUDatePartFunctions(ClientContext &context) {
 	ICUDatePart::AddUnaryPartCodeFunctions("dayofyear", context);
 	ICUDatePart::AddUnaryPartCodeFunctions("quarter", context);
 	ICUDatePart::AddUnaryPartCodeFunctions("epoch", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("isoyear", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("timezone", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("timezone_hour", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("timezone_minute", context);
 
 	//  register combinations
-	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", context); //  Note this is ISO year and week
 
 	//  register various aliases
 	ICUDatePart::AddUnaryPartCodeFunctions("dayofmonth", context);

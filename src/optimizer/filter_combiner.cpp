@@ -271,7 +271,7 @@ bool FilterCombiner::HasFilters() {
 // 					break;
 // 				} else {
 // 					auto &const_value_expr = (BoundConstantExpression &)*comp_in_exp.children[i].get();
-// 					if (const_value_expr.value.is_null) {
+// 					if (const_value_expr.value.IsNull()) {
 // 						return checks;
 // 					}
 // 					if (!min && !max) {
@@ -433,18 +433,16 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				//! This is a like function.
 				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
 				auto &constant_value_expr = (BoundConstantExpression &)*func.children[1].get();
-				string like_string = constant_value_expr.value.str_value;
+				auto like_string = StringValue::Get(constant_value_expr.value);
 				if (like_string.empty()) {
 					continue;
 				}
 				auto column_index = column_ids[column_ref.binding.column_index];
-				auto const_value = constant_value_expr.value.Copy();
-				const_value.str_value = like_string;
 				//! Here the like must be transformed to a BOUND COMPARISON geq le
 				auto lower_bound =
-				    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, const_value);
-				const_value.str_value[const_value.str_value.size() - 1]++;
-				auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, const_value);
+				    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(like_string));
+				like_string[like_string.size() - 1]++;
+				auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(like_string));
 				table_filters.PushFilter(column_index, move(lower_bound));
 				table_filters.PushFilter(column_index, move(upper_bound));
 				table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
@@ -454,8 +452,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				//! This is a like function.
 				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
 				auto &constant_value_expr = (BoundConstantExpression &)*func.children[1].get();
-				string like_string = constant_value_expr.value.str_value;
-				auto const_value = constant_value_expr.value.Copy();
+				auto &like_string = StringValue::Get(constant_value_expr.value);
 				if (like_string[0] == '%' || like_string[0] == '_') {
 					//! We have no prefix so nothing to pushdown
 					break;
@@ -469,19 +466,18 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 					}
 					prefix += c;
 				}
-				const_value.str_value = prefix;
 				auto column_index = column_ids[column_ref.binding.column_index];
 				if (equality) {
 					//! Here the like can be transformed to an equality query
-					auto equal_filter = make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_value);
+					auto equal_filter = make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value(prefix));
 					table_filters.PushFilter(column_index, move(equal_filter));
 					table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
 				} else {
 					//! Here the like must be transformed to a BOUND COMPARISON geq le
 					auto lower_bound =
-					    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, const_value);
-					const_value.str_value[const_value.str_value.size() - 1]++;
-					auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, const_value);
+					    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(prefix));
+					prefix[prefix.size() - 1]++;
+					auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix));
 					table_filters.PushFilter(column_index, move(lower_bound));
 					table_filters.PushFilter(column_index, move(upper_bound));
 					table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
@@ -489,7 +485,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			}
 		} else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
 			auto &func = (BoundOperatorExpression &)*remaining_filter;
-			vector<Value> in_values;
+			vector<hugeint_t> in_values;
 			D_ASSERT(func.children.size() > 1);
 			if (func.children[0]->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
@@ -510,31 +506,31 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				continue;
 			}
 			auto &fst_const_value_expr = (BoundConstantExpression &)*func.children[1].get();
+			auto &type = fst_const_value_expr.value.type();
 
 			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
 			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
-			if (!fst_const_value_expr.value.type().IsIntegral()) {
+			if (!type.IsIntegral()) {
 				continue;
 			}
 
 			bool can_simplify_in_clause = true;
 			for (idx_t i = 1; i < func.children.size(); i++) {
 				auto &const_value_expr = (BoundConstantExpression &)*func.children[i].get();
-				if (const_value_expr.value.is_null) {
+				if (const_value_expr.value.IsNull()) {
 					can_simplify_in_clause = false;
 					break;
 				}
-				in_values.push_back(const_value_expr.value);
+				in_values.push_back(const_value_expr.value.GetValue<hugeint_t>());
 			}
 			if (!can_simplify_in_clause || in_values.empty()) {
 				continue;
 			}
-			Value one(1);
 
 			sort(in_values.begin(), in_values.end());
 
 			for (idx_t in_val_idx = 1; in_val_idx < in_values.size(); in_val_idx++) {
-				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > one || in_values[in_val_idx - 1].is_null) {
+				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > 1) {
 					can_simplify_in_clause = false;
 					break;
 				}
@@ -542,9 +538,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			if (!can_simplify_in_clause) {
 				continue;
 			}
-			auto lower_bound =
-			    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, in_values.front());
-			auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, in_values.back());
+			auto lower_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+			                                               Value::Numeric(type, in_values.front()));
+			auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+			                                               Value::Numeric(type, in_values.back()));
 			table_filters.PushFilter(column_index, move(lower_bound));
 			table_filters.PushFilter(column_index, move(upper_bound));
 			table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
@@ -585,7 +582,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression *expr) {
 		idx_t equivalence_set = GetEquivalenceSet(node);
 		auto scalar = left_is_scalar ? comparison.left.get() : comparison.right.get();
 		auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
-		if (constant_value.is_null) {
+		if (constant_value.IsNull()) {
 			// comparisons with null are always null (i.e. will never result in rows)
 			return FilterResult::UNSATISFIABLE;
 		}
@@ -667,7 +664,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		// scalar condition, evaluate it
 		auto result = ExpressionExecutor::EvaluateScalar(*expr).CastAs(LogicalType::BOOLEAN);
 		// check if the filter passes
-		if (result.is_null || !result.value_.boolean) {
+		if (result.IsNull() || !BooleanValue::Get(result)) {
 			// the filter does not pass the scalar test, create an empty result
 			return FilterResult::UNSATISFIABLE;
 		} else {

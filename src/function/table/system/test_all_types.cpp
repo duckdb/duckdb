@@ -51,7 +51,7 @@ static vector<TestType> GetTestTypes() {
 	result.emplace_back(LogicalType::DOUBLE, "double");
 	result.emplace_back(LogicalType::DECIMAL(4, 1), "dec_4_1");
 	result.emplace_back(LogicalType::DECIMAL(9, 4), "dec_9_4");
-	result.emplace_back(LogicalType::DECIMAL(18, 6), "dec_18_3");
+	result.emplace_back(LogicalType::DECIMAL(18, 6), "dec_18_6");
 	result.emplace_back(LogicalType::DECIMAL(38, 10), "dec38_10");
 	result.emplace_back(LogicalType::UUID, "uuid");
 	// interval
@@ -166,7 +166,7 @@ static vector<TestType> GetTestTypes() {
 }
 
 static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, vector<Value> &inputs,
-                                                 unordered_map<string, Value> &named_parameters,
+                                                 named_parameter_map_t &named_parameters,
                                                  vector<LogicalType> &input_table_types,
                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                  vector<string> &names) {

@@ -18,7 +18,7 @@ struct UnnestOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> UnnestBind(ClientContext &context, vector<Value> &inputs,
-                                           unordered_map<string, Value> &named_parameters,
+                                           named_parameter_map_t &named_parameters,
                                            vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                            vector<LogicalType> &return_types, vector<string> &names) {
 	return_types.push_back(ListType::GetChildType(inputs[0].type()));
@@ -36,7 +36,7 @@ static void UnnestFunction(ClientContext &context, const FunctionData *bind_data
 	auto &bind_data = (UnnestFunctionData &)*bind_data_p;
 	auto &state = (UnnestOperatorData &)*operator_state;
 
-	auto &list_value = bind_data.value.list_value;
+	auto &list_value = ListValue::GetChildren(bind_data.value);
 	idx_t count = 0;
 	for (; state.current_count < list_value.size() && count < STANDARD_VECTOR_SIZE; state.current_count++) {
 		output.data[0].SetValue(count, list_value[state.current_count]);

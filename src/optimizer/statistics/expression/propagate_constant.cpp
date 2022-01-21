@@ -22,40 +22,42 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE: {
 		auto result = make_unique<NumericStatistics>(input.type(), input, input);
-		result->validity_stats = make_unique<ValidityStatistics>(input.is_null, !input.is_null);
+		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
 		return move(result);
 	}
 	case PhysicalType::VARCHAR: {
 		auto result = make_unique<StringStatistics>(input.type());
-		result->validity_stats = make_unique<ValidityStatistics>(input.is_null, !input.is_null);
-		if (!input.is_null) {
-			string_t str(input.str_value.c_str(), input.str_value.size());
-			result->Update(str);
+		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
+		if (!input.IsNull()) {
+			auto &string_value = StringValue::Get(input);
+			result->Update(string_t(string_value));
 		}
 		return move(result);
 	}
 	case PhysicalType::STRUCT: {
 		auto result = make_unique<StructStatistics>(input.type());
-		result->validity_stats = make_unique<ValidityStatistics>(input.is_null, !input.is_null);
-		if (input.is_null) {
+		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
+		if (input.IsNull()) {
 			for (auto &child_stat : result->child_stats) {
 				child_stat.reset();
 			}
 		} else {
-			D_ASSERT(result->child_stats.size() == input.struct_value.size());
+			auto &struct_children = StructValue::GetChildren(input);
+			D_ASSERT(result->child_stats.size() == struct_children.size());
 			for (idx_t i = 0; i < result->child_stats.size(); i++) {
-				result->child_stats[i] = StatisticsFromValue(input.struct_value[i]);
+				result->child_stats[i] = StatisticsFromValue(struct_children[i]);
 			}
 		}
 		return move(result);
 	}
 	case PhysicalType::LIST: {
 		auto result = make_unique<ListStatistics>(input.type());
-		result->validity_stats = make_unique<ValidityStatistics>(input.is_null, !input.is_null);
-		if (input.is_null) {
+		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
+		if (input.IsNull()) {
 			result->child_stats.reset();
 		} else {
-			for (auto &child_element : input.list_value) {
+			auto &list_children = ListValue::GetChildren(input);
+			for (auto &child_element : list_children) {
 				auto child_element_stats = StatisticsFromValue(child_element);
 				if (child_element_stats) {
 					result->child_stats->Merge(*child_element_stats);

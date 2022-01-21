@@ -12,7 +12,7 @@ QueryRelation::QueryRelation(ClientContext &context, string query, string alias)
 }
 
 unique_ptr<SelectStatement> QueryRelation::GetSelectStatement() {
-	Parser parser;
+	Parser parser(context.GetParserOptions());
 	parser.ParseQuery(query);
 	if (parser.statements.size() != 1) {
 		throw ParserException("Expected a single SELECT statement");

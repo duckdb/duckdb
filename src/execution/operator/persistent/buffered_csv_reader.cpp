@@ -164,9 +164,9 @@ static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 	return to_string(linenr + 1) + estimated;
 }
 
-static bool StartsWithNumericDate(string &separator, const string_t &value) {
-	auto begin = value.GetDataUnsafe();
-	auto end = begin + value.GetSize();
+static bool StartsWithNumericDate(string &separator, const string &value) {
+	auto begin = value.c_str();
+	auto end = begin + value.size();
 
 	//	StrpTimeFormat::Parse will skip whitespace, so we can too
 	auto field1 = std::find_if_not(begin, end, StringUtil::CharacterIsSpace);
@@ -549,12 +549,13 @@ bool BufferedCSVReader::TryCastValue(const Value &value, const LogicalType &sql_
 	if (options.has_format[LogicalTypeId::DATE] && sql_type.id() == LogicalTypeId::DATE) {
 		date_t result;
 		string error_message;
-		return options.date_format[LogicalTypeId::DATE].TryParseDate(string_t(value.str_value), result, error_message);
+		return options.date_format[LogicalTypeId::DATE].TryParseDate(string_t(StringValue::Get(value)), result,
+		                                                             error_message);
 	} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type.id() == LogicalTypeId::TIMESTAMP) {
 		timestamp_t result;
 		string error_message;
-		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(string_t(value.str_value), result,
-		                                                                       error_message);
+		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(string_t(StringValue::Get(value)),
+		                                                                       result, error_message);
 	} else {
 		Value new_value;
 		string error_message;
@@ -790,7 +791,7 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 					// try formatting for date types if the user did not specify one and it starts with numeric values.
 					string separator;
 					if (has_format_candidates.count(sql_type.id()) && !original_options.has_format[sql_type.id()] &&
-					    StartsWithNumericDate(separator, dummy_val.str_value)) {
+					    StartsWithNumericDate(separator, StringValue::Get(dummy_val))) {
 						// generate date format candidates the first time through
 						auto &type_format_candidates = format_candidates[sql_type.id()];
 						const auto had_format_candidates = has_format_candidates[sql_type.id()];
@@ -819,7 +820,7 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 						while (!type_format_candidates.empty()) {
 							//	avoid using exceptions for flow control...
 							auto &current_format = options.date_format[sql_type.id()];
-							if (current_format.Parse(dummy_val.str_value, result)) {
+							if (current_format.Parse(StringValue::Get(dummy_val), result)) {
 								break;
 							}
 							//	doesn't work - move to the next one
@@ -906,7 +907,7 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 	first_row_nulls = true;
 	for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
 		auto dummy_val = best_header_row.GetValue(col, 0);
-		if (!dummy_val.is_null) {
+		if (!dummy_val.IsNull()) {
 			first_row_nulls = false;
 		}
 
@@ -920,14 +921,14 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 	// update parser info, and read, generate & set col_names based on previous findings
 	if (((!first_row_consistent || first_row_nulls) && !options.has_header) || (options.has_header && options.header)) {
 		options.header = true;
-		unordered_map<string, idx_t> name_collision_count;
+		case_insensitive_map_t<idx_t> name_collision_count;
 		// get header names from CSV
 		for (idx_t col = 0; col < options.num_cols; col++) {
 			const auto &val = best_header_row.GetValue(col, 0);
 			string col_name = val.ToString();
 
 			// generate name if field is empty
-			if (col_name.empty() || val.is_null) {
+			if (col_name.empty() || val.IsNull()) {
 				col_name = GenerateColumnName(options.num_cols, col);
 			}
 

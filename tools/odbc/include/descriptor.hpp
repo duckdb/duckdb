@@ -11,7 +11,6 @@
 #include <sqltypes.h>
 
 namespace duckdb {
-enum DescType { APD, IPD, ARD, IRD };
 
 struct DescRecord {
 public:
@@ -64,7 +63,7 @@ public:
 	SQLSMALLINT sql_desc_alloc_type;
 	SQLULEN sql_desc_array_size;
 	SQLUSMALLINT *sql_desc_array_status_ptr;
-	SQLLEN *sql_desc_bind_offset_ptr;
+	SQLLEN *sql_desc_bind_offset_ptr = nullptr;
 	SQLINTEGER sql_desc_bind_type;
 	SQLSMALLINT sql_desc_count;
 	SQLULEN *sql_desc_rows_processed_ptr;

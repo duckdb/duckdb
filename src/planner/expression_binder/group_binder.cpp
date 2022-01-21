@@ -9,7 +9,7 @@
 namespace duckdb {
 
 GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, idx_t group_index,
-                         unordered_map<string, idx_t> &alias_map, unordered_map<string, idx_t> &group_alias_map)
+                         case_insensitive_map_t<idx_t> &alias_map, case_insensitive_map_t<idx_t> &group_alias_map)
     : ExpressionBinder(binder, context), node(node), alias_map(alias_map), group_alias_map(group_alias_map),
       group_index(group_index) {
 }

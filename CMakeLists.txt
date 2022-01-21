@@ -587,7 +587,10 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
             PROPERTIES LINK_FLAGS_RELEASE "/DELAYLOAD:duckdb.dll")
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE
             "${CMAKE_EXE_LINKER_FLAGS_RELEASE}  /DELAYLOAD:duckdb.dll")
-  endif()
+    # This is only strictly required in non-Visual-Studio builds like Ninja:
+    target_link_libraries(${TARGET_NAME}
+            delayimp)
+endif()
 
 endfunction()
 

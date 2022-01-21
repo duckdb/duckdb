@@ -23,7 +23,7 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 
 			// fold based on the constant condition
 			auto condition = constant_value.CastAs(LogicalType::BOOLEAN);
-			if (condition.is_null || !condition.value_.boolean) {
+			if (condition.IsNull() || !BooleanValue::Get(condition)) {
 				// the condition is always false: remove this case check
 				root->case_checks.erase(root->case_checks.begin() + i);
 				i--;

@@ -27,5 +27,7 @@ SQLRETURN BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT parameter_nu
                             SQLSMALLINT decimal_digits, SQLPOINTER parameter_value_ptr, SQLLEN buffer_length,
                             SQLLEN *str_len_or_ind_ptr);
 
+SQLRETURN CloseStmt(duckdb::OdbcHandleStmt *stmt);
+
 } // namespace duckdb
 #endif

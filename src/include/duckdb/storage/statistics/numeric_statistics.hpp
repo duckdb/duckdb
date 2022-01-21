@@ -61,31 +61,12 @@ public:
 	}
 
 	template <class T>
-	static inline void Update(SegmentStatistics &stats, T new_value);
+	static inline void Update(SegmentStatistics &stats, T new_value) {
+		auto &nstats = (NumericStatistics &)*stats.statistics;
+		UpdateValue<T>(new_value, nstats.min.GetReferenceUnsafe<T>(), nstats.max.GetReferenceUnsafe<T>());
+	}
 };
 
-template <>
-void NumericStatistics::Update<int8_t>(SegmentStatistics &stats, int8_t new_value);
-template <>
-void NumericStatistics::Update<int16_t>(SegmentStatistics &stats, int16_t new_value);
-template <>
-void NumericStatistics::Update<int32_t>(SegmentStatistics &stats, int32_t new_value);
-template <>
-void NumericStatistics::Update<int64_t>(SegmentStatistics &stats, int64_t new_value);
-template <>
-void NumericStatistics::Update<uint8_t>(SegmentStatistics &stats, uint8_t new_value);
-template <>
-void NumericStatistics::Update<uint16_t>(SegmentStatistics &stats, uint16_t new_value);
-template <>
-void NumericStatistics::Update<uint32_t>(SegmentStatistics &stats, uint32_t new_value);
-template <>
-void NumericStatistics::Update<uint64_t>(SegmentStatistics &stats, uint64_t new_value);
-template <>
-void NumericStatistics::Update<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value);
-template <>
-void NumericStatistics::Update<float>(SegmentStatistics &stats, float new_value);
-template <>
-void NumericStatistics::Update<double>(SegmentStatistics &stats, double new_value);
 template <>
 void NumericStatistics::Update<interval_t>(SegmentStatistics &stats, interval_t new_value);
 template <>

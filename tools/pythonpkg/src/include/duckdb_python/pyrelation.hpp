@@ -100,7 +100,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Map(py::function fun);
 
-	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const string &condition);
+	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const string &condition, const string &type);
 
 	void WriteCsv(const string &file);
 

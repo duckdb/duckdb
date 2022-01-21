@@ -12,8 +12,10 @@ public:
 	OdbcHandleDesc *GetIPD();
 	OdbcHandleDesc *GetAPD();
 	void Clear();
+	void SetCurrentAPD(OdbcHandleDesc *new_apd);
 	void Reset();
 	void ResetParams(SQLSMALLINT count);
+	void ResetCurrentAPD();
 
 	SQLRETURN GetParamValues(std::vector<Value> &values);
 	void SetParamProcessedPtr(SQLPOINTER value_ptr);
@@ -22,6 +24,7 @@ public:
 	bool HasParamSetToProcess();
 
 public:
+	// implicitly allocated descriptors
 	unique_ptr<OdbcHandleDesc> apd;
 	unique_ptr<OdbcHandleDesc> ipd;
 
@@ -38,8 +41,20 @@ private:
 	                              SQLLEN str_len_or_ind_ptr);
 	SQLRETURN ValidateNumeric(int precision, int scale);
 
+	SQLPOINTER GetSQLDescDataPtr(DescRecord &apd_record);
+	void SetSQLDescDataPtr(DescRecord &apd_record, SQLPOINTER data_ptr);
+
+	SQLLEN *GetSQLDescIndicatorPtr(DescRecord &apd_record, idx_t set_idx = 0);
+	void SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN *ind_ptr);
+	void SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN value);
+
+	SQLLEN *GetSQLDescOctetLengthPtr(DescRecord &apd_record, idx_t set_idx = 0);
+	void SetSQLDescOctetLengthPtr(DescRecord &apd_record, SQLLEN *ind_ptr);
+
 private:
 	OdbcHandleStmt *stmt;
+	// pointer to the current APD descriptor
+	OdbcHandleDesc *cur_apd;
 
 	//! a pool of allocated parameters during SQLPutData for character data
 	vector<unique_ptr<char[]>> pool_allocated_ptr;

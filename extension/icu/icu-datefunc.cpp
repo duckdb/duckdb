@@ -1,6 +1,9 @@
 #include "include/icu-datefunc.hpp"
 
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 
@@ -15,8 +18,18 @@ ICUDateFunc::BindData::BindData(ClientContext &context) {
 	}
 	auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id)));
 
+	string cal_id("@calendar=");
+	Value cal_value;
+	if (context.TryGetCurrentSetting("Calendar", cal_value)) {
+		cal_id += cal_value.ToString();
+	} else {
+		cal_id += "gregorian";
+	}
+
+	icu::Locale locale(cal_id.c_str());
+
 	UErrorCode success = U_ZERO_ERROR;
-	calendar.reset(icu::Calendar::createInstance(tz, success));
+	calendar.reset(icu::Calendar::createInstance(tz, locale, success));
 	if (U_FAILURE(success)) {
 		throw Exception("Unable to create ICU calendar.");
 	}
@@ -44,6 +57,26 @@ timestamp_t ICUDateFunc::GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros)
 		throw Exception("Unable to get ICU calendar time.");
 	}
 	return timestamp_t(millis * Interval::MICROS_PER_MSEC + micros);
+}
+
+timestamp_t ICUDateFunc::GetTime(icu::Calendar *calendar, uint64_t micros) {
+	// Extract the new time
+	UErrorCode status = U_ZERO_ERROR;
+	auto millis = int64_t(calendar->getTime(status));
+	if (U_FAILURE(status)) {
+		throw Exception("Unable to get ICU calendar time.");
+	}
+
+	// UDate is a double, so it can't overflow (it just loses accuracy), but converting back to µs can.
+	millis = MultiplyOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(millis, Interval::MICROS_PER_MSEC);
+	millis = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(millis, micros);
+
+	// Now make sure the value is in range
+	date_t d;
+	dtime_t t;
+	Timestamp::Convert(timestamp_t(millis), d, t);
+
+	return timestamp_t(millis);
 }
 
 uint64_t ICUDateFunc::SetTime(icu::Calendar *calendar, timestamp_t date) {
