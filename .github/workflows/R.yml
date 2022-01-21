@@ -45,6 +45,11 @@ jobs:
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 
+    - name: Coverage
+      run: |
+        cov <- covr::codecov("tools/rpkg", relative_path = ".")
+      shell: Rscript {0}
+
     - name: Prepare
       run: |
         cd tools/rpkg
@@ -68,11 +73,6 @@ jobs:
         cd tools/rpkg
         export NOT_CRAN='false'
         R CMD check --use-valgrind -o /tmp duckdb_*.tar.gz
-
-    - name: Coverage
-      run: |
-        cov <- covr::codecov("tools/rpkg", relative_path = ".")
-      shell: Rscript {0}
 
     - name: Print R log on failure
       if: ${{ failure() }}
