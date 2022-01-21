@@ -19,7 +19,7 @@ SEXP RApi::PointerToString(SEXP extptr) {
 		char buf[100];
 		snprintf(buf, 100, "%p", ptr);
 		cpp11::strings a;
-		return cpp11::writable::strings({ buf });
+		return cpp11::writable::strings({buf});
 	} else {
 		return cpp11::strings(NA_STRING);
 	}
@@ -202,24 +202,24 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 
 	switch (val.type().id()) {
 	case LogicalTypeId::BOOLEAN:
-		return cpp11::logicals({ val.GetValue<bool>() });
+		return cpp11::logicals({val.GetValue<bool>()});
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
-		return cpp11::integers({ val.GetValue<int32_t>() });
+		return cpp11::integers({val.GetValue<int32_t>()});
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
-		return cpp11::doubles({ val.GetValue<double>() });
+		return cpp11::doubles({val.GetValue<double>()});
 	case LogicalTypeId::VARCHAR:
-		return RApi::StringsToSexp({ val.ToString() });
+		return RApi::StringsToSexp({val.ToString()});
 	case LogicalTypeId::TIMESTAMP: {
-		cpp11::doubles res({ (double)Timestamp::GetEpochSeconds(val.GetValue<timestamp_t>()) });
+		cpp11::doubles res({(double)Timestamp::GetEpochSeconds(val.GetValue<timestamp_t>())});
 		// TODO bit of duplication here with statement.cpp, fix this
 		// some dresssup for R
 		SET_CLASS(res, RStrings::get().POSIXct_POSIXt_str);
@@ -227,7 +227,7 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 		return res;
 	}
 	case LogicalTypeId::TIME: {
-		cpp11::doubles res({ (double)val.GetValue<dtime_t>().micros / Interval::MICROS_PER_SEC });
+		cpp11::doubles res({(double)val.GetValue<dtime_t>().micros / Interval::MICROS_PER_SEC});
 		// some dresssup for R
 		SET_CLASS(res, RStrings::get().difftime_str);
 		// we always return difftime as "seconds"
@@ -236,7 +236,7 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 	}
 
 	case LogicalTypeId::DATE: {
-		cpp11::doubles res({ (double)int32_t(val.GetValue<date_t>()) });
+		cpp11::doubles res({(double)int32_t(val.GetValue<date_t>())});
 		// some dresssup for R
 		SET_CLASS(res, RStrings::get().Date_str);
 		return res;

@@ -85,7 +85,7 @@ public:
 
 				filters_sexp = r.Protect(TransformFilter(*filters, project_columns.first, factory->export_fun));
 			}
-			 export_fun(factory->arrow_scannable, stream_ptr_sexp, projection_sexp, filters_sexp);
+			export_fun(factory->arrow_scannable, stream_ptr_sexp, projection_sexp, filters_sexp);
 		}
 		return res;
 	}

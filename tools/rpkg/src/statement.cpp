@@ -620,7 +620,8 @@ SEXP RApi::DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp) 
 
 	ResultArrowArrayStreamWrapper *result_stream =
 	    new ResultArrowArrayStreamWrapper(move(query_result_holder->result), approx_batch_size);
-	cpp11::sexp stream_ptr_sexp(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&result_stream->stream))));
+	cpp11::sexp stream_ptr_sexp(
+	    Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&result_stream->stream))));
 	cpp11::sexp record_batch_reader(Rf_lang2(RStrings::get().ImportRecordBatchReader_sym, stream_ptr_sexp));
 	return cpp11::safe[Rf_eval](record_batch_reader, arrow_namespace);
 }
