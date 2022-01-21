@@ -23,18 +23,16 @@ duckdb_result <- function(connection, stmt_lst, arrow) {
   env$open <- TRUE
   env$rows_affected <- 0
 
-  res <- new("duckdb_result", connection = connection, stmt_lst = stmt_lst, env = env, arrow=arrow)
+  res <- new("duckdb_result", connection = connection, stmt_lst = stmt_lst, env = env, arrow = arrow)
 
   if (stmt_lst$n_param == 0) {
-    if (arrow){
+    if (arrow) {
       query_result <- duckdb_execute(res)
-      new_res <- new("duckdb_result", connection = connection, stmt_lst = stmt_lst, env = env, arrow=arrow, query_result=query_result)
-      return (new_res)
-    }
-    else{
+      new_res <- new("duckdb_result", connection = connection, stmt_lst = stmt_lst, env = env, arrow = arrow, query_result = query_result)
+      return(new_res)
+    } else {
       duckdb_execute(res)
     }
-
   }
 
 
@@ -83,29 +81,32 @@ fix_rownames <- function(df) {
 #' @param vector_per_chunk If streaming, how many vectors per chunk we should emit
 #' @param return_table If we return results as a list of RecordBatches or an Arrow Table
 #' @export
-duckdb_fetch_arrow <- function(res,stream=FALSE,vector_per_chunk=1,return_table=FALSE) {
+duckdb_fetch_arrow <- function(res, stream = FALSE, vector_per_chunk = 1, return_table = FALSE) {
   if (vector_per_chunk < 0) {
-      stop("cannot fetch negative vector_per_chunk")
+    stop("cannot fetch negative vector_per_chunk")
   }
-  result <- .Call(`_duckdb_fetch_arrow_R`, res@query_result,stream,vector_per_chunk,return_table)
-  return (result)
+  result <- .Call(duckdb_fetch_arrow_R, res@query_result, stream, vector_per_chunk, return_table)
+  return(result)
 }
 
 #' @rdname duckdb_result-class
 #' @param res Query result to be converted to an Arrow Table
 #' @param approx_batch_size If streaming, how many vectors per chunk we should emit
 #' @export
-duckdb_fetch_record_batch <- function(res,approx_batch_size=1) {
-  result <- .Call(`_duckdb_fetch_record_batch_R`, res@query_result,approx_batch_size)
-  return (result)
+duckdb_fetch_record_batch <- function(res, approx_batch_size = 1) {
+  result <- .Call(duckdb_fetch_record_batch_R, res@query_result, approx_batch_size)
+  return(result)
 }
 
 set_output_tz <- function(x, timezone, convert) {
-  if (timezone == "UTC") return(x)
+  if (timezone == "UTC") {
+    return(x)
+  }
 
   tz_convert <- switch(convert,
-                       with = tz_convert,
-                       force = tz_force)
+    with = tz_convert,
+    force = tz_force
+  )
 
   is_datetime <- which(vapply(x, inherits, "POSIXt", FUN.VALUE = logical(1)))
 

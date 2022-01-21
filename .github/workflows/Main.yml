@@ -1,6 +1,10 @@
 name: Main
 on: [push, pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}
+  cancel-in-progress: true
+
 defaults:
   run:
     shell: bash
@@ -457,4 +461,3 @@ jobs:
       run: |
         export ASAN_OPTIONS=verify_asan_link_order=0
         julia tools/odbc/test/julia-test.jl
-
