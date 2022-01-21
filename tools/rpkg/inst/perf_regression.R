@@ -11,7 +11,6 @@ temp_lib_dir <- dir_create()
 
 versions <- list(
   master = list(repo = "duckdb/duckdb", branch = "master"),
-  cpp11 = list(repo = "cynkra/duckdb", branch = "cpp11-4"),
   release = list(repo = "duckdb/duckdb", ref = "v0.3.1")
 )
 
