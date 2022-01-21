@@ -11,35 +11,49 @@ temp_lib_dir <- dir_create()
 
 versions <- list(
   master = list(repo = "duckdb/duckdb", branch = "master"),
-  cpp11 = list(repo = "cynkra/duckdb", branch = "cpp11-4")
+  cpp11 = list(repo = "cynkra/duckdb", branch = "cpp11-4"),
+  release = list(repo = "duckdb/duckdb", ref = "v0.3.1")
 )
 
 versions <- Map(`[[<-`, versions, "lib",
                 dir_create(temp_lib_dir, names(versions)))
 
-install_all(versions)
+install_all(versions, update_deps = TRUE)
 
 res <- bench_mark(
   versions,
   seed = 2022,
   helpers = helpers,
-  pkgs = c("DBI"),
-  iterations = 5,
-  grid = list(nrow = c(1e3, 1e4)),
+  pkgs = c("DBI", "duckdb", "arrow"),
+  reps = 50,
+  grid = list(nrow = c(1e3, 1e5, 1e7)),
   setup = {
-
-    con <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+    con <- dbConnect(duckdb(), dbdir = ":memory:")
     dat <- setup_data(nrow)
-    tmp <- rand_string()
+    arw <- InMemoryDataset$create(dat)
 
-    dbWriteTable(con, tmp, dat)
+    tmp_tbl <- rand_string()
+    dbWriteTable(con, tmp_tbl, dat)
 
-    sql_all <- paste("SELECT * FROM", dbQuoteIdentifier(con, tmp))
+    tmp_df <- rand_string()
+    duckdb_register(con, tmp_df, dat)
+
+    tmp_arw <- rand_string()
+    duckdb_register_arrow(con, tmp_arw, arw)
   },
-  write_from_df = write_table(con, dat),
-  read_to_df = dbReadTable(con, tmp),
-  sql_to_df = dbGetQuery(con, sql_all),
+  write_from_df = write_df(con, dat),
+  register_df = register_df(con, dat),
+  register_arrow = register_arrow(con, dat),
+  read_from_tbl = dbReadTable(con, tmp_tbl),
+  select_from_tbl = select_some(con, tmp_tbl),
+  read_from_df = dbReadTable(con, tmp_df),
+  select_from_df = select_some(con, tmp_df),
+  read_from_arw = dbReadTable(con, tmp_arw),
+  select_from_arw = select_some(con, tmp_arw),
   teardown = {
     dbDisconnect(con, shutdown = TRUE)
   }
 )
+
+(plot <- bench_plot(res))
+ggplot2::ggsave("perf_reg.png", plot, width = 9, height = 11)
