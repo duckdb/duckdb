@@ -77,7 +77,11 @@ public:
 		idx_t len = 0;
 		if (arguments[1]->return_type.id() != LogicalTypeId::SQLNULL && arguments[1]->IsFoldable()) {
 			constant = true;
-			auto query = ExpressionExecutor::EvaluateScalar(*arguments[1]).GetValueUnsafe<string_t>();
+			auto value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+			if (!value.TryCastAs(LogicalType::VARCHAR)) {
+				throw InvalidInputException("JSON path");
+			}
+			auto query = value.GetValueUnsafe<string_t>();
 			JSONCommon::ConvertToPath(query, path, len);
 		}
 		return make_unique<JSONFunctionData>(constant, path, len);
