@@ -38,6 +38,8 @@ jobs:
         r-version: 'devel'
 
     - name: Install
+      env:
+        GITHUB_PAT: ${{ github.token }}
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind pandoc
         mkdir -p $HOME/.R
