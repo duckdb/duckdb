@@ -27,6 +27,11 @@ select json_extract_string('{"str": "quack"}', 'str')
 quack
 
 query T
+select json_extract_varchar('{"str": "quack"}', 'str')
+----
+quack
+
+query T
 select json_extract_string('{"str": "quack"}', 'str2')
 ----
 NULL
@@ -91,6 +96,27 @@ select json_extract_int(json, 'int') from test
 ----
 4
 -4
+NULL
+
+query T
+select json_extract_integer(json, 'int') from test
+----
+4
+-4
+NULL
+
+query T
+select json_extract_bigint(json, 'int') from test
+----
+4
+-4
+NULL
+
+query T
+select json_extract_ubigint(json, 'int') from test
+----
+4
+NULL
 NULL
 
 query T

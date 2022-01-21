@@ -29,7 +29,8 @@ inline bool ExtractFromVal(yyjson_val *val, int32_t &result) {
 
 template <>
 inline bool ExtractFromVal(yyjson_val *val, int64_t &result) {
-	auto valid = yyjson_is_sint(val);
+	// Needs to check whether it is int first, otherwise we get NULL for small values
+	auto valid = yyjson_is_int(val) || yyjson_is_sint(val);
 	if (valid) {
 		result = unsafe_yyjson_get_sint(val);
 	}
