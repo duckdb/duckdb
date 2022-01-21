@@ -48,7 +48,7 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 		// isodow (Monday = 1, Sunday = 7)
 		result = DatePartSpecifier::ISODOW;
 	} else if (specifier == "week" || specifier == "weeks" || specifier == "w" || specifier == "weekofyear") {
-		// week number
+		// ISO week number
 		result = DatePartSpecifier::WEEK;
 	} else if (specifier == "doy" || specifier == "dayofyear") {
 		// day of the year (1-365/366)
@@ -57,8 +57,11 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 		// quarter of the year (1-4)
 		result = DatePartSpecifier::QUARTER;
 	} else if (specifier == "yearweek") {
-		// Combined year and week YYYYWW
+		// Combined isoyear and isoweek YYYYWW
 		result = DatePartSpecifier::YEARWEEK;
+	} else if (specifier == "isoyear") {
+		// ISO year (first week of the year may be in previous year)
+		result = DatePartSpecifier::ISOYEAR;
 	} else if (specifier == "era") {
 		result = DatePartSpecifier::ERA;
 	} else if (specifier == "timezone") {
@@ -97,6 +100,7 @@ DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType 
 		case DatePartSpecifier::MILLENNIUM:
 		case DatePartSpecifier::DOW:
 		case DatePartSpecifier::ISODOW:
+		case DatePartSpecifier::ISOYEAR:
 		case DatePartSpecifier::WEEK:
 		case DatePartSpecifier::QUARTER:
 		case DatePartSpecifier::DOY:
@@ -164,7 +168,7 @@ static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<
 		return nullptr;
 	}
 	auto &nstats = (NumericStatistics &)*child_stats[0];
-	if (nstats.min.is_null || nstats.max.is_null) {
+	if (nstats.min.IsNull() || nstats.max.IsNull()) {
 		return nullptr;
 	}
 	// run the operator on both the min and the max, this gives us the [min, max] bound
@@ -399,6 +403,20 @@ struct DatePart {
 		}
 	};
 
+	struct ISOYearOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return Date::ExtractISOYearNumber(input);
+		}
+
+		template <class T>
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+		                                                      FunctionData *bind_data,
+		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+			return PropagateDatePartStatistics<T, ISOYearOperator>(child_stats);
+		}
+	};
+
 	struct YearWeekOperator {
 		template <class TR>
 		static inline TR YearWeekFromParts(TR yyyy, TR ww) {
@@ -407,7 +425,9 @@ struct DatePart {
 
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			return YearWeekFromParts(YearOperator::Operation<TA, TR>(input), WeekOperator::Operation<TA, TR>(input));
+			int32_t yyyy, ww;
+			Date::ExtractISOYearWeek(input, yyyy, ww);
+			return YearWeekFromParts(yyyy, ww);
 		}
 
 		template <class T>
@@ -550,7 +570,8 @@ struct DatePart {
 			DOY = 1 << 2,
 			EPOCH = 1 << 3,
 			TIME = 1 << 4,
-			ZONE = 1 << 5
+			ZONE = 1 << 5,
+			ISO = 1 << 6
 		};
 
 		static part_mask_t GetMask(const part_codes_t &part_codes) {
@@ -568,12 +589,12 @@ struct DatePart {
 					mask |= YMD;
 					break;
 				case DatePartSpecifier::YEARWEEK:
-					mask |= YMD;
-					mask |= DOW;
+				case DatePartSpecifier::WEEK:
+				case DatePartSpecifier::ISOYEAR:
+					mask |= ISO;
 					break;
 				case DatePartSpecifier::DOW:
 				case DatePartSpecifier::ISODOW:
-				case DatePartSpecifier::WEEK:
 					mask |= DOW;
 					break;
 				case DatePartSpecifier::DOY:
@@ -640,22 +661,29 @@ struct DatePart {
 			}
 
 			// Week calculations
-			int32_t isodow = 0;
-			int32_t ww = 0;
 			if (mask & DOW) {
-				isodow = Date::ExtractISODayOfTheWeek(input);
-				ww = Date::ExtractISOWeekNumber(input);
+				auto isodow = Date::ExtractISODayOfTheWeek(input);
 				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DOW))) {
 					part_data[idx] = DayOfWeekOperator::DayOfWeekFromISO(isodow);
 				}
 				if ((part_data = HasPartValue(part_values, DatePartSpecifier::ISODOW))) {
 					part_data[idx] = isodow;
 				}
+			}
+
+			// ISO calculations
+			if (mask & ISO) {
+				int32_t ww = 0;
+				int32_t iyyy = 0;
+				Date::ExtractISOYearWeek(input, iyyy, ww);
 				if ((part_data = HasPartValue(part_values, DatePartSpecifier::WEEK))) {
 					part_data[idx] = ww;
 				}
+				if ((part_data = HasPartValue(part_values, DatePartSpecifier::ISOYEAR))) {
+					part_data[idx] = iyyy;
+				}
 				if ((part_data = HasPartValue(part_values, DatePartSpecifier::YEARWEEK))) {
-					part_data[idx] = YearWeekOperator::YearWeekFromParts(yyyy, ww);
+					part_data[idx] = YearWeekOperator::YearWeekFromParts(iyyy, ww);
 				}
 			}
 
@@ -821,6 +849,33 @@ int64_t DatePart::WeekOperator::Operation(interval_t input) {
 template <>
 int64_t DatePart::WeekOperator::Operation(dtime_t input) {
 	throw NotImplementedException("\"time\" units \"week\" not recognized");
+}
+
+template <>
+int64_t DatePart::ISOYearOperator::Operation(timestamp_t input) {
+	return ISOYearOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+template <>
+int64_t DatePart::ISOYearOperator::Operation(interval_t input) {
+	throw NotImplementedException("interval units \"isoyear\" not recognized");
+}
+
+template <>
+int64_t DatePart::ISOYearOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"isoyear\" not recognized");
+}
+
+template <>
+int64_t DatePart::YearWeekOperator::Operation(timestamp_t input) {
+	return YearWeekOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+template <>
+int64_t DatePart::YearWeekOperator::Operation(interval_t input) {
+	const auto yyyy = YearOperator::Operation<interval_t, int64_t>(input);
+	const auto ww = WeekOperator::Operation<interval_t, int64_t>(input);
+	return YearWeekOperator::YearWeekFromParts<int64_t>(yyyy, ww);
 }
 
 template <>
@@ -1118,6 +1173,8 @@ static int64_t ExtractElement(DatePartSpecifier type, T element) {
 		return DatePart::DayOfYearOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::WEEK:
 		return DatePart::WeekOperator::template Operation<T, int64_t>(element);
+	case DatePartSpecifier::ISOYEAR:
+		return DatePart::ISOYearOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::YEARWEEK:
 		return DatePart::YearWeekOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::EPOCH:
@@ -1263,11 +1320,12 @@ struct StructDatePart {
 
 		Value parts_list = ExpressionExecutor::EvaluateScalar(*arguments[0]);
 		if (parts_list.type().id() == LogicalTypeId::LIST) {
-			if (parts_list.list_value.empty()) {
+			auto &list_children = ListValue::GetChildren(parts_list);
+			if (list_children.empty()) {
 				throw BinderException("%s requires non-empty lists of part names", bound_function.name);
 			}
-			for (const auto &part_value : parts_list.list_value) {
-				if (part_value.is_null) {
+			for (const auto &part_value : list_children) {
+				if (part_value.IsNull()) {
 					throw BinderException("NULL struct entry name in %s", bound_function.name);
 				}
 				const auto part_name = part_value.ToString();
@@ -1409,6 +1467,7 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	AddDatePartOperator<DatePart::ISODayOfWeekOperator>(set, "isodow");
 	AddDatePartOperator<DatePart::DayOfYearOperator>(set, "dayofyear");
 	AddDatePartOperator<DatePart::WeekOperator>(set, "week");
+	AddDatePartOperator<DatePart::ISOYearOperator>(set, "isoyear");
 	AddDatePartOperator<DatePart::EraOperator>(set, "era");
 	AddDatePartOperator<DatePart::TimezoneOperator>(set, "timezone");
 	AddDatePartOperator<DatePart::TimezoneHourOperator>(set, "timezone_hour");

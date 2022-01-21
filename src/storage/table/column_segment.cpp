@@ -422,7 +422,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
 		}
 		case PhysicalType::VARCHAR: {
 			auto result_flat = FlatVector::GetData<string_t>(result);
-			Vector predicate_vector(constant_filter.constant.str_value);
+			Vector predicate_vector(constant_filter.constant);
 			auto predicate = FlatVector::GetData<string_t>(predicate_vector);
 			FilterSelectionSwitch<string_t>(result_flat, predicate, sel, approved_tuple_count,
 			                                constant_filter.comparison_type, mask);

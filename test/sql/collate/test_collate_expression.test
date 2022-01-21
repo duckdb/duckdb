@@ -13,6 +13,16 @@ SELECT 'hëllo' COLLATE NOACCENT='hello'
 ----
 1
 
+query T
+SELECT 'hëllo' COLLATE POSIX='hello'
+----
+0
+
+query T
+SELECT 'hëllo' COLLATE C='hello'
+----
+0
+
 statement ok
 SELECT * FROM collate_test WHERE s='hello'
 

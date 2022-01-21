@@ -28,7 +28,7 @@ struct DSDGenFunctionData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value> &inputs,
-                                           unordered_map<string, Value> &named_parameters,
+                                           named_parameter_map_t &named_parameters,
                                            vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                            vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<DSDGenFunctionData>();
@@ -36,9 +36,9 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value>
 		if (kv.first == "sf") {
 			result->sf = kv.second.GetValue<double>();
 		} else if (kv.first == "schema") {
-			result->schema = kv.second.str_value;
+			result->schema = StringValue::Get(kv.second);
 		} else if (kv.first == "suffix") {
-			result->suffix = kv.second.str_value;
+			result->suffix = StringValue::Get(kv.second);
 		} else if (kv.first == "overwrite") {
 			result->overwrite = kv.second.GetValue<bool>();
 		} else if (kv.first == "keys") {
@@ -75,7 +75,7 @@ unique_ptr<FunctionOperatorData> TPCDSInit(ClientContext &context, const Functio
 }
 
 static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, vector<Value> &inputs,
-                                               unordered_map<string, Value> &named_parameters,
+                                               named_parameter_map_t &named_parameters,
                                                vector<LogicalType> &input_table_types,
                                                vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                vector<string> &names) {
@@ -110,7 +110,7 @@ static void TPCDSQueryFunction(ClientContext &context, const FunctionData *bind_
 }
 
 static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, vector<Value> &inputs,
-                                                     unordered_map<string, Value> &named_parameters,
+                                                     named_parameter_map_t &named_parameters,
                                                      vector<LogicalType> &input_table_types,
                                                      vector<string> &input_table_names,
                                                      vector<LogicalType> &return_types, vector<string> &names) {

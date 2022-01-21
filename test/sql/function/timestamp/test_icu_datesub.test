@@ -44,6 +44,11 @@ select DATESUB('year', '2004-02-29 12:00:00-08'::TIMESTAMPTZ, '2005-02-28 13:00:
 1
 
 query I
+select DATESUB('isoyear', '2004-02-29 12:00:00-08'::TIMESTAMPTZ, '2005-02-28 13:00:00-08'::TIMESTAMPTZ);
+----
+1
+
+query I
 select DATESUB('decade', '1994-02-28 12:00:00-08'::TIMESTAMPTZ, '2004-02-29 13:00:00-08'::TIMESTAMPTZ);
 ----
 1
@@ -72,6 +77,11 @@ select DATESUB('quarter', '2004-01-31 13:00:00-08'::TIMESTAMPTZ, '2004-04-30 12:
 
 query I
 select DATESUB('year', '2004-02-29 13:00:00-08'::TIMESTAMPTZ, '2005-02-28 12:00:00-08'::TIMESTAMPTZ);
+----
+0
+
+query I
+select DATESUB('isoyear', '2004-02-29 13:00:00-08'::TIMESTAMPTZ, '2005-02-28 12:00:00-08'::TIMESTAMPTZ);
 ----
 0
 
@@ -218,7 +228,8 @@ CREATE TABLE dateparts AS SELECT datepart FROM (VALUES
 	('century'),
 	('millennium'),
 	('week'),
-	('yearweek')
+	('yearweek'),
+	('isoyear')
 ) tbl(datepart)
 
 query II
@@ -240,6 +251,7 @@ FROM datetime1, dateparts
 0	millennium
 0	week
 0	yearweek
+0	isoyear
 
 # Table
 foreach datepart year month day hour minute second millisecond microsecond

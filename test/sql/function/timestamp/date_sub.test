@@ -35,6 +35,11 @@ select DATESUB('year', '2004-02-29'::DATE, '2005-02-28'::DATE);
 1
 
 query I
+select DATESUB('isoyear', '2004-02-29'::DATE, '2005-02-28'::DATE);
+----
+1
+
+query I
 select DATESUB('decade', '1994-02-28'::DATE, '2004-02-29'::DATE);
 ----
 1
@@ -94,10 +99,10 @@ select DATESUB('microsecond', '2004-02-29'::DATE, '2004-03-01'::DATE);
 86400000000
 
 # Negation
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week' 'yearweek'
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear
 
 query I
-SELECT DATESUB(${datepart}, startdate, enddate) + DATESUB(${datepart}, enddate, startdate) FROM date1
+SELECT DATESUB('${datepart}', startdate, enddate) + DATESUB('${datepart}', enddate, startdate) FROM date1
 ----
 0
 
@@ -173,6 +178,11 @@ select DATESUB('year', '2004-02-29 12:00:00'::TIMESTAMP, '2005-02-28 13:00:00'::
 1
 
 query I
+select DATESUB('isoyear', '2004-02-29 12:00:00'::TIMESTAMP, '2005-02-28 13:00:00'::TIMESTAMP);
+----
+1
+
+query I
 select DATESUB('decade', '1994-02-28 12:00:00'::TIMESTAMP, '2004-02-29 13:00:00'::TIMESTAMP);
 ----
 1
@@ -201,6 +211,11 @@ select DATESUB('quarter', '2004-01-31 13:00:00'::TIMESTAMP, '2004-04-30 12:00:00
 
 query I
 select DATESUB('year', '2004-02-29 13:00:00'::TIMESTAMP, '2005-02-28 12:00:00'::TIMESTAMP);
+----
+0
+
+query I
+select DATESUB('isoyear', '2004-02-29 13:00:00'::TIMESTAMP, '2005-02-28 12:00:00'::TIMESTAMP);
 ----
 0
 
@@ -326,10 +341,10 @@ select DATESUB('microsecond', '2004-01-31 12:00:00.000050'::TIMESTAMP, '2004-02-
 86399999950
 
 # Negation
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week' 'yearweek'
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear
 
 query I
-SELECT DATESUB(${datepart}, startdate, enddate) + DATESUB(${datepart}, enddate, startdate) FROM datetime1
+SELECT DATESUB('${datepart}', startdate, enddate) + DATESUB('${datepart}', enddate, startdate) FROM datetime1
 ----
 0
 
@@ -470,22 +485,22 @@ endloop
 # NULLs
 #
 
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week' 'yearweek'
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek
 
 foreach tbl date1 datetime1 time1
 
 query I
-SELECT DATESUB(${datepart}, NULL::TIMESTAMP, NULL::TIMESTAMP) FROM ${tbl}
+SELECT DATESUB('${datepart}', NULL::TIMESTAMP, NULL::TIMESTAMP) FROM ${tbl}
 ----
 NULL
 
 query I
-SELECT DATESUB(${datepart}, NULL, enddate) FROM ${tbl}
+SELECT DATESUB('${datepart}', NULL, enddate) FROM ${tbl}
 ----
 NULL
 
 query I
-SELECT DATESUB(${datepart}, startdate, NULL) FROM ${tbl}
+SELECT DATESUB('${datepart}', startdate, NULL) FROM ${tbl}
 ----
 NULL
 
@@ -511,10 +526,10 @@ CREATE TABLE parts (datepart VARCHAR);
 statement ok
 INSERT into parts VALUES(NULL);
 
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week' 'yearweek'
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear
 
 statement ok
-INSERT into parts VALUES(${datepart});
+INSERT into parts VALUES('${datepart}');
 
 endloop
 
@@ -538,6 +553,7 @@ century	0
 millennium	0
 week	4
 yearweek	4
+isoyear	0
 
 statement ok
 INSERT into parts VALUES('duck');

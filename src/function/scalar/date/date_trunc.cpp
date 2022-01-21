@@ -73,6 +73,16 @@ struct DateTrunc {
 		}
 	};
 
+	struct ISOYearOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			date_t date = Date::GetMondayOfCurrentWeek(input);
+			date.days -= (Date::ExtractISOWeekNumber(date) - 1) * Interval::DAYS_PER_WEEK;
+
+			return Timestamp::FromDatetime(date, dtime_t(0));
+		}
+	};
+
 	struct DayOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
@@ -175,6 +185,11 @@ timestamp_t DateTrunc::WeekOperator::Operation(date_t input) {
 }
 
 template <>
+timestamp_t DateTrunc::ISOYearOperator::Operation(timestamp_t input) {
+	return ISOYearOperator::Operation<date_t, timestamp_t>(Timestamp::GetDate(input));
+}
+
+template <>
 timestamp_t DateTrunc::DayOperator::Operation(date_t input) {
 	return Timestamp::FromDatetime(input, dtime_t(0));
 }
@@ -222,6 +237,8 @@ static TR TruncateElement(DatePartSpecifier type, TA element) {
 	case DatePartSpecifier::WEEK:
 	case DatePartSpecifier::YEARWEEK:
 		return DateTrunc::WeekOperator::Operation<TA, TR>(element);
+	case DatePartSpecifier::ISOYEAR:
+		return DateTrunc::ISOYearOperator::Operation<TA, TR>(element);
 	case DatePartSpecifier::DAY:
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
@@ -274,6 +291,9 @@ static void DateTruncUnaryExecutor(DatePartSpecifier type, Vector &left, Vector 
 	case DatePartSpecifier::WEEK:
 	case DatePartSpecifier::YEARWEEK:
 		UnaryExecutor::Execute<TA, TR, DateTrunc::WeekOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::ISOYEAR:
+		UnaryExecutor::Execute<TA, TR, DateTrunc::ISOYearOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::DAY:
 	case DatePartSpecifier::DOW:

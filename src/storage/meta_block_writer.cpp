@@ -15,7 +15,13 @@ MetaBlockWriter::MetaBlockWriter(DatabaseInstance &db, block_id_t initial_block_
 }
 
 MetaBlockWriter::~MetaBlockWriter() {
-	Flush();
+	if (Exception::UncaughtException()) {
+		return;
+	}
+	try {
+		Flush();
+	} catch (...) {
+	}
 }
 
 block_id_t MetaBlockWriter::GetNextBlockId() {

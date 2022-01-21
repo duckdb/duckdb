@@ -78,6 +78,8 @@ public:
 	void SetLastFetchedLength(size_t new_len);
 	size_t GetLastFetchedLength();
 
+	bool IsInExecutionState();
+
 private:
 	SQLRETURN ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt);
 

@@ -161,20 +161,16 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 }
 
 unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, vector<Value> &inputs,
-                                                           unordered_map<string, Value> &named_parameters,
+                                                           named_parameter_map_t &named_parameters,
                                                            vector<LogicalType> &input_table_types,
                                                            vector<string> &input_table_names,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
-	auto stream_factory_ptr = inputs[0].GetPointer();
-	unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce)(
+	typedef unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce_t)(
 	    uintptr_t stream_factory_ptr,
 	    std::pair<std::unordered_map<idx_t, string>, std::vector<string>> & project_columns,
-	    TableFilterCollection * filters) =
-	    (unique_ptr<ArrowArrayStreamWrapper>(*)(uintptr_t stream_factory_ptr,
-	                                            std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &
-	                                                project_columns,
-	                                            TableFilterCollection * filters)) inputs[1]
-	        .GetPointer();
+	    TableFilterCollection * filters);
+	auto stream_factory_ptr = inputs[0].GetPointer();
+	auto stream_factory_produce = (stream_factory_produce_t)inputs[1].GetPointer();
 	auto rows_per_thread = inputs[2].GetValue<uint64_t>();
 	std::pair<std::unordered_map<idx_t, string>, std::vector<string>> project_columns;
 #ifndef DUCKDB_NO_THREADS

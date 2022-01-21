@@ -25,7 +25,7 @@ drv_to_string <- function(drv) {
 #'
 #' @import methods DBI
 #' @export
-duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE, config=list()) {
+duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE, config = list()) {
   check_flag(read_only)
   new(
     "duckdb_driver",
@@ -59,7 +59,6 @@ is_installed <- function(pkg) {
 }
 
 check_tz <- function(timezone) {
-
   if (!is.null(timezone) && timezone == "") {
     return(Sys.timezone())
   }

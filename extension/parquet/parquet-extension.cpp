@@ -196,7 +196,7 @@ public:
 	}
 
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, vector<Value> &inputs,
-	                                                unordered_map<string, Value> &named_parameters,
+	                                                named_parameter_map_t &named_parameters,
 	                                                vector<LogicalType> &input_table_types,
 	                                                vector<string> &input_table_names,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
@@ -208,7 +208,7 @@ public:
 		ParquetOptions parquet_options(context);
 		for (auto &kv : named_parameters) {
 			if (kv.first == "binary_as_string") {
-				parquet_options.binary_as_string = kv.second.value_.boolean;
+				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
 			}
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
@@ -217,7 +217,7 @@ public:
 	}
 
 	static unique_ptr<FunctionData> ParquetScanBindList(ClientContext &context, vector<Value> &inputs,
-	                                                    unordered_map<string, Value> &named_parameters,
+	                                                    named_parameter_map_t &named_parameters,
 	                                                    vector<LogicalType> &input_table_types,
 	                                                    vector<string> &input_table_names,
 	                                                    vector<LogicalType> &return_types, vector<string> &names) {
@@ -227,7 +227,7 @@ public:
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		vector<string> files;
-		for (auto &val : inputs[0].list_value) {
+		for (auto &val : ListValue::GetChildren(inputs[0])) {
 			auto glob_files = ParquetGlob(fs, val.ToString());
 			files.insert(files.end(), glob_files.begin(), glob_files.end());
 		}
@@ -237,7 +237,7 @@ public:
 		ParquetOptions parquet_options(context);
 		for (auto &kv : named_parameters) {
 			if (kv.first == "binary_as_string") {
-				parquet_options.binary_as_string = kv.second.value_.boolean;
+				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
 			}
 		}
 		return ParquetScanBindInternal(context, move(files), return_types, names, parquet_options);

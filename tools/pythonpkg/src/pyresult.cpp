@@ -33,8 +33,8 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	PyDateTime_IMPORT;
 }
 
-py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type) {
-	if (val.is_null) {
+py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType &type) {
+	if (val.IsNull()) {
 		return py::none();
 	}
 	switch (type.id()) {
@@ -69,9 +69,9 @@ py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type)
 	case LogicalTypeId::ENUM:
 		return py::cast(EnumType::GetValue(val));
 	case LogicalTypeId::VARCHAR:
-		return py::cast(val.GetValue<string>());
+		return py::cast(StringValue::Get(val));
 	case LogicalTypeId::BLOB:
-		return py::bytes(val.GetValueUnsafe<string>());
+		return py::bytes(StringValue::Get(val));
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -112,21 +112,25 @@ py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type)
 		return py::cast<py::object>(PyDate_FromDate(year, month, day));
 	}
 	case LogicalTypeId::LIST: {
+		auto &list_values = ListValue::GetChildren(val);
+
 		py::list list;
-		for (auto list_elem : val.list_value) {
+		for (auto &list_elem : list_values) {
 			list.append(GetValueToPython(list_elem, ListType::GetChildType(type)));
 		}
 		return std::move(list);
 	}
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT: {
+		auto &struct_values = StructValue::GetChildren(val);
+
 		py::dict py_struct;
 		auto &child_types = StructType::GetChildTypes(type);
-		for (idx_t i = 0; i < val.struct_value.size(); i++) {
+		for (idx_t i = 0; i < struct_values.size(); i++) {
 			auto &child_entry = child_types[i];
 			auto &child_name = child_entry.first;
 			auto &child_type = child_entry.second;
-			py_struct[child_name.c_str()] = GetValueToPython(val.struct_value[i], child_type);
+			py_struct[child_name.c_str()] = GetValueToPython(struct_values[i], child_type);
 		}
 		return std::move(py_struct);
 	}
