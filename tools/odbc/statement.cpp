@@ -239,7 +239,7 @@ SQLRETURN SQL_API SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQ
 			return SQL_SUCCESS;
 		}
 
-		if (schema_n == std::string(SQL_ALL_SCHEMAS) && catalog_n.size() == 0 && name_length3 == 0) {
+		if (schema_n == std::string(SQL_ALL_SCHEMAS) && catalog_n.empty() && name_length3 == 0) {
 			if (!SQL_SUCCEEDED(duckdb::ExecDirectStmt(
 			        statement_handle,
 			        (SQLCHAR *)"SELECT '' \"TABLE_CAT\", schema_name \"TABLE_SCHEM\", NULL \"TABLE_NAME\", "

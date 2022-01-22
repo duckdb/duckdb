@@ -26,14 +26,14 @@ public:
 	                                    SQLPOINTER target_value_ptr, SQLSMALLINT buffer_length,
 	                                    SQLSMALLINT *str_len_or_ind_ptr);
 
-	static string GetStringAsIdentifier(const string str);
-	static string ParseStringFilter(const string filter_name, const string filter_value,
-	                                SQLUINTEGER sql_attr_metadata_id, const string coalesce_str = "");
+	static string GetStringAsIdentifier(const string &str);
+	static string ParseStringFilter(const string &filter_name, const string &filter_value,
+	                                SQLUINTEGER sql_attr_metadata_id, const string &coalesce_str = "");
 
-	static string GetQueryDuckdbTables(const string schema_filter, const string table_filter,
-	                                   const string table_type_filter);
-	static string GetQueryDuckdbColumns(const string catalog_filter, const string schema_filter,
-	                                    const string table_filter, const string column_filter);
+	static string GetQueryDuckdbTables(const string &schema_filter, const string &table_filter,
+	                                   const string &table_type_filter);
+	static string GetQueryDuckdbColumns(const string &catalog_filter, const string &schema_filter,
+	                                    const string &table_filter, const string &column_filter);
 };
 } // namespace duckdb
 #endif

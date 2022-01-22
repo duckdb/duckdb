@@ -56,8 +56,8 @@ SQLRETURN OdbcUtils::SetStringAndLength(vector<string> &error_messages, const st
 	return ret;
 }
 
-string OdbcUtils::GetStringAsIdentifier(const string str) {
-	string str_ret = nullptr;
+string OdbcUtils::GetStringAsIdentifier(const string &str) {
+	string str_ret;
 
 	std::regex regex_str_quoted("^(\".*\"|\'.*\')$");
 
@@ -75,8 +75,8 @@ string OdbcUtils::GetStringAsIdentifier(const string str) {
 	return str_ret;
 }
 
-string OdbcUtils::ParseStringFilter(const string filter_name, const string filter_value,
-                                    SQLUINTEGER sql_attr_metadata_id, const string coalesce_str) {
+string OdbcUtils::ParseStringFilter(const string &filter_name, const string &filter_value,
+                                    SQLUINTEGER sql_attr_metadata_id, const string &coalesce_str) {
 	string filter;
 	if (filter_value.empty()) {
 		if (coalesce_str.empty()) {
@@ -92,8 +92,8 @@ string OdbcUtils::ParseStringFilter(const string filter_name, const string filte
 	return filter;
 }
 
-string OdbcUtils::GetQueryDuckdbColumns(const string catalog_filter, const string schema_filter,
-                                        const string table_filter, const string column_filter) {
+string OdbcUtils::GetQueryDuckdbColumns(const string &catalog_filter, const string &schema_filter,
+                                        const string &table_filter, const string &column_filter) {
 	string sql_duckdb_columns =
 	    "SELECT "
 	    "NULL \"TABLE_CAT\", "
@@ -160,8 +160,8 @@ string OdbcUtils::GetQueryDuckdbColumns(const string catalog_filter, const strin
 	return sql_duckdb_columns;
 }
 
-string OdbcUtils::GetQueryDuckdbTables(const string schema_filter, const string table_filter,
-                                       const string table_type_filter) {
+string OdbcUtils::GetQueryDuckdbTables(const string &schema_filter, const string &table_filter,
+                                       const string &table_type_filter) {
 	string sql_duckdb_tables = "SELECT "
 	                           "table_catalog::VARCHAR \"TABLE_CAT\", "
 	                           "table_schema \"TABLE_SCHEM\", "
@@ -174,8 +174,12 @@ string OdbcUtils::GetQueryDuckdbTables(const string schema_filter, const string 
 	                           "'' \"REMARKS\"  "
 	                           "FROM information_schema.tables "
 	                           "WHERE " +
-	                           schema_filter + " AND " + table_filter + " AND table_type IN (" + table_type_filter +
-	                           ") "
-	                           "ORDER BY TABLE_TYPE, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME";
+	                           schema_filter + " AND " + table_filter;
+	if (!table_type_filter.empty()) {
+		sql_duckdb_tables += " AND table_type IN (" + table_type_filter + ") ";
+	}
+
+	sql_duckdb_tables += "ORDER BY TABLE_TYPE, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME";
+
 	return sql_duckdb_tables;
 }

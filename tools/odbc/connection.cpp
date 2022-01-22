@@ -74,8 +74,7 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
-		if (!SQL_SUCCEEDED(
-				SQLExecDirect(stmt, (SQLCHAR *)"SELECT library_version FROM pragma_version()", SQL_NTS))) {
+		if (!SQL_SUCCEEDED(SQLExecDirect(stmt, (SQLCHAR *)"SELECT library_version FROM pragma_version()", SQL_NTS))) {
 			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
@@ -135,7 +134,7 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		auto *dbc = (duckdb::OdbcHandleDbc *)connection_handle;
 		const string str_table("table");
 		return OdbcUtils::SetStringAndLength(dbc->error_messages, str_table, info_value_ptr, buffer_length,
-											 string_length_ptr);
+		                                     string_length_ptr);
 	}
 	default:
 		return SQL_ERROR;
