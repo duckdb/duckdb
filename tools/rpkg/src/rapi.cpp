@@ -74,6 +74,6 @@ connect_R(cpp11::external_pointer<duckdb::DBWrapper> dbsexp) {
 	return RApi::PointerToString(extptr);
 }
 
-[[cpp11::init]] void AltrepString_Initialize(DllInfo *dll) {
+[[cpp11::init]] void AltrepString_Initialize(DllInfo* dll) {
 	AltrepString::Initialize(dll);
 }
