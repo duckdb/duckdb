@@ -54,5 +54,5 @@ res <- bench_mark(
   }
 )
 
-(plot <- bench_plot(res))
-ggplot2::ggsave("perf_reg.png", plot, width = 9, height = 11)
+bench_plot(res, check = TRUE, ref = "master", new = "cpp11", threshold = 0.1)
+ggplot2::ggsave("perf_reg.png", width = 9, height = 11)

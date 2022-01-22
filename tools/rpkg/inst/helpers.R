@@ -20,10 +20,13 @@ install_gh <- function(lib, repo = "duckdb/duckdb", branch = NULL,
   on.exit(unlink(dir, recursive = TRUE))
 
   if (!is.null(ref)) {
+    current <- gert::git_branch(repo = dir)
     branch <- paste0("bench_", rand_string(alphabet = c(letters, 0:9)))
     gert::git_branch_create(branch, ref = ref, checkout = TRUE, repo = dir)
-    on.exit(gert::git_branch_delete(branch, repo = dir), add = TRUE,
-            after = FALSE)
+    on.exit({
+      gert::git_branch_checkout(current, repo = dir)
+      gert::git_branch_delete(branch, repo = dir)
+    }, add = TRUE, after = FALSE)
   }
 
   pkg <- file.path(dir, subdir)
@@ -106,12 +109,12 @@ bench_mark <- function(versions, ..., grid = NULL, setup = NULL,
                        teardown = NULL, seed = NULL, helpers = NULL,
                        pkgs = NULL, reps = 1L) {
 
-  eval_versions <- function(lib, args) {
+  eval_versions <- function(lib, vers, args) {
 
     eval_grid <- function(args, ...) {
 
       eval_one <- function(args, setup, teardown, exprs, nreps, seed, helpers,
-                           libs) {
+                           libs, vers) {
 
         if (!is.null(seed)) set.seed(seed)
 
@@ -124,7 +127,11 @@ bench_mark <- function(versions, ..., grid = NULL, setup = NULL,
           assign(nme, args[[nme]], envir = env)
         }
 
-        message(paste0(names(args), ": ", args, collapse = ", "))
+        message(vers, appendLF = !length(args))
+
+        if (length(args)) {
+          message("; ", paste0(names(args), ": ", args, collapse = ", "))
+        }
 
         rlang::eval_tidy(setup, data = env)
         on.exit(rlang::eval_tidy(teardown, data = env))
@@ -132,15 +139,22 @@ bench_mark <- function(versions, ..., grid = NULL, setup = NULL,
         res <- bench::mark(iterations = nreps, check = FALSE, exprs = exprs,
                            env = env, time_unit = "s")
 
-        arg <- lapply(args, rep, nrow(res))
+        arg <- lapply(c(list(version = vers), args), rep, nrow(res))
+        res <- tibble::as_tibble(cbind(res[1], arg, res[-1]))
 
-        do.call(tibble::add_column, c(list(res), arg, list(.before = 2)))
+        class(res) <- unique(c("bench_mark", class(res)))
+
+        res
       }
 
-      do.call(rbind, lapply(args, eval_one, ...))
+      if (length(args)) {
+        do.call(rbind, lapply(args, eval_one, ...))
+      } else {
+        eval_one(args, ...)
+      }
     }
 
-    callr::r(eval_grid, args, libpath = lib, show = TRUE)
+    callr::r(eval_grid, c(args, vers), libpath = lib, show = TRUE)
   }
 
   stopifnot(all(pkgs %in% installed.packages()))
@@ -150,26 +164,33 @@ bench_mark <- function(versions, ..., grid = NULL, setup = NULL,
   teardown <- rlang::enquo(teardown)
 
   params <- expand.grid(grid, stringsAsFactors = FALSE)
-  params <- split(params, seq(nrow(params)))
-
-  res <- lapply(
-    vapply(versions, `[[`, character(1L), "lib"),
-    eval_versions,
-    list(params, setup, teardown, exprs, reps, seed, helpers, pkgs)
-  )
+  params <- split(params, seq_len(nrow(params)))
 
   res <- Map(
-    tibble::add_column,
-    res,
-    version = Map(rep, names(res), vapply(res, nrow, integer(1L))),
-    MoreArgs = list(.before = 2)
+    eval_versions,
+    vapply(versions, `[[`, character(1L), "lib"),
+    names(versions),
+    MoreArgs = list(
+      list(params, setup, teardown, exprs, reps, seed, helpers, pkgs)
+    )
   )
 
   do.call(rbind, res)
 }
 
-bench_plot <- function (object, type = c("beeswarm", "jitter", "ridge",
-                                         "boxplot", "violin"), ...) {
+bench_plot <- function(object, type = c("beeswarm", "jitter", "ridge",
+                                        "boxplot", "violin"),
+                       check = FALSE, ref, new, threshold, ...) {
+
+  within_thresh <- function(x, ref, new, thresh) {
+    ifelse(x[new] > x[ref] + x[ref] * thresh, "slower",
+           ifelse(x[new] < x[ref] - x[ref] * thresh, "faster", "same"))
+  }
+
+  labeller <- function(...) {
+    sub_fun <- function(x) sub("^expression: ", "", x)
+    lapply(ggplot2::label_both(...), sub_fun)
+  }
 
   type <- match.arg(type)
 
@@ -178,52 +199,81 @@ bench_plot <- function (object, type = c("beeswarm", "jitter", "ridge",
   }
 
   if (inherits(object$expression, "bench_expr")) {
-    object$expression <- names(object$expression)
+    object$expression <- as.character(object$expression)
   }
 
-  if (utils::packageVersion("tidyr") > "0.8.99") {
-    res <- tidyr::unnest(object, c(time, gc))
-  } else {
-    res <- tidyr::unnest(object)
+  res <- tidyr::unnest(object, c(time, gc))
+  plt <- ggplot2::ggplot()
+
+  params <- setdiff(colnames(object), c("version", bench:::summary_cols,
+                    bench:::data_cols, c("level0", "level1", "level2"),
+                    "expression"))
+
+  if (!isFALSE(check)) {
+
+    grid <- object[, c("expression", params)]
+    temp <- split(object, grid)
+    temp <- Map(setNames, lapply(temp, `[[`, "median"),
+                          lapply(temp, `[[`, "version"), USE.NAMES = FALSE)
+    grid <- cbind(grid,
+      `Median runtime` = vapply(temp, within_thresh, character(1L), ref, new,
+                                threshold)
+    )
+
+    plt <- plt +
+      ggplot2::geom_rect(data = grid,
+        ggplot2::aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf,
+                     fill = `Median runtime`),
+        alpha = 0.05
+      ) +
+      ggplot2::scale_fill_manual(
+        values = c(faster = "green", slower = "red", same = NA)
+      )
   }
 
-  p <- ggplot2::ggplot(res)
-
-  p <- switch(
+  plt <- switch(
     type,
-    beeswarm = p + ggplot2::aes_string("version", "time", color = "gc") +
-      ggbeeswarm::geom_quasirandom(...) +
-      ggplot2::coord_flip(),
-    jitter = p + ggplot2::aes_string("version", "time", color = "gc") +
-      ggplot2::geom_jitter(...) +
-      ggplot2::coord_flip(),
-    ridge = p + ggplot2::aes_string("time", "version") +
-      ggridges::geom_density_ridges(...),
-    boxplot = p + ggplot2::aes_string("version", "time") +
-      ggplot2::geom_boxplot(...) +
-      ggplot2::coord_flip(),
-    violin = p + ggplot2::aes_string("version", "time") +
-      ggplot2::geom_violin(...) +
-      ggplot2::coord_flip()
+    beeswarm = plt + ggbeeswarm::geom_quasirandom(
+        data = res,
+        ggplot2::aes_string("version", "time", color = "gc"),
+        ...
+      ) + ggplot2::coord_flip(),
+    jitter = plt + ggplot2::geom_jitter(
+        data = res,
+        ggplot2::aes_string("version", "time", color = "gc"),
+        ...
+      ) + ggplot2::coord_flip(),
+    ridge = plt + ggridges::geom_density_ridges(
+        data = res,
+        ggplot2::aes_string("time", "version"),
+        ...
+      ),
+    boxplot = plt + ggplot2::geom_boxplot(
+        data = res,
+        ggplot2::aes_string("version", "time"),
+        ...
+      ) + ggplot2::coord_flip(),
+    violin = plt + ggplot2::geom_violin(
+        data = res,
+        ggplot2::aes_string("version", "time"),
+        ...
+      ) + ggplot2::coord_flip()
   )
 
-  parameters <- setdiff(colnames(object), c("version", bench:::summary_cols,
-                        bench:::data_cols, c("level0", "level1", "level2"),
-                        "expression"))
-
-  labeller <- function(...) {
-    sub_fun <- function(x) sub("^expression: ", "", x)
-    lapply(ggplot2::label_both(...), sub_fun)
-  }
-
-  if (length(parameters) > 0) {
-    p <- p + ggplot2::facet_grid(
-      paste("expression", "~", paste(parameters, collapse = "+")),
+  if (length(params) == 0) {
+    plt <- plt + ggplot2::facet_grid(
+      rows = ggplot2::vars(expression),
+      labeller = labeller
+    )
+  } else {
+    plt <- plt + ggplot2::facet_grid(
+      as.formula(paste("expression", "~", paste(params, collapse = " + "))),
       labeller = labeller, scales = "free_x"
     )
   }
 
-  p + ggplot2::labs(y = "Time [s]", color = "GC level") +
+  plt + ggplot2::labs(y = "Time [s]", color = "GC level") +
+    ggplot2::theme_bw() +
     ggplot2::theme(axis.title.y = ggplot2::element_blank(),
                    legend.position = "bottom")
 }
