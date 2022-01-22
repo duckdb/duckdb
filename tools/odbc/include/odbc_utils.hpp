@@ -1,7 +1,12 @@
 #ifndef ODBC_UTIL_HPP
 #define ODBC_UTIL_HPP
 
+// needs to be first because BOOL
 #include "duckdb.hpp"
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 
 #include <sqltypes.h>
 #include <string>
