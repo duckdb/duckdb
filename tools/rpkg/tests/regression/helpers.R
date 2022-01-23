@@ -140,11 +140,8 @@ bench_mark <- function(versions, ..., grid = NULL, setup = NULL,
                            env = env, time_unit = "s")
 
         arg <- lapply(c(list(version = vers), args), rep, nrow(res))
-        res <- tibble::as_tibble(cbind(res[1], arg, res[-1]))
 
-        class(res) <- unique(c("bench_mark", class(res)))
-
-        res
+        as_bench_mark(cbind(res[1], arg, res[-1]))
       }
 
       if (length(args)) {
@@ -192,6 +189,16 @@ bench_plot <- function(object, type = c("beeswarm", "jitter", "ridge",
     lapply(ggplot2::label_both(...), sub_fun)
   }
 
+  bench_cols <- function() {
+    c("min", "median", "itr/sec", "mem_alloc", "gc/sec", "n_itr", "n_gc",
+      "total_time", "result", "memory", "time", "gc")
+  }
+
+  extra_cols <- function(x) {
+    setdiff(colnames(x), c("version", bench_cols(), c("level0", "level1",
+            "level2"), "expression"))
+  }
+
   type <- match.arg(type)
 
   if (type == "beeswarm" && !requireNamespace("ggbeeswarm", quietly = TRUE)) {
@@ -205,9 +212,7 @@ bench_plot <- function(object, type = c("beeswarm", "jitter", "ridge",
   res <- tidyr::unnest(object, c(time, gc))
   plt <- ggplot2::ggplot()
 
-  params <- setdiff(colnames(object), c("version", bench:::summary_cols,
-                    bench:::data_cols, c("level0", "level1", "level2"),
-                    "expression"))
+  params <- extra_cols(object)
 
   if (!isFALSE(check)) {
 
