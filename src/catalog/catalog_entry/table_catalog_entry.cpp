@@ -22,6 +22,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/alter_binder.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -385,18 +386,26 @@ vector<LogicalType> TableCatalogEntry::GetTypes() {
 
 void TableCatalogEntry::Serialize(Serializer &serializer) {
 	D_ASSERT(!internal);
-	serializer.WriteString(schema->name);
-	serializer.WriteString(name);
-	D_ASSERT(columns.size() <= NumericLimits<uint32_t>::Maximum());
-	serializer.Write<uint32_t>((uint32_t)columns.size());
-	for (auto &column : columns) {
-		column.Serialize(serializer);
-	}
-	D_ASSERT(constraints.size() <= NumericLimits<uint32_t>::Maximum());
-	serializer.Write<uint32_t>((uint32_t)constraints.size());
-	for (auto &constraint : constraints) {
-		constraint->Serialize(serializer);
-	}
+
+	FieldWriter writer(serializer);
+	writer.WriteString(schema->name);
+	writer.WriteString(name);
+	writer.WriteRegularSerializableList(columns);
+	writer.WriteSerializableList(constraints);
+	writer.Finalize();
+}
+
+unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source) {
+	auto info = make_unique<CreateTableInfo>();
+
+	FieldReader reader(source);
+	info->schema = reader.ReadRequired<string>();
+	info->table = reader.ReadRequired<string>();
+	info->columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>();
+	info->constraints = reader.ReadRequiredSerializableList<Constraint>();
+	reader.Finalize();
+
+	return info;
 }
 
 string TableCatalogEntry::ToSQL() {
@@ -479,26 +488,6 @@ string TableCatalogEntry::ToSQL() {
 
 	ss << ");";
 	return ss.str();
-}
-
-unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source) {
-	auto info = make_unique<CreateTableInfo>();
-
-	info->schema = source.Read<string>();
-	info->table = source.Read<string>();
-	auto column_count = source.Read<uint32_t>();
-
-	for (uint32_t i = 0; i < column_count; i++) {
-		auto column = ColumnDefinition::Deserialize(source);
-		info->columns.push_back(move(column));
-	}
-	auto constraint_count = source.Read<uint32_t>();
-
-	for (uint32_t i = 0; i < constraint_count; i++) {
-		auto constraint = Constraint::Deserialize(source);
-		info->constraints.push_back(move(constraint));
-	}
-	return info;
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
