@@ -1,6 +1,7 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -37,7 +38,7 @@ void NumericStatistics::Merge(const BaseStatistics &other_p) {
 	}
 }
 
-FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
+FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) const {
 	if (constant.IsNull()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
@@ -110,7 +111,7 @@ FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_
 	}
 }
 
-unique_ptr<BaseStatistics> NumericStatistics::Copy() {
+unique_ptr<BaseStatistics> NumericStatistics::Copy() const {
 	auto stats = make_unique<NumericStatistics>(type, min, max);
 	if (validity_stats) {
 		stats->validity_stats = validity_stats->Copy();
@@ -118,29 +119,28 @@ unique_ptr<BaseStatistics> NumericStatistics::Copy() {
 	return move(stats);
 }
 
-bool NumericStatistics::IsConstant() {
+bool NumericStatistics::IsConstant() const {
 	return max <= min;
 }
 
-void NumericStatistics::Serialize(Serializer &serializer) {
-	BaseStatistics::Serialize(serializer);
-	min.Serialize(serializer);
-	max.Serialize(serializer);
+void NumericStatistics::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializable(min);
+	writer.WriteSerializable(max);
 }
 
-unique_ptr<BaseStatistics> NumericStatistics::Deserialize(Deserializer &source, LogicalType type) {
-	auto min = Value::Deserialize(source);
-	auto max = Value::Deserialize(source);
+unique_ptr<BaseStatistics> NumericStatistics::Deserialize(FieldReader &reader, LogicalType type) {
+	auto min = reader.ReadRequiredSerializable<Value, Value>();
+	auto max = reader.ReadRequiredSerializable<Value, Value>();
 	return make_unique_base<BaseStatistics, NumericStatistics>(move(type), min, max);
 }
 
-string NumericStatistics::ToString() {
+string NumericStatistics::ToString() const {
 	return StringUtil::Format("[Min: %s, Max: %s]%s", min.ToString(), max.ToString(),
 	                          validity_stats ? validity_stats->ToString() : "");
 }
 
 template <class T>
-void NumericStatistics::TemplatedVerify(Vector &vector, const SelectionVector &sel, idx_t count) {
+void NumericStatistics::TemplatedVerify(Vector &vector, const SelectionVector &sel, idx_t count) const {
 	VectorData vdata;
 	vector.Orrify(count, vdata);
 
@@ -162,7 +162,7 @@ void NumericStatistics::TemplatedVerify(Vector &vector, const SelectionVector &s
 	}
 }
 
-void NumericStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) {
+void NumericStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {
 	BaseStatistics::Verify(vector, sel, count);
 
 	switch (type.InternalType()) {

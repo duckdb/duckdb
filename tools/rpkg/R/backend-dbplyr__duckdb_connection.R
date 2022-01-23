@@ -188,7 +188,7 @@ sql_translation.duckdb_connection <- function(con) {
             "quarter"
           }
         }
-        if (with_year == TRUE) {
+        if (with_year) {
           type <- "year.quarter"
         }
         switch(type,
@@ -270,7 +270,7 @@ sql_translation.duckdb_connection <- function(con) {
       # stringr functions
       str_c = sql_paste(""),
       str_detect = function(string, pattern, negate = FALSE) {
-        if (negate == TRUE) {
+        if (negate) {
           sql_expr((NOT(REGEXP_MATCHES(!!string, !!pattern))))
         } else {
           sql_expr(REGEXP_MATCHES(!!string, !!pattern))
