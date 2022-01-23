@@ -20,6 +20,7 @@ import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.sql.SQLWarning;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.time.LocalDateTime;
@@ -442,36 +443,96 @@ public static void test_duckdb_timestamp() throws Exception {
 		Statement stmt = conn.createStatement();
 		stmt.execute("CREATE TABLE b (vchar VARCHAR, bo BOOLEAN, sint SMALLINT, nint INTEGER, bigi BIGINT,"
 			+ " flt FLOAT, dbl DOUBLE, dte DATE, tme TIME, ts TIMESTAMP, dec16 DECIMAL(3,1),"
-            + " dec32 DECIMAL(9,8), dec64 DECIMAL(16,1), dec128 DECIMAL(30,10))");
+			+ " dec32 DECIMAL(9,8), dec64 DECIMAL(16,1), dec128 DECIMAL(30,10))");
 		stmt.execute("INSERT INTO b VALUES ('varchary', true, 6, 42, 666, 42.666, 666.42,"
 			+ " '1970-01-02', '01:00:34', '1970-01-03 03:42:23', 42.2, 1.23456789, 987654321012345.6, 111112222233333.44444)");
 
 		PreparedStatement ps = conn.prepareStatement("SELECT * FROM b");
 		ResultSet rs = ps.executeQuery();
 
-        rs.next();
-        assertEquals(rs.getString(1), rs.getObject(1, String.class));
-        assertEquals(rs.getBoolean(2), rs.getObject(2, Boolean.class));
-        assertEquals(rs.getShort(3), rs.getObject(3, Short.class));
-        assertEquals(rs.getInt(4), rs.getObject(4, Integer.class));
-        assertEquals(rs.getLong(5), rs.getObject(5, Long.class));
-        assertEquals(rs.getFloat(6), rs.getObject(6, Float.class));
-        assertEquals(rs.getDouble(7), rs.getObject(7, Double.class));
-        assertEquals(rs.getDate(8), rs.getObject(8, Date.class));
-        assertEquals(rs.getTime(9), rs.getObject(9, Time.class));
-        assertEquals(rs.getTimestamp(10), rs.getObject(10, Timestamp.class));
-        assertEquals(rs.getBigDecimal(11), rs.getObject(11, BigDecimal.class)); 
-        assertEquals(rs.getBigDecimal(12), rs.getObject(12, BigDecimal.class)); 
-        assertEquals(rs.getBigDecimal(13), rs.getObject(13, BigDecimal.class)); 
-        assertEquals(rs.getBigDecimal(14), rs.getObject(14, BigDecimal.class)); 
-        System.out.println(rs.getBigDecimal(11));
-        System.out.println(rs.getBigDecimal(12));
-        System.out.println(rs.getBigDecimal(13));
-        System.out.println(rs.getBigDecimal(14));
+		rs.next();
+		assertEquals(rs.getString(1), rs.getObject(1, String.class));
+		assertEquals(rs.getBoolean(2), rs.getObject(2, Boolean.class));
+		assertEquals(rs.getShort(3), rs.getObject(3, Short.class));
+		assertEquals(rs.getInt(4), rs.getObject(4, Integer.class));
+		assertEquals(rs.getLong(5), rs.getObject(5, Long.class));
+		assertEquals(rs.getFloat(6), rs.getObject(6, Float.class));
+		assertEquals(rs.getDouble(7), rs.getObject(7, Double.class));
+		assertEquals(rs.getDate(8), rs.getObject(8, Date.class));
+		assertEquals(rs.getTime(9), rs.getObject(9, Time.class));
+		assertEquals(rs.getTimestamp(10), rs.getObject(10, Timestamp.class));
+		assertEquals(rs.getBigDecimal(11), rs.getObject(11, BigDecimal.class)); 
+		assertEquals(rs.getBigDecimal(12), rs.getObject(12, BigDecimal.class)); 
+		assertEquals(rs.getBigDecimal(13), rs.getObject(13, BigDecimal.class)); 
+		assertEquals(rs.getBigDecimal(14), rs.getObject(14, BigDecimal.class)); 
 
-        rs.close();
-        ps.close();
+		rs.close();
+		ps.close();
 		stmt.close();
+		conn.close();
+	}
+
+	public static void test_bigdecimal() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		stmt.execute("CREATE TABLE q (id DECIMAL(3,0), dec16 DECIMAL(4,1), dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), dec128 DECIMAL(38,10))");
+		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (1, 999.9, 99999.9999, 99999999999.9999999, 9999999999999999999999999999.9999999999)");
+		// Until https://github.com/duckdb/duckdb/issues/2975 is resolved
+		// stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (2, -999.9, -99999.9999, -99999999999.9999999, -9999999999999999999999999999.999999999)");
+		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (3, -5, -999, -88888888, -123456789654321)");
+		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (4, -0, -0, -0, -0)");
+		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (5, 0, 0, 0, 18446744073709551615)");
+		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (6, 0, 0, 0, 18446744073709551616)");
+		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (7, 0, 0, 0, -18446744073709551615)");
+		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (8, 0, 0, 0, -18446744073709551616)");
+		stmt.close();
+
+		PreparedStatement ps = conn.prepareStatement("SELECT * FROM q ORDER BY id");
+		ResultSet rs = ps.executeQuery();
+		while (rs.next())
+		{
+			assertEquals(rs.getBigDecimal(1), rs.getObject(1, BigDecimal.class)); 
+			assertEquals(rs.getBigDecimal(2), rs.getObject(2, BigDecimal.class)); 
+			assertEquals(rs.getBigDecimal(3), rs.getObject(3, BigDecimal.class)); 
+			assertEquals(rs.getBigDecimal(4), rs.getObject(4, BigDecimal.class)); 
+			assertEquals(rs.getBigDecimal(5), rs.getObject(5, BigDecimal.class)); 
+		}
+
+		rs.close();
+
+		ResultSet rs2 = ps.executeQuery();
+		rs2.next();
+		assertEquals(rs2.getBigDecimal(1), new BigDecimal("1"));
+		assertEquals(rs2.getBigDecimal(2), new BigDecimal("999.9"));
+		assertEquals(rs2.getBigDecimal(3), new BigDecimal("99999.9999"));
+		assertEquals(rs2.getBigDecimal(4), new BigDecimal("99999999999.9999999"));
+		assertEquals(rs2.getBigDecimal(5), new BigDecimal("9999999999999999999999999999.9999999999"));
+		rs2.next();
+		assertEquals(rs2.getBigDecimal(1), new BigDecimal("3"));
+		assertEquals(rs2.getBigDecimal(2), new BigDecimal("-5.0"));
+		assertEquals(rs2.getBigDecimal(3), new BigDecimal("-999.0000"));
+		assertEquals(rs2.getBigDecimal(4), new BigDecimal("-88888888.0000000"));
+		assertEquals(rs2.getBigDecimal(5), new BigDecimal("-123456789654321.0000000000"));
+		rs2.next();
+		assertEquals(rs2.getBigDecimal(1), new BigDecimal("4"));
+		assertEquals(rs2.getBigDecimal(2), new BigDecimal("-0.0"));
+		assertEquals(rs2.getBigDecimal(3), new BigDecimal("-0.0000"));
+		assertEquals(rs2.getBigDecimal(4), new BigDecimal("-0.0000000"));
+		assertEquals(rs2.getBigDecimal(5), new BigDecimal("-0.0000000000"));
+		rs2.next();
+		assertEquals(rs2.getBigDecimal(1), new BigDecimal("5"));
+		assertEquals(rs2.getBigDecimal(5), new BigDecimal("18446744073709551615.0000000000"));
+		rs2.next();
+		assertEquals(rs2.getBigDecimal(1), new BigDecimal("6"));
+		assertEquals(rs2.getBigDecimal(5), new BigDecimal("18446744073709551616.0000000000"));
+		rs2.next();
+		assertEquals(rs2.getBigDecimal(1), new BigDecimal("7"));
+		assertEquals(rs2.getBigDecimal(5), new BigDecimal("-18446744073709551615.0000000000"));
+		rs2.next();
+		assertEquals(rs2.getBigDecimal(1), new BigDecimal("8"));
+		assertEquals(rs2.getBigDecimal(5), new BigDecimal("-18446744073709551616.0000000000"));
+		rs2.close();
+
 		conn.close();
 	}
 
@@ -501,6 +562,8 @@ public static void test_duckdb_timestamp() throws Exception {
 			rs.close();
 			ps.close();
 		}
+
+		conn.close();
 	}
 
 
