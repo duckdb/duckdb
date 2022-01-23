@@ -48,7 +48,6 @@ translate_duckdb <- function(...) {
 
 #' Declare which version of dbplyr API is being called.
 #' @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
-#' @export
 dbplyr_edition.duckdb_connection <- function(con) {
   2L
 }
@@ -58,7 +57,6 @@ dbplyr_edition.duckdb_connection <- function(con) {
 #' @name db_connection_describe
 #' @return
 #' String consisting of DuckDB version, user login name, operating system, R version and the name of database
-#' @export
 db_connection_describe.duckdb_connection <- function(con) {
   info <- DBI::dbGetInfo(con)
   paste0(
@@ -88,7 +86,6 @@ duckdb_grepl <- function(pattern, x, ignore.case = FALSE, perl = FALSE, fixed = 
 #' Customized translation functions for DuckDB SQL
 #' @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
 #' @name sql_translation
-#' @export
 sql_translation.duckdb_connection <- function(con) {
   sql_variant <- pkg_method("sql_variant", "dbplyr")
   sql_translator <- pkg_method("sql_translator", "dbplyr")
@@ -115,7 +112,8 @@ sql_translation.duckdb_connection <- function(con) {
       .parent = base_scalar,
       as.raw = sql_cast("VARBINARY"),
       `%%` = function(a, b) build_sql("(CAST((", a, ") AS INTEGER)) % (CAST((", b, ") AS INTEGER))"),
-      `%/%` = function(a, b) build_sql("(((CAST((", a, ") AS INTEGER)) - (CAST((", a, ") AS INTEGER)) % (CAST((", b, ") AS INTEGER)))) / (CAST((", b, ") AS INTEGER))"),
+      # Integer division remains problematic: https://github.com/tidyverse/dbplyr/issues/108
+      #      `%/%` = function(a, b) build_sql("(((CAST((", a, ") AS INTEGER)) - (CAST((", a, ") AS INTEGER)) % (CAST((", b, ") AS INTEGER)))) / (CAST((", b, ") AS INTEGER))"),
       `^` = sql_prefix("POW", 2),
       bitwOr = function(a, b) sql_expr((CAST((!!a) %AS% INTEGER)) | (CAST((!!b) %AS% INTEGER))),
       bitwAnd = function(a, b) sql_expr((CAST((!!a) %AS% INTEGER)) & (CAST((!!b) %AS% INTEGER))),
@@ -126,6 +124,12 @@ sql_translation.duckdb_connection <- function(con) {
       log = function(x, base = exp(1)) {
         if (isTRUE(all.equal(base, exp(1)))) {
           sql_expr(LN(!!x))
+        } else
+        if (base == 10) {
+          sql_expr(LOG10(!!x))
+        } else
+        if (base == 2) {
+          sql_expr(LOG2(!!x))
         } else {
           sql_expr(LOG(!!x) / LOG(!!base))
         }
@@ -133,24 +137,28 @@ sql_translation.duckdb_connection <- function(con) {
       log10 = sql_prefix("LOG10", 1),
       log2 = sql_prefix("LOG2", 1),
 
+      # See https://github.com/duckdb/duckdb/issues/530 about NaN, infinites and NULL in DuckDB
+      # The following is how R functions for detecting those should behave:
       # Function 	    Inf 	–Inf 	NaN 	NA
-      # is.finite() 	  FALSE FALSE FALSE FALSE
-      # is.infinite() 	TRUE 	TRUE 	FALSE FALSE
+      # is.finite() 	FALSE FALSE FALSE FALSE
+      # is.infinite() TRUE 	TRUE 	FALSE FALSE
       # is.nan() 	    FALSE FALSE TRUE 	FALSE
-      # is.na() 	      FALSE FALSE TRUE 	TRUE
+      # is.na() 	    FALSE FALSE TRUE 	TRUE
       is.na = function(a) build_sql("(", a, " IS NULL OR PRINTF('%f',", a, ") = 'nan')"),
       is.nan = function(a) build_sql("(", a, " IS NOT NULL AND PRINTF('%f',", a, ") = 'nan')"),
       is.infinite = function(a) build_sql("(", a, " IS NOT NULL AND REGEXP_MATCHES(PRINTF('%f',", a, "),'inf'))"),
       is.finite = function(a) build_sql("(NOT (", a, " IS NULL OR REGEXP_MATCHES(PRINTF('%f',", a, "),'inf|nan')))"),
       grepl = duckdb_grepl,
 
-      # Return índex where first match starts, -1 if not found
+      # Return index where first match starts, string length if no match (R would give -1 in case of no match)
       regexpr = function(p, x) {
-        build_sql(
-          "(LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX(", x, ", ", p,
-          "),0))-(LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX(", x, ", ", p,
-          "),0))+2)/(LENGTH(", x, ")+2)*(LENGTH(", x, ")+2)+1)"
-        )
+        sql_expr((LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX(!!x, !!p), 0L)) + 1L))
+        # The following version would give -1 in case of no match:
+        #        build_sql(
+        #          "(LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX(", x, ", ", p,
+        #          "),0))-(LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX(", x, ", ", p,
+        #          "),0))+2)/(LENGTH(", x, ")+2)*(LENGTH(", x, ")+2)+1)"
+        #        )
       },
       round = function(x, digits) sql_expr(ROUND(!!x, CAST(ROUND((!!digits), 0L) %AS% INTEGER))),
       as.Date = sql_cast("DATE"),
@@ -217,9 +225,9 @@ sql_translation.duckdb_connection <- function(con) {
       },
       yday = function(x) sql_expr(EXTRACT(DOY %FROM% !!x)),
 
-      # These work fine internally, but getting INTERVAL-type data out of DuckDB,
-      # cast to CHARs is required until there is a fix for the issue #2900
-      # (https://github.com/duckdb/duckdb/issues/2900)
+      # These work fine internally, but getting INTERVAL-type data out of DuckDB
+      # seems problematic until there is a fix for the issue #1920 / #2900
+      # (https://github.com/duckdb/duckdb/issues/1920)
       seconds = function(x) {
         sql_expr(TO_SECONDS(CAST((!!x) %AS% BIGINT)))
       },
@@ -242,10 +250,19 @@ sql_translation.duckdb_connection <- function(con) {
         sql_expr(TO_YEARS(CAST((!!x) %AS% INTEGER)))
       },
 
-      # Type may change from date to timestamp here now that is not consistent with the R-function
-      # Week_start not implemented and default is different from R-function (1 [Monday] instead of 7 [Sunday])
-      floor_date = function(x, unit = "seconds") {
-        sql_expr(DATE_TRUNC(!!unit, !!x))
+      # Week_start algorithm: https://github.com/tidyverse/lubridate/issues/509#issuecomment-287030620
+      floor_date = function(x, unit = "seconds", week_start = NULL) {
+        if (unit %in% c("week", "weeks")) {
+          week_start <- if (!is.null(week_start)) week_start else getOption("lubridate.week.start", 7)
+          if (week_start == 1) {
+            sql_expr(DATE_TRUNC(!!unit, !!x))
+          } else {
+            offset <- as.integer(7 - week_start)
+            sql_expr(CAST((!!x) %AS% DATE) - CAST(EXTRACT("dow" %FROM% CAST((!!x) %AS% DATE) + !!offset) %AS% INTEGER))
+          }
+        } else {
+          sql_expr(DATE_TRUNC(!!unit, !!x))
+        }
       },
       paste = sql_paste(" "),
       paste0 = sql_paste(""),
@@ -274,22 +291,24 @@ sql_translation.duckdb_connection <- function(con) {
       str_remove_all = function(string, pattern) {
         sql_expr(REGEXP_REPLACE(!!string, !!pattern, "", "g"))
       },
-      str_to_title = function(string, pattern) {
+      str_to_sentence = function(string, pattern) {
         build_sql("(UPPER(", string, "[0]) || ", string, "[1:NULL])")
       },
+      # Respect OR (|) operator: https://github.com/tidyverse/stringr/pull/340
       str_starts = function(string, pattern) {
-        build_sql("REGEXP_MATCHES(", string, ",'^'||", pattern, ")")
+        build_sql("REGEXP_MATCHES(", string, ",'^(?:'||", pattern, "))")
       },
       str_ends = function(string, pattern) {
-        build_sql("REGEXP_MATCHES(", string, ",", pattern, "||'$')")
+        build_sql("REGEXP_MATCHES((?:", string, ",", pattern, "||')$')")
       },
+      # NOTE: GREATEST need because DuckDB PAD-functions truncate the string if width < length of string
       str_pad = function(string, width, side = "left", pad = " ", use_length = FALSE) {
         if (side %in% c("left")) {
-          sql_expr(LPAD(!!string, !!as.integer(width), !!pad))
+          sql_expr(LPAD(!!string, CAST(GREATEST(!!as.integer(width), LENGTH(!!string)) %AS% INTEGER), !!pad))
         } else if (side %in% c("right")) {
-          sql_expr(RPAD(!!string, !!as.integer(width), !!pad))
+          sql_expr(RPAD(!!string, CAST(GREATEST(!!as.integer(width), LENGTH(!!string)) %AS% INTEGER), !!pad))
         } else if (side %in% c("both")) {
-          sql_expr(RPAD(REPEAT(!!pad, (!!as.integer(width) - LENGTH(!!string)) / 2L) %||% !!string, !!as.integer(width), !!pad))
+          sql_expr(RPAD(REPEAT(!!pad, (!!as.integer(width) - LENGTH(!!string)) / 2L) %||% !!string, CAST(GREATEST(!!as.integer(width), LENGTH(!!string)) %AS% INTEGER), !!pad))
         } else {
           stop('Argument \'side\' should be "left", "right" or "both"', call. = FALSE)
         }
@@ -332,7 +351,6 @@ sql_translation.duckdb_connection <- function(con) {
 #' @param x First object to be compared
 #' @param y Second object to be compared
 #' @name sql_expr_matches
-#' @export
 sql_expr_matches.duckdb_connection <- function(con, x, y) {
   build_sql <- pkg_method("build_sql", "dbplyr")
   # https://duckdb.org/docs/sql/expressions/comparison_operators
@@ -343,7 +361,6 @@ sql_expr_matches.duckdb_connection <- function(con, x, y) {
 #' @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
 #' @param x Date object to be escaped
 #' @name sql_escape_date
-#' @export
 sql_escape_date.duckdb_connection <- function(con, x) {
   # https://github.com/tidyverse/dbplyr/issues/727
   dbQLit <- pkg_method("dbQuoteLiteral", "DBI")
@@ -354,7 +371,6 @@ sql_escape_date.duckdb_connection <- function(con, x) {
 #' @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
 #' @param x Datetime object to be escaped
 #' @name sql_escape_datetime
-#' @export
 sql_escape_datetime.duckdb_connection <- function(con, x) {
   dbQLit <- pkg_method("dbQuoteLiteral", "DBI")
   dbQLit(con, x)
@@ -367,7 +383,6 @@ sql_escape_datetime.duckdb_connection <- function(con, x) {
 #' @param order_by_cols Defined order of variables
 #' @param .direction Direction in which to fill missing values.
 #' @name dbplyr_fill0
-#' @export
 dbplyr_fill0.duckdb_connection <- function(.con, .data, cols_to_fill, order_by_cols, .direction) {
   dbplyr_fill0 <- pkg_method("dbplyr_fill0.SQLiteConnection", "dbplyr")
 
