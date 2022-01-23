@@ -630,11 +630,13 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 	}
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &conjunction = (ConjunctionOrFilter &)filter;
+		parquet_filter_t or_mask;
 		for (auto &child_filter : conjunction.child_filters) {
 			parquet_filter_t child_mask = filter_mask;
 			ApplyFilter(v, *child_filter, child_mask, count);
-			filter_mask |= child_mask;
+			or_mask |= child_mask;
 		}
+		filter_mask &= or_mask;
 		break;
 	}
 	case TableFilterType::CONSTANT_COMPARISON: {
