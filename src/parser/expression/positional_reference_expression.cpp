@@ -1,7 +1,7 @@
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/to_string.hpp"
 
@@ -31,13 +31,12 @@ hash_t PositionalReferenceExpression::Hash() const {
 	return CombineHash(duckdb::Hash(index), result);
 }
 
-void PositionalReferenceExpression::Serialize(Serializer &serializer) {
-	ParsedExpression::Serialize(serializer);
-	serializer.Write<idx_t>(index);
+void PositionalReferenceExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteField<idx_t>(index);
 }
 
-unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(ExpressionType type, Deserializer &source) {
-	auto expression = make_unique<PositionalReferenceExpression>(source.Read<idx_t>());
+unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	auto expression = make_unique<PositionalReferenceExpression>(reader.ReadRequired<idx_t>());
 	return move(expression);
 }
 

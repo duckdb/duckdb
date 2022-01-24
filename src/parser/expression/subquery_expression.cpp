@@ -1,7 +1,7 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -35,23 +35,28 @@ unique_ptr<ParsedExpression> SubqueryExpression::Copy() const {
 	return move(copy);
 }
 
-void SubqueryExpression::Serialize(Serializer &serializer) {
-	ParsedExpression::Serialize(serializer);
-	serializer.Write<SubqueryType>(subquery_type);
+void SubqueryExpression::Serialize(FieldWriter &writer) const {
+	auto &serializer = writer.GetSerializer();
+
+	writer.WriteField<SubqueryType>(subquery_type);
+	// FIXME: this shouldn't use a serializer (probably)?
 	subquery->Serialize(serializer);
-	serializer.WriteOptional(child);
-	serializer.Write<ExpressionType>(comparison_type);
+	writer.WriteOptional(child);
+	writer.WriteField<ExpressionType>(comparison_type);
 }
 
-unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type, Deserializer &source) {
-	auto subquery_type = source.Read<SubqueryType>();
+unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	// FIXME: this shouldn't use a source
+	auto &source = reader.GetSource();
+
+	auto subquery_type = reader.ReadRequired<SubqueryType>();
 	auto subquery = SelectStatement::Deserialize(source);
 
 	auto expression = make_unique<SubqueryExpression>();
 	expression->subquery_type = subquery_type;
 	expression->subquery = move(subquery);
-	expression->child = source.ReadOptional<ParsedExpression>();
-	expression->comparison_type = source.Read<ExpressionType>();
+	expression->child = reader.ReadOptional<ParsedExpression>(nullptr);
+	expression->comparison_type = reader.ReadRequired<ExpressionType>();
 	return move(expression);
 }
 

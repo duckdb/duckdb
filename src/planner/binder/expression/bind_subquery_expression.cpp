@@ -20,11 +20,14 @@ public:
 	unique_ptr<SelectStatement> subquery;
 
 	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
-		throw Exception("Cannot get select list of bound subquery node");
+		throw InternalException("Cannot get select list of bound subquery node");
 	}
 
-	unique_ptr<QueryNode> Copy() override {
-		throw Exception("Cannot copy bound subquery node");
+	unique_ptr<QueryNode> Copy() const override {
+		throw InternalException("Cannot copy bound subquery node");
+	}
+	void Serialize(FieldWriter &writer) const override {
+		throw InternalException("Cannot copy bound subquery node");
 	}
 };
 
