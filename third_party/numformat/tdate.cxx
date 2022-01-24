@@ -3,7 +3,7 @@
 #if defined( OS2 )
 #define INCL_DOSDATETIME
 #include <svpm.h>
-#elif defined( WNT )
+#elif defined( _WIN32 )
 #ifdef _MSC_VER
 #pragma warning (push,1)
 #endif

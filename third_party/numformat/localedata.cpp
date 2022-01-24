@@ -121,13 +121,13 @@ void LocaleData::LoadLocaleData()
 
 	str = L"EUR";
 	m_locale_list[LocaleId_fr_FR].setCurrentCurrencyId(str);
-	m_locale_list[LocaleId_fr_FR].currency[L"EUR"].currency_symbol = L"€";
+	m_locale_list[LocaleId_fr_FR].currency[L"EUR"].currency_symbol = L"â‚¬";
 	m_locale_list[LocaleId_fr_FR].currency[L"EUR"].bank_symbol = L"EUR";
 	m_locale_list[LocaleId_fr_FR].currency[L"EUR"].currency_name = L"euro";
 	m_locale_list[LocaleId_fr_FR].currency[L"EUR"].decimal_places = 2;
 	m_locale_list[LocaleId_fr_FR].currency[L"FRF"].currency_symbol = L"F";
 	m_locale_list[LocaleId_fr_FR].currency[L"FRF"].bank_symbol = L"FRF";
-	m_locale_list[LocaleId_fr_FR].currency[L"FRF"].currency_name = L"franc français";
+	m_locale_list[LocaleId_fr_FR].currency[L"FRF"].currency_name = L"franc franÃ§ais";
 	m_locale_list[LocaleId_fr_FR].currency[L"FRF"].decimal_places = 2;
 
 	m_locale_list[LocaleId_fr_FR].time_am = L"AM";
@@ -137,17 +137,17 @@ void LocaleData::LoadLocaleData()
 
 	m_locale_list[LocaleId_fr_FR].months_of_year.clear();
 	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"jan", L"janv.", L"janvier"} );
-	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"feb", L"févr.", L"février"} );
+	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"feb", L"fÃ©vr.", L"fÃ©vrier"} );
 	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"mar", L"mars", L"mars"} );
 	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"apr", L"avr.", L"avril"} );
 	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"may", L"mai", L"mai"} );
 	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"jun", L"juin", L"juin"} );
 	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"jul", L"juil.", L"juillet"} );
-	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"aug", L"août", L"août"} );
+	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"aug", L"aoÃ»t", L"aoÃ»t"} );
 	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"sep", L"sept.", L"septembre"} );
 	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"oct", L"oct.", L"octobre"} );
 	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"nov", L"nov.", L"novembre"} );
-	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"dec", L"déc.", L"décembre"} );
+	m_locale_list[LocaleId_fr_FR].months_of_year.push_back( {L"dec", L"dÃ©c.", L"dÃ©cembre"} );
 
 	m_locale_list[LocaleId_fr_FR].days_of_week.clear();
 	m_locale_list[LocaleId_fr_FR].days_of_week.push_back( {L"sun", L"dim.", L"dimanche"} );
@@ -174,7 +174,7 @@ void LocaleData::LoadLocaleData()
 	m_locale_list[LocaleId_fr_FR].format_codes.fixed_format_key1 = L"Standard";
 	m_locale_list[LocaleId_fr_FR].format_codes.scientific_format_key1 = L"0,00E+000";
 	m_locale_list[LocaleId_fr_FR].format_codes.percent_format_key1 = L"0%";
-	m_locale_list[LocaleId_fr_FR].format_codes.currency_format_key1 = L"# ##0 [CURRENCY];-# ##0 [CURRENCY]";
+	m_locale_list[LocaleId_fr_FR].format_codes.currency_format_key1 = L"#Â ##0 [CURRENCY];-#Â ##0 [CURRENCY]";
 	m_locale_list[LocaleId_fr_FR].format_codes.date_format_key1 = L"JJ/MM/AAAA";
 	m_locale_list[LocaleId_fr_FR].format_codes.date_format_key9 = L"NNNNJ MMMM AAAA";
 	m_locale_list[LocaleId_fr_FR].format_codes.datetime_format_key1 = L"JJ/MM/AA HH:MM";
