@@ -208,8 +208,12 @@ unordered_set<string> Connection::GetTableNames(const string &query) {
 	return context->GetTableNames(query);
 }
 
-shared_ptr<Relation> Connection::RelationFromQuery(const string &query, const string &alias) {
-	return make_shared<QueryRelation>(*context, query, alias);
+shared_ptr<Relation> Connection::RelationFromQuery(string query, string alias, string error) {
+	return RelationFromQuery(QueryRelation::ParseStatement(*context, query, error), move(alias));
+}
+
+shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> select_stmt, string alias) {
+	return make_shared<QueryRelation>(*context, move(select_stmt), move(alias));
 }
 
 void Connection::BeginTransaction() {
