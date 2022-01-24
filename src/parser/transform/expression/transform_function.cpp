@@ -276,8 +276,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	}
 
 	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), move(children), move(filter_expr),
-	                                                move(order_bys), root->agg_distinct);
+	                                                move(order_bys), root->agg_distinct, false, root->export_state);
 	function->query_location = root->location;
+
 	return move(function);
 }
 
