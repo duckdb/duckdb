@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-20.04
 
     env:
-      LIBARROW_BINARY : 'true'
-
+      LIBARROW_BINARY : 'false'
+      ARROW_RUNTIME_SIMD_LEVEL : 'AVX2'
     steps:
     - uses: actions/checkout@v2
       with:
