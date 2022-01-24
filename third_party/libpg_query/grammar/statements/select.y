@@ -2394,7 +2394,7 @@ func_application: func_name '(' ')'
  * (Note that many of the special SQL functions wouldn't actually make any
  * sense as functional index entries, but we ignore that consideration here.)
  */
-func_expr: func_application within_group_clause filter_clause over_clause
+func_expr: func_application within_group_clause filter_clause export_clause over_clause
 				{
 					PGFuncCall *n = (PGFuncCall *) $1;
 					/*
@@ -2426,7 +2426,8 @@ func_expr: func_application within_group_clause filter_clause over_clause
 						n->agg_within_group = true;
 					}
 					n->agg_filter = $3;
-					n->over = $4;
+					n->export_state = $4;
+					n->over = $5;
 					$$ = (PGNode *) n;
 				}
 			| func_expr_common_subexpr
@@ -2604,6 +2605,10 @@ filter_clause:
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
+export_clause:
+			EXPORT STATE            				{ $$ = true; }
+			| /*EMPTY*/								{ $$ = NULL; }
+		;
 
 /*
  * Window Definitions
