@@ -351,9 +351,9 @@ void DuckDBPyConnection::Close() {
 
 // cursor() is stupid
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
-	auto res = make_shared<DuckDBPyConnection>();
+	auto res = make_shared<DuckDBPyConnection>(thread_id);
 	res->database = database;
-	res->connection = make_unique<Connection>(*res->database);
+	res->connection = connection;
 	cursors.push_back(res);
 	return res;
 }
