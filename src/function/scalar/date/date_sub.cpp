@@ -54,6 +54,7 @@ struct DateSub {
 			return MonthOperator::Operation<TA, TB, TR>(start_ts, end_ts) / Interval::MONTHS_PER_QUARTER;
 		}
 	};
+
 	struct YearOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA start_ts, TB end_ts) {
@@ -300,6 +301,7 @@ template <typename TA, typename TB, typename TR>
 static int64_t SubtractDateParts(DatePartSpecifier type, TA startdate, TB enddate) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
+	case DatePartSpecifier::ISOYEAR:
 		return DateSub::YearOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::MONTH:
 		return DateSub::MonthOperator::template Operation<TA, TB, TR>(startdate, enddate);
@@ -346,6 +348,7 @@ template <typename TA, typename TB, typename TR>
 static void DateSubBinaryExecutor(DatePartSpecifier type, Vector &left, Vector &right, Vector &result, idx_t count) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
+	case DatePartSpecifier::ISOYEAR:
 		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateSub::YearOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::MONTH:

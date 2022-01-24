@@ -40,6 +40,8 @@ add_library(
   empty_stubs.cpp
   descriptor.cpp
   parameter_descriptor.cpp
+  row_descriptor.cpp
+  cursor.cpp
   duckdb_odbc.def)
 
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")

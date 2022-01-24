@@ -101,8 +101,9 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	if (result.type == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = (StreamQueryResult &)result;
 		if (!stream_result.IsOpen()) {
-			my_stream->last_error = "Query Stream is closed";
-			return -1;
+			// Nothing to output
+			out->release = nullptr;
+			return 0;
 		}
 	}
 	unique_ptr<DataChunk> chunk_result = result.Fetch();

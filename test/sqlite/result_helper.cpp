@@ -425,7 +425,7 @@ bool TestResultHelper::SkipErrorMessage(const string &message) {
 }
 
 string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_type, bool original_sqlite_test) {
-	if (value.is_null) {
+	if (value.IsNull()) {
 		return "NULL";
 	} else {
 		if (original_sqlite_test) {
@@ -441,7 +441,7 @@ string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_t
 		}
 		switch (sql_type.id()) {
 		case LogicalTypeId::BOOLEAN:
-			return value.value_.boolean ? "1" : "0";
+			return BooleanValue::Get(value) ? "1" : "0";
 		default: {
 			string str = value.ToString();
 			if (str.empty()) {

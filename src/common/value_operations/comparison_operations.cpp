@@ -111,56 +111,60 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 	}
 	switch (left_type.InternalType()) {
 	case PhysicalType::BOOL:
-		return OP::Operation(left.value_.boolean, right.value_.boolean);
+		return OP::Operation(left.GetValueUnsafe<bool>(), right.GetValueUnsafe<bool>());
 	case PhysicalType::INT8:
-		return OP::Operation(left.value_.tinyint, right.value_.tinyint);
+		return OP::Operation(left.GetValueUnsafe<int8_t>(), right.GetValueUnsafe<int8_t>());
 	case PhysicalType::INT16:
-		return OP::Operation(left.value_.smallint, right.value_.smallint);
+		return OP::Operation(left.GetValueUnsafe<int16_t>(), right.GetValueUnsafe<int16_t>());
 	case PhysicalType::INT32:
-		return OP::Operation(left.value_.integer, right.value_.integer);
+		return OP::Operation(left.GetValueUnsafe<int32_t>(), right.GetValueUnsafe<int32_t>());
 	case PhysicalType::INT64:
-		return OP::Operation(left.value_.bigint, right.value_.bigint);
+		return OP::Operation(left.GetValueUnsafe<int64_t>(), right.GetValueUnsafe<int64_t>());
 	case PhysicalType::UINT8:
-		return OP::Operation(left.value_.utinyint, right.value_.utinyint);
+		return OP::Operation(left.GetValueUnsafe<uint8_t>(), right.GetValueUnsafe<uint8_t>());
 	case PhysicalType::UINT16:
-		return OP::Operation(left.value_.usmallint, right.value_.usmallint);
+		return OP::Operation(left.GetValueUnsafe<uint16_t>(), right.GetValueUnsafe<uint16_t>());
 	case PhysicalType::UINT32:
-		return OP::Operation(left.value_.uinteger, right.value_.uinteger);
+		return OP::Operation(left.GetValueUnsafe<uint32_t>(), right.GetValueUnsafe<uint32_t>());
 	case PhysicalType::UINT64:
-		return OP::Operation(left.value_.ubigint, right.value_.ubigint);
+		return OP::Operation(left.GetValueUnsafe<uint64_t>(), right.GetValueUnsafe<uint64_t>());
 	case PhysicalType::INT128:
-		return OP::Operation(left.value_.hugeint, right.value_.hugeint);
+		return OP::Operation(left.GetValueUnsafe<hugeint_t>(), right.GetValueUnsafe<hugeint_t>());
 	case PhysicalType::FLOAT:
-		return OP::Operation(left.value_.float_, right.value_.float_);
+		return OP::Operation(left.GetValueUnsafe<float>(), right.GetValueUnsafe<float>());
 	case PhysicalType::DOUBLE:
-		return OP::Operation(left.value_.double_, right.value_.double_);
+		return OP::Operation(left.GetValueUnsafe<double>(), right.GetValueUnsafe<double>());
 	case PhysicalType::INTERVAL:
-		return OP::Operation(left.value_.interval, right.value_.interval);
+		return OP::Operation(left.GetValueUnsafe<interval_t>(), right.GetValueUnsafe<interval_t>());
 	case PhysicalType::VARCHAR:
-		return OP::Operation(left.str_value, right.str_value);
+		return OP::Operation(StringValue::Get(left), StringValue::Get(right));
 	case PhysicalType::STRUCT: {
+		auto &left_children = StructValue::GetChildren(left);
+		auto &right_children = StructValue::GetChildren(right);
 		// this should be enforced by the type
-		D_ASSERT(left.struct_value.size() == right.struct_value.size());
+		D_ASSERT(left_children.size() == right_children.size());
 		idx_t i = 0;
-		for (; i < left.struct_value.size() - 1; ++i) {
-			if (ValuePositionComparator::Definite<OP>(left.struct_value[i], right.struct_value[i])) {
+		for (; i < left_children.size() - 1; ++i) {
+			if (ValuePositionComparator::Definite<OP>(left_children[i], right_children[i])) {
 				return true;
 			}
-			if (!ValuePositionComparator::Possible<OP>(left.struct_value[i], right.struct_value[i])) {
+			if (!ValuePositionComparator::Possible<OP>(left_children[i], right_children[i])) {
 				return false;
 			}
 		}
-		return ValuePositionComparator::Final<OP>(left.struct_value[i], right.struct_value[i]);
+		return ValuePositionComparator::Final<OP>(left_children[i], right_children[i]);
 	}
 	case PhysicalType::LIST: {
+		auto &left_children = ListValue::GetChildren(left);
+		auto &right_children = ListValue::GetChildren(right);
 		for (idx_t pos = 0;; ++pos) {
-			if (pos == left.list_value.size() || pos == right.list_value.size()) {
-				return ValuePositionComparator::TieBreak<OP>(left.list_value.size(), right.list_value.size());
+			if (pos == left_children.size() || pos == right_children.size()) {
+				return ValuePositionComparator::TieBreak<OP>(left_children.size(), right_children.size());
 			}
-			if (ValuePositionComparator::Definite<OP>(left.list_value[pos], right.list_value[pos])) {
+			if (ValuePositionComparator::Definite<OP>(left_children[pos], right_children[pos])) {
 				return true;
 			}
-			if (!ValuePositionComparator::Possible<OP>(left.list_value[pos], right.list_value[pos])) {
+			if (!ValuePositionComparator::Possible<OP>(left_children[pos], right_children[pos])) {
 				return false;
 			}
 		}
@@ -172,7 +176,7 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 }
 
 bool ValueOperations::Equals(const Value &left, const Value &right) {
-	if (left.is_null || right.is_null) {
+	if (left.IsNull() || right.IsNull()) {
 		throw InternalException("Comparison on NULL values");
 	}
 	return TemplatedBooleanOperation<duckdb::Equals>(left, right);
@@ -183,14 +187,14 @@ bool ValueOperations::NotEquals(const Value &left, const Value &right) {
 }
 
 bool ValueOperations::GreaterThan(const Value &left, const Value &right) {
-	if (left.is_null || right.is_null) {
+	if (left.IsNull() || right.IsNull()) {
 		throw InternalException("Comparison on NULL values");
 	}
 	return TemplatedBooleanOperation<duckdb::GreaterThan>(left, right);
 }
 
 bool ValueOperations::GreaterThanEquals(const Value &left, const Value &right) {
-	if (left.is_null || right.is_null) {
+	if (left.IsNull() || right.IsNull()) {
 		throw InternalException("Comparison on NULL values");
 	}
 	return TemplatedBooleanOperation<duckdb::GreaterThanEquals>(left, right);
@@ -205,10 +209,10 @@ bool ValueOperations::LessThanEquals(const Value &left, const Value &right) {
 }
 
 bool ValueOperations::NotDistinctFrom(const Value &left, const Value &right) {
-	if (left.is_null && right.is_null) {
+	if (left.IsNull() && right.IsNull()) {
 		return true;
 	}
-	if (left.is_null != right.is_null) {
+	if (left.IsNull() != right.IsNull()) {
 		return false;
 	}
 	return TemplatedBooleanOperation<duckdb::Equals>(left, right);
@@ -219,20 +223,20 @@ bool ValueOperations::DistinctFrom(const Value &left, const Value &right) {
 }
 
 bool ValueOperations::DistinctGreaterThan(const Value &left, const Value &right) {
-	if (left.is_null && right.is_null) {
+	if (left.IsNull() && right.IsNull()) {
 		return false;
-	} else if (right.is_null) {
+	} else if (right.IsNull()) {
 		return false;
-	} else if (left.is_null) {
+	} else if (left.IsNull()) {
 		return true;
 	}
 	return TemplatedBooleanOperation<duckdb::GreaterThan>(left, right);
 }
 
 bool ValueOperations::DistinctGreaterThanEquals(const Value &left, const Value &right) {
-	if (left.is_null) {
+	if (left.IsNull()) {
 		return true;
-	} else if (right.is_null) {
+	} else if (right.IsNull()) {
 		return false;
 	}
 	return TemplatedBooleanOperation<duckdb::GreaterThanEquals>(left, right);

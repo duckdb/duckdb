@@ -48,3 +48,19 @@ EXPLAIN SELECT tbl.a, tbl.b, tbl.c FROM "data/parquet-testing/arrow/alltypes_pla
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a<2 OR a>3 AND a=1.*OR a=4.*
 
+
+# Testing the number of rows filtered (column "a" has eight values: 0 .. 7)
+statement ok
+PRAGMA enable_profiling
+
+# should return 2 rows: 0 and 7
+query II
+EXPLAIN ANALYZE SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a<1 OR a>6;
+----
+analyzed_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a<1 OR a>6.*2[ \t].*
+
+# should return 1 row: 0
+query II
+EXPLAIN ANALYZE SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a<1 OR a>8;
+----
+analyzed_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a<1 OR a>8.*1[ \t].*

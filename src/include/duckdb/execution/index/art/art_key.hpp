@@ -12,6 +12,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
@@ -29,6 +30,11 @@ public:
 		return make_unique<Key>(move(data), sizeof(element));
 	}
 
+	template <class T>
+	static unique_ptr<Key> CreateKey(const Value &element, bool is_little_endian) {
+		return CreateKey(element.GetValueUnsafe<T>(), is_little_endian);
+	}
+
 public:
 	data_t &operator[](std::size_t i) {
 		return data[i];
@@ -40,8 +46,6 @@ public:
 	bool operator<(const Key &k) const;
 	bool operator>=(const Key &k) const;
 	bool operator==(const Key &k) const;
-
-	string ToString(bool is_little_endian, PhysicalType type);
 
 private:
 	template <class T>

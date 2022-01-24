@@ -38,7 +38,7 @@ static inline duckdb_re2::StringPiece CreateStringPiece(string_t &input) {
 	return duckdb_re2::StringPiece(input.GetDataUnsafe(), input.GetSize());
 }
 
-static void ParseRegexOptions(string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr) {
+static void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr) {
 	for (idx_t i = 0; i < options.size(); i++) {
 		switch (options[i]) {
 		case 'c':
@@ -149,15 +149,15 @@ static unique_ptr<FunctionData> RegexpMatchesBind(ClientContext &context, Scalar
 			throw InvalidInputException("Regex options field must be a constant");
 		}
 		Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[2]);
-		if (!options_str.is_null && options_str.type().id() == LogicalTypeId::VARCHAR) {
-			ParseRegexOptions(options_str.str_value, options);
+		if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
+			ParseRegexOptions(StringValue::Get(options_str), options);
 		}
 	}
 
 	if (arguments[1]->IsFoldable()) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-		if (!pattern_str.is_null && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
-			return make_unique<RegexpMatchesBindData>(options, pattern_str.str_value);
+		if (!pattern_str.IsNull() && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
+			return make_unique<RegexpMatchesBindData>(options, StringValue::Get(pattern_str));
 		}
 	}
 	return make_unique<RegexpMatchesBindData>(options, "");
@@ -200,8 +200,8 @@ static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarF
 			throw InvalidInputException("Regex options field must be a constant");
 		}
 		Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[3]);
-		if (!options_str.is_null && options_str.type().id() == LogicalTypeId::VARCHAR) {
-			ParseRegexOptions(options_str.str_value, data->options, &data->global_replace);
+		if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
+			ParseRegexOptions(StringValue::Get(options_str), data->options, &data->global_replace);
 		}
 	}
 
@@ -262,8 +262,8 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 	string pattern = "";
 	if (constant_pattern) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-		if (!pattern_str.is_null && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
-			pattern = pattern_str.str_value;
+		if (!pattern_str.IsNull() && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
+			pattern = StringValue::Get(pattern_str);
 		}
 	}
 
@@ -273,7 +273,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 			throw InvalidInputException("Group index field field must be a constant!");
 		}
 		Value group = ExpressionExecutor::EvaluateScalar(*arguments[2]);
-		if (!group.is_null) {
+		if (!group.IsNull()) {
 			auto group_idx = group.GetValue<int32_t>();
 			if (group_idx < 0 || group_idx > 9) {
 				throw InvalidInputException("Group index must be between 0 and 9!");

@@ -113,7 +113,7 @@ int di_compare(const void *op1, const void *op2) {
  * Side Effects:
  * TODO: None
  */
-d_idx_t *find_dist(char *name) {
+d_idx_t *find_dist(const char *name) {
 	static int entry_count;
 	static d_idx_t *idx = NULL;
 	d_idx_t key, *id = NULL;
@@ -507,7 +507,7 @@ static int load_dist(d_idx_t *di) {
  * Side Effects:
  * TODO: 20000317 Need to be sure this is portable to NT and others
  */
-int dist_op(void *dest, int op, char *d_name, int vset, int wset, int stream) {
+int dist_op(void *dest, int op, const char *d_name, int vset, int wset, int stream) {
 	d_idx_t *d;
 	dist_t *dist;
 	int level, index = 0, dt;
@@ -589,7 +589,7 @@ int dist_op(void *dest, int op, char *d_name, int vset, int wset, int stream) {
  * TODO:
  *	20000405 need to add error checking
  */
-int dist_weight(int *dest, char *d, int index, int wset) {
+int dist_weight(int *dest, const char *d, int index, int wset) {
 	d_idx_t *d_idx;
 	dist_t *dist;
 	int res;
@@ -630,7 +630,7 @@ int dist_weight(int *dest, char *d, int index, int wset) {
  * Side Effects:
  * TODO:
  */
-int DistNameIndex(char *szDist, int nNameType, char *szName) {
+int DistNameIndex(const char *szDist, int nNameType, const char *szName) {
 	d_idx_t *d_idx;
 	dist_t *dist;
 	int res;
@@ -677,7 +677,7 @@ int DistNameIndex(char *szDist, int nNameType, char *szName) {
  * TODO:
  *	20000405 need to add error checking
  */
-int distsize(char *name) {
+int distsize(const char *name) {
 	d_idx_t *dist;
 
 	dist = find_dist(name);
@@ -704,7 +704,7 @@ int distsize(char *name) {
  * TODO:
  */
 
-int IntegrateDist(char *szDistName, int nPct, int nStartIndex, int nWeightSet) {
+int IntegrateDist(const char *szDistName, int nPct, int nStartIndex, int nWeightSet) {
 	d_idx_t *pDistIndex;
 	int nGoal, nSize;
 
@@ -744,7 +744,7 @@ int IntegrateDist(char *szDistName, int nPct, int nStartIndex, int nWeightSet) {
  * Side Effects:
  * TODO:
  */
-int dist_type(char *name, int nValueSet) {
+int dist_type(const char *name, int nValueSet) {
 	d_idx_t *dist;
 
 	dist = find_dist(name);
@@ -772,7 +772,7 @@ int dist_type(char *name, int nValueSet) {
  * Side Effects:
  * TODO: None
  */
-void dump_dist(char *name) {
+void dump_dist(const char *name) {
 	d_idx_t *pIndex;
 	int i, j;
 	char *pCharVal = NULL;
@@ -829,7 +829,7 @@ void dump_dist(char *name) {
  * Side Effects:
  * TODO: None
  */
-int dist_active(char *szName, int nWeightSet) {
+int dist_active(const char *szName, int nWeightSet) {
 	int nSize, nResult = 0, i;
 
 	nSize = distsize(szName);
@@ -854,7 +854,7 @@ int dist_active(char *szName, int nWeightSet) {
  * Side Effects:
  * TODO: None
  */
-int DistSizeToShiftWidth(char *szDist, int nWeightSet) {
+int DistSizeToShiftWidth(const char *szDist, int nWeightSet) {
 	int nBits = 1, nTotal = 2, nMax;
 	d_idx_t *d;
 
@@ -883,7 +883,7 @@ int DistSizeToShiftWidth(char *szDist, int nWeightSet) {
  * Side Effects:
  * TODO: None
  */
-int MatchDistWeight(void *dest, char *szDist, int nWeight, int nWeightSet, int ValueSet) {
+int MatchDistWeight(void *dest, const char *szDist, int nWeight, int nWeightSet, int ValueSet) {
 	d_idx_t *d;
 	dist_t *dist;
 	int index = 0, dt, i_res, nRetcode;
@@ -956,7 +956,7 @@ int MatchDistWeight(void *dest, char *szDist, int nWeight, int nWeightSet, int V
  * TODO:
  * 20031024 jms this routine needs to handle all data types, not just varchar
  */
-int findDistValue(char *szValue, char *szDistName, int ValueSet) {
+int findDistValue(const char *szValue, const char *szDistName, int ValueSet) {
 	int nRetValue = 1, nDistMax;
 	char szDistValue[128];
 
