@@ -35,10 +35,10 @@ test_that("duckdb custom scalars translated correctly", {
   translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
   sql <- function(...) dbplyr::sql(...)
 
-  #  expect_equal(translate(as(1,"CHARACTER")),            sql(r"{CAST(1.0 AS TEXT}"))        # Not implemented
+  #  expect_equal(translate(as(1,"CHARACTER")), sql(r"{CAST(1.0 AS TEXT}"))        # Not implemented
   expect_equal(translate(as.raw(10)), sql(r"{CAST(10.0 AS VARBINARY)}"))
   expect_equal(translate(13 %% 5), sql(r"{(CAST((13.0) AS INTEGER)) % (CAST((5.0) AS INTEGER))}"))
-  #  expect_equal(translate(35.8 %/% 4),                   sql(r"{(((CAST((35.8) AS INTEGER)) - (CAST((35.8) AS INTEGER)) % (CAST((4.0) AS INTEGER)))) / (CAST((4.0) AS INTEGER))}"))
+  #  expect_equal(translate(35.8 %/% 4), sql(r"{(((CAST((35.8) AS INTEGER)) - (CAST((35.8) AS INTEGER)) % (CAST((4.0) AS INTEGER)))) / (CAST((4.0) AS INTEGER))}"))
   expect_equal(translate(35.8^2.51), sql(r"{POW(35.8, 2.51)}"))
   expect_equal(translate(bitwOr(x, 128L)), sql(r"{(CAST("x" AS INTEGER)) | (CAST(128 AS INTEGER))}"))
   expect_equal(translate(bitwAnd(x, 128)), sql(r"{(CAST("x" AS INTEGER)) & (CAST(128.0 AS INTEGER))}"))
@@ -57,9 +57,7 @@ test_that("duckdb custom scalars translated correctly", {
   expect_equal(translate(is.infinite(var1)), sql(r"{("var1" IS NOT NULL AND REGEXP_MATCHES(PRINTF('%f',"var1"),'inf'))}"))
   expect_equal(translate(is.finite(var1)), sql(r"{(NOT ("var1" IS NULL OR REGEXP_MATCHES(PRINTF('%f',"var1"),'inf|nan')))}"))
   expect_equal(translate(grepl("pattern", text)), sql(r"{REGEXP_MATCHES("text", 'pattern')}"))
-  expect_equal(translate(grepl("pattern", text,
-    ignore.case = TRUE
-  )), sql(r"{REGEXP_MATCHES("text", '(?i)pattern')}"))
+  expect_equal(translate(grepl("pattern", text, ignore.case = TRUE)), sql(r"{REGEXP_MATCHES("text", '(?i)pattern')}"))
   expect_error(translate(grepl("dummy", txt, perl = TRUE)))
   expect_equal(translate(regexpr("pattern", text)), sql(r"{(LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX("text", 'pattern'), 0)) + 1)}"))
   expect_equal(translate(round(x, digits = 1.1)), sql(r"{ROUND("x", CAST(ROUND(1.1, 0) AS INTEGER))}"))
@@ -180,4 +178,216 @@ test_that("two variable aggregates are translated correctly", {
 
   expect_equal(translate(cor(x, y), window = FALSE), sql(r"{CORR("x", "y")}"))
   expect_equal(translate(cor(x, y), window = TRUE), sql(r"{CORR("x", "y") OVER ()}"))
+})
+
+
+
+
+# Snapshot tests
+
+test_that("snapshots of dbplyr generic scalar translation", {
+  skip_on_cran()
+  skip_if_not_installed("dbplyr")
+  local_edition(3)
+  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+
+  expect_snapshot({
+    translate(as.character(1))
+    translate(as.character(1L))
+    translate(as.numeric(1))
+    translate(as.double(1.2))
+    translate(as.integer(1.2))
+    translate(as.integer64(1.2))
+    translate(as.logical("TRUE"))
+    translate(tolower("HELLO"))
+    translate(toupper("hello"))
+    translate(pmax(1, 2, na.rm = TRUE))
+    translate(pmin(1, 2, na.rm = TRUE))
+    translate(as.character("2020-01-01"))
+    translate(c("2020-01-01", "2020-13-02"))
+    translate(iris[["sepal_length"]])
+    translate(iris[[1]])
+    translate(cot(x))
+    translate(substr("test", 2, 3))
+  })
+})
+
+
+test_that("snapshots of duckdb custom scalars translations", {
+  skip_on_cran()
+  skip_if_not_installed("dbplyr")
+  local_edition(3)
+  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+
+  expect_snapshot({
+    #  translate(as(1,"CHARACTER"))        # Not implemented
+    translate(as.raw(10))
+    translate(13 %% 5)
+    #  translate(35.8 %/% 4)               # Inconsistent - implementation pending
+    translate(35.8^2.51)
+    translate(bitwOr(x, 128L))
+    translate(bitwAnd(x, 128))
+    translate(bitwXor(x, 128L))
+    translate(bitwNot(x))
+    translate(bitwShiftL(x, 5L))
+    translate(bitwShiftR(x, 4L))
+    translate(log(x))
+    translate(log(x, base = 5))
+    translate(log(x, base = 10))
+    translate(log(x, base = 2))
+    translate(log10(x))
+    translate(log2(x))
+    translate(is.na(var1))
+    translate(is.nan(var1))
+    translate(is.infinite(var1))
+    translate(is.finite(var1))
+    translate(grepl("pattern", text))
+    translate(grepl("pattern", text, ignore.case = TRUE))
+    #  translate(grepl("dummy", txt, perl = TRUE)) # Error tests later
+    translate(regexpr("pattern", text))
+    translate(round(x, digits = 1.1))
+    translate(as.Date("2019-01-01"))
+    translate(as.POSIXct("2019-01-01 01:01:01"))
+  })
+})
+
+
+
+test_that("snapshot tests for pasting translate", {
+  skip_on_cran()
+  skip_if_not_installed("dbplyr")
+  local_edition(3)
+  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+
+  expect_snapshot({
+    translate(paste("hi", "bye"))
+    translate(paste("hi", "bye", sep = "-"))
+    translate(paste0("hi", "bye"))
+
+    translate(paste(x, y), window = FALSE)
+    translate(paste0(x, y), window = FALSE)
+
+    #    translate(paste0(x, collapse = ""), window = FALSE)  # Expected error
+  })
+})
+
+
+# lubridate functions
+
+test_that("snapshots for custom lubridate functions translated correctly", {
+  skip_on_cran()
+  skip_if_not_installed("dbplyr")
+  local_edition(3)
+  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+
+  expect_snapshot({
+    translate(yday(x))
+    translate(quarter(x))
+    translate(quarter(x))
+    translate(quarter(x, type = "year.quarter"))
+    translate(quarter(x, type = "quarter"))
+    translate(quarter(x, type = TRUE))
+    translate(quarter(x, type = FALSE))
+    translate(quarter(x, type = "date_first"))
+    translate(quarter(x, type = "date_last"))
+    #    translate(quarter(x, type = "other"))       # Not supported - error
+    #    translate(quarter(x, fiscal_start = 2))     # Not supported - error
+    translate(month(x, label = FALSE))
+    translate(month(x, label = TRUE))
+    translate(month(x, label = TRUE, abbr = FALSE))
+    translate(qday(x))
+    translate(wday(x))
+    translate(wday(x, week_start = 4))
+    translate(wday(x, label = TRUE))
+    translate(wday(x, label = TRUE, abbr = FALSE))
+    translate(seconds(x))
+    translate(minutes(x))
+    translate(hours(x))
+    translate(days(x))
+    translate(weeks(x))
+    translate(months(x))
+    translate(years(x))
+    translate(floor_date(x, "month"))
+    translate(floor_date(x, "week"))
+    translate(floor_date(x, "week", week_start = 1))
+    translate(floor_date(x, "week", week_start = 4))
+  })
+})
+
+# stringr functions
+
+test_that("snapshots for custom stringr functions translated correctly", {
+  skip_on_cran()
+  skip_if_not_installed("dbplyr")
+  local_edition(3)
+  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+
+  expect_snapshot({
+    translate(str_c(x, y))
+    #  translate(str_c(x, collapse = ""))  # Error
+    translate(str_detect(x, y))
+    translate(str_detect(x, y, negate = TRUE))
+    translate(str_replace(x, y, z))
+    translate(str_replace_all(x, y, z))
+    translate(str_squish(x))
+    translate(str_remove(x, y))
+    translate(str_remove_all(x, y))
+    translate(str_to_sentence(x))
+    translate(str_starts(x, y))
+    translate(str_ends(x, y))
+    translate(str_pad(x, width = 10))
+    translate(str_pad(x, width = 10, side = "right"))
+    translate(str_pad(x, width = 10, side = "both", pad = "<"))
+    #  translate(str_pad(x, width = 10, side = "other")) # Error
+  })
+})
+
+test_that("snapshots datetime escaping working as in DBI", {
+  skip_on_cran()
+  skip_if_not_installed("dbplyr")
+  local_edition(3)
+  con <- duckdb::translate_duckdb()
+  escape <- function(...) dbplyr::escape(...)
+
+  expect_snapshot({
+    test_date <- as.Date("2020-01-01")
+    escape(test_date, con = con)
+    escape("2020-01-01", con = con)
+
+    test_datetime <- as.POSIXct("2020-01-01 01:23:45 UTC", tz = "UTC")
+    escape(test_datetime, con = con)
+    escape("2020-01-01 01:23:45 UTC", con = con)
+
+    test_datetime_tz <- as.POSIXct("2020-01-01 18:23:45 UTC", tz = "America/Los_Angeles")
+    escape(test_datetime_tz, con = con)
+    escape("2020-01-01 18:23:45 PST", con = con)
+  })
+})
+
+test_that("two variable aggregates are translated correctly", {
+  skip_on_cran()
+  skip_if_not_installed("dbplyr")
+  local_edition(3)
+  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+
+  expect_snapshot({
+    translate(cor(x, y), window = FALSE)
+    translate(cor(x, y), window = TRUE)
+  })
+})
+
+test_that("these should give errors", {
+  skip_on_cran()
+  skip_if_not_installed("dbplyr")
+  local_edition(3)
+  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+
+  expect_snapshot(error = TRUE, {
+    translate(grepl("dummy", txt, perl = TRUE)) # Expected error
+    translate(paste0(x, collapse = ""), window = FALSE) # Expected error
+    translate(quarter(x, type = "other")) # Not supported - error
+    translate(quarter(x, fiscal_start = 2)) # Not supported - error
+    translate(str_c(x, collapse = "")) # Error
+    translate(str_pad(x, width = 10, side = "other")) # Error
+  })
 })
