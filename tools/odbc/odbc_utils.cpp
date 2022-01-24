@@ -5,6 +5,8 @@
 #include <regex>
 
 using duckdb::OdbcUtils;
+using std::string;
+using std::vector;
 
 string OdbcUtils::ReadString(const SQLPOINTER ptr, const SQLSMALLINT len) {
 	return len == SQL_NTS ? string((const char *)ptr) : string((const char *)ptr, (size_t)len);
@@ -94,65 +96,66 @@ string OdbcUtils::ParseStringFilter(const string &filter_name, const string &fil
 
 string OdbcUtils::GetQueryDuckdbColumns(const string &catalog_filter, const string &schema_filter,
                                         const string &table_filter, const string &column_filter) {
-	string sql_duckdb_columns =
-	    "SELECT "
-	    "NULL \"TABLE_CAT\", "
-	    "schema_name \"TABLE_SCHEM\", "
-	    "table_name \"TABLE_NAME\", "
-	    "column_name \"COLUMN_NAME\", "
-	    "data_type_id \"DATA_TYPE\", "
-	    "data_type \"TYPE_NAME\", "
-	    "CASE "
-	    "WHEN data_type='DATE' THEN 12 "
-	    "WHEN data_type='TIME' THEN 15 "
-	    "WHEN data_type LIKE 'TIMESTAMP%' THEN 26 "
-	    "WHEN data_type='CHAR' OR data_type='BOOLEAN' THEN 1 "
-	    "WHEN data_type='VARCHAR' OR data_type='BLOB' THEN character_maximum_length "
-	    "WHEN data_type LIKE '%INT%' THEN numeric_precision "
-	    "WHEN data_type like 'DECIMAL%' THEN numeric_precision "
-	    "WHEN data_type='FLOAT' OR data_type='DOUBLE' THEN numeric_precision "
-	    "ELSE NULL "
-	    "END as \"COLUMN_SIZE\", "
-	    "CASE "
-	    "WHEN data_type='DATE' THEN 4 "
-	    "WHEN data_type='TIME' THEN 8 "
-	    "WHEN data_type LIKE 'TIMESTAMP%' THEN 8 "
-	    "WHEN data_type='CHAR' OR data_type='BOOLEAN' THEN 1 "
-	    "WHEN data_type='VARCHAR' OR data_type='BLOB' THEN 16 "
-	    "WHEN data_type LIKE '%TINYINT' THEN 1 "
-	    "WHEN data_type LIKE '%SMALLINT' THEN 2 "
-	    "WHEN data_type LIKE '%INTEGER' THEN 4 "
-	    "WHEN data_type LIKE '%BIGINT' THEN 8 "
-	    "WHEN data_type='HUGEINT' THEN 16 "
-	    "WHEN data_type='FLOAT' THEN 4 "
-	    "WHEN data_type='DOUBLE' THEN 8 "
-	    "ELSE NULL "
-	    "END as \"BUFFER_LENGTH\", "
-	    "numeric_scale \"DECIMAL_DIGITS\", "
-	    "numeric_precision_radix \"NUM_PREC_RADIX\", "
-	    "CASE is_nullable "
-	    "WHEN false THEN 0 "
-	    "WHEN true THEN 1 "
-	    "ELSE 2 "
-	    "END as \"NULLABLE\", "
-	    "NULL \"REMARKS\", "
-	    "column_default \"COLUMN_DEF\", "
-	    "data_type_id  \"SQL_DATA_TYPE\", "
-	    "CASE "
-	    "WHEN data_type='DATE' OR data_type='TIME' OR data_type LIKE 'TIMESTAMP%' THEN data_type_id "
-	    "ELSE NULL "
-	    "END as \"SQL_DATETIME_SUB\", "
-	    "CASE "
-	    "WHEN data_type='%CHAR' OR data_type='BLOB' THEN character_maximum_length "
-	    "ELSE NULL "
-	    "END as \"CHAR_OCTET_LENGTH\", "
-	    "column_index as \"ORDINAL_POSITION\", "
-	    "CASE is_nullable "
-	    "WHEN false THEN 'NO' "
-	    "WHEN true THEN 'YES' "
-	    "ELSE '' "
-	    "END as \"IS_NULLABLE\" "
-	    "FROM duckdb_columns";
+	string sql_duckdb_columns = R"(
+		SELECT
+			NULL "TABLE_CAT", 
+			schema_name "TABLE_SCHEM", 
+			table_name "TABLE_NAME", 
+			column_name "COLUMN_NAME", 
+			data_type_id "DATA_TYPE", 
+			data_type "TYPE_NAME", 
+			CASE 
+				WHEN data_type='DATE' THEN 12 
+				WHEN data_type='TIME' THEN 15 
+				WHEN data_type LIKE 'TIMESTAMP%' THEN 26 
+				WHEN data_type='CHAR' OR data_type='BOOLEAN' THEN 1 
+				WHEN data_type='VARCHAR' OR data_type='BLOB' THEN character_maximum_length 
+				WHEN data_type LIKE '%INT%' THEN numeric_precision 
+				WHEN data_type like 'DECIMAL%' THEN numeric_precision 
+				WHEN data_type='FLOAT' OR data_type='DOUBLE' THEN numeric_precision 
+				ELSE NULL 
+			END as "COLUMN_SIZE", 
+			CASE 
+				WHEN data_type='DATE' THEN 4 
+				WHEN data_type='TIME' THEN 8 
+				WHEN data_type LIKE 'TIMESTAMP%' THEN 8 
+				WHEN data_type='CHAR' OR data_type='BOOLEAN' THEN 1 
+				WHEN data_type='VARCHAR' OR data_type='BLOB' THEN 16 
+				WHEN data_type LIKE '%TINYINT' THEN 1 
+				WHEN data_type LIKE '%SMALLINT' THEN 2 
+				WHEN data_type LIKE '%INTEGER' THEN 4 
+				WHEN data_type LIKE '%BIGINT' THEN 8 
+				WHEN data_type='HUGEINT' THEN 16 
+				WHEN data_type='FLOAT' THEN 4 
+				WHEN data_type='DOUBLE' THEN 8 
+				ELSE NULL 
+			END as "BUFFER_LENGTH", 
+			numeric_scale "DECIMAL_DIGITS", 
+			numeric_precision_radix "NUM_PREC_RADIX", 
+			CASE is_nullable 
+				WHEN false THEN 0 
+				WHEN true THEN 1 
+				ELSE 2 
+			END as "NULLABLE", 
+			NULL "REMARKS", 
+			column_default "COLUMN_DEF", 
+			data_type_id  "SQL_DATA_TYPE", 
+			CASE 
+				WHEN data_type='DATE' OR data_type='TIME' OR data_type LIKE 'TIMESTAMP%' THEN data_type_id 
+				ELSE NULL 
+			END as "SQL_DATETIME_SUB", 
+			CASE  
+				WHEN data_type='%CHAR' OR data_type='BLOB' THEN character_maximum_length 
+				ELSE NULL 
+			END as "CHAR_OCTET_LENGTH", 
+			column_index as "ORDINAL_POSITION", 
+			CASE is_nullable 
+				WHEN false THEN 'NO' 
+				WHEN true THEN 'YES' 
+				ELSE '' 
+			END as "IS_NULLABLE" 
+		FROM duckdb_columns
+	)";
 
 	sql_duckdb_columns +=
 	    " WHERE " + catalog_filter + " AND " + schema_filter + " AND " + table_filter + " AND " + column_filter;
@@ -162,19 +165,22 @@ string OdbcUtils::GetQueryDuckdbColumns(const string &catalog_filter, const stri
 
 string OdbcUtils::GetQueryDuckdbTables(const string &schema_filter, const string &table_filter,
                                        const string &table_type_filter) {
-	string sql_duckdb_tables = "SELECT "
-	                           "table_catalog::VARCHAR \"TABLE_CAT\", "
-	                           "table_schema \"TABLE_SCHEM\", "
-	                           "table_name \"TABLE_NAME\", "
-	                           "CASE "
-	                           "WHEN table_type='BASE TABLE' "
-	                           "THEN 'TABLE' "
-	                           "ELSE table_type "
-	                           "END \"TABLE_TYPE\" ,"
-	                           "'' \"REMARKS\"  "
-	                           "FROM information_schema.tables "
-	                           "WHERE " +
-	                           schema_filter + " AND " + table_filter;
+	string sql_duckdb_tables = R"(
+		SELECT 
+			table_catalog::VARCHAR "TABLE_CAT", 
+			table_schema "TABLE_SCHEM", 
+			table_name "TABLE_NAME", 
+			CASE 
+				WHEN table_type='BASE TABLE' 
+				THEN 'TABLE' 
+				ELSE table_type 
+			END "TABLE_TYPE", 
+			'' "REMARKS"  
+			FROM information_schema.tables
+	)";
+
+	sql_duckdb_tables += " WHERE " + schema_filter + " AND " + table_filter;
+
 	if (!table_type_filter.empty()) {
 		sql_duckdb_tables += " AND table_type IN (" + table_type_filter + ") ";
 	}

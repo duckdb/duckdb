@@ -137,53 +137,28 @@ void ApiInfo::FindDataType(SQLSMALLINT data_type, vector<TypeInfo> &vec_types) {
 }
 
 void ApiInfo::WriteInfoTypesToQueryString(const vector<TypeInfo> &vec_types, string &query) {
-	bool first = true;
 	for (auto info_type : vec_types) {
 		query += "(";
-		if (first) {
-			query += "CAST(" + string(info_type.type_name) + " AS VARCHAR),";
-			query += "CAST(" + std::to_string(info_type.data_type) + " AS SMALLINT),";
-			query += "CAST(" + std::to_string(info_type.column_size) + " AS INTEGER),";
-			query += "CAST(" + string(info_type.literal_prefix) + " AS VARCHAR),";
-			query += "CAST(" + string(info_type.literal_suffix) + " AS VARCHAR),";
-			query += "CAST(" + string(info_type.create_params) + " AS VARCHAR),";
-			query += "CAST(" + std::to_string(info_type.nullable) + " AS SMALLINT),";
-			query += "CAST(" + std::to_string(info_type.case_sensitive) + " AS SMALLINT),";
-			query += "CAST(" + std::to_string(info_type.searchable) + " AS SMALLINT),";
-			query += "CAST(" + std::to_string(info_type.unsigned_attribute) + " AS SMALLINT),";
-			query += "CAST(" + std::to_string(info_type.fixed_prec_scale) + " AS SMALLINT),";
-			query += "CAST(" + std::to_string(info_type.auto_unique_value) + " AS SMALLINT),";
-			query += "CAST(" + string(info_type.local_type_name) + " AS VARCHAR),";
-			query += "CAST(" + std::to_string(info_type.minimum_scale) + " AS SMALLINT),";
-			query += "CAST(" + std::to_string(info_type.maximum_scale) + " AS SMALLINT),";
-			query += "CAST(" + std::to_string(info_type.sql_data_type) + " AS SMALLINT),";
-			query += "CAST(" + std::to_string(info_type.sql_datetime_sub) + " AS SMALLINT),";
-			query += "CAST(" + std::to_string(info_type.num_prec_radix) + " AS integer),";
-			query += "CAST(" + std::to_string(info_type.interval_precision) + " AS SMALLINT)";
-			query += ")";
-		} else {
-			query += string(info_type.type_name) + ",";
-			query += std::to_string(info_type.data_type) + ",";
-			query += std::to_string(info_type.column_size) + ",";
-			query += string(info_type.literal_prefix) + ",";
-			query += string(info_type.literal_suffix) + ",";
-			query += string(info_type.create_params) + ",";
-			query += std::to_string(info_type.nullable) + ",";
-			query += std::to_string(info_type.case_sensitive) + ",";
-			query += std::to_string(info_type.searchable) + ",";
-			query += std::to_string(info_type.unsigned_attribute) + ",";
-			query += std::to_string(info_type.fixed_prec_scale) + ",";
-			query += std::to_string(info_type.auto_unique_value) + ",";
-			query += string(info_type.local_type_name) + ",";
-			query += std::to_string(info_type.minimum_scale) + ",";
-			query += std::to_string(info_type.maximum_scale) + ",";
-			query += std::to_string(info_type.sql_data_type) + ",";
-			query += std::to_string(info_type.sql_datetime_sub) + ",";
-			query += std::to_string(info_type.num_prec_radix) + ",";
-			query += std::to_string(info_type.interval_precision);
-			query += ")";
-		}
-		first = false;
+		query += "CAST(" + string(info_type.type_name) + " AS VARCHAR),";
+		query += "CAST(" + std::to_string(info_type.data_type) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.column_size) + " AS INTEGER),";
+		query += "CAST(" + string(info_type.literal_prefix) + " AS VARCHAR),";
+		query += "CAST(" + string(info_type.literal_suffix) + " AS VARCHAR),";
+		query += "CAST(" + string(info_type.create_params) + " AS VARCHAR),";
+		query += "CAST(" + std::to_string(info_type.nullable) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.case_sensitive) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.searchable) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.unsigned_attribute) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.fixed_prec_scale) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.auto_unique_value) + " AS SMALLINT),";
+		query += "CAST(" + string(info_type.local_type_name) + " AS VARCHAR),";
+		query += "CAST(" + std::to_string(info_type.minimum_scale) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.maximum_scale) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.sql_data_type) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.sql_datetime_sub) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.num_prec_radix) + " AS integer),";
+		query += "CAST(" + std::to_string(info_type.interval_precision) + " AS SMALLINT)";
+		query += ")";
 	}
 }
 

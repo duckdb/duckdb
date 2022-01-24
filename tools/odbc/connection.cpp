@@ -132,7 +132,7 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		return SQL_SUCCESS;
 	case SQL_TABLE_TERM: {
 		auto *dbc = (duckdb::OdbcHandleDbc *)connection_handle;
-		const string str_table("table");
+		const std::string str_table("table");
 		return OdbcUtils::SetStringAndLength(dbc->error_messages, str_table, info_value_ptr, buffer_length,
 		                                     string_length_ptr);
 	}
