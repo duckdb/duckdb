@@ -40,6 +40,10 @@ public:
 	unique_ptr<ParsedExpression> Copy() const override {
 		throw SerializationException("Cannot copy or serialize bound expression");
 	}
+
+	void Serialize(FieldWriter &writer) const override {
+		throw SerializationException("Cannot copy or serialize bound expression");
+	}
 };
 
 } // namespace duckdb
