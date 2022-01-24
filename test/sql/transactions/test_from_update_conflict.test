@@ -1,6 +1,7 @@
 # name: test/sql/transactions/test_from_update_conflict.test
 # description: Test correct checking for out-of-order row id updates
 # group: [transactions]
+
 statement ok con1
 CREATE TABLE test AS SELECT i AS a FROM range (2048, 5000, 1) t1(i)
 
