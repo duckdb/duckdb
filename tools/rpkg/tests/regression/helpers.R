@@ -1,7 +1,7 @@
 
 local({
 
-  pkgs <- c("gert", "remotes", "callr", "rlang", "bench", "tibble", "ggplot2",
+  pkgs <- c("gert", "remotes", "callr", "rlang", "bench", "ggplot2",
             "tidyr")
   avail <- pkgs %in% installed.packages()
 
@@ -140,8 +140,10 @@ bench_mark <- function(versions, ..., grid = NULL, setup = NULL,
                            env = env, time_unit = "s")
 
         arg <- lapply(c(list(version = vers), args), rep, nrow(res))
+        ind <- colnames(res) == "expression"
+        arg <- c(list(expression = names(res[[which(ind)]])), arg)
 
-        as_bench_mark(cbind(res[1], arg, res[-1]))
+        cbind(arg, res[!ind])
       }
 
       if (length(args)) {
@@ -153,8 +155,6 @@ bench_mark <- function(versions, ..., grid = NULL, setup = NULL,
 
     callr::r(eval_grid, c(args, vers), libpath = lib, show = TRUE)
   }
-
-  stopifnot(all(pkgs %in% installed.packages()))
 
   exprs <- rlang::exprs(...)
   setup <- rlang::enquo(setup)
@@ -172,7 +172,7 @@ bench_mark <- function(versions, ..., grid = NULL, setup = NULL,
     )
   )
 
-  do.call(rbind, res)
+  bench::as_bench_mark(do.call(rbind, res))
 }
 
 bench_plot <- function(object, type = c("beeswarm", "jitter", "ridge",
@@ -203,10 +203,6 @@ bench_plot <- function(object, type = c("beeswarm", "jitter", "ridge",
 
   if (type == "beeswarm" && !requireNamespace("ggbeeswarm", quietly = TRUE)) {
     stop("`ggbeeswarm` must be installed to use `type = \"beeswarm\"` option.")
-  }
-
-  if (inherits(object$expression, "bench_expr")) {
-    object$expression <- as.character(object$expression)
   }
 
   res <- tidyr::unnest(object, c(time, gc))

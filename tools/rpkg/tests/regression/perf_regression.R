@@ -3,7 +3,7 @@ pkg_root <- function(...) {
   file.path(rprojroot::find_root(rprojroot::is_git_root), "tools", "rpkg", ...)
 }
 
-helpers <- pkg_root("inst", "helpers.R")
+helpers <- pkg_root("tests", "regression", "helpers.R")
 
 source(helpers)
 
@@ -11,7 +11,6 @@ temp_lib_dir <- dir_create()
 
 versions <- list(
   master = list(repo = "duckdb/duckdb", branch = "master"),
-  master = list(repo = "nbenn/duckdb", branch = "cpp11"),
   release = list(repo = "duckdb/duckdb", ref = "v0.3.1")
 )
 
@@ -28,7 +27,7 @@ res <- bench_mark(
   reps = 50,
   grid = list(nrow = c(1e3, 1e5, 1e7)),
   setup = {
-    con <- dbConnect(duckdb(), dbdir = ":memory:")
+    con <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
     dat <- setup_data(nrow)
     arw <- InMemoryDataset$create(dat)
 
@@ -55,5 +54,5 @@ res <- bench_mark(
   }
 )
 
-bench_plot(res, check = TRUE, ref = "master", new = "cpp11", threshold = 0.1)
+bench_plot(res, check = TRUE, ref = "master", new = "cpp11", threshold = 0.15)
 ggplot2::ggsave("perf_reg.png", width = 9, height = 11)
