@@ -1,0 +1,40 @@
+# name: test/sql/aggregate/aggregates/test_state_export.test
+# description: Test the state export functionality
+# group: [aggregates]
+
+#statement ok
+#PRAGMA enable_verification
+
+statement ok
+PRAGMA disable_optimizer
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+query I
+SELECT sum(d) FROM dummy GROUP BY g ORDER BY g;
+----
+450
+460
+470
+480
+490
+500
+510
+520
+530
+540
+
+query I
+SELECT finalize(sum(d) EXPORT STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+450
+460
+470
+480
+490
+500
+510
+520
+530
+540

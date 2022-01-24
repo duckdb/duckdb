@@ -365,10 +365,18 @@ enum class LogicalTypeId : uint8_t {
 	LIST = 101,
 	MAP = 102,
 	TABLE = 103,
-	ENUM = 104
+	ENUM = 104,
+	AGGREGATE_STATE = 105
 };
 
 struct ExtraTypeInfo;
+
+struct LogicalType;
+struct aggregate_state_t {
+	string function_name;
+	vector<LogicalType> bound_argument_types;
+};
+
 
 struct LogicalType {
 	DUCKDB_API LogicalType();
@@ -473,6 +481,7 @@ public:
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
 	DUCKDB_API static LogicalType LIST( LogicalType child);                       // NOLINT
 	DUCKDB_API static LogicalType STRUCT( child_list_t<LogicalType> children);    // NOLINT
+	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type);    // NOLINT
 	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
@@ -523,6 +532,10 @@ struct StructType {
 struct MapType {
 	DUCKDB_API static const LogicalType &KeyType(const LogicalType &type);
 	DUCKDB_API static const LogicalType &ValueType(const LogicalType &type);
+};
+
+struct AggregateStateType {
+	DUCKDB_API static const aggregate_state_t &GetStateType(const LogicalType &type);
 };
 
 

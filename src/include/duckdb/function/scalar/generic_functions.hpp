@@ -48,4 +48,19 @@ struct SystemFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ExportAggregateFunctionBindData : public FunctionData {
+	AggregateFunction &function;
+
+	explicit ExportAggregateFunctionBindData(AggregateFunction &function_p) : function(function_p) {
+	}
+
+	unique_ptr<FunctionData> Copy() override {
+		return make_unique<ExportAggregateFunctionBindData>(function);
+	}
+};
+
+struct ExportAggregateFunction {
+	static AggregateFunction GetFunction(LogicalType &return_type, AggregateFunction &bound_function);
+};
+
 } // namespace duckdb

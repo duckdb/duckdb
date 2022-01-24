@@ -132,6 +132,8 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::INVALID;
 	case LogicalTypeId::USER:
 		return PhysicalType::UNKNOWN;
+	case LogicalTypeId::AGGREGATE_STATE:
+		return PhysicalType::VARCHAR;
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
 	}
@@ -426,6 +428,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "UNKNOWN";
 	case LogicalTypeId::ENUM:
 		return "ENUM";
+	case LogicalTypeId::AGGREGATE_STATE:
+		return "AGGREGATE_STATE<?>";
 	case LogicalTypeId::USER:
 		return "USER";
 	}
@@ -738,7 +742,8 @@ enum class ExtraTypeInfoType : uint8_t {
 	LIST_TYPE_INFO = 3,
 	STRUCT_TYPE_INFO = 4,
 	ENUM_TYPE_INFO = 5,
-	USER_TYPE_INFO = 6
+	USER_TYPE_INFO = 6,
+	AGGREGATE_STATE_TYPE_INFO = 7
 };
 
 struct ExtraTypeInfo {
@@ -943,6 +948,43 @@ public:
 	}
 };
 
+struct AggregateStateTypeInfo : public ExtraTypeInfo {
+	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p)
+	    : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), state_type(move(state_type_p)) {
+	}
+
+	aggregate_state_t state_type;
+
+public:
+	bool Equals(ExtraTypeInfo *other_p) const override {
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		auto &other = (AggregateStateTypeInfo &)*other_p;
+		return state_type.function_name == other.state_type.function_name &&
+		       state_type.bound_argument_types == other.state_type.bound_argument_types;
+	}
+
+	void Serialize(FieldWriter &writer) const override {
+		D_ASSERT(false); // TODO
+	}
+
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
+		D_ASSERT(false); // TODO
+		return nullptr;
+	}
+};
+
+const aggregate_state_t &AggregateStateType::GetStateType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::AGGREGATE_STATE);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((AggregateStateTypeInfo &)*info).state_type;
+}
+
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP);
 	auto info = type.AuxInfo();
@@ -969,6 +1011,11 @@ idx_t StructType::GetChildCount(const LogicalType &type) {
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	auto info = make_shared<StructTypeInfo>(move(children));
 	return LogicalType(LogicalTypeId::STRUCT, move(info));
+}
+
+LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) {
+	auto info = make_shared<AggregateStateTypeInfo>(move(state_type));
+	return LogicalType(LogicalTypeId::AGGREGATE_STATE, move(info));
 }
 
 //===--------------------------------------------------------------------===//
