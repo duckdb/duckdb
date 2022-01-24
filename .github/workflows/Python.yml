@@ -22,7 +22,7 @@ jobs:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy && pip install --prefer-binary "requests>=2.26" && pip install --prefer-binary "sqlalchemy" && (pip install --prefer-binary "pyarrow==6.0" || true)'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow==6.0" || true)'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
@@ -60,7 +60,7 @@ jobs:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy && pip install --prefer-binary "requests>=2.26" && pip install --prefer-binary "sqlalchemy"'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy && pip install --prefer-binary "requests>=2.26"'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
@@ -116,7 +116,7 @@ jobs:
         CIBW_BUILD: ${{ matrix.python_build}}
         CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
         CIBW_TEST_REQUIRES: 'pytest'
-        CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "requests>=2.26" "sqlalchemy" mypy && (pip install --prefer-binary "pyarrow==6.0" || true)'
+        CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "requests>=2.26" mypy && (pip install --prefer-binary "pyarrow==6.0" || true)'
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
         CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
@@ -158,9 +158,9 @@ jobs:
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
-        CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" "sqlalchemy" '
+        CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
         CIBW_TEST_REQUIRES: 'pytest'
-        CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"  "sqlalchemy" mypy'
+        CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" mypy'
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         TWINE_USERNAME: 'hfmuehleisen'
