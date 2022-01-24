@@ -9,23 +9,23 @@ typedef unsigned char sal_Bool;
 #   define sal_False ((sal_Bool)0)                
 #   define sal_True  ((sal_Bool)1) 
 
-typedef char                     sal_Char;
-typedef signed char              sal_sChar;
-typedef unsigned char            sal_uChar;
+typedef char                sal_Char;
+typedef signed char         sal_sChar;
+typedef unsigned char       sal_uChar;
 typedef signed char         sal_Int8;
 typedef unsigned char       sal_uInt8;
-typedef signed short      sal_Int16;
-typedef unsigned short    sal_uInt16;
-typedef signed long       sal_Int32;
-typedef unsigned long     sal_uInt32;
-typedef int64_t                sal_Int64;
-typedef uint64_t         sal_uInt64;
+typedef signed short        sal_Int16;
+typedef unsigned short      sal_uInt16;
+typedef signed long         sal_Int32;
+typedef unsigned long       sal_uInt32;
+typedef int64_t             sal_Int64;
+typedef uint64_t            sal_uInt64;
 typedef unsigned long		sal_uLong;
-typedef wchar_t          sal_Unicode;
-#define xub_StrLen		sal_uInt16
+typedef wchar_t             sal_Unicode;
 typedef std::wstring		String;
 typedef sal_Int64           sal_IntPtr;
 typedef sal_uInt64          sal_uIntPtr;
+typedef sal_uInt16          xub_StrLen;
 
 #define SAL_CONST_INT64(x)       x
 #define SAL_CONST_UINT64(x)      x
@@ -33,6 +33,9 @@ typedef sal_uInt64          sal_uIntPtr;
 #define TOOLS_DLLPUBLIC
 #define SV_NUMBERFORMATTER_VERSION_ADDITIONAL_I18N_FORMATS	0x000e
 #define SV_NUMBERFORMATTER_VERSION				0x000e
+#if defined(ULONG_MAX)
+#undef ULONG_MAX
+#endif
 #define ULONG_MAX 0xffffffffffffffffUL
 
 // Format types
@@ -64,9 +67,6 @@ typedef sal_uInt64          sal_uIntPtr;
 #define EraseLeadingChars(A, B)		A.erase(0, std::min(A.find_first_not_of(B), A.size() - 1))
 #define ConvertToUpper(A)		std::transform(A.begin(), A.end(), A.begin(), ::toupper)
 #define ConvertToLower(A)		std::transform(A.begin(), A.end(), A.begin(), ::tolower)
-
-typedef uint64_t idx_t;
-
 
 //=============================================================================
 
