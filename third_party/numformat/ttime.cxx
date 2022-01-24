@@ -6,7 +6,7 @@
 #define INCL_DOSMISC
 #define INCL_DOSDATETIME
 #include <svpm.h>
-#elif defined( WNT )
+#elif defined( _WIN32 )
 #ifdef _MSC_VER
 #pragma warning (push,1)
 #endif
@@ -23,7 +23,9 @@
 #endif
 
 #include <math.h>
+#if !defined(_WIN32)
 #include <sys/time.h>
+#endif
 #include <time.h>
 #include <ctime>
 #include "define.h"
@@ -302,7 +304,7 @@ Time Time::GetUTCOffset()
 	}
 	else
 		return Time( 0 );
-#elif defined( WNT )
+#elif defined( _WIN32 )
 	TIME_ZONE_INFORMATION	aTimeZone;
 	aTimeZone.Bias = 0;
 	DWORD nTimeZoneRet = GetTimeZoneInformation( &aTimeZone );
@@ -362,7 +364,7 @@ Time Time::GetUTCOffset()
 
 sal_uIntPtr Time::GetSystemTicks()
 {
-#if defined WNT
+#if defined _WIN32
 	return (sal_uIntPtr)GetTickCount();
 #elif defined( OS2 )
 	sal_uIntPtr nClock;
@@ -385,7 +387,7 @@ sal_uIntPtr Time::GetSystemTicks()
 
 sal_uIntPtr Time::GetProcessTicks()
 {
-#if defined WNT
+#if defined _WIN32
 	return (sal_uIntPtr)GetTickCount();
 #elif defined( OS2 )
 	sal_uIntPtr nClock;

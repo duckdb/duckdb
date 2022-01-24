@@ -61,6 +61,10 @@ typedef sal_uInt16          xub_StrLen;
 #define SAL_MAX_ENUM 0x7fffffff
 #define SAL_MAX_UINT16        ((sal_uInt16) 0xFFFF)
 #define SAL_MAX_INT32         ((sal_Int32)  0x7FFFFFFF)
+#if defined(_WIN32)
+#define localtime_r(A, B)			localtime_s(B, A)
+#define gmtime_r(A, B)				gmtime_s(B, A)
+#endif
 
 #define EraseAllChars(A, B)		A.erase(std::remove(A.begin(), A.end(), B ), A.end())
 #define EraseTrailingChars(A, B)	A.erase (A.find_last_not_of(B) + 1, std::string::npos )

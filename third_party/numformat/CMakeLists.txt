@@ -1,12 +1,13 @@
 cmake_minimum_required(VERSION 2.8.12)
 
-project(numformat CXX C)
+project(duckdb_numformat CXX C)
 if(POLICY CMP0063)
     cmake_policy(SET CMP0063 NEW)
 endif()
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-add_library(numformat STATIC
+add_library(duckdb_numformat STATIC
+            localedata.cpp
             calendar.cpp
             calendar.h
             CMakeLists.txt
@@ -30,15 +31,15 @@ add_library(numformat STATIC
             zforscan.hxx)           
 
 target_include_directories(
-  numformat
+  duckdb_numformat
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-set_target_properties(numformat PROPERTIES EXPORT_NAME duckdb_numformat)
+set_target_properties(duckdb_numformat PROPERTIES EXPORT_NAME duckdb_duckdb_numformat)
 
-install(TARGETS numformat
+install(TARGETS duckdb_numformat
         EXPORT "${DUCKDB_EXPORT_SET}"
         LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
         ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
 
-disable_target_warnings(numformat)
+disable_target_warnings(duckdb_numformat)
 
-set_target_properties(numformat PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(duckdb_numformat PROPERTIES POSITION_INDEPENDENT_CODE ON)
