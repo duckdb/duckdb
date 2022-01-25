@@ -1,7 +1,7 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 
 namespace duckdb {
@@ -33,15 +33,14 @@ unique_ptr<ParsedExpression> ComparisonExpression::Copy() const {
 	return move(copy);
 }
 
-void ComparisonExpression::Serialize(Serializer &serializer) {
-	ParsedExpression::Serialize(serializer);
-	left->Serialize(serializer);
-	right->Serialize(serializer);
+void ComparisonExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializable(*left);
+	writer.WriteSerializable(*right);
 }
 
-unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(ExpressionType type, Deserializer &source) {
-	auto left_child = ParsedExpression::Deserialize(source);
-	auto right_child = ParsedExpression::Deserialize(source);
+unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	auto left_child = reader.ReadRequiredSerializable<ParsedExpression>();
+	auto right_child = reader.ReadRequiredSerializable<ParsedExpression>();
 	return make_unique<ComparisonExpression>(type, move(left_child), move(right_child));
 }
 

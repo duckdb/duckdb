@@ -103,7 +103,7 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 			auto table = (TableCatalogEntry *)new_obj;
 			bool deleted_dependency = true;
 			for (auto &column : table->columns) {
-				if (column.type == *user_type->user_type) {
+				if (column.type == user_type->user_type) {
 					deleted_dependency = false;
 					break;
 				}

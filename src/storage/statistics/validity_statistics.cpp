@@ -1,6 +1,6 @@
 #include "duckdb/storage/statistics/validity_statistics.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
@@ -24,7 +24,7 @@ unique_ptr<BaseStatistics> ValidityStatistics::Combine(const unique_ptr<BaseStat
 	}
 }
 
-bool ValidityStatistics::IsConstant() {
+bool ValidityStatistics::IsConstant() const {
 	if (!has_null) {
 		return true;
 	}
@@ -40,23 +40,22 @@ void ValidityStatistics::Merge(const BaseStatistics &other_p) {
 	has_no_null = has_no_null || other.has_no_null;
 }
 
-unique_ptr<BaseStatistics> ValidityStatistics::Copy() {
+unique_ptr<BaseStatistics> ValidityStatistics::Copy() const {
 	return make_unique<ValidityStatistics>(has_null, has_no_null);
 }
 
-void ValidityStatistics::Serialize(Serializer &serializer) {
-	BaseStatistics::Serialize(serializer);
-	serializer.Write<bool>(has_null);
-	serializer.Write<bool>(has_no_null);
+void ValidityStatistics::Serialize(FieldWriter &writer) const {
+	writer.WriteField<bool>(has_null);
+	writer.WriteField<bool>(has_no_null);
 }
 
-unique_ptr<BaseStatistics> ValidityStatistics::Deserialize(Deserializer &source) {
-	bool has_null = source.Read<bool>();
-	bool has_no_null = source.Read<bool>();
+unique_ptr<BaseStatistics> ValidityStatistics::Deserialize(FieldReader &reader) {
+	bool has_null = reader.ReadRequired<bool>();
+	bool has_no_null = reader.ReadRequired<bool>();
 	return make_unique<ValidityStatistics>(has_null, has_no_null);
 }
 
-void ValidityStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) {
+void ValidityStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {
 	if (has_null && has_no_null) {
 		// nothing to verify
 		return;
@@ -80,7 +79,7 @@ void ValidityStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_
 	}
 }
 
-string ValidityStatistics::ToString() {
+string ValidityStatistics::ToString() const {
 	return has_null ? "[Has Null: true]" : "[Has Null: false]";
 }
 
