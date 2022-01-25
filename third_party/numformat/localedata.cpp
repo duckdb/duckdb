@@ -1,6 +1,8 @@
 #include "calendar.h"
 #include "localedata.h"
 
+namespace duckdb_numformat {
+
 LocaleData::LocaleData()
 {
 	LoadLocaleData();
@@ -183,4 +185,4 @@ void LocaleData::LoadLocaleData()
 	m_locale_list[LocaleId_fr_FR].eras.push_back({ L"av. J.-C.", L"av. J.-C." });
 	m_locale_list[LocaleId_fr_FR].eras.push_back({ L"apr. J.-C.", L"ap. J.-C." });
 }
-
+}	// namespace duckdb_numformat

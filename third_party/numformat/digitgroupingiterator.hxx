@@ -4,6 +4,8 @@
 #include <vector>
 #include "define.h"
 
+namespace duckdb_numformat {
+
 /** Iterator to be used with a digit grouping as obtained through
     LocaleDataWrapper::getDigitGrouping().
 
@@ -141,34 +143,7 @@ public:
     {
         initGrouping();
     }
-
-    /** Create a sequence of bool values containing positions where to add a
-        separator when iterating forward over a string and copying digit per
-        digit. For example, for grouping in thousands and nIntegerDigits==7 the
-        sequence returned would be {1,0,0,1,0,0,0} so the caller would add a
-        separator after the 1st and the 4th digit. */
-    static std::vector<sal_Bool> createForwardSequence(
-            sal_Int32 nIntegerDigits,
-            std::vector<int32_t>& rGroupings )
-    {
-		std::vector<sal_Bool> aSeq;
-		if (nIntegerDigits <= 0)
-            return aSeq;
-        DigitGroupingIterator aIterator( rGroupings);
-		aSeq.resize(nIntegerDigits);
-        sal_Bool* pArr = aSeq.data();
-        for (sal_Int32 j = 0; --nIntegerDigits >= 0; ++j)
-        {
-            if (j == aIterator.getPos())
-            {
-                pArr[nIntegerDigits] = sal_True;
-                aIterator.advance();
-            }
-            else
-                pArr[nIntegerDigits] = sal_False;
-        }
-        return aSeq;
-    }
 };
+}   // namespace duckdb_numformat
 
 #endif // INCLUDED_UNOTOOLS_DIGITGROUPINGITERATOR_HXX

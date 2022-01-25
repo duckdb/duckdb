@@ -3,6 +3,8 @@
 
 #include "define.h"
 
+namespace duckdb_numformat {
+
 class ResId;
 
 // --------
@@ -81,5 +83,6 @@ public:
 	TOOLS_DLLPUBLIC friend Time 	operator +( const Time& rTime1, const Time& rTime2 );
 	TOOLS_DLLPUBLIC friend Time 	operator -( const Time& rTime1, const Time& rTime2 );
 };
+}	// namespace duckdb_numformat
 
 #endif // _TOOLS_TIME_HXX

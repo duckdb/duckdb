@@ -35,6 +35,8 @@
 extern long altzone;
 #endif
 
+namespace duckdb_numformat {
+
 // =======================================================================
 
 static sal_Int32 TimeToSec100( const Time& rTime )
@@ -413,3 +415,4 @@ sal_uIntPtr Time::GetProcessTicks()
 	return (sal_uIntPtr)fTicks;
 #endif
 }
+}	// namespace duckdb_numformat

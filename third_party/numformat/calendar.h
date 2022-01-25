@@ -8,6 +8,8 @@
 #include "time.hxx"
 #include "localedata.h"
 
+namespace duckdb_numformat {
+
 //	----------------------------------------------------
 //	class Calendar
 //	----------------------------------------------------
@@ -87,5 +89,6 @@ private:
 	sal_Int32 getZoneOffsetInMillis();
 	sal_Int32 getDSTOffsetInMillis();
 };
+}   // namespace duckdb_numformat
 
 #endif

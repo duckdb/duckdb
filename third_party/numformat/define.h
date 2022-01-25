@@ -5,9 +5,11 @@
 #include <string>
 #include <algorithm>
 
-typedef unsigned char sal_Bool;
-#   define sal_False ((sal_Bool)0)                
-#   define sal_True  ((sal_Bool)1) 
+namespace duckdb_numformat {
+
+typedef bool sal_Bool;
+#define sal_False false
+#define sal_True  true
 
 typedef char                sal_Char;
 typedef signed char         sal_sChar;
@@ -405,5 +407,6 @@ enum rtl_math_RoundingMode
 	 */
 	rtl_math_RoundingMode_FORCE_EQUAL_SIZE = SAL_MAX_ENUM
 };
+}	// namespace duckdb_numformat
 
 #endif // _DEFINE_H
