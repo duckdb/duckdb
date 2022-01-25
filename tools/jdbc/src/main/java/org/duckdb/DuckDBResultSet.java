@@ -1208,7 +1208,7 @@ public class DuckDBResultSet implements ResultSet {
 
 	public <T> T getObject(int columnIndex, Class<T> type) throws SQLException {
 		if (type == null) {
-		  throw new SQLException("type is null");
+			throw new SQLException("type is null");
 		}
 
 		DuckDBColumnType sqlType = meta.column_types[columnIndex - 1]; 
@@ -1216,114 +1216,114 @@ public class DuckDBResultSet implements ResultSet {
 		// Compare results with expected results from Javadoc
 		// https://docs.oracle.com/en/java/javase/17/docs/api/java.sql/java/sql/ResultSet.html
 		if (type == BigDecimal.class) {
-		  	if (sqlType == DuckDBColumnType.DECIMAL) {
+			if (sqlType == DuckDBColumnType.DECIMAL) {
 				return type.cast(getBigDecimal(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to BigDecimal " + type.toString());
-		  	}
+			}
 		} else if (type == String.class) {
-		  	if (sqlType == DuckDBColumnType.VARCHAR) {
+			if (sqlType == DuckDBColumnType.VARCHAR) {
 				return type.cast(getString(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to String " + type.toString());
-		  	}
+			}
 		} else if (type == Boolean.class) {
-		  	if (sqlType == DuckDBColumnType.BOOLEAN) { 
+			if (sqlType == DuckDBColumnType.BOOLEAN) { 
 				return type.cast(getBoolean(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to boolean " + type.toString());
-		  	}
+			}
 		} else if (type == Short.class) {
-		  	if (sqlType == DuckDBColumnType.SMALLINT) { 
+			if (sqlType == DuckDBColumnType.SMALLINT) { 
 				return type.cast(getShort(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to short " + type.toString());
-		  	}
+			}
 		} else if (type == Integer.class) {
-		  	if (sqlType == DuckDBColumnType.INTEGER) { 
+			if (sqlType == DuckDBColumnType.INTEGER) { 
 				return type.cast(getInt(columnIndex));
-		  	} else if (sqlType == DuckDBColumnType.SMALLINT){
+			} else if (sqlType == DuckDBColumnType.SMALLINT){
 				return type.cast(getShort(columnIndex));
-		  	} else if (sqlType == DuckDBColumnType.TINYINT){
+			} else if (sqlType == DuckDBColumnType.TINYINT){
 				return type.cast(getByte(columnIndex));
-		  	} else if (sqlType == DuckDBColumnType.USMALLINT){
+			} else if (sqlType == DuckDBColumnType.USMALLINT){
 				throw new SQLException("Can't convert value to integer " + type.toString());
 			// return type.cast(getShort(columnIndex));
-		  	} else if (sqlType == DuckDBColumnType.UTINYINT){
+			} else if (sqlType == DuckDBColumnType.UTINYINT){
 				throw new SQLException("Can't convert value to integer " + type.toString());
 			// return type.cast(getShort(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to integer " + type.toString());
-		  	}
+			}
 		} else if (type == Long.class) {
-		  	if (sqlType == DuckDBColumnType.BIGINT) { 
+			if (sqlType == DuckDBColumnType.BIGINT) { 
 				return type.cast(getLong(columnIndex));
-		  	} else if (sqlType == DuckDBColumnType.UINTEGER) { 
+			} else if (sqlType == DuckDBColumnType.UINTEGER) { 
 				throw new SQLException("Can't convert value to long " + type.toString());
 			// return type.cast(getLong(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to long " + type.toString());
-		  	}
+			}
 		} else if (type == Float.class) {
-		  	if (sqlType == DuckDBColumnType.FLOAT) { 
+			if (sqlType == DuckDBColumnType.FLOAT) { 
 				return type.cast(getFloat(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to float " + type.toString());
-		  	}
+			}
 		} else if (type == Double.class) {
-		  	if (sqlType == DuckDBColumnType.DOUBLE) { 
+			if (sqlType == DuckDBColumnType.DOUBLE) { 
 				return type.cast(getDouble(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to float " + type.toString());
-		  	}
+			}
 		} else if (type == Date.class) {
-		  	if (sqlType == DuckDBColumnType.DATE) { 
+			if (sqlType == DuckDBColumnType.DATE) { 
 				return type.cast(getDate(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to Date " + type.toString());
-		  	}
+			}
 		} else if (type == Time.class) {
-		  	if (sqlType == DuckDBColumnType.TIME) { 
+			if (sqlType == DuckDBColumnType.TIME) { 
 				return type.cast(getTime(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to Time " + type.toString());
-		  	}
+			}
 		} else if (type == Timestamp.class) {
-		  	if (sqlType == DuckDBColumnType.TIMESTAMP) { 
+			if (sqlType == DuckDBColumnType.TIMESTAMP) { 
 				return type.cast(getTimestamp(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to Timestamp " + type.toString());
-		  	}
+			}
 		} else if (type == LocalDateTime.class) {
-		  	if (sqlType == DuckDBColumnType.TIMESTAMP) {
+			if (sqlType == DuckDBColumnType.TIMESTAMP) {
 				return type.cast(getLocalDateTime(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to LocalDateTime " + type.toString());
-		  	}
+			}
 		} else if (type == BigInteger.class) {
-		  	if (sqlType == DuckDBColumnType.HUGEINT) {
+			if (sqlType == DuckDBColumnType.HUGEINT) {
 				throw new SQLException("Can't convert value to BigInteger " + type.toString());
 			// return type.cast(getLocalDateTime(columnIndex));
-		  	} else if (sqlType == DuckDBColumnType.UBIGINT) {
+			} else if (sqlType == DuckDBColumnType.UBIGINT) {
 				throw new SQLException("Can't convert value to BigInteger " + type.toString());
 			// return type.cast(getLocalDateTime(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to BigInteger " + type.toString());
-		  	}
+			}
 		} else if (type == OffsetDateTime.class) {
 			if (sqlType == DuckDBColumnType.TIMESTAMP_WITH_TIMEZONE) {
 				throw new SQLException("Can't convert value to OffsetDateTime " + type.toString());
 			// return type.cast(getLocalDateTime(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to OffsetDateTime " + type.toString());
-		  	}
+			}
 		} else if (type == Blob.class) {
-		  	if (sqlType == DuckDBColumnType.BLOB) {
+			if (sqlType == DuckDBColumnType.BLOB) {
 				throw new SQLException("Can't convert value to Blob " + type.toString());
 			// return type.cast(getLocalDateTime(columnIndex));
-		  	} else {
+			} else {
 				throw new SQLException("Can't convert value to Blob " + type.toString());
-		  	}
+			}
 		} else {
 			throw new SQLException("Can't convert value to " + type +  " " +  type.toString());
 		}
