@@ -1,5 +1,5 @@
 # name: test/sql/copy/csv/test_copy_overwrite.test
-# description: Test copy statement with file overwrite
+# description: Test copy statement with file stream_write
 # group: [csv]
 
 # create a table and insert some values
@@ -43,9 +43,29 @@ SELECT * FROM test ORDER BY 1;
 1	hello
 2	world 
 
+# test succesful query with stream_write flag
+query I
+COPY (SELECT * FROM test LIMIT 2) TO '__TEST_DIR__/overwrite.csv' (STREAM_WRITE false);
+----
+2
+
+statement ok
+DELETE FROM test;
+
+query I
+COPY test FROM '__TEST_DIR__/overwrite.csv' (STREAM_WRITE false);
+----
+2
+
+query IT
+SELECT * FROM test ORDER BY 1;
+----
+1	hello
+2	world 
+
 # test query returning error does not export to file
 statement error
-COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv' OVERWRITE 0;
+COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv' STREAM_WRITE 0;
 
 statement ok
 DELETE FROM test;
@@ -62,7 +82,7 @@ SELECT * FROM test ORDER BY 1;
 1	hello
 2	world 
 
-# test query returning error does not export to file
+# test query returning error does export to file with no stream_write flag
 statement error
 COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv';
 
@@ -93,7 +113,7 @@ COPY test TO '__TEST_DIR__/overwrite.csv' (HEADER TRUE);
 
 # test query returning error does not export to file with headers
 statement error
-COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv' (OVERWRITE 0, HEADER TRUE);
+COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv' (STREAM_WRITE 0, HEADER TRUE);
 
 statement ok
 DELETE FROM test;
@@ -110,7 +130,7 @@ SELECT * FROM test ORDER BY 1;
 1	hello
 2	world 
 
-# test query returning error does not export to file with headers
+# test query returning error does export to file with no stream_write flag
 statement error
 COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv' (HEADER TRUE);
 
@@ -119,3 +139,36 @@ DELETE FROM test;
 
 statement error
 COPY test FROM '__TEST_DIR__/overwrite.csv' (HEADER TRUE);
+
+# set up testing for headers with stream_write
+statement ok
+DELETE FROM test;
+
+statement ok
+INSERT INTO test VALUES (1, 'hello'), (2, 'world ');
+
+query IT
+SELECT * FROM test ORDER BY 1;
+----
+1	hello
+2	world 
+
+# test succesful query with stream_write flag and header
+query I
+COPY (SELECT * FROM test LIMIT 2) TO '__TEST_DIR__/overwrite.csv' (STREAM_WRITE 0, HEADER TRUE);
+----
+2
+
+statement ok
+DELETE FROM test;
+
+query I
+COPY test FROM '__TEST_DIR__/overwrite.csv' (HEADER TRUE);
+----
+2
+
+query IT
+SELECT * FROM test ORDER BY 1;
+----
+1	hello
+2	world 
