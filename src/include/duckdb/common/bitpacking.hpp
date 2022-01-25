@@ -50,7 +50,7 @@ public:
 	}
 
 	// Unpacks a block of BITPACKING_ALGORITHM_GROUP_SIZE values
-	// Assumes bot src and dst to be of the correct size
+	// Assumes both src and dst to be of the correct size
 	template <class T>
 	inline static void UnPackBuffer(data_ptr_t dst, data_ptr_t src, idx_t count, bitpacking_width_t width,
 	                                bool skip_sign_extension = false) {
@@ -75,6 +75,12 @@ public:
 
 	// Calculates the minimum required number of bits per value that can store all values
 	template <class T>
+	inline static bitpacking_width_t MinimumBitWidth(T value) {
+		return FindMinimumBitWidth<T, BYTE_ALIGNED>(value, value);
+	}
+
+	// Calculates the minimum required number of bits per value that can store all values
+	template <class T>
 	inline static bitpacking_width_t MinimumBitWidth(T *values, idx_t count) {
 		return FindMinimumBitWidth<T, BYTE_ALIGNED>(values, count);
 	}
@@ -88,44 +94,14 @@ public:
 	template <class T>
 	inline static T RoundUpToAlgorithmGroupSize(T num_to_round) {
 		int remainder = num_to_round % BITPACKING_ALGORITHM_GROUP_SIZE;
-		if (remainder == 0)
+		if (remainder == 0) {
 			return num_to_round;
+		}
 
 		return num_to_round + BITPACKING_ALGORITHM_GROUP_SIZE - remainder;
 	}
 
 private:
-	template <class T>
-	static bitpacking_width_t MinimumBitWidth(T min_value, T max_value) {
-		bitpacking_width_t required_bits;
-
-		if (std::is_signed<T>::value) {
-			if (min_value == NumericLimits<T>::Minimum()) {
-				// handle special case of the minimal value, as it cannot be negated like all other values.
-				return sizeof(T) * 8;
-			} else {
-				max_value = MaxValue((T)-min_value, max_value);
-			}
-		}
-
-		if (max_value == 0) {
-			return 0;
-		}
-
-		if (std::is_signed<T>::value) {
-			required_bits = 1;
-		} else {
-			required_bits = 0;
-		}
-
-		while (max_value) {
-			required_bits++;
-			max_value >>= 1;
-		}
-
-		return GetEffectiveWidth<T>(required_bits);
-	}
-
 	template <class T, bool round_to_next_byte = false>
 	static bitpacking_width_t FindMinimumBitWidth(T *values, idx_t count) {
 		T min_value = values[0];
@@ -143,23 +119,57 @@ private:
 			}
 		}
 
-		bitpacking_width_t calc_width = MinimumBitWidth<T>(std::is_signed<T>::value ? min_value : 0, max_value);
+		return FindMinimumBitWidth<T,round_to_next_byte>(min_value, max_value);
+	}
+
+	template <class T, bool round_to_next_byte = false>
+	static bitpacking_width_t FindMinimumBitWidth(T min_value, T max_value) {
+		bitpacking_width_t bitwidth;
+		T value;
+
+		if (std::is_signed<T>::value) {
+			if (min_value == NumericLimits<T>::Minimum()) {
+				// handle special case of the minimal value, as it cannot be negated like all other values.
+				return sizeof(T) * 8;
+			} else {
+				value = MaxValue((T)-min_value, max_value);
+			}
+		} else {
+			value = max_value;
+		}
+
+		if (value == 0) {
+			return 0;
+		}
+
+		if (std::is_signed<T>::value) {
+			bitwidth = 1;
+		} else {
+			bitwidth = 0;
+		}
+
+		while (value) {
+			bitwidth++;
+			value >>= 1;
+		}
+
+		bitwidth = GetEffectiveWidth<T>(bitwidth);
 
 		// Assert results are correct
 #ifdef DEBUG
-		if (calc_width < sizeof(T) * 8 && calc_width != 0) {
+		if (bitwidth < sizeof(T) * 8 && bitwidth != 0) {
 			if (std::is_signed<T>::value) {
-				D_ASSERT((int64_t)max_value <= (int64_t)(1L << (calc_width - 1)) - 1);
-				D_ASSERT((int64_t)min_value >= (int64_t)(-1 * ((1L << (calc_width - 1)) - 1) - 1));
+				D_ASSERT((int64_t)max_value <= (int64_t)(1L << (bitwidth - 1)) - 1);
+				D_ASSERT((int64_t)min_value >= (int64_t)(-1 * ((1L << (bitwidth - 1)) - 1) - 1));
 			} else {
-				D_ASSERT((uint64_t)max_value <= (uint64_t)(1L << (calc_width)) - 1);
+				D_ASSERT((uint64_t)max_value <= (uint64_t)(1L << (bitwidth)) - 1);
 			}
 		}
 #endif
 		if (round_to_next_byte) {
-			return (calc_width / 8 + (calc_width % 8 != 0)) * 8;
+			return (bitwidth / 8 + (bitwidth % 8 != 0)) * 8;
 		} else {
-			return calc_width;
+			return bitwidth;
 		}
 	}
 
