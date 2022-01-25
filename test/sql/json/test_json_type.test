@@ -18,9 +18,29 @@ select json_type('[1, 2, 3]')
 ----
 array
 
-# this does not work as it is not valid JSON
+# invalid JSON but we can still get the type of the singleton
 query T
 select json_type('"other"')
+----
+string
+
+query T
+select json_type('42')
+----
+integer
+
+query T
+select json_type('NaN')
+----
+real
+
+query T
+select json_type('null')
+----
+null
+
+query T
+select json_type(NULL)
 ----
 NULL
 
@@ -51,26 +71,26 @@ select json_type(NULL, 'str')
 ----
 NULL
 
-# NaN and Infinity should become NULL
+# NaN and Infinity should become real
 query T
 select json_type('{"null": NaN}', 'null')
 ----
-NULL
+real
 
 query T
 select json_type('{"null": nan}', 'null')
 ----
-NULL
+real
 
 query T
 select json_type('{"null": Infinity}', 'null')
 ----
-NULL
+real
 
 query T
 select json_type('{"null": -Infinity}', 'null')
 ----
-NULL
+real
 
 statement ok
 create table test(json varchar, query varchar)

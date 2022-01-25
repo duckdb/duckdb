@@ -4,23 +4,7 @@
 
 namespace duckdb {
 
-static inline bool GetType(const string_t &input, string_t &result) {
-	yyjson_val *val = JSONCommon::GetRoot(input);
-	switch (yyjson_get_type(val)) {
-	case YYJSON_TYPE_ARR:
-		result = string_t("array");
-		break;
-	case YYJSON_TYPE_OBJ:
-		result = string_t("object");
-		break;
-	default:
-		return false;
-	}
-	return true;
-}
-
-static inline bool GetType(const string_t &input, const char *ptr, const idx_t &len, string_t &result) {
-	yyjson_val *val = JSONCommon::GetPointer(input, ptr, len);
+static inline bool GetType(yyjson_val *val, string_t &result) {
 	switch (yyjson_get_type(val)) {
 	case YYJSON_TYPE_NULL:
 		result = string_t("null");
@@ -58,14 +42,14 @@ static inline bool GetType(const string_t &input, const char *ptr, const idx_t &
 
 static void UnaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &inputs = args.data[0];
-	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(inputs, result, args.size(),
-	                                                    [&](string_t input, ValidityMask &mask, idx_t idx) {
-		                                                    string_t result_val {};
-		                                                    if (!GetType(input, result_val)) {
-			                                                    mask.SetInvalid(idx);
-		                                                    }
-		                                                    return result_val;
-	                                                    });
+	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
+	    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
+		    string_t result_val {};
+		    if (!GetType(JSONCommon::GetRootUnsafe(input), result_val)) {
+			    mask.SetInvalid(idx);
+		    }
+		    return result_val;
+	    });
 }
 
 static void BinaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -77,14 +61,14 @@ static void BinaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &
 		// Constant query
 		const char *ptr = info.path.c_str();
 		const idx_t &len = info.len;
-		UnaryExecutor::ExecuteWithNulls<string_t, string_t>(inputs, result, args.size(),
-		                                                    [&](string_t input, ValidityMask &mask, idx_t idx) {
-			                                                    string_t result_val {};
-			                                                    if (!GetType(input, ptr, len, result_val)) {
-				                                                    mask.SetInvalid(idx);
-			                                                    }
-			                                                    return result_val;
-		                                                    });
+		UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
+		    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
+			    string_t result_val {};
+			    if (!GetType(JSONCommon::GetPointer(input, ptr, len), result_val)) {
+				    mask.SetInvalid(idx);
+			    }
+			    return result_val;
+		    });
 	} else {
 		// Columnref query
 		auto &queries = args.data[1];
@@ -93,7 +77,8 @@ static void BinaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &
 			    string path;
 			    idx_t len;
 			    string_t result_val {};
-			    if (!JSONCommon::ConvertToPath(query, path, len) || !GetType(input, path.c_str(), len, result_val)) {
+			    if (!JSONCommon::ConvertToPath(query, path, len) ||
+			        !GetType(JSONCommon::GetPointer(input, path.c_str(), len), result_val)) {
 				    mask.SetInvalid(idx);
 			    }
 			    return result_val;

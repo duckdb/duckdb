@@ -15,6 +15,10 @@
 namespace duckdb {
 
 struct JSONCommon {
+private:
+	static constexpr auto READ_FLAGS =
+	    YYJSON_READ_ALLOW_COMMENTS | YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_STOP_WHEN_DONE;
+
 public:
 	//! Convert JSON query string to JSON path query
 	static inline bool ConvertToPath(const string_t &query, string &result, idx_t &len) {
@@ -42,9 +46,18 @@ public:
 		return true;
 	}
 
-	//! Get root of JSON document
+	//! Get root of JSON document (nullptr if malformed JSON)
+	static inline yyjson_val *GetRootUnsafe(const string_t &input) {
+		return yyjson_doc_get_root(yyjson_read(input.GetDataUnsafe(), input.GetSize(), READ_FLAGS));
+	}
+
+	//! Get root of JSON document (throws error if malformed JSON)
 	static inline yyjson_val *GetRoot(const string_t &input) {
-		return yyjson_doc_get_root(yyjson_read(input.GetDataUnsafe(), input.GetSize(), YYJSON_READ_NOFLAG));
+		auto root = GetRootUnsafe(input);
+		if (!root) {
+			throw InvalidInputException("malformed JSON");
+		}
+		return root;
 	}
 
 	//! Get JSON value using JSON path query
