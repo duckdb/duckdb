@@ -77,7 +77,7 @@ bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpre
 	if (!a->order_bys->Equals(b->order_bys.get())) {
 		return false;
 	}
-	if (!a->export_state != b->export_state) {
+	if (a->export_state != b->export_state) {
 		return false;
 	}
 	return true;

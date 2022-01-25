@@ -2,39 +2,104 @@
 # description: Test the state export functionality
 # group: [aggregates]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
+# TODO make this work with ze optimizer
 statement ok
 PRAGMA disable_optimizer
 
 statement ok
 create table dummy as select range % 10 g, range d from range(100);
 
-query I
-SELECT sum(d) FROM dummy GROUP BY g ORDER BY g;
+# ungrouped aggr
+query IIII nosort res0
+SELECT sum(d), avg(d)::integer, min(d), max(d) FROM dummy;
 ----
-450
-460
-470
-480
-490
-500
-510
-520
-530
-540
+4950	49	0	99
 
-query I
-SELECT finalize(sum(d) EXPORT STATE) FROM dummy GROUP BY g ORDER BY g;
+query IIII nosort res0
+SELECT finalize(sum(d) EXPORT STATE), finalize(avg(d) EXPORT STATE)::integer, finalize(min(d) EXPORT STATE), finalize(max(d) EXPORT STATE)  FROM dummy;
 ----
-450
-460
-470
-480
-490
-500
-510
-520
-530
-540
+
+# grouped aggr
+query IIIII nosort res1
+SELECT g, sum(d), avg(d)::integer, min(d), max(d) FROM dummy GROUP BY g ORDER BY g;
+----
+0	450	45	0	90
+1	460	46	1	91
+2	470	47	2	92
+3	480	48	3	93
+4	490	49	4	94
+5	500	50	5	95
+6	510	51	6	96
+7	520	52	7	97
+8	530	53	8	98
+9	540	54	9	99
+
+query IIIII nosort res1
+SELECT g, finalize(sum(d) EXPORT STATE), finalize(avg(d) EXPORT STATE)::integer, finalize(min(d) EXPORT STATE), finalize(max(d) EXPORT STATE)  FROM dummy GROUP BY g ORDER BY g;
+----
+
+# we can persist this
+statement ok
+CREATE TABLE state AS SELECT g, sum(d) EXPORT STATE sum_state, avg(d) EXPORT STATE avg_state, min(d) EXPORT STATE min_state, max(d) EXPORT STATE max_state FROM dummy GROUP BY g ORDER BY g;
+
+query IIIII nosort res1
+SELECT g, finalize(sum_state), finalize(avg_state)::integer, finalize(min_state), finalize(max_state) FROM state ORDER BY g;
+----
+
+query II nosort res2
+SELECT sum(d)*2 FROM dummy;
+----
+9900
+
+query II nosort res2
+SELECT FINALIZE(COMBINE(SUM(d) EXPORT STATE, SUM(d) EXPORT STATE)) FROM dummy;
+----
+
+query II nosort res3
+SELECT g, sum(d)*2 combined_sum FROM dummy GROUP BY g ORDER BY g;
+----
+0	900
+1	920
+2	940
+3	960
+4	980
+5	1000
+6	1020
+7	1040
+8	1060
+9	1080
+
+query II nosort res3
+select g, finalize(combine(sum(d) export STATE, sum_state)) combined_sum from dummy join state using (g) group by g, sum_state ORDER BY g;
+----
+
+# you're holding it wrong:
+
+statement error
+SELECT FINALIZE(COMBINE(SUM(d) EXPORT STATE, AVG(d) EXPORT STATE)) FROM dummy;
+
+statement error
+SELECT combine(NULL, NULL);
+
+statement error
+SELECT combine(42, 42);
+
+statement error
+SELECT finalize(NULL);
+
+statement error
+SELECT finalize(42);
+
+statement error
+SELECT finalize(sum(d)) from dummy;
+
+statement error
+SELECT finalize(sum(d)) from dummy group by g;
+
+# can't finalize twice
+statement error
+SELECT finalize(finalize(sum(d) EXPORT STATE)) from dummy;
+

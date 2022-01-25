@@ -969,12 +969,25 @@ public:
 	}
 
 	void Serialize(FieldWriter &writer) const override {
-		D_ASSERT(false); // TODO
+		writer.WriteString(state_type.function_name);
+		writer.WriteField<uint32_t>(state_type.bound_argument_types.size());
+		auto &serializer = writer.GetSerializer();
+		for (idx_t i = 0; i < state_type.bound_argument_types.size(); i++) {
+			state_type.bound_argument_types[i].Serialize(serializer);
+		}
 	}
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
-		D_ASSERT(false); // TODO
-		return nullptr;
+		aggregate_state_t state_type;
+		state_type.function_name = reader.ReadRequired<string>();
+		auto bound_argument_types_size = reader.ReadRequired<uint32_t>();
+		auto &source = reader.GetSource();
+
+		for (uint32_t i = 0; i < bound_argument_types_size; i++) {
+			auto type = LogicalType::Deserialize(source);
+			state_type.bound_argument_types.push_back(move(type));
+		}
+		return make_shared<AggregateStateTypeInfo>(move(state_type));
 	}
 };
 
