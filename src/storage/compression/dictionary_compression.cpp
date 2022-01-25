@@ -12,40 +12,8 @@
 
 namespace duckdb {
 
-// REFACTOR? is this inheritance sensible still?
-struct DictionaryCompressionState : UncompressedCompressState {
-	explicit DictionaryCompressionState(ColumnDataCheckpointer &checkpointer)
-	    : UncompressedCompressState(checkpointer) {
-		auto &db = checkpointer.GetDatabase();
-		auto &config = DBConfig::GetConfig(db);
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY, PhysicalType::VARCHAR);
+struct DictionaryCompressionState;
 
-		// TODO: deduplicate this? Uncompressed State constructor calls CreateEmptySegment
-		current_segment->function = function;
-		ResetBuffers();
-	}
-
-	void CreateEmptySegment(idx_t row_start) override {
-		// TODO: the overflow writer is not used, but created through this method
-		UncompressedCompressState::CreateEmptySegment(row_start);
-		current_segment->function = function;
-		ResetBuffers();
-	}
-
-	void ResetBuffers() {
-		current_string_map = make_unique<std::unordered_map<string, int32_t>>();
-		index_buffer = make_unique<std::vector<int32_t>>();
-		index_buffer->push_back(0); // Reserve index 0 for null strings
-		selection_buffer = make_unique<std::vector<int32_t>>();
-	}
-	unique_ptr<std::unordered_map<string, int32_t>> current_string_map;
-	unique_ptr<std::vector<int32_t>> index_buffer;
-	unique_ptr<std::vector<int32_t>> selection_buffer;
-	CompressionFunction *function;
-
-	// Minimal bitpacking width for the indices in the index buffer. Necessary for current size on disk
-	bitpacking_width_t min_width = sizeof(sel_t) * 8;
-};
 
 // Dictionary compression uses a combination of bitpacking and a dictionary to compress string segments. The data is stored
 // across three buffers: the index buffer, the selection buffer and the dictionary. Firstly the Index buffer contains the offsets into the
@@ -93,6 +61,135 @@ struct DictionaryCompressionStorage : UncompressedStringStorage { // TODO REFACT
 	static uint16_t GetStringLength(int32_t *index_buffer_ptr, int32_t string_number);
 };
 
+// REFACTOR? is this inheritance sensible still?
+struct DictionaryCompressionState : UncompressedCompressState {
+	explicit DictionaryCompressionState(ColumnDataCheckpointer &checkpointer)
+	    : UncompressedCompressState(checkpointer) {
+		auto &db = checkpointer.GetDatabase();
+		auto &config = DBConfig::GetConfig(db);
+		function = config.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY, PhysicalType::VARCHAR);
+
+		// TODO: deduplicate this? Uncompressed State constructor calls CreateEmptySegment
+		current_segment->function = function;
+		ResetBuffers();
+		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
+		current_handle = buffer_manager.Pin(current_segment->block);
+		current_dictionary = UncompressedStringStorage::GetDictionary(*current_segment, *current_handle);
+		current_end_ptr = current_handle->node->buffer + current_segment->GetBlockOffset() + current_dictionary.end;
+	}
+
+	void CreateEmptySegment(idx_t row_start) override {
+		// TODO: the overflow writer is not used, but created through this method
+		UncompressedCompressState::CreateEmptySegment(row_start);
+
+		current_segment->function = function;
+		ResetBuffers();
+		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
+		current_handle = buffer_manager.Pin(current_segment->block);
+		current_dictionary = UncompressedStringStorage::GetDictionary(*current_segment, *current_handle);
+		current_end_ptr = current_handle->node->buffer + current_segment->GetBlockOffset() + current_dictionary.end;
+	}
+
+	void ResetBuffers() {
+		current_string_map = make_unique<std::unordered_map<string, int32_t>>();
+		index_buffer = make_unique<std::vector<int32_t>>();
+		index_buffer->push_back(0); // Reserve index 0 for null strings
+		selection_buffer = make_unique<std::vector<int32_t>>();
+	}
+
+	unique_ptr<std::unordered_map<string, int32_t>> current_string_map;
+	unique_ptr<std::vector<int32_t>> index_buffer;
+	unique_ptr<std::vector<int32_t>> selection_buffer;
+	CompressionFunction *function;
+
+
+	// Minimal bitpacking width for the indices in the index buffer. Necessary for current size on disk
+	// TODO rename max width?
+	bitpacking_width_t min_width = sizeof(sel_t) * 8;
+
+	// New interface for refactor
+	unique_ptr<BufferHandle> current_handle;
+	StringDictionaryContainer current_dictionary;
+	data_ptr_t current_end_ptr;
+	int32_t latest_lookup_result;
+
+	void Verify() {
+		current_dictionary.Verify();
+		D_ASSERT(current_segment->count == selection_buffer->size());
+		D_ASSERT(DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load(), index_buffer->size(), current_dictionary.size, min_width));
+		D_ASSERT(current_dictionary.end == Storage::BLOCK_SIZE);
+		D_ASSERT(index_buffer->size() == current_string_map->size() + 1); // +1 is for null value
+	}
+
+	bool LookupString(string str) {
+		auto search = current_string_map->find(str);
+		auto has_result = search != current_string_map->end();
+
+		if (has_result) {
+			latest_lookup_result = search->second;
+		}
+		return has_result;
+	}
+
+	void AddNewString(string_t str) {
+
+
+		auto str_len = str.GetSize();
+
+		UncompressedStringStorage::UpdateStringStats(current_segment->stats, str);
+
+		// Copy string to dict
+		current_dictionary.size += str_len;
+		auto dict_pos = current_end_ptr - current_dictionary.size;
+		memcpy(dict_pos, str.GetDataUnsafe(), str.GetSize());
+		current_dictionary.Verify();
+		D_ASSERT(current_dictionary.end == Storage::BLOCK_SIZE);
+
+		index_buffer->push_back(current_dictionary.size);
+		selection_buffer->push_back(index_buffer->size() - 1);
+		current_string_map->insert({str.GetString(), index_buffer->size() - 1});
+
+		min_width = BitpackingPrimitives::MinimumBitWidth(index_buffer->size() - 1);
+
+		UncompressedStringStorage::SetDictionary(*current_segment, *current_handle, current_dictionary);
+
+		current_segment->count++;
+	}
+
+	void AddNull() {
+		selection_buffer->push_back(0);
+		current_segment->count++;
+	}
+
+	void AddLastLookup() {
+		selection_buffer->push_back(latest_lookup_result);
+		current_segment->count++;
+	}
+
+	bool HasEnoughSpace(bool new_string, size_t string_size) {
+		// TODO move global segment shizzle to state?
+		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
+		auto handle = buffer_manager.Pin(current_segment->block);
+		auto dictionary = UncompressedStringStorage::GetDictionary(*current_segment, *handle);
+
+		auto new_width = BitpackingPrimitives::MinimumBitWidth(index_buffer->size() + new_string);
+
+		if (new_string){
+			return DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load()+1, index_buffer->size()+1, dictionary.size + string_size, new_width);
+		} else {
+			// TODO -1 here is new, might be wrong
+			return DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load()+1, index_buffer->size(), dictionary.size, new_width);
+		}
+	}
+
+	void FlushSegment2() {
+		min_width = BitpackingPrimitives::MinimumBitWidth(index_buffer->size()-1);
+		auto next_start = current_segment->start + current_segment->count;
+		UncompressedCompressState::FlushSegment(DictionaryCompressionStorage::FinalizeAppend(*current_segment, current_segment->stats, *this));
+		CreateEmptySegment(next_start);
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
@@ -109,6 +206,33 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState {
 
 	unique_ptr<std::unordered_set<string>> current_set;
 
+	bool LookupString(string str) {
+		return current_set->count(str) == 0;
+	}
+
+	void AddNewString(string_t str) {
+		current_unique_count++;
+		current_dict_size += str.GetString().size();
+		current_set->insert(str.GetString());
+	}
+
+	void AddLastLookup() {
+		current_tuple_count++;
+	}
+
+	void AddNull() {
+		current_tuple_count++;
+	}
+
+	bool HasEnoughSpace(bool new_string, size_t string_size) {
+		auto new_width = BitpackingPrimitives::MinimumBitWidth(current_unique_count + 1 + new_string);
+		if (new_string){
+			return DictionaryCompressionStorage::HasEnoughSpace(current_tuple_count+1, current_unique_count+1, current_dict_size + string_size, new_width);
+		} else {
+			return DictionaryCompressionStorage::HasEnoughSpace(current_tuple_count+1, current_unique_count, current_dict_size, new_width);
+		}
+	}
+
 	void FlushSegment() {
 		segment_count++;
 		current_tuple_count = 0;
@@ -122,6 +246,9 @@ unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnD
 	return make_unique<DictionaryCompressionAnalyzeState>();
 }
 
+// TODO make template
+// - mark where i would need to add calls
+// - rewrite as a combined function, probably with a template?
 bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
 	auto &state = (DictionaryCompressionAnalyzeState &)state_p;
 	VectorData vdata;
@@ -130,7 +257,7 @@ bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 
-		size_t string_size;
+		size_t string_size = 0;
 		bool new_string = false;
 		auto row_is_valid = vdata.validity.RowIsValid(idx);
 
@@ -139,26 +266,23 @@ bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &
 			if (string_size >= StringUncompressed::STRING_BLOCK_LIMIT) {
 				return false;
 			}
-			new_string = state.current_set->count(data[idx].GetString()) == 0;
+			new_string = state.LookupString(data[idx].GetString());
 		}
-		auto new_width = BitpackingPrimitives::MinimumBitWidth(state.current_unique_count + 1);
 
-		size_t fits;
-		if (row_is_valid && new_string){
-			fits = HasEnoughSpace(state.current_tuple_count+1, state.current_unique_count+1, state.current_dict_size + string_size, new_width);
-		} else {
-			fits = HasEnoughSpace(state.current_tuple_count+1, state.current_unique_count, state.current_dict_size, new_width);
-		}
+		size_t fits = state.HasEnoughSpace(new_string, string_size);
 
 		if (!fits){
 			state.FlushSegment();
 			new_string = true;
 		}
 
-		if (new_string) {
-			state.current_unique_count++;
-			state.current_dict_size += string_size;
-			state.current_set->insert(data[idx].GetString());
+		// We now assume there is enough space to fit the string as we have just created a new segment
+		if (!row_is_valid) {
+			state.AddNull();
+		} else if (new_string) {
+			state.AddNewString(data[idx]);
+		} else {
+			state.AddLastLookup();
 		}
 	}
 	return true;
@@ -183,40 +307,51 @@ unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(Colum
 
 void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = (DictionaryCompressionState &)state_p;
-
-	// TODO: check for GetBlockOffset in other parts of code and then remove them all or add them all then remove
-	// asserts?
-	D_ASSERT(state.current_segment->GetBlockOffset() == 0);
-
 	VectorData vdata;
 	scan_vector.Orrify(count, vdata);
+	auto data = (string_t *)vdata.data;
+	state.Verify();
 
-	ColumnAppendState append_state;
-	idx_t offset = 0;
-	while (count > 0) {
-		idx_t appended =
-		    StringAppendCompressed(*state.current_segment, state.current_segment->stats, vdata, offset, count, state);
-		if (appended == count) {
-			// appended everything: finished
-			return;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+
+		size_t string_size = 0;
+		bool new_string = false;
+		auto row_is_valid = vdata.validity.RowIsValid(idx);
+
+		if (row_is_valid) {
+			string_size = data[idx].GetSize();
+			if (string_size >= StringUncompressed::STRING_BLOCK_LIMIT) {
+				throw NotImplementedException("Big strings not implemented for dictionary compression");
+			}
+			new_string = !state.LookupString(data[idx].GetString());
 		}
-		auto next_start = state.current_segment->start + state.current_segment->count;
-		// the segment is full: flush it to disk
 
-		state.FlushSegment(
-		    DictionaryCompressionStorage::FinalizeAppend(*state.current_segment, state.current_segment->stats, state));
+		bool fits = state.HasEnoughSpace(new_string, string_size);
 
-		// now create a new segment and continue appending
-		state.CreateEmptySegment(next_start);
-		offset += appended;
-		count -= appended;
+		if (!fits){
+			state.FlushSegment2();
+			new_string = true;
+			D_ASSERT(state.HasEnoughSpace(new_string, string_size));
+		}
+
+		if (!row_is_valid) {
+			state.AddNull();
+		} else if (new_string) {
+			state.AddNewString(data[idx]);
+		} else {
+			state.AddLastLookup();
+		}
+
+		state.Verify();
 	}
 }
 
 void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 	auto &state = (DictionaryCompressionState &)state_p;
-	state.Finalize(
-	    DictionaryCompressionStorage::FinalizeAppend(*state.current_segment, state.current_segment->stats, state));
+	state.FlushSegment2();
+//	state.Finalize(
+//	    DictionaryCompressionStorage::FinalizeAppend(*state.current_segment, state.current_segment->stats, state));
 }
 
 //===--------------------------------------------------------------------===//
@@ -233,8 +368,6 @@ idx_t DictionaryCompressionStorage::StringAppendCompressed(ColumnSegment &segmen
 	auto source_data = (string_t *)data.data;
 	auto dictionary = GetDictionary(segment, *handle);
 
-	// TODO we only support adding to fresh blocks?
-	D_ASSERT(segment.GetBlockOffset() == 0);
 	D_ASSERT(segment.count == state.selection_buffer->size());
 
 	for (idx_t i = 0; i < count; i++) {
@@ -261,6 +394,7 @@ idx_t DictionaryCompressionStorage::StringAppendCompressed(ColumnSegment &segmen
 				state.selection_buffer->push_back(search->second);
 			} else {
 				// Unknown string, continue
+				// this is actually not the latest inserted, but the one to be inserted
 				sel_t latest_inserted_sel = state.index_buffer->size();
 				bitpacking_width_t new_width = BitpackingPrimitives::MinimumBitWidth(latest_inserted_sel);
 
