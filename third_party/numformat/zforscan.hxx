@@ -6,6 +6,8 @@
 #include "nfsymbol.hxx"
 #include "localedata.h"
 
+namespace duckdb_numformat {
+
 class LocaleData;
 struct ImpSvNumberformatInfo;
 
@@ -240,7 +242,6 @@ private:							// ---- privater Teil
 
 //#endif //_ZFORSCAN_CXX
 };
-
-
+}	// namespace duckdb_numformat
 
 #endif	// _ZFORSCAN_HXX

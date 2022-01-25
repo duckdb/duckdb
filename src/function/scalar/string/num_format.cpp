@@ -1,5 +1,3 @@
-#include <locale>
-#include <codecvt>
 #include <string>
 #include <vector>
 #include "duckdb/function/scalar/string_functions.hpp"
@@ -14,27 +12,27 @@ namespace duckdb {
 
 string_t NumForFun::NumberFormatScalarFunction(Vector &result, double num_value, string_t format) {
 	try {
-		std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-		std::wstring in_str = converter.from_bytes(format.GetString());
-		LocaleData locale_data;
-		ImpSvNumberInputScan input_scan(&locale_data);
+		string in_str = format.GetString();
+		duckdb_numformat::LocaleData locale_data;
+		duckdb_numformat::ImpSvNumberInputScan input_scan(&locale_data);
 		unsigned short nCheckPos;
-		std::wstring out_str;
-		LanguageType eLan = LocaleId_en_US;
-		Color* pColor = NULL;
+		string out_str;
+		duckdb_numformat::Color* pColor = NULL;
 
-		SvNumberformat num_format(in_str, &locale_data, &input_scan, nCheckPos, eLan);
 
-		if (num_format.GetOutputString(num_value, out_str, &pColor)) {
-			string dynamic_result = converter.to_bytes(out_str);
-			auto result_string = StringVector::EmptyString(result, dynamic_result.size());
+		duckdb_numformat::SvNumberformat num_format(in_str, &locale_data, &input_scan, nCheckPos);
+
+		if (!num_format.GetOutputString(num_value, out_str, &pColor)) {
+			auto result_string = StringVector::EmptyString(result, out_str.size());
 			auto result_data = result_string.GetDataWriteable();
-			memcpy(result_data, dynamic_result.c_str(), dynamic_result.size());
+			memcpy(result_data, out_str.c_str(), out_str.size());
 			result_string.Finalize();
 			return result_string;
 		}
 		else {
-			throw InternalException("Failed to get string for number format");
+			auto result_string = StringVector::EmptyString(result, 0);
+			result_string.Finalize();
+			return result_string;
 		}
 	}
 	catch (...){

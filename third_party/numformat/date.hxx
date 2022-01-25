@@ -3,6 +3,8 @@
 
 #include "define.h"
 
+namespace duckdb_numformat {
+
 class ResId;
 
 // --------------
@@ -89,5 +91,6 @@ public:
     static long DateToDays( sal_uInt16 nDay, sal_uInt16 nMonth, sal_uInt16 nYear );
 
 };
+}	// namespace duckdb_numformat
 
 #endif // _DATE_HXX

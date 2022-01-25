@@ -24,6 +24,7 @@
 #include <com/sun/star/i18n/XExtendedCalendar.hpp>
 #endif
 
+namespace duckdb_numformat {
 
 const sal_uInt8 ImpSvNumberInputScan::nMatchedEndString    = 0x01;
 const sal_uInt8 ImpSvNumberInputScan::nMatchedMidString    = 0x02;
@@ -82,17 +83,16 @@ ImpSvNumberInputScan::~ImpSvNumberInputScan()
 
 void ImpSvNumberInputScan::Reset()
 {
-#if 0
 // ER 16.06.97 18:56 Vorbelegung erfolgt jetzt in NumberStringDivision,
 // wozu immer alles loeschen wenn einiges wieder benutzt oder gar nicht
 // gebraucht wird..
     for (sal_uInt16 i = 0; i < SV_MAX_ANZ_INPUT_STRINGS; i++)
     {
-        sStrArray[i].Erase();
+        sStrArray[i].erase();
         nNums[i] = SV_MAX_ANZ_INPUT_STRINGS-1;
         IsNum[i] = sal_False;
     }
-#endif
+
     nMonth       = 0;
     nMonthPos    = 0;
     nTimePos     = 0;
@@ -2768,6 +2768,4 @@ sal_Bool ImpSvNumberInputScan::IsNumberFormat(
     F_Type = eScannedType;
     return res;
 }
-
-
-
+}   // namespace duckdb_numformat

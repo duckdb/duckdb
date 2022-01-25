@@ -3,6 +3,8 @@
 #include "define.h"
 #include "datetime.hxx"
 
+namespace duckdb_numformat {
+
 /*************************************************************************
 |*
 |*    DateTime::IsBetween()
@@ -412,3 +414,4 @@ DateTime DateTime::CreateFromWin32FileDateTime( const sal_uInt32 & rLower, const
 
     return DateTime( _aDate, _aTime );
 }
+}   // namespace duckdb_numformat

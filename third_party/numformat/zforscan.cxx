@@ -14,6 +14,8 @@
 #include "zforscan.hxx"
 #include "localedata.h"
 
+namespace duckdb_numformat {
+
 //using namespace svt;
 
 const sal_Unicode cNonBreakingSpace = 0xA0;
@@ -954,14 +956,14 @@ void ImpSvNumberformatScan::Reset()
 {
 	nAnzStrings = 0;
 	nAnzResStrings = 0;
-#if 0
+
 // ER 20.06.97 14:05   nicht noetig, wenn nAnzStrings beachtet wird
 	for (size_t i = 0; i < NF_MAX_FORMAT_SYMBOLS; i++)
 	{
-		sStrArray[i].Erase();
+		sStrArray[i].erase();
 		nTypeArray[i] = 0;
 	}
-#endif
+
 	eScannedType = NUMBERFORMAT_UNDEFINED;
 	nRepPos = 0;
 	bExp = sal_False;
@@ -2702,5 +2704,4 @@ void ImpSvNumberformatScan::CopyInfo(ImpSvNumberformatInfo* pInfo, sal_uInt16 nA
 	pInfo->nCntExp      = nCntExp;
 	pInfo->nExpVal      = nExpVal;
 }
-
-
+}	// namespace duckdb_numformat

@@ -2,13 +2,14 @@
 #include <string.h>
 #include "calendar.h"
 
+namespace duckdb_numformat {
+
 #define erDUMP_ICU_CALENDAR 0
 #define erDUMP_I18N_CALENDAR 0
 #define DUMP_ICU_CAL_MSG(x)
 #define DUMP_I18N_CAL_MSG(x)
 
-
-#define ERROR RuntimeException()
+//#define ERROR RuntimeException()
 
 const double MILLISECONDS_PER_DAY = 1000.0 * 60.0 * 60.0 * 24.0;
 
@@ -17,11 +18,13 @@ Calendar::Calendar(LocaleData* pFormatterP)
 	pFormatter = pFormatterP;
     init(NULL);
 	pNullDate = new Date(30, 12, 1899);
+	memset(fieldValue, 0, sizeof(fieldValue));
 }
 Calendar::Calendar(Era *_eraArray)
 {
     init(_eraArray);
 	pNullDate = new Date(30, 12, 1899);
+	memset(fieldValue, 0, sizeof(fieldValue));
 }
 void Calendar::init(Era *_eraArray)
 {
@@ -421,5 +424,4 @@ void Calendar::ChangeNullDate(
 	else
 		pNullDate = new Date(Day, Month, Year);
 }
-
-
+} // namespace duckdb_numformat

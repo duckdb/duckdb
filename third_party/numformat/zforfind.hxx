@@ -4,6 +4,8 @@
 #include "define.h"
 #include "localedata.h"
 
+namespace duckdb_numformat {
+
 class Date;
 class SvNumberformat;
 
@@ -250,7 +252,6 @@ private:
 
 //#endif  // _ZFORFIND_CXX
 };
-
-
+}       // namespace duckdb_numformat
 
 #endif  // _ZFORFIND_HXX

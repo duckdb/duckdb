@@ -23,6 +23,8 @@ struct tm *localtime_r(const time_t *timep, struct tm *buffer);
 }
 #endif
 
+namespace duckdb_numformat {
+
 // =======================================================================
 
 static sal_uInt16 aDaysInMonth[12] = { 31, 28, 31, 30, 31, 30,
@@ -187,7 +189,7 @@ sal_uInt16 Date::GetDayOfYear() const
 {
 	sal_uInt16 nDay = GetDay();
 	for( sal_uInt16 i = 1; i < GetMonth(); i++ )
-         nDay = nDay + ::DaysInMonth( i, GetYear() );   // += yields a warning on MSVC, so don't use it
+         nDay = nDay + DaysInMonth( i, GetYear() );   // += yields a warning on MSVC, so don't use it
 	return nDay;
 }
 
@@ -455,3 +457,4 @@ long operator -( const Date& rDate1, const Date& rDate2 )
 									rDate2.GetYear() );
 	return nTempDays1 - nTempDays2;
 }
+}	// namespace duckdb_numformat

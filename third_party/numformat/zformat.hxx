@@ -10,6 +10,8 @@
 #include "zforscan.hxx"
 #include "localedata.h"
 
+namespace duckdb_numformat {
+
 // If comment field is also in format code string, was used for SUPD versions 371-372
 #define NF_COMMENT_IN_FORMATSTRING 0
 
@@ -158,10 +160,25 @@ public:
                    LocaleData* pFormatter,
                    ImpSvNumberInputScan* pISc,
                    xub_StrLen& nCheckPos,
-                   LanguageType& eLan,
+                   LanguageType eLan = LocaleIndentifier::LocaleId_en_US,
                    sal_Bool bStand = sal_False );
 
-    // Copy ctor
+	// Ascii version of constructor
+	SvNumberformat(std::string& rString,
+		LocaleData* pFormatter,
+		ImpSvNumberInputScan* pISc,
+		xub_StrLen& nCheckPos,
+		LanguageType eLan = LocaleIndentifier::LocaleId_en_US,
+		sal_Bool bStand = sal_False);
+
+	void InitFormat(String& rString,
+		LocaleData* pFormatter,
+		ImpSvNumberInputScan* pISc,
+		xub_StrLen& nCheckPos,
+		LanguageType eLan,
+		sal_Bool bStand);
+	
+	// Copy ctor
     //SvNumberformat( SvNumberformat& rFormat );
 
     // Copy ctor with exchange of format code string scanner (used in merge)
@@ -217,7 +234,8 @@ public:
     bool GetOutputString( double fNumber, sal_uInt16 nCharCount, String& rOutString ) const;
 
     sal_Bool GetOutputString( double fNumber, String& OutString, Color** ppColor );
-    sal_Bool GetOutputString( String& sString, String& OutString, Color** ppColor );
+	sal_Bool GetOutputString( double fNumber, std::string& OutString, Color** ppColor );
+	sal_Bool GetOutputString( String& sString, String& OutString, Color** ppColor );
 
     // True if type text
     sal_Bool IsTextFormat() const { return (eType & NUMBERFORMAT_TEXT) != 0; }
@@ -576,5 +594,6 @@ private:
 //#endif // _ZFORMAT_CXX
 
 };
+}   // namespace duckdb_numformat
 
 #endif  // _ZFORMAT_HXX

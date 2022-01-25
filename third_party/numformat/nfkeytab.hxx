@@ -3,6 +3,8 @@
 
 #include <vector>
 
+namespace duckdb_numformat {
+
 //! For ImpSvNumberformatScan: first the short symbols, then the long symbols!
 //! e.g. first TT then TTTT
 //! The internal order is essentially for the format code string scanner!
@@ -96,6 +98,6 @@ public:
     String & operator[] (Keywords_t::size_type n) { return m_keywords[n]; }
     const String & operator[] (Keywords_t::size_type n) const { return m_keywords[n]; }
 };
+}   //namespace duckdb_numformat
 
 #endif // INCLUDED_SVTOOLS_NFKEYTAB_HXX
-

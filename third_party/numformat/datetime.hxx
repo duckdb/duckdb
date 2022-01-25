@@ -5,6 +5,8 @@
 #include "date.hxx"
 #include "time.hxx"
 
+namespace duckdb_numformat {
+
 // ------------
 // - DateTime -
 // ------------
@@ -80,5 +82,6 @@ inline DateTime& DateTime::operator =( const DateTime& rDateTime )
     Time::operator=( rDateTime );
     return *this;
 }
+}   // namespace duckdb_numformat
 
 #endif // _DATETIME_HXX

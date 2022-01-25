@@ -9,6 +9,8 @@
 #include <clocale>
 #include <cmath>
 #include <math.h>
+#include <locale>
+#include <codecvt>
 
 #define _ZFORMAT_CXX
 #include "zforscan.hxx"
@@ -16,6 +18,7 @@
 #include "zformat.hxx"
 #include "nfsymbol.hxx"
 
+namespace duckdb_numformat {
 
 const sal_uInt16 UPPER_PRECISION = 300; // entirely arbitrary...
 const double EXP_LOWER_BOUND = 1.0E-4; // prefer scientific notation below this value.
@@ -1071,283 +1074,306 @@ SvNumberformat::SvNumberformat(String& rString,
                                LocaleData* pFormatterP,
                                ImpSvNumberInputScan* pISc,
                                xub_StrLen& nCheckPos,
-                               LanguageType& eLan,
+                               LanguageType eLan,
                                sal_Bool bStan)
-        :
-        pFormatter(pFormatterP),
-        nNewStandardDefined(0),
-        bStarFlag( sal_False )
 {
+	InitFormat(rString, pFormatterP, pISc, nCheckPos, eLan, bStan);
+}
+
+SvNumberformat::SvNumberformat(std::string& rString,
+	LocaleData* pFormatterP,
+	ImpSvNumberInputScan* pISc,
+	xub_StrLen& nCheckPos,
+	LanguageType eLan,
+	sal_Bool bStan)
+{
+	std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+	std::wstring in_str = converter.from_bytes(rString.data());
+
+	InitFormat(in_str, pFormatterP, pISc, nCheckPos, eLan, bStan);
+}
+
+void SvNumberformat::InitFormat(String& rString,
+	LocaleData* pFormatterP,
+	ImpSvNumberInputScan* pISc,
+	xub_StrLen& nCheckPos,
+	LanguageType eLan,
+	sal_Bool bStan)
+{
+	pFormatter = pFormatterP;
+	nNewStandardDefined = 0;
+	bStarFlag = sal_False;
+
 	if (!pFormatter || !pISc)
 	{
 		return;
 	}
 	rScanPtr = pFormatter->GetFormatScanner();
-    // If the group (AKA thousand) separator is a Non-Breaking Space (French)
-    // replace all occurrences by a simple space.
-    // The tokens will be changed to the LocaleData separator again later on.
-    //const sal_Unicode cNBSp = 0xA0;
-    //const String& rThSep = pFormatter->GetNumThousandSep();
-    //if ( rThSep.at(0) == cNBSp && rThSep.size() == 1 )
-    //{
-    //    xub_StrLen nIndex = 0;
-    //    do
-    //        nIndex = rString.SearchAndReplace( cNBSp, ' ', nIndex );
-    //    while ( nIndex != STRING_NOTFOUND );
-    //}
+	// If the group (AKA thousand) separator is a Non-Breaking Space (French)
+	// replace all occurrences by a simple space.
+	// The tokens will be changed to the LocaleData separator again later on.
+	//const sal_Unicode cNBSp = 0xA0;
+	//const String& rThSep = pFormatter->GetNumThousandSep();
+	//if ( rThSep.at(0) == cNBSp && rThSep.size() == 1 )
+	//{
+	//    xub_StrLen nIndex = 0;
+	//    do
+	//        nIndex = rString.SearchAndReplace( cNBSp, ' ', nIndex );
+	//    while ( nIndex != STRING_NOTFOUND );
+	//}
 
-    if (rScanPtr->GetConvertMode())
-    {
-        eLnge = rScanPtr->GetNewLnge();
-        eLan = eLnge;                   // Wechsel auch zurueckgeben
-    }
-    else
-        eLnge = eLan;
-    bStandard = bStan;
-    bIsUsed = sal_False;
-    fLimit1 = 0.0;
-    fLimit2 = 0.0;
-    eOp1 = NUMBERFORMAT_OP_NO;
-    eOp2 = NUMBERFORMAT_OP_NO;
-    eType = NUMBERFORMAT_DEFINED;
+	// if (rScanPtr->GetConvertMode())
+	// {
+	// 	eLnge = rScanPtr->GetNewLnge();
+	// 	eLan = eLnge;                   // Wechsel auch zurueckgeben
+	// }
+	// else
+	// 	eLnge = eLan;
+	bStandard = bStan;
+	bIsUsed = sal_False;
+	fLimit1 = 0.0;
+	fLimit2 = 0.0;
+	eOp1 = NUMBERFORMAT_OP_NO;
+	eOp2 = NUMBERFORMAT_OP_NO;
+	eType = NUMBERFORMAT_DEFINED;
 
-    sal_Bool bCancel = sal_False;
-    sal_Bool bCondition = sal_False;
-    short eSymbolType;
-    xub_StrLen nPos = 0;
-    xub_StrLen nPosOld;
-    nCheckPos = 0;
-    String aComment;
+	sal_Bool bCancel = sal_False;
+	sal_Bool bCondition = sal_False;
+	short eSymbolType;
+	xub_StrLen nPos = 0;
+	xub_StrLen nPosOld;
+	nCheckPos = 0;
+	String aComment;
 
-    // Split into 4 sub formats
-    sal_uInt16 nIndex;
-    for ( nIndex = 0; nIndex < 4 && !bCancel; nIndex++ )
-    {
-        // Original language/country may have to be reestablished
-        //if (rScanPtr->GetConvertMode())
-        //    (rScanPtr->GetNumberformatter())->ChangeIntl(rScanPtr->GetTmpLnge());
+	// Split into 4 sub formats
+	sal_uInt16 nIndex;
+	for (nIndex = 0; nIndex < 4 && !bCancel; nIndex++)
+	{
+		// Original language/country may have to be reestablished
+		//if (rScanPtr->GetConvertMode())
+		//    (rScanPtr->GetNumberformatter())->ChangeIntl(rScanPtr->GetTmpLnge());
 
-        String sStr;
-        nPosOld = nPos;                         // Start position of substring
-        // first get bracketed prefixes; e.g. conditions, color
-        do
-        {
-            eSymbolType = ImpNextSymbol(rString, nPos, sStr);
-            if (eSymbolType > 0)                    // condition
-            {
-                if ( nIndex == 0 && !bCondition )
-                {
-                    bCondition = sal_True;
-                    eOp1 = (SvNumberformatLimitOps) eSymbolType;
-                }
-                else if ( nIndex == 1 && bCondition )
-                    eOp2 = (SvNumberformatLimitOps) eSymbolType;
-                else                                // error
-                {
-                    bCancel = sal_True;                 // break for
-                    nCheckPos = nPosOld;
-                }
-                if (!bCancel)
-                {
-                    double fNumber;
-                    xub_StrLen nAnzChars = ImpGetNumber(rString, nPos, sStr);
-                    if (nAnzChars > 0)
-                    {
-                        short F_Type = NUMBERFORMAT_UNDEFINED;
-                        if (!pISc->IsNumberFormat(sStr,F_Type,fNumber) ||
-                            ( F_Type != NUMBERFORMAT_NUMBER &&
-                            F_Type != NUMBERFORMAT_SCIENTIFIC) )
-                        {
-                            fNumber = 0.0;
-                            nPos = nPos - nAnzChars;
-                            rString.erase(nPos, nAnzChars);
-                            rString.insert(nPos, L"0");
-                            nPos++;
-                        }
-                    }
-                    else
-                    {
-                        fNumber = 0.0;
-                        rString.insert(nPos++, L"0");
-                    }
-                    if (nIndex == 0)
-                        fLimit1 = fNumber;
-                    else
-                        fLimit2 = fNumber;
-                    if ( rString.at(nPos) == L']' )
-                        nPos++;
-                    else
-                    {
-                        bCancel = sal_True;             // break for
-                        nCheckPos = nPos;
-                    }
-                }
-                nPosOld = nPos;                     // position before string
-            }
-            else if ( lcl_SvNumberformat_IsBracketedPrefix( eSymbolType ) )
-            {
-                switch ( eSymbolType )
-                {
-                    case BRACKET_SYMBOLTYPE_COLOR :
-                    {
-                        //if ( NumFor[nIndex].GetColor() != NULL )
-                        //{                           // error, more than one color
-                        //    bCancel = sal_True;         // break for
-                        //    nCheckPos = nPosOld;
-                        //}
-                        //else
-                        //{
-                        //    Color* pColor = pSc->GetColor( sStr);
-                        //    NumFor[nIndex].SetColor( pColor, sStr);
-                        //    if (pColor == NULL)
-                        //    {                       // error
-                        //        bCancel = sal_True;     // break for
-                        //        nCheckPos = nPosOld;
-                        //    }
-                        //}
-                    }
-                    break;
-                    case BRACKET_SYMBOLTYPE_NATNUM0 :
-                    case BRACKET_SYMBOLTYPE_NATNUM1 :
-                    case BRACKET_SYMBOLTYPE_NATNUM2 :
-                    case BRACKET_SYMBOLTYPE_NATNUM3 :
-                    case BRACKET_SYMBOLTYPE_NATNUM4 :
-                    case BRACKET_SYMBOLTYPE_NATNUM5 :
-                    case BRACKET_SYMBOLTYPE_NATNUM6 :
-                    case BRACKET_SYMBOLTYPE_NATNUM7 :
-                    case BRACKET_SYMBOLTYPE_NATNUM8 :
-                    case BRACKET_SYMBOLTYPE_NATNUM9 :
-                    case BRACKET_SYMBOLTYPE_NATNUM10 :
-                    case BRACKET_SYMBOLTYPE_NATNUM11 :
-                    case BRACKET_SYMBOLTYPE_NATNUM12 :
-                    case BRACKET_SYMBOLTYPE_NATNUM13 :
-                    case BRACKET_SYMBOLTYPE_NATNUM14 :
-                    case BRACKET_SYMBOLTYPE_NATNUM15 :
-                    case BRACKET_SYMBOLTYPE_NATNUM16 :
-                    case BRACKET_SYMBOLTYPE_NATNUM17 :
-                    case BRACKET_SYMBOLTYPE_NATNUM18 :
-                    case BRACKET_SYMBOLTYPE_NATNUM19 :
-                    //{
-                    //    if ( NumFor[nIndex].GetNatNum().IsSet() )
-                    //    {
-                    //        bCancel = sal_True;         // break for
-                    //        nCheckPos = nPosOld;
-                    //    }
-                    //    else
-                    //    {
-                    //        sStr.AssignAscii( RTL_CONSTASCII_STRINGPARAM( "NatNum" ) );
-                    //        //! eSymbolType is negative
-                    //        sal_uInt8 nNum = sal::static_int_cast< sal_uInt8 >(0 - (eSymbolType - BRACKET_SYMBOLTYPE_NATNUM0));
-                    //        sStr += String::CreateFromInt32( nNum );
-                    //        NumFor[nIndex].SetNatNumNum( nNum, sal_False );
-                    //    }
-                    //}
-                    break;
-                    case BRACKET_SYMBOLTYPE_DBNUM1 :
-                    case BRACKET_SYMBOLTYPE_DBNUM2 :
-                    case BRACKET_SYMBOLTYPE_DBNUM3 :
-                    case BRACKET_SYMBOLTYPE_DBNUM4 :
-                    case BRACKET_SYMBOLTYPE_DBNUM5 :
-                    case BRACKET_SYMBOLTYPE_DBNUM6 :
-                    case BRACKET_SYMBOLTYPE_DBNUM7 :
-                    case BRACKET_SYMBOLTYPE_DBNUM8 :
-                    case BRACKET_SYMBOLTYPE_DBNUM9 :
-                    //{
-                    //    if ( NumFor[nIndex].GetNatNum().IsSet() )
-                    //    {
-                    //        bCancel = sal_True;         // break for
-                    //        nCheckPos = nPosOld;
-                    //    }
-                    //    else
-                    //    {
-                    //        sStr.AssignAscii( RTL_CONSTASCII_STRINGPARAM( "DBNum" ) );
-                    //        //! eSymbolType is negative
-                    //        sal_uInt8 nNum = sal::static_int_cast< sal_uInt8 >(1 - (eSymbolType - BRACKET_SYMBOLTYPE_DBNUM1));
-                    //        sStr += static_cast< sal_Unicode >(L'0' + nNum);
-                    //        NumFor[nIndex].SetNatNumNum( nNum, sal_True );
-                    //    }
-                    //}
-                    break;
-                    case BRACKET_SYMBOLTYPE_LOCALE :
-                    //{
-                    //    if ( NumFor[nIndex].GetNatNum().GetLang() != LocaleId_en_US)
-                    //    {
-                    //        bCancel = sal_True;         // break for
-                    //        nCheckPos = nPosOld;
-                    //    }
-                    //    else
-                    //    {
-                    //        xub_StrLen nTmp = 2;
-                    //        LanguageType eLang = ImpGetLanguageType( sStr, nTmp );
-                    //        if ( eLang == LocaleId_en_US)
-                    //        {
-                    //            bCancel = sal_True;         // break for
-                    //            nCheckPos = nPosOld;
-                    //        }
-                    //        else
-                    //        {
-                    //            sStr = L"$-";
-                    //            sStr += String::CreateFromInt32( sal_Int32( eLang ), 16 ).ToUpperAscii();
-                    //            NumFor[nIndex].SetNatNumLang( eLang );
-                    //        }
-                    //    }
-                    //}
-                    break;
-                }
-                if ( !bCancel )
-                {
-                    rString.erase(nPosOld,nPos-nPosOld);
-                    rString.insert(nPosOld, sStr);
-                    nPos = nPosOld + sStr.size();
-                    rString.insert(nPos, L"]");
-                    rString.insert(nPosOld, L"[");
-                    nPos += 2;
-                    nPosOld = nPos;     // position before string
-                }
-            }
-        } while ( !bCancel && lcl_SvNumberformat_IsBracketedPrefix( eSymbolType ) );
+		String sStr;
+		nPosOld = nPos;                         // Start position of substring
+		// first get bracketed prefixes; e.g. conditions, color
+		do
+		{
+			eSymbolType = ImpNextSymbol(rString, nPos, sStr);
+			if (eSymbolType > 0)                    // condition
+			{
+				if (nIndex == 0 && !bCondition)
+				{
+					bCondition = sal_True;
+					eOp1 = (SvNumberformatLimitOps)eSymbolType;
+				}
+				else if (nIndex == 1 && bCondition)
+					eOp2 = (SvNumberformatLimitOps)eSymbolType;
+				else                                // error
+				{
+					bCancel = sal_True;                 // break for
+					nCheckPos = nPosOld;
+				}
+				if (!bCancel)
+				{
+					double fNumber;
+					xub_StrLen nAnzChars = ImpGetNumber(rString, nPos, sStr);
+					if (nAnzChars > 0)
+					{
+						short F_Type = NUMBERFORMAT_UNDEFINED;
+						if (!pISc->IsNumberFormat(sStr, F_Type, fNumber) ||
+							(F_Type != NUMBERFORMAT_NUMBER &&
+								F_Type != NUMBERFORMAT_SCIENTIFIC))
+						{
+							fNumber = 0.0;
+							nPos = nPos - nAnzChars;
+							rString.erase(nPos, nAnzChars);
+							rString.insert(nPos, L"0");
+							nPos++;
+						}
+					}
+					else
+					{
+						fNumber = 0.0;
+						rString.insert(nPos++, L"0");
+					}
+					if (nIndex == 0)
+						fLimit1 = fNumber;
+					else
+						fLimit2 = fNumber;
+					if (rString.at(nPos) == L']')
+						nPos++;
+					else
+					{
+						bCancel = sal_True;             // break for
+						nCheckPos = nPos;
+					}
+				}
+				nPosOld = nPos;                     // position before string
+			}
+			else if (lcl_SvNumberformat_IsBracketedPrefix(eSymbolType))
+			{
+				switch (eSymbolType)
+				{
+				case BRACKET_SYMBOLTYPE_COLOR:
+				{
+					//if ( NumFor[nIndex].GetColor() != NULL )
+					//{                           // error, more than one color
+					//    bCancel = sal_True;         // break for
+					//    nCheckPos = nPosOld;
+					//}
+					//else
+					//{
+					//    Color* pColor = pSc->GetColor( sStr);
+					//    NumFor[nIndex].SetColor( pColor, sStr);
+					//    if (pColor == NULL)
+					//    {                       // error
+					//        bCancel = sal_True;     // break for
+					//        nCheckPos = nPosOld;
+					//    }
+					//}
+				}
+				break;
+				case BRACKET_SYMBOLTYPE_NATNUM0:
+				case BRACKET_SYMBOLTYPE_NATNUM1:
+				case BRACKET_SYMBOLTYPE_NATNUM2:
+				case BRACKET_SYMBOLTYPE_NATNUM3:
+				case BRACKET_SYMBOLTYPE_NATNUM4:
+				case BRACKET_SYMBOLTYPE_NATNUM5:
+				case BRACKET_SYMBOLTYPE_NATNUM6:
+				case BRACKET_SYMBOLTYPE_NATNUM7:
+				case BRACKET_SYMBOLTYPE_NATNUM8:
+				case BRACKET_SYMBOLTYPE_NATNUM9:
+				case BRACKET_SYMBOLTYPE_NATNUM10:
+				case BRACKET_SYMBOLTYPE_NATNUM11:
+				case BRACKET_SYMBOLTYPE_NATNUM12:
+				case BRACKET_SYMBOLTYPE_NATNUM13:
+				case BRACKET_SYMBOLTYPE_NATNUM14:
+				case BRACKET_SYMBOLTYPE_NATNUM15:
+				case BRACKET_SYMBOLTYPE_NATNUM16:
+				case BRACKET_SYMBOLTYPE_NATNUM17:
+				case BRACKET_SYMBOLTYPE_NATNUM18:
+				case BRACKET_SYMBOLTYPE_NATNUM19:
+					//{
+					//    if ( NumFor[nIndex].GetNatNum().IsSet() )
+					//    {
+					//        bCancel = sal_True;         // break for
+					//        nCheckPos = nPosOld;
+					//    }
+					//    else
+					//    {
+					//        sStr.AssignAscii( RTL_CONSTASCII_STRINGPARAM( "NatNum" ) );
+					//        //! eSymbolType is negative
+					//        sal_uInt8 nNum = sal::static_int_cast< sal_uInt8 >(0 - (eSymbolType - BRACKET_SYMBOLTYPE_NATNUM0));
+					//        sStr += String::CreateFromInt32( nNum );
+					//        NumFor[nIndex].SetNatNumNum( nNum, sal_False );
+					//    }
+					//}
+					break;
+				case BRACKET_SYMBOLTYPE_DBNUM1:
+				case BRACKET_SYMBOLTYPE_DBNUM2:
+				case BRACKET_SYMBOLTYPE_DBNUM3:
+				case BRACKET_SYMBOLTYPE_DBNUM4:
+				case BRACKET_SYMBOLTYPE_DBNUM5:
+				case BRACKET_SYMBOLTYPE_DBNUM6:
+				case BRACKET_SYMBOLTYPE_DBNUM7:
+				case BRACKET_SYMBOLTYPE_DBNUM8:
+				case BRACKET_SYMBOLTYPE_DBNUM9:
+					//{
+					//    if ( NumFor[nIndex].GetNatNum().IsSet() )
+					//    {
+					//        bCancel = sal_True;         // break for
+					//        nCheckPos = nPosOld;
+					//    }
+					//    else
+					//    {
+					//        sStr.AssignAscii( RTL_CONSTASCII_STRINGPARAM( "DBNum" ) );
+					//        //! eSymbolType is negative
+					//        sal_uInt8 nNum = sal::static_int_cast< sal_uInt8 >(1 - (eSymbolType - BRACKET_SYMBOLTYPE_DBNUM1));
+					//        sStr += static_cast< sal_Unicode >(L'0' + nNum);
+					//        NumFor[nIndex].SetNatNumNum( nNum, sal_True );
+					//    }
+					//}
+					break;
+				case BRACKET_SYMBOLTYPE_LOCALE:
+					//{
+					//    if ( NumFor[nIndex].GetNatNum().GetLang() != LocaleId_en_US)
+					//    {
+					//        bCancel = sal_True;         // break for
+					//        nCheckPos = nPosOld;
+					//    }
+					//    else
+					//    {
+					//        xub_StrLen nTmp = 2;
+					//        LanguageType eLang = ImpGetLanguageType( sStr, nTmp );
+					//        if ( eLang == LocaleId_en_US)
+					//        {
+					//            bCancel = sal_True;         // break for
+					//            nCheckPos = nPosOld;
+					//        }
+					//        else
+					//        {
+					//            sStr = L"$-";
+					//            sStr += String::CreateFromInt32( sal_Int32( eLang ), 16 ).ToUpperAscii();
+					//            NumFor[nIndex].SetNatNumLang( eLang );
+					//        }
+					//    }
+					//}
+					break;
+				}
+				if (!bCancel)
+				{
+					rString.erase(nPosOld, nPos - nPosOld);
+					rString.insert(nPosOld, sStr);
+					nPos = nPosOld + sStr.size();
+					rString.insert(nPos, L"]");
+					rString.insert(nPosOld, L"[");
+					nPos += 2;
+					nPosOld = nPos;     // position before string
+				}
+			}
+		} while (!bCancel && lcl_SvNumberformat_IsBracketedPrefix(eSymbolType));
 
-        // The remaining format code string
-        if ( !bCancel )
-        {
-            if (eSymbolType == BRACKET_SYMBOLTYPE_FORMAT)
-            {
-                if (nIndex == 1 && eOp1 == NUMBERFORMAT_OP_NO)
-                    eOp1 = NUMBERFORMAT_OP_GT;  // undefined condition, default: > 0
-                else if (nIndex == 2 && eOp2 == NUMBERFORMAT_OP_NO)
-                    eOp2 = NUMBERFORMAT_OP_LT;  // undefined condition, default: < 0
-                if (sStr.size() == 0)
-                {   // empty sub format
-                }
-                else
-                {
-                    xub_StrLen nStrPos = rScanPtr->ScanFormat( sStr, aComment );
-                    sal_uInt16 nAnz = rScanPtr->GetAnzResStrings();
-                    if (nAnz == 0)              // error
-                        nStrPos = 1;
-                    if (nStrPos == 0)               // ok
-                    {
-                        // e.g. Thai T speciality
-                        //if (pSc->GetNatNumModifier() && !NumFor[nIndex].GetNatNum().IsSet())
-                        //{
-                        //    String aNat( RTL_CONSTASCII_USTRINGPARAM( "[NatNum"));
-                        //    aNat += String::CreateFromInt32( pSc->GetNatNumModifier());
-                        //    aNat += L']';
-                        //    sStr.Insert( aNat, 0);
-                        //    NumFor[nIndex].SetNatNumNum( pSc->GetNatNumModifier(), sal_False );
-                        //}
-                        // #i53826# #i42727# For the Thai T speciality we need
-                        // to freeze the locale and immunize it against
-                        // conversions during exports, just in case we want to
-                        // save to Xcl. This disables the feature of being able
-                        // to convert a NatNum to another locale. You can't
-                        // have both.
-                        // FIXME: implement a specialized export conversion
-                        // that works on tokens (have to tokenize all first)
-                        // and doesn't use the format string and
-                        // PutandConvertEntry() to LANGUAGE_ENGLISH_US in
-                        // sc/source/filter/excel/xestyle.cxx
-                        // XclExpNumFmtBuffer::WriteFormatRecord().
+		// The remaining format code string
+		if (!bCancel)
+		{
+			if (eSymbolType == BRACKET_SYMBOLTYPE_FORMAT)
+			{
+				if (nIndex == 1 && eOp1 == NUMBERFORMAT_OP_NO)
+					eOp1 = NUMBERFORMAT_OP_GT;  // undefined condition, default: > 0
+				else if (nIndex == 2 && eOp2 == NUMBERFORMAT_OP_NO)
+					eOp2 = NUMBERFORMAT_OP_LT;  // undefined condition, default: < 0
+				if (sStr.size() == 0)
+				{   // empty sub format
+				}
+				else
+				{
+					xub_StrLen nStrPos = rScanPtr->ScanFormat(sStr, aComment);
+					sal_uInt16 nAnz = rScanPtr->GetAnzResStrings();
+					if (nAnz == 0)              // error
+						nStrPos = 1;
+					if (nStrPos == 0)               // ok
+					{
+						// e.g. Thai T speciality
+						//if (pSc->GetNatNumModifier() && !NumFor[nIndex].GetNatNum().IsSet())
+						//{
+						//    String aNat( RTL_CONSTASCII_USTRINGPARAM( "[NatNum"));
+						//    aNat += String::CreateFromInt32( pSc->GetNatNumModifier());
+						//    aNat += L']';
+						//    sStr.Insert( aNat, 0);
+						//    NumFor[nIndex].SetNatNumNum( pSc->GetNatNumModifier(), sal_False );
+						//}
+						// #i53826# #i42727# For the Thai T speciality we need
+						// to freeze the locale and immunize it against
+						// conversions during exports, just in case we want to
+						// save to Xcl. This disables the feature of being able
+						// to convert a NatNum to another locale. You can't
+						// have both.
+						// FIXME: implement a specialized export conversion
+						// that works on tokens (have to tokenize all first)
+						// and doesn't use the format string and
+						// PutandConvertEntry() to LANGUAGE_ENGLISH_US in
+						// sc/source/filter/excel/xestyle.cxx
+						// XclExpNumFmtBuffer::WriteFormatRecord().
 						//LanguageType eLanguage;
 						//if (NumFor[nIndex].GetNatNum().GetNatNum() == 1 &&
 						//        ((eLanguage =
@@ -1360,138 +1386,137 @@ SvNumberformat::SvNumberformat(String& rString,
 						//    aLID += String::CreateFromInt32( sal_Int32(
 						//                eLanguage), 16 ).ToUpperAscii();
 						//    aLID += L']';
-                        //    sStr.Insert( aLID, 0);
-                        //    NumFor[nIndex].SetNatNumLang( eLanguage);
-                        //}
-                        rString.erase(nPosOld,nPos-nPosOld);
-                        rString.insert(nPosOld, sStr);
-                        nPos = nPosOld + sStr.size();
-                        if (nPos < rString.size())
-                        {
-                            rString.insert(nPos, L";");
-                            nPos++;
-                        }
-                        NumFor[nIndex].Enlarge(nAnz);
+						//    sStr.Insert( aLID, 0);
+						//    NumFor[nIndex].SetNatNumLang( eLanguage);
+						//}
+						rString.erase(nPosOld, nPos - nPosOld);
+						rString.insert(nPosOld, sStr);
+						nPos = nPosOld + sStr.size();
+						if (nPos < rString.size())
+						{
+							rString.insert(nPos, L";");
+							nPos++;
+						}
+						NumFor[nIndex].Enlarge(nAnz);
 						rScanPtr->CopyInfo(&(NumFor[nIndex].Info()), nAnz);
-                        // type check
-                        if (nIndex == 0)
-                            eType = (short) NumFor[nIndex].Info().eScannedType;
-                        else if (nIndex == 3)
-                        {   // #77026# Everything recognized IS text
-                            NumFor[nIndex].Info().eScannedType = NUMBERFORMAT_TEXT;
-                        }
-                        else if ( (short) NumFor[nIndex].Info().eScannedType != eType)
-                            eType = NUMBERFORMAT_DEFINED;
-                    }
-                    else
-                    {
-                        nCheckPos = nPosOld + nStrPos;  // error in string
-                        bCancel = sal_True;                 // break for
-                    }
-                }
-            }
-            else if (eSymbolType == BRACKET_SYMBOLTYPE_ERROR)   // error
-            {
-                nCheckPos = nPosOld;
-                bCancel = sal_True;
-            }
-            else if ( lcl_SvNumberformat_IsBracketedPrefix( eSymbolType ) )
-            {
-                nCheckPos = nPosOld+1;                  // error, prefix in string
-                bCancel = sal_True;                         // break for
-            }
-        }
-        if ( bCancel && !nCheckPos )
-            nCheckPos = 1;      // nCheckPos is used as an error condition
-        if ( !bCancel )
-        {
-            if ( NumFor[nIndex].GetNatNum().IsSet() &&
-                    NumFor[nIndex].GetNatNum().GetLang() == LocaleId_en_US)
-                 NumFor[nIndex].SetNatNumLang( eLan );
-        }
-        if (rString.size() == nPos)
-        {
-            if ( nIndex == 2 && eSymbolType == BRACKET_SYMBOLTYPE_FORMAT &&
-                    rString.at(nPos-1) == L';' )
-            {   // #83510# A 4th subformat explicitly specified to be empty
-                // hides any text. Need the type here for HasTextFormat()
-                NumFor[3].Info().eScannedType = NUMBERFORMAT_TEXT;
-            }
-            bCancel = sal_True;
-        }
-        if ( NumFor[nIndex].GetNatNum().IsSet() )
-            NumFor[nIndex].SetNatNumDate(
-                (NumFor[nIndex].Info().eScannedType & NUMBERFORMAT_DATE) != 0 );
-    }
+						// type check
+						if (nIndex == 0)
+							eType = (short)NumFor[nIndex].Info().eScannedType;
+						else if (nIndex == 3)
+						{   // #77026# Everything recognized IS text
+							NumFor[nIndex].Info().eScannedType = NUMBERFORMAT_TEXT;
+						}
+						else if ((short)NumFor[nIndex].Info().eScannedType != eType)
+							eType = NUMBERFORMAT_DEFINED;
+					}
+					else
+					{
+						nCheckPos = nPosOld + nStrPos;  // error in string
+						bCancel = sal_True;                 // break for
+					}
+				}
+			}
+			else if (eSymbolType == BRACKET_SYMBOLTYPE_ERROR)   // error
+			{
+				nCheckPos = nPosOld;
+				bCancel = sal_True;
+			}
+			else if (lcl_SvNumberformat_IsBracketedPrefix(eSymbolType))
+			{
+				nCheckPos = nPosOld + 1;                  // error, prefix in string
+				bCancel = sal_True;                         // break for
+			}
+		}
+		if (bCancel && !nCheckPos)
+			nCheckPos = 1;      // nCheckPos is used as an error condition
+		if (!bCancel)
+		{
+			if (NumFor[nIndex].GetNatNum().IsSet() &&
+				NumFor[nIndex].GetNatNum().GetLang() == LocaleId_en_US)
+				NumFor[nIndex].SetNatNumLang(eLan);
+		}
+		if (rString.size() == nPos)
+		{
+			if (nIndex == 2 && eSymbolType == BRACKET_SYMBOLTYPE_FORMAT &&
+				rString.at(nPos - 1) == L';')
+			{   // #83510# A 4th subformat explicitly specified to be empty
+				// hides any text. Need the type here for HasTextFormat()
+				NumFor[3].Info().eScannedType = NUMBERFORMAT_TEXT;
+			}
+			bCancel = sal_True;
+		}
+		if (NumFor[nIndex].GetNatNum().IsSet())
+			NumFor[nIndex].SetNatNumDate(
+			(NumFor[nIndex].Info().eScannedType & NUMBERFORMAT_DATE) != 0);
+	}
 
-    if ( bCondition && !nCheckPos )
-    {
-        if ( nIndex == 1 && NumFor[0].GetnAnz() == 0 &&
-                rString.at(rString.size()-1) != L';' )
-        {   // No format code => GENERAL   but not if specified empty
-            String aAdd(rScanPtr->GetStandardName() );
-            String aTmp;
-            if ( !rScanPtr->ScanFormat( aAdd, aTmp ) )
-            {
-                sal_uInt16 nAnz = rScanPtr->GetAnzResStrings();
-                if ( nAnz )
-                {
-                    NumFor[0].Enlarge(nAnz);
-					rScanPtr->CopyInfo( &(NumFor[0].Info()), nAnz );
-                    rString += aAdd;
-                }
-            }
-        }
-        else if ( nIndex == 1 && NumFor[nIndex].GetnAnz() == 0 &&
-                rString.at(rString.size()-1) != L';' &&
-                (NumFor[0].GetnAnz() > 1 || (NumFor[0].GetnAnz() == 1 &&
-                NumFor[0].Info().nTypeArray[0] != NF_KEY_GENERAL)) )
-        {   // No trailing second subformat => GENERAL   but not if specified empty
-            // and not if first subformat is GENERAL
-            String aAdd(rScanPtr->GetStandardName() );
-            String aTmp;
-            if ( !rScanPtr->ScanFormat( aAdd, aTmp ) )
-            {
-                sal_uInt16 nAnz = rScanPtr->GetAnzResStrings();
-                if ( nAnz )
-                {
-                    NumFor[nIndex].Enlarge(nAnz);
-					rScanPtr->CopyInfo( &(NumFor[nIndex].Info()), nAnz );
-                    rString += L';';
-                    rString += aAdd;
-                }
-            }
-        }
-        else if ( nIndex == 2 && NumFor[nIndex].GetnAnz() == 0 &&
-                rString.at(rString.size()-1) != L';' &&
-                eOp2 != NUMBERFORMAT_OP_NO )
-        {   // No trailing third subformat => GENERAL   but not if specified empty
-            String aAdd(rScanPtr->GetStandardName() );
-            String aTmp;
-            if ( !rScanPtr->ScanFormat( aAdd, aTmp ) )
-            {
-                sal_uInt16 nAnz = rScanPtr->GetAnzResStrings();
-                if ( nAnz )
-                {
-                    NumFor[nIndex].Enlarge(nAnz);
-					rScanPtr->CopyInfo( &(NumFor[nIndex].Info()), nAnz );
-                    rString += L';';
-                    rString += aAdd;
-                }
-            }
-        }
-    }
-    sFormatstring = rString;
-    if ( aComment.size() )
-    {
-        SetComment( aComment );     // setzt sComment und sFormatstring
-        rString = sFormatstring;    // geaenderten sFormatstring uebernehmen
-    }
-    if (NumFor[2].GetnAnz() == 0 &&                 // kein 3. Teilstring
-        eOp1 == NUMBERFORMAT_OP_GT && eOp2 == NUMBERFORMAT_OP_NO &&
-        fLimit1 == 0.0 && fLimit2 == 0.0)
-        eOp1 = NUMBERFORMAT_OP_GE;                  // 0 zum ersten Format dazu
-
+	if (bCondition && !nCheckPos)
+	{
+		if (nIndex == 1 && NumFor[0].GetnAnz() == 0 &&
+			rString.at(rString.size() - 1) != L';')
+		{   // No format code => GENERAL   but not if specified empty
+			String aAdd(rScanPtr->GetStandardName());
+			String aTmp;
+			if (!rScanPtr->ScanFormat(aAdd, aTmp))
+			{
+				sal_uInt16 nAnz = rScanPtr->GetAnzResStrings();
+				if (nAnz)
+				{
+					NumFor[0].Enlarge(nAnz);
+					rScanPtr->CopyInfo(&(NumFor[0].Info()), nAnz);
+					rString += aAdd;
+				}
+			}
+		}
+		else if (nIndex == 1 && NumFor[nIndex].GetnAnz() == 0 &&
+			rString.at(rString.size() - 1) != L';' &&
+			(NumFor[0].GetnAnz() > 1 || (NumFor[0].GetnAnz() == 1 &&
+				NumFor[0].Info().nTypeArray[0] != NF_KEY_GENERAL)))
+		{   // No trailing second subformat => GENERAL   but not if specified empty
+			// and not if first subformat is GENERAL
+			String aAdd(rScanPtr->GetStandardName());
+			String aTmp;
+			if (!rScanPtr->ScanFormat(aAdd, aTmp))
+			{
+				sal_uInt16 nAnz = rScanPtr->GetAnzResStrings();
+				if (nAnz)
+				{
+					NumFor[nIndex].Enlarge(nAnz);
+					rScanPtr->CopyInfo(&(NumFor[nIndex].Info()), nAnz);
+					rString += L';';
+					rString += aAdd;
+				}
+			}
+		}
+		else if (nIndex == 2 && NumFor[nIndex].GetnAnz() == 0 &&
+			rString.at(rString.size() - 1) != L';' &&
+			eOp2 != NUMBERFORMAT_OP_NO)
+		{   // No trailing third subformat => GENERAL   but not if specified empty
+			String aAdd(rScanPtr->GetStandardName());
+			String aTmp;
+			if (!rScanPtr->ScanFormat(aAdd, aTmp))
+			{
+				sal_uInt16 nAnz = rScanPtr->GetAnzResStrings();
+				if (nAnz)
+				{
+					NumFor[nIndex].Enlarge(nAnz);
+					rScanPtr->CopyInfo(&(NumFor[nIndex].Info()), nAnz);
+					rString += L';';
+					rString += aAdd;
+				}
+			}
+		}
+	}
+	sFormatstring = rString;
+	if (aComment.size())
+	{
+		SetComment(aComment);     // setzt sComment und sFormatstring
+		rString = sFormatstring;    // geaenderten sFormatstring uebernehmen
+	}
+	if (NumFor[2].GetnAnz() == 0 &&                 // kein 3. Teilstring
+		eOp1 == NUMBERFORMAT_OP_GT && eOp2 == NUMBERFORMAT_OP_NO &&
+		fLimit1 == 0.0 && fLimit2 == 0.0)
+		eOp1 = NUMBERFORMAT_OP_GE;                  // 0 zum ersten Format dazu
 }
 
 SvNumberformat::~SvNumberformat()
@@ -3066,6 +3091,17 @@ sal_Bool SvNumberformat::GetOutputString(double fNumber,
         }
     }
     return bRes;
+}
+
+sal_Bool SvNumberformat::GetOutputString(double fNumber, std::string& OutString, Color** ppColor)
+{
+	String out_str;
+	sal_Bool result = GetOutputString(fNumber, out_str, ppColor);
+
+	std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+	OutString = converter.to_bytes(out_str);
+
+	return result;
 }
 
 sal_Bool SvNumberformat::ImpGetTimeOutput(double fNumber,
@@ -5112,4 +5148,4 @@ sal_uInt16 SvNumberformat::ImpGetNumForStringElementCount( sal_uInt16 nNumFor ) 
     }
     return nCnt;
 }
-
+}   // namespace duckdb_numformat
