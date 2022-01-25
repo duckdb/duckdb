@@ -384,6 +384,22 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 	}
 }
 
+static BufferedSerializer WriteCSVHeader(WriteCSVData &csv_data) {
+    auto &options = csv_data.options;
+
+    BufferedSerializer serializer;
+    // write the header line to the file
+    for (idx_t i = 0; i < csv_data.names.size(); i++) {
+        if (i != 0) {
+            serializer.WriteBufferData(options.delimiter);
+        }
+        WriteQuotedString(serializer, csv_data, csv_data.names[i].c_str(), csv_data.names[i].size(), false);
+    }
+    serializer.WriteBufferData(csv_data.newline);
+    
+    return serializer;
+}
+
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
@@ -448,36 +464,11 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	                                                   FileSystem::GetFileOpener(context), options.compression,
                                                        options.overwrite);
 
-	if (options.header) {
-		BufferedSerializer serializer;
-		// write the header line to the file
-		for (idx_t i = 0; i < csv_data.names.size(); i++) {
-			if (i != 0) {
-				serializer.WriteBufferData(options.delimiter);
-			}
-			WriteQuotedString(serializer, csv_data, csv_data.names[i].c_str(), csv_data.names[i].size(), false);
-		}
-		serializer.WriteBufferData(csv_data.newline);
-
-		global_data->WriteData(serializer.blob.data.get(), serializer.blob.size);
+	if (options.header && options.overwrite) {
+        auto header_serializer = WriteCSVHeader(csv_data);
+        global_data->WriteData(header_serializer.blob.data.get(), header_serializer.blob.size);
 	}
 	return move(global_data);
-}
-
-static void WriteCSVHeader(WriteCSVData &csv_data) {
-    auto &options = csv_data.options;
-    
-    BufferedSerializer serializer;
-    // write the header line to the file
-    for (idx_t i = 0; i < csv_data.names.size(); i++) {
-        if (i != 0) {
-            serializer.WriteBufferData(options.delimiter);
-        }
-        WriteQuotedString(serializer, csv_data, csv_data.names[i].c_str(), csv_data.names[i].size(), false);
-    }
-    serializer.WriteBufferData(csv_data.newline);
-
-    global_data->WriteData(serializer.blob.data.get(), serializer.blob.size);
 }
 
 static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
@@ -591,6 +582,12 @@ void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFun
                                           FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
                                           FileLockType::WRITE_LOCK, global_state.compression,
                                           global_state.opener);
+        
+        if (options.header && !options.overwrite) {
+            auto header_serializer = WriteCSVHeader(csv_data);
+            global_state.WriteData(header_serializer.blob.data.get(), header_serializer.blob.size);
+        }
+        
         global_state.WriteData(global_writer.blob.data.get(), global_writer.blob.size);
         global_writer.Reset();
     }

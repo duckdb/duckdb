@@ -71,3 +71,51 @@ DELETE FROM test;
 
 statement error
 COPY test FROM '__TEST_DIR__/overwrite.csv';
+
+# set up testing for headers
+statement ok
+DELETE FROM test;
+
+statement ok
+INSERT INTO test VALUES (1, 'hello'), (2, 'world ');
+
+query IT
+SELECT * FROM test ORDER BY 1;
+----
+1	hello
+2	world 
+
+# copy to the CSV file
+query I
+COPY test TO '__TEST_DIR__/overwrite.csv' (HEADER TRUE);
+----
+2
+
+# test query returning error does not export to file with headers
+statement error
+COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv' (OVERWRITE 0, HEADER TRUE);
+
+statement ok
+DELETE FROM test;
+
+query I
+COPY test FROM '__TEST_DIR__/overwrite.csv' (HEADER TRUE);
+----
+2
+
+# this test should still pass as data was not overwritten
+query IT
+SELECT * FROM test ORDER BY 1;
+----
+1	hello
+2	world 
+
+# test query returning error does not export to file with headers
+statement error
+COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv' (HEADER TRUE);
+
+statement ok
+DELETE FROM test;
+
+statement error
+COPY test FROM '__TEST_DIR__/overwrite.csv' (HEADER TRUE);
