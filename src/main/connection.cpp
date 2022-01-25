@@ -208,7 +208,7 @@ unordered_set<string> Connection::GetTableNames(const string &query) {
 	return context->GetTableNames(query);
 }
 
-shared_ptr<Relation> Connection::RelationFromQuery(string query, string alias, string error) {
+shared_ptr<Relation> Connection::RelationFromQuery(const string &query, string alias, const string &error) {
 	return RelationFromQuery(QueryRelation::ParseStatement(*context, query, error), move(alias));
 }
 

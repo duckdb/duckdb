@@ -22,6 +22,8 @@ class TestDuckDBQuery(object):
         # duckdb.from_query cannot be used to run arbitrary queries
         with pytest.raises(Exception) as e_info:
             duckdb.from_query('create view v1 as select 42 i')
+        assert 'duckdb.query' in str(e_info.value)
         # ... or multiple select statements
         with pytest.raises(Exception) as e_info:
             duckdb.from_query('select 42; select 84;')
+        assert 'duckdb.query' in str(e_info.value)
