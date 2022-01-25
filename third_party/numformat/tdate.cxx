@@ -135,13 +135,13 @@ Date::Date()
 	nTmpTime = time( 0 );
 	
 	// Datum zusammenbauen
-	if ( localtime_r( &nTmpTime, &aTime ) )
-	{
-		nDate = ((sal_uIntPtr)aTime.tm_mday) +
-				(((sal_uIntPtr)(aTime.tm_mon+1))*100) +
-				(((sal_uIntPtr)(aTime.tm_year+2000))*10000);
-	}
-	else
+	// if ( localtime_r( &nTmpTime, &aTime ) )
+	// {
+	// 	nDate = ((sal_uIntPtr)aTime.tm_mday) +
+	// 			(((sal_uIntPtr)(aTime.tm_mon+1))*100) +
+	// 			(((sal_uIntPtr)(aTime.tm_year+1900))*10000);
+	// }
+	// else
 		nDate = 30 + 1200 + (((sal_uIntPtr)1899)*10000);
 #endif
 }

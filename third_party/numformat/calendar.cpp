@@ -242,17 +242,17 @@ std::wstring  Calendar::getDisplayString( sal_Int32 nCalendarDisplayCode, sal_In
                 value += 1;     // month is zero based
                 // fall thru
             case CalendarDisplayCode::SHORT_DAY: 
-                swprintf(aStr, sizeof(aStr), L"%d", value);     // #100211# - checked
+                swprintf(aStr, sizeof(aStr) / sizeof(wchar_t), L"%d", value);     // #100211# - checked
                 break;
             case CalendarDisplayCode::LONG_YEAR: 
                 //if (aCalendar.Name.equalsAscii("gengou"))
                 //    swprintf(aStr, L"%02d", value);     // #100211# - checked
                 //else
-                    swprintf(aStr, sizeof(aStr), L"%d", value);     // #100211# - checked
+                    swprintf(aStr, sizeof(aStr) / sizeof(wchar_t), L"%d", value);     // #100211# - checked
                 break;
             case CalendarDisplayCode::LONG_MONTH: 
                 value += 1;     // month is zero based
-                swprintf(aStr, sizeof(aStr), L"%02d", value);   // #100211# - checked
+                swprintf(aStr, sizeof(aStr) / sizeof(wchar_t), L"%02d", value);   // #100211# - checked
                 break;
             case CalendarDisplayCode::SHORT_YEAR: 
                 // Take last 2 digits, or only one if value<10, for example,
@@ -260,12 +260,12 @@ std::wstring  Calendar::getDisplayString( sal_Int32 nCalendarDisplayCode, sal_In
                 // #i116701# For values in non-Gregorian era years use all
                 // digits.
                 if (value < 100 || eraArray)
-                    swprintf(aStr, sizeof(aStr), L"%d", value); // #100211# - checked
+                    swprintf(aStr, sizeof(aStr) / sizeof(wchar_t), L"%d", value); // #100211# - checked
                 else
-                    swprintf(aStr, sizeof(aStr), L"%02d", value % 100); // #100211# - checked
+                    swprintf(aStr, sizeof(aStr) / sizeof(wchar_t), L"%02d", value % 100); // #100211# - checked
                 break;
             case CalendarDisplayCode::LONG_DAY: 
-                swprintf(aStr, sizeof(aStr), L"%02d", value);   // #100211# - checked
+                swprintf(aStr, sizeof(aStr) / sizeof(wchar_t), L"%02d", value);   // #100211# - checked
                 break;
 
             case CalendarDisplayCode::SHORT_DAY_NAME: 

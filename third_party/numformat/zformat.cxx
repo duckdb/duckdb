@@ -2938,7 +2938,7 @@ sal_Bool SvNumberformat::GetOutputString(double fNumber,
                 else
                 {
                     wchar_t aBuf[100];
-                    swprintf( aBuf, sizeof(aBuf), L"%.f", fNum );   // simple rounded integer (#100211# - checked)
+                    swprintf( aBuf, sizeof(aBuf) / sizeof(wchar_t), L"%.f", fNum );   // simple rounded integer (#100211# - checked)
                     sStr = aBuf;
                     ImpTransliterate( sStr, NumFor[nIx].GetNatNum() );
                 }
@@ -4896,7 +4896,7 @@ String SvNumberformat::ImpGetNatNumString( const SvNumberNatNum& rNum,
             if ( 0 <= nVal && nVal < 10 )
             {
 				wchar_t str[3];
-				swprintf(str, sizeof(str), L"0%d", nVal);
+				swprintf(str, sizeof(str) / sizeof(wchar_t), L"0%d", nVal);
 				aStr = str;
             }
             else
