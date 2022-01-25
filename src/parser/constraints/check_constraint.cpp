@@ -1,6 +1,6 @@
 #include "duckdb/parser/constraints/check_constraint.hpp"
 
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -12,17 +12,16 @@ string CheckConstraint::ToString() const {
 	return "CHECK(" + expression->ToString() + ")";
 }
 
-unique_ptr<Constraint> CheckConstraint::Copy() {
+unique_ptr<Constraint> CheckConstraint::Copy() const {
 	return make_unique<CheckConstraint>(expression->Copy());
 }
 
-void CheckConstraint::Serialize(Serializer &serializer) {
-	Constraint::Serialize(serializer);
-	expression->Serialize(serializer);
+void CheckConstraint::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializable(*expression);
 }
 
-unique_ptr<Constraint> CheckConstraint::Deserialize(Deserializer &source) {
-	auto expression = ParsedExpression::Deserialize(source);
+unique_ptr<Constraint> CheckConstraint::Deserialize(FieldReader &source) {
+	auto expression = source.ReadRequiredSerializable<ParsedExpression>();
 	return make_unique<CheckConstraint>(move(expression));
 }
 

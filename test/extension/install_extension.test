@@ -122,3 +122,4 @@ query T
 select json_extract_int('{"myint": 42}', 'myint')
 ----
 42
+
