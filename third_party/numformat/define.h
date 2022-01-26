@@ -1,7 +1,7 @@
 #ifndef _DEFINE_H
 #define _DEFINE_H
 
-#include "stdint.h"
+#include <stdint.h>
 #include <string>
 #include <algorithm>
 
