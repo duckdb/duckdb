@@ -170,19 +170,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 
 	auto aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children),
 	                                                          move(bound_filter), aggr.distinct, move(order_bys));
-
 	if (aggr.export_state) {
-		auto export_bind_data = make_unique<ExportAggregateFunctionBindData>(bound_function);
-		aggregate_state_t state_type;
-		state_type.function_name = bound_function.name;
-		state_type.bound_argument_types = bound_function.arguments;
-
-		auto export_type = LogicalType::AGGREGATE_STATE(move(state_type));
-
-		auto export_function = ExportAggregateFunction::GetFunction(export_type, bound_function);
-		aggregate =
-		    make_unique<BoundAggregateExpression>(export_function, move(aggregate->children), move(aggregate->filter),
-		                                          move(export_bind_data), aggregate->distinct);
+		aggregate = ExportAggregateFunction::Bind(move(aggregate));
 	}
 
 	// check for all the aggregates if this aggregate already exists

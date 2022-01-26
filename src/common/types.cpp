@@ -965,29 +965,34 @@ public:
 		}
 		auto &other = (AggregateStateTypeInfo &)*other_p;
 		return state_type.function_name == other.state_type.function_name &&
+		       state_type.return_type == other.state_type.return_type &&
 		       state_type.bound_argument_types == other.state_type.bound_argument_types;
 	}
 
 	void Serialize(FieldWriter &writer) const override {
-		writer.WriteString(state_type.function_name);
-		writer.WriteField<uint32_t>(state_type.bound_argument_types.size());
 		auto &serializer = writer.GetSerializer();
+		writer.WriteString(state_type.function_name);
+		state_type.return_type.Serialize(serializer);
+		writer.WriteField<uint32_t>(state_type.bound_argument_types.size());
 		for (idx_t i = 0; i < state_type.bound_argument_types.size(); i++) {
 			state_type.bound_argument_types[i].Serialize(serializer);
 		}
 	}
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
-		aggregate_state_t state_type;
-		state_type.function_name = reader.ReadRequired<string>();
-		auto bound_argument_types_size = reader.ReadRequired<uint32_t>();
 		auto &source = reader.GetSource();
+
+		auto function_name = reader.ReadRequired<string>();
+		auto return_type = LogicalType::Deserialize(source);
+		auto bound_argument_types_size = reader.ReadRequired<uint32_t>();
+		vector<LogicalType> bound_argument_types;
 
 		for (uint32_t i = 0; i < bound_argument_types_size; i++) {
 			auto type = LogicalType::Deserialize(source);
-			state_type.bound_argument_types.push_back(move(type));
+			bound_argument_types.push_back(move(type));
 		}
-		return make_shared<AggregateStateTypeInfo>(move(state_type));
+		return make_shared<AggregateStateTypeInfo>(
+		    move(aggregate_state_t(move(function_name), move(return_type), move(bound_argument_types))));
 	}
 };
 

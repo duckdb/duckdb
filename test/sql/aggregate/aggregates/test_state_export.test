@@ -13,6 +13,13 @@ statement ok
 create table dummy as select range % 10 g, range d from range(100);
 
 # ungrouped aggr
+
+query I
+SELECT finalize(sum(d) EXPORT STATE) FROM dummy;
+----
+4950
+
+
 query IIII nosort res0
 SELECT sum(d), avg(d)::integer, min(d), max(d) FROM dummy;
 ----
@@ -57,6 +64,10 @@ SELECT sum(d)*2 FROM dummy;
 query II nosort res2
 SELECT FINALIZE(COMBINE(SUM(d) EXPORT STATE, SUM(d) EXPORT STATE)) FROM dummy;
 ----
+
+#query II
+#SELECT FINALIZE(COMBINE(SUM(d) EXPORT TABLE, COMBINE(SUM(d) EXPORT STATE, SUM(d) EXPORT STATE))) FROM dummy;
+#----
 
 query II nosort res3
 SELECT g, sum(d)*2 combined_sum FROM dummy GROUP BY g ORDER BY g;

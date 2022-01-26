@@ -49,18 +49,15 @@ struct SystemFun {
 };
 
 struct ExportAggregateFunctionBindData : public FunctionData {
-	AggregateFunction &function;
-
-	explicit ExportAggregateFunctionBindData(AggregateFunction &function_p) : function(function_p) {
-	}
-
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<ExportAggregateFunctionBindData>(function);
-	}
+	unique_ptr<BoundAggregateExpression> aggregate;
+	explicit ExportAggregateFunctionBindData(unique_ptr<Expression> aggregate_p);
+	unique_ptr<FunctionData> Copy() override;
 };
 
 struct ExportAggregateFunction {
-	static AggregateFunction GetFunction(LogicalType &return_type, AggregateFunction &bound_function);
+	static unique_ptr<BoundAggregateExpression> Bind(unique_ptr<BoundAggregateExpression> child_aggregate);
+	static ScalarFunction GetCombine();
+	static ScalarFunction GetFinalize();
 };
 
 } // namespace duckdb
