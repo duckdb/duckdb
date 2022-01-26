@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <cwctype>
 #include <clocale>
-#include <math.h>
+#include <cmath>
 #include <locale>
 #include <codecvt>
 
@@ -95,13 +95,13 @@ void doubleToString(String& pResult,
 	if (bSign)
 		fValue = -fValue;
 
-	if (isnan(fValue))
+	if (std::isnan(fValue))
 	{
 		pResult = L"NaN";
 		return;
 	}
 
-	if (isinf(fValue))
+	if (std::isinf(fValue))
 	{
 		if (bSign)
 			pResult = L"-INF";
