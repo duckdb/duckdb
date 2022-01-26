@@ -16,30 +16,39 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 	auto count = args.size();
 
 	Vector &list = args.data[0];
-	auto   value = args.data[1].GetValue(0);
+	Value value = args.data[1].GetValue(0);
 
-	if (list.GetType().id() == LogicalTypeId::SQLNULL) {
-		result.Reference(false);
-	}
 	auto &key_type = ListType::GetChildType(list.GetType());
 	if (key_type != LogicalTypeId::SQLNULL) {
 		value = value.CastAs(key_type);
 	}
 
+	if (list.GetType().id() == LogicalTypeId::SQLNULL) {
+		result.Reference(false);
+	}
+
+
 	VectorData list_data;
 	list.Orrify(count, list_data);
-	auto array_entries = (list_entry_t*)list_data.data;
 
 	auto list_size = ListVector::GetListSize(list);
-	auto &list_child = ListVector::GetEntry(list);
-	VectorData list_child_data;
+	auto &child_vector = ListVector::GetEntry(list);
+	VectorData child_data;
 
-	for (idx_t i = 0; i < list_size; i++) {
-		auto list_index = list_child_data.sel->get_index(i);
+	child_vector.Orrify(list_size, child_data);
+	for (idx_t i = 0; i < count; i++) {
+		auto list_index = list_data.sel->get_index(i);
 		if (list_data.validity.RowIsValid(list_index)) {
-			list_child.Orrify(list_size, list_child_data);
-			const auto &child_entry = list_child_data.data[list_index];
-
+			auto list_entry = ((list_entry_t *)list_data.data)[list_index];
+			idx_t child_offset = list_entry.offset;
+		   	if (child_data.validity.RowIsValid(child_offset)) {
+				auto child_value = ((T *)child_data.data)[child_offset];
+				if (child_value == value.GetValue<T>()) {
+					printf("GOT HERE");
+				} else{
+					printf("DID NOT GET HERE");
+				}
+			}
 		}
 	}
 }
@@ -74,14 +83,14 @@ static void ListContainsFunction(DataChunk &args, ExpressionState &state, Vector
 	case PhysicalType::UINT64:
 		TemplatedListContainsFunction<uint64_t>(args, state, result);
 		break;
-		//	case PhysicalType::FLOAT:
-		//		TemplatedListContainsFunction<float>(args, state, result);
-		//		break;
-		//	case PhysicalType::DOUBLE:
-		//		TemplatedListContainsFunction<double>(args, state, result);
-		//		break;
-		//		case PhysicalType::VARCHAR:
-		//		    TemplatedListContainsFunction(list, StringValue::Get(key), offsets, key.IsNull(), entry.offset, entry.length); 			break;
+	case PhysicalType::FLOAT:
+		TemplatedListContainsFunction<float>(args, state, result);
+		break;
+	case PhysicalType::DOUBLE:
+		TemplatedListContainsFunction<double>(args, state, result);
+		break;
+//		case PhysicalType::VARCHAR:
+//			TemplatedListContainsFunction(list, StringValue::Get(key), offsets, key.IsNull(), entry.offset, entry.length); 			break;
 	default:
 		throw InvalidTypeException(args.data[1].GetType().id(), "Invalid type for List Vector Search");
 	}
