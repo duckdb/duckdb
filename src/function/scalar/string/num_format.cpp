@@ -4,7 +4,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/limits.hpp"
 #include "zformat.hxx"
-#include "localedata.h"
 
 using namespace std;
 
@@ -13,15 +12,9 @@ namespace duckdb {
 string_t NumForFun::NumberFormatScalarFunction(Vector &result, double num_value, string_t format) {
 	try {
 		string in_str = format.GetString();
-		duckdb_numformat::LocaleData locale_data;
-		duckdb_numformat::ImpSvNumberInputScan input_scan(&locale_data);
-		uint16_t nCheckPos;
-		string out_str;
-		duckdb_numformat::Color *pColor = nullptr;
+		string out_str = duckdb_numformat::GetNumberFormatString(in_str, num_value);
 
-		duckdb_numformat::SvNumberformat num_format(in_str, &locale_data, &input_scan, nCheckPos);
-
-		if (!num_format.GetOutputString(num_value, out_str, &pColor)) {
+		if (out_str.length() > 0) {
 			auto result_string = StringVector::EmptyString(result, out_str.size());
 			auto result_data = result_string.GetDataWriteable();
 			memcpy(result_data, out_str.c_str(), out_str.size());

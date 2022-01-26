@@ -594,6 +594,9 @@ private:
 //#endif // _ZFORMAT_CXX
 
 };
+
+std::string GetNumberFormatString(std::string& format, double num_value);
+
 }   // namespace duckdb_numformat
 
 #endif  // _ZFORMAT_HXX

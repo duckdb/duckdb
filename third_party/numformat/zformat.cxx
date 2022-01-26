@@ -5145,4 +5145,22 @@ sal_uInt16 SvNumberformat::ImpGetNumForStringElementCount( sal_uInt16 nNumFor ) 
     }
     return nCnt;
 }
+
+std::string GetNumberFormatString(std::string& format, double num_value)
+{
+    duckdb_numformat::LocaleData locale_data;
+    duckdb_numformat::ImpSvNumberInputScan input_scan(&locale_data);
+    uint16_t nCheckPos;
+    std::string out_str;
+    duckdb_numformat::Color *pColor = nullptr;
+
+    duckdb_numformat::SvNumberformat num_format(format, &locale_data, &input_scan, nCheckPos);
+
+    if (!num_format.GetOutputString(num_value, out_str, &pColor)) {
+        return out_str;
+    }
+
+    return "";
+}
+
 }   // namespace duckdb_numformat
