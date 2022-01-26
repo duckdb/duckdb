@@ -33,7 +33,7 @@ add_library(duckdb_numformat STATIC
 target_include_directories(
   duckdb_numformat
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-set_target_properties(duckdb_numformat PROPERTIES EXPORT_NAME duckdb_duckdb_numformat)
+set_target_properties(duckdb_numformat PROPERTIES EXPORT_NAME duckdb_numformat)
 
 install(TARGETS duckdb_numformat
         EXPORT "${DUCKDB_EXPORT_SET}"
@@ -41,5 +41,3 @@ install(TARGETS duckdb_numformat
         ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
 
 disable_target_warnings(duckdb_numformat)
-
-set_target_properties(duckdb_numformat PROPERTIES POSITION_INDEPENDENT_CODE ON)
