@@ -43,5 +43,6 @@ ${EMCPP} \
     -DDUCKDB_NO_THREADS=1 \
     -I ${PROJECT_ROOT}/src/include \
     -I ${PROJECT_ROOT}/third_party/concurrentqueue/ \
+    -I ${PROJECT_ROOT}/third_party/numformat/ \
     -o ${DUCKDB_WASM} \
     -c ${DUCKDB_CC}
