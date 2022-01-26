@@ -38,6 +38,7 @@ Calendar::~Calendar()
 	delete pNullDate;
 }
 
+#if (0)
 static Era gengou_eraArray[] = {
     {1868,  1,  1},
     {1912,  7, 30},
@@ -46,6 +47,7 @@ static Era gengou_eraArray[] = {
     {2019,  5,  1},
     {0, 0,  0}
 };
+#endif
 
 void Calendar::setValue( sal_Int16 fieldIndex, sal_Int16 value )
 {
@@ -103,6 +105,7 @@ void Calendar::submitValues( sal_Int32 nYear,
     submitFields();
 }
 
+#if (0)
 static void lcl_setCombinedOffsetFieldValues( sal_Int32 nValue,
         sal_Int16 rFieldSetValue[], sal_Int16 rFieldValue[],
         sal_Int16 nParentFieldIndex, sal_Int16 nChildFieldIndex )
@@ -114,6 +117,7 @@ static void lcl_setCombinedOffsetFieldValues( sal_Int32 nValue,
     rFieldSetValue[nChildFieldIndex] = rFieldValue[nChildFieldIndex] =
         static_cast<sal_Int16>( nMillis);
 }
+#endif
 
 sal_Int16 Calendar::getValue( sal_Int16 fieldIndex )
 {
@@ -242,17 +246,17 @@ std::wstring  Calendar::getDisplayString( sal_Int32 nCalendarDisplayCode, sal_In
                 value += 1;     // month is zero based
                 // fall thru
             case CalendarDisplayCode::SHORT_DAY: 
-                swprintf(aStr, sizeof(aStr), L"%d", value);     // #100211# - checked
+                swprintf(aStr, sizeof(aStr) / sizeof(wchar_t), L"%d", value);     // #100211# - checked
                 break;
             case CalendarDisplayCode::LONG_YEAR: 
                 //if (aCalendar.Name.equalsAscii("gengou"))
                 //    swprintf(aStr, L"%02d", value);     // #100211# - checked
                 //else
-                    swprintf(aStr, sizeof(aStr), L"%d", value);     // #100211# - checked
+                    swprintf(aStr, sizeof(aStr) / sizeof(wchar_t), L"%d", value);     // #100211# - checked
                 break;
             case CalendarDisplayCode::LONG_MONTH: 
                 value += 1;     // month is zero based
-                swprintf(aStr, sizeof(aStr), L"%02d", value);   // #100211# - checked
+                swprintf(aStr, sizeof(aStr) / sizeof(wchar_t), L"%02d", value);   // #100211# - checked
                 break;
             case CalendarDisplayCode::SHORT_YEAR: 
                 // Take last 2 digits, or only one if value<10, for example,
@@ -260,12 +264,12 @@ std::wstring  Calendar::getDisplayString( sal_Int32 nCalendarDisplayCode, sal_In
                 // #i116701# For values in non-Gregorian era years use all
                 // digits.
                 if (value < 100 || eraArray)
-                    swprintf(aStr, sizeof(aStr), L"%d", value); // #100211# - checked
+                    swprintf(aStr, sizeof(aStr) / sizeof(wchar_t), L"%d", value); // #100211# - checked
                 else
-                    swprintf(aStr, sizeof(aStr), L"%02d", value % 100); // #100211# - checked
+                    swprintf(aStr, sizeof(aStr) / sizeof(wchar_t), L"%02d", value % 100); // #100211# - checked
                 break;
             case CalendarDisplayCode::LONG_DAY: 
-                swprintf(aStr, sizeof(aStr), L"%02d", value);   // #100211# - checked
+                swprintf(aStr, sizeof(aStr) / sizeof(wchar_t), L"%02d", value);   // #100211# - checked
                 break;
 
             case CalendarDisplayCode::SHORT_DAY_NAME: 

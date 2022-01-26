@@ -22,7 +22,7 @@
 #include <sys/time.h>
 #endif
 
-#include <math.h>
+#include <cmath>
 #if !defined(_WIN32)
 #include <sys/time.h>
 #endif

@@ -1,6 +1,7 @@
 #include "statement_functions.hpp"
 #include "odbc_interval.hpp"
 #include "odbc_fetch.hpp"
+#include "odbc_utils.hpp"
 #include "descriptor.hpp"
 #include "parameter_descriptor.hpp"
 
@@ -28,6 +29,7 @@ using duckdb::interval_t;
 using duckdb::LogicalType;
 using duckdb::LogicalTypeId;
 using duckdb::OdbcInterval;
+using duckdb::OdbcUtils;
 using duckdb::Store;
 using duckdb::string_t;
 using duckdb::timestamp_t;
@@ -175,20 +177,10 @@ static bool CastTimestampValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value
 	}
 }
 
-SQLRETURN SetStringValueLength(const std::string &val_str, SQLLEN *str_len_or_ind_ptr) {
-	if (str_len_or_ind_ptr) {
-		// it fills the required lenght from string value
-		*str_len_or_ind_ptr = val_str.size();
-		return SQL_SUCCESS;
-	}
-	// there is no length pointer
-	return SQL_ERROR;
-}
-
 SQLRETURN GetVariableValue(const std::string &val_str, SQLUSMALLINT col_idx, duckdb::OdbcHandleStmt *stmt,
                            SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 	if (!target_value_ptr) {
-		return SetStringValueLength(val_str, str_len_or_ind_ptr);
+		return OdbcUtils::SetStringValueLength(val_str, str_len_or_ind_ptr);
 	}
 
 	SQLRETURN ret = SQL_SUCCESS;
@@ -281,7 +273,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_WCHAR: {
 			std::string str = val.GetValue<std::string>();
 			if (!target_value_ptr) {
-				return SetStringValueLength(str, str_len_or_ind_ptr);
+				return OdbcUtils::SetStringValueLength(str, str_len_or_ind_ptr);
 			}
 
 			SQLRETURN ret = SQL_SUCCESS;
