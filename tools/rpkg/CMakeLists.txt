@@ -21,6 +21,7 @@ find_library(
 include_directories(${R_INCLUDE_DIR})
 include_directories(../../)
 include_directories(src/include)
+include_directories(inst/include)
 
 # this is used for clang-tidy checks and IDE support
 add_library(
