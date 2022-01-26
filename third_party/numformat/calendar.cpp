@@ -38,6 +38,7 @@ Calendar::~Calendar()
 	delete pNullDate;
 }
 
+#if (0)
 static Era gengou_eraArray[] = {
     {1868,  1,  1},
     {1912,  7, 30},
@@ -46,6 +47,7 @@ static Era gengou_eraArray[] = {
     {2019,  5,  1},
     {0, 0,  0}
 };
+#endif
 
 void Calendar::setValue( sal_Int16 fieldIndex, sal_Int16 value )
 {
@@ -103,6 +105,7 @@ void Calendar::submitValues( sal_Int32 nYear,
     submitFields();
 }
 
+#if (0)
 static void lcl_setCombinedOffsetFieldValues( sal_Int32 nValue,
         sal_Int16 rFieldSetValue[], sal_Int16 rFieldValue[],
         sal_Int16 nParentFieldIndex, sal_Int16 nChildFieldIndex )
@@ -114,6 +117,7 @@ static void lcl_setCombinedOffsetFieldValues( sal_Int32 nValue,
     rFieldSetValue[nChildFieldIndex] = rFieldValue[nChildFieldIndex] =
         static_cast<sal_Int16>( nMillis);
 }
+#endif
 
 sal_Int16 Calendar::getValue( sal_Int16 fieldIndex )
 {
