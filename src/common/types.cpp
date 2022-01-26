@@ -992,7 +992,7 @@ public:
 			bound_argument_types.push_back(move(type));
 		}
 		return make_shared<AggregateStateTypeInfo>(
-		    move(aggregate_state_t(move(function_name), move(return_type), move(bound_argument_types))));
+		    aggregate_state_t(move(function_name), move(return_type), move(bound_argument_types)));
 	}
 };
 

@@ -117,7 +117,6 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 		aggr_bind = bound_aggr.bind(context, bound_aggr, aggr_args);
 	}
 
-	// TODO does this not change the return type in the catalog?
 	if (bound_function.name == "finalize") {
 		bound_function.return_type = bound_aggr.return_type;
 	} else if (bound_function.name == "combine") {
