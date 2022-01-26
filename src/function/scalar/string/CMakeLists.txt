@@ -1,5 +1,3 @@
-include_directories(../../third_party/numformat)
-
 add_library_unity(
   duckdb_func_string
   OBJECT

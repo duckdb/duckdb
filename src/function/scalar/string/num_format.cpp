@@ -3,8 +3,8 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/limits.hpp"
-#include "../../third_party/numformat/zformat.hxx"
-#include "../../third_party/numformat/localedata.h"
+#include "zformat.hxx"
+#include "localedata.h"
 
 using namespace std;
 
