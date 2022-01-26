@@ -1,0 +1,12 @@
+# name: test/sql/function/list/list_contains.test
+# description: Test list_ccontains function
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+# basic functionality
+query T
+SELECT list_contains([5, 6, 7, 1], 1)
+----
+1
