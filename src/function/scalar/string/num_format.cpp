@@ -15,9 +15,9 @@ string_t NumForFun::NumberFormatScalarFunction(Vector &result, double num_value,
 		string in_str = format.GetString();
 		duckdb_numformat::LocaleData locale_data;
 		duckdb_numformat::ImpSvNumberInputScan input_scan(&locale_data);
-		unsigned short nCheckPos;
+		uint16_t nCheckPos;
 		string out_str;
-		duckdb_numformat::Color *pColor = NULL;
+		duckdb_numformat::Color *pColor = nullptr;
 
 		duckdb_numformat::SvNumberformat num_format(in_str, &locale_data, &input_scan, nCheckPos);
 

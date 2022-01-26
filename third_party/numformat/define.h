@@ -11,15 +11,15 @@ typedef bool sal_Bool;
 #define sal_False false
 #define sal_True  true
 
-typedef char                sal_Char;
-typedef signed char         sal_sChar;
-typedef unsigned char       sal_uChar;
-typedef signed char         sal_Int8;
-typedef unsigned char       sal_uInt8;
-typedef signed short        sal_Int16;
-typedef unsigned short      sal_uInt16;
-typedef signed long         sal_Int32;
-typedef unsigned long       sal_uInt32;
+typedef int8_t              sal_Char;
+typedef int8_t         		sal_sChar;
+typedef uint8_t       		sal_uChar;
+typedef int8_t              sal_Int8;
+typedef uint8_t             sal_uInt8;
+typedef int16_t             sal_Int16;
+typedef uint16_t            sal_uInt16;
+typedef int32_t             sal_Int32;
+typedef uint32_t            sal_uInt32;
 typedef int64_t             sal_Int64;
 typedef uint64_t            sal_uInt64;
 typedef unsigned long		sal_uLong;
@@ -112,23 +112,23 @@ const short DAY_OF_YEAR = 3;
 	that prevents interpreting this value correctly. </p> */
 const short DST_OFFSET = 4;
 /// Get/Set hour [0-23].
-const short HOUR = 5;
+const short CFI_HOUR = 5;
 /// Get/Set minute [0-59].
-const short MINUTE = 6;
+const short CFI_MINUTE = 6;
 /// Get/Set second [0-59].
-const short SECOND = 7;
+const short CFI_SECOND = 7;
 /// Get/Set milliseconds [0-999].
-const short MILLISECOND = 8;
+const short CFI_MILLISECOND = 8;
 /// Get     week of month.
 const short WEEK_OF_MONTH = 9;
 /// Get     week of year.
 const short WEEK_OF_YEAR = 10;
 /// Get/Set year.
-const short YEAR = 11;
+const short CFI_YEAR = 11;
 /** Get/Set month [0-...].
 	<p> Note that the maximum value is <b>not</b> necessarily 11 for
 	December but depends on the calendar used instead. </p> */
-const short MONTH = 12;
+const short CFI_MONTH = 12;
 /// Get/Set era, for example, 0:= Before Christ, 1:= After Christ.
 const short ERA = 13;
 /// Get/Set time zone offset in minutes, e.g. [-14*60..14*60]
@@ -254,26 +254,6 @@ const long LONG_YEAR_AND_ERA = 14;
 const long SHORT_QUARTER = 15;
 /// Long quarter, for example, "1st quarter"
 const long LONG_QUARTER = 16;
-}
-
-//=============================================================================
-
-
-/**
-	Values to be passed to <member>XCalendar::getDisplayName()</member>.
- */
-namespace CalendarDisplayIndex
-{
-	/// name of an AM/PM value
-	const short AM_PM = 0;
-/// name of a day of week
-const short DAY = 1;
-/// name of a month
-const short MONTH = 2;
-/// name of a year (if used for a specific calendar)
-const short YEAR = 3;
-/// name of an era, like BC/AD
-const short ERA = 4;
 }
 
 //=============================================================================

@@ -11,6 +11,23 @@ namespace duckdb_numformat {
 
 //#define ERROR RuntimeException()
 
+/**
+	Values to be passed to <member>XCalendar::getDisplayName()</member>.
+ */
+namespace CalendarDisplayIndex
+{
+	/// name of an AM/PM value
+	const short CDI_AM_PM = 0;
+    /// name of a day of week
+    const short CDI_DAY = 1;
+    /// name of a month
+    const short CDI_MONTH = 2;
+    /// name of a year (if used for a specific calendar)
+    const short CDI_YEAR = 3;
+    /// name of an era, like BC/AD
+    const short CDI_ERA = 4;
+}
+
 const double MILLISECONDS_PER_DAY = 1000.0 * 60.0 * 60.0 * 24.0;
 
 Calendar::Calendar(LocaleData* pFormatterP)
@@ -165,16 +182,16 @@ static sal_Int32  DisplayCode2FieldIndex(sal_Int32 nCalendarDisplayCode)
         case CalendarDisplayCode::LONG_MONTH: 
         case CalendarDisplayCode::SHORT_MONTH_NAME: 
         case CalendarDisplayCode::LONG_MONTH_NAME: 
-            return CalendarFieldIndex::MONTH;
+            return CalendarFieldIndex::CFI_MONTH;
         case CalendarDisplayCode::SHORT_YEAR: 
         case CalendarDisplayCode::LONG_YEAR: 
-            return CalendarFieldIndex::YEAR;
+            return CalendarFieldIndex::CFI_YEAR;
         case CalendarDisplayCode::SHORT_ERA: 
         case CalendarDisplayCode::LONG_ERA: 
             return CalendarFieldIndex::ERA;
         case CalendarDisplayCode::SHORT_YEAR_AND_ERA: 
         case CalendarDisplayCode::LONG_YEAR_AND_ERA: 
-            return CalendarFieldIndex::YEAR;
+            return CalendarFieldIndex::CFI_YEAR;
         default:
             return 0;
     }
@@ -185,30 +202,30 @@ std::wstring Calendar::getDisplayName( sal_Int16 displayIndex, sal_Int16 idx, sa
         std::wstring aStr;
 
         switch( displayIndex ) {
-            case CalendarDisplayIndex::AM_PM:/* ==0 */
+            case CalendarDisplayIndex::CDI_AM_PM:/* ==0 */
                 if (idx == 0) aStr = pFormatter->getTimeAM();
                 else if (idx == 1) aStr = pFormatter->getTimePM();
                 else return L"";
                 break;
-            case CalendarDisplayIndex::DAY:
+            case CalendarDisplayIndex::CDI_DAY:
                 if( idx >= pFormatter->getDayOfWeekSize() ) return L"";
                 if (nameType == 0) aStr = pFormatter->getDayOfWeekAbbrvName(idx);
                 else if (nameType == 1) aStr = pFormatter->getDayOfWeekFullName(idx);
                 else return L"";
                 break;
-            case CalendarDisplayIndex::MONTH:
+            case CalendarDisplayIndex::CDI_MONTH:
                 if( idx >= pFormatter->getMonthsOfYearSize()) return L"";
                 if (nameType == 0) aStr = pFormatter->getMonthsOfYearAbbrvName(idx);
                 else if (nameType == 1) aStr = pFormatter->getMonthsOfYearFullName(idx);
                 else return L"";
                 break;
-            case CalendarDisplayIndex::ERA:
+            case CalendarDisplayIndex::CDI_ERA:
                 if( idx >= pFormatter->getEraSize() ) return L"";
                 if (nameType == 0) aStr = pFormatter->getEraAbbrvName(idx);
                 else if (nameType == 1) aStr = pFormatter->getEraFullName(idx);
                 else return L"";
                 break;
-            case CalendarDisplayIndex::YEAR:
+            case CalendarDisplayIndex::CDI_YEAR:
                 break;
             default:
 				return L"";
@@ -273,17 +290,17 @@ std::wstring  Calendar::getDisplayString( sal_Int32 nCalendarDisplayCode, sal_In
                 break;
 
             case CalendarDisplayCode::SHORT_DAY_NAME: 
-                return getDisplayName(CalendarDisplayIndex::DAY, value, 0);
+                return getDisplayName(CalendarDisplayIndex::CDI_DAY, value, 0);
             case CalendarDisplayCode::LONG_DAY_NAME: 
-                return getDisplayName(CalendarDisplayIndex::DAY, value, 1);
+                return getDisplayName(CalendarDisplayIndex::CDI_DAY, value, 1);
             case CalendarDisplayCode::SHORT_MONTH_NAME: 
-                return getDisplayName(CalendarDisplayIndex::MONTH, value, 0);
+                return getDisplayName(CalendarDisplayIndex::CDI_MONTH, value, 0);
             case CalendarDisplayCode::LONG_MONTH_NAME: 
-                return getDisplayName(CalendarDisplayIndex::MONTH, value, 1);
+                return getDisplayName(CalendarDisplayIndex::CDI_MONTH, value, 1);
             case CalendarDisplayCode::SHORT_ERA: 
-                return getDisplayName(CalendarDisplayIndex::ERA, value, 0);
+                return getDisplayName(CalendarDisplayIndex::CDI_ERA, value, 0);
             case CalendarDisplayCode::LONG_ERA: 
-                return getDisplayName(CalendarDisplayIndex::ERA, value, 1);
+                return getDisplayName(CalendarDisplayIndex::CDI_ERA, value, 1);
 
             case CalendarDisplayCode::SHORT_YEAR_AND_ERA: 
                 return  getDisplayString( CalendarDisplayCode::SHORT_ERA, nNativeNumberMode ) +
@@ -331,13 +348,13 @@ void Calendar::setDateTime(double timeInDays_val)
 	setValue(CalendarFieldIndex::DAY_OF_MONTH, dt.GetDay());
 	setValue(CalendarFieldIndex::DAY_OF_WEEK, dt.GetDayOfWeek() + 1);
 	setValue(CalendarFieldIndex::DAY_OF_YEAR, dt.GetDayOfYear());
-	setValue(CalendarFieldIndex::HOUR, dt.GetHour());
-	setValue(CalendarFieldIndex::MINUTE, dt.GetMin());
-	setValue(CalendarFieldIndex::SECOND, dt.GetSec());
-	setValue(CalendarFieldIndex::MILLISECOND, dt.Get100Sec() * 10);
+	setValue(CalendarFieldIndex::CFI_HOUR, dt.GetHour());
+	setValue(CalendarFieldIndex::CFI_MINUTE, dt.GetMin());
+	setValue(CalendarFieldIndex::CFI_SECOND, dt.GetSec());
+	setValue(CalendarFieldIndex::CFI_MILLISECOND, dt.Get100Sec() * 10);
 	setValue(CalendarFieldIndex::WEEK_OF_YEAR, dt.GetWeekOfYear());
-	setValue(CalendarFieldIndex::YEAR, dt.GetYear());
-	setValue(CalendarFieldIndex::MONTH, dt.GetMonth() - 1);
+	setValue(CalendarFieldIndex::CFI_YEAR, dt.GetYear());
+	setValue(CalendarFieldIndex::CFI_MONTH, dt.GetMonth() - 1);
 #endif
 }
 

@@ -7,8 +7,6 @@
 #include <cwctype>
 #include <clocale>
 #include <cmath>
-#include <locale>
-#include <codecvt>
 
 #define _ZFORMAT_CXX
 #include "zforscan.hxx"
@@ -29,8 +27,8 @@ const double D_EPS = 1.0E-2;
 const double _D_MAX_D_BY_100  = 1.7E306;
 const double _D_MIN_M_BY_1000 = 2.3E-305;
 
-const sal_uInt16 UNLIMITED_PRECISION = ::std::numeric_limits<sal_uInt16>::max();
-const sal_uInt16 INPUTSTRING_PRECISION = ::std::numeric_limits<sal_uInt16>::max() - 1;
+const sal_uInt16 UNLIMITED_PRECISION = (sal_uInt16)0xffff;
+const sal_uInt16 INPUTSTRING_PRECISION = (sal_uInt16)0xfffe;
 
 static sal_uInt8 cCharWidths[ 128-32 ] = {
     1,1,1,2,2,3,2,1,1,1,1,2,1,1,1,1,
@@ -1085,8 +1083,8 @@ SvNumberformat::SvNumberformat(std::string& rString,
 	LanguageType eLan,
 	sal_Bool bStan)
 {
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-	std::wstring in_str = converter.from_bytes(rString.data());
+	std::wstring in_str(rString.length(), L' ');
+	std::copy(rString.begin(), rString.end(), in_str.begin());
 
 	InitFormat(in_str, pFormatterP, pISc, nCheckPos, eLan, bStan);
 }
@@ -3096,8 +3094,9 @@ sal_Bool SvNumberformat::GetOutputString(double fNumber, std::string& OutString,
 	String out_str;
 	sal_Bool result = GetOutputString(fNumber, out_str, ppColor);
 
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-	OutString = converter.to_bytes(out_str);
+	std::string temp(out_str.length(), ' ');
+	std::copy(out_str.begin(), out_str.end(), temp.begin());
+	OutString = temp;
 
 	return result;
 }

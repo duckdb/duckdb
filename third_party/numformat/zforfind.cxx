@@ -897,7 +897,7 @@ sal_uInt16 ImpSvNumberInputScan::ImplGetMonth( sal_uInt16 nIndex )
     {
         sal_uInt16 nNum = (sal_uInt16)std::stoi(sStrArray[nNums[nIndex]]);
         if ( 0 < nNum && nNum <= nRes )
-            nRes = nNum - 1;        // zero based for CalendarFieldIndex::MONTH
+            nRes = nNum - 1;        // zero based for CalendarFieldIndex::CFI_MONTH
     }
 
     return nRes;
@@ -1067,7 +1067,7 @@ input for the following reasons:
         {
             case 0:                 // none
                 if (nMonthPos)          // only month (Jan)
-                    pCal->setValue( CalendarFieldIndex::MONTH, abs(nMonth)-1 );
+                    pCal->setValue( CalendarFieldIndex::CFI_MONTH, abs(nMonth)-1 );
                 else
                     res = sal_False;
                 break;
@@ -1080,7 +1080,7 @@ input for the following reasons:
                         pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(0) );
                         break;
                     case 1:             // month at the beginning (Jan 01)
-                        pCal->setValue( CalendarFieldIndex::MONTH, abs(nMonth)-1 );
+                        pCal->setValue( CalendarFieldIndex::CFI_MONTH, abs(nMonth)-1 );
                         switch (DateFmt)
                         {
                             case MDY:
@@ -1088,7 +1088,7 @@ input for the following reasons:
                                 pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(0) );
                                 break;
                             case DMY:
-                                pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(0) );
+                                pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(0) );
                                 break;
                             default:
                                 res = sal_False;
@@ -1096,14 +1096,14 @@ input for the following reasons:
                         }
                         break;
                     case 3:             // month at the end (10 Jan)
-                        pCal->setValue( CalendarFieldIndex::MONTH, abs(nMonth)-1 );
+                        pCal->setValue( CalendarFieldIndex::CFI_MONTH, abs(nMonth)-1 );
                         switch (DateFmt)
                         {
                             case DMY:
                                 pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(0) );
                                 break;
                             case YMD:
-                                pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(0) );
+                                pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(0) );
                                 break;
                             default:
                                 res = sal_False;
@@ -1130,10 +1130,10 @@ input for the following reasons:
                             switch ( (nExactDateOrder >> 8) & 0xff )
                             {
                                 case L'Y':
-                                    pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(0) );
+                                    pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(0) );
                                 break;
                                 case L'M':
-                                    pCal->setValue( CalendarFieldIndex::MONTH, ImplGetMonth(0) );
+                                    pCal->setValue( CalendarFieldIndex::CFI_MONTH, ImplGetMonth(0) );
                                 break;
                                 case L'D':
                                     pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(0) );
@@ -1144,10 +1144,10 @@ input for the following reasons:
                             switch ( nExactDateOrder & 0xff )
                             {
                                 case L'Y':
-                                    pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(1) );
+                                    pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(1) );
                                 break;
                                 case L'M':
-                                    pCal->setValue( CalendarFieldIndex::MONTH, ImplGetMonth(1) );
+                                    pCal->setValue( CalendarFieldIndex::CFI_MONTH, ImplGetMonth(1) );
                                 break;
                                 case L'D':
                                     pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(1) );
@@ -1167,34 +1167,34 @@ input for the following reasons:
                                 case MDY:
                                     // M D
                                     pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(1) );
-                                    pCal->setValue( CalendarFieldIndex::MONTH, ImplGetMonth(0) );
+                                    pCal->setValue( CalendarFieldIndex::CFI_MONTH, ImplGetMonth(0) );
                                     if ( !pCal->isValid() )             // 2nd try
                                     {                                   // M Y
                                         pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, 1 );
-                                        pCal->setValue( CalendarFieldIndex::MONTH, ImplGetMonth(0) );
-                                        pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(1) );
+                                        pCal->setValue( CalendarFieldIndex::CFI_MONTH, ImplGetMonth(0) );
+                                        pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(1) );
                                     }
                                     break;
                                 case DMY:
                                     // D M
                                     pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(0) );
-                                    pCal->setValue( CalendarFieldIndex::MONTH, ImplGetMonth(1) );
+                                    pCal->setValue( CalendarFieldIndex::CFI_MONTH, ImplGetMonth(1) );
                                     if ( !pCal->isValid() )             // 2nd try
                                     {                                   // M Y
                                         pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, 1 );
-                                        pCal->setValue( CalendarFieldIndex::MONTH, ImplGetMonth(0) );
-                                        pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(1) );
+                                        pCal->setValue( CalendarFieldIndex::CFI_MONTH, ImplGetMonth(0) );
+                                        pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(1) );
                                     }
                                     break;
                                 case YMD:
                                     // M D
                                     pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(1) );
-                                    pCal->setValue( CalendarFieldIndex::MONTH, ImplGetMonth(0) );
+                                    pCal->setValue( CalendarFieldIndex::CFI_MONTH, ImplGetMonth(0) );
                                     if ( !pCal->isValid() )             // 2nd try
                                     {                                   // Y M
                                         pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, 1 );
-                                        pCal->setValue( CalendarFieldIndex::MONTH, ImplGetMonth(1) );
-                                        pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(0) );
+                                        pCal->setValue( CalendarFieldIndex::CFI_MONTH, ImplGetMonth(1) );
+                                        pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(0) );
                                     }
                                     break;
                                 default:
@@ -1209,32 +1209,32 @@ input for the following reasons:
                         // The input is valid as MDY in almost any
                         // constellation, there is no date order (M)YD except if
                         // set in a format applied.
-                        pCal->setValue( CalendarFieldIndex::MONTH, abs(nMonth)-1 );
+                        pCal->setValue( CalendarFieldIndex::CFI_MONTH, abs(nMonth)-1 );
                         sal_uInt32 nExactDateOrder = (bFormatTurn ? pFormat->GetExactDateOrder() : 0);
                         if ((((nExactDateOrder >> 8) & 0xff) == L'Y') && ((nExactDateOrder & 0xff) == L'D'))
                         {
                             pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(1) );
-                            pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(0) );
+                            pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(0) );
                         }
                         else
                         {
                             pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(0) );
-                            pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(1) );
+                            pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(1) );
                         }
                     }
                     break;
                     case 2:             // month in the middle (10 Jan 94)
-                        pCal->setValue( CalendarFieldIndex::MONTH, abs(nMonth)-1 );
+                        pCal->setValue( CalendarFieldIndex::CFI_MONTH, abs(nMonth)-1 );
                         switch (DateFmt)
                         {
                             case MDY:   // yes, "10-Jan-94" is valid
                             case DMY:
                                 pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(0) );
-                                pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(1) );
+                                pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(1) );
                                 break;
                             case YMD:
                                 pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(1) );
-                                pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(0) );
+                                pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(0) );
                                 break;
                             default:
                                 res = sal_False;
@@ -1270,21 +1270,21 @@ input for the following reasons:
                         {
                             case MDY:
                                 pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(1) );
-                                pCal->setValue( CalendarFieldIndex::MONTH, ImplGetMonth(0) );
+                                pCal->setValue( CalendarFieldIndex::CFI_MONTH, ImplGetMonth(0) );
                                 if ( nCounter > 2 )
-                                    pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(2) );
+                                    pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(2) );
                                 break;
                             case DMY:
                                 pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(0) );
-                                pCal->setValue( CalendarFieldIndex::MONTH, ImplGetMonth(1) );
+                                pCal->setValue( CalendarFieldIndex::CFI_MONTH, ImplGetMonth(1) );
                                 if ( nCounter > 2 )
-                                    pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(2) );
+                                    pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(2) );
                                 break;
                             case YMD:
                                 if ( nCounter > 2 )
                                     pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(2) );
-                                pCal->setValue( CalendarFieldIndex::MONTH, ImplGetMonth(1) );
-                                pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(0) );
+                                pCal->setValue( CalendarFieldIndex::CFI_MONTH, ImplGetMonth(1) );
+                                pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(0) );
                                 break;
                             default:
                                 res = sal_False;
@@ -1298,8 +1298,8 @@ input for the following reasons:
                         {
                             case MDY:
                                 pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(0) );
-                                pCal->setValue( CalendarFieldIndex::MONTH, abs(nMonth)-1 );
-                                pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(1) );
+                                pCal->setValue( CalendarFieldIndex::CFI_MONTH, abs(nMonth)-1 );
+                                pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(1) );
                                 break;
                             default:
                                 res = sal_False;
@@ -1308,16 +1308,16 @@ input for the following reasons:
                         break;
                     case 2:             // month in the middle (10 Jan 94 8:23)
                         nCounter = 2;
-                        pCal->setValue( CalendarFieldIndex::MONTH, abs(nMonth)-1 );
+                        pCal->setValue( CalendarFieldIndex::CFI_MONTH, abs(nMonth)-1 );
                         switch (DateFmt)
                         {
                             case DMY:
                                 pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(0) );
-                                pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(1) );
+                                pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(1) );
                                 break;
                             case YMD:
                                 pCal->setValue( CalendarFieldIndex::DAY_OF_MONTH, ImplGetDay(1) );
-                                pCal->setValue( CalendarFieldIndex::YEAR, ImplGetYear(0) );
+                                pCal->setValue( CalendarFieldIndex::CFI_YEAR, ImplGetYear(0) );
                                 break;
                             default:
                                 res = sal_False;
@@ -1399,28 +1399,28 @@ input for the following reasons:
             xCal->setDateTime( nDateTime );
         }
         nDaySet    = xCal->getValue( i18n::CalendarFieldIndex::DAY_OF_MONTH );
-        nMonthSet  = xCal->getValue( i18n::CalendarFieldIndex::MONTH );
-        nYearSet   = xCal->getValue( i18n::CalendarFieldIndex::YEAR );
-        nHourSet   = xCal->getValue( i18n::CalendarFieldIndex::HOUR );
-        nMinuteSet = xCal->getValue( i18n::CalendarFieldIndex::MINUTE );
-        nSecondSet = xCal->getValue( i18n::CalendarFieldIndex::SECOND );
+        nMonthSet  = xCal->getValue( i18n::CalendarFieldIndex::CFI_MONTH );
+        nYearSet   = xCal->getValue( i18n::CalendarFieldIndex::CFI_YEAR );
+        nHourSet   = xCal->getValue( i18n::CalendarFieldIndex::CFI_HOUR );
+        nMinuteSet = xCal->getValue( i18n::CalendarFieldIndex::CFI_MINUTE );
+        nSecondSet = xCal->getValue( i18n::CalendarFieldIndex::CFI_SECOND );
         nZO        = xCal->getValue( i18n::CalendarFieldIndex::ZONE_OFFSET );
         nZOmillis  = xCal->getValue( i18n::CalendarFieldIndex::ZONE_OFFSET_SECOND_MILLIS );
         nDST       = xCal->getValue( i18n::CalendarFieldIndex::DST_OFFSET );
         nDSTmillis = xCal->getValue( i18n::CalendarFieldIndex::DST_OFFSET_SECOND_MILLIS );
         xCal->setValue( i18n::CalendarFieldIndex::DAY_OF_MONTH, nDaySet );
-        xCal->setValue( i18n::CalendarFieldIndex::MONTH, nMonthSet );
-        xCal->setValue( i18n::CalendarFieldIndex::YEAR, nYearSet );
-        xCal->setValue( i18n::CalendarFieldIndex::HOUR, nHourSet );
-        xCal->setValue( i18n::CalendarFieldIndex::MINUTE, nMinuteSet );
-        xCal->setValue( i18n::CalendarFieldIndex::SECOND, nSecondSet );
+        xCal->setValue( i18n::CalendarFieldIndex::CFI_MONTH, nMonthSet );
+        xCal->setValue( i18n::CalendarFieldIndex::CFI_YEAR, nYearSet );
+        xCal->setValue( i18n::CalendarFieldIndex::CFI_HOUR, nHourSet );
+        xCal->setValue( i18n::CalendarFieldIndex::CFI_MINUTE, nMinuteSet );
+        xCal->setValue( i18n::CalendarFieldIndex::CFI_SECOND, nSecondSet );
         bValid  = xCal->isValid();
         nDay    = xCal->getValue( i18n::CalendarFieldIndex::DAY_OF_MONTH );
-        nMyMonth= xCal->getValue( i18n::CalendarFieldIndex::MONTH );
-        nYear   = xCal->getValue( i18n::CalendarFieldIndex::YEAR );
-        nHour   = xCal->getValue( i18n::CalendarFieldIndex::HOUR );
-        nMinute = xCal->getValue( i18n::CalendarFieldIndex::MINUTE );
-        nSecond = xCal->getValue( i18n::CalendarFieldIndex::SECOND );
+        nMyMonth= xCal->getValue( i18n::CalendarFieldIndex::CFI_MONTH );
+        nYear   = xCal->getValue( i18n::CalendarFieldIndex::CFI_YEAR );
+        nHour   = xCal->getValue( i18n::CalendarFieldIndex::CFI_HOUR );
+        nMinute = xCal->getValue( i18n::CalendarFieldIndex::CFI_MINUTE );
+        nSecond = xCal->getValue( i18n::CalendarFieldIndex::CFI_SECOND );
         bValid = bValid && nDay == nDaySet && nMyMonth == nMonthSet && nYear ==
             nYearSet && nHour == nHourSet && nMinute == nMinuteSet && nSecond
             == nSecondSet;
