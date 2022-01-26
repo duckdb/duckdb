@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _LOCALEDATA_H
+#define _LOCALEDATA_H
 
 #include <string>
 #include <vector>
@@ -15,7 +16,7 @@ namespace duckdb_numformat {
 #define MLD_ABBRVFULLNAME_GET_ABBRV_NAME(A, B)		m_locale_list[m_cur_locale_id].A[B].abbrv_name
 #define MLD_ABBRVFULLNAME_GET_SIZE(A)				m_locale_list[m_cur_locale_id].A.size()
 
-typedef struct {
+struct SeparatorInfo {
 	std::wstring		date;
 	std::wstring		thousand;
 	std::wstring		decimal;
@@ -27,24 +28,24 @@ typedef struct {
 	std::wstring		longdatemonth;
 	std::wstring		longdateyear;
 
-} SeparatorInfo;
+};
 
-typedef struct {
+struct CurrencyInfo {
 	std::wstring		currency_symbol;	// "$"
 	std::wstring		bank_symbol;	// "USD"
 	std::wstring		currency_name;	// "US Dollar"
 	int32_t				decimal_places;	// 2
 
-} CurrencyInfo;
+};
 
-typedef struct {
+struct AbbrvFullNameInfo {
 	std::wstring		id;
 	std::wstring		abbrv_name;
 	std::wstring		full_name;
 
-} AbbrvFullNameInfo;
+};
 
-typedef struct {
+struct FormatCodeInfo {
 	std::wstring		fixed_format_key1;
 	std::wstring		scientific_format_key1;
 	std::wstring		percent_format_key1;
@@ -53,9 +54,9 @@ typedef struct {
 	std::wstring		date_format_key9;
 	std::wstring		datetime_format_key1;
 
-} FormatCodeInfo;
+};
 
-typedef struct {
+struct LocaleInfo {
 	SeparatorInfo		seperators;
 	//std::wstring		num_thousand_separator;	// ','
 	std::vector<int32_t> digit_grouping;		// {3, 0} or {3, 2, 0} (India and Bhutan)
@@ -73,14 +74,13 @@ typedef struct {
 public:
 	std::wstring& getCurrentCurrencyId() { return cur_currency_id; }
 	void setCurrentCurrencyId(std::wstring& currency_id) { cur_currency_id = currency_id; }
-} LocaleInfo;
+};
 
 class Calendar;
 class ImpSvNumberInputScan;
 class ImpSvNumberformatScan;
 
-class LocaleData
-{
+class LocaleData {
 public:
 	LocaleData();
 	~LocaleData();
@@ -138,3 +138,5 @@ private:
 	ImpSvNumberformatScan*	m_num_format_scan_ptr;
 };
 }	// namespace duckdb_numformat
+
+#endif // _LOCALEDATA_H
