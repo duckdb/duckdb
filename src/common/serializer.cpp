@@ -5,6 +5,9 @@ namespace duckdb {
 template <>
 string Deserializer::Read() {
 	uint32_t size = Read<uint32_t>();
+	if (size == 0) {
+		return string();
+	}
 	auto buffer = unique_ptr<data_t[]>(new data_t[size]);
 	ReadData(buffer.get(), size);
 	return string((char *)buffer.get(), size);

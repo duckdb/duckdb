@@ -51,7 +51,7 @@ test_that("duckdb_register_arrow() works with datasets and async arrow scanner",
 
   # Registering a dataset + aggregation
   ds <- arrow::open_dataset("data/userdata1.parquet")
-  duckdb::duckdb_register_arrow(con, "mydatasetreader", ds, use_async = TRUE)
+  duckdb::duckdb_register_arrow(con, "mydatasetreader", ds)
   res1 <- dbGetQuery(con, "SELECT count(*) FROM mydatasetreader")
   res2 <- dbGetQuery(con, "SELECT count(*) FROM parquet_scan('data/userdata1.parquet')")
   expect_true(identical(res1, res2))

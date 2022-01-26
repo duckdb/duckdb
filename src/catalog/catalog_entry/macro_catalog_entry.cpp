@@ -1,6 +1,6 @@
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -10,36 +10,39 @@ MacroCatalogEntry::MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	this->internal = info->internal;
 }
 
-void MacroCatalogEntry::Serialize(Serializer &serializer) {
+void MacroCatalogEntry::Serialize(Serializer &main_serializer) {
 	D_ASSERT(!internal);
-	serializer.WriteString(schema->name);
-	serializer.WriteString(name);
-	function->expression->Serialize(serializer);
-	serializer.Write<uint32_t>((uint32_t)function->parameters.size());
-	for (auto &param : function->parameters) {
-		param->Serialize(serializer);
-	}
-	serializer.Write<uint32_t>((uint32_t)function->default_parameters.size());
+	FieldWriter writer(main_serializer);
+	writer.WriteString(schema->name);
+	writer.WriteString(name);
+	writer.WriteSerializable(*function->expression);
+	writer.WriteSerializableList(function->parameters);
+	writer.WriteField<uint32_t>((uint32_t)function->default_parameters.size());
+	auto &serializer = writer.GetSerializer();
 	for (auto &kv : function->default_parameters) {
 		serializer.WriteString(kv.first);
 		kv.second->Serialize(serializer);
 	}
+	writer.Finalize();
 }
 
-unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &source) {
+unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &main_source) {
 	auto info = make_unique<CreateMacroInfo>();
-	info->schema = source.Read<string>();
-	info->name = source.Read<string>();
-	info->function = make_unique<MacroFunction>(ParsedExpression::Deserialize(source));
-	auto param_count = source.Read<uint32_t>();
-	for (idx_t i = 0; i < param_count; i++) {
-		info->function->parameters.push_back(ParsedExpression::Deserialize(source));
-	}
-	auto default_param_count = source.Read<uint32_t>();
+
+	FieldReader reader(main_source);
+	info->schema = reader.ReadRequired<string>();
+	info->name = reader.ReadRequired<string>();
+	auto expression = reader.ReadRequiredSerializable<ParsedExpression>();
+	info->function = make_unique<MacroFunction>(move(expression));
+	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>();
+	auto default_param_count = reader.ReadRequired<uint32_t>();
+	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < default_param_count; i++) {
 		auto name = source.Read<string>();
 		info->function->default_parameters[name] = ParsedExpression::Deserialize(source);
 	}
+	reader.Finalize();
+
 	return info;
 }
 

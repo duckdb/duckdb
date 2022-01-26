@@ -1,7 +1,7 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -224,46 +224,49 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	return move(new_window);
 }
 
-void WindowExpression::Serialize(Serializer &serializer) {
-	ParsedExpression::Serialize(serializer);
-	serializer.WriteString(function_name);
-	serializer.WriteString(schema);
-	serializer.WriteList(children);
-	serializer.WriteList(partitions);
+void WindowExpression::Serialize(FieldWriter &writer) const {
+	auto &serializer = writer.GetSerializer();
+
+	writer.WriteString(function_name);
+	writer.WriteString(schema);
+	writer.WriteSerializableList(children);
+	writer.WriteSerializableList(partitions);
+	// FIXME: should not use serializer here (probably)?
 	D_ASSERT(orders.size() <= NumericLimits<uint32_t>::Maximum());
-	serializer.Write<uint32_t>((uint32_t)orders.size());
+	writer.WriteField<uint32_t>((uint32_t)orders.size());
 	for (auto &order : orders) {
 		order.Serialize(serializer);
 	}
-	serializer.Write<WindowBoundary>(start);
-	serializer.Write<WindowBoundary>(end);
+	writer.WriteField<WindowBoundary>(start);
+	writer.WriteField<WindowBoundary>(end);
 
-	serializer.WriteOptional(start_expr);
-	serializer.WriteOptional(end_expr);
-	serializer.WriteOptional(offset_expr);
-	serializer.WriteOptional(default_expr);
-	serializer.Write<bool>(ignore_nulls);
+	writer.WriteOptional(start_expr);
+	writer.WriteOptional(end_expr);
+	writer.WriteOptional(offset_expr);
+	writer.WriteOptional(default_expr);
+	writer.WriteField<bool>(ignore_nulls);
 }
 
-unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, Deserializer &source) {
-	auto function_name = source.Read<string>();
-	auto schema = source.Read<string>();
+unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	auto function_name = reader.ReadRequired<string>();
+	auto schema = reader.ReadRequired<string>();
 	auto expr = make_unique<WindowExpression>(type, schema, function_name);
-	source.ReadList<ParsedExpression>(expr->children);
-	source.ReadList<ParsedExpression>(expr->partitions);
+	expr->children = reader.ReadRequiredSerializableList<ParsedExpression>();
+	expr->partitions = reader.ReadRequiredSerializableList<ParsedExpression>();
 
-	auto order_count = source.Read<uint32_t>();
+	auto order_count = reader.ReadRequired<uint32_t>();
+	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < order_count; i++) {
 		expr->orders.push_back(OrderByNode::Deserialize((source)));
 	}
-	expr->start = source.Read<WindowBoundary>();
-	expr->end = source.Read<WindowBoundary>();
+	expr->start = reader.ReadRequired<WindowBoundary>();
+	expr->end = reader.ReadRequired<WindowBoundary>();
 
-	expr->start_expr = source.ReadOptional<ParsedExpression>();
-	expr->end_expr = source.ReadOptional<ParsedExpression>();
-	expr->offset_expr = source.ReadOptional<ParsedExpression>();
-	expr->default_expr = source.ReadOptional<ParsedExpression>();
-	expr->ignore_nulls = source.Read<bool>();
+	expr->start_expr = reader.ReadOptional<ParsedExpression>(nullptr);
+	expr->end_expr = reader.ReadOptional<ParsedExpression>(nullptr);
+	expr->offset_expr = reader.ReadOptional<ParsedExpression>(nullptr);
+	expr->default_expr = reader.ReadOptional<ParsedExpression>(nullptr);
+	expr->ignore_nulls = reader.ReadRequired<bool>();
 	return move(expr);
 }
 
