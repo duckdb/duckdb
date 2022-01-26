@@ -2,17 +2,15 @@
 #include "duckdb/function/scalar/strftime.hpp"
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
+#include "duckdb/common/thread.hpp"
+#include "duckdb/common/mutex.hpp"
 
 #include <map>
+#include <atomic>
 
-using namespace duckdb;
+namespace duckdb {
 
-unique_ptr<ResponseWrapper> HTTPFileSystem::Request(FileHandle &handle, string url, string method, HeaderMap header_map,
-                                                    idx_t file_offset, char *buffer_out, idx_t buffer_len) {
-	auto headers = make_unique<duckdb_httplib_openssl::Headers>();
-	for (auto &entry : header_map) {
-		headers->insert(entry);
-	}
+string ParseUrl(string url, string &path, string &proto_host_port) {
 	if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0) {
 		throw std::runtime_error("URL needs to start with http:// or https://");
 	}
@@ -20,32 +18,111 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::Request(FileHandle &handle, string u
 	if (slash_pos == std::string::npos) {
 		throw std::runtime_error("URL needs to contain a '/' after the host");
 	}
-	auto proto_host_port = url.substr(0, slash_pos);
+	proto_host_port = url.substr(0, slash_pos);
 
-	auto path = url.substr(slash_pos);
+	path = url.substr(slash_pos);
 	if (path.empty()) {
 		throw std::runtime_error("URL needs to contain a path");
 	}
+	return path;
+}
+
+unique_ptr<duckdb_httplib_openssl::Headers> InitializeHTTPHeaders(HeaderMap header_map) {
+	auto headers = make_unique<duckdb_httplib_openssl::Headers>();
+	for (auto &entry : header_map) {
+		headers->insert(entry);
+	}
+	return headers;
+}
+
+// Todo clean up requests further? Make sure error handling is correct
+unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
+                                                        char *buffer_out, idx_t buffer_out_len, char *buffer_in,
+                                                        idx_t buffer_in_len) {
+	auto headers = InitializeHTTPHeaders(header_map);
+	string path, proto_host_port;
+	ParseUrl(url, path, proto_host_port);
 
 	duckdb_httplib_openssl::Client cli(proto_host_port.c_str());
 	cli.set_follow_location(true);
 	cli.enable_server_certificate_verification(false);
 
-	if (method == "HEAD") {
-		auto res = cli.Head(path.c_str(), *headers);
-		if (res.error() != duckdb_httplib_openssl::Error::Success) {
-			throw std::runtime_error("HTTP HEAD error on '" + url + "' " + std::to_string(res.error()));
-		}
-		return make_unique<ResponseWrapper>(res.value());
+	string content_type = "application/octet-stream";
+	string buffer_str(buffer_in, buffer_in_len); // TODO why copy?
+	idx_t out_offset = 0;
+	auto res = cli.Post(
+	    path.c_str(), *headers, buffer_str,
+	    [&](const duckdb_httplib_openssl::Response &response) {
+		    if (response.status >= 400) {
+			    std::cout << response.body << std::endl;
+			    throw std::runtime_error("HTTP error2");
+		    }
+		    return true;
+	    },
+	    [&](const char *data, size_t data_length) {
+		    memcpy(buffer_out + out_offset, data, data_length);
+		    out_offset += data_length;
+		    return true;
+	    },
+	    content_type.c_str());
+	if (res.error() != duckdb_httplib_openssl::Error::Success) {
+		throw std::runtime_error("HTTP POST error on '" + url + "' " + std::to_string(res.error()));
 	}
+	return make_unique<ResponseWrapper>(res.value());
+}
+
+unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, string url, HeaderMap header_map,
+                                                       char *buffer_in, idx_t buffer_in_len) {
+	auto headers = InitializeHTTPHeaders(header_map);
+	string path, proto_host_port;
+	ParseUrl(url, path, proto_host_port);
+
+	duckdb_httplib_openssl::Client cli(proto_host_port.c_str());
+	cli.set_follow_location(true);
+	cli.enable_server_certificate_verification(false);
+
+	string content_type = "application/octet-stream";
+	auto res = cli.Put(path.c_str(), *headers, buffer_in, buffer_in_len, content_type.c_str());
+	if (res.error() != duckdb_httplib_openssl::Error::Success) {
+		throw std::runtime_error("HTTP PUT error on '" + url + "' " + std::to_string(res.error()));
+	}
+	return make_unique<ResponseWrapper>(res.value());
+}
+
+unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, string url, HeaderMap header_map) {
+	auto headers = InitializeHTTPHeaders(header_map);
+	string path, proto_host_port;
+	ParseUrl(url, path, proto_host_port);
+
+	duckdb_httplib_openssl::Client cli(proto_host_port.c_str());
+	cli.set_follow_location(true);
+	cli.enable_server_certificate_verification(false);
+
+	auto res = cli.Head(path.c_str(), *headers);
+	if (res.error() != duckdb_httplib_openssl::Error::Success) {
+		throw std::runtime_error("HTTP HEAD error on '" + url + "' " + std::to_string(res.error()));
+	}
+	return make_unique<ResponseWrapper>(res.value());
+}
+
+unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
+                                                            idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
+	auto headers = InitializeHTTPHeaders(header_map);
+	string path, proto_host_port;
+	ParseUrl(url, path, proto_host_port);
+
+	duckdb_httplib_openssl::Client cli(proto_host_port.c_str());
+	cli.set_follow_location(true);
+	cli.enable_server_certificate_verification(false);
+
 	std::string range_expr =
-	    "bytes=" + std::to_string(file_offset) + "-" + std::to_string(file_offset + buffer_len - 1);
-	// printf("%s(%llu, %llu)\n", method.c_str(), file_offset, buffer_len);
+	    "bytes=" + std::to_string(file_offset) + "-" + std::to_string(file_offset + buffer_out_len - 1);
 
 	// send the Range header to read only subset of file
 	headers->insert(std::pair<std::string, std::string>("Range", range_expr));
 
 	idx_t out_offset = 0;
+
 	auto res = cli.Get(
 	    path.c_str(), *headers,
 	    [&](const duckdb_httplib_openssl::Response &response) {
@@ -55,7 +132,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::Request(FileHandle &handle, string u
 		    if (response.status < 300) { // done redirectering
 			    out_offset = 0;
 			    auto content_length = std::stoll(response.get_header_value("Content-Length", 0));
-			    if ((idx_t)content_length != buffer_len) {
+			    if ((idx_t)content_length != buffer_out_len) {
 				    throw std::runtime_error("offset error");
 			    }
 		    }
@@ -72,23 +149,22 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::Request(FileHandle &handle, string u
 	return make_unique<ResponseWrapper>(res.value());
 }
 
-HTTPFileHandle::HTTPFileHandle(FileSystem &fs, std::string path)
-    : FileHandle(fs, path), length(0), buffer_available(0), buffer_idx(0), file_offset(0), buffer_start(0),
-      buffer_end(0) {
-	buffer = std::unique_ptr<data_t[]>(new data_t[BUFFER_LEN]);
+HTTPFileHandle::HTTPFileHandle(FileSystem &fs, std::string path, uint8_t flags)
+    : FileHandle(fs, path), flags(flags), length(0), buffer_available(0), buffer_idx(0), file_offset(0),
+      buffer_start(0), buffer_end(0) {
 }
 
 std::unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, uint8_t flags, FileLockType lock,
                                                              FileCompressionType compression, FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
-	return duckdb::make_unique<HTTPFileHandle>(*this, path);
+	return duckdb::make_unique<HTTPFileHandle>(*this, path, flags);
 }
 
 std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
                                                      FileCompressionType compression, FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
 	auto handle = CreateHandle(path, flags, lock, compression, opener);
-	handle->InitializeMetadata();
+	handle->Initialize();
 	return move(handle);
 }
 
@@ -115,7 +191,7 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 		auto buffer_read_len = MinValue<idx_t>(hfh.buffer_available, to_read);
 		if (buffer_read_len > 0) {
 			D_ASSERT(hfh.buffer_start + hfh.buffer_idx + buffer_read_len <= hfh.buffer_end);
-			memcpy((char *)buffer + buffer_offset, hfh.buffer.get() + hfh.buffer_idx, buffer_read_len);
+			memcpy((char *)buffer + buffer_offset, hfh.read_buffer.get() + hfh.buffer_idx, buffer_read_len);
 
 			buffer_offset += buffer_read_len;
 			to_read -= buffer_read_len;
@@ -126,8 +202,8 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 		}
 
 		if (to_read > 0 && hfh.buffer_available == 0) {
-			auto new_buffer_available = MinValue<idx_t>(hfh.BUFFER_LEN, hfh.length - hfh.file_offset);
-			Request(hfh, hfh.path, "GET", {}, hfh.file_offset, (char *)hfh.buffer.get(), new_buffer_available);
+			auto new_buffer_available = MinValue<idx_t>(hfh.READ_BUFFER_LEN, hfh.length - hfh.file_offset);
+			GetRangeRequest(hfh, hfh.path, {}, hfh.file_offset, (char *)hfh.read_buffer.get(), new_buffer_available);
 			hfh.buffer_available = new_buffer_available;
 			hfh.buffer_idx = 0;
 			hfh.buffer_start = hfh.file_offset;
@@ -142,6 +218,21 @@ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
 	nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
 	Read(handle, buffer, nr_bytes, hfh.file_offset);
 	return nr_bytes;
+}
+
+void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	throw NotImplementedException("Writing to HTTP files not implemented");
+}
+
+int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+	auto &hfh = (HTTPFileHandle &)handle;
+	;
+	Write(handle, buffer, nr_bytes, hfh.file_offset);
+	return nr_bytes;
+}
+
+void HTTPFileSystem::FileSync(FileHandle &handle) {
+	throw NotImplementedException("FileSync for HTTP files not implemented"); // tODO is it?
 }
 
 int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
@@ -176,19 +267,34 @@ void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 	sfh.file_offset = location;
 }
 
-void HTTPFileHandle::InitializeMetadata() {
-	// get length using HEAD
+unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 	auto &hfs = (HTTPFileSystem &)file_system;
-	auto res = hfs.Request(*this, path, "HEAD");
+	auto res = hfs.HeadRequest(*this, path, {});
+
 	if (res->code != 200) {
-		throw std::runtime_error("Unable to connect to URL \"" + path + "\": " + std::to_string(res->code) + " (" +
-		                         res->error + ")");
+		if ((flags & FileFlags::FILE_FLAGS_WRITE) && res->code == 404) {
+			if (!(flags & FileFlags::FILE_FLAGS_FILE_CREATE) && !(flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW)) {
+				throw std::runtime_error("Unable to open URL \"" + path +
+				                         "\" for writing: file does not exists and CREATE flag is not set");
+			}
+			length = 0;
+			return res;
+		} else {
+			throw std::runtime_error("Unable to connect to URL \"" + path + "\": " + std::to_string(res->code) + " (" +
+			                         res->error + ")");
+		}
 	}
-	length = std::atoll(res->headers["Content-Length"].c_str());
+
+	// Initialize the read buffer now that we know the file exists TODO: MAX(READ_BUFFER_LEN, filesize?)
+	if (flags & FileFlags::FILE_FLAGS_READ) {
+		read_buffer = std::unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
+	}
+
+	length = std::atoll(res->headers["Contentx-Length"].c_str());
 
 	auto last_modified = res->headers["Last-Modified"];
 	if (last_modified.empty()) {
-		return;
+		return res;
 	}
 	auto result = StrpTimeFormat::Parse("%a, %d %h %Y %T %Z", last_modified);
 
@@ -201,6 +307,7 @@ void HTTPFileHandle::InitializeMetadata() {
 	tm.tm_sec = result.data[5];
 	tm.tm_isdst = 0;
 	last_modified = std::mktime(&tm);
+	return res;
 }
 
 ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res) {
@@ -209,4 +316,6 @@ ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res) {
 	for (auto &h : res.headers) {
 		headers[h.first] = h.second;
 	}
+}
+
 }
