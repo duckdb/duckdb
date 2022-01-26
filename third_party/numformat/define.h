@@ -171,7 +171,7 @@ const short DST_OFFSET_SECOND_MILLIS = 16;
  */
 const short FIELD_COUNT2 = 17;
 
-};
+}
 
 //=============================================================================
 
@@ -254,7 +254,7 @@ const long LONG_YEAR_AND_ERA = 14;
 const long SHORT_QUARTER = 15;
 /// Long quarter, for example, "1st quarter"
 const long LONG_QUARTER = 16;
-};
+}
 
 //=============================================================================
 
@@ -274,7 +274,7 @@ const short MONTH = 2;
 const short YEAR = 3;
 /// name of an era, like BC/AD
 const short ERA = 4;
-};
+}
 
 //=============================================================================
 
@@ -319,7 +319,7 @@ const short QUARTER4_ABBREVIATION = 11;
 //! the maximum number used above!
 /// Count of known reserved words.
 const short COUNT = 12;
-};
+}
 
 //============================================================================
 

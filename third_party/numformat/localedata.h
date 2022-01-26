@@ -10,7 +10,7 @@
 
 namespace duckdb_numformat {
 
-#define MLD_ABBRVFULLNAME_CHECK_INDEX_RANGE(A, B)	if (B < 0 || B >= m_locale_list[m_cur_locale_id].A.size()) return L""
+#define MLD_ABBRVFULLNAME_CHECK_INDEX_RANGE(A, B)	if (B < 0 || B >= (sal_Int32)m_locale_list[m_cur_locale_id].A.size()) return L""
 #define MLD_ABBRVFULLNAME_GET_FULL_NAME(A, B)		m_locale_list[m_cur_locale_id].A[B].full_name
 #define MLD_ABBRVFULLNAME_GET_ABBRV_NAME(A, B)		m_locale_list[m_cur_locale_id].A[B].abbrv_name
 #define MLD_ABBRVFULLNAME_GET_SIZE(A)				m_locale_list[m_cur_locale_id].A.size()

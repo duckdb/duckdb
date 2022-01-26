@@ -54,12 +54,12 @@ class DigitGroupingIterator
 
     bool isInfinite() const
     {
-        return mnGroup >= maGroupings.size();
+        return mnGroup >= (sal_Int32)maGroupings.size();
     }
 
     sal_Int32 getGrouping() const
     {
-        if (mnGroup < maGroupings.size())
+        if (mnGroup < (sal_Int32)maGroupings.size())
         {
             sal_Int32 n = maGroupings[mnGroup];
             //OSL_ENSURE( 0 <= n && n <= SAL_MAX_UINT16, "DigitGroupingIterator::getGrouping: far out");

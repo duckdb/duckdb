@@ -17,8 +17,7 @@ string_t NumForFun::NumberFormatScalarFunction(Vector &result, double num_value,
 		duckdb_numformat::ImpSvNumberInputScan input_scan(&locale_data);
 		unsigned short nCheckPos;
 		string out_str;
-		duckdb_numformat::Color* pColor = NULL;
-
+		duckdb_numformat::Color *pColor = NULL;
 
 		duckdb_numformat::SvNumberformat num_format(in_str, &locale_data, &input_scan, nCheckPos);
 
@@ -28,14 +27,12 @@ string_t NumForFun::NumberFormatScalarFunction(Vector &result, double num_value,
 			memcpy(result_data, out_str.c_str(), out_str.size());
 			result_string.Finalize();
 			return result_string;
-		}
-		else {
+		} else {
 			auto result_string = StringVector::EmptyString(result, 0);
 			result_string.Finalize();
 			return result_string;
 		}
-	}
-	catch (...){
+	} catch (...) {
 		throw InternalException("Unexpected result for number format");
 	}
 
@@ -46,15 +43,14 @@ static void NumberFormatFunction(DataChunk &args, ExpressionState &state, Vector
 	auto &number_vector = args.data[0];
 	auto &format_vector = args.data[1];
 	BinaryExecutor::Execute<double, string_t, string_t>(
-		number_vector, format_vector, result, args.size(), [&](double value, string_t format) {
-			return NumForFun::NumberFormatScalarFunction(result, value, format);
-		});
+	    number_vector, format_vector, result, args.size(),
+	    [&](double value, string_t format) { return NumForFun::NumberFormatScalarFunction(result, value, format); });
 }
 
 void NumForFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet substr("text");
-	substr.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::VARCHAR},
-	                                  LogicalType::VARCHAR, NumberFormatFunction));
+	substr.AddFunction(
+	    ScalarFunction({LogicalType::DOUBLE, LogicalType::VARCHAR}, LogicalType::VARCHAR, NumberFormatFunction));
 	set.AddFunction(substr);
 	substr.name = "excel_text";
 	set.AddFunction(substr);
