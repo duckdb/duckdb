@@ -13,8 +13,6 @@
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
-#include "duckdb/common/arrow_wrapper.hpp"
-
 namespace duckdb {
 
 class BufferHandle;
@@ -31,6 +29,15 @@ enum class VectorBufferType : uint8_t {
 	LIST_BUFFER,         // list buffer, holds a single flatvector child
 	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
 	OPAQUE_BUFFER        // opaque buffer, can be created for example by the parquet reader
+};
+
+enum class VectorAuxiliaryDataType : uint8_t {
+	ARROW_AUXILIARY // Holds Arrow Chunks that this vector depends on
+};
+
+struct VectorAuxiliaryData {
+	virtual ~VectorAuxiliaryData() {
+	}
 };
 
 //! The VectorBuffer is a class used by the vector to hold its data
@@ -50,14 +57,23 @@ public:
 	}
 	VectorBuffer() {
 	}
-	shared_ptr<ArrowArrayWrapper> arrow_array;
 
 public:
 	data_ptr_t GetData() {
 		return data.get();
 	}
+
 	void SetData(unique_ptr<data_t[]> new_data) {
 		data = move(new_data);
+	}
+
+	VectorAuxiliaryData *GetAuxiliaryData() {
+		return aux_data.get();
+	}
+
+	void SetAuxiliaryData(unique_ptr<VectorAuxiliaryData> aux_data_p, VectorAuxiliaryDataType aux_type_p) {
+		aux_data = move(aux_data_p);
+		aux_type = aux_type_p;
 	}
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
@@ -70,8 +86,14 @@ public:
 		return buffer_type;
 	}
 
+	inline VectorAuxiliaryDataType GetAuxiliaryDataType() const {
+		return aux_type;
+	}
+
 protected:
 	VectorBufferType buffer_type;
+	unique_ptr<VectorAuxiliaryData> aux_data;
+	VectorAuxiliaryDataType aux_type;
 	unique_ptr<data_t[]> data;
 };
 
