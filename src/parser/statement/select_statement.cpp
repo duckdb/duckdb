@@ -10,7 +10,7 @@ unique_ptr<SQLStatement> SelectStatement::Copy() const {
 	return move(result);
 }
 
-void SelectStatement::Serialize(Serializer &serializer) {
+void SelectStatement::Serialize(Serializer &serializer) const {
 	node->Serialize(serializer);
 }
 
