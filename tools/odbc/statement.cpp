@@ -1,10 +1,19 @@
 #include "duckdb_odbc.hpp"
 #include "api_info.hpp"
+#include "driver.hpp"
 #include "odbc_fetch.hpp"
-#include "statement_functions.hpp"
+#include "odbc_utils.hpp"
 #include "parameter_descriptor.hpp"
+#include "row_descriptor.hpp"
+#include "statement_functions.hpp"
+
+#include "duckdb/common/constants.hpp"
+
+#include <regex>
 
 using duckdb::LogicalTypeId;
+using duckdb::OdbcUtils;
+using std::string;
 
 SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                  SQLINTEGER string_length) {
@@ -64,6 +73,18 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 		case SQL_ATTR_CONCURRENCY:
 			// needs to be implemented
 			return SQL_SUCCESS;
+		case SQL_ATTR_APP_ROW_DESC: {
+			stmt->SetARD((duckdb::OdbcHandleDesc *)value_ptr);
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_APP_PARAM_DESC: {
+			stmt->SetAPD((duckdb::OdbcHandleDesc *)value_ptr);
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_PARAM_BIND_OFFSET_PTR: {
+			stmt->param_desc->apd->header.sql_desc_bind_offset_ptr = (SQLLEN *)value_ptr;
+			return SQL_SUCCESS;
+		}
 		default:
 			stmt->error_messages.emplace_back("Unsupported attribute type.");
 			return SQL_ERROR;
@@ -89,17 +110,17 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 				*((HSTMT *)value_ptr) = stmt->param_desc->GetIPD();
 			}
 			if (attribute == SQL_ATTR_APP_ROW_DESC) {
-				*((HSTMT *)value_ptr) = stmt->ard.get();
+				*((HSTMT *)value_ptr) = stmt->row_desc->GetARD();
 			}
 			if (attribute == SQL_ATTR_IMP_ROW_DESC) {
-				*((HSTMT *)value_ptr) = stmt->ird.get();
+				*((HSTMT *)value_ptr) = stmt->row_desc->GetIRD();
 			}
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_ASYNC_ENABLE:
 			break;
-		case SQL_ATTR_ASYNC_STMT_EVENT:
-			break;
+		// case SQL_ATTR_ASYNC_STMT_EVENT:
+		//	break;
 		case SQL_ATTR_CONCURRENCY:
 			break;
 		case SQL_ATTR_CURSOR_SCROLLABLE:
@@ -122,8 +143,10 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 			break;
 		case SQL_ATTR_NOSCAN:
 			break;
-		case SQL_ATTR_PARAM_BIND_OFFSET_PTR:
-			break;
+		case SQL_ATTR_PARAM_BIND_OFFSET_PTR: {
+			*((SQLLEN *)value_ptr) = *stmt->param_desc->apd->header.sql_desc_bind_offset_ptr;
+			return SQL_SUCCESS;
+		}
 		case SQL_ATTR_PARAM_BIND_TYPE:
 			break;
 		case SQL_ATTR_PARAM_OPERATION_PTR:
@@ -182,81 +205,102 @@ SQLRETURN SQL_API SQLExecDirect(SQLHSTMT statement_handle, SQLCHAR *statement_te
 SQLRETURN SQL_API SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1,
                             SQLCHAR *schema_name, SQLSMALLINT name_length2, SQLCHAR *table_name,
                             SQLSMALLINT name_length3, SQLCHAR *table_type, SQLSMALLINT name_length4) {
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
+		auto catalog_n = OdbcUtils::ReadString(catalog_name, name_length1);
+		string catalog_filter;
+		if (catalog_n.empty()) {
+			catalog_filter = "\"TABLE_CAT\" IS NULL";
+		} else if (stmt->dbc->sql_attr_metadata_id == SQL_TRUE) {
+			catalog_filter = "\"TABLE_CAT\"=" + OdbcUtils::GetStringAsIdentifier(catalog_n);
+		}
 
-	auto catalog_n = duckdb::OdbcUtils::ReadString(catalog_name, name_length1);
-	auto schema_n = duckdb::OdbcUtils::ReadString(schema_name, name_length2);
-	auto table_n = duckdb::OdbcUtils::ReadString(table_name, name_length3);
-	auto table_tp = duckdb::OdbcUtils::ReadString(table_type, name_length4);
+		// String search pattern for schema name
+		auto schema_n = OdbcUtils::ReadString(schema_name, name_length2);
+		string schema_filter = OdbcUtils::ParseStringFilter("\"TABLE_SCHEM\"", schema_n,
+		                                                    stmt->dbc->sql_attr_metadata_id, string(DEFAULT_SCHEMA));
 
-	// special cases
-	if (catalog_n == std::string(SQL_ALL_CATALOGS) && name_length2 == 0 && name_length2 == 0) {
-		if (!SQL_SUCCEEDED(duckdb::ExecDirectStmt(statement_handle,
-		                                          (SQLCHAR *)"SELECT '' \"TABLE_CAT\", NULL \"TABLE_SCHEM\", NULL "
-		                                                     "\"TABLE_NAME\", NULL \"TABLE_TYPE\" , NULL \"REMARKS\"",
-		                                          SQL_NTS))) {
+		// String search pattern for table name
+		auto table_n = OdbcUtils::ReadString(table_name, name_length3);
+		string table_filter = OdbcUtils::ParseStringFilter("\"TABLE_NAME\"", table_n, stmt->dbc->sql_attr_metadata_id);
+
+		auto table_tp = OdbcUtils::ReadString(table_type, name_length4);
+		table_tp = std::regex_replace(table_tp, std::regex("^('TABLE'|TABLE)"), "'BASE TABLE'");
+		table_tp = std::regex_replace(table_tp, std::regex(",[ \t]*('TABLE'|TABLE)"), ",'BASE TABLE'");
+
+		// special cases
+		if (catalog_n == std::string(SQL_ALL_CATALOGS) && name_length2 == 0 && name_length3 == 0) {
+			if (!SQL_SUCCEEDED(
+			        duckdb::ExecDirectStmt(statement_handle,
+			                               (SQLCHAR *)"SELECT '' \"TABLE_CAT\", NULL \"TABLE_SCHEM\", NULL "
+			                                          "\"TABLE_NAME\", NULL \"TABLE_TYPE\" , NULL \"REMARKS\"",
+			                               SQL_NTS))) {
+				return SQL_ERROR;
+			}
+			return SQL_SUCCESS;
+		}
+
+		if (schema_n == std::string(SQL_ALL_SCHEMAS) && catalog_n.empty() && name_length3 == 0) {
+			if (!SQL_SUCCEEDED(duckdb::ExecDirectStmt(
+			        statement_handle,
+			        (SQLCHAR *)"SELECT '' \"TABLE_CAT\", schema_name \"TABLE_SCHEM\", NULL \"TABLE_NAME\", "
+			                   "NULL \"TABLE_TYPE\" , NULL \"REMARKS\" FROM information_schema.schemata",
+			        SQL_NTS))) {
+				return SQL_ERROR;
+			}
+			return SQL_SUCCESS;
+		}
+
+		if (table_n == std::string(SQL_ALL_TABLE_TYPES) && name_length1 == 0 && name_length2 == 0 &&
+		    name_length3 == 0) {
+			return SQL_ERROR; // TODO
+		}
+
+		string sql_tables = OdbcUtils::GetQueryDuckdbTables(schema_filter, table_filter, table_tp);
+
+		if (!SQL_SUCCEEDED(
+		        duckdb::ExecDirectStmt(statement_handle, (SQLCHAR *)sql_tables.c_str(), sql_tables.size()))) {
 			return SQL_ERROR;
 		}
+
 		return SQL_SUCCESS;
-	}
-
-	if (schema_n == std::string(SQL_ALL_SCHEMAS) && name_length1 == 0 && name_length3 == 0) {
-		if (!SQL_SUCCEEDED(duckdb::ExecDirectStmt(
-		        statement_handle,
-		        (SQLCHAR *)"SELECT '' \"TABLE_CAT\", schema_name \"TABLE_SCHEM\", NULL \"TABLE_NAME\", "
-		                   "NULL \"TABLE_TYPE\" , NULL \"REMARKS\" FROM information_schema.schemata",
-		        SQL_NTS))) {
-			return SQL_ERROR;
-		}
-		return SQL_SUCCESS;
-	}
-
-	if (table_tp == std::string(SQL_ALL_TABLE_TYPES) && name_length1 == 0 && name_length2 == 0 && name_length3 == 0) {
-		return SQL_ERROR; // TODO
-	}
-
-	// TODO make this a nice template? also going to use this for SQLColumns etc.
-	if (!SQL_SUCCEEDED(duckdb::PrepareStmt(
-	        statement_handle,
-	        (SQLCHAR
-	             *)"SELECT table_catalog \"TABLE_CAT\", table_schema \"TABLE_SCHEM\", table_name \"TABLE_NAME\", CASE "
-	               "WHEN table_type='BASE TABLE' THEN 'TABLE' ELSE table_type END \"TABLE_TYPE\" , '' \"REMARKS\"  "
-	               "FROM information_schema.tables WHERE table_schema LIKE ? AND table_name LIKE ? and table_type = ?",
-	        SQL_NTS))) {
-		return SQL_ERROR;
-	}
-
-	SQLLEN null_indicator = SQL_NULL_DATA;
-	if (!SQL_SUCCEEDED(duckdb::BindParameterStmt(statement_handle, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_UNKNOWN_TYPE, 0,
-	                                             0, schema_name, name_length2,
-	                                             schema_name ? nullptr : &null_indicator))) {
-		return SQL_ERROR;
-	}
-
-	if (!SQL_SUCCEEDED(duckdb::BindParameterStmt(statement_handle, 2, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_UNKNOWN_TYPE, 0,
-	                                             0, table_name, name_length3,
-	                                             table_name ? nullptr : &null_indicator))) {
-		return SQL_ERROR;
-	}
-
-	if (!SQL_SUCCEEDED(duckdb::BindParameterStmt(statement_handle, 3, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_UNKNOWN_TYPE, 0,
-	                                             0, table_type, name_length4,
-	                                             table_type ? nullptr : &null_indicator))) {
-		return SQL_ERROR;
-	}
-
-	if (!SQL_SUCCEEDED(duckdb::ExecuteStmt(statement_handle))) {
-		return SQL_ERROR;
-	}
-
-	return SQL_SUCCESS;
+	});
 }
 
 SQLRETURN SQL_API SQLColumns(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1,
                              SQLCHAR *schema_name, SQLSMALLINT name_length2, SQLCHAR *table_name,
                              SQLSMALLINT name_length3, SQLCHAR *column_name, SQLSMALLINT name_length4) {
-	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-		// TODO
-		return SQL_ERROR;
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
+		// TODO see SQL_ATTR_METADATA_ID, parameters case
+
+		auto catalog_n = OdbcUtils::ReadString(catalog_name, name_length1);
+		string catalog_filter;
+		if (catalog_n.empty()) {
+			catalog_filter = "\"TABLE_CAT\" IS NULL";
+		} else if (stmt->dbc->sql_attr_metadata_id == SQL_TRUE) {
+			catalog_filter = "\"TABLE_CAT\"=" + OdbcUtils::GetStringAsIdentifier(catalog_n);
+		}
+
+		// String search pattern for schema name
+		auto schema_n = OdbcUtils::ReadString(schema_name, name_length2);
+		string schema_filter = OdbcUtils::ParseStringFilter("\"TABLE_SCHEM\"", schema_n,
+		                                                    stmt->dbc->sql_attr_metadata_id, string(DEFAULT_SCHEMA));
+
+		// String search pattern for table name
+		auto table_n = OdbcUtils::ReadString(table_name, name_length3);
+		string table_filter = OdbcUtils::ParseStringFilter("\"TABLE_NAME\"", table_n, stmt->dbc->sql_attr_metadata_id);
+
+		// String search pattern for column name
+		auto column_n = OdbcUtils::ReadString(column_name, name_length4);
+		string column_filter =
+		    OdbcUtils::ParseStringFilter("\"COLUMN_NAME\"", column_n, stmt->dbc->sql_attr_metadata_id);
+
+		string sql_columns =
+		    OdbcUtils::GetQueryDuckdbColumns(catalog_filter, schema_filter, table_filter, column_filter);
+		auto ret = duckdb::ExecDirectStmt(statement_handle, (SQLCHAR *)sql_columns.c_str(), sql_columns.size());
+		if (!SQL_SUCCEEDED(ret)) {
+			return ret;
+		}
+		return SQL_SUCCESS;
 	});
 }
 
@@ -347,7 +391,7 @@ SQLRETURN SQL_API SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
 		if (option == SQL_DROP) {
 			// mapping FreeStmt with DROP option to SQLFreeHandle
-			return SQLFreeHandle(SQL_HANDLE_STMT, statement_handle);
+			return duckdb::FreeHandle(SQL_HANDLE_STMT, statement_handle);
 		}
 		if (option == SQL_UNBIND) {
 			stmt->bound_cols.clear();
@@ -358,8 +402,7 @@ SQLRETURN SQL_API SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_CLOSE) {
-			stmt->Close();
-			return SQL_SUCCESS;
+			return duckdb::CloseStmt(stmt);
 		}
 		return SQL_ERROR;
 	});

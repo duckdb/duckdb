@@ -52,7 +52,7 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 	// get the next chunk from the child
 	if (!state.is_limit_percent_delimited) {
 		Value val = PhysicalLimit::GetDelimiter(input, limit_expression.get());
-		if (!val.is_null) {
+		if (!val.IsNull()) {
 			limit_percent = val.GetValue<double>();
 		}
 		if (limit_percent < 0.0) {
@@ -62,7 +62,7 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 	}
 	if (!state.is_offset_delimited) {
 		Value val = PhysicalLimit::GetDelimiter(input, offset_expression.get());
-		if (!val.is_null) {
+		if (!val.IsNull()) {
 			offset = val.GetValue<idx_t>();
 		}
 		if (offset > 1ULL << 62ULL) {

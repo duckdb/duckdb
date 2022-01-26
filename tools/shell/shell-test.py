@@ -413,14 +413,14 @@ test('.databases', out='main:')
 
 # .dump test
 test('''
-CREATE TABLE a (I INTEGER);
+CREATE TABLE a (i INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump
 ''', 'CREATE TABLE a(i INTEGER)')
 
 test('''
-CREATE TABLE a (I INTEGER);
+CREATE TABLE a (i INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump
@@ -428,7 +428,7 @@ INSERT INTO a VALUES (42);
 
 # .dump a specific table
 test('''
-CREATE TABLE a (I INTEGER);
+CREATE TABLE a (i INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump a
@@ -436,7 +436,7 @@ INSERT INTO a VALUES (42);
 
 # .dump LIKE
 test('''
-CREATE TABLE a (I INTEGER);
+CREATE TABLE a (i INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump a%
@@ -540,23 +540,46 @@ test('/* ;;;;;; */ select 42;', out='42')
 
 if os.name != 'nt':
      test('''
-     create table mytable as select * from
-     read_csv('/dev/stdin',
-       columns=STRUCT_PACK(foo := 'INTEGER', bar := 'INTEGER', baz := 'VARCHAR'),
-       AUTO_DETECT='false'
-     );
-     select * from mytable limit 1;
-     ''',
+create table mytable as select * from
+read_csv('/dev/stdin',
+  columns=STRUCT_PACK(foo := 'INTEGER', bar := 'INTEGER', baz := 'VARCHAR'),
+  AUTO_DETECT='false'
+);
+select * from mytable limit 1;''',
      extra_commands=['-csv', ':memory:'],
      input_file='test/sql/copy/csv/data/test/test.csv',
      out='''foo,bar,baz
 0,0," test"''')
 
      test('''
+create table mytable as select * from
+read_csv_auto('/dev/stdin');
+select * from mytable limit 1;
+''',
+          extra_commands=['-csv', ':memory:'],
+          input_file='test/sql/copy/csv/data/test/test.csv',
+          out='''column0,column1,column2
+0,0," test"''')
+
+     test('''create table mytable as select * from
+read_csv_auto('/dev/stdin');
+select channel,i_brand_id,sum_sales,number_sales from mytable;
+          ''',
+          extra_commands=['-csv', ':memory:'],
+          input_file='data/csv/tpcds_14.csv',
+          out='''web,8006004,844.21,21''')
+
+     test('''
      COPY (SELECT 42) TO '/dev/stdout' WITH (FORMAT 'csv');
      ''',
      extra_commands=['-csv', ':memory:'],
      out='''42''')
+
+     test('''
+     COPY (SELECT 42) TO stdout WITH (FORMAT 'csv');
+     ''',
+          extra_commands=['-csv', ':memory:'],
+          out='''42''')
 
      test('''
      COPY (SELECT 42) TO '/dev/stderr' WITH (FORMAT 'csv');

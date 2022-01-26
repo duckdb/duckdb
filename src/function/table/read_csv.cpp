@@ -15,7 +15,7 @@
 namespace duckdb {
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value> &inputs,
-                                            unordered_map<string, Value> &named_parameters,
+                                            named_parameter_map_t &named_parameters,
                                             vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                             vector<LogicalType> &return_types, vector<string> &names) {
 	auto &config = DBConfig::GetConfig(context);
@@ -25,7 +25,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 	auto result = make_unique<ReadCSVData>();
 	auto &options = result->options;
 
-	string file_pattern = inputs[0].str_value;
+	auto &file_pattern = StringValue::Get(inputs[0]);
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	result->files = fs.Glob(file_pattern);
@@ -34,22 +34,23 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 	}
 
 	for (auto &kv : named_parameters) {
-		if (kv.first == "auto_detect") {
-			options.auto_detect = kv.second.value_.boolean;
-		} else if (kv.first == "sep" || kv.first == "delim") {
-			options.SetDelimiter(kv.second.str_value);
-		} else if (kv.first == "header") {
-			options.header = kv.second.value_.boolean;
+		auto loption = StringUtil::Lower(kv.first);
+		if (loption == "auto_detect") {
+			options.auto_detect = BooleanValue::Get(kv.second);
+		} else if (loption == "sep" || loption == "delim") {
+			options.SetDelimiter(StringValue::Get(kv.second));
+		} else if (loption == "header") {
+			options.header = BooleanValue::Get(kv.second);
 			options.has_header = true;
-		} else if (kv.first == "quote") {
-			options.quote = kv.second.str_value;
+		} else if (loption == "quote") {
+			options.quote = StringValue::Get(kv.second);
 			options.has_quote = true;
-		} else if (kv.first == "escape") {
-			options.escape = kv.second.str_value;
+		} else if (loption == "escape") {
+			options.escape = StringValue::Get(kv.second);
 			options.has_escape = true;
-		} else if (kv.first == "nullstr") {
-			options.null_str = kv.second.str_value;
-		} else if (kv.first == "sample_size") {
+		} else if (loption == "nullstr") {
+			options.null_str = StringValue::Get(kv.second);
+		} else if (loption == "sample_size") {
 			int64_t sample_size = kv.second.GetValue<int64_t>();
 			if (sample_size < 1 && sample_size != -1) {
 				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
@@ -64,7 +65,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
 				options.sample_chunks = sample_size / STANDARD_VECTOR_SIZE;
 			}
-		} else if (kv.first == "sample_chunk_size") {
+		} else if (loption == "sample_chunk_size") {
 			options.sample_chunk_size = kv.second.GetValue<int64_t>();
 			if (options.sample_chunk_size > STANDARD_VECTOR_SIZE) {
 				throw BinderException(
@@ -73,55 +74,58 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 			} else if (options.sample_chunk_size < 1) {
 				throw BinderException("Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be smaller than 1");
 			}
-		} else if (kv.first == "sample_chunks") {
+		} else if (loption == "sample_chunks") {
 			options.sample_chunks = kv.second.GetValue<int64_t>();
 			if (options.sample_chunks < 1) {
 				throw BinderException("Unsupported parameter for SAMPLE_CHUNKS: cannot be smaller than 1");
 			}
-		} else if (kv.first == "all_varchar") {
-			options.all_varchar = kv.second.value_.boolean;
-		} else if (kv.first == "dateformat") {
+		} else if (loption == "all_varchar") {
+			options.all_varchar = BooleanValue::Get(kv.second);
+		} else if (loption == "dateformat") {
 			options.has_format[LogicalTypeId::DATE] = true;
 			auto &date_format = options.date_format[LogicalTypeId::DATE];
-			date_format.format_specifier = kv.second.str_value;
+			date_format.format_specifier = StringValue::Get(kv.second);
 			string error = StrTimeFormat::ParseFormatSpecifier(date_format.format_specifier, date_format);
 			if (!error.empty()) {
 				throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
 			}
-		} else if (kv.first == "timestampformat") {
+		} else if (loption == "timestampformat") {
 			options.has_format[LogicalTypeId::TIMESTAMP] = true;
 			auto &timestamp_format = options.date_format[LogicalTypeId::TIMESTAMP];
-			timestamp_format.format_specifier = kv.second.str_value;
+			timestamp_format.format_specifier = StringValue::Get(kv.second);
 			string error = StrTimeFormat::ParseFormatSpecifier(timestamp_format.format_specifier, timestamp_format);
 			if (!error.empty()) {
 				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
 			}
-		} else if (kv.first == "normalize_names") {
-			options.normalize_names = kv.second.value_.boolean;
-		} else if (kv.first == "columns") {
+		} else if (loption == "normalize_names") {
+			options.normalize_names = BooleanValue::Get(kv.second);
+		} else if (loption == "columns") {
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException("read_csv columns requires a a struct as input");
 			}
-			D_ASSERT(StructType::GetChildCount(child_type) == kv.second.struct_value.size());
-			for (idx_t i = 0; i < kv.second.struct_value.size(); i++) {
+			auto &struct_children = StructValue::GetChildren(kv.second);
+			D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
+			for (idx_t i = 0; i < struct_children.size(); i++) {
 				auto &name = StructType::GetChildName(child_type, i);
-				auto &val = kv.second.struct_value[i];
+				auto &val = struct_children[i];
 				names.push_back(name);
 				if (val.type().id() != LogicalTypeId::VARCHAR) {
 					throw BinderException("read_csv requires a type specification as string");
 				}
-				return_types.emplace_back(TransformStringToLogicalType(val.str_value.c_str()));
+				return_types.emplace_back(TransformStringToLogicalType(StringValue::Get(val)));
 			}
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
-		} else if (kv.first == "compression") {
-			options.compression = FileCompressionTypeFromString(kv.second.str_value);
-		} else if (kv.first == "filename") {
-			result->include_file_name = kv.second.value_.boolean;
-		} else if (kv.first == "skip") {
+		} else if (loption == "compression") {
+			options.compression = FileCompressionTypeFromString(StringValue::Get(kv.second));
+		} else if (loption == "filename") {
+			result->include_file_name = BooleanValue::Get(kv.second);
+		} else if (loption == "skip") {
 			options.skip_rows = kv.second.GetValue<int64_t>();
+		} else {
+			throw InternalException("Unrecognized parameter %s", kv.first);
 		}
 	}
 	if (!options.auto_detect && return_types.empty()) {
@@ -169,13 +173,13 @@ static unique_ptr<FunctionOperatorData> ReadCSVInit(ClientContext &context, cons
 		result->csv_reader = make_unique<BufferedCSVReader>(context, bind_data.options, bind_data.sql_types);
 	}
 	bind_data.bytes_read = 0;
-	bind_data.file_size = result->csv_reader->file_size;
+	bind_data.file_size = result->csv_reader->GetFileSize();
 	result->file_index = 1;
 	return move(result);
 }
 
 static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, vector<Value> &inputs,
-                                                unordered_map<string, Value> &named_parameters,
+                                                named_parameter_map_t &named_parameters,
                                                 vector<LogicalType> &input_table_types,
                                                 vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                 vector<string> &names) {

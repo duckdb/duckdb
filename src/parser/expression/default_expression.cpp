@@ -17,7 +17,10 @@ unique_ptr<ParsedExpression> DefaultExpression::Copy() const {
 	return move(copy);
 }
 
-unique_ptr<ParsedExpression> DefaultExpression::Deserialize(ExpressionType type, Deserializer &source) {
+void DefaultExpression::Serialize(FieldWriter &writer) const {
+}
+
+unique_ptr<ParsedExpression> DefaultExpression::Deserialize(ExpressionType type, FieldReader &source) {
 	return make_unique<DefaultExpression>();
 }
 

@@ -1,6 +1,10 @@
 name: NodeJS
 on: [push, pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}
+  cancel-in-progress: true
+
 defaults:
   run:
     shell: bash
@@ -37,6 +41,9 @@ jobs:
     - name: Node 15
       run: ./scripts/node_build.sh 15
 
+    - name: Node 17
+      run: ./scripts/node_build.sh 17
+
    osx-nodejs:
       name: node.js OSX
       runs-on: macos-latest
@@ -60,6 +67,9 @@ jobs:
 
       - name: Node 15
         run: ./scripts/node_build.sh 15
+
+      - name: Node 17
+        run: ./scripts/node_build.sh 17
 
    win-nodejs:
       name: node.js Windows

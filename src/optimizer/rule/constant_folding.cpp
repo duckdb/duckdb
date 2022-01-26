@@ -31,7 +31,6 @@ unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Ex
 	D_ASSERT(root->IsFoldable() && root->type != ExpressionType::VALUE_CONSTANT);
 
 	// use an ExpressionExecutor to execute the expression
-
 	Value result_value;
 	if (!ExpressionExecutor::TryEvaluateScalar(*root, result_value)) {
 		return nullptr;

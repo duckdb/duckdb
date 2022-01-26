@@ -124,9 +124,6 @@ AggregateFunction GetArgMinMaxFunctionArg2(LogicalTypeId arg_2, const LogicalTyp
 	case LogicalTypeId::TIMESTAMP:
 		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, timestamp_t>, T, timestamp_t, T, OP>(
 		    arg, LogicalType::TIMESTAMP, arg);
-	case LogicalTypeId::DATE_TZ:
-		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, date_t>, T, date_t, T, OP>(
-		    arg, LogicalType::DATE_TZ, arg);
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, timestamp_t>, T, timestamp_t, T, OP>(
 		    arg, LogicalType::TIMESTAMP_TZ, arg);
@@ -148,7 +145,6 @@ void GetArgMinMaxFunction(LogicalTypeId arg_1, AggregateFunctionSet &fun) {
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, int32_t>(LogicalTypeId::VARCHAR, LogicalType::INTEGER));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, int32_t>(LogicalTypeId::DATE, LogicalType::INTEGER));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, int32_t>(LogicalTypeId::TIMESTAMP, LogicalType::INTEGER));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, int32_t>(LogicalTypeId::DATE_TZ, LogicalType::INTEGER));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, int32_t>(LogicalTypeId::TIMESTAMP_TZ, LogicalType::INTEGER));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, int32_t>(LogicalTypeId::BLOB, LogicalType::INTEGER));
 		break;
@@ -159,7 +155,6 @@ void GetArgMinMaxFunction(LogicalTypeId arg_1, AggregateFunctionSet &fun) {
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, int64_t>(LogicalTypeId::VARCHAR, LogicalType::BIGINT));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, int64_t>(LogicalTypeId::DATE, LogicalType::BIGINT));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, int64_t>(LogicalTypeId::TIMESTAMP, LogicalType::BIGINT));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, int64_t>(LogicalTypeId::DATE_TZ, LogicalType::BIGINT));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, int64_t>(LogicalTypeId::TIMESTAMP_TZ, LogicalType::BIGINT));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, int64_t>(LogicalTypeId::BLOB, LogicalType::BIGINT));
 		break;
@@ -170,7 +165,6 @@ void GetArgMinMaxFunction(LogicalTypeId arg_1, AggregateFunctionSet &fun) {
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, double>(LogicalTypeId::VARCHAR, LogicalType::DOUBLE));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, double>(LogicalTypeId::DATE, LogicalType::DOUBLE));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, double>(LogicalTypeId::TIMESTAMP, LogicalType::DOUBLE));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, double>(LogicalTypeId::DATE_TZ, LogicalType::DOUBLE));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, double>(LogicalTypeId::TIMESTAMP_TZ, LogicalType::DOUBLE));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, double>(LogicalTypeId::BLOB, LogicalType::DOUBLE));
 		break;
@@ -181,7 +175,6 @@ void GetArgMinMaxFunction(LogicalTypeId arg_1, AggregateFunctionSet &fun) {
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, string_t>(LogicalTypeId::VARCHAR, LogicalType::VARCHAR));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, string_t>(LogicalTypeId::DATE, LogicalType::VARCHAR));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, string_t>(LogicalTypeId::TIMESTAMP, LogicalType::VARCHAR));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, string_t>(LogicalTypeId::DATE_TZ, LogicalType::VARCHAR));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, string_t>(LogicalTypeId::TIMESTAMP_TZ, LogicalType::VARCHAR));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, string_t>(LogicalTypeId::BLOB, LogicalType::VARCHAR));
 		break;
@@ -192,19 +185,7 @@ void GetArgMinMaxFunction(LogicalTypeId arg_1, AggregateFunctionSet &fun) {
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::VARCHAR, LogicalType::DATE));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::DATE, LogicalType::DATE));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::TIMESTAMP, LogicalType::DATE));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::DATE_TZ, LogicalType::DATE));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::TIMESTAMP_TZ, LogicalType::DATE));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::BLOB, LogicalType::DATE));
-		break;
-	case LogicalTypeId::DATE_TZ:
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::INTEGER, LogicalType::DATE_TZ));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::BIGINT, LogicalType::DATE_TZ));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::DOUBLE, LogicalType::DATE_TZ));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::VARCHAR, LogicalType::DATE_TZ));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::DATE, LogicalType::DATE_TZ));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::TIMESTAMP, LogicalType::DATE_TZ));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::DATE_TZ, LogicalType::DATE_TZ));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::TIMESTAMP_TZ, LogicalType::DATE_TZ));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, date_t>(LogicalTypeId::BLOB, LogicalType::DATE));
 		break;
 	case LogicalTypeId::TIMESTAMP:
@@ -214,7 +195,6 @@ void GetArgMinMaxFunction(LogicalTypeId arg_1, AggregateFunctionSet &fun) {
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, timestamp_t>(LogicalTypeId::VARCHAR, LogicalType::TIMESTAMP));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, timestamp_t>(LogicalTypeId::DATE, LogicalType::TIMESTAMP));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, timestamp_t>(LogicalTypeId::TIMESTAMP, LogicalType::TIMESTAMP));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, timestamp_t>(LogicalTypeId::DATE_TZ, LogicalType::TIMESTAMP));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, timestamp_t>(LogicalTypeId::TIMESTAMP_TZ, LogicalType::TIMESTAMP));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, timestamp_t>(LogicalTypeId::BLOB, LogicalType::TIMESTAMP));
 		break;
@@ -225,7 +205,6 @@ void GetArgMinMaxFunction(LogicalTypeId arg_1, AggregateFunctionSet &fun) {
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, timestamp_t>(LogicalTypeId::VARCHAR, LogicalType::TIMESTAMP_TZ));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, timestamp_t>(LogicalTypeId::DATE, LogicalType::TIMESTAMP_TZ));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, timestamp_t>(LogicalTypeId::TIMESTAMP, LogicalType::TIMESTAMP_TZ));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, timestamp_t>(LogicalTypeId::DATE_TZ, LogicalType::TIMESTAMP_TZ));
 		fun.AddFunction(
 		    GetArgMinMaxFunctionArg2<OP, timestamp_t>(LogicalTypeId::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, timestamp_t>(LogicalTypeId::BLOB, LogicalType::TIMESTAMP_TZ));
@@ -237,7 +216,6 @@ void GetArgMinMaxFunction(LogicalTypeId arg_1, AggregateFunctionSet &fun) {
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, string_t>(LogicalTypeId::VARCHAR, LogicalType::BLOB));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, string_t>(LogicalTypeId::DATE, LogicalType::BLOB));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, string_t>(LogicalTypeId::TIMESTAMP, LogicalType::BLOB));
-		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, string_t>(LogicalTypeId::DATE_TZ, LogicalType::BLOB));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, string_t>(LogicalTypeId::TIMESTAMP_TZ, LogicalType::BLOB));
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, string_t>(LogicalTypeId::BLOB, LogicalType::BLOB));
 		break;
@@ -253,7 +231,6 @@ void ArgMinFun::RegisterFunction(BuiltinFunctions &set) {
 	GetArgMinMaxFunction<ArgMinOperation>(LogicalTypeId::VARCHAR, fun);
 	GetArgMinMaxFunction<ArgMinOperation>(LogicalTypeId::DATE, fun);
 	GetArgMinMaxFunction<ArgMinOperation>(LogicalTypeId::TIMESTAMP, fun);
-	GetArgMinMaxFunction<ArgMinOperation>(LogicalTypeId::DATE_TZ, fun);
 	GetArgMinMaxFunction<ArgMinOperation>(LogicalTypeId::TIMESTAMP_TZ, fun);
 	GetArgMinMaxFunction<ArgMinOperation>(LogicalTypeId::BLOB, fun);
 	set.AddFunction(fun);
@@ -275,7 +252,6 @@ void ArgMaxFun::RegisterFunction(BuiltinFunctions &set) {
 	GetArgMinMaxFunction<ArgMaxOperation>(LogicalTypeId::VARCHAR, fun);
 	GetArgMinMaxFunction<ArgMaxOperation>(LogicalTypeId::DATE, fun);
 	GetArgMinMaxFunction<ArgMaxOperation>(LogicalTypeId::TIMESTAMP, fun);
-	GetArgMinMaxFunction<ArgMaxOperation>(LogicalTypeId::DATE_TZ, fun);
 	GetArgMinMaxFunction<ArgMaxOperation>(LogicalTypeId::TIMESTAMP_TZ, fun);
 	GetArgMinMaxFunction<ArgMaxOperation>(LogicalTypeId::BLOB, fun);
 	set.AddFunction(fun);

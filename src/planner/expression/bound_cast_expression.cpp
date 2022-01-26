@@ -61,7 +61,6 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		switch (target_type.id()) {
 		case LogicalTypeId::DATE:
 		case LogicalTypeId::TIME:
-		case LogicalTypeId::DATE_TZ:
 		case LogicalTypeId::TIME_TZ:
 			return false;
 		default:
@@ -76,7 +75,6 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIMESTAMP_SEC:
-		case LogicalTypeId::DATE_TZ:
 		case LogicalTypeId::TIME_TZ:
 		case LogicalTypeId::TIMESTAMP_TZ:
 			return true;
@@ -92,7 +90,6 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIMESTAMP_SEC:
-		case LogicalTypeId::DATE_TZ:
 		case LogicalTypeId::TIME_TZ:
 		case LogicalTypeId::TIMESTAMP_TZ:
 			return true;

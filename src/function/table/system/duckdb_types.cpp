@@ -17,7 +17,7 @@ struct DuckDBTypesData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, vector<Value> &inputs,
-                                                unordered_map<string, Value> &named_parameters,
+                                                named_parameter_map_t &named_parameters,
                                                 vector<LogicalType> &input_table_types,
                                                 vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                 vector<string> &names) {
@@ -104,7 +104,6 @@ void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data, 
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::INTERVAL:
-		case LogicalTypeId::DATE_TZ:
 		case LogicalTypeId::TIME_TZ:
 		case LogicalTypeId::TIMESTAMP_TZ:
 			category = "DATETIME";

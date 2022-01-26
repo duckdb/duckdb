@@ -1,4 +1,5 @@
 #include "parameter_descriptor.hpp"
+#include "odbc_utils.hpp"
 #include "duckdb/common/types/decimal.hpp"
 
 using duckdb::Decimal;
@@ -9,8 +10,10 @@ using duckdb::Value;
 ParameterDescriptor::ParameterDescriptor(OdbcHandleStmt *stmt_ptr)
     : stmt(stmt_ptr), paramset_idx(0), cur_paramset_idx(0), cur_param_idx(0) {
 
-	apd = make_unique<OdbcHandleDesc>(DescType::APD, stmt);
-	ipd = make_unique<OdbcHandleDesc>(DescType::IPD, stmt);
+	apd = make_unique<OdbcHandleDesc>(stmt->dbc);
+	ipd = make_unique<OdbcHandleDesc>(stmt->dbc);
+
+	cur_apd = apd.get();
 }
 
 OdbcHandleDesc *ParameterDescriptor::GetIPD() {
@@ -18,19 +21,23 @@ OdbcHandleDesc *ParameterDescriptor::GetIPD() {
 }
 
 OdbcHandleDesc *ParameterDescriptor::GetAPD() {
-	return apd.get();
+	return cur_apd;
 }
 
 void ParameterDescriptor::Clear() {
 	ipd->records.clear();
-	apd->records.clear();
+	cur_apd->records.clear();
 	Reset();
+}
+
+void ParameterDescriptor::SetCurrentAPD(OdbcHandleDesc *new_apd) {
+	cur_apd = new_apd;
 }
 
 void ParameterDescriptor::Reset() {
 	pool_allocated_ptr.clear();
 	ipd->header.sql_desc_count = 0;
-	apd->header.sql_desc_count = 0;
+	cur_apd->header.sql_desc_count = 0;
 	paramset_idx = 0;
 	cur_paramset_idx = 0;
 	cur_param_idx = 0;
@@ -42,8 +49,12 @@ void ParameterDescriptor::ResetParams(SQLSMALLINT count) {
 	ipd->records.resize(count);
 	ipd->header.sql_desc_count = count;
 
-	apd->records.resize(count);
-	apd->header.sql_desc_count = count;
+	cur_apd->records.resize(count);
+	cur_apd->header.sql_desc_count = count;
+}
+
+void ParameterDescriptor::ResetCurrentAPD() {
+	cur_apd = apd.get();
 }
 
 SQLRETURN ParameterDescriptor::GetParamValues(std::vector<Value> &values) {
@@ -51,7 +62,7 @@ SQLRETURN ParameterDescriptor::GetParamValues(std::vector<Value> &values) {
 	if (ipd->records.empty()) {
 		return SQL_SUCCESS;
 	}
-	D_ASSERT((SQLULEN)paramset_idx < apd->header.sql_desc_array_size);
+	D_ASSERT((SQLULEN)paramset_idx < cur_apd->header.sql_desc_array_size);
 	// Fill values
 	for (idx_t rec_idx = 0; rec_idx < ipd->records.size(); ++rec_idx) {
 		auto ret = SetValue(rec_idx);
@@ -82,27 +93,28 @@ void ParameterDescriptor::SetParamProcessedPtr(SQLPOINTER value_ptr) {
 }
 
 SQLRETURN ParameterDescriptor::GetNextParam(SQLPOINTER *param) {
-	if ((SQLSMALLINT)cur_param_idx >= apd->header.sql_desc_count) {
+	if ((SQLSMALLINT)cur_param_idx >= cur_apd->header.sql_desc_count) {
 		return SQL_NO_DATA;
 	}
 
-	auto param_desc = apd->records[cur_param_idx];
-	*param = param_desc.sql_desc_data_ptr;
+	auto apd_record = &cur_apd->records[cur_param_idx];
+	*param = GetSQLDescDataPtr(*apd_record);
 	if (ipd->header.sql_desc_rows_processed_ptr) {
 		*ipd->header.sql_desc_rows_processed_ptr += 1;
 	}
-	if (param_desc.sql_desc_indicator_ptr[cur_paramset_idx] == SQL_DATA_AT_EXEC) {
+	auto sql_desc_ind_ptr = GetSQLDescIndicatorPtr(*apd_record, cur_paramset_idx);
+	if (*sql_desc_ind_ptr == SQL_DATA_AT_EXEC) {
 		return SQL_NEED_DATA;
 	}
 	return SQL_SUCCESS;
 }
 
 SQLRETURN ParameterDescriptor::PutData(SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr) {
-	if ((SQLSMALLINT)cur_param_idx >= apd->header.sql_desc_count) {
+	if ((SQLSMALLINT)cur_param_idx >= cur_apd->header.sql_desc_count) {
 		return SQL_ERROR;
 	}
 
-	auto apd_record = &apd->records[cur_param_idx];
+	auto apd_record = &cur_apd->records[cur_param_idx];
 	if (apd_record->sql_desc_type == SQL_C_CHAR || apd_record->sql_desc_type == SQL_C_BINARY) {
 		auto ipd_record = &ipd->records[cur_param_idx];
 		return PutCharData(*apd_record, *ipd_record, data_ptr, str_len_or_ind_ptr);
@@ -111,21 +123,21 @@ SQLRETURN ParameterDescriptor::PutData(SQLPOINTER data_ptr, SQLLEN str_len_or_in
 	// filling the current param, go to the next one
 	++cur_param_idx;
 	if (str_len_or_ind_ptr == SQL_NULL_DATA) {
-		*apd_record->sql_desc_indicator_ptr = SQL_NULL_DATA;
+		SetSQLDescIndicatorPtr(*apd_record, SQL_NULL_DATA);
 		return SQL_SUCCESS;
 	}
 
-	apd_record->sql_desc_data_ptr = data_ptr;
+	SetSQLDescDataPtr(*apd_record, data_ptr);
 	return SQL_SUCCESS;
 }
 
 bool ParameterDescriptor::HasParamSetToProcess() {
-	return (paramset_idx < apd->header.sql_desc_array_size && !ipd->records.empty());
+	return (paramset_idx < cur_apd->header.sql_desc_array_size && !ipd->records.empty());
 }
 
 SQLRETURN ParameterDescriptor::PutCharData(DescRecord &apd_record, DescRecord &ipd_record, SQLPOINTER data_ptr,
                                            SQLLEN str_len_or_ind_ptr) {
-	if (apd->header.sql_desc_array_size == 1) {
+	if (cur_apd->header.sql_desc_array_size == 1) {
 		return FillParamCharDataBuffer(apd_record, ipd_record, data_ptr, str_len_or_ind_ptr);
 	}
 
@@ -135,13 +147,14 @@ SQLRETURN ParameterDescriptor::PutCharData(DescRecord &apd_record, DescRecord &i
 SQLRETURN ParameterDescriptor::FillParamCharDataBuffer(DescRecord &apd_record, DescRecord &ipd_record,
                                                        SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr) {
 	size_t offset = 0;
-	if (*apd_record.sql_desc_indicator_ptr == SQL_DATA_AT_EXEC) {
+	auto sql_ind_ptr = GetSQLDescIndicatorPtr(apd_record);
+	if (*sql_ind_ptr == SQL_DATA_AT_EXEC) {
 		pool_allocated_ptr.emplace_back(unique_ptr<char[]>(new char[ipd_record.sql_desc_length]));
-		apd_record.sql_desc_data_ptr = pool_allocated_ptr.back().get();
-		*apd_record.sql_desc_indicator_ptr = 0;
+		SetSQLDescDataPtr(apd_record, pool_allocated_ptr.back().get());
+		*sql_ind_ptr = 0;
 	} else {
 		// appending more data into it
-		offset = *apd_record.sql_desc_indicator_ptr;
+		offset = *sql_ind_ptr;
 	}
 
 	size_t size = str_len_or_ind_ptr;
@@ -151,8 +164,8 @@ SQLRETURN ParameterDescriptor::FillParamCharDataBuffer(DescRecord &apd_record, D
 		++cur_param_idx;
 	}
 
-	memcpy((char *)apd_record.sql_desc_data_ptr + offset, (char *)data_ptr, size);
-	*apd_record.sql_desc_indicator_ptr += size;
+	memcpy((char *)GetSQLDescDataPtr(apd_record) + offset, (char *)data_ptr, size);
+	*sql_ind_ptr += size;
 
 	if (ipd->header.sql_desc_array_status_ptr) {
 		ipd->header.sql_desc_array_status_ptr[cur_param_idx] = SQL_PARAM_SUCCESS;
@@ -163,16 +176,16 @@ SQLRETURN ParameterDescriptor::FillParamCharDataBuffer(DescRecord &apd_record, D
 
 SQLRETURN ParameterDescriptor::FillCurParamCharSet(DescRecord &apd_record, DescRecord &ipd_record, SQLPOINTER data_ptr,
                                                    SQLLEN str_len_or_ind_ptr) {
-	auto len_ptr = &apd_record.sql_desc_indicator_ptr[cur_paramset_idx];
+	auto len_ptr = GetSQLDescIndicatorPtr(apd_record, cur_paramset_idx);
 	auto col_size = (size_t)ipd_record.sql_desc_length;
 
 	if (*len_ptr == SQL_DATA_AT_EXEC && pool_allocated_ptr.empty()) {
-		auto alloc_size = col_size * apd->header.sql_desc_array_size;
+		auto alloc_size = col_size * cur_apd->header.sql_desc_array_size;
 		pool_allocated_ptr.emplace_back(unique_ptr<char[]>(new char[alloc_size]));
-		apd_record.sql_desc_data_ptr = pool_allocated_ptr.back().get();
+		SetSQLDescDataPtr(apd_record, pool_allocated_ptr.back().get());
 	}
 
-	auto value_ptr = (char *)apd_record.sql_desc_data_ptr + (cur_paramset_idx * col_size);
+	auto value_ptr = (char *)GetSQLDescDataPtr(apd_record) + (cur_paramset_idx * col_size);
 
 	size_t size = str_len_or_ind_ptr;
 	if (size >= ((size_t)ipd_record.sql_desc_length)) {
@@ -187,7 +200,7 @@ SQLRETURN ParameterDescriptor::FillCurParamCharSet(DescRecord &apd_record, DescR
 	}
 
 	++cur_paramset_idx;
-	if (cur_paramset_idx >= apd->header.sql_desc_array_size) {
+	if (cur_paramset_idx >= cur_apd->header.sql_desc_array_size) {
 		// got to the next param set
 		cur_paramset_idx = 0;
 		++cur_param_idx;
@@ -198,76 +211,81 @@ SQLRETURN ParameterDescriptor::FillCurParamCharSet(DescRecord &apd_record, DescR
 
 SQLRETURN ParameterDescriptor::SetValue(idx_t rec_idx) {
 	auto val_idx = paramset_idx;
+	auto apd_record = &cur_apd->records[rec_idx];
+	auto sql_data_ptr = GetSQLDescDataPtr(*apd_record);
+	auto sql_ind_ptr = GetSQLDescIndicatorPtr(*apd_record);
 
-	if (apd->records[rec_idx].sql_desc_data_ptr == nullptr && apd->records[rec_idx].sql_desc_indicator_ptr == nullptr) {
+	if (sql_data_ptr == nullptr && sql_ind_ptr == nullptr) {
 		return SQL_ERROR;
 	}
 
-	if (apd->records[rec_idx].sql_desc_data_ptr == nullptr || apd->records[rec_idx].sql_desc_indicator_ptr == nullptr ||
-	    apd->records[rec_idx].sql_desc_indicator_ptr[val_idx] == SQL_NULL_DATA) {
+	auto sql_ind_ptr_val_set = GetSQLDescIndicatorPtr(*apd_record, val_idx);
+	if (sql_data_ptr == nullptr || sql_ind_ptr == nullptr || *sql_ind_ptr_val_set == SQL_NULL_DATA) {
 		Value val_null(nullptr);
 		SetValue(val_null, val_idx);
 		return SQL_SUCCESS;
 	}
 
-	if (apd->records[rec_idx].sql_desc_indicator_ptr[val_idx] == SQL_DATA_AT_EXEC ||
-	    (SQLULEN)apd->records[rec_idx].sql_desc_indicator_ptr[val_idx] ==
-	        SQL_LEN_DATA_AT_EXEC(ipd->records[rec_idx].sql_desc_length)) {
+	if (*sql_ind_ptr_val_set == SQL_DATA_AT_EXEC ||
+	    (SQLULEN)*sql_ind_ptr_val_set == SQL_LEN_DATA_AT_EXEC(ipd->records[rec_idx].sql_desc_length)) {
 		return SQL_NEED_DATA;
 	}
 
 	duckdb::Value value;
 	// TODO need to check it param_value_ptr is an array of parameters
 	// and get the right parameter using the index (now it's working for all supported tests)
-	duckdb::const_data_ptr_t dataptr = (duckdb::const_data_ptr_t)apd->records[rec_idx].sql_desc_data_ptr;
+	duckdb::const_data_ptr_t dataptr = (duckdb::const_data_ptr_t)sql_data_ptr;
 
 	switch (ipd->records[rec_idx].sql_desc_type) {
 	case SQL_CHAR:
 	case SQL_VARCHAR: {
-		auto str_data =
-		    (char *)apd->records[rec_idx].sql_desc_data_ptr + (val_idx * ipd->records[rec_idx].sql_desc_length);
-		auto str_len = apd->records[rec_idx].sql_desc_indicator_ptr[val_idx];
+		auto str_data = (char *)sql_data_ptr + (val_idx * ipd->records[rec_idx].sql_desc_length);
+		if (*sql_ind_ptr_val_set == SQL_NTS) {
+			*sql_ind_ptr_val_set = strlen(str_data);
+		}
+		auto str_len = *sql_ind_ptr_val_set;
 		value = Value(duckdb::OdbcUtils::ReadString(str_data, str_len));
 		break;
 	}
 	case SQL_WCHAR: {
-		auto str_data =
-		    (wchar_t *)apd->records[rec_idx].sql_desc_data_ptr + (val_idx * ipd->records[rec_idx].sql_desc_length);
-		auto str_len = apd->records[rec_idx].sql_desc_indicator_ptr[val_idx];
+		auto str_data = (wchar_t *)sql_data_ptr + (val_idx * ipd->records[rec_idx].sql_desc_length);
+		if (*sql_ind_ptr_val_set == SQL_NTS) {
+			*sql_ind_ptr_val_set = wcslen(str_data);
+		}
+		auto str_len = *sql_ind_ptr_val_set;
 		value = Value(duckdb::OdbcUtils::ReadString(str_data, str_len));
 		break;
 	}
 	case SQL_VARBINARY:
 	case SQL_BINARY: {
-		auto blob_data = (duckdb::const_data_ptr_t)apd->records[rec_idx].sql_desc_data_ptr +
-		                 (val_idx * ipd->records[rec_idx].sql_desc_length);
-		auto blob_len = apd->records[rec_idx].sql_desc_indicator_ptr[val_idx];
+		auto blob_data = (duckdb::const_data_ptr_t)sql_data_ptr + (val_idx * ipd->records[rec_idx].sql_desc_length);
+		auto blob_len = *sql_ind_ptr_val_set;
 		value = Value::BLOB(blob_data, blob_len);
 		break;
 	}
 	case SQL_TINYINT:
-		if (apd->records[rec_idx].sql_desc_type == SQL_C_UTINYINT) {
+		if (cur_apd->records[rec_idx].sql_desc_type == SQL_C_UTINYINT) {
 			value = Value::UTINYINT(Load<uint8_t>(dataptr));
 		} else {
 			value = Value::TINYINT(Load<int8_t>(dataptr));
 		}
 		break;
 	case SQL_SMALLINT:
-		if (apd->records[rec_idx].sql_desc_type == SQL_C_USHORT) {
+		if (cur_apd->records[rec_idx].sql_desc_type == SQL_C_USHORT) {
 			value = Value::USMALLINT(Load<uint16_t>(dataptr));
 		} else {
 			value = Value::SMALLINT(Load<int16_t>(dataptr));
 		}
 		break;
 	case SQL_INTEGER:
-		if (apd->records[rec_idx].sql_desc_type == SQL_C_ULONG) {
+		if (cur_apd->records[rec_idx].sql_desc_type == SQL_C_ULONG) {
 			value = Value::UINTEGER(Load<uint32_t>(dataptr));
 		} else {
 			value = Value::INTEGER(Load<int32_t>(dataptr));
 		}
 		break;
 	case SQL_BIGINT:
-		if (apd->records[rec_idx].sql_desc_type == SQL_C_UBIGINT) {
+		if (cur_apd->records[rec_idx].sql_desc_type == SQL_C_UBIGINT) {
 			value = Value::UBIGINT(Load<uint64_t>(dataptr));
 		} else {
 			value = Value::BIGINT(Load<int64_t>(dataptr));
@@ -280,7 +298,7 @@ SQLRETURN ParameterDescriptor::SetValue(idx_t rec_idx) {
 		value = Value::DOUBLE(Load<double>(dataptr));
 		break;
 	case SQL_NUMERIC: {
-		auto numeric = (SQL_NUMERIC_STRUCT *)apd->records[rec_idx].sql_desc_data_ptr;
+		auto numeric = (SQL_NUMERIC_STRUCT *)sql_data_ptr;
 		dataptr = numeric->val;
 
 		auto precision = ipd->records[rec_idx].sql_desc_precision;
@@ -323,7 +341,7 @@ Value ParameterDescriptor::GetNextValue() {
 
 SQLRETURN ParameterDescriptor::SetParamIndex() {
 	++paramset_idx;
-	if (paramset_idx == apd->header.sql_desc_array_size) {
+	if (paramset_idx == cur_apd->header.sql_desc_array_size) {
 		return SQL_SUCCESS;
 	}
 	return SQL_STILL_EXECUTING;
@@ -337,4 +355,57 @@ SQLRETURN ParameterDescriptor::ValidateNumeric(int precision, int scale) {
 		return SQL_ERROR;
 	}
 	return SQL_SUCCESS;
+}
+
+SQLPOINTER ParameterDescriptor::GetSQLDescDataPtr(DescRecord &apd_record) {
+	if (cur_apd->header.sql_desc_bind_offset_ptr) {
+		return (uint8_t *)apd_record.sql_desc_data_ptr + *cur_apd->header.sql_desc_bind_offset_ptr;
+	}
+	return apd_record.sql_desc_data_ptr;
+}
+
+void ParameterDescriptor::SetSQLDescDataPtr(DescRecord &apd_record, SQLPOINTER data_ptr) {
+	auto sql_data_ptr = &(apd_record.sql_desc_data_ptr);
+	if (cur_apd->header.sql_desc_bind_offset_ptr) {
+		sql_data_ptr += *cur_apd->header.sql_desc_bind_offset_ptr;
+	}
+	*sql_data_ptr = data_ptr;
+}
+
+SQLLEN *ParameterDescriptor::GetSQLDescIndicatorPtr(DescRecord &apd_record, idx_t set_idx) {
+	if (cur_apd->header.sql_desc_bind_offset_ptr) {
+		return apd_record.sql_desc_indicator_ptr + set_idx + *cur_apd->header.sql_desc_bind_offset_ptr;
+	}
+	return apd_record.sql_desc_indicator_ptr + set_idx;
+}
+
+void ParameterDescriptor::SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN *ind_ptr) {
+	auto sql_ind_ptr = apd_record.sql_desc_indicator_ptr;
+	if (cur_apd->header.sql_desc_bind_offset_ptr) {
+		sql_ind_ptr += *cur_apd->header.sql_desc_bind_offset_ptr;
+	}
+	sql_ind_ptr = ind_ptr;
+}
+
+void ParameterDescriptor::SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN value) {
+	auto sql_ind_ptr = apd_record.sql_desc_indicator_ptr;
+	if (cur_apd->header.sql_desc_bind_offset_ptr) {
+		sql_ind_ptr += *cur_apd->header.sql_desc_bind_offset_ptr;
+	}
+	*sql_ind_ptr = value;
+}
+
+SQLLEN *ParameterDescriptor::GetSQLDescOctetLengthPtr(DescRecord &apd_record, idx_t set_idx) {
+	if (cur_apd->header.sql_desc_bind_offset_ptr) {
+		return apd_record.sql_desc_octet_length_ptr + set_idx + *cur_apd->header.sql_desc_bind_offset_ptr;
+	}
+	return apd_record.sql_desc_octet_length_ptr + set_idx;
+}
+
+void ParameterDescriptor::SetSQLDescOctetLengthPtr(DescRecord &apd_record, SQLLEN *len_ptr) {
+	auto sql_len_ptr = apd_record.sql_desc_octet_length_ptr;
+	if (cur_apd->header.sql_desc_bind_offset_ptr) {
+		sql_len_ptr += *cur_apd->header.sql_desc_bind_offset_ptr;
+	}
+	sql_len_ptr = len_ptr;
 }

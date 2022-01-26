@@ -1,4 +1,9 @@
 #include "duckdb_odbc.hpp"
+#include "driver.hpp"
+#include "odbc_utils.hpp"
+
+using duckdb::OdbcUtils;
+using std::ptrdiff_t;
 
 SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                     SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
@@ -30,6 +35,9 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 			case (ptrdiff_t)SQL_AUTOCOMMIT_OFF:
 				dbc->autocommit = false;
 				dbc->conn->SetAutoCommit(false);
+				return SQL_SUCCESS;
+			case SQL_ATTR_METADATA_ID:
+				dbc->sql_attr_metadata_id = *((SQLUINTEGER *)value_ptr);
 				return SQL_SUCCESS;
 			default:
 				return SQL_ERROR;
@@ -63,15 +71,15 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		SQLHDBC stmt;
 
 		if (!SQL_SUCCEEDED(SQLAllocHandle(SQL_HANDLE_STMT, connection_handle, &stmt))) {
-			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
 		if (!SQL_SUCCEEDED(SQLExecDirect(stmt, (SQLCHAR *)"SELECT library_version FROM pragma_version()", SQL_NTS))) {
-			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
 		if (!SQL_SUCCEEDED(SQLFetch(stmt))) {
-			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
 
@@ -84,11 +92,11 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 			ret = SQLGetData(stmt, 1, SQL_C_CHAR, info_value_ptr, buffer_length, nullptr);
 		}
 		if (!SQL_SUCCEEDED(ret)) {
-			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
 
-		SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+		duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
 		return SQL_SUCCESS;
 	}
 	case SQL_NON_NULLABLE_COLUMNS:
@@ -119,6 +127,15 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		mask = (SQL_GD_ANY_COLUMN | SQL_GD_ANY_ORDER | SQL_GD_BOUND | SQL_GD_BLOCK);
 		duckdb::Store<SQLUINTEGER>(mask, (duckdb::data_ptr_t)info_value_ptr);
 		return SQL_SUCCESS;
+	case SQL_IDENTIFIER_QUOTE_CHAR:
+		duckdb::OdbcUtils::WriteString("\"", (SQLCHAR *)info_value_ptr, buffer_length, string_length_ptr);
+		return SQL_SUCCESS;
+	case SQL_TABLE_TERM: {
+		auto *dbc = (duckdb::OdbcHandleDbc *)connection_handle;
+		const std::string str_table("table");
+		return OdbcUtils::SetStringAndLength(dbc->error_messages, str_table, info_value_ptr, buffer_length,
+		                                     string_length_ptr);
+	}
 	default:
 		return SQL_ERROR;
 	}

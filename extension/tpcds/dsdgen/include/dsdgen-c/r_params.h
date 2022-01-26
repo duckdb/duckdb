@@ -54,30 +54,30 @@ typedef struct OPTION_T {
 	int flags;
 	int index;
 	const char *usage;
-	int (*action)(char *szPName, char *optarg);
+	int (*action)(const char *szPName, const char *optarg);
 	const char *dflt;
 } option_t;
 #endif
 /*
  * function declarations
  */
-int process_options(int count, char **args);
-char *get_str(char *var);
-void set_str(char *param, char *value);
-int get_int(char *var);
-void set_int(char *var, char *val);
-double get_dbl(char *var);
-int is_set(char *flag);
-void clr_flg(char *flag);
-int find_table(char *szParamName, char *tname);
-int read_file(char *param_name, char *arg);
-int usage(char *param_name, char *msg);
+int process_options(int count, const char **args);
+char *get_str(const char *var);
+void set_str(const char *param, const char *value);
+int get_int(const char *var);
+void set_int(const char *var, const char *val);
+double get_dbl(const char *var);
+int is_set(const char *flag);
+void clr_flg(const char *flag);
+int find_table(const char *szParamName, const char *tname);
+int read_file(const char *param_name, const char *arg);
+int usage(const char *param_name, const char *msg);
 char *GetParamName(int nParam);
 char *GetParamValue(int nParam);
-int load_param(int nParam, char *value);
-int fnd_param(char *name);
+int load_param(int nParam, const char *value);
+int fnd_param(const char *name);
 int init_params(void);
-int set_option(char *pname, char *value);
+int set_option(const char *pname, const char *value);
 void load_params(void);
-int IsIntParam(char *szName);
-int IsStrParam(char *szName);
+int IsIntParam(const char *szName);
+int IsStrParam(const char *szName);

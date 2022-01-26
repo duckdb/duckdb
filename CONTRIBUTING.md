@@ -12,7 +12,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 ## **Did you write a patch that fixes a bug?**
 * Great!
 * If possible, add a unit test case to make sure the issue does not occur again.
-* Make sure you run the code formatter (`make format`).
+* Make sure you run the code formatter (`make format-fix`).
 * Open a new GitHub pull request with the patch.
 * Ensure the PR description clearly describes the problem and solution. Include the relevant issue number if applicable.
 

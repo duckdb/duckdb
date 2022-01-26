@@ -14,7 +14,7 @@ static string fts_schema_name(const string &schema, const string &table) {
 }
 
 string drop_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
-	auto qname = QualifiedName::Parse(parameters.values[0].str_value);
+	auto qname = QualifiedName::Parse(StringValue::Get(parameters.values[0]));
 	qname.schema = context.catalog_search_path->GetOrDefault(qname.schema);
 	string fts_schema = fts_schema_name(qname.schema, qname.name);
 
@@ -236,7 +236,7 @@ void check_exists(ClientContext &context, QualifiedName &qname) {
 }
 
 string create_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
-	auto qname = QualifiedName::Parse(parameters.values[0].str_value);
+	auto qname = QualifiedName::Parse(StringValue::Get(parameters.values[0]));
 	qname.schema = context.catalog_search_path->GetOrDefault(qname.schema);
 	check_exists(context, qname);
 	string fts_schema = fts_schema_name(qname.schema, qname.name);
@@ -245,13 +245,13 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 	string stemmer = "porter";
 	auto stemmer_entry = parameters.named_parameters.find("stemmer");
 	if (stemmer_entry != parameters.named_parameters.end()) {
-		stemmer = stemmer_entry->second.str_value;
+		stemmer = StringValue::Get(stemmer_entry->second);
 	}
 	string stopwords = "english";
 
 	auto stopword_entry = parameters.named_parameters.find("stopwords");
 	if (stopword_entry != parameters.named_parameters.end()) {
-		stopwords = stopword_entry->second.str_value;
+		stopwords = StringValue::Get(stopword_entry->second);
 		if (stopwords != "english" && stopwords != "none") {
 			auto stopwords_qname = QualifiedName::Parse(stopwords);
 			stopwords_qname.schema = context.catalog_search_path->GetOrDefault(stopwords_qname.schema);
@@ -261,22 +261,22 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 	string ignore = "(\\\\.|[^a-z])+";
 	auto ignore_entry = parameters.named_parameters.find("ignore");
 	if (ignore_entry != parameters.named_parameters.end()) {
-		ignore = ignore_entry->second.str_value;
+		ignore = StringValue::Get(ignore_entry->second);
 	}
 	bool strip_accents = true;
 	auto strip_accents_entry = parameters.named_parameters.find("strip_accents");
 	if (strip_accents_entry != parameters.named_parameters.end()) {
-		strip_accents = strip_accents_entry->second.value_.boolean;
+		strip_accents = BooleanValue::Get(strip_accents_entry->second);
 	}
 	bool lower = true;
 	auto lower_entry = parameters.named_parameters.find("lower");
 	if (lower_entry != parameters.named_parameters.end()) {
-		lower = lower_entry->second.value_.boolean;
+		lower = BooleanValue::Get(lower_entry->second);
 	}
 	bool overwrite = false;
 	auto overwrite_entry = parameters.named_parameters.find("overwrite");
 	if (overwrite_entry != parameters.named_parameters.end()) {
-		overwrite = overwrite_entry->second.value_.boolean;
+		overwrite = BooleanValue::Get(overwrite_entry->second);
 	}
 
 	// throw error if an index already exists on this table
@@ -288,12 +288,12 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 	}
 
 	// positional parameters
-	auto doc_id = parameters.values[1].str_value;
+	auto doc_id = StringValue::Get(parameters.values[1]);
 	// check all specified columns
 	auto table = catalog.GetEntry<TableCatalogEntry>(context, qname.schema, qname.name);
 	vector<string> doc_values;
 	for (idx_t i = 2; i < parameters.values.size(); i++) {
-		string col_name = parameters.values[i].str_value;
+		string col_name = StringValue::Get(parameters.values[i]);
 		if (col_name == "*") {
 			// star found - get all columns
 			doc_values.clear();

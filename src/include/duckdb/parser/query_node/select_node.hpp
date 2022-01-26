@@ -14,20 +14,14 @@
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/common/enums/aggregate_handling.hpp"
 
 namespace duckdb {
-
-enum class AggregateHandling : uint8_t {
-	STANDARD_HANDLING,     // standard handling as in the SELECT clause
-	NO_AGGREGATES_ALLOWED, // no aggregates allowed: any aggregates in this node will result in an error
-	FORCE_AGGREGATES       // force aggregates: any non-aggregate select list entry will become a GROUP
-};
 
 //! SelectNode represents a standard SELECT statement
 class SelectNode : public QueryNode {
 public:
-	SelectNode() : QueryNode(QueryNodeType::SELECT_NODE), aggregate_handling(AggregateHandling::STANDARD_HANDLING) {
-	}
+	SelectNode();
 
 	//! The projection list
 	vector<unique_ptr<ParsedExpression>> select_list;
@@ -53,10 +47,12 @@ public:
 public:
 	bool Equals(const QueryNode *other) const override;
 	//! Create a copy of this SelectNode
-	unique_ptr<QueryNode> Copy() override;
-	//! Serializes a SelectNode to a stand-alone binary blob
-	void Serialize(Serializer &serializer) override;
-	//! Deserializes a blob back into a SelectNode
-	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
+	unique_ptr<QueryNode> Copy() const override;
+
+	//! Serializes a QueryNode to a stand-alone binary blob
+	void Serialize(FieldWriter &writer) const override;
+	//! Deserializes a blob back into a QueryNode
+	static unique_ptr<QueryNode> Deserialize(FieldReader &reader);
 };
+
 } // namespace duckdb

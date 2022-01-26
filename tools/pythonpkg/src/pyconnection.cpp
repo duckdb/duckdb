@@ -280,7 +280,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filen
 	}
 	vector<Value> params;
 	params.emplace_back(filename);
-	unordered_map<string, Value> named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
+	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
 	return make_unique<DuckDBPyRelation>(
 	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(filename));
 }
@@ -351,9 +351,9 @@ void DuckDBPyConnection::Close() {
 
 // cursor() is stupid
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
-	auto res = make_shared<DuckDBPyConnection>();
+	auto res = make_shared<DuckDBPyConnection>(thread_id);
 	res->database = database;
-	res->connection = make_unique<Connection>(*res->database);
+	res->connection = connection;
 	cursors.push_back(res);
 	return res;
 }

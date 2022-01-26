@@ -43,7 +43,7 @@ bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value) {
 		}
 		index = length + index;
 	} else if (index > length) {
-		return false;
+		index = length;
 	}
 	return true;
 }
@@ -189,10 +189,10 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 
 void ArraySliceFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("array_slice", {LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
+	ScalarFunction fun({LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
 	                   ArraySliceFunction, false, ArraySliceBind);
 	fun.varargs = LogicalType::ANY;
-	set.AddFunction(fun);
+	set.AddFunction({"array_slice", "list_slice"}, fun);
 }
 
 } // namespace duckdb

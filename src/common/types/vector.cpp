@@ -7,8 +7,6 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
-#include "duckdb/common/to_string.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
@@ -70,12 +68,13 @@ void Vector::Reference(const Value &value) {
 		auto struct_buffer = make_unique<VectorStructBuffer>();
 		auto &child_types = StructType::GetChildTypes(value.type());
 		auto &child_vectors = struct_buffer->GetChildren();
+		auto &value_children = StructValue::GetChildren(value);
 		for (idx_t i = 0; i < child_types.size(); i++) {
-			auto vector = make_unique<Vector>(value.is_null ? Value(child_types[i].second) : value.struct_value[i]);
+			auto vector = make_unique<Vector>(value.IsNull() ? Value(child_types[i].second) : value_children[i]);
 			child_vectors.push_back(move(vector));
 		}
 		auxiliary = move(struct_buffer);
-		if (value.is_null) {
+		if (value.IsNull()) {
 			SetValue(0, value);
 		}
 	} else if (internal_type == PhysicalType::LIST) {
@@ -293,101 +292,66 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	}
 
 	validity.EnsureWritable();
-	validity.Set(index, !val.is_null);
-	if (val.is_null && GetType().InternalType() != PhysicalType::STRUCT) {
+	validity.Set(index, !val.IsNull());
+	if (val.IsNull() && GetType().InternalType() != PhysicalType::STRUCT) {
 		// for structs we still need to set the child-entries to NULL
 		// so we do not bail out yet
 		return;
 	}
 
-	switch (GetType().id()) {
-	case LogicalTypeId::BOOLEAN:
-		((bool *)data)[index] = val.value_.boolean;
+	switch (GetType().InternalType()) {
+	case PhysicalType::BOOL:
+		((bool *)data)[index] = val.GetValueUnsafe<bool>();
 		break;
-	case LogicalTypeId::TINYINT:
-		((int8_t *)data)[index] = val.value_.tinyint;
+	case PhysicalType::INT8:
+		((int8_t *)data)[index] = val.GetValueUnsafe<int8_t>();
 		break;
-	case LogicalTypeId::SMALLINT:
-		((int16_t *)data)[index] = val.value_.smallint;
+	case PhysicalType::INT16:
+		((int16_t *)data)[index] = val.GetValueUnsafe<int16_t>();
 		break;
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ:
-	case LogicalTypeId::INTEGER:
-		((int32_t *)data)[index] = val.value_.integer;
+	case PhysicalType::INT32:
+		((int32_t *)data)[index] = val.GetValueUnsafe<int32_t>();
 		break;
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::HASH:
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::TIMESTAMP_TZ:
-	case LogicalTypeId::TIME_TZ:
-		((int64_t *)data)[index] = val.value_.bigint;
+	case PhysicalType::INT64:
+		((int64_t *)data)[index] = val.GetValueUnsafe<int64_t>();
 		break;
-	case LogicalTypeId::UTINYINT:
-		((uint8_t *)data)[index] = val.value_.utinyint;
+	case PhysicalType::INT128:
+		((hugeint_t *)data)[index] = val.GetValueUnsafe<hugeint_t>();
 		break;
-	case LogicalTypeId::USMALLINT:
-		((uint16_t *)data)[index] = val.value_.usmallint;
+	case PhysicalType::UINT8:
+		((uint8_t *)data)[index] = val.GetValueUnsafe<uint8_t>();
 		break;
-	case LogicalTypeId::UINTEGER:
-		((uint32_t *)data)[index] = val.value_.uinteger;
+	case PhysicalType::UINT16:
+		((uint16_t *)data)[index] = val.GetValueUnsafe<uint16_t>();
 		break;
-	case LogicalTypeId::UBIGINT:
-		((uint64_t *)data)[index] = val.value_.ubigint;
+	case PhysicalType::UINT32:
+		((uint32_t *)data)[index] = val.GetValueUnsafe<uint32_t>();
 		break;
-	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::UUID:
-		((hugeint_t *)data)[index] = val.value_.hugeint;
+	case PhysicalType::UINT64:
+		((uint64_t *)data)[index] = val.GetValueUnsafe<uint64_t>();
 		break;
-	case LogicalTypeId::DECIMAL:
-		D_ASSERT(DecimalType::GetWidth(GetType()) == DecimalType::GetWidth(val.type()));
-		D_ASSERT(DecimalType::GetScale(GetType()) == DecimalType::GetScale(val.type()));
-		switch (GetType().InternalType()) {
-		case PhysicalType::INT16:
-			((int16_t *)data)[index] = val.value_.smallint;
-			break;
-		case PhysicalType::INT32:
-			((int32_t *)data)[index] = val.value_.integer;
-			break;
-		case PhysicalType::INT64:
-			((int64_t *)data)[index] = val.value_.bigint;
-			break;
-		case PhysicalType::INT128:
-			((hugeint_t *)data)[index] = val.value_.hugeint;
-			break;
-		default:
-			throw InternalException("Widths bigger than 38 are not supported");
-		}
+	case PhysicalType::FLOAT:
+		((float *)data)[index] = val.GetValueUnsafe<float>();
 		break;
-	case LogicalTypeId::FLOAT:
-		((float *)data)[index] = val.value_.float_;
+	case PhysicalType::DOUBLE:
+		((double *)data)[index] = val.GetValueUnsafe<double>();
 		break;
-	case LogicalTypeId::DOUBLE:
-		((double *)data)[index] = val.value_.double_;
+	case PhysicalType::INTERVAL:
+		((interval_t *)data)[index] = val.GetValueUnsafe<interval_t>();
 		break;
-	case LogicalTypeId::POINTER:
-		((uintptr_t *)data)[index] = val.value_.pointer;
+	case PhysicalType::VARCHAR:
+		((string_t *)data)[index] = StringVector::AddStringOrBlob(*this, StringValue::Get(val));
 		break;
-	case LogicalTypeId::INTERVAL:
-		((interval_t *)data)[index] = val.value_.interval;
-		break;
-	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BLOB:
-		((string_t *)data)[index] = StringVector::AddStringOrBlob(*this, val.str_value);
-		break;
-	case LogicalTypeId::MAP:
-	case LogicalTypeId::STRUCT: {
+	case PhysicalType::STRUCT: {
 		D_ASSERT(GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR);
 
 		auto &children = StructVector::GetEntries(*this);
-		D_ASSERT(val.is_null || children.size() == val.struct_value.size());
+		auto &val_children = StructValue::GetChildren(val);
+		D_ASSERT(val.IsNull() || children.size() == val_children.size());
 		for (size_t i = 0; i < children.size(); i++) {
 			auto &vec_child = children[i];
-			if (!val.is_null) {
-				auto &struct_child = val.struct_value[i];
+			if (!val.IsNull()) {
+				auto &struct_child = val_children[i];
 				vec_child->SetValue(index, struct_child);
 			} else {
 				vec_child->SetValue(index, Value());
@@ -395,34 +359,18 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		}
 		break;
 	}
-	case LogicalTypeId::LIST: {
+	case PhysicalType::LIST: {
 		auto offset = ListVector::GetListSize(*this);
-		if (!val.list_value.empty()) {
-			for (idx_t i = 0; i < val.list_value.size(); i++) {
-				Value v(val.list_value[i]);
-				ListVector::PushBack(*this, v);
+		auto &val_children = ListValue::GetChildren(val);
+		if (!val_children.empty()) {
+			for (idx_t i = 0; i < val_children.size(); i++) {
+				ListVector::PushBack(*this, val_children[i]);
 			}
 		}
 		//! now set the pointer
 		auto &entry = ((list_entry_t *)data)[index];
-		entry.length = val.list_value.size();
+		entry.length = val_children.size();
 		entry.offset = offset;
-		break;
-	}
-	case LogicalTypeId::ENUM: {
-		switch (type.InternalType()) {
-		case PhysicalType::UINT8:
-			((uint8_t *)data)[index] = val.value_.utinyint;
-			break;
-		case PhysicalType::UINT16:
-			((uint16_t *)data)[index] = val.value_.usmallint;
-			break;
-		case PhysicalType::UINT32:
-			((uint32_t *)data)[index] = val.value_.uinteger;
-			break;
-		default:
-			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
-		}
 		break;
 	}
 	default:
@@ -466,8 +414,6 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::INTEGER(((int32_t *)data)[index]);
 	case LogicalTypeId::DATE:
 		return Value::DATE(((date_t *)data)[index]);
-	case LogicalTypeId::DATE_TZ:
-		return Value::DATETZ(((date_t *)data)[index]);
 	case LogicalTypeId::TIME:
 		return Value::TIME(((dtime_t *)data)[index]);
 	case LogicalTypeId::TIME_TZ:
@@ -542,26 +488,31 @@ Value Vector::GetValue(idx_t index) const {
 		auto str = ((string_t *)data)[index];
 		return Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
 	}
-	case LogicalTypeId::MAP:
+	case LogicalTypeId::MAP: {
+		auto &child_entries = StructVector::GetEntries(*this);
+		Value key = child_entries[0]->GetValue(index);
+		Value value = child_entries[1]->GetValue(index);
+		return Value::MAP(move(key), move(value));
+	}
 	case LogicalTypeId::STRUCT: {
-		Value ret(GetType());
-		ret.is_null = false;
 		// we can derive the value schema from the vector schema
 		auto &child_entries = StructVector::GetEntries(*this);
-		for (auto &struct_child : child_entries) {
-			ret.struct_value.push_back(struct_child->GetValue(index));
+		child_list_t<Value> children;
+		for (idx_t child_idx = 0; child_idx < child_entries.size(); child_idx++) {
+			auto &struct_child = child_entries[child_idx];
+			children.push_back(
+			    make_pair(StructType::GetChildName(GetType(), child_idx), struct_child->GetValue(index)));
 		}
-		return ret;
+		return Value::STRUCT(move(children));
 	}
 	case LogicalTypeId::LIST: {
-		Value ret(GetType());
-		ret.is_null = false;
 		auto offlen = ((list_entry_t *)data)[index];
 		auto &child_vec = ListVector::GetEntry(*this);
+		vector<Value> children;
 		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
-			ret.list_value.push_back(child_vec.GetValue(i));
+			children.push_back(child_vec.GetValue(i));
 		}
-		return ret;
+		return Value::LIST(ListType::GetChildType(GetType()), move(children));
 	}
 	default:
 		throw InternalException("Unimplemented type for value access");
@@ -1419,7 +1370,14 @@ void TemplatedSearchInMap(Vector &list, T key, vector<idx_t> &offsets, bool is_k
 	}
 }
 
-void SearchString(Vector &list, string &key, vector<idx_t> &offsets, bool is_key_null, idx_t offset, idx_t length) {
+template <class T>
+void TemplatedSearchInMap(Vector &list, const Value &key, vector<idx_t> &offsets, bool is_key_null, idx_t offset,
+                          idx_t length) {
+	TemplatedSearchInMap<T>(list, key.template GetValueUnsafe<T>(), offsets, is_key_null, offset, length);
+}
+
+void SearchStringInMap(Vector &list, const string &key, vector<idx_t> &offsets, bool is_key_null, idx_t offset,
+                       idx_t length) {
 	auto &list_vector = ListVector::GetEntry(list);
 	VectorData vector_data;
 	list_vector.Orrify(ListVector::GetListSize(list), vector_data);
@@ -1444,81 +1402,49 @@ void SearchString(Vector &list, string &key, vector<idx_t> &offsets, bool is_key
 	}
 }
 
-vector<idx_t> ListVector::Search(Vector &list, Value &key, idx_t row) {
+vector<idx_t> ListVector::Search(Vector &list, const Value &key, idx_t row) {
 	vector<idx_t> offsets;
 
 	auto &list_vector = ListVector::GetEntry(list);
 	auto &entry = ((list_entry_t *)list.GetData())[row];
-	switch (list_vector.GetType().id()) {
 
-	case LogicalTypeId::SQLNULL:
-		if (key.is_null) {
-			for (idx_t i = entry.offset; i < entry.offset + entry.length; i++) {
-				offsets.push_back(i);
-			}
-		}
+	switch (list_vector.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		TemplatedSearchInMap<int8_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
-	case LogicalTypeId::UTINYINT:
-		::duckdb::TemplatedSearchInMap<uint8_t>(list, key.value_.utinyint, offsets, key.is_null, entry.offset,
-		                                        entry.length);
+	case PhysicalType::INT16:
+		TemplatedSearchInMap<int16_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
-	case LogicalTypeId::TINYINT:
-		::duckdb::TemplatedSearchInMap<int8_t>(list, key.value_.tinyint, offsets, key.is_null, entry.offset,
-		                                       entry.length);
+	case PhysicalType::INT32:
+		TemplatedSearchInMap<int32_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
-	case LogicalTypeId::USMALLINT:
-		::duckdb::TemplatedSearchInMap<uint16_t>(list, key.value_.usmallint, offsets, key.is_null, entry.offset,
-		                                         entry.length);
+	case PhysicalType::INT64:
+		TemplatedSearchInMap<int64_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
-	case LogicalTypeId::SMALLINT:
-		::duckdb::TemplatedSearchInMap<int16_t>(list, key.value_.smallint, offsets, key.is_null, entry.offset,
-		                                        entry.length);
+	case PhysicalType::INT128:
+		TemplatedSearchInMap<hugeint_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
-	case LogicalTypeId::UINTEGER:
-		::duckdb::TemplatedSearchInMap<uint32_t>(list, key.value_.uinteger, offsets, key.is_null, entry.offset,
-		                                         entry.length);
+	case PhysicalType::UINT8:
+		TemplatedSearchInMap<uint8_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
-	case LogicalTypeId::INTEGER:
-		::duckdb::TemplatedSearchInMap<int32_t>(list, key.value_.integer, offsets, key.is_null, entry.offset,
-		                                        entry.length);
+	case PhysicalType::UINT16:
+		TemplatedSearchInMap<uint16_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
-	case LogicalTypeId::UBIGINT:
-		::duckdb::TemplatedSearchInMap<uint64_t>(list, key.value_.ubigint, offsets, key.is_null, entry.offset,
-		                                         entry.length);
+	case PhysicalType::UINT32:
+		TemplatedSearchInMap<uint32_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
-	case LogicalTypeId::BIGINT:
-		::duckdb::TemplatedSearchInMap<int64_t>(list, key.value_.bigint, offsets, key.is_null, entry.offset,
-		                                        entry.length);
+	case PhysicalType::UINT64:
+		TemplatedSearchInMap<uint64_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
-	case LogicalTypeId::HUGEINT:
-		::duckdb::TemplatedSearchInMap<hugeint_t>(list, key.value_.hugeint, offsets, key.is_null, entry.offset,
-		                                          entry.length);
+	case PhysicalType::FLOAT:
+		TemplatedSearchInMap<float>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
-	case LogicalTypeId::FLOAT:
-		::duckdb::TemplatedSearchInMap<float>(list, key.value_.float_, offsets, key.is_null, entry.offset,
-		                                      entry.length);
+	case PhysicalType::DOUBLE:
+		TemplatedSearchInMap<double>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
-	case LogicalTypeId::DOUBLE:
-		::duckdb::TemplatedSearchInMap<double>(list, key.value_.double_, offsets, key.is_null, entry.offset,
-		                                       entry.length);
-		break;
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ:
-		::duckdb::TemplatedSearchInMap<date_t>(list, key.value_.date, offsets, key.is_null, entry.offset, entry.length);
-		break;
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
-		::duckdb::TemplatedSearchInMap<dtime_t>(list, key.value_.time, offsets, key.is_null, entry.offset,
-		                                        entry.length);
-		break;
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
-		::duckdb::TemplatedSearchInMap<timestamp_t>(list, key.value_.timestamp, offsets, key.is_null, entry.offset,
-		                                            entry.length);
-		break;
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::VARCHAR:
-		::duckdb::SearchString(list, key.str_value, offsets, key.is_null, entry.offset, entry.length);
+	case PhysicalType::VARCHAR:
+		SearchStringInMap(list, StringValue::Get(key), offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	default:
 		throw InvalidTypeException(list.GetType().id(), "Invalid type for List Vector Search");
@@ -1527,13 +1453,13 @@ vector<idx_t> ListVector::Search(Vector &list, Value &key, idx_t row) {
 }
 
 Value ListVector::GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets) {
-	Value ret(ListType::GetChildType(list.GetType()));
-	ret.is_null = false;
 	auto &child_vec = ListVector::GetEntry(list);
+	vector<Value> list_values;
+	list_values.reserve(offsets.size());
 	for (auto &offset : offsets) {
-		ret.list_value.push_back(child_vec.GetValue(offset));
+		list_values.push_back(child_vec.GetValue(offset));
 	}
-	return ret;
+	return Value::LIST(ListType::GetChildType(list.GetType()), move(list_values));
 }
 
 idx_t ListVector::GetListSize(const Vector &vec) {
@@ -1581,7 +1507,7 @@ void ListVector::Append(Vector &target, const Vector &source, const SelectionVec
 	target_buffer.Append(source, sel, source_size, source_offset);
 }
 
-void ListVector::PushBack(Vector &target, Value &insert) {
+void ListVector::PushBack(Vector &target, const Value &insert) {
 	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
 	target_buffer.PushBack(insert);
 }

@@ -34,20 +34,20 @@ public:
 public:
 	void Merge(const BaseStatistics &other) override;
 
-	bool IsConstant() override;
+	bool IsConstant() const override;
 
-	FilterPropagateResult CheckZonemap(ExpressionType comparison_type, const Value &constant);
+	FilterPropagateResult CheckZonemap(ExpressionType comparison_type, const Value &constant) const;
 
-	unique_ptr<BaseStatistics> Copy() override;
-	void Serialize(Serializer &serializer) override;
-	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
-	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) override;
+	unique_ptr<BaseStatistics> Copy() const override;
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<BaseStatistics> Deserialize(FieldReader &reader, LogicalType type);
+	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const override;
 
-	string ToString() override;
+	string ToString() const override;
 
 private:
 	template <class T>
-	void TemplatedVerify(Vector &vector, const SelectionVector &sel, idx_t count);
+	void TemplatedVerify(Vector &vector, const SelectionVector &sel, idx_t count) const;
 
 public:
 	template <class T>
@@ -61,31 +61,12 @@ public:
 	}
 
 	template <class T>
-	static inline void Update(SegmentStatistics &stats, T new_value);
+	static inline void Update(SegmentStatistics &stats, T new_value) {
+		auto &nstats = (NumericStatistics &)*stats.statistics;
+		UpdateValue<T>(new_value, nstats.min.GetReferenceUnsafe<T>(), nstats.max.GetReferenceUnsafe<T>());
+	}
 };
 
-template <>
-void NumericStatistics::Update<int8_t>(SegmentStatistics &stats, int8_t new_value);
-template <>
-void NumericStatistics::Update<int16_t>(SegmentStatistics &stats, int16_t new_value);
-template <>
-void NumericStatistics::Update<int32_t>(SegmentStatistics &stats, int32_t new_value);
-template <>
-void NumericStatistics::Update<int64_t>(SegmentStatistics &stats, int64_t new_value);
-template <>
-void NumericStatistics::Update<uint8_t>(SegmentStatistics &stats, uint8_t new_value);
-template <>
-void NumericStatistics::Update<uint16_t>(SegmentStatistics &stats, uint16_t new_value);
-template <>
-void NumericStatistics::Update<uint32_t>(SegmentStatistics &stats, uint32_t new_value);
-template <>
-void NumericStatistics::Update<uint64_t>(SegmentStatistics &stats, uint64_t new_value);
-template <>
-void NumericStatistics::Update<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value);
-template <>
-void NumericStatistics::Update<float>(SegmentStatistics &stats, float new_value);
-template <>
-void NumericStatistics::Update<double>(SegmentStatistics &stats, double new_value);
 template <>
 void NumericStatistics::Update<interval_t>(SegmentStatistics &stats, interval_t new_value);
 template <>

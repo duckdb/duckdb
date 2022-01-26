@@ -1,37 +1,14 @@
 #include "duckdb_odbc.hpp"
+#include "driver.hpp"
 #include "odbc_fetch.hpp"
+#include "odbc_utils.hpp"
+
 #include <odbcinst.h>
-#include <codecvt>
 #include <locale>
+
 using std::string;
 
-SQLRETURN SQL_API SQLAllocHandle(SQLSMALLINT handle_type, SQLHANDLE input_handle, SQLHANDLE *output_handle_ptr) {
-	switch (handle_type) {
-	case SQL_HANDLE_DBC: {
-		D_ASSERT(input_handle);
-		auto *env = (duckdb::OdbcHandleEnv *)input_handle;
-		D_ASSERT(env->type == duckdb::OdbcHandleType::ENV);
-		*output_handle_ptr = new duckdb::OdbcHandleDbc(env);
-		return SQL_SUCCESS;
-	}
-	case SQL_HANDLE_DESC:
-		return SQL_ERROR;
-	case SQL_HANDLE_ENV:
-		*output_handle_ptr = new duckdb::OdbcHandleEnv();
-		return SQL_SUCCESS;
-	case SQL_HANDLE_STMT: {
-		D_ASSERT(input_handle);
-		auto *dbc = (duckdb::OdbcHandleDbc *)input_handle;
-		D_ASSERT(dbc->type == duckdb::OdbcHandleType::DBC);
-		*output_handle_ptr = new duckdb::OdbcHandleStmt(dbc);
-		return SQL_SUCCESS;
-	}
-	default:
-		return SQL_ERROR;
-	}
-}
-
-SQLRETURN SQL_API SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
+SQLRETURN duckdb::FreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 	if (!handle) {
 		return SQL_ERROR;
 	}
@@ -44,6 +21,7 @@ SQLRETURN SQL_API SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 	}
 	case SQL_HANDLE_DESC: {
 		auto *hdl = (duckdb::OdbcHandleDesc *)handle;
+		hdl->dbc->ResetStmtDescriptors(hdl);
 		delete hdl;
 		return SQL_ERROR;
 	}
@@ -56,6 +34,41 @@ SQLRETURN SQL_API SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 		auto *hdl = (duckdb::OdbcHandleStmt *)handle;
 		hdl->dbc->EraseStmtRef(hdl);
 		delete hdl;
+		return SQL_SUCCESS;
+	}
+	default:
+		return SQL_ERROR;
+	}
+}
+
+SQLRETURN SQL_API SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
+	return duckdb::FreeHandle(handle_type, handle);
+}
+
+SQLRETURN SQL_API SQLAllocHandle(SQLSMALLINT handle_type, SQLHANDLE input_handle, SQLHANDLE *output_handle_ptr) {
+	switch (handle_type) {
+	case SQL_HANDLE_DBC: {
+		D_ASSERT(input_handle);
+		auto *env = (duckdb::OdbcHandleEnv *)input_handle;
+		D_ASSERT(env->type == duckdb::OdbcHandleType::ENV);
+		*output_handle_ptr = new duckdb::OdbcHandleDbc(env);
+		return SQL_SUCCESS;
+	}
+	case SQL_HANDLE_ENV:
+		*output_handle_ptr = new duckdb::OdbcHandleEnv();
+		return SQL_SUCCESS;
+	case SQL_HANDLE_STMT: {
+		D_ASSERT(input_handle);
+		auto *dbc = (duckdb::OdbcHandleDbc *)input_handle;
+		D_ASSERT(dbc->type == duckdb::OdbcHandleType::DBC);
+		*output_handle_ptr = new duckdb::OdbcHandleStmt(dbc);
+		return SQL_SUCCESS;
+	}
+	case SQL_HANDLE_DESC: {
+		D_ASSERT(input_handle);
+		auto *dbc = (duckdb::OdbcHandleDbc *)input_handle;
+		D_ASSERT(dbc->type == duckdb::OdbcHandleType::DBC);
+		*output_handle_ptr = new duckdb::OdbcHandleDesc(dbc);
 		return SQL_SUCCESS;
 	}
 	default:
@@ -193,35 +206,38 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
 
 	auto *hdl = (duckdb::OdbcHandle *)handle;
 
+	// lambda function that writes the diagnostic messages
+	std::function<SQLRETURN(duckdb::OdbcHandle *, duckdb::OdbcHandleType)> func_write_diag =
+	    [&](duckdb::OdbcHandle *hdl, duckdb::OdbcHandleType target_type) {
+		    if (hdl->type != target_type) {
+			    std::string msg_str("Handle type " + duckdb::OdbcHandleTypeToString(hdl->type) + " mismatch with " +
+			                        duckdb::OdbcHandleTypeToString(target_type));
+			    duckdb::OdbcUtils::WriteString(msg_str, message_text, buffer_length, text_length_ptr);
+			    return SQL_SUCCESS;
+		    }
+
+		    // Errors should be placed at the error_messages
+		    if ((size_t)rec_number <= hdl->error_messages.size()) {
+			    duckdb::OdbcUtils::WriteString(hdl->error_messages[rec_number - 1], message_text, buffer_length,
+			                                   text_length_ptr);
+			    return SQL_SUCCESS;
+		    } else {
+			    return SQL_NO_DATA;
+		    }
+	    };
+
 	switch (handle_type) {
-	case SQL_HANDLE_DBC: {
-		// TODO return connection errors here
-		return SQL_NO_DATA;
-	}
-	case SQL_HANDLE_DESC: {
-		// throw std::runtime_error("SQL_HANDLE_DESC");
-		return SQL_NO_DATA;
-	}
 	case SQL_HANDLE_ENV: {
-		// dont think we can have errors here
-		return SQL_NO_DATA;
+		return func_write_diag(hdl, duckdb::OdbcHandleType::ENV);
+	}
+	case SQL_HANDLE_DBC: {
+		return func_write_diag(hdl, duckdb::OdbcHandleType::DBC);
 	}
 	case SQL_HANDLE_STMT: {
-		if (hdl->type != duckdb::OdbcHandleType::STMT) {
-			std::string msg_str("Handle type is not a OdbcHandleStmt.");
-			duckdb::OdbcUtils::WriteString(msg_str, message_text, buffer_length, text_length_ptr);
-			return SQL_SUCCESS;
-		}
-
-		auto *stmt = (duckdb::OdbcHandleStmt *)hdl;
-		// Errors should be placed at the stmt->error_messages
-		if ((size_t)rec_number <= stmt->error_messages.size()) {
-			duckdb::OdbcUtils::WriteString(stmt->error_messages[rec_number - 1], message_text, buffer_length,
-			                               text_length_ptr);
-			return SQL_SUCCESS;
-		} else {
-			return SQL_NO_DATA;
-		}
+		return func_write_diag(hdl, duckdb::OdbcHandleType::STMT);
+	}
+	case SQL_HANDLE_DESC: {
+		return func_write_diag(hdl, duckdb::OdbcHandleType::DESC);
 	}
 	default:
 		return SQL_INVALID_HANDLE;

@@ -95,36 +95,28 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 }
 
 Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
-	Value val;
 	auto rtype = RApiTypes::DetectRType(valsexp);
 	switch (rtype) {
 	case RType::LOGICAL: {
 		auto lgl_val = INTEGER_POINTER(valsexp)[idx];
-		val = Value::BOOLEAN(lgl_val);
-		val.is_null = RBooleanType::IsNull(lgl_val);
-		break;
+		return RBooleanType::IsNull(lgl_val) ? Value(LogicalType::BOOLEAN) : Value::BOOLEAN(lgl_val);
 	}
 	case RType::INTEGER: {
 		auto int_val = INTEGER_POINTER(valsexp)[idx];
-		val = Value::INTEGER(int_val);
-		val.is_null = RIntegerType::IsNull(int_val);
-		break;
+		return RIntegerType::IsNull(int_val) ? Value(LogicalType::INTEGER) : Value::INTEGER(int_val);
 	}
 	case RType::NUMERIC: {
 		auto dbl_val = NUMERIC_POINTER(valsexp)[idx];
 		bool is_null = RDoubleType::IsNull(dbl_val);
 		if (is_null) {
-			val = Value(LogicalType::DOUBLE);
+			return Value(LogicalType::DOUBLE);
 		} else {
-			val = Value::DOUBLE(dbl_val);
+			return Value::DOUBLE(dbl_val);
 		}
-		break;
 	}
 	case RType::STRING: {
 		auto str_val = STRING_ELT(RApi::ToUtf8(valsexp), idx);
-		val = Value(CHAR(str_val));
-		val.is_null = str_val == NA_STRING;
-		break;
+		return str_val == NA_STRING ? Value(LogicalType::VARCHAR) : Value(CHAR(str_val));
 	}
 	case RType::FACTOR: {
 		auto int_val = INTEGER_POINTER(valsexp)[idx];
@@ -132,102 +124,78 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		bool is_null = RIntegerType::IsNull(int_val);
 		if (!is_null) {
 			auto str_val = STRING_ELT(levels, int_val - 1);
-			val = Value(CHAR(str_val));
+			return Value(CHAR(str_val));
 		} else {
-			val = Value(LogicalType::VARCHAR);
+			return Value(LogicalType::VARCHAR);
 		}
-		break;
 	}
 	case RType::TIMESTAMP: {
 		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
 		bool is_null = RTimestampType::IsNull(ts_val);
 		if (!is_null) {
-			val = Value::TIMESTAMP(RTimestampType::Convert(ts_val));
+			return Value::TIMESTAMP(RTimestampType::Convert(ts_val));
 		} else {
-			val = Value(LogicalType::TIMESTAMP);
+			return Value(LogicalType::TIMESTAMP);
 		}
-		break;
 	}
 	case RType::DATE: {
 		auto d_val = NUMERIC_POINTER(valsexp)[idx];
-		val = Value::DATE(RDateType::Convert(d_val));
-		val.is_null = RDateType::IsNull(d_val);
-		break;
+		return RDateType::IsNull(d_val) ? Value(LogicalType::DATE) : Value::DATE(RDateType::Convert(d_val));
 	}
 	case RType::DATE_INTEGER: {
 		auto d_val = INTEGER_POINTER(valsexp)[idx];
-		val = Value::DATE(RDateType::Convert(d_val));
-		val.is_null = RIntegerType::IsNull(d_val);
-		break;
+		return RIntegerType::IsNull(d_val) ? Value(LogicalType::DATE) : Value::DATE(RDateType::Convert(d_val));
 	}
 	case RType::TIME_SECONDS: {
 		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
-		val = Value::TIME(RTimeSecondsType::Convert(ts_val));
-		val.is_null = RTimeSecondsType::IsNull(ts_val);
-		break;
+		return RTimeSecondsType::IsNull(ts_val) ? Value(LogicalType::TIME)
+		                                        : Value::TIME(RTimeSecondsType::Convert(ts_val));
 	}
 	case RType::TIME_MINUTES: {
 		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
-		val = Value::TIME(RTimeMinutesType::Convert(ts_val));
-		val.is_null = RTimeMinutesType::IsNull(ts_val);
-		break;
+		return RTimeMinutesType::IsNull(ts_val) ? Value(LogicalType::TIME)
+		                                        : Value::TIME(RTimeMinutesType::Convert(ts_val));
 	}
 	case RType::TIME_HOURS: {
 		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
-		val = Value::TIME(RTimeHoursType::Convert(ts_val));
-		val.is_null = RTimeHoursType::IsNull(ts_val);
-		break;
+		return RTimeHoursType::IsNull(ts_val) ? Value(LogicalType::TIME) : Value::TIME(RTimeHoursType::Convert(ts_val));
 	}
 	case RType::TIME_DAYS: {
 		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
-		val = Value::TIME(RTimeDaysType::Convert(ts_val));
-		val.is_null = RTimeDaysType::IsNull(ts_val);
-		break;
+		return RTimeDaysType::IsNull(ts_val) ? Value(LogicalType::TIME) : Value::TIME(RTimeDaysType::Convert(ts_val));
 	}
 	case RType::TIME_WEEKS: {
 		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
-		val = Value::TIME(RTimeWeeksType::Convert(ts_val));
-		val.is_null = RTimeWeeksType::IsNull(ts_val);
-		break;
+		return RTimeWeeksType::IsNull(ts_val) ? Value(LogicalType::TIME) : Value::TIME(RTimeWeeksType::Convert(ts_val));
 	}
 	case RType::TIME_SECONDS_INTEGER: {
 		auto ts_val = INTEGER_POINTER(valsexp)[idx];
-		val = Value::TIME(RTimeSecondsType::Convert(ts_val));
-		val.is_null = RIntegerType::IsNull(ts_val);
-		break;
+		return RIntegerType::IsNull(ts_val) ? Value(LogicalType::TIME) : Value::TIME(RTimeSecondsType::Convert(ts_val));
 	}
 	case RType::TIME_MINUTES_INTEGER: {
 		auto ts_val = INTEGER_POINTER(valsexp)[idx];
-		val = Value::TIME(RTimeMinutesType::Convert(ts_val));
-		val.is_null = RIntegerType::IsNull(ts_val);
-		break;
+		return RIntegerType::IsNull(ts_val) ? Value(LogicalType::TIME) : Value::TIME(RTimeMinutesType::Convert(ts_val));
 	}
 	case RType::TIME_HOURS_INTEGER: {
 		auto ts_val = INTEGER_POINTER(valsexp)[idx];
-		val = Value::TIME(RTimeHoursType::Convert(ts_val));
-		val.is_null = RIntegerType::IsNull(ts_val);
-		break;
+		return RIntegerType::IsNull(ts_val) ? Value(LogicalType::TIME) : Value::TIME(RTimeHoursType::Convert(ts_val));
 	}
 	case RType::TIME_DAYS_INTEGER: {
 		auto ts_val = INTEGER_POINTER(valsexp)[idx];
-		val = Value::TIME(RTimeDaysType::Convert(ts_val));
-		val.is_null = RIntegerType::IsNull(ts_val);
-		break;
+		return RIntegerType::IsNull(ts_val) ? Value(LogicalType::TIME) : Value::TIME(RTimeDaysType::Convert(ts_val));
 	}
 	case RType::TIME_WEEKS_INTEGER: {
 		auto ts_val = INTEGER_POINTER(valsexp)[idx];
-		val = Value::TIME(RTimeWeeksType::Convert(ts_val));
-		val.is_null = RIntegerType::IsNull(ts_val);
-		break;
+		return RIntegerType::IsNull(ts_val) ? Value(LogicalType::TIME) : Value::TIME(RTimeWeeksType::Convert(ts_val));
 	}
 	default:
 		Rf_error("duckdb_sexp_to_value: Unsupported type");
+		return Value();
 	}
-	return val;
 }
 
 SEXP RApiTypes::ValueToSexp(Value &val) {
-	if (val.is_null) {
+	if (val.IsNull()) {
 		return R_NilValue;
 	}
 	RProtector r;
@@ -262,7 +230,7 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 		// TODO bit of duplication here with statement.cpp, fix this
 		res = r.Protect(NEW_NUMERIC(1));
 		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
-		dest_ptr[0] = (double)Timestamp::GetEpochSeconds(val.value_.timestamp);
+		dest_ptr[0] = (double)Timestamp::GetEpochSeconds(val.GetValue<timestamp_t>());
 		// some dresssup for R
 		SET_CLASS(res, RStrings::get().POSIXct_POSIXt_str);
 		Rf_setAttrib(res, RStrings::get().tzone_sym, RStrings::get().UTC_str);
@@ -271,23 +239,18 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 	case LogicalTypeId::TIME: {
 		res = r.Protect(NEW_NUMERIC(1));
 		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
-		dest_ptr[0] = ((double)val.value_.time.micros) / 1000;
-		NUMERIC_POINTER(res)[0] = val.value_.time.micros;
+		dest_ptr[0] = ((double)val.GetValue<dtime_t>().micros) / Interval::MICROS_PER_SEC;
 		// some dresssup for R
-		RProtector r_time;
-		SEXP cl = r_time.Protect(NEW_STRING(2));
-		SET_STRING_ELT(cl, 0, r_time.Protect(Rf_mkChar("hms")));
-		SET_STRING_ELT(cl, 1, r_time.Protect(Rf_mkChar("difftime")));
-		SET_CLASS(res, cl);
-		// hms difftime is always stored as "seconds"
-		Rf_setAttrib(res, Rf_install("units"), r_time.Protect(Rf_mkString("secs")));
+		SET_CLASS(res, RStrings::get().difftime_str);
+		// we always return difftime as "seconds"
+		Rf_setAttrib(res, RStrings::get().units_sym, RStrings::get().secs_str);
 		return res;
 	}
 
 	case LogicalTypeId::DATE: {
 		res = r.Protect(NEW_NUMERIC(1));
 		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
-		dest_ptr[0] = (double)int32_t(val.value_.date);
+		dest_ptr[0] = (double)int32_t(val.GetValue<date_t>());
 		// some dresssup for R
 		SET_CLASS(res, RStrings::get().Date_str);
 		return res;

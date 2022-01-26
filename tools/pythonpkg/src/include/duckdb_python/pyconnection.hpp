@@ -42,13 +42,15 @@ public:
 struct DuckDBPyConnection {
 public:
 	shared_ptr<DuckDB> database;
-	unique_ptr<Connection> connection;
+	shared_ptr<Connection> connection;
 	unordered_map<string, unique_ptr<RegisteredObject>> registered_objects;
 	unique_ptr<DuckDBPyResult> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
 	std::thread::id thread_id = std::this_thread::get_id();
 
 public:
+	explicit DuckDBPyConnection(std::thread::id thread_id_p = std::this_thread::get_id()) : thread_id(thread_id_p) {
+	}
 	static void Initialize(py::handle &m);
 	static void Cleanup();
 

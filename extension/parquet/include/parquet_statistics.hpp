@@ -13,7 +13,13 @@ using duckdb_parquet::format::SchemaElement;
 
 struct LogicalType;
 
-unique_ptr<BaseStatistics> ParquetTransformColumnStatistics(const SchemaElement &s_ele, const LogicalType &type,
-                                                            const ColumnChunk &column_chunk);
+struct ParquetStatisticsUtils {
+
+	static unique_ptr<BaseStatistics> TransformColumnStatistics(const SchemaElement &s_ele, const LogicalType &type,
+	                                                            const ColumnChunk &column_chunk);
+
+	static Value ConvertValue(const LogicalType &type, const duckdb_parquet::format::SchemaElement &schema_ele,
+	                          const std::string &stats);
+};
 
 } // namespace duckdb

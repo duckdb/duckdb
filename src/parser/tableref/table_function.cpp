@@ -1,6 +1,6 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -16,20 +16,17 @@ bool TableFunctionRef::Equals(const TableRef *other_p) const {
 	return function->Equals(other->function.get());
 }
 
-void TableFunctionRef::Serialize(Serializer &serializer) {
-	TableRef::Serialize(serializer);
-	function->Serialize(serializer);
-	serializer.WriteString(alias);
-	serializer.WriteStringVector(column_name_alias);
+void TableFunctionRef::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializable(*function);
+	writer.WriteString(alias);
+	writer.WriteList<string>(column_name_alias);
 }
 
-unique_ptr<TableRef> TableFunctionRef::Deserialize(Deserializer &source) {
+unique_ptr<TableRef> TableFunctionRef::Deserialize(FieldReader &reader) {
 	auto result = make_unique<TableFunctionRef>();
-
-	result->function = ParsedExpression::Deserialize(source);
-	result->alias = source.Read<string>();
-	source.ReadStringVector(result->column_name_alias);
-
+	result->function = reader.ReadRequiredSerializable<ParsedExpression>();
+	result->alias = reader.ReadRequired<string>();
+	result->column_name_alias = reader.ReadRequiredList<string>();
 	return move(result);
 }
 

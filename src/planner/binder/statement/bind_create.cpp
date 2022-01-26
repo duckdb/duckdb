@@ -138,7 +138,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 		if (!user_type_catalog) {
 			throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
 		}
-		type = *user_type_catalog->user_type;
+		type = user_type_catalog->user_type;
 		EnumType::SetCatalog(type, user_type_catalog);
 	} else if (type.id() == LogicalTypeId::ENUM) {
 		auto &enum_type_name = EnumType::GetTypeName(type);

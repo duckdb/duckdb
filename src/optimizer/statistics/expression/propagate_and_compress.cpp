@@ -11,7 +11,7 @@ namespace duckdb {
 
 unique_ptr<Expression> CastHugeintToSmallestType(unique_ptr<Expression> expr, NumericStatistics &num_stats) {
 	// Compute range
-	if (num_stats.min.is_null || num_stats.max.is_null) {
+	if (num_stats.min.IsNull() || num_stats.max.IsNull()) {
 		return expr;
 	}
 
@@ -59,7 +59,7 @@ unique_ptr<Expression> CastHugeintToSmallestType(unique_ptr<Expression> expr, Nu
 template <class T>
 unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr, NumericStatistics &num_stats) {
 	// Compute range
-	if (num_stats.min.is_null || num_stats.max.is_null) {
+	if (num_stats.min.IsNull() || num_stats.max.IsNull()) {
 		return expr;
 	}
 

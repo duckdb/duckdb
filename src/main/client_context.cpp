@@ -364,7 +364,7 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &qu
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
-	Parser parser;
+	Parser parser(GetParserOptions());
 	parser.ParseQuery(query);
 
 	PragmaHandler handler(*this);
@@ -528,7 +528,12 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		auto copied_statement = statement->Copy();
 		if (statement->type == StatementType::SELECT_STATEMENT) {
 			// in case this is a select query, we verify the original statement
-			string error = VerifyQuery(lock, query, move(statement));
+			string error;
+			try {
+				error = VerifyQuery(lock, query, move(statement));
+			} catch (std::exception &ex) {
+				error = ex.what();
+			}
 			if (!error.empty()) {
 				// error in verifying query
 				return make_unique<PendingQueryResult>(error);
@@ -798,8 +803,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	} catch (std::exception &ex) {
 		original_result->error = ex.what();
 		original_result->success = false;
-		interrupted = false;
 	}
+	interrupted = false;
 
 	// check explain, only if q does not already contain EXPLAIN
 	if (original_result->success) {
@@ -819,8 +824,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	} catch (std::exception &ex) {
 		copied_result->error = ex.what();
 		copied_result->success = false;
-		interrupted = false;
 	}
+	interrupted = false;
 	// now execute the deserialized statement
 	try {
 		auto result = RunStatementInternal(lock, query, move(deserialized_stmt), false, false);
@@ -828,8 +833,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	} catch (std::exception &ex) {
 		deserialized_result->error = ex.what();
 		deserialized_result->success = false;
-		interrupted = false;
 	}
+	interrupted = false;
 	// now execute the unoptimized statement
 	config.enable_optimizer = false;
 	try {
@@ -838,8 +843,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	} catch (std::exception &ex) {
 		unoptimized_result->error = ex.what();
 		unoptimized_result->success = false;
-		interrupted = false;
 	}
+	interrupted = false;
 	config.enable_optimizer = true;
 
 	if (profiling_is_enabled) {
@@ -1099,6 +1104,12 @@ bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) 
 
 	result = found_session_value ? session_value->second : global_value->second;
 	return true;
+}
+
+ParserOptions ClientContext::GetParserOptions() {
+	ParserOptions options;
+	options.preserve_identifier_case = ClientConfig::GetConfig(*this).preserve_identifier_case;
+	return options;
 }
 
 } // namespace duckdb
