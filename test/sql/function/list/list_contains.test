@@ -7,6 +7,6 @@ PRAGMA enable_verification
 
 # basic functionality
 query T
-SELECT list_contains([5, 6, 7, 1], 1)
+SELECT list_contains([5], 7)
 ----
-1
+0

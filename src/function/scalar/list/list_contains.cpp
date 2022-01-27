@@ -16,25 +16,28 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 	auto count = args.size();
 
 	Vector &list = args.data[0];
-	Value value = args.data[1].GetValue(0);
+	Vector &value = args.data[1];
 
-	auto &key_type = ListType::GetChildType(list.GetType());
-	if (key_type != LogicalTypeId::SQLNULL) {
-		value = value.CastAs(key_type);
-	}
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+
+//	auto &key_type = ListType::GetChildType(list.GetType());
+//	if (key_type != LogicalTypeId::SQLNULL) {
+//		value = value.CastAs(key_type);
+//	}
 
 	if (list.GetType().id() == LogicalTypeId::SQLNULL) {
 		result.Reference(false);
 	}
-
-
 	VectorData list_data;
+	VectorData value_data;
+
 	list.Orrify(count, list_data);
+	value.Orrify(count, value_data);
 
 	auto list_size = ListVector::GetListSize(list);
 	auto &child_vector = ListVector::GetEntry(list);
-	VectorData child_data;
 
+	VectorData child_data;
 	child_vector.Orrify(list_size, child_data);
 	for (idx_t i = 0; i < count; i++) {
 		auto list_index = list_data.sel->get_index(i);
@@ -43,14 +46,17 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 			idx_t child_offset = list_entry.offset;
 		   	if (child_data.validity.RowIsValid(child_offset)) {
 				auto child_value = ((T *)child_data.data)[child_offset];
-				if (child_value == value.GetValue<T>()) {
-					printf("GOT HERE");
-				} else{
-					printf("DID NOT GET HERE");
+				if (child_value == ((T *)value_data.data)[0]) {
+					auto result_data = ConstantVector::GetData<bool>(result);
+					result_data[0] = true;
+					return;
 				}
 			}
 		}
 	}
+	auto result_data = ConstantVector::GetData<bool>(result);
+	result_data[0] = false;
+	return;
 }
 
 static void ListContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
