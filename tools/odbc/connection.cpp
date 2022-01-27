@@ -1,6 +1,8 @@
 #include "duckdb_odbc.hpp"
 #include "driver.hpp"
+#include "odbc_utils.hpp"
 
+using duckdb::OdbcUtils;
 using std::ptrdiff_t;
 
 SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
@@ -33,6 +35,9 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 			case (ptrdiff_t)SQL_AUTOCOMMIT_OFF:
 				dbc->autocommit = false;
 				dbc->conn->SetAutoCommit(false);
+				return SQL_SUCCESS;
+			case SQL_ATTR_METADATA_ID:
+				dbc->sql_attr_metadata_id = *((SQLUINTEGER *)value_ptr);
 				return SQL_SUCCESS;
 			default:
 				return SQL_ERROR;
@@ -122,6 +127,15 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		mask = (SQL_GD_ANY_COLUMN | SQL_GD_ANY_ORDER | SQL_GD_BOUND | SQL_GD_BLOCK);
 		duckdb::Store<SQLUINTEGER>(mask, (duckdb::data_ptr_t)info_value_ptr);
 		return SQL_SUCCESS;
+	case SQL_IDENTIFIER_QUOTE_CHAR:
+		duckdb::OdbcUtils::WriteString("\"", (SQLCHAR *)info_value_ptr, buffer_length, string_length_ptr);
+		return SQL_SUCCESS;
+	case SQL_TABLE_TERM: {
+		auto *dbc = (duckdb::OdbcHandleDbc *)connection_handle;
+		const std::string str_table("table");
+		return OdbcUtils::SetStringAndLength(dbc->error_messages, str_table, info_value_ptr, buffer_length,
+		                                     string_length_ptr);
+	}
 	default:
 		return SQL_ERROR;
 	}

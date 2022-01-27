@@ -16,3 +16,4 @@ build-*
 deploy-*
 CMakeLists.txt
 NEWS.md
+tests/regression
