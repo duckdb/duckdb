@@ -8,7 +8,7 @@ dbSendQuery__duckdb_connection_character <- function(conn, statement, params = N
     message("Q ", statement)
   }
   statement <- enc2utf8(statement)
-  stmt_lst <- .Call(duckdb_prepare_R, conn@conn_ref, statement)
+  stmt_lst <- .Call(`_duckdb_prepare_R`, conn@conn_ref, statement)
 
   res <- duckdb_result(
     connection = conn,
