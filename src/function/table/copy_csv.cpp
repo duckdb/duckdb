@@ -82,8 +82,6 @@ static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, 
 		options.compression = FileCompressionTypeFromString(ParseString(set));
 	} else if (loption == "skip") {
 		options.skip_rows = ParseInteger(set);
-	} else if (loption == "stream_write") {
-		options.stream_write = ParseBoolean(set);
 	} else {
 		// unrecognized option in base CSV
 		return false;
@@ -386,22 +384,6 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 	}
 }
 
-static BufferedSerializer WriteCSVHeader(WriteCSVData &csv_data) {
-	auto &options = csv_data.options;
-
-	BufferedSerializer serializer;
-	// write the header line to the file
-	for (idx_t i = 0; i < csv_data.names.size(); i++) {
-		if (i != 0) {
-			serializer.WriteBufferData(options.delimiter);
-		}
-		WriteQuotedString(serializer, csv_data, csv_data.names[i].c_str(), csv_data.names[i].size(), false);
-	}
-	serializer.WriteBufferData(csv_data.newline);
-
-	return serializer;
-}
-
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
@@ -413,13 +395,10 @@ struct LocalReadCSVData : public LocalFunctionData {
 };
 
 struct GlobalWriteCSVData : public GlobalFunctionData {
-	GlobalWriteCSVData(FileSystem &fs, const string &file_path, FileOpener *opener, FileCompressionType compression,
-	                   bool overwrite_flag)
-	    : fs(fs), file_path(file_path), opener(opener), compression(compression) {
-		if (overwrite_flag) {
-			handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
-			                     FileLockType::WRITE_LOCK, compression, opener);
-		}
+	GlobalWriteCSVData(FileSystem &fs, const string &file_path, FileOpener *opener, FileCompressionType compression)
+	    : fs(fs), file_path(file_path + ".tmp") {
+		handle = fs.OpenFile(file_path + ".tmp", FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
+		                     FileLockType::WRITE_LOCK, compression, opener);
 	}
 
 	void WriteData(const_data_ptr_t data, idx_t size) {
@@ -435,15 +414,6 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 
 	//! Path of the file to write to
 	const string file_path;
-
-	//! Filesystem reference
-	FileOpener *opener;
-
-	//! Compression type used on the file
-	FileCompressionType compression;
-
-	//! Buffer for writing data when stream_write is set
-	BufferedSerializer serializer;
 };
 
 static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &context, FunctionData &bind_data) {
@@ -461,13 +431,20 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &cont
 static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
-	auto global_data =
-	    make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), csv_data.files[0],
-	                                    FileSystem::GetFileOpener(context), options.compression, options.stream_write);
+	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), csv_data.files[0],
+	                                                   FileSystem::GetFileOpener(context), options.compression);
 
-	if (options.header && options.stream_write) {
-		auto header_serializer = WriteCSVHeader(csv_data);
-		global_data->WriteData(header_serializer.blob.data.get(), header_serializer.blob.size);
+	if (options.header) {
+		BufferedSerializer serializer;
+		// write the header line to the file
+		for (idx_t i = 0; i < csv_data.names.size(); i++) {
+			if (i != 0) {
+				serializer.WriteBufferData(options.delimiter);
+			}
+			WriteQuotedString(serializer, csv_data, csv_data.names[i].c_str(), csv_data.names[i].size(), false);
+		}
+		serializer.WriteBufferData(csv_data.newline);
+		global_data->WriteData(serializer.blob.data.get(), serializer.blob.size);
 	}
 	return move(global_data);
 }
@@ -496,25 +473,16 @@ static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, Global
 
 	cast_chunk.Normalify();
 	auto &writer = local_data.serializer;
-	auto &global_writer = global_state.serializer;
 	// now loop over the vectors and output the values
 	for (idx_t row_idx = 0; row_idx < cast_chunk.size(); row_idx++) {
 		// write values
 		for (idx_t col_idx = 0; col_idx < cast_chunk.ColumnCount(); col_idx++) {
 			if (col_idx != 0) {
-				if (options.stream_write) {
-					writer.WriteBufferData(options.delimiter);
-				} else {
-					global_writer.WriteBufferData(options.delimiter);
-				}
+				writer.WriteBufferData(options.delimiter);
 			}
 			if (FlatVector::IsNull(cast_chunk.data[col_idx], row_idx)) {
 				// write null value
-				if (options.stream_write) {
-					writer.WriteBufferData(options.null_str);
-				} else {
-					global_writer.WriteBufferData(options.null_str);
-				}
+				writer.WriteBufferData(options.null_str);
 				continue;
 			}
 
@@ -524,22 +492,13 @@ static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, Global
 			// FIXME: we could gain some performance here by checking for certain types if they ever require quotes
 			// (e.g. integers only require quotes if the delimiter is a number, decimals only require quotes if the
 			// delimiter is a number or "." character)
-			if (options.stream_write) {
-				WriteQuotedString(writer, csv_data, str_value.GetDataUnsafe(), str_value.GetSize(),
-				                  csv_data.force_quote[col_idx]);
-			} else {
-				WriteQuotedString(global_writer, csv_data, str_value.GetDataUnsafe(), str_value.GetSize(),
-				                  csv_data.force_quote[col_idx]);
-			}
+			WriteQuotedString(writer, csv_data, str_value.GetDataUnsafe(), str_value.GetSize(),
+			                  csv_data.force_quote[col_idx]);
 		}
-		if (options.stream_write) {
-			writer.WriteBufferData(csv_data.newline);
-		} else {
-			global_writer.WriteBufferData(csv_data.newline);
-		}
+		writer.WriteBufferData(csv_data.newline);
 	}
 	// check if we should flush what we have currently written
-	if (writer.blob.size >= csv_data.flush_size && options.stream_write) {
+	if (writer.blob.size >= csv_data.flush_size) {
 		global_state.WriteData(writer.blob.data.get(), writer.blob.size);
 		writer.Reset();
 	}
@@ -553,15 +512,11 @@ static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, Glo
 	auto &local_data = (LocalReadCSVData &)lstate;
 	auto &global_state = (GlobalWriteCSVData &)gstate;
 	auto &writer = local_data.serializer;
-	auto &csv_data = (WriteCSVData &)bind_data;
-	auto &options = csv_data.options;
 
 	// flush the local writer
 	if (writer.blob.size > 0) {
-		if (options.stream_write) {
-			global_state.WriteData(writer.blob.data.get(), writer.blob.size);
-			writer.Reset();
-		}
+		global_state.WriteData(writer.blob.data.get(), writer.blob.size);
+		writer.Reset();
 	}
 }
 
@@ -570,23 +525,13 @@ static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, Glo
 //===--------------------------------------------------------------------===//
 void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
 	auto &global_state = (GlobalWriteCSVData &)gstate;
-	auto &global_writer = global_state.serializer;
-	auto &csv_data = (WriteCSVData &)bind_data;
-	auto &options = csv_data.options;
 
-	if (global_writer.blob.size > 0 && !options.stream_write) {
-		global_state.handle = global_state.fs.OpenFile(
-		    global_state.file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
-		    FileLockType::WRITE_LOCK, global_state.compression, global_state.opener);
-
-		if (options.header && !options.stream_write) {
-			auto header_serializer = WriteCSVHeader(csv_data);
-			global_state.WriteData(header_serializer.blob.data.get(), header_serializer.blob.size);
-		}
-
-		global_state.WriteData(global_writer.blob.data.get(), global_writer.blob.size);
-		global_writer.Reset();
+	auto tmp_file_name = global_state.file_path;
+	auto file_name = tmp_file_name.substr(0, tmp_file_name.length() - 4);
+	if (global_state.fs.FileExists(file_name)) {
+		global_state.fs.RemoveFile(file_name);
 	}
+	global_state.fs.MoveFile(tmp_file_name, file_name);
 
 	global_state.handle->Close();
 	global_state.handle.reset();

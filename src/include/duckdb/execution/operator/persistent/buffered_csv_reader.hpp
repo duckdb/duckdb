@@ -99,8 +99,6 @@ struct BufferedCSVReaderOptions {
 	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
 	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
-	//! Whether the query results should be streamed to file or written when query is successful
-	bool stream_write = true;
 
 	void SetDelimiter(const string &delimiter);
 
