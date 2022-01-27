@@ -2606,7 +2606,7 @@ filter_clause:
 		;
 
 export_clause:
-			EXPORT STATE            				{ $$ = true; }
+			EXPORT_P STATE            				{ $$ = true; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
