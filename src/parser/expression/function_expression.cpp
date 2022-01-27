@@ -132,7 +132,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 	auto order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(reader.ReadRequiredSerializable<ResultModifier>());
 	auto distinct = reader.ReadRequired<bool>();
 	auto is_operator = reader.ReadRequired<bool>();
-	auto export_state = reader.ReadRequired<bool>();
+	auto export_state = reader.ReadField<bool>(false);
 
 	unique_ptr<FunctionExpression> function;
 	function = make_unique<FunctionExpression>(function_name, move(children), move(filter), move(order_bys), distinct,
