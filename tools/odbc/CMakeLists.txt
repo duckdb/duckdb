@@ -37,6 +37,7 @@ add_library(
   statement_functions.cpp
   odbc_interval.cpp
   odbc_fetch.cpp
+  odbc_utils.cpp
   empty_stubs.cpp
   descriptor.cpp
   parameter_descriptor.cpp
