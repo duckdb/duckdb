@@ -36,6 +36,12 @@ enum class VectorAuxiliaryDataType : uint8_t {
 };
 
 struct VectorAuxiliaryData {
+	explicit VectorAuxiliaryData(VectorAuxiliaryDataType type_p)
+	    : type(type_p) {
+
+	      };
+	VectorAuxiliaryDataType type;
+
 	virtual ~VectorAuxiliaryData() {
 	}
 };
@@ -73,7 +79,6 @@ public:
 
 	void SetAuxiliaryData(unique_ptr<VectorAuxiliaryData> aux_data_p, VectorAuxiliaryDataType aux_type_p) {
 		aux_data = move(aux_data_p);
-		aux_type = aux_type_p;
 	}
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
@@ -87,13 +92,12 @@ public:
 	}
 
 	inline VectorAuxiliaryDataType GetAuxiliaryDataType() const {
-		return aux_type;
+		return aux_data->type;
 	}
 
 protected:
 	VectorBufferType buffer_type;
 	unique_ptr<VectorAuxiliaryData> aux_data;
-	VectorAuxiliaryDataType aux_type;
 	unique_ptr<data_t[]> data;
 };
 
