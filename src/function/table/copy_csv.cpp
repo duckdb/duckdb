@@ -523,15 +523,18 @@ static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, Glo
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
+void MoveTmpFile(FileSystem &fs, const string &tmp_file_path) {
+	auto file_path = tmp_file_path.substr(0, tmp_file_path.length() - 4);
+	if (fs.FileExists(file_path)) {
+		fs.RemoveFile(file_path);
+	}
+	fs.MoveFile(tmp_file_path, file_path);
+}
+
 void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
 	auto &global_state = (GlobalWriteCSVData &)gstate;
 
-	auto tmp_file_name = global_state.file_path;
-	auto file_name = tmp_file_name.substr(0, tmp_file_name.length() - 4);
-	if (global_state.fs.FileExists(file_name)) {
-		global_state.fs.RemoveFile(file_name);
-	}
-	global_state.fs.MoveFile(tmp_file_name, file_name);
+	MoveTmpFile(global_state.fs, global_state.file_path);
 
 	global_state.handle->Close();
 	global_state.handle.reset();
