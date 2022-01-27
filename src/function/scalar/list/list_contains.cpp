@@ -39,17 +39,19 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 
 	VectorData child_data;
 	child_vector.Orrify(list_size, child_data);
+
 	for (idx_t i = 0; i < count; i++) {
 		auto list_index = list_data.sel->get_index(i);
 		if (list_data.validity.RowIsValid(list_index)) {
-			auto list_entry = ((list_entry_t *)list_data.data)[list_index];
-			idx_t child_offset = list_entry.offset;
-		   	if (child_data.validity.RowIsValid(child_offset)) {
-				auto child_value = ((T *)child_data.data)[child_offset];
-				if (child_value == ((T *)value_data.data)[0]) {
-					auto result_data = ConstantVector::GetData<bool>(result);
-					result_data[0] = true;
-					return;
+//			auto list_entry = ((list_entry_t *)list_data.data)[list_index];
+			for (idx_t j = 0; j < list_size; j++) {
+				if (child_data.validity.RowIsValid(j)) {
+					auto child_value = ((T *)child_data.data)[j];
+					if (child_value == ((T *)value_data.data)[0]) {
+						auto result_data = ConstantVector::GetData<bool>(result);
+						result_data[0] = true;
+						return;
+					}
 				}
 			}
 		}

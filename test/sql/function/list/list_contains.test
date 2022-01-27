@@ -7,6 +7,41 @@ PRAGMA enable_verification
 
 # basic functionality
 query T
-SELECT list_contains([5], 7)
+SELECT list_contains([7], 7)
+----
+1
+
+query T
+SELECT list_contains([7], 5)
 ----
 0
+
+query T
+SELECT list_contains([1,2,3,4],4)
+----
+1
+
+query T
+SELECT list_contains([1,2,3,4],5)
+----
+0
+
+query T
+SELECT list_contains([true, false],true)
+----
+1
+
+query T
+SELECT list_contains([true, true],false)
+----
+0
+
+query T
+SELECT list_contains(["test", "notest"],"notest")
+----
+1
+
+query T
+SELECT list_contains(["test", "notest"],"a")
+----
+1
