@@ -11,7 +11,7 @@
 namespace duckdb {
 
 template <class T>
-static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static void TemplatedListContainsStringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto count = args.size();
 
@@ -37,6 +37,63 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 	auto list_size = ListVector::GetListSize(list);
 	auto &child_vector = ListVector::GetEntry(list);
 
+	VectorData child_data;
+	child_vector.Orrify(list_size, child_data);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto list_index = list_data.sel->get_index(i);
+		if (list_data.validity.RowIsValid(list_index)) {
+			//			auto list_entry = ((list_entry_t *)list_data.data)[list_index];
+			for (idx_t j = 0; j < list_size; j++) {
+				if (child_data.validity.RowIsValid(j)) {
+					auto child_value = ((T *)child_data.data)[j];
+					if (StringComparisonOperators::EqualsOrNot<false>(child_value, ((T *)value_data.data)[0])) {
+						auto result_data = ConstantVector::GetData<bool>(result);
+						result_data[0] = true;
+						return;
+					}
+				}
+			}
+		}
+	}
+	auto result_data = ConstantVector::GetData<bool>(result);
+	result_data[0] = false;
+	return;
+}
+
+template <class T>
+static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 2);
+	auto count = args.size();
+
+	Vector &list = args.data[0];
+	Vector &value = args.data[1];
+
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+
+//	auto &key_type = ListType::GetChildType(list.GetType());
+//	if (key_type != LogicalTypeId::SQLNULL) {
+//		value = value.CastAs(key_type);
+//	}
+
+	if (list.GetType().id() == LogicalTypeId::SQLNULL) {
+		auto result_data = ConstantVector::GetData<bool>(result);
+		result_data[0] = false;
+		return;
+	}
+	VectorData list_data;
+	VectorData value_data;
+
+	list.Orrify(count, list_data);
+	value.Orrify(count, value_data);
+
+	auto list_size = ListVector::GetListSize(list);
+	auto &child_vector = ListVector::GetEntry(list);
+	if (child_vector.GetType().id() == LogicalTypeId::SQLNULL) {
+		auto result_data = ConstantVector::GetData<bool>(result);
+		result_data[0] = false;
+		return;
+	}
 	VectorData child_data;
 	child_vector.Orrify(list_size, child_data);
 
@@ -97,8 +154,9 @@ static void ListContainsFunction(DataChunk &args, ExpressionState &state, Vector
 	case PhysicalType::DOUBLE:
 		TemplatedListContainsFunction<double>(args, state, result);
 		break;
-//		case PhysicalType::VARCHAR:
-//			TemplatedListContainsFunction(list, StringValue::Get(key), offsets, key.IsNull(), entry.offset, entry.length); 			break;
+	case PhysicalType::VARCHAR:
+		TemplatedListContainsStringFunction<string_t>(args, state, result);
+		break;
 	default:
 		throw InvalidTypeException(args.data[1].GetType().id(), "Invalid type for List Vector Search");
 	}
@@ -115,20 +173,24 @@ static unique_ptr<FunctionData> ListContainsBind(ClientContext &context, ScalarF
 	if (array.id() == LogicalTypeId::SQLNULL && value.id() == LogicalTypeId::SQLNULL) {
 		bound_function.return_type = LogicalType::SQLNULL;
 	} else if (array.id() == LogicalTypeId::SQLNULL || value.id() == LogicalTypeId::SQLNULL) {
+		// In case either the array or the value is NULL, return NULL
+		// Similar to behaviour of prestoDB
 		bound_function.arguments[0] = array;
 		bound_function.arguments[1] = value;
-		bound_function.return_type = value.id() == LogicalTypeId::SQLNULL ? array : value;
+		bound_function.return_type = LogicalTypeId::SQLNULL;
 	} else {
-		auto child_type =ListType::GetChildType(arguments[0]->return_type);
+		auto child_type = ListType::GetChildType(arguments[0]->return_type);
 		D_ASSERT(array.id() == LogicalTypeId::LIST);
-		D_ASSERT(value.id() == child_type.id()); // LogicalTypeId::ANY?
+		if (child_type.id() != LogicalTypeId::SQLNULL) {
+			D_ASSERT(value.id() == child_type.id()); // LogicalTypeId::ANY?
+		}
 
 		//		LogicalType child_type = LogicalType::SQLNULL;
 		//		child_type = LogicalType::MaxLogicalType(child_type, ListType::GetChildType(arguments[0]->return_type));
 		//		ExpressionBinder::ResolveParameterType(child_type);
 
 		bound_function.arguments[0] = LogicalType::LIST(move(child_type));
-		bound_function.arguments[1] = value; // LogicalType::ANY What should be here. The second argument can be of type any.
+		bound_function.arguments[1] = LogicalType::ANY; // LogicalType::ANY What should be here. The second argument can be of type any.
 		bound_function.return_type = LogicalType::BOOLEAN; // What should be here. Boolean
 	}
 
@@ -143,6 +205,6 @@ ScalarFunction ListContainsFun::GetFunction() {
 }
 
 void ListContainsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_contains", "array_contains"},GetFunction());
+	set.AddFunction({"list_contains", "array_contains", "list_has", "array_has"},GetFunction());
 }
 }
