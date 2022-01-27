@@ -59,6 +59,8 @@ public:
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
 
+	MacroBinding *macro_binding;
+
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
 	                            bool root_expression = true);
@@ -105,6 +107,8 @@ public:
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
 
+	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
+
 protected:
 	BindResult BindExpression(BetweenExpression &expr, idx_t depth);
 	BindResult BindExpression(CaseExpression &expr, idx_t depth);
@@ -130,7 +134,6 @@ protected:
 	virtual BindResult BindMacro(FunctionExpression &expr, MacroCatalogEntry *macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> *expr_ptr);
 
-	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();
@@ -138,7 +141,6 @@ protected:
 	Binder &binder;
 	ClientContext &context;
 	ExpressionBinder *stored_binder;
-	MacroBinding *macro_binding;
 	vector<BoundColumnReferenceInfo> bound_columns;
 };
 
