@@ -523,9 +523,19 @@ public static void test_duckdb_timestamp() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 		stmt.execute("CREATE TABLE q (id DECIMAL(3,0), dec16 DECIMAL(4,1), dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), dec128 DECIMAL(38,10))");
-		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (1, 999.9, 99999.9999, 99999999999.9999999, 9999999999999999999999999999.9999999999)");
-		// Until https://github.com/duckdb/duckdb/issues/2975 is resolved
-		// stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (2, -999.9, -99999.9999, -99999999999.9999999, -9999999999999999999999999999.999999999)");
+
+		PreparedStatement ps1 = conn.prepareStatement("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (?, ?, ?, ?, ?)");
+		ps1.setObject(1, new BigDecimal("1"));
+		ps1.setObject(2, new BigDecimal("999.9"));
+		ps1.setObject(3, new BigDecimal("99999.9999"));
+		ps1.setObject(4, new BigDecimal("99999999999.9999999"));
+		ps1.setObject(5, new BigDecimal("9999999999999999999999999999.9999999999"));
+		ps1.execute();
+		ps1.close();
+
+
+
+		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (2, -999.9, -99999.9999, -99999999999.9999999, -9999999999999999999999999999.9999999999)");
 		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (3, -5, -999, -88888888, -123456789654321)");
 		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (4, -0, -0, -0, -0)");
 		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (5, 0, 0, 0, 18446744073709551615)");
@@ -554,6 +564,12 @@ public static void test_duckdb_timestamp() throws Exception {
 		assertEquals(rs2.getBigDecimal(3), new BigDecimal("99999.9999"));
 		assertEquals(rs2.getBigDecimal(4), new BigDecimal("99999999999.9999999"));
 		assertEquals(rs2.getBigDecimal(5), new BigDecimal("9999999999999999999999999999.9999999999"));
+		rs2.next();
+		assertEquals(rs2.getBigDecimal(1), new BigDecimal("2"));
+		assertEquals(rs2.getBigDecimal(2), new BigDecimal("-999.9"));
+		assertEquals(rs2.getBigDecimal(3), new BigDecimal("-99999.9999"));
+		assertEquals(rs2.getBigDecimal(4), new BigDecimal("-99999999999.9999999"));
+		assertEquals(rs2.getBigDecimal(5), new BigDecimal("-9999999999999999999999999999.9999999999"));
 		rs2.next();
 		assertEquals(rs2.getBigDecimal(1), new BigDecimal("3"));
 		assertEquals(rs2.getBigDecimal(2), new BigDecimal("-5.0"));
