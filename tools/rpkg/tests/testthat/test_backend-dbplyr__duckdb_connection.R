@@ -37,8 +37,8 @@ test_that("duckdb custom scalars translated correctly", {
 
   #  expect_equal(translate(as(1,"CHARACTER")), sql(r"{CAST(1.0 AS TEXT}"))        # Not implemented
   expect_equal(translate(as.raw(10)), sql(r"{CAST(10.0 AS VARBINARY)}"))
-  expect_equal(translate(13 %% 5), sql(r"{(CAST((13.0) AS INTEGER)) % (CAST((5.0) AS INTEGER))}"))
-  #  expect_equal(translate(35.8 %/% 4), sql(r"{(((CAST((35.8) AS INTEGER)) - (CAST((35.8) AS INTEGER)) % (CAST((4.0) AS INTEGER)))) / (CAST((4.0) AS INTEGER))}"))
+  expect_equal(translate(13 %% 5), sql(r"{(13.0 - 5.0 * FLOOR(13.0 / 5.0))}"))
+  expect_equal(translate(35.8 %/% 4), sql(r"{FLOOR(35.8 / 4.0)}"))
   expect_equal(translate(35.8^2.51), sql(r"{POW(35.8, 2.51)}"))
   expect_equal(translate(bitwOr(x, 128L)), sql(r"{(CAST("x" AS INTEGER)) | (CAST(128 AS INTEGER))}"))
   expect_equal(translate(bitwAnd(x, 128)), sql(r"{(CAST("x" AS INTEGER)) & (CAST(128.0 AS INTEGER))}"))
@@ -223,7 +223,7 @@ test_that("snapshots of duckdb custom scalars translations", {
     #  translate(as(1,"CHARACTER"))        # Not implemented
     translate(as.raw(10))
     translate(13 %% 5)
-    #  translate(35.8 %/% 4)               # Inconsistent - implementation pending
+    translate(35.8 %/% 4)
     translate(35.8^2.51)
     translate(bitwOr(x, 128L))
     translate(bitwAnd(x, 128))
