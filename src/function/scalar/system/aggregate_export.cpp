@@ -34,17 +34,35 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state, Vec
 	auto state_size = bind_data.aggr.state_size();
 	D_ASSERT(input.data.size() == 1);
 	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
+	auto aligned_state_size = AlignValue(state_size);
 
-	auto state_buf = malloc(state_size);
-	Vector state_vec(Value::POINTER((uintptr_t)state_buf));
-	Vector scalar_result(result.GetType());
-	auto state_ptr = FlatVector::GetData<string_t>(input.data[0]);
+	// TODO put this in the state, too
+	auto state_buffer = unique_ptr<data_t[]>(new data_t[aligned_state_size * input.size()]);
+	Vector state_vec(LogicalType::POINTER);
+	auto state_vec_ptr = FlatVector::GetData<data_ptr_t>(state_vec);
 
+	VectorData state_data;
+	input.data[0].Orrify(input.size(), state_data);
 	for (idx_t i = 0; i < input.size(); i++) {
-		D_ASSERT(state_ptr[i].GetSize() == state_size);
-		memcpy(state_buf, state_ptr[i].GetDataUnsafe(), state_size);
-		bind_data.aggr.finalize(state_vec, bind_data.bind_data.get(), scalar_result, 1, 0);
-		result.SetValue(i, scalar_result.GetValue(0)); // FIXME
+		auto state_idx = state_data.sel->get_index(i);
+		auto state = &((string_t *)state_data.data)[state_idx];
+		auto target_ptr = (const char *)state_buffer.get() + aligned_state_size * i;
+
+		if (state_data.validity.RowIsValid(state_idx)) {
+			D_ASSERT(state->GetSize() == state_size);
+			memcpy((void *)target_ptr, state->GetDataUnsafe(), state_size);
+		} else {
+			// create a dummy state because finalize does not understand NULLs in its input
+			bind_data.aggr.initialize((data_ptr_t)target_ptr);
+		}
+		state_vec_ptr[i] = (data_ptr_t)target_ptr;
+	}
+	bind_data.aggr.finalize(state_vec, bind_data.bind_data.get(), result, input.size(), 0);
+	for (idx_t i = 0; i < input.size(); i++) {
+		auto state_idx = state_data.sel->get_index(i);
+		if (!state_data.validity.RowIsValid(state_idx)) {
+			FlatVector::SetNull(result, i, true);
+		}
 	}
 }
 
@@ -57,24 +75,46 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state, Vect
 	D_ASSERT(input.data[0].GetType() == input.data[1].GetType());
 	D_ASSERT(input.data[0].GetType() == result.GetType());
 
+	VectorData state0_data, state1_data;
+	input.data[0].Orrify(input.size(), state0_data);
+	input.data[1].Orrify(input.size(), state1_data);
+
 	// TODO put this into the state
+	// TODO not leak
 	auto state_buf0 = malloc(state_size);
 	auto state_buf1 = malloc(state_size);
-
 	Vector state_vec0(Value::POINTER((uintptr_t)state_buf0));
 	Vector state_vec1(Value::POINTER((uintptr_t)state_buf1));
-
-	auto state_ptr0 = FlatVector::GetData<string_t>(input.data[0]);
-	auto state_ptr1 = FlatVector::GetData<string_t>(input.data[1]);
 
 	auto result_ptr = FlatVector::GetData<string_t>(result);
 
 	for (idx_t i = 0; i < input.size(); i++) {
-		D_ASSERT(state_ptr0[i].GetSize() == state_size);
-		D_ASSERT(state_ptr1[i].GetSize() == state_size);
+		auto state0_idx = state0_data.sel->get_index(i);
+		auto state1_idx = state1_data.sel->get_index(i);
 
-		memcpy(state_buf0, state_ptr0[i].GetDataUnsafe(), state_size);
-		memcpy(state_buf1, state_ptr1[i].GetDataUnsafe(), state_size);
+		auto &state0 = ((string_t *)state0_data.data)[state0_idx];
+		auto &state1 = ((string_t *)state1_data.data)[state1_idx];
+
+		// if both are NULL, we return NULL. If either of them is not, the result is that one
+		if (!state0_data.validity.RowIsValid(state0_idx) && !state1_data.validity.RowIsValid(state1_idx)) {
+			FlatVector::SetNull(result, i, true);
+			continue;
+		}
+		if (state0_data.validity.RowIsValid(state0_idx) && !state1_data.validity.RowIsValid(state1_idx)) {
+			result_ptr[i] = StringVector::AddStringOrBlob(result, (const char *)state0.GetDataUnsafe(), state_size);
+			continue;
+		}
+		if (!state0_data.validity.RowIsValid(state0_idx) && state1_data.validity.RowIsValid(state1_idx)) {
+			result_ptr[i] = StringVector::AddStringOrBlob(result, (const char *)state1.GetDataUnsafe(), state_size);
+			continue;
+		}
+
+		// we actually have to combine
+		D_ASSERT(state0.GetSize() == state_size);
+		D_ASSERT(state1.GetSize() == state_size);
+
+		memcpy(state_buf0, state0.GetDataUnsafe(), state_size);
+		memcpy(state_buf1, state1.GetDataUnsafe(), state_size);
 
 		bind_data.aggr.combine(state_vec0, state_vec1, 1);
 		result_ptr[i] = StringVector::AddStringOrBlob(result, (const char *)state_buf1, state_size);
@@ -83,10 +123,14 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state, Vect
 
 static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
+
 	// grab the aggregate type and bind the aggregate again
+
+	// the aggregate name and types are in the logical type of the aggregate state, make sure its sane
 	auto &arg_type = arguments[0]->return_type;
+
 	if (arg_type.id() != LogicalTypeId::AGGREGATE_STATE) {
-		throw BinderException("Can only finalize aggregate state, not %s", arg_type.ToString());
+		throw BinderException("Can only FINALIZE aggregate state, not %s", arg_type.ToString());
 	}
 	// combine
 	if (arguments.size() == 2 && arguments[0]->return_type != arguments[1]->return_type) {
@@ -94,26 +138,42 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 		                      arguments[0]->return_type.ToString(), arguments[1]->return_type.ToString());
 	}
 
+	// following error states are only reachable when someone messes up creating the state_type which is impossible from
+	// SQL
+
 	auto state_type = AggregateStateType::GetStateType(arg_type);
 
+	// now we can look up the function in the catalog again and bind it
 	auto func = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA,
 	                                                  state_type.function_name);
-	D_ASSERT(func->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
+	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
+		throw InternalException("Could not find aggregate %s", state_type.function_name);
+	}
 	auto aggr = (AggregateFunctionCatalogEntry *)func;
+
 	string error;
 	idx_t best_function = Function::BindFunction(aggr->name, aggr->functions, state_type.bound_argument_types, error);
-	D_ASSERT(best_function != DConstants::INVALID_INDEX);
-	// found a matching function!
+	if (best_function == DConstants::INVALID_INDEX) {
+		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name, error);
+	}
 	auto &bound_aggr = aggr->functions[best_function];
-
-	// construct fake expressions for the bind
-	vector<unique_ptr<Expression>> aggr_args;
-	for (auto &expr : state_type.bound_argument_types) {
-		aggr_args.push_back(make_unique<BoundConstantExpression>(Value().CastAs(expr)));
+	if (bound_aggr.return_type != state_type.return_type || bound_aggr.arguments != state_type.bound_argument_types) {
+		throw InternalException("Type mismatch for exported aggregate %s", state_type.function_name);
 	}
 
+	// maybe we have to call the bind callback for the function, too
 	unique_ptr<FunctionData> aggr_bind;
 	if (bound_aggr.bind) {
+		// construct fake expressions for the call to bind
+		vector<unique_ptr<Expression>> aggr_args;
+		for (auto &arg_type : state_type.bound_argument_types) {
+			Value val;
+			// COUNT(x) does not bind an argument type, maybe others
+			if (arg_type.id() != LogicalTypeId::ANY) {
+				val = val.CastAs(arg_type);
+			}
+			aggr_args.push_back(make_unique<BoundConstantExpression>(val));
+		}
 		aggr_bind = bound_aggr.bind(context, bound_aggr, aggr_args);
 	}
 
@@ -160,6 +220,12 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	D_ASSERT(bound_function.state_size);
 	D_ASSERT(bound_function.finalize);
 
+	D_ASSERT(child_aggregate->function.return_type.id() != LogicalTypeId::INVALID);
+#ifdef DEBUG
+	for (auto &arg_type : child_aggregate->function.arguments) {
+		D_ASSERT(arg_type.id() != LogicalTypeId::INVALID);
+	}
+#endif
 	auto export_bind_data = make_unique<ExportAggregateFunctionBindData>(child_aggregate->Copy());
 	aggregate_state_t state_type(child_aggregate->function.name, child_aggregate->function.return_type,
 	                             child_aggregate->function.arguments);
@@ -183,6 +249,7 @@ ScalarFunction ExportAggregateFunction::GetFinalize() {
 }
 
 ScalarFunction ExportAggregateFunction::GetCombine() {
+
 	return ScalarFunction("combine", {LogicalType::ANY, LogicalType::ANY}, LogicalType::INVALID, AggregateStateCombine,
 	                      false, BindAggregateState);
 }
