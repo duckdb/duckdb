@@ -396,8 +396,8 @@ struct LocalReadCSVData : public LocalFunctionData {
 
 struct GlobalWriteCSVData : public GlobalFunctionData {
 	GlobalWriteCSVData(FileSystem &fs, const string &file_path, FileOpener *opener, FileCompressionType compression)
-	    : fs(fs), file_path(file_path + ".tmp") {
-		handle = fs.OpenFile(file_path + ".tmp", FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
+	    : fs(fs), file_path(file_path) {
+		handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
 		                     FileLockType::WRITE_LOCK, compression, opener);
 	}
 
@@ -431,7 +431,7 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &cont
 static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
-	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), csv_data.files[0],
+	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), csv_data.files[0] + ".tmp",
 	                                                   FileSystem::GetFileOpener(context), options.compression);
 
 	if (options.header) {
