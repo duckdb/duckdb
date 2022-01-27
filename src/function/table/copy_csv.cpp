@@ -444,6 +444,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 			WriteQuotedString(serializer, csv_data, csv_data.names[i].c_str(), csv_data.names[i].size(), false);
 		}
 		serializer.WriteBufferData(csv_data.newline);
+		
 		global_data->WriteData(serializer.blob.data.get(), serializer.blob.size);
 	}
 	return move(global_data);
@@ -512,7 +513,6 @@ static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, Glo
 	auto &local_data = (LocalReadCSVData &)lstate;
 	auto &global_state = (GlobalWriteCSVData &)gstate;
 	auto &writer = local_data.serializer;
-
 	// flush the local writer
 	if (writer.blob.size > 0) {
 		global_state.WriteData(writer.blob.data.get(), writer.blob.size);

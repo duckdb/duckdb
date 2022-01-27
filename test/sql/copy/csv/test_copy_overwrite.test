@@ -1,5 +1,5 @@
 # name: test/sql/copy/csv/test_copy_overwrite.test
-# description: Test copy statement with file stream_write
+# description: Test copy statement with file overwrite
 # group: [csv]
 
 # create a table and insert some values
