@@ -122,6 +122,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		if (root->agg_filter) {
 			throw ParserException("FILTER is not implemented for window functions!");
 		}
+		if (root->export_state) {
+			throw ParserException("EXPORT STATE is not supported for window functions!");
+		}
 
 		const auto win_fun_type = WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {

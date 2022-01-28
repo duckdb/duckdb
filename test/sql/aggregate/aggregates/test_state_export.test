@@ -135,3 +135,6 @@ SELECT finalize(sum(d)) from dummy group by g;
 statement error
 SELECT finalize(finalize(sum(d) EXPORT STATE)) from dummy;
 
+statement error
+select sum(42) export state over ();
+

@@ -296,7 +296,6 @@ ScalarFunction ExportAggregateFunction::GetFinalize() {
 }
 
 ScalarFunction ExportAggregateFunction::GetCombine() {
-
 	return ScalarFunction("combine", {LogicalType::ANY, LogicalType::ANY}, LogicalType::INVALID, AggregateStateCombine,
 	                      false, BindAggregateState, nullptr, nullptr, InitCombineState);
 }
