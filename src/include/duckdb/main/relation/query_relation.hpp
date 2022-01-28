@@ -16,13 +16,15 @@ class SelectStatement;
 
 class QueryRelation : public Relation {
 public:
-	QueryRelation(ClientContext &context, string query, string alias = "query_relation");
+	QueryRelation(ClientContext &context, unique_ptr<SelectStatement> select_stmt, string alias);
+	~QueryRelation();
 
-	string query;
+	unique_ptr<SelectStatement> select_stmt;
 	string alias;
 	vector<ColumnDefinition> columns;
 
 public:
+	static unique_ptr<SelectStatement> ParseStatement(ClientContext &context, const string &query, const string &error);
 	unique_ptr<QueryNode> GetQueryNode() override;
 	unique_ptr<TableRef> GetTableRef() override;
 

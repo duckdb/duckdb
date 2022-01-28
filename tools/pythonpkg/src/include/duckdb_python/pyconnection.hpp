@@ -66,6 +66,7 @@ public:
 	                                         const idx_t rows_per_tuple = 100000);
 
 	unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation");
+	unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias = "query_relation");
 
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 
