@@ -81,7 +81,7 @@ static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, 
 	} else if (loption == "compression") {
 		options.compression = FileCompressionTypeFromString(ParseString(set));
 	} else if (loption == "skip") {
-		options.skip_rows = ParseInteger(set);;
+		options.skip_rows = ParseInteger(set);
 	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
 		options.maximum_line_size = ParseInteger(set);
 	} else {

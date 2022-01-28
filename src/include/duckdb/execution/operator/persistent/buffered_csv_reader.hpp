@@ -95,7 +95,7 @@ struct BufferedCSVReaderOptions {
 	idx_t buffer_size = STANDARD_VECTOR_SIZE * 100;
 	//! Consider all columns to be of type varchar
 	bool all_varchar = false;
-	//! Maximum CSV line size: specified because if we reach this amount, we likely have the wrong delimiters (default: 2MB)
+	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
 	idx_t maximum_line_size = 2097152;
 
 	//! The date format to use (if any is specified)
