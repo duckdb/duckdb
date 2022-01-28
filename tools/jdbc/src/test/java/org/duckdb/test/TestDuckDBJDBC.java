@@ -531,12 +531,26 @@ public static void test_duckdb_timestamp() throws Exception {
 		ps1.setObject(4, new BigDecimal("99999999999.9999999"));
 		ps1.setObject(5, new BigDecimal("9999999999999999999999999999.9999999999"));
 		ps1.execute();
+		
+		ps1.clearParameters();
+		ps1.setBigDecimal(1, new BigDecimal("2"));
+		ps1.setBigDecimal(2, new BigDecimal("-999.9"));
+		ps1.setBigDecimal(3, new BigDecimal("-99999.9999"));
+		ps1.setBigDecimal(4, new BigDecimal("-99999999999.9999999"));
+		ps1.setBigDecimal(5, new BigDecimal("-9999999999999999999999999999.9999999999"));
+		ps1.execute();
+
+		ps1.clearParameters();
+		ps1.setObject(1, new BigDecimal("3"), Types.DECIMAL);
+		ps1.setObject(2, new BigDecimal("-5"), Types.DECIMAL);
+		ps1.setObject(3, new BigDecimal("-999"), Types.DECIMAL);
+		ps1.setObject(4, new BigDecimal("-88888888"), Types.DECIMAL);
+		ps1.setObject(5, new BigDecimal("-123456789654321"), Types.DECIMAL);
+		ps1.execute();
 		ps1.close();
 
 
 
-		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (2, -999.9, -99999.9999, -99999999999.9999999, -9999999999999999999999999999.9999999999)");
-		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (3, -5, -999, -88888888, -123456789654321)");
 		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (4, -0, -0, -0, -0)");
 		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (5, 0, 0, 0, 18446744073709551615)");
 		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (6, 0, 0, 0, 18446744073709551616)");
@@ -1130,20 +1144,20 @@ public static void test_duckdb_timestamp() throws Exception {
 		conn.close();
 	}
 
-	// public static void test_decimal() throws Exception {
-	// 	Connection conn = DriverManager.getConnection("jdbc:duckdb:");
-	// 	Statement stmt = conn.createStatement();
+	public static void test_decimal() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
 
-	// 	ResultSet rs = stmt.executeQuery("SELECT '1.23'::decimal(3,2) d");
+		ResultSet rs = stmt.executeQuery("SELECT '1.23'::decimal(3,2) d");
 
-	// 	assertTrue(rs.next());
-	// 	assertEquals(rs.getDouble("d"), 1.23);
+		assertTrue(rs.next());
+		assertEquals(rs.getDouble("d"), 1.23);
 
-	// 	assertFalse(rs.next());
-	// 	rs.close();
-	// 	stmt.close();
-	// 	conn.close();
-	// }
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
 
 	public static void test_schema_reflection() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
