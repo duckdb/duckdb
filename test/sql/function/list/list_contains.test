@@ -5,12 +5,13 @@
 statement ok
 PRAGMA enable_verification
 
+# Empty list
 query T
 SELECT list_contains([], 7)
 ----
 0
 
-
+# Mixed data types
 query T
 SELECT list_contains([1,2,3],1.0)
 ----
@@ -20,6 +21,26 @@ query T
 SELECT list_contains([1.0,2.0,3.0,4.0],1)
 ----
 1
+
+query T
+SELECT list_contains([1,2,3],4.0)
+----
+0
+
+query T
+SELECT list_contains([1.0,2.0,3.0],4)
+----
+0
+
+
+query T
+SELECT list_contains([1.0,2.0,3.0], 'a')
+----
+0
+
+# Not a list as input
+statement error
+SELECT list_contains('a', 'a')
 
 query T
 SELECT list_contains(NULL,NULL)
@@ -36,7 +57,6 @@ query T
 SELECT list_contains([7], 7)
 ----
 1
-
 
 query T
 SELECT list_contains([7], 5)
@@ -63,8 +83,6 @@ SELECT list_contains([1.0,2.0,3.0,4.0],4.0)
 ----
 1
 
-
-
 query T
 SELECT list_contains([true, false],true)
 ----
@@ -85,18 +103,16 @@ SELECT list_contains(['test', 'notest'],'a')
 ----
 0
 
+# Null types
 query T
 SELECT list_contains(NULL,1)
 ----
 NULL
 
-
-
 query T
 SELECT list_contains([NULL],NULL)
 ----
 NULL
-
 
 query T
 SELECT list_contains([NULL, 1],NULL)

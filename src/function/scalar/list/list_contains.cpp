@@ -187,19 +187,15 @@ static unique_ptr<FunctionData> ListContainsBind(ClientContext &context, ScalarF
 		bound_function.return_type = LogicalTypeId::SQLNULL;
 	} else {
 		D_ASSERT(list.id() == LogicalTypeId::LIST);
+
 		auto child_type = ListType::GetChildType(arguments[0]->return_type);
-//		if (child_type.id() == LogicalTypeId::SQLNULL) { // list_contains([NULL],1) -> returns NULL
-//			bound_function.arguments[0] = list;
-//			bound_function.arguments[1] = value;
-//			bound_function.return_type = LogicalTypeId::SQLNULL;
-//		} else {
 		auto max_child_type = LogicalType::MaxLogicalType(child_type, value);
 		ExpressionBinder::ResolveParameterType(max_child_type);
 		auto list_type = LogicalType::LIST(max_child_type);
+
 		bound_function.arguments[0] = list_type;
 		bound_function.arguments[1] = value == max_child_type ? value : max_child_type;
 		bound_function.return_type = LogicalType::BOOLEAN;
-//		}
 	}
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
