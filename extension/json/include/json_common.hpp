@@ -20,32 +20,6 @@ private:
 	    YYJSON_READ_ALLOW_COMMENTS | YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_STOP_WHEN_DONE;
 
 public:
-	//! Convert JSON query string to JSON path query
-	static inline bool ConvertToPath(const string_t &query, string &result, idx_t &len) {
-		len = query.GetSize();
-		if (len == 0) {
-			return false;
-		}
-		const char *ptr = query.GetDataUnsafe();
-		if (*ptr == '/') {
-			// Already a path string
-			// FIXME: avoid copying the string in this case - already OK
-			result = query.GetString();
-		} else if (*ptr == '$') {
-			// Dollar/dot/brackets syntax
-			// FIXME: this does not check for escaped strings, and does not support e.g. [#-1] : last array element
-			result = StringUtil::Replace(string(ptr + 1, len - 1), ".", "/");
-			result = StringUtil::Replace(result, "]", "");
-			result = StringUtil::Replace(result, "[", "/");
-			len = result.length();
-		} else {
-			// Plain tag/array index, prepend slash
-			len++;
-			result = "/" + query.GetString();
-		}
-		return true;
-	}
-
 	//! Get root of JSON document (nullptr if malformed JSON)
 	static inline yyjson_val *GetRootUnsafe(const string_t &input) {
 		return yyjson_doc_get_root(yyjson_read(input.GetDataUnsafe(), input.GetSize(), READ_FLAGS));
@@ -61,9 +35,46 @@ public:
 	}
 
 	//! Get JSON value using JSON path query
-	static inline yyjson_val *GetPointer(const string_t &input, const char *ptr, const idx_t &len) {
-		return unsafe_yyjson_get_pointer(GetRoot(input), ptr, len);
+	static inline yyjson_val *GetPointer(const string_t &input, const string_t &query) {
+		auto ptr = query.GetDataUnsafe();
+		auto len = query.GetSize();
+		if (len == 0) {
+			return GetPointerUnsafe(input, ptr, len);
+		}
+		switch (*ptr) {
+		case '/': {
+			// '/' notation must be '\0'-terminated
+			auto str = string(ptr, len);
+			return GetPointerUnsafe(input, str.c_str(), len);
+		}
+		case '$':
+			return GetPointerUnsafe(input, ptr, len);
+		default:
+			auto str = "/" + string(ptr, len);
+			return GetPointerUnsafe(input, str.c_str(), len);
+		}
 	}
+
+	//! Get JSON value using JSON path query
+	static inline yyjson_val *GetPointerUnsafe(const string_t &input, const char *ptr, const idx_t &len) {
+		if (len == 0) {
+			return nullptr;
+		}
+		auto root = GetRoot(input);
+		if (*ptr == '/') {
+			return GetPointer(root, ptr, len);
+		} else if (*ptr == '$') {
+			return GetPointerDollar(root, ptr, len);
+		}
+		throw InvalidInputException("JSON query %s", ptr);
+	}
+
+private:
+	static inline yyjson_val *GetPointer(yyjson_val *root, const char *ptr, const idx_t &len) {
+		return len == 1 ? root : unsafe_yyjson_get_pointer(root, ptr, len);
+	}
+
+	static yyjson_val *GetPointerDollar(yyjson_val *val, const char *ptr, idx_t len);
 };
 
 struct JSONFunctionData : public FunctionData {
@@ -95,7 +106,16 @@ public:
 				throw InvalidInputException("JSON path");
 			}
 			auto query = value.GetValueUnsafe<string_t>();
-			JSONCommon::ConvertToPath(query, path, len);
+			len = query.GetSize();
+			auto ptr = query.GetDataUnsafe();
+			if (len > 0) {
+				if (*ptr == '/' || *ptr == '$') {
+					path = string(ptr, len);
+				} else {
+					path = "/" + string(ptr, len);
+					len++;
+				}
+			}
 		}
 		return make_unique<JSONFunctionData>(constant, path, len);
 	}

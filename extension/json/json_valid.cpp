@@ -6,9 +6,8 @@ namespace duckdb {
 
 static void ValidFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &inputs = args.data[0];
-	UnaryExecutor::Execute<string_t, bool>(inputs, result, args.size(), [&](string_t input) {
-		return JSONCommon::GetRootUnsafe(input);
-	});
+	UnaryExecutor::Execute<string_t, bool>(inputs, result, args.size(),
+	                                       [&](string_t input) { return JSONCommon::GetRootUnsafe(input); });
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetValidFunction() {

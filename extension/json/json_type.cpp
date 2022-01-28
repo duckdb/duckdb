@@ -64,7 +64,7 @@ static void BinaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &
 		UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
 		    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
 			    string_t result_val {};
-			    if (!GetType(JSONCommon::GetPointer(input, ptr, len), result_val)) {
+			    if (!GetType(JSONCommon::GetPointerUnsafe(input, ptr, len), result_val)) {
 				    mask.SetInvalid(idx);
 			    }
 			    return result_val;
@@ -74,11 +74,8 @@ static void BinaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &
 		auto &queries = args.data[1];
 		BinaryExecutor::ExecuteWithNulls<string_t, string_t, string_t>(
 		    inputs, queries, result, args.size(), [&](string_t input, string_t query, ValidityMask &mask, idx_t idx) {
-			    string path;
-			    idx_t len;
 			    string_t result_val {};
-			    if (!JSONCommon::ConvertToPath(query, path, len) ||
-			        !GetType(JSONCommon::GetPointer(input, path.c_str(), len), result_val)) {
+			    if (!GetType(JSONCommon::GetPointer(input, query), result_val)) {
 				    mask.SetInvalid(idx);
 			    }
 			    return result_val;

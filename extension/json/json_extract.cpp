@@ -65,8 +65,13 @@ inline bool ExtractFromVal(yyjson_val *val, string_t &result) {
 }
 
 template <class T>
+static inline bool TemplatedExtract(const string_t &input, const string_t &query, T &result) {
+	return ExtractFromVal<T>(JSONCommon::GetPointer(input, query), result);
+}
+
+template <class T>
 static inline bool TemplatedExtract(const string_t &input, const char *ptr, const idx_t &len, T &result) {
-	return ExtractFromVal<T>(JSONCommon::GetPointer(input, ptr, len), result);
+	return ExtractFromVal<T>(JSONCommon::GetPointerUnsafe(input, ptr, len), result);
 }
 
 template <class T>
@@ -92,11 +97,8 @@ static void TemplatedExtractFunction(DataChunk &args, ExpressionState &state, Ve
 		auto &queries = args.data[1];
 		BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
 		    inputs, queries, result, args.size(), [&](string_t input, string_t query, ValidityMask &mask, idx_t idx) {
-			    string path;
-			    idx_t len;
 			    T result_val {};
-			    if (!JSONCommon::ConvertToPath(query, path, len) ||
-			        !TemplatedExtract<T>(input, path.c_str(), len, result_val)) {
+			    if (!TemplatedExtract<T>(input, query, result_val)) {
 				    mask.SetInvalid(idx);
 			    }
 			    return result_val;
