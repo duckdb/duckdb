@@ -43,6 +43,16 @@ select json_extract_string(j, q) from test
 ----
 goose
 
+query T
+select json_extract_string('{"my_field": [{"my_nested_field": ["duck", "goose"]}]}', '$.my_field[0].my_nested_field[0]')
+----
+duck
+
+query T
+select json_extract_string('{"my_field": [{"my_nested_field": ["duck", "goose"]}]}', '$.my_field[#-1].my_nested_field[#-1]')
+----
+goose
+
 # bogus
 query T
 select json_extract_string(j, '$.my_field[my_nested_field[#-3]') from test

@@ -23,12 +23,13 @@ static inline idx_t ReadString(const char *ptr, idx_t &len) {
 	return before - len;
 }
 
-static inline bool ReadIndex(const char *ptr, idx_t &len, idx_t &idx) {
+static inline bool ReadIndex(const char *ptr, idx_t &len, idx_t &idx, idx_t &i) {
 	idx = 0;
-	for (idx_t i = 0; i < IDX_T_SAFE_DIG; i++) {
+	for (i = 0; i < IDX_T_SAFE_DIG; i++) {
 		const auto &c = *ptr++;
 		len--;
 		if (c == ']') {
+			i++;
 			return idx < (idx_t)IDX_T_MAX;
 		} else if (len == 0) {
 			return false;
@@ -71,7 +72,8 @@ yyjson_val *JSONCommon::GetPointerDollar(yyjson_val *val, const char *ptr, idx_t
 			}
 			// Read index
 			idx_t idx;
-			if (ReadIndex(ptr, len, idx)) {
+			idx_t index_len;
+			if (ReadIndex(ptr, len, idx, index_len)) {
 				if (offset_from_back) {
 					auto arr_size = yyjson_arr_size(val);
 					if (idx > arr_size) {
@@ -80,6 +82,7 @@ yyjson_val *JSONCommon::GetPointerDollar(yyjson_val *val, const char *ptr, idx_t
 					idx = arr_size - idx;
 				}
 				val = yyjson_arr_get(val, idx);
+				ptr += index_len;
 			} else {
 				return nullptr;
 			}
