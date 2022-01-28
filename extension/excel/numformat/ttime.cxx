@@ -35,8 +35,6 @@
 extern long altzone;
 #endif
 
-namespace duckdb_numformat {
-
 // =======================================================================
 
 static sal_Int32 TimeToSec100( const Time& rTime )
@@ -279,7 +277,7 @@ Time operator -( const Time& rTime1, const Time& rTime2 )
 
 // -----------------------------------------------------------------------
 
-sal_Bool Time::IsEqualIgnore100Sec( const Time& rTime ) const
+bool Time::IsEqualIgnore100Sec( const Time& rTime ) const
 {
     sal_Int32 n1 = (nTime < 0 ? -Get100Sec() : Get100Sec() );
     sal_Int32 n2 = (rTime.nTime < 0 ? -rTime.Get100Sec() : rTime.Get100Sec() );
@@ -415,4 +413,3 @@ sal_uIntPtr Time::GetProcessTicks()
 	return (sal_uIntPtr)fTicks;
 #endif
 }
-}	// namespace duckdb_numformat

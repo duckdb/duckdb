@@ -1,5 +1,3 @@
-// MARKER(update_precomp.py): autogen include statement, do not remove
-
 #if defined( OS2 )
 #define INCL_DOSDATETIME
 #include <svpm.h>
@@ -23,8 +21,6 @@ struct tm *localtime_r(const time_t *timep, struct tm *buffer);
 }
 #endif
 
-namespace duckdb_numformat {
-
 // =======================================================================
 
 static sal_uInt16 aDaysInMonth[12] = { 31, 28, 31, 30, 31, 30,
@@ -34,7 +30,7 @@ static sal_uInt16 aDaysInMonth[12] = { 31, 28, 31, 30, 31, 30,
 
 // =======================================================================
 
-inline sal_Bool ImpIsLeapYear( sal_uInt16 nYear )
+inline bool ImpIsLeapYear( sal_uInt16 nYear )
 {
 	return (
                  ( ((nYear % 4) == 0) && ((nYear % 100) != 0) ) ||
@@ -78,7 +74,7 @@ static void DaysToDate( long nDays,
 {
 	long	nTempDays;
 	long	i = 0;
-	sal_Bool	bCalc;
+	bool	bCalc;
 
 	do
 	{
@@ -86,11 +82,11 @@ static void DaysToDate( long nDays,
 		rYear = (sal_uInt16)((nTempDays / 365) - i);
 		nTempDays -= ((sal_uIntPtr)rYear-1) * 365;
 		nTempDays -= ((rYear-1) / 4) - ((rYear-1) / 100) + ((rYear-1) / 400);
-		bCalc = sal_False;
+		bCalc = false;
 		if ( nTempDays < 1 )
 		{
 			i++;
-			bCalc = sal_True;
+			bCalc = true;
 		}
 		else
 		{
@@ -99,7 +95,7 @@ static void DaysToDate( long nDays,
 				if ( (nTempDays != 366) || !ImpIsLeapYear( rYear ) )
 				{
 					i--;
-					bCalc = sal_True;
+					bCalc = true;
 				}
 			}
 		}
@@ -293,7 +289,7 @@ sal_uInt16 Date::GetDaysInMonth() const
 
 // -----------------------------------------------------------------------
 
-sal_Bool Date::IsLeapYear() const
+bool Date::IsLeapYear() const
 {
 	sal_uInt16 nYear = GetYear();
 	return ImpIsLeapYear( nYear );
@@ -301,27 +297,27 @@ sal_Bool Date::IsLeapYear() const
 
 // -----------------------------------------------------------------------
 
-sal_Bool Date::IsValid() const
+bool Date::IsValid() const
 {
 	sal_uInt16 nDay   = GetDay();
 	sal_uInt16 nMonth = GetMonth();
 	sal_uInt16 nYear  = GetYear();
 
 	if ( !nMonth || (nMonth > 12) )
-		return sal_False;
+		return false;
 	if ( !nDay || (nDay > DaysInMonth( nMonth, nYear )) )
-		return sal_False;
+		return false;
 	else if ( nYear <= 1582 )
 	{
 		if ( nYear < 1582 )
-			return sal_False;
+			return false;
 		else if ( nMonth < 10 )
-			return sal_False;
+			return false;
 		else if ( (nMonth == 10) && (nDay < 15) )
-			return sal_False;
+			return false;
 	}
 
-	return sal_True;
+	return true;
 }
 
 // -----------------------------------------------------------------------
@@ -457,4 +453,3 @@ long operator -( const Date& rDate1, const Date& rDate2 )
 									rDate2.GetYear() );
 	return nTempDays1 - nTempDays2;
 }
-}	// namespace duckdb_numformat
