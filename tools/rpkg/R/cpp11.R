@@ -59,3 +59,11 @@ unregister_arrow_R <- function(connsexp, namesexp) {
 ptr_to_str <- function(extptr) {
   .Call(`_duckdb_ptr_to_str`, extptr)
 }
+
+expr_ref_R <- function(ref) {
+  .Call(`_duckdb_expr_ref_R`, ref)
+}
+
+expr_constant_R <- function(ref) {
+  .Call(`_duckdb_expr_constant_R`, ref)
+}

@@ -116,6 +116,20 @@ extern "C" SEXP _duckdb_ptr_to_str(SEXP extptr) {
     return cpp11::as_sexp(ptr_to_str(cpp11::as_cpp<cpp11::decay_t<SEXP>>(extptr)));
   END_CPP11
 }
+// relational.cpp
+SEXP expr_ref_R(strings ref);
+extern "C" SEXP _duckdb_expr_ref_R(SEXP ref) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(expr_ref_R(cpp11::as_cpp<cpp11::decay_t<strings>>(ref)));
+  END_CPP11
+}
+// relational.cpp
+SEXP expr_constant_R(SEXP ref);
+extern "C" SEXP _duckdb_expr_constant_R(SEXP ref) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(expr_constant_R(cpp11::as_cpp<cpp11::decay_t<SEXP>>(ref)));
+  END_CPP11
+}
 
 extern "C" {
 static const R_CallMethodDef CallEntries[] = {
@@ -123,6 +137,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_connect_R",            (DL_FUNC) &_duckdb_connect_R,            1},
     {"_duckdb_disconnect_R",         (DL_FUNC) &_duckdb_disconnect_R,         1},
     {"_duckdb_execute_R",            (DL_FUNC) &_duckdb_execute_R,            2},
+    {"_duckdb_expr_constant_R",      (DL_FUNC) &_duckdb_expr_constant_R,      1},
+    {"_duckdb_expr_ref_R",           (DL_FUNC) &_duckdb_expr_ref_R,           1},
     {"_duckdb_fetch_arrow_R",        (DL_FUNC) &_duckdb_fetch_arrow_R,        4},
     {"_duckdb_fetch_record_batch_R", (DL_FUNC) &_duckdb_fetch_record_batch_R, 2},
     {"_duckdb_prepare_R",            (DL_FUNC) &_duckdb_prepare_R,            2},
