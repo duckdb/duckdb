@@ -373,7 +373,7 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return Double.NaN;
 		}
-		if (isType(columnIndex, DuckDBColumnType.DOUBLE) || isType(columnIndex, DuckDBColumnType.DECIMAL)) {
+		if (isType(columnIndex, DuckDBColumnType.DOUBLE)) {
 			return getbuf(columnIndex, 8).getDouble();
 		}
 		Object o = getObject(columnIndex);
