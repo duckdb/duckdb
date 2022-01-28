@@ -1,13 +1,14 @@
-#ifndef _LOCALEDATA_H
-#define _LOCALEDATA_H
+#ifndef _NF_LOCALEDATA_H
+#define _NF_LOCALEDATA_H
 
 #include <string>
 #include <vector>
 #include <map>
-#include "calendar.h"
-#include "zforfind.hxx"
-#include "zforscan.hxx"
-#include "zformat.hxx"
+#include "nf_calendar.h"
+#include "nf_zformat.h"
+
+
+namespace duckdb_excel {
 
 #define MLD_ABBRVFULLNAME_CHECK_INDEX_RANGE(A, B)                                                                      \
 	if (B < 0 || B >= (sal_Int32)m_locale_list[m_cur_locale_id].A.size())                                              \
@@ -214,4 +215,6 @@ private:
 	ImpSvNumberformatScan *m_num_format_scan_ptr;
 };
 
-#endif // _LOCALEDATA_H
+}   // namespace duckdb_excel
+
+#endif // _NF_LOCALEDATA_H

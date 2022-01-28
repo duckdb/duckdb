@@ -1,15 +1,6 @@
 include_directories(include)
 
-add_library(
-  numformat OBJECT
-  calendar.cpp
-  datetime.cxx
-  localedata.cpp
-  tdate.cxx
-  ttime.cxx
-  zforfind.cxx
-  zformat.cxx
-  zforscan.cxx)
+add_library(numformat OBJECT nf_calendar.cpp nf_localedata.cpp nf_zformat.cpp)
 
 set(NUMFORMAT_OBJECT_FILES
     ${NUMFORMAT_OBJECT_FILES} $<TARGET_OBJECTS:numformat>

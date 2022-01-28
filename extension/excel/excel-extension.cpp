@@ -1,19 +1,34 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include "excel-extension.hpp"
-
-#include "zformat.hxx"
-
-#ifndef DUCKDB_AMALGAMATION
+#include "duckdb.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
-// #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
-// #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-// #include "duckdb/parser/parsed_data/create_view_info.hpp"
-// #include "duckdb/parser/parser.hpp"
-// #include "duckdb/parser/statement/select_statement.hpp"
-#endif
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "excel-extension.hpp"
+#include "nf_calendar.h"
+#include "nf_localedata.h"
+#include "nf_zformat.h"
 
 namespace duckdb {
+
+static std::string GetNumberFormatString(std::string &format, double num_value) {
+	duckdb_excel::LocaleData locale_data;
+	duckdb_excel::ImpSvNumberInputScan input_scan(&locale_data);
+	uint16_t nCheckPos;
+	std::string out_str;
+
+	duckdb_excel::SvNumberformat num_format(format, &locale_data, &input_scan, nCheckPos);
+
+	if (!num_format.GetOutputString(num_value, out_str)) {
+		return out_str;
+	}
+
+	return "";
+}
 
 static string_t NumberFormatScalarFunction(Vector &result, double num_value, string_t format) {
 	try {
