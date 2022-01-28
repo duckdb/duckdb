@@ -1,14 +1,495 @@
-#ifndef _ZFORMAT_HXX
-#define _ZFORMAT_HXX
+#ifndef _NF_ZFORMAT_H
+#define _NF_ZFORMAT_H
 
 #include <string>
-#include "define.h"
-#include "nfkeytab.hxx"
-#include "digitgroupingiterator.hxx"
+#include "nf_calendar.h"
+#include "nf_localedata.h"
 
-// We need ImpSvNumberformatScan for the private SvNumberformat definitions.
-#include "zforscan.hxx"
-#include "localedata.h"
+
+namespace duckdb_excel {
+
+class Date;
+class SvNumberformat;
+
+#define SV_MAX_ANZ_INPUT_STRINGS  20    // max count of substrings in input scanner
+
+
+class LocaleData;
+
+class ImpSvNumberInputScan
+{
+public:
+    ImpSvNumberInputScan( LocaleData* pFormatter );
+    ~ImpSvNumberInputScan();
+
+/*!*/   void ChangeIntl();                      // MUST be called if language changes
+
+    /// convert input string to number
+    bool IsNumberFormat(
+            const String& rString,              /// input string
+            short& F_Type,                      /// format type (in + out)
+            double& fOutNumber,                 /// value determined (out)
+            const SvNumberformat* pFormat = NULL    /// optional a number format to which compare against
+            );
+
+    /// after IsNumberFormat: get decimal position
+    short   GetDecPos() const { return nDecPos; }
+    /// after IsNumberFormat: get count of numeric substrings in input string
+    sal_uInt16  GetAnzNums() const { return nAnzNums; }
+
+    /// set threshold of two-digit year input
+    void    SetYear2000( sal_uInt16 nVal ) { nYear2000 = nVal; }
+    /// get threshold of two-digit year input
+    sal_uInt16  GetYear2000() const { return nYear2000; }
+
+private:
+	LocaleData*  pFormatter;							// SvNumberFormatter *
+    String* pUpperMonthText;                    // Array of month names, uppercase
+    String* pUpperAbbrevMonthText;              // Array of month names, abbreviated, uppercase
+    String* pUpperDayText;                      // Array of day of week names, uppercase
+    String* pUpperAbbrevDayText;                // Array of day of week names, abbreviated, uppercase
+    String  aUpperCurrSymbol;                   // Currency symbol, uppercase
+    bool    bTextInitialized;                   // Whether days and months are initialized
+                                                // Variables for provisional results:
+    String sStrArray[SV_MAX_ANZ_INPUT_STRINGS]; // Array of scanned substrings
+    bool   IsNum[SV_MAX_ANZ_INPUT_STRINGS];     // Whether a substring is numeric
+    sal_uInt16 nNums[SV_MAX_ANZ_INPUT_STRINGS];     // Sequence of offsets to numeric strings
+    sal_uInt16 nAnzStrings;                         // Total count of scanned substrings
+    sal_uInt16 nAnzNums;                            // Count of numeric substrings
+    bool   bDecSepInDateSeps;                   // True <=> DecSep in {.,-,/,DateSep}
+    sal_uInt8   nMatchedAllStrings;                  // Scan...String() matched all substrings,
+                                                // bit mask of nMatched... constants
+
+    static const sal_uInt8 nMatchedEndString;        // 0x01
+    static const sal_uInt8 nMatchedMidString;        // 0x02
+    static const sal_uInt8 nMatchedStartString;      // 0x04
+    static const sal_uInt8 nMatchedVirgin;           // 0x08
+    static const sal_uInt8 nMatchedUsedAsReturn;     // 0x10
+
+    int    nSign;                               // Sign of number
+    short  nMonth;                              // Month (1..x) if date
+                                                // negative => short format
+    short  nMonthPos;                           // 1 = front, 2 = middle
+                                                // 3 = end
+    sal_uInt16 nTimePos;                            // Index of first time separator (+1)
+    short  nDecPos;                             // Index of substring containing "," (+1)
+    short  nNegCheck;                           // '( )' for negative
+    short  nESign;                              // Sign of exponent
+    short  nAmPm;                               // +1 AM, -1 PM, 0 if none
+    short  nLogical;                            // -1 => False, 1 => True
+    sal_uInt16 nThousand;                           // Count of group (AKA thousand) separators
+    sal_uInt16 nPosThousandString;                  // Position of concatenaded 000,000,000 string
+    short  eScannedType;                        // Scanned type
+    short  eSetType;                            // Preset Type
+
+    sal_uInt16 nStringScanNumFor;                   // Fixed strings recognized in
+                                                // pFormat->NumFor[nNumForStringScan]
+    short  nStringScanSign;                     // Sign resulting of FixString
+    sal_uInt16 nYear2000;                           // Two-digit threshold
+                                                // Year as 20xx
+                                                // default 18
+                                                // number <= nYear2000 => 20xx
+                                                // number >  nYear2000 => 19xx
+    sal_uInt16  nTimezonePos;                       // Index of timezone separator (+1)
+    sal_uInt8    nMayBeIso8601;                      // 0:=dontknowyet, 1:=yes, 2:=no
+
+//#ifdef _ZFORFIND_CXX        // methods private to implementation
+    void Reset();                               // Reset all variables before start of analysis
+
+    void InitText();                            // Init of months and days of week
+
+    // Convert string to double.
+    // Only simple unsigned floating point values without any error detection,
+    // decimal separator has to be '.'
+    // If bForceFraction==true the string is taken to be the fractional part
+    // of 0.1234 without the leading 0. (thus being just "1234").
+    double StringToDouble(
+            const String& rStr,
+            bool bForceFraction = false );
+
+    bool NextNumberStringSymbol(                // Next number/string symbol
+            const sal_Unicode*& pStr,
+            String& rSymbol );
+
+    bool SkipThousands(                         // Concatenate ,000,23 blocks
+            const sal_Unicode*& pStr,           // in input to 000123
+            String& rSymbol );
+
+    void NumberStringDivision(                  // Divide numbers/strings into
+            const String& rString );            // arrays and variables above.
+                                                // Leading blanks and blanks
+                                                // after numbers are thrown away
+
+
+                                                // optimized substring versions
+
+    static inline bool StringContains(          // Whether rString contains rWhat at nPos
+            const String& rWhat,
+            const String& rString,
+            uint16_t nPos )
+                {   // mostly used with one character
+                    if ( rWhat.size() <= 0 || nPos >= rString.size() || rWhat.at(0) != rString.at(nPos) )
+                        return false;
+                    return StringContainsImpl( rWhat, rString, nPos );
+                }
+    static inline bool StringPtrContains(       // Whether pString contains rWhat at nPos
+            const String& rWhat,
+            const sal_Unicode* pString,
+            uint16_t nPos )                   // nPos MUST be a valid offset from pString
+                {   // mostly used with one character
+                    if ( rWhat.at(0) != *(pString+nPos) )
+                        return false;
+                    return StringPtrContainsImpl( rWhat, pString, nPos );
+                }
+    static bool StringContainsImpl(             //! DO NOT use directly
+            const String& rWhat,
+            const String& rString,
+            uint16_t nPos );
+    static bool StringPtrContainsImpl(          //! DO NOT use directly
+            const String& rWhat,
+            const sal_Unicode* pString,
+            uint16_t nPos );
+
+
+    static inline bool SkipChar(                // Skip a special character
+            sal_Unicode c,
+            const String& rString,
+            uint16_t& nPos );
+    static inline void SkipBlanks(              // Skip blank
+            const String& rString,
+            uint16_t& nPos );
+    static inline bool SkipString(              // Jump over rWhat in rString at nPos
+            const String& rWhat,
+            const String& rString,
+            uint16_t& nPos );
+
+    inline bool GetThousandSep(                 // Recognizes exactly ,111 as group separator
+            const String& rString,
+            uint16_t& nPos,
+            sal_uInt16 nStringPos );
+    short GetLogical(                           // Get boolean value
+            const String& rString );
+    short GetMonth(                             // Get month and advance string position
+            const String& rString,
+            uint16_t& nPos );
+    int GetDayOfWeek(                           // Get day of week and advance string position
+            const String& rString,
+            uint16_t& nPos );
+    bool GetCurrency(                           // Get currency symbol and advance string position
+            const String& rString,
+            uint16_t& nPos,
+            const SvNumberformat* pFormat = NULL ); // optional number format to match against
+    bool GetTimeAmPm(                           // Get symbol AM or PM and advance string position
+            const String& rString,
+            uint16_t& nPos );
+    inline bool GetDecSep(                      // Get decimal separator and advance string position
+            const String& rString,
+            uint16_t& nPos );
+    inline bool GetTime100SecSep(               // Get hundredth seconds separator and advance string position
+            const String& rString,
+            uint16_t& nPos );
+    int GetSign(                                // Get sign  and advance string position
+            const String& rString,              // Including special case '('
+            uint16_t& nPos );
+    short GetESign(                             // Get sign of exponent and advance string position
+            const String& rString,
+            uint16_t& nPos );
+
+    inline bool GetNextNumber(                  // Get next number as array offset
+            sal_uInt16& i,
+            sal_uInt16& j );
+
+    void GetTimeRef(                            // Converts time -> double (only decimals)
+            double& fOutNumber,                 // result as double
+            sal_uInt16 nIndex,                      // Index of hour in input
+            sal_uInt16 nAnz );                      // Count of time substrings in input
+    sal_uInt16 ImplGetDay  ( sal_uInt16 nIndex );       // Day input, 0 if no match
+    sal_uInt16 ImplGetMonth( sal_uInt16 nIndex );       // Month input, zero based return, NumberOfMonths if no match
+    sal_uInt16 ImplGetYear ( sal_uInt16 nIndex );       // Year input, 0 if no match
+    bool GetDateRef(                            // Conversion of date to number
+            double& fDays,                      // OUT: days diff to null date
+            sal_uInt16& nCounter,                   // Count of date substrings
+            const SvNumberformat* pFormat = NULL ); // optional number format to match against
+
+    bool ScanStartString(                       // Analyze start of string
+            const String& rString,
+            const SvNumberformat* pFormat = NULL );
+    bool ScanMidString(                         // Analyze middle substring
+            const String& rString,
+            sal_uInt16 nStringPos,
+            const SvNumberformat* pFormat = NULL );
+    bool ScanEndString(                         // Analyze end of string
+            const String& rString,
+            const SvNumberformat* pFormat = NULL );
+
+    // Whether input may be a ISO 8601 date format, yyyy-mm-dd...
+    // checks if at least 3 numbers and first number>31
+    bool MayBeIso8601();
+
+    // Compare rString to substring of array indexed by nString
+    // nString == 0xFFFF => last substring
+    bool ScanStringNumFor(
+            const String& rString,
+            uint16_t nPos,
+            const SvNumberformat* pFormat,
+            sal_uInt16 nString,
+            bool bDontDetectNegation = false );
+
+    // if nMatchedAllStrings set nMatchedUsedAsReturn and return true,
+    // else do nothing and return false
+    bool MatchedReturn();
+
+    //! Be sure that the string to be analyzed is already converted to upper
+    //! case and if it contained native humber digits that they are already
+    //! converted to ASCII.
+    bool IsNumberFormatMain(                    // Main anlyzing function
+            const String& rString,
+            double& fOutNumber,                 // return value if string is numeric
+            const SvNumberformat* pFormat = NULL    // optional number format to match against
+            );
+
+    static inline bool MyIsdigit( sal_Unicode c );
+
+    // native number transliteration if necessary
+    void TransformInput( String& rString );
+
+//#endif  // _ZFORFIND_CXX
+};
+
+class LocaleData;
+struct ImpSvNumberformatInfo;
+
+
+const size_t NF_MAX_FORMAT_SYMBOLS   = 100;
+const size_t NF_MAX_DEFAULT_COLORS   = 10;
+
+// Hack: nThousand==1000 => "Default" occurs in format string
+const sal_uInt16 FLAG_STANDARD_IN_FORMAT = 1000;
+
+class LocaleData;
+
+class ImpSvNumberformatScan
+{
+public:
+
+	ImpSvNumberformatScan( LocaleData* pFormatter );
+	~ImpSvNumberformatScan();
+	void ChangeIntl();							// tauscht Keywords aus
+
+    void ChangeStandardPrec(sal_uInt16 nPrec);  // tauscht Standardprecision aus
+
+	uint16_t ScanFormat( String& rString, String& rComment );	// Aufruf der Scan-Analyse
+
+	void CopyInfo(ImpSvNumberformatInfo* pInfo,
+					 sal_uInt16 nAnz);				// Kopiert die FormatInfo
+	sal_uInt16 GetAnzResStrings() const				{ return nAnzResStrings; }
+
+	//const CharClass& GetChrCls() const			{ return *pFormatter->GetCharClass(); }
+	//const LocaleDataWrapper& GetLoc() const		{ return *pFormatter->GetLocaleData(); }
+	//CalendarWrapper& GetCal() const				{ return *pFormatter->GetCalendar(); }
+
+    const NfKeywordTable & GetKeywords() const
+        {
+            if ( bKeywordsNeedInit )
+                InitKeywords();
+            return sKeyword;
+        }
+    // Keywords used in output like true and false
+    const String& GetSpecialKeyword( NfKeywordIndex eIdx ) const
+        {
+            if ( !sKeyword[eIdx].size() )
+                InitSpecialKeyword( eIdx );
+            return sKeyword[eIdx];
+        }
+    const String& GetTrueString() const     { return GetSpecialKeyword( NF_KEY_TRUE ); }
+    const String& GetFalseString() const    { return GetSpecialKeyword( NF_KEY_FALSE ); }
+    const String& GetColorString() const    { return GetKeywords()[NF_KEY_COLOR]; }
+    const String& GetRedString() const      { return GetKeywords()[NF_KEY_RED]; }
+    const String& GetBooleanString() const  { return GetKeywords()[NF_KEY_BOOLEAN]; }
+	const String& GetErrorString() const  	{ return sErrStr; }
+
+    const String& GetStandardName() const
+        {
+            if ( bKeywordsNeedInit )
+                InitKeywords();
+            return sNameStandardFormat;
+        }
+    sal_uInt16 GetStandardPrec() const          { return nStandardPrec; }
+	//const Color& GetRedColor() const			{ return StandardColor[4]; }
+	//Color* GetColor(String& sStr);			// Setzt Hauptfarben oder
+												// definierte Farben
+
+    // the compatibility currency symbol for old automatic currency formats
+    const String& GetCurSymbol() const
+        {
+            if ( bCompatCurNeedInit )
+                InitCompatCur();
+            return sCurSymbol;
+        }
+
+    // the compatibility currency abbreviation for CCC format code
+    const String& GetCurAbbrev() const
+        {
+            if ( bCompatCurNeedInit )
+                InitCompatCur();
+            return sCurAbbrev;
+        }
+
+    // the compatibility currency symbol upper case for old automatic currency formats
+    const String& GetCurString() const
+        {
+            if ( bCompatCurNeedInit )
+                InitCompatCur();
+            return sCurString;
+        }
+
+	void SetConvertMode(LanguageType eTmpLge, LanguageType eNewLge,
+			bool bSystemToSystem = false )
+	{
+		bConvertMode = true;
+		eNewLnge = eNewLge;
+		eTmpLnge = eTmpLge;
+		bConvertSystemToSystem = bSystemToSystem;
+	}
+	void SetConvertMode(bool bMode) { bConvertMode = bMode; }
+												// Veraendert nur die Bool-Variable
+												// (zum temporaeren Unterbrechen des
+												// Convert-Modus)
+	bool GetConvertMode() const     { return bConvertMode; }
+	LanguageType GetNewLnge() const { return eNewLnge; }
+												// Lesezugriff auf ConvertMode
+												// und Konvertierungsland/Spr.
+	LanguageType GetTmpLnge() const { return eTmpLnge; }
+												// Lesezugriff auf
+												// und Ausgangsland/Spr.
+
+                                                /// get Thai T speciality
+    sal_uInt8 GetNatNumModifier() const      { return nNatNumModifier; }
+                                                /// set Thai T speciality
+    void SetNatNumModifier( sal_uInt8 n )    { nNatNumModifier = n; }
+
+	LocaleData* GetNumberformatter() { return pFormatter; }
+												// Zugriff auf Formatierer
+												// (fuer zformat.cxx)
+
+
+private:							// ---- privater Teil
+	NfKeywordTable sKeyword; 					// Schluesselworte der Syntax
+	//Color StandardColor[NF_MAX_DEFAULT_COLORS];
+												// Array der Standardfarben
+	String sNameStandardFormat;				// "Standard"
+    sal_uInt16 nStandardPrec;                   // default Precision for Standardformat
+	LocaleData* pFormatter;				// Pointer auf die Formatliste
+
+	String sStrArray[NF_MAX_FORMAT_SYMBOLS];    // Array der Symbole
+	short nTypeArray[NF_MAX_FORMAT_SYMBOLS];    // Array der Infos
+												// externe Infos:
+	sal_uInt16 nAnzResStrings;						// Anzahl der Ergebnissymbole
+#if !(defined SOLARIS && defined X86)
+	short eScannedType;							// Typ gemaess Scan
+#else
+	int eScannedType;							// wg. Optimierung
+#endif
+	bool bThousand;								// Mit Tausenderpunkt
+	sal_uInt16 nThousand;							// Zaehlt ....-Folgen
+	sal_uInt16 nCntPre;								// Zaehlt Vorkommastellen
+	sal_uInt16 nCntPost;							// Zaehlt Nachkommastellen
+	sal_uInt16 nCntExp;								// Counts Exp.Jobs, AM/PM
+	sal_uInt32 nExpVal;
+												// interne Infos:
+	sal_uInt16 nAnzStrings;							// Anzahl der Symbole
+	sal_uInt16 nRepPos;								// Position eines '*'
+	sal_uInt16 nExpPos;								// interne Position des E
+	sal_uInt16 nBlankPos;							// interne Position des Blank
+	short nDecPos;								// interne Pos. des ,
+	bool bExp;									// wird bei Lesen des E gesetzt
+	bool bFrac;									// wird bei Lesen des / gesetzt
+	bool bBlank;								// wird bei ' '(Fraction) ges.
+	bool bDecSep;								// Wird beim ersten , gesetzt
+    mutable bool bKeywordsNeedInit;             // Locale dependent keywords need to be initialized
+    mutable bool bCompatCurNeedInit;            // Locale dependent compatibility currency need to be initialized
+    String sCurSymbol;                          // Currency symbol for compatibility format codes
+    String sCurString;                          // Currency symbol in upper case
+    String sCurAbbrev;                          // Currency abbreviation
+    String sErrStr;                             // String fuer Fehlerausgaben
+
+	bool bConvertMode;							// Wird im Convert-Mode gesetzt
+												// Land/Sprache, in die der
+	LanguageType eNewLnge;						// gescannte String konvertiert
+												// wird (fuer Excel Filter)
+												// Land/Sprache, aus der der
+	LanguageType eTmpLnge;						// gescannte String konvertiert
+												// wird (fuer Excel Filter)
+	bool bConvertSystemToSystem;				// Whether the conversion is
+												// from one system locale to
+												// another system locale (in
+												// this case the automatic
+												// currency symbol is converted
+												// too).
+
+	uint16_t nCurrPos;						// Position des Waehrungssymbols
+
+    sal_uInt8 nNatNumModifier;                       // Thai T speciality
+
+    void InitKeywords() const;
+    void InitSpecialKeyword( NfKeywordIndex eIdx ) const;
+    void InitCompatCur() const;
+
+//#ifdef _ZFORSCAN_CXX				// ----- private Methoden -----
+	void SetDependentKeywords();
+												// Setzt die Sprachabh. Keyw.
+	void SkipStrings(sal_uInt16& i,uint16_t& nPos);// Ueberspringt StringSymbole
+	sal_uInt16 PreviousKeyword(sal_uInt16 i);			// Gibt Index des vorangeh.
+												// Schluesselworts oder 0
+	sal_uInt16 NextKeyword(sal_uInt16 i);				// Gibt Index des naechsten
+												// Schluesselworts oder 0
+	sal_Unicode PreviousChar(sal_uInt16 i);				// Gibt letzten Buchstaben
+												// vor der Position,
+												// skipt EMPTY, STRING, STAR, BLANK
+	sal_Unicode NextChar(sal_uInt16 i);					// Gibt ersten Buchst. danach
+	short PreviousType( sal_uInt16 i );				// Gibt Typ vor Position,
+												// skipt EMPTY
+	bool IsLastBlankBeforeFrac(sal_uInt16 i);		// True <=> es kommt kein ' '
+												// mehr bis zum '/'
+	void Reset();								// Reset aller Variablen
+												// vor Analysestart
+	short GetKeyWord( const String& sSymbol,	// determine keyword at nPos
+		uint16_t nPos );                      // return 0 <=> not found
+
+	inline bool IsAmbiguousE( short nKey )		// whether nKey is ambiguous E of NF_KEY_E/NF_KEY_EC
+		{
+			return (nKey == NF_KEY_EC || nKey == NF_KEY_E) &&
+                (GetKeywords()[NF_KEY_EC] == GetKeywords()[NF_KEY_E]);
+		}
+
+    // if 0 at strArray[i] is of S,00 or SS,00 or SS"any"00 in ScanType() or FinalScan()
+    bool Is100SecZero( sal_uInt16 i, bool bHadDecSep );
+
+	short Next_Symbol(const String& rStr,
+						uint16_t& nPos,
+					  String& sSymbol);       // Naechstes Symbol
+	uint16_t Symbol_Division(const String& rString);// lexikalische Voranalyse
+	uint16_t ScanType(const String& rString);	// Analyse des Formattyps
+	uint16_t FinalScan( String& rString, String& rComment );	// Endanalyse mit Vorgabe
+												// des Typs
+	// -1:= error, return nPos in FinalScan; 0:= no calendar, 1:= calendar found
+	int FinalScanGetCalendar( uint16_t& nPos, sal_uInt16& i, sal_uInt16& nAnzResStrings );
+
+    /** Insert symbol into nTypeArray and sStrArray, e.g. grouping separator.
+        If at nPos-1 a symbol type NF_SYMBOLTYPE_EMPTY is present, that is
+        reused instead of shifting all one up and nPos is decremented! */
+    bool InsertSymbol( sal_uInt16 & nPos, NfSymbolType eType, const String& rStr );
+
+	static inline bool StringEqualsChar( const String& rStr, sal_Unicode ch )
+		{ return rStr.at(0) == ch && rStr.size() == 1; }
+		// Yes, for efficiency get the character first and then compare length
+		// because in most places where this is used the string is one char.
+
+	// remove "..." and \... quotes from rStr, return how many chars removed
+	static uint16_t RemoveQuotes( String& rStr );
+
+//#endif //_ZFORSCAN_CXX
+};
 
 // If comment field is also in format code string, was used for SUPD versions 371-372
 #define NF_COMMENT_IN_FORMATSTRING 0
@@ -232,7 +713,7 @@ public:
     bool GetOutputString( double fNumber, sal_uInt16 nCharCount, String& rOutString ) const;
 
     bool GetOutputString( double fNumber, String& OutString, Color** ppColor );
-	bool GetOutputString( double fNumber, std::string& OutString, Color** ppColor );
+	bool GetOutputString( double fNumber, std::string& OutString );
 	bool GetOutputString( String& sString, String& OutString, Color** ppColor );
 
     // True if type text
@@ -588,6 +1069,6 @@ private:
         }
 };
 
-std::string GetNumberFormatString(std::string& format, double num_value);
+}   // namespace duckdb_excel
 
-#endif  // _ZFORMAT_HXX
+#endif  // _NF_ZFORMAT_H
