@@ -1,8 +1,6 @@
 #ifndef INCLUDED_SVTOOLS_NFSYMBOL_HXX
 #define INCLUDED_SVTOOLS_NFSYMBOL_HXX
 
-namespace duckdb_numformat {
-
 /* ATTENTION! If new types arrive that had its content previously handled as
  * SYMBOLTYPE_STRING, they have to be added at several places in zforscan.cxx
  * and/or zformat.cxx, and in xmloff/source/style/xmlnumfe.cxx. Mostly these
@@ -36,6 +34,5 @@ enum NfSymbolType
     NF_SYMBOLTYPE_TIME100SECSEP = -20,  // time 100th seconds separator
     NF_SYMBOLTYPE_PERCENT       = -21   // percent %
 };
-}   // namespace duckdb_numformat
 
 #endif // INCLUDED_SVTOOLS_NFSYMBOL_HXX

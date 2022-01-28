@@ -102,10 +102,23 @@ SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubuse
 1	Amanda	Jordan	ajordan0@com.com
 2	Albert	Freeman	afreeman1@is.gd
 3	Evelyn	Morgan	emorgan2@altervista.org
-4	Denise	Riley	driley3@gmpg.org
+4	Denise	Riley	driley3@gmpg.orge
 5	Carlos	Burns	cburns4@miitbeian.gov.cn
 6	Kathryn	White	kwhite5@google.com
 7	Samuel	Holmes	sholmes6@foxnews.com
 8	Harry	Howell	hhowell7@eepurl.com
 9	Jose	Foster	jfoster8@yelp.com
 10	Emily	Stewart	estewart9@opensource.org
+
+statement ok
+INSTALL 'excel';
+
+statement ok
+LOAD 'excel';
+
+require excel
+
+query T
+select text(1.0, '#')
+----
+1

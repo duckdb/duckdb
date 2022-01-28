@@ -6,8 +6,6 @@
 #include "nfsymbol.hxx"
 #include "localedata.h"
 
-namespace duckdb_numformat {
-
 class LocaleData;
 struct ImpSvNumberformatInfo;
 
@@ -30,7 +28,7 @@ public:
 
     void ChangeStandardPrec(sal_uInt16 nPrec);  // tauscht Standardprecision aus
 
-	xub_StrLen ScanFormat( String& rString, String& rComment );	// Aufruf der Scan-Analyse
+	uint16_t ScanFormat( String& rString, String& rComment );	// Aufruf der Scan-Analyse
 
 	void CopyInfo(ImpSvNumberformatInfo* pInfo,
 					 sal_uInt16 nAnz);				// Kopiert die FormatInfo
@@ -46,7 +44,7 @@ public:
                 InitKeywords();
             return sKeyword;
         }
-    // Keywords used in output like sal_True and sal_False
+    // Keywords used in output like true and false
     const String& GetSpecialKeyword( NfKeywordIndex eIdx ) const
         {
             if ( !sKeyword[eIdx].size() )
@@ -96,18 +94,18 @@ public:
         }
 
 	void SetConvertMode(LanguageType eTmpLge, LanguageType eNewLge,
-			sal_Bool bSystemToSystem = sal_False )
+			bool bSystemToSystem = false )
 	{
-		bConvertMode = sal_True;
+		bConvertMode = true;
 		eNewLnge = eNewLge;
 		eTmpLnge = eTmpLge;
 		bConvertSystemToSystem = bSystemToSystem;
 	}
-	void SetConvertMode(sal_Bool bMode) { bConvertMode = bMode; }
+	void SetConvertMode(bool bMode) { bConvertMode = bMode; }
 												// Veraendert nur die Bool-Variable
 												// (zum temporaeren Unterbrechen des
 												// Convert-Modus)
-	sal_Bool GetConvertMode() const     { return bConvertMode; }
+	bool GetConvertMode() const     { return bConvertMode; }
 	LanguageType GetNewLnge() const { return eNewLnge; }
 												// Lesezugriff auf ConvertMode
 												// und Konvertierungsland/Spr.
@@ -142,7 +140,7 @@ private:							// ---- privater Teil
 #else
 	int eScannedType;							// wg. Optimierung
 #endif
-	sal_Bool bThousand;								// Mit Tausenderpunkt
+	bool bThousand;								// Mit Tausenderpunkt
 	sal_uInt16 nThousand;							// Zaehlt ....-Folgen
 	sal_uInt16 nCntPre;								// Zaehlt Vorkommastellen
 	sal_uInt16 nCntPost;							// Zaehlt Nachkommastellen
@@ -154,32 +152,32 @@ private:							// ---- privater Teil
 	sal_uInt16 nExpPos;								// interne Position des E
 	sal_uInt16 nBlankPos;							// interne Position des Blank
 	short nDecPos;								// interne Pos. des ,
-	sal_Bool bExp;									// wird bei Lesen des E gesetzt
-	sal_Bool bFrac;									// wird bei Lesen des / gesetzt
-	sal_Bool bBlank;								// wird bei ' '(Fraction) ges.
-	sal_Bool bDecSep;								// Wird beim ersten , gesetzt
-    mutable sal_Bool bKeywordsNeedInit;             // Locale dependent keywords need to be initialized
-    mutable sal_Bool bCompatCurNeedInit;            // Locale dependent compatibility currency need to be initialized
+	bool bExp;									// wird bei Lesen des E gesetzt
+	bool bFrac;									// wird bei Lesen des / gesetzt
+	bool bBlank;								// wird bei ' '(Fraction) ges.
+	bool bDecSep;								// Wird beim ersten , gesetzt
+    bool bKeywordsNeedInit;             // Locale dependent keywords need to be initialized
+    bool bCompatCurNeedInit;            // Locale dependent compatibility currency need to be initialized
     String sCurSymbol;                          // Currency symbol for compatibility format codes
     String sCurString;                          // Currency symbol in upper case
     String sCurAbbrev;                          // Currency abbreviation
     String sErrStr;                             // String fuer Fehlerausgaben
 
-	sal_Bool bConvertMode;							// Wird im Convert-Mode gesetzt
+	bool bConvertMode;							// Wird im Convert-Mode gesetzt
 												// Land/Sprache, in die der
 	LanguageType eNewLnge;						// gescannte String konvertiert
 												// wird (fuer Excel Filter)
 												// Land/Sprache, aus der der
 	LanguageType eTmpLnge;						// gescannte String konvertiert
 												// wird (fuer Excel Filter)
-	sal_Bool bConvertSystemToSystem;				// Whether the conversion is
+	bool bConvertSystemToSystem;				// Whether the conversion is
 												// from one system locale to
 												// another system locale (in
 												// this case the automatic
 												// currency symbol is converted
 												// too).
 
-	xub_StrLen nCurrPos;						// Position des Waehrungssymbols
+	uint16_t nCurrPos;						// Position des Waehrungssymbols
 
     sal_uInt8 nNatNumModifier;                       // Thai T speciality
 
@@ -190,7 +188,7 @@ private:							// ---- privater Teil
 //#ifdef _ZFORSCAN_CXX				// ----- private Methoden -----
 	void SetDependentKeywords();
 												// Setzt die Sprachabh. Keyw.
-	void SkipStrings(sal_uInt16& i,xub_StrLen& nPos);// Ueberspringt StringSymbole
+	void SkipStrings(sal_uInt16& i,uint16_t& nPos);// Ueberspringt StringSymbole
 	sal_uInt16 PreviousKeyword(sal_uInt16 i);			// Gibt Index des vorangeh.
 												// Schluesselworts oder 0
 	sal_uInt16 NextKeyword(sal_uInt16 i);				// Gibt Index des naechsten
@@ -201,47 +199,46 @@ private:							// ---- privater Teil
 	sal_Unicode NextChar(sal_uInt16 i);					// Gibt ersten Buchst. danach
 	short PreviousType( sal_uInt16 i );				// Gibt Typ vor Position,
 												// skipt EMPTY
-	sal_Bool IsLastBlankBeforeFrac(sal_uInt16 i);		// True <=> es kommt kein ' '
+	bool IsLastBlankBeforeFrac(sal_uInt16 i);		// True <=> es kommt kein ' '
 												// mehr bis zum '/'
 	void Reset();								// Reset aller Variablen
 												// vor Analysestart
 	short GetKeyWord( const String& sSymbol,	// determine keyword at nPos
-		xub_StrLen nPos );                      // return 0 <=> not found
+		uint16_t nPos );                      // return 0 <=> not found
 
-	inline sal_Bool IsAmbiguousE( short nKey )		// whether nKey is ambiguous E of NF_KEY_E/NF_KEY_EC
+	inline bool IsAmbiguousE( short nKey )		// whether nKey is ambiguous E of NF_KEY_E/NF_KEY_EC
 		{
 			return (nKey == NF_KEY_EC || nKey == NF_KEY_E) &&
                 (GetKeywords()[NF_KEY_EC] == GetKeywords()[NF_KEY_E]);
 		}
 
     // if 0 at strArray[i] is of S,00 or SS,00 or SS"any"00 in ScanType() or FinalScan()
-    sal_Bool Is100SecZero( sal_uInt16 i, sal_Bool bHadDecSep );
+    bool Is100SecZero( sal_uInt16 i, bool bHadDecSep );
 
 	short Next_Symbol(const String& rStr,
-						xub_StrLen& nPos,
+						uint16_t& nPos,
 					  String& sSymbol);       // Naechstes Symbol
-	xub_StrLen Symbol_Division(const String& rString);// lexikalische Voranalyse
-	xub_StrLen ScanType(const String& rString);	// Analyse des Formattyps
-	xub_StrLen FinalScan( String& rString, String& rComment );	// Endanalyse mit Vorgabe
+	uint16_t Symbol_Division(const String& rString);// lexikalische Voranalyse
+	uint16_t ScanType(const String& rString);	// Analyse des Formattyps
+	uint16_t FinalScan( String& rString, String& rComment );	// Endanalyse mit Vorgabe
 												// des Typs
 	// -1:= error, return nPos in FinalScan; 0:= no calendar, 1:= calendar found
-	int FinalScanGetCalendar( xub_StrLen& nPos, sal_uInt16& i, sal_uInt16& nAnzResStrings );
+	int FinalScanGetCalendar( uint16_t& nPos, sal_uInt16& i, sal_uInt16& nAnzResStrings );
 
     /** Insert symbol into nTypeArray and sStrArray, e.g. grouping separator.
         If at nPos-1 a symbol type NF_SYMBOLTYPE_EMPTY is present, that is
         reused instead of shifting all one up and nPos is decremented! */
     bool InsertSymbol( sal_uInt16 & nPos, NfSymbolType eType, const String& rStr );
 
-	static inline sal_Bool StringEqualsChar( const String& rStr, sal_Unicode ch )
+	static inline bool StringEqualsChar( const String& rStr, sal_Unicode ch )
 		{ return rStr.at(0) == ch && rStr.size() == 1; }
 		// Yes, for efficiency get the character first and then compare length
 		// because in most places where this is used the string is one char.
 
 	// remove "..." and \... quotes from rStr, return how many chars removed
-	static xub_StrLen RemoveQuotes( String& rStr );
+	static uint16_t RemoveQuotes( String& rStr );
 
 //#endif //_ZFORSCAN_CXX
 };
-}	// namespace duckdb_numformat
 
 #endif	// _ZFORSCAN_HXX

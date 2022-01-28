@@ -3,8 +3,6 @@
 #include "define.h"
 #include "datetime.hxx"
 
-namespace duckdb_numformat {
-
 /*************************************************************************
 |*
 |*    DateTime::IsBetween()
@@ -15,13 +13,13 @@ namespace duckdb_numformat {
 |*
 *************************************************************************/
 
-sal_Bool DateTime::IsBetween( const DateTime& rFrom,
+bool DateTime::IsBetween( const DateTime& rFrom,
                           const DateTime& rTo ) const
 {
     if ( (*this >= rFrom) && (*this <= rTo) )
-        return sal_True;
+        return true;
     else
-        return sal_False;
+        return false;
 }
 
 /*************************************************************************
@@ -34,13 +32,13 @@ sal_Bool DateTime::IsBetween( const DateTime& rFrom,
 |*
 *************************************************************************/
 
-sal_Bool DateTime::operator >( const DateTime& rDateTime ) const
+bool DateTime::operator >( const DateTime& rDateTime ) const
 {
     if ( (Date::operator>( rDateTime )) ||
          (Date::operator==( rDateTime ) && Time::operator>( rDateTime )) )
-        return sal_True;
+        return true;
     else
-        return sal_False;
+        return false;
 }
 
 /*************************************************************************
@@ -53,13 +51,13 @@ sal_Bool DateTime::operator >( const DateTime& rDateTime ) const
 |*
 *************************************************************************/
 
-sal_Bool DateTime::operator <( const DateTime& rDateTime ) const
+bool DateTime::operator <( const DateTime& rDateTime ) const
 {
     if ( (Date::operator<( rDateTime )) ||
          (Date::operator==( rDateTime ) && Time::operator<( rDateTime )) )
-        return sal_True;
+        return true;
     else
-        return sal_False;
+        return false;
 }
 
 /*************************************************************************
@@ -72,13 +70,13 @@ sal_Bool DateTime::operator <( const DateTime& rDateTime ) const
 |*
 *************************************************************************/
 
-sal_Bool DateTime::operator >=( const DateTime& rDateTime ) const
+bool DateTime::operator >=( const DateTime& rDateTime ) const
 {
     if ( (Date::operator>( rDateTime )) ||
          (Date::operator==( rDateTime ) && Time::operator>=( rDateTime )) )
-        return sal_True;
+        return true;
     else
-        return sal_False;
+        return false;
 }
 
 /*************************************************************************
@@ -91,13 +89,13 @@ sal_Bool DateTime::operator >=( const DateTime& rDateTime ) const
 |*
 *************************************************************************/
 
-sal_Bool DateTime::operator <=( const DateTime& rDateTime ) const
+bool DateTime::operator <=( const DateTime& rDateTime ) const
 {
     if ( (Date::operator<( rDateTime )) ||
          (Date::operator==( rDateTime ) && Time::operator<=( rDateTime )) )
-        return sal_True;
+        return true;
     else
-        return sal_False;
+        return false;
 }
 
 /*************************************************************************
@@ -414,4 +412,3 @@ DateTime DateTime::CreateFromWin32FileDateTime( const sal_uInt32 & rLower, const
 
     return DateTime( _aDate, _aTime );
 }
-}   // namespace duckdb_numformat

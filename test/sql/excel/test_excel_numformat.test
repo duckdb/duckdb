@@ -1,6 +1,8 @@
-# name: test/sql/function/string/test_numformat.test
+# name: test/sql/excel/test_excel_numformat.test
 # description: Test number format
-# group: [string]
+# group: [excel]
+
+require excel
 
 statement ok
 PRAGMA enable_verification

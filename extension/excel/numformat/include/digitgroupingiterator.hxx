@@ -4,8 +4,6 @@
 #include <vector>
 #include "define.h"
 
-namespace duckdb_numformat {
-
 /** Iterator to be used with a digit grouping as obtained through
     LocaleDataWrapper::getDigitGrouping().
 
@@ -14,7 +12,7 @@ namespace duckdb_numformat {
     always return the last grouping.
     
     Grouping values are sanitized to be 0 <= value <= SAL_MAX_UINT16, even if
-    originally Int32, to be able to easily cast it down to String's xub_StrLen.
+    originally Int32, to be able to easily cast it down to String's uint16_t.
     This shouldn't make any difference in practice.
 
     Usage example with a string buffer containing a decimal representation of
@@ -66,7 +64,7 @@ class DigitGroupingIterator
             if (n < 0)
                 n = 0;                  // sanitize ...
             else if (n > SAL_MAX_UINT16)
-                n = SAL_MAX_UINT16;     // limit for use with xub_StrLen
+                n = SAL_MAX_UINT16;     // limit for use with uint16_t
             return n;
         }
         return 0;
@@ -144,6 +142,5 @@ public:
         initGrouping();
     }
 };
-}   // namespace duckdb_numformat
 
 #endif // INCLUDED_UNOTOOLS_DIGITGROUPINGITERATOR_HXX

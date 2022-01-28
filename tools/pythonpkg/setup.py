@@ -10,10 +10,10 @@ from setuptools import setup, Extension
 
 lib_name = 'duckdb'
 
-extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer']
+extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer', 'excel']
 
 if platform.system() == 'Windows':
-    extensions = ['parquet', 'icu', 'fts','tpch']
+    extensions = ['parquet', 'icu', 'fts','tpch', 'excel']
 
 unity_build = 0
 if 'DUCKDB_BUILD_UNITY' in os.environ:

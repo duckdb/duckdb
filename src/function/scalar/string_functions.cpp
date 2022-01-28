@@ -43,9 +43,6 @@ void BuiltinFunctions::RegisterStringFunctions() {
 
 	// uuid functions
 	Register<UUIDFun>();
-
-	// numer format function
-	Register<NumForFun>();
 }
 
 } // namespace duckdb

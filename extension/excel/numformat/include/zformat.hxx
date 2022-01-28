@@ -10,8 +10,6 @@
 #include "zforscan.hxx"
 #include "localedata.h"
 
-namespace duckdb_numformat {
-
 // If comment field is also in format code string, was used for SUPD versions 371-372
 #define NF_COMMENT_IN_FORMATSTRING 0
 
@@ -56,7 +54,7 @@ struct ImpSvNumberformatInfo            // Struct for FormatInfo
     sal_uInt16 nCntExp;                     // Count of exponent digits, or AM/PM
 	sal_uInt32 nExpVal;                     // 
 	short eScannedType;                 // Type determined by scan
-    sal_Bool bThousand;                     // Has group (AKA thousand) separator
+    bool bThousand;                     // Has group (AKA thousand) separator
 
     void Copy( const ImpSvNumberformatInfo& rNumFor, sal_uInt16 nAnz );
     //void Load(SvStream& rStream, sal_uInt16 nAnz);
@@ -69,31 +67,31 @@ class SvNumberNatNum
 {
 	LocaleIndentifier    eLang;
     sal_uInt8            nNum;
-    sal_Bool            bDBNum  :1;     // DBNum, to be converted to NatNum
-    sal_Bool            bDate   :1;     // Used in date? (needed for DBNum/NatNum mapping)
-    sal_Bool            bSet    :1;     // If set, since NatNum0 is possible
+    bool            bDBNum  :1;     // DBNum, to be converted to NatNum
+    bool            bDate   :1;     // Used in date? (needed for DBNum/NatNum mapping)
+    bool            bSet    :1;     // If set, since NatNum0 is possible
 
 public:
 
-    //static  sal_uInt8    MapDBNumToNatNum( sal_uInt8 nDBNum, LanguageType eLang, sal_Bool bDate );
-    //static  sal_uInt8    MapNatNumToDBNum( sal_uInt8 nNatNum, LanguageType eLang, sal_Bool bDate );
+    //static  sal_uInt8    MapDBNumToNatNum( sal_uInt8 nDBNum, LanguageType eLang, bool bDate );
+    //static  sal_uInt8    MapNatNumToDBNum( sal_uInt8 nNatNum, LanguageType eLang, bool bDate );
 
                     SvNumberNatNum() : eLang( LocaleId_en_US ), nNum(0),
                                         bDBNum(0), bDate(0), bSet(0) {}
-    sal_Bool            IsComplete() const  { return bSet && eLang != LocaleId_en_US; }
+    bool            IsComplete() const  { return bSet && eLang != LocaleId_en_US; }
     sal_uInt8            GetRawNum() const   { return nNum; }
 	sal_uInt8            GetNatNum() const { return 0; }// { return bDBNum ? MapDBNumToNatNum(nNum, eLang, bDate) : nNum; }
     //sal_uInt8            GetDBNum() const    { return bDBNum ? nNum : MapNatNumToDBNum( nNum, eLang, bDate ); }
     LanguageType    GetLang() const     { return eLang; }
     void            SetLang( LanguageType e ) { eLang = e; }
-    void            SetNum( sal_uInt8 nNumber, sal_Bool bDBNumber )
+    void            SetNum( sal_uInt8 nNumber, bool bDBNumber )
                         {
                             nNum = nNumber;
                             bDBNum = bDBNumber;
-                            bSet = sal_True;
+                            bSet = true;
                         }
-    sal_Bool            IsSet() const       { return bSet; }
-    void            SetDate( sal_Bool bDateP )   { bDate = (bDateP != 0); }
+    bool            IsSet() const       { return bSet; }
+    void            SetDate( bool bDateP )   { bDate = (bDateP != 0); }
 };
 
 class CharClass;
@@ -124,15 +122,15 @@ public:
     const String& GetColorName() const { return sColorName; }
 
     // new SYMBOLTYPE_CURRENCY in subformat?
-    sal_Bool HasNewCurrency() const;
-    sal_Bool GetNewCurrencySymbol( String& rSymbol, String& rExtension ) const;
+    bool HasNewCurrency() const;
+    bool GetNewCurrencySymbol( String& rSymbol, String& rExtension ) const;
     //void SaveNewCurrencyMap( SvStream& rStream ) const;
     //void LoadNewCurrencyMap( SvStream& rStream );
 
     // [NatNum1], [NatNum2], ...
-    void SetNatNumNum( sal_uInt8 nNum, sal_Bool bDBNum ) { aNatNum.SetNum( nNum, bDBNum ); }
+    void SetNatNumNum( sal_uInt8 nNum, bool bDBNum ) { aNatNum.SetNum( nNum, bDBNum ); }
     void SetNatNumLang( LanguageType eLang ) { aNatNum.SetLang( eLang ); }
-    void SetNatNumDate( sal_Bool bDate ) { aNatNum.SetDate( bDate ); }
+    void SetNatNumDate( bool bDate ) { aNatNum.SetDate( bDate ); }
     const SvNumberNatNum& GetNatNum() const { return aNatNum; }
 
     // check, if the format code contains a subformat for text
@@ -159,24 +157,24 @@ public:
     SvNumberformat( String& rString,
                    LocaleData* pFormatter,
                    ImpSvNumberInputScan* pISc,
-                   xub_StrLen& nCheckPos,
+                   uint16_t& nCheckPos,
                    LanguageType eLan = LocaleIndentifier::LocaleId_en_US,
-                   sal_Bool bStand = sal_False );
+                   bool bStand = false );
 
 	// Ascii version of constructor
 	SvNumberformat(std::string& rString,
 		LocaleData* pFormatter,
 		ImpSvNumberInputScan* pISc,
-		xub_StrLen& nCheckPos,
+		uint16_t& nCheckPos,
 		LanguageType eLan = LocaleIndentifier::LocaleId_en_US,
-		sal_Bool bStand = sal_False);
+		bool bStand = false);
 
 	void InitFormat(String& rString,
 		LocaleData* pFormatter,
 		ImpSvNumberInputScan* pISc,
-		xub_StrLen& nCheckPos,
+		uint16_t& nCheckPos,
 		LanguageType eLan,
-		sal_Bool bStand);
+		bool bStand);
 	
 	// Copy ctor
     //SvNumberformat( SvNumberformat& rFormat );
@@ -194,8 +192,8 @@ public:
 
     void SetType(const short eSetType)          { eType = eSetType; }
     // Standard means the I18N defined standard format of this type
-    void SetStandard()                          { bStandard = sal_True; }
-    sal_Bool IsStandard() const                     { return bStandard; }
+    void SetStandard()                          { bStandard = true; }
+    bool IsStandard() const                     { return bStandard; }
 
     // For versions before version nVer it is UserDefined, for newer versions
     // it is builtin. nVer of SV_NUMBERFORMATTER_VERSION_...
@@ -203,7 +201,7 @@ public:
         { nNewStandardDefined = nVer; eType |= NUMBERFORMAT_DEFINED; }
 
     sal_uInt16 GetNewStandardDefined() const        { return nNewStandardDefined; }
-    sal_Bool IsAdditionalStandardDefined() const
+    bool IsAdditionalStandardDefined() const
         { return nNewStandardDefined == SV_NUMBERFORMATTER_VERSION_ADDITIONAL_I18N_FORMATS; }
 
     LanguageType GetLanguage() const            { return eLnge;}
@@ -213,12 +211,12 @@ public:
     // Build a format string of application defined keywords
     //String GetMappedFormatstring( const NfKeywordTable& rKeywords,
     //                                const LocaleDataWrapper& rLoc,
-    //                                sal_Bool bDontQuote = sal_False ) const;
+    //                                bool bDontQuote = false ) const;
 
-    void SetUsed(const sal_Bool b)                  { bIsUsed = b; }
-    sal_Bool GetUsed() const                        { return bIsUsed; }
-    sal_Bool IsStarFormatSupported() const          { return bStarFlag; }
-    void SetStarFormatSupport( sal_Bool b )         { bStarFlag = b; }
+    void SetUsed(const bool b)                  { bIsUsed = b; }
+    bool GetUsed() const                        { return bIsUsed; }
+    bool IsStarFormatSupported() const          { return bStarFlag; }
+    void SetStarFormatSupport( bool b )         { bStarFlag = b; }
 
     //NfHackConversion Load( SvStream& rStream, ImpSvNumMultipleReadHeader& rHdr, MyLocaleData* pConverter, ImpSvNumberInputScan& rISc );
     //void Save( SvStream& rStream, ImpSvNumMultipleWriteHeader& rHdr  ) const;
@@ -233,21 +231,21 @@ public:
      */
     bool GetOutputString( double fNumber, sal_uInt16 nCharCount, String& rOutString ) const;
 
-    sal_Bool GetOutputString( double fNumber, String& OutString, Color** ppColor );
-	sal_Bool GetOutputString( double fNumber, std::string& OutString, Color** ppColor );
-	sal_Bool GetOutputString( String& sString, String& OutString, Color** ppColor );
+    bool GetOutputString( double fNumber, String& OutString, Color** ppColor );
+	bool GetOutputString( double fNumber, std::string& OutString, Color** ppColor );
+	bool GetOutputString( String& sString, String& OutString, Color** ppColor );
 
     // True if type text
-    sal_Bool IsTextFormat() const { return (eType & NUMBERFORMAT_TEXT) != 0; }
+    bool IsTextFormat() const { return (eType & NUMBERFORMAT_TEXT) != 0; }
     // True if 4th subformat present
-    sal_Bool HasTextFormat() const
+    bool HasTextFormat() const
         {
             return (NumFor[3].GetnAnz() > 0) ||
                 (NumFor[3].Info().eScannedType == NUMBERFORMAT_TEXT);
         }
 
-    void GetFormatSpecialInfo(sal_Bool& bThousand,
-                              sal_Bool& IsRed,
+    void GetFormatSpecialInfo(bool& bThousand,
+                              bool& IsRed,
                               sal_uInt16& nPrecision,
                               sal_uInt16& nAnzLeading) const;
 
@@ -263,24 +261,24 @@ public:
 
     //! Only onLoad: convert from stored to current system language/country
     void ConvertLanguage( LocaleData& rConverter,
-        LanguageType eConvertFrom, LanguageType eConvertTo, sal_Bool bSystem = sal_False );
+        LanguageType eConvertFrom, LanguageType eConvertTo, bool bSystem = false );
 
     // Substring of a subformat code nNumFor (0..3)
     // nPos == 0xFFFF => last substring
-    // bString==sal_True: first/last SYMBOLTYPE_STRING or SYMBOLTYPE_CURRENCY
+    // bString==true: first/last SYMBOLTYPE_STRING or SYMBOLTYPE_CURRENCY
     const String* GetNumForString( sal_uInt16 nNumFor, sal_uInt16 nPos,
-            sal_Bool bString = sal_False ) const;
+            bool bString = false ) const;
 
     // Subtype of a subformat code nNumFor (0..3)
     // nPos == 0xFFFF => last substring
-    // bString==sal_True: first/last SYMBOLTYPE_STRING or SYMBOLTYPE_CURRENCY
-    short GetNumForType( sal_uInt16 nNumFor, sal_uInt16 nPos, sal_Bool bString = sal_False ) const;
+    // bString==true: first/last SYMBOLTYPE_STRING or SYMBOLTYPE_CURRENCY
+    short GetNumForType( sal_uInt16 nNumFor, sal_uInt16 nPos, bool bString = false ) const;
 
     /** If the count of string elements (substrings, ignoring [modifiers] and
         so on) in a subformat code nNumFor (0..3) is equal to the given number.
         Used by ImpSvNumberInputScan::IsNumberFormatMain() to detect a matched
         format.  */
-    sal_Bool IsNumForStringElementCountEqual( sal_uInt16 nNumFor, sal_uInt16 nAllCount,
+    bool IsNumForStringElementCountEqual( sal_uInt16 nNumFor, sal_uInt16 nAllCount,
             sal_uInt16 nNumCount ) const
         {
             if ( nNumFor < 4 )
@@ -292,17 +290,17 @@ public:
                 // [modifiers] or anything else if both counts are equal.
                 sal_uInt16 nCnt = NumFor[nNumFor].GetnAnz();
                 if ( nAllCount == nCnt )
-                    return sal_True;
+                    return true;
                 if ( nAllCount < nCnt ) // check ignoring [modifiers] and so on
                     return ImpGetNumForStringElementCount( nNumFor ) ==
                         (nAllCount - nNumCount);
             }
-            return sal_False;
+            return false;
         }
 
     // Whether the second subformat code is really for negative numbers
     // or another limit set.
-    sal_Bool IsNegativeRealNegative() const
+    bool IsNegativeRealNegative() const
         {
             return fLimit1 == 0.0 && fLimit2 == 0.0 &&
             ( (eOp1 == NUMBERFORMAT_OP_GE && eOp2 == NUMBERFORMAT_OP_NO) ||
@@ -311,7 +309,7 @@ public:
         }
 	// Whether the first subformat code is really for negative numbers
     // or another limit set.
-    sal_Bool IsNegativeRealNegative2() const
+    bool IsNegativeRealNegative2() const
         {
             return fLimit1 == 0.0 && fLimit2 == 0.0 &&
             ( (eOp2 == NUMBERFORMAT_OP_GT && eOp1 == NUMBERFORMAT_OP_LT) ||
@@ -323,10 +321,10 @@ public:
         }
 
     // Whether the negative format is without a sign or not
-    sal_Bool IsNegativeWithoutSign() const;
+    bool IsNegativeWithoutSign() const;
 
     // Whether a new SYMBOLTYPE_CURRENCY is contained in the format
-    sal_Bool HasNewCurrency() const;
+    bool HasNewCurrency() const;
 
     // check, if the format code contains a subformat for text
     bool HasTextFormatCode() const;
@@ -335,28 +333,28 @@ public:
     void Build50Formatstring( String& rStr ) const;
 
     // strip [$-yyy] from all [$xxx-yyy] leaving only xxx's,
-    // if bQuoteSymbol==sal_True the xxx will become "xxx"
+    // if bQuoteSymbol==true the xxx will become "xxx"
     static String StripNewCurrencyDelimiters( const String& rStr,
-        sal_Bool bQuoteSymbol );
+        bool bQuoteSymbol );
 
     // If a new SYMBOLTYPE_CURRENCY is contained if the format is of type
     // NUMBERFORMAT_CURRENCY, and if so the symbol xxx and the extension nnn
     // of [$xxx-nnn] are returned
-    sal_Bool GetNewCurrencySymbol( String& rSymbol, String& rExtension ) const;
+    bool GetNewCurrencySymbol( String& rSymbol, String& rExtension ) const;
 
-    static sal_Bool HasStringNegativeSign( const String& rStr );
+    static bool HasStringNegativeSign( const String& rStr );
 
     /**
         Whether a character at position nPos is somewhere between two matching
         cQuote or not.
-        If nPos points to a cQuote, a sal_True is returned on an opening cQuote,
-        a sal_False is returned on a closing cQuote.
+        If nPos points to a cQuote, a true is returned on an opening cQuote,
+        a false is returned on a closing cQuote.
         A cQuote between quotes may be escaped by a cEscIn, a cQuote outside of
         quotes may be escaped by a cEscOut.
         The default '\0' results in no escapement possible.
         Defaults are set right according to the "unlogic" of the Numberformatter
      */
-    static sal_Bool IsInQuote( const String& rString, xub_StrLen nPos,
+    static bool IsInQuote( const String& rString, uint16_t nPos,
             sal_Unicode cQuote = '"',
             sal_Unicode cEscIn = '\0', sal_Unicode cEscOut = '\\' );
 
@@ -372,7 +370,7 @@ public:
         Uses <method>IsInQuote</method> internally, so you don't have to call
         that prior to a call of this method.
      */
-    static xub_StrLen GetQuoteEnd( const String& rString, xub_StrLen nPos,
+    static uint16_t GetQuoteEnd( const String& rString, uint16_t nPos,
                 sal_Unicode cQuote = '"',
                 sal_Unicode cEscIn = '\0', sal_Unicode cEscOut = '\\' );
 
@@ -393,7 +391,7 @@ public:
 
     /** Insert the number of blanks into the string that is needed to simulate
         the width of character c for underscore formats */
-    static xub_StrLen InsertBlanks( String& r, xub_StrLen nPos, sal_Unicode c );
+    static uint16_t InsertBlanks( String& r, uint16_t nPos, sal_Unicode c );
 
     /// One of YMD,DMY,MDY if date format
     DateFormat GetDateOrder() const;
@@ -410,7 +408,7 @@ public:
                         SvNumberformatLimitOps& rOper2, double& rVal2 ) const;
     Color* GetColor( sal_uInt16 nNumFor ) const;
     void GetNumForInfo( sal_uInt16 nNumFor, short& rScannedType,
-                    sal_Bool& bThousand, sal_uInt16& nPrecision, sal_uInt16& nAnzLeading ) const;
+                    bool& bThousand, sal_uInt16& nPrecision, sal_uInt16& nAnzLeading ) const;
 
     // rAttr.Number not empty if NatNum attributes are to be stored
     //void GetNatNumXml(
@@ -420,11 +418,11 @@ public:
     /** @returns <TRUE/> if E,EE,R,RR,AAA,AAAA in format code of subformat
         nNumFor (0..3) and <b>no</b> preceding calendar was specified and the
         currently loaded calendar is "gregorian". */
-    sal_Bool IsOtherCalendar( sal_uInt16 nNumFor ) const
+    bool IsOtherCalendar( sal_uInt16 nNumFor ) const
         {
             if ( nNumFor < 4 )
                 return ImpIsOtherCalendar( NumFor[nNumFor] );
-            return sal_False;
+            return false;
         }
 
     /** Switches to the first non-"gregorian" calendar, but only if the current
@@ -446,13 +444,13 @@ public:
             <TRUE/> if a calendar was specified and switched to,
             <FALSE/> else.
      */
-    sal_Bool SwitchToSpecifiedCalendar( String& rOrgCalendar, double& fOrgDateTime,
+    bool SwitchToSpecifiedCalendar( String& rOrgCalendar, double& fOrgDateTime,
             sal_uInt16 nNumFor ) const
         {
             if ( nNumFor < 4 )
                 return ImpSwitchToSpecifiedCalendar( rOrgCalendar,
                         fOrgDateTime, NumFor[nNumFor] );
-            return sal_False;
+            return false;
         }
 
 private:
@@ -468,34 +466,32 @@ private:
     SvNumberformatLimitOps eOp2;    // Operator for second condition
     sal_uInt16 nNewStandardDefined;     // new builtin formats as of version 6
     short eType;                    // Type of format
-    sal_Bool bStarFlag;                 // Take *n format as ESC n
-    sal_Bool bStandard;                 // If this is a default standard format
-    sal_Bool bIsUsed;                   // Flag as used for storing
+    bool bStarFlag;                 // Take *n format as ESC n
+    bool bStandard;                 // If this is a default standard format
+    bool bIsUsed;                   // Flag as used for storing
 
      sal_uInt16 ImpGetNumForStringElementCount( sal_uInt16 nNumFor ) const;
 
-     sal_Bool ImpIsOtherCalendar( const ImpSvNumFor& rNumFor ) const;
+     bool ImpIsOtherCalendar( const ImpSvNumFor& rNumFor ) const;
 
-     sal_Bool ImpSwitchToSpecifiedCalendar( String& rOrgCalendar,
+     bool ImpSwitchToSpecifiedCalendar( String& rOrgCalendar,
             double& fOrgDateTime, const ImpSvNumFor& rNumFor ) const;
-
-//#ifdef _ZFORMAT_CXX     // ----- private implementation methods -----
 
     //const LocaleDataWrapper& rLoc() const   { return rScan.GetLoc(); }
     //CalendarWrapper& GetCal() const         { return rScan.GetCal(); }
 
     // divide in substrings and color conditions
      short ImpNextSymbol( String& rString,
-                     xub_StrLen& nPos,
+                     uint16_t& nPos,
                      String& sSymbol );
 
     // read string until ']' and strip blanks (after condition)
-     static xub_StrLen ImpGetNumber( String& rString,
-                   xub_StrLen& nPos,
+     static uint16_t ImpGetNumber( String& rString,
+                   uint16_t& nPos,
                    String& sSymbol );
 
     // get xxx of "[$-xxx]" as LanguageType, starting at and advancing position nPos
-     static LanguageType ImpGetLanguageType( const String& rString, xub_StrLen& nPos );
+     static LanguageType ImpGetLanguageType( const String& rString, uint16_t& nPos );
 
     // standard number output
      void ImpGetOutputStandard( double& fNumber, String& OutString );
@@ -515,17 +511,17 @@ private:
 
     // Helper function for number strings
     // append string symbols, insert leading 0 or ' ', or ...
-     sal_Bool ImpNumberFill( String& sStr,
+     bool ImpNumberFill( String& sStr,
                     double& rNumber,
-                    xub_StrLen& k,
+                    uint16_t& k,
                     sal_uInt16& j,
                     sal_uInt16 nIx,
                     short eSymbolType );
 
     // Helper function to fill in the integer part and the group (AKA thousand) separators
-     sal_Bool ImpNumberFillWithThousands( String& sStr,
+     bool ImpNumberFillWithThousands( String& sStr,
                                  double& rNumber,
-                                 xub_StrLen k,
+                                 uint16_t k,
                                  sal_uInt16 j,
                                  sal_uInt16 nIx,
                                  sal_uInt16 nDigCnt );
@@ -535,19 +531,19 @@ private:
     // Helper function to fill in the group (AKA thousand) separators
     // or to skip additional digits
      void ImpDigitFill( String& sStr,
-                    xub_StrLen nStart,
-                    xub_StrLen& k,
+                    uint16_t nStart,
+                    uint16_t& k,
                     sal_uInt16 nIx,
-                    xub_StrLen & nDigitCount,
+                    uint16_t & nDigitCount,
                     DigitGroupingIterator & rGrouping );
 
-     sal_Bool ImpGetDateOutput( double fNumber,
+     bool ImpGetDateOutput( double fNumber,
                        sal_uInt16 nIx,
                        String& OutString );
-     sal_Bool ImpGetTimeOutput( double fNumber,
+     bool ImpGetTimeOutput( double fNumber,
                        sal_uInt16 nIx,
                        String& OutString );
-     sal_Bool ImpGetDateTimeOutput( double fNumber,
+     bool ImpGetDateTimeOutput( double fNumber,
                            sal_uInt16 nIx,
                            String& OutString );
 
@@ -556,14 +552,14 @@ private:
     // know a "before" era (like zh_TW ROC or ja_JP Gengou). If switched and
     // rOrgCalendar was "gregorian" the string is emptied. If rOrgCalendar was
     // empty the previous calendar name and date/time are returned.
-     sal_Bool ImpFallBackToGregorianCalendar( String& rOrgCalendar, double& fOrgDateTime );
+     bool ImpFallBackToGregorianCalendar( String& rOrgCalendar, double& fOrgDateTime );
 
     // Append a "G" short era string of the given calendar. In the case of a
     // Gengou calendar this is a one character abbreviation, for other
     // calendars the XExtendedCalendar::getDisplayString() method is called.
      void ImpAppendEraG( String& OutString, sal_Int16 nNatNum );
 
-     sal_Bool ImpGetNumberOutput( double fNumber,
+     bool ImpGetNumberOutput( double fNumber,
                          sal_uInt16 nIx,
                          String& OutString );
 
@@ -590,10 +586,8 @@ private:
             //if ( rNum.IsComplete() )
             //    ImpTransliterateImpl( rStr, rNum );
         }
-
-//#endif // _ZFORMAT_CXX
-
 };
-}   // namespace duckdb_numformat
+
+std::string GetNumberFormatString(std::string& format, double num_value);
 
 #endif  // _ZFORMAT_HXX

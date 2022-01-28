@@ -208,6 +208,7 @@ option(BUILD_TPCDS_EXTENSION "Build the TPC-DS extension." FALSE)
 option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
 option(BUILD_HTTPFS_EXTENSION "Build the HTTP File System extension." FALSE)
 option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extension." FALSE)
+option(BUILD_EXCEL_EXTENSION "Build the excel extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
@@ -355,7 +356,6 @@ include_directories(third_party/miniparquet)
 include_directories(third_party/concurrentqueue)
 include_directories(third_party/pcg)
 include_directories(third_party/tdigest)
-include_directories(third_party/numformat)
 
 # todo only regenerate ub file if one of the input files changed hack alert
 function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
@@ -475,6 +475,11 @@ function(add_extension_definitions)
     include_directories(${PROJECT_SOURCE_DIR}/extension/visualizer/include)
     add_definitions(-DBUILD_VISUALIZER_EXTENSION=${BUILD_VISUALIZER_EXTENSION})
   endif()
+
+  if(${BUILD_EXCEL_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/excel/include)
+    add_definitions(-DBUILD_EXCEL_EXTENSION=${BUILD_EXCEL_EXTENSION})
+  endif()
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
@@ -504,6 +509,10 @@ function(add_extension_dependencies LIBRARY)
 
   if(${BUILD_VISUALIZER_EXTENSION})
     add_dependencies(${LIBRARY} visualizer_extension)
+  endif()
+
+  if(${BUILD_EXCEL_EXTENSION})
+    add_dependencies(${LIBRARY} excel_extension)
   endif()
 endfunction()
 
@@ -535,6 +544,10 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_VISUALIZER_EXTENSION})
     target_link_libraries(${LIBRARY} visualizer_extension)
+  endif()
+
+  if(${BUILD_EXCEL_EXTENSION})
+    target_link_libraries(${LIBRARY} excel_extension)
   endif()
 endfunction()
 

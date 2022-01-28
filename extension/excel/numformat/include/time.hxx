@@ -3,8 +3,6 @@
 
 #include "define.h"
 
-namespace duckdb_numformat {
-
 class ResId;
 
 // --------
@@ -50,22 +48,22 @@ public:
                     /// 12 hours == 0.5 days
     double          GetTimeInDays() const;
 
-	sal_Bool			IsBetween( const Time& rFrom, const Time& rTo ) const
+	bool			IsBetween( const Time& rFrom, const Time& rTo ) const
 						{ return ((nTime >= rFrom.nTime) && (nTime <= rTo.nTime)); }
 
-    sal_Bool            IsEqualIgnore100Sec( const Time& rTime ) const;
+    bool            IsEqualIgnore100Sec( const Time& rTime ) const;
 
-	sal_Bool			operator ==( const Time& rTime ) const
+	bool			operator ==( const Time& rTime ) const
 						{ return (nTime == rTime.nTime); }
-	sal_Bool			operator !=( const Time& rTime ) const
+	bool			operator !=( const Time& rTime ) const
 						{ return (nTime != rTime.nTime); }
-	sal_Bool			operator  >( const Time& rTime ) const
+	bool			operator  >( const Time& rTime ) const
 						{ return (nTime > rTime.nTime); }
-	sal_Bool			operator  <( const Time& rTime ) const
+	bool			operator  <( const Time& rTime ) const
 						{ return (nTime < rTime.nTime); }
-	sal_Bool			operator >=( const Time& rTime ) const
+	bool			operator >=( const Time& rTime ) const
 						{ return (nTime >= rTime.nTime); }
-	sal_Bool			operator <=( const Time& rTime ) const
+	bool			operator <=( const Time& rTime ) const
 						{ return (nTime <= rTime.nTime); }
 
 	static Time 	GetUTCOffset();
@@ -83,6 +81,5 @@ public:
 	TOOLS_DLLPUBLIC friend Time 	operator +( const Time& rTime1, const Time& rTime2 );
 	TOOLS_DLLPUBLIC friend Time 	operator -( const Time& rTime1, const Time& rTime2 );
 };
-}	// namespace duckdb_numformat
 
 #endif // _TOOLS_TIME_HXX

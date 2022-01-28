@@ -3,8 +3,6 @@
 
 #include "define.h"
 
-namespace duckdb_numformat {
-
 class ResId;
 
 // --------------
@@ -53,24 +51,24 @@ public:
 
 	sal_uInt16			GetDaysInMonth() const;
 	sal_uInt16			GetDaysInYear() const { return (IsLeapYear()) ? 366 : 365; }
-	sal_Bool			IsLeapYear() const;
-	sal_Bool			IsValid() const;
+	bool			IsLeapYear() const;
+	bool			IsValid() const;
 
-	sal_Bool			IsBetween( const Date& rFrom, const Date& rTo ) const
+	bool			IsBetween( const Date& rFrom, const Date& rTo ) const
 						{ return ((nDate >= rFrom.nDate) &&
 								 (nDate <= rTo.nDate)); }
 
-	sal_Bool			operator ==( const Date& rDate ) const
+	bool			operator ==( const Date& rDate ) const
 						{ return (nDate == rDate.nDate); }
-	sal_Bool			operator !=( const Date& rDate ) const
+	bool			operator !=( const Date& rDate ) const
 						{ return (nDate != rDate.nDate); }
-	sal_Bool			operator  >( const Date& rDate ) const
+	bool			operator  >( const Date& rDate ) const
 						{ return (nDate > rDate.nDate); }
-	sal_Bool			operator  <( const Date& rDate ) const
+	bool			operator  <( const Date& rDate ) const
 						{ return (nDate < rDate.nDate); }
-	sal_Bool			operator >=( const Date& rDate ) const
+	bool			operator >=( const Date& rDate ) const
 						{ return (nDate >= rDate.nDate); }
-	sal_Bool			operator <=( const Date& rDate ) const
+	bool			operator <=( const Date& rDate ) const
 						{ return (nDate <= rDate.nDate); }
 
 	Date&			operator =( const Date& rDate )
@@ -91,6 +89,5 @@ public:
     static long DateToDays( sal_uInt16 nDay, sal_uInt16 nMonth, sal_uInt16 nYear );
 
 };
-}	// namespace duckdb_numformat
 
 #endif // _DATE_HXX
