@@ -10,19 +10,15 @@ namespace duckdb {
 
 struct ExportAggregateBindData : public FunctionData {
 	AggregateFunction &aggr;
-	unique_ptr<FunctionData> bind_data;
 	idx_t state_size;
 
-	explicit ExportAggregateBindData(AggregateFunction &aggr_p, unique_ptr<FunctionData> bind_data_p,
-	                                 idx_t state_size_p)
-	    : aggr(aggr_p), bind_data(move(bind_data_p)), state_size(state_size_p) {
+	explicit ExportAggregateBindData(AggregateFunction &aggr_p, idx_t state_size_p)
+	    : aggr(aggr_p), state_size(state_size_p) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
-		if (bind_data) {
-			return make_unique<ExportAggregateBindData>(aggr, bind_data->Copy(), state_size);
-		}
-		return make_unique<ExportAggregateBindData>(aggr, nullptr, state_size);
+
+		return make_unique<ExportAggregateBindData>(aggr, state_size);
 	}
 
 	static ExportAggregateBindData &GetFrom(ExpressionState &state) {
@@ -103,7 +99,7 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 		state_vec_ptr[i] = (data_ptr_t)target_ptr;
 	}
 
-	bind_data.aggr.finalize(local_state.addresses, bind_data.bind_data.get(), result, input.size(), 0);
+	bind_data.aggr.finalize(local_state.addresses, nullptr, result, input.size(), 0);
 
 	for (idx_t i = 0; i < input.size(); i++) {
 		auto state_idx = state_data.sel->get_index(i);
@@ -207,29 +203,13 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 		throw InternalException("Type mismatch for exported aggregate %s", state_type.function_name);
 	}
 
-	// maybe we have to call the bind callback for the function, too
-	unique_ptr<FunctionData> aggr_bind;
-	if (bound_aggr.bind) {
-		// construct fake expressions for the call to bind
-		vector<unique_ptr<Expression>> aggr_args;
-		for (auto &arg_type : state_type.bound_argument_types) {
-			Value val;
-			// COUNT(x) does not bind an argument type, maybe others
-			if (arg_type.id() != LogicalTypeId::ANY) {
-				val = val.CastAs(arg_type);
-			}
-			aggr_args.push_back(make_unique<BoundConstantExpression>(val));
-		}
-		aggr_bind = bound_aggr.bind(context, bound_aggr, aggr_args);
-	}
-
 	if (bound_function.name == "finalize") {
 		bound_function.return_type = bound_aggr.return_type;
 	} else if (bound_function.name == "combine") {
 		bound_function.return_type = arg_return_type;
 	}
 
-	return make_unique<ExportAggregateBindData>(bound_aggr, move(aggr_bind), bound_aggr.state_size());
+	return make_unique<ExportAggregateBindData>(bound_aggr, bound_aggr.state_size());
 }
 
 static void ExportAggregateFinalize(Vector &state, FunctionData *bind_data_p, Vector &result, idx_t count,
@@ -259,6 +239,9 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	auto &bound_function = child_aggregate->function;
 	if (!bound_function.combine) {
 		throw BinderException("Cannot export state for non-combinable function %s", bound_function.name);
+	}
+	if (bound_function.bind) {
+		throw BinderException("Cannot export state on functions with custom binders");
 	}
 	if (bound_function.destructor) {
 		throw BinderException("Cannot export state on functions with destructors");
