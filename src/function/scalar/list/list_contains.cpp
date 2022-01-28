@@ -88,6 +88,11 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 	value.Orrify(count, value_data);
 
 	auto list_size = ListVector::GetListSize(list);
+	if (list_size == 0) { // empty list will never contain a value
+		auto result_data = ConstantVector::GetData<bool>(result);
+		result_data[0] = false;
+		return;
+	}
 	auto &child_vector = ListVector::GetEntry(list);
 	if (child_vector.GetType().id() == LogicalTypeId::SQLNULL) {
 		auto result_data = ConstantVector::GetData<bool>(result);
@@ -168,32 +173,34 @@ static unique_ptr<FunctionData> ListContainsBind(ClientContext &context, ScalarF
                                                  vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 
-	auto &array = arguments[0]->return_type; // change to list
+	auto &list = arguments[0]->return_type; // change to list
 	auto &value = arguments[1]->return_type;
-	if (array.id() == LogicalTypeId::SQLNULL && value.id() == LogicalTypeId::SQLNULL) {
+	if (list.id() == LogicalTypeId::SQLNULL && value.id() == LogicalTypeId::SQLNULL) {
+		bound_function.arguments[0] = LogicalType::SQLNULL;
+		bound_function.arguments[1] = LogicalType::SQLNULL;
 		bound_function.return_type = LogicalType::SQLNULL;
-	} else if (array.id() == LogicalTypeId::SQLNULL || value.id() == LogicalTypeId::SQLNULL) {
-		// In case either the array or the value is NULL, return NULL
+	} else if (list.id() == LogicalTypeId::SQLNULL || value.id() == LogicalTypeId::SQLNULL) {
+		// In case either the list or the value is NULL, return NULL
 		// Similar to behaviour of prestoDB
-		bound_function.arguments[0] = array;
+		bound_function.arguments[0] = list;
 		bound_function.arguments[1] = value;
 		bound_function.return_type = LogicalTypeId::SQLNULL;
 	} else {
+		D_ASSERT(list.id() == LogicalTypeId::LIST);
 		auto child_type = ListType::GetChildType(arguments[0]->return_type);
-		D_ASSERT(array.id() == LogicalTypeId::LIST);
-		if (child_type.id() != LogicalTypeId::SQLNULL) {
-			D_ASSERT(value.id() == child_type.id()); // LogicalTypeId::ANY?
-		}
-
-		//		LogicalType child_type = LogicalType::SQLNULL;
-		//		child_type = LogicalType::MaxLogicalType(child_type, ListType::GetChildType(arguments[0]->return_type));
-		//		ExpressionBinder::ResolveParameterType(child_type);
-
-		bound_function.arguments[0] = LogicalType::LIST(move(child_type));
-		bound_function.arguments[1] = LogicalType::ANY; // LogicalType::ANY What should be here. The second argument can be of type any.
-		bound_function.return_type = LogicalType::BOOLEAN; // What should be here. Boolean
+//		if (child_type.id() == LogicalTypeId::SQLNULL) { // list_contains([NULL],1) -> returns NULL
+//			bound_function.arguments[0] = list;
+//			bound_function.arguments[1] = value;
+//			bound_function.return_type = LogicalTypeId::SQLNULL;
+//		} else {
+		auto max_child_type = LogicalType::MaxLogicalType(child_type, value);
+		ExpressionBinder::ResolveParameterType(max_child_type);
+		auto list_type = LogicalType::LIST(max_child_type);
+		bound_function.arguments[0] = list_type;
+		bound_function.arguments[1] = value == max_child_type ? value : max_child_type;
+		bound_function.return_type = LogicalType::BOOLEAN;
+//		}
 	}
-
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
