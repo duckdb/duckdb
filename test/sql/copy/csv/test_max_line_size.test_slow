@@ -13,3 +13,10 @@ CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 statement error
 COPY test FROM '__TEST_DIR__/test.csv';
 
+# we can override the max line size
+statement ok
+COPY test FROM '__TEST_DIR__/test.csv' (max_line_size 204857600);
+
+# also in the read_csv call
+statement ok
+INSERT INTO test SELECT * FROM read_csv_auto('__TEST_DIR__/test.csv', max_line_size=204857600);
