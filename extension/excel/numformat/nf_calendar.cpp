@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#ifndef WIN32
+#ifdef WIN32
+#include "windows.h"
+#else
 #include <sys/time.h>
 #endif
 #include <ctime> 

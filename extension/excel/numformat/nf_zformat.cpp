@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <float.h>
 #include <errno.h>
-#include <math.h>
+#include <cmath>
 #include <cwctype>
 #include "nf_calendar.h"
 #include "nf_zformat.h"
