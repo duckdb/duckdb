@@ -40,7 +40,6 @@ ${EMCPP} \
     -s EXPORTED_FUNCTIONS='[ _main, _HelloWasm ]' \
     -I ${PROJECT_ROOT}/src/include \
     -I ${PROJECT_ROOT}/third_party/concurrentqueue/ \
-    -I ${PROJECT_ROOT}/third_party/numformat/ \
     ${DUCKDB_WASM} \
     ${HELLO_WASM_CPP} \
     -o ${BUILD_DIR}/hello_wasm.js
