@@ -205,7 +205,8 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 
 	if (bound_function.name == "finalize") {
 		bound_function.return_type = bound_aggr.return_type;
-	} else if (bound_function.name == "combine") {
+	} else {
+		D_ASSERT(bound_function.name == "combine");
 		bound_function.return_type = arg_return_type;
 	}
 
