@@ -2,9 +2,9 @@
 # description: Test lines that exceed the maximum line size
 # group: [csv]
 
-# generate CSV file with 20 MB string
+# generate CSV file with 4 MB string
 statement ok
-COPY (SELECT 10, REPEAT('a', 2048576), 20) TO '__TEST_DIR__/test.csv'
+COPY (SELECT 10, REPEAT('a', 4048576), 20) TO '__TEST_DIR__/test.csv'
 
 # value is too big for loading
 statement ok
