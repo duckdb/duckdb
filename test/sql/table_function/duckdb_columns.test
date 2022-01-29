@@ -20,4 +20,4 @@ select tables.table_name, column_name, data_type, column_default, is_nullable, n
 integers	i	INTEGER	NULL	True	32	2	0
 test	i	INTEGER	NULL	False	32	2	0
 test	j	DECIMAL(18,3)	NULL	True	18	10	3
-test	k	VARCHAR	hello	True	NULL	NULL	NULL
+test	k	VARCHAR	'hello'	True	NULL	NULL	NULL

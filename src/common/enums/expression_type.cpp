@@ -147,7 +147,7 @@ string ExpressionTypeToOperator(ExpressionType type) {
 	case ExpressionType::COMPARE_EQUAL:
 		return "=";
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return "<>";
+		return "!=";
 	case ExpressionType::COMPARE_LESSTHAN:
 		return "<";
 	case ExpressionType::COMPARE_GREATERTHAN:

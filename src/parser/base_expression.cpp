@@ -25,5 +25,4 @@ bool BaseExpression::Equals(const BaseExpression *other) const {
 void BaseExpression::Verify() const {
 }
 
-
 } // namespace duckdb

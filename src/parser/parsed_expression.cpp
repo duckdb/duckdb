@@ -172,5 +172,4 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 	return result;
 }
 
-
 } // namespace duckdb

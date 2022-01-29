@@ -3,6 +3,7 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 
@@ -47,7 +48,7 @@ string ColumnRefExpression::ToString() const {
 		if (i > 0) {
 			result += ".";
 		}
-		result += "\"" + StringUtil::Replace(column_names[i], "\"", "\"\"") + "\"";
+		result += QualifiedName::Quote(column_names[i]);
 	}
 	return result;
 }

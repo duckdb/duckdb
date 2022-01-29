@@ -379,11 +379,11 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 	case LogicalTypeId::TIMESTAMP:
 		return "TIMESTAMP";
 	case LogicalTypeId::TIMESTAMP_MS:
-		return "TIMESTAMP (MS)";
+		return "TIMESTAMP_MS";
 	case LogicalTypeId::TIMESTAMP_NS:
-		return "TIMESTAMP (NS)";
+		return "TIMESTAMP_NS";
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return "TIMESTAMP (SEC)";
+		return "TIMESTAMP_S";
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return "TIMESTAMP WITH TIME ZONE";
 	case LogicalTypeId::TIME_TZ:

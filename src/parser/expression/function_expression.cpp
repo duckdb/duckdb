@@ -32,7 +32,11 @@ string FunctionExpression::ToString() const {
 		// built-in operator
 		D_ASSERT(!distinct);
 		if (children.size() == 1) {
-			return function_name + children[0]->ToString();
+			if (StringUtil::Contains(function_name, "__postfix")) {
+				return "(" + children[0]->ToString() + ")" + StringUtil::Replace(function_name, "__postfix", "");
+			} else {
+				return function_name + "(" + children[0]->ToString() + ")";
+			}
 		} else if (children.size() == 2) {
 			return "(" + children[0]->ToString() + " " + function_name + " " + children[1]->ToString() + ")";
 		}
@@ -45,21 +49,27 @@ string FunctionExpression::ToString() const {
 	}
 	result += StringUtil::Join(children, children.size(), ", ",
 	                           [](const unique_ptr<ParsedExpression> &child) { return child->ToString(); });
+	// ordered aggregate
+	if (!order_bys->orders.empty()) {
+		if (children.empty()) {
+			result += ") WITHIN GROUP (";
+		}
+		result += " ORDER BY ";
+		for (idx_t i = 0; i < order_bys->orders.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += order_bys->orders[i].ToString();
+		}
+	}
+	result += ")";
 
 	// filtered aggregate
 	if (filter) {
-		result += " FILTER " + filter->ToString();
+		result += " FILTER (WHERE " + filter->ToString() + ")";
 	}
 
-	// ordered aggregate
-	if (!order_bys->orders.empty()) {
-		result += " ORDER BY";
-		for (const auto &order : order_bys->orders) {
-			result += " " + order.ToString();
-		}
-	}
-
-	return result + ")";
+	return result;
 }
 
 bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpression *b) {
