@@ -84,6 +84,8 @@ public:
 	bool operator==(const BaseExpression &rhs) {
 		return this->Equals(&rhs);
 	}
+
+	virtual void Verify() const;
 };
 
 } // namespace duckdb

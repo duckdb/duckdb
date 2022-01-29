@@ -66,4 +66,8 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() {
 	return move(copy);
 }
 
+void BoundFunctionExpression::Verify() const {
+	D_ASSERT(!function.name.empty());
+}
+
 } // namespace duckdb

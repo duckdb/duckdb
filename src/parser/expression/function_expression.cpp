@@ -30,14 +30,19 @@ FunctionExpression::FunctionExpression(const string &function_name, vector<uniqu
 string FunctionExpression::ToString() const {
 	if (is_operator) {
 		// built-in operator
+		D_ASSERT(!distinct);
 		if (children.size() == 1) {
 			return function_name + children[0]->ToString();
 		} else if (children.size() == 2) {
-			return children[0]->ToString() + " " + function_name + " " + children[1]->ToString();
+			return "(" + children[0]->ToString() + " " + function_name + " " + children[1]->ToString() + ")";
 		}
 	}
 	// standard function call
-	string result = function_name + "(";
+	string result = schema.empty() ? function_name : schema + "." + function_name;
+	result += "(";
+	if (distinct) {
+		result += "DISTINCT ";
+	}
 	result += StringUtil::Join(children, children.size(), ", ",
 	                           [](const unique_ptr<ParsedExpression> &child) { return child->ToString(); });
 
@@ -130,6 +135,10 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 	                                           is_operator);
 	function->schema = schema;
 	return move(function);
+}
+
+void FunctionExpression::Verify() const {
+	D_ASSERT(!function_name.empty());
 }
 
 } // namespace duckdb

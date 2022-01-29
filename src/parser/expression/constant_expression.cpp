@@ -12,7 +12,7 @@ ConstantExpression::ConstantExpression(Value val)
 }
 
 string ConstantExpression::ToString() const {
-	return value.ToString();
+	return value.ToSQLString();
 }
 
 bool ConstantExpression::Equals(const ConstantExpression *a, const ConstantExpression *b) {

@@ -144,12 +144,10 @@ string ExpressionTypeToString(ExpressionType type) {
 
 string ExpressionTypeToOperator(ExpressionType type) {
 	switch (type) {
-	case ExpressionType::OPERATOR_NOT:
-		return "!";
 	case ExpressionType::COMPARE_EQUAL:
 		return "=";
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return "!=";
+		return "<>";
 	case ExpressionType::COMPARE_LESSTHAN:
 		return "<";
 	case ExpressionType::COMPARE_GREATERTHAN:
@@ -158,6 +156,10 @@ string ExpressionTypeToOperator(ExpressionType type) {
 		return "<=";
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		return ">=";
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		return "IS DISTINCT FROM";
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return "IS NOT DISTINCT FROM";
 	case ExpressionType::CONJUNCTION_AND:
 		return "AND";
 	case ExpressionType::CONJUNCTION_OR:

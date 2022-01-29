@@ -439,21 +439,21 @@ string LogicalType::ToString() const {
 			return "STRUCT";
 		}
 		auto &child_types = StructType::GetChildTypes(*this);
-		string ret = "STRUCT<";
+		string ret = "STRUCT(";
 		for (size_t i = 0; i < child_types.size(); i++) {
-			ret += child_types[i].first + ": " + child_types[i].second.ToString();
+			ret += child_types[i].first + " " + child_types[i].second.ToString();
 			if (i < child_types.size() - 1) {
 				ret += ", ";
 			}
 		}
-		ret += ">";
+		ret += ")";
 		return ret;
 	}
 	case LogicalTypeId::LIST: {
 		if (!type_info_) {
 			return "LIST";
 		}
-		return "LIST<" + ListType::GetChildType(*this).ToString() + ">";
+		return ListType::GetChildType(*this).ToString() + "[]";
 	}
 	case LogicalTypeId::MAP: {
 		if (!type_info_) {
@@ -481,7 +481,10 @@ string LogicalType::ToString() const {
 		return StringUtil::Format("DECIMAL(%d,%d)", width, scale);
 	}
 	case LogicalTypeId::ENUM: {
-		return EnumType::GetTypeName(*this);
+		return "\"" + EnumType::GetTypeName(*this) + "\"";
+	}
+	case LogicalTypeId::USER: {
+		return "\"" + UserType::GetTypeName(*this) + "\"";
 	}
 	default:
 		return LogicalTypeIdToString(id_);

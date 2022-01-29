@@ -15,6 +15,7 @@ string CaseExpression::ToString() const {
 		case_str += " THEN (" + check.then_expr->ToString() + ")";
 	}
 	case_str += " ELSE " + else_expr->ToString();
+	case_str += " END";
 	return case_str;
 }
 

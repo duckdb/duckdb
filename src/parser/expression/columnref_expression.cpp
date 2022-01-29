@@ -47,7 +47,7 @@ string ColumnRefExpression::ToString() const {
 		if (i > 0) {
 			result += ".";
 		}
-		result += column_names[i];
+		result += "\"" + StringUtil::Replace(column_names[i], "\"", "\"\"") + "\"";
 	}
 	return result;
 }

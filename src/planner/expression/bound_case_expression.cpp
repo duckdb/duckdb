@@ -23,6 +23,7 @@ string BoundCaseExpression::ToString() const {
 		result += " THEN (" + check.then_expr->ToString() + ")";
 	}
 	result += " ELSE (" + else_expr->ToString() + ")";
+	result += " END";
 	return result;
 }
 

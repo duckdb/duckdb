@@ -25,18 +25,48 @@ string OperatorExpression::ToString() const {
 	auto op = ExpressionTypeToOperator(type);
 	if (!op.empty()) {
 		// use the operator string to represent the operator
-		if (children.size() == 1) {
-			return op + children[0]->ToString();
-		} else if (children.size() == 2) {
-			return children[0]->ToString() + " " + op + " " + children[1]->ToString();
-		}
+		D_ASSERT(children.size() == 2);
+		return children[0]->ToString() + " " + op + " " + children[1]->ToString();
 	}
-	// if there is no operator we render it as a function
-	auto result = ExpressionTypeToString(type) + "(";
-	result += StringUtil::Join(children, children.size(), ", ",
-	                           [](const unique_ptr<ParsedExpression> &child) { return child->ToString(); });
-	result += ")";
-	return result;
+	switch(type) {
+	case ExpressionType::COMPARE_IN:
+	case ExpressionType::COMPARE_NOT_IN: {
+		string op_type = type == ExpressionType::COMPARE_IN ? " IN " : " NOT IN ";
+		string in_child = children[0]->ToString();
+		string child_list = "(";
+		for(idx_t i = 1; i < children.size(); i++) {
+			if (i > 1) {
+				child_list += ", ";
+			}
+			child_list += children[i]->ToString();
+		}
+		child_list += ")";
+		return in_child + op_type + child_list;
+	}
+	case ExpressionType::OPERATOR_NOT:
+	case ExpressionType::GROUPING_FUNCTION:
+	case ExpressionType::OPERATOR_COALESCE: {
+		string result = ExpressionTypeToString(type);
+		result += "(";
+		result += StringUtil::Join(children, children.size(), ", ",
+		                           [](const unique_ptr<ParsedExpression> &child) { return child->ToString(); });
+		result += ")";
+		return result;
+	}
+	case ExpressionType::OPERATOR_IS_NULL:
+		return children[0]->ToString() + " IS NULL";
+	case ExpressionType::OPERATOR_IS_NOT_NULL:
+		return children[0]->ToString() + " IS NOT NULL";
+	case ExpressionType::ARRAY_EXTRACT:
+		return children[0]->ToString() + "[" + children[1]->ToString() + "]";
+	case ExpressionType::ARRAY_SLICE:
+		return children[0]->ToString() + "[" + children[1]->ToString() + ":" + children[2]->ToString() + "]";
+	case ExpressionType::STRUCT_EXTRACT:
+		D_ASSERT(children[1]->type == ExpressionType::VALUE_CONSTANT);
+		return "(" + children[0]->ToString() + ")." + StringUtil::Replace(StringUtil::Replace(children[1]->ToString(), "\"", "\"\""), "'", "\"");
+	default:
+		throw InternalException("Unrecognized operator type");
+	}
 }
 
 bool OperatorExpression::Equals(const OperatorExpression *a, const OperatorExpression *b) {

@@ -1344,6 +1344,57 @@ string Value::ToString() const {
 	}
 }
 
+string Value::ToSQLString() const {
+	if (IsNull()) {
+		return ToString();
+	}
+	switch (type_.id()) {
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::BLOB:
+		return "'" + ToString() + "'::" + type_.ToString();
+	case LogicalTypeId::VARCHAR:
+		return "'" + ToString() + "'";
+	case LogicalTypeId::STRUCT: {
+		string ret = "{";
+		auto &child_types = StructType::GetChildTypes(type_);
+		for (size_t i = 0; i < struct_value.size(); i++) {
+			auto &name = child_types[i].first;
+			auto &child = struct_value[i];
+			ret += "'" + name + "': " + child.ToSQLString();
+			if (i < struct_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "}";
+		return ret;
+	}
+	case LogicalTypeId::LIST: {
+		string ret = "[";
+		for (size_t i = 0; i < list_value.size(); i++) {
+			auto &child = list_value[i];
+			ret += child.ToSQLString();
+			if (i < list_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "]";
+		return ret;
+	}
+	default:
+		return ToString();
+	}
+}
+
+
 //===--------------------------------------------------------------------===//
 // Type-specific getters
 //===--------------------------------------------------------------------===//
