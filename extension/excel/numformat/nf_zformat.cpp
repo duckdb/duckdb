@@ -7674,11 +7674,13 @@ String SvNumberformat::StripNewCurrencyDelimiters( const String& rStr,
             bool bQuoteSymbol )
 {
     String aTmp;
+	size_t find_pos;
     uint16_t nStartPos, nPos, nLen;
     nLen = rStr.size();
     nStartPos = 0;
-    while ( (nPos = rStr.find( L"[$", nStartPos )) != std::string::npos )
+    while ( (find_pos = rStr.find( L"[$", nStartPos )) != std::string::npos )
     {
+		nPos = (uint16_t)find_pos;
         uint16_t nEnd;
         if ( (nEnd = GetQuoteEnd( rStr, nPos )) < nLen )
         {
