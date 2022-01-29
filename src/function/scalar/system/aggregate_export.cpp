@@ -250,6 +250,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	// this should be required
 	D_ASSERT(bound_function.state_size);
 	D_ASSERT(bound_function.finalize);
+	D_ASSERT(!bound_function.window);
 
 	D_ASSERT(child_aggregate->function.return_type.id() != LogicalTypeId::INVALID);
 #ifdef DEBUG
@@ -267,7 +268,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	                      bound_function.state_size, bound_function.initialize, bound_function.update,
 	                      bound_function.combine, ExportAggregateFinalize, bound_function.simple_update,
 	                      /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
-	                      /* can't propagate statistics */ nullptr, bound_function.window);
+	                      /* can't propagate statistics */ nullptr, nullptr);
 
 	return make_unique<BoundAggregateExpression>(export_function, move(child_aggregate->children),
 	                                             move(child_aggregate->filter), move(export_bind_data),
