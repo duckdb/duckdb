@@ -5,10 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-# TODO make this work with ze optimizer
-statement ok
-PRAGMA disable_optimizer
-
 statement ok
 create table dummy as select range % 10 g, range d from range(100);
 
