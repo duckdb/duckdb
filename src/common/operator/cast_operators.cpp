@@ -16,6 +16,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "fast_float/fast_float.h"
 #include "fmt/format.h"
 
 #include <cctype>
@@ -1011,82 +1012,6 @@ bool TryCast::Operation(string_t input, uint64_t &result, bool strict) {
 	return TryIntegerCast<uint64_t, false>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
 
-template <class T, bool NEGATIVE>
-static void ComputeDoubleResult(T &result, idx_t decimal, idx_t decimal_factor) {
-	if (decimal_factor > 1) {
-		if (NEGATIVE) {
-			result -= (T)decimal / (T)decimal_factor;
-		} else {
-			result += (T)decimal / (T)decimal_factor;
-		}
-	}
-}
-
-template <class T, bool NEGATIVE>
-static bool DoubleCastLoop(const char *buf, idx_t len, T &result, bool strict) {
-	idx_t start_pos = NEGATIVE || *buf == '+' ? 1 : 0;
-	idx_t pos = start_pos;
-	idx_t decimal = 0;
-	idx_t decimal_factor = 0;
-	while (pos < len) {
-		if (!StringUtil::CharacterIsDigit(buf[pos])) {
-			// not a digit!
-			if (buf[pos] == '.') {
-				// decimal point
-				if (decimal_factor != 0) {
-					// nested periods
-					return false;
-				}
-				decimal_factor = 1;
-				pos++;
-				continue;
-			} else if (StringUtil::CharacterIsSpace(buf[pos])) {
-				// skip any trailing spaces
-				while (++pos < len) {
-					if (!StringUtil::CharacterIsSpace(buf[pos])) {
-						return false;
-					}
-				}
-				ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
-				return true;
-			} else if (buf[pos] == 'e' || buf[pos] == 'E') {
-				if (pos == start_pos) {
-					return false;
-				}
-				// E power
-				// parse an integer, this time not allowing another exponent
-				pos++;
-				int64_t exponent;
-				if (!TryIntegerCast<int64_t, true, false>(buf + pos, len - pos, exponent, strict)) {
-					return false;
-				}
-				ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
-				if (result > NumericLimits<T>::Maximum() / std::pow(10.0L, exponent)) {
-					return false;
-				}
-				result = result * std::pow(10.0L, exponent);
-
-				return true;
-			} else {
-				return false;
-			}
-		}
-		T digit = buf[pos++] - '0';
-		if (decimal_factor == 0) {
-			result = result * 10 + (NEGATIVE ? -digit : digit);
-		} else {
-			if (decimal_factor >= 1000000000000000000) {
-				// decimal value will overflow if we parse more, ignore any subsequent numbers
-				continue;
-			}
-			decimal = decimal * 10 + digit;
-			decimal_factor *= 10;
-		}
-	}
-	ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
-	return pos > start_pos;
-}
-
 template <class T>
 bool CheckDoubleValidity(T value);
 
@@ -1110,28 +1035,32 @@ static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 	if (len == 0) {
 		return false;
 	}
-	int negative = *buf == '-';
-
-	result = 0;
-	if (!negative) {
-		if (!DoubleCastLoop<T, false>(buf, len, result, strict)) {
-			return false;
-		}
-	} else {
-		if (!DoubleCastLoop<T, true>(buf, len, result, strict)) {
-			return false;
-		}
+	if (*buf == '+') {
+		buf++;
+		len--;
 	}
+	auto endptr = buf + len;
+	auto parse_result = fast_float::from_chars(buf, buf + len, result);
 	if (!CheckDoubleValidity<T>(result)) {
 		return false;
 	}
-	return true;
+	if (parse_result.ec != std::errc()) {
+		return false;
+	}
+	auto current_end = parse_result.ptr;
+	if (!strict) {
+		while(current_end < endptr && StringUtil::CharacterIsSpace(*current_end)) {
+			current_end++;
+		}
+	}
+	return current_end == endptr;
 }
 
 template <>
 bool TryCast::Operation(string_t input, float &result, bool strict) {
 	return TryDoubleCast<float>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
+
 template <>
 bool TryCast::Operation(string_t input, double &result, bool strict) {
 	return TryDoubleCast<double>(input.GetDataUnsafe(), input.GetSize(), result, strict);

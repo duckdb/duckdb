@@ -42,7 +42,7 @@ string OperatorExpression::ToString() const {
 			child_list += children[i]->ToString();
 		}
 		child_list += ")";
-		return in_child + op_type + child_list;
+		return "(" + in_child + op_type + child_list + ")";
 	}
 	case ExpressionType::OPERATOR_NOT:
 	case ExpressionType::GROUPING_FUNCTION:
@@ -55,9 +55,9 @@ string OperatorExpression::ToString() const {
 		return result;
 	}
 	case ExpressionType::OPERATOR_IS_NULL:
-		return children[0]->ToString() + " IS NULL";
+		return "(" + children[0]->ToString() + " IS NULL)";
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
-		return children[0]->ToString() + " IS NOT NULL";
+		return "(" + children[0]->ToString() + " IS NOT NULL)";
 	case ExpressionType::ARRAY_EXTRACT:
 		return children[0]->ToString() + "[" + children[1]->ToString() + "]";
 	case ExpressionType::ARRAY_SLICE:

@@ -28,6 +28,7 @@ tdigest_dir = os.path.join('third_party', 'tdigest')
 utf8proc_dir = os.path.join('third_party', 'utf8proc')
 utf8proc_include_dir = os.path.join('third_party', 'utf8proc', 'include')
 httplib_include_dir = os.path.join('third_party', 'httplib')
+fastfloat_include_dir = os.path.join('third_party', 'fast_float')
 
 moodycamel_include_dir = os.path.join('third_party', 'concurrentqueue')
 pcg_include_dir = os.path.join('third_party', 'pcg')
@@ -87,7 +88,7 @@ if '--extended' in sys.argv:
     main_header_files = normalize_path(main_header_files)
 
 # include paths for where to search for include files during amalgamation
-include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, hll_dir, fastpforlib_dir, tdigest_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir, pcg_include_dir, httplib_include_dir]
+include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, hll_dir, fastpforlib_dir, tdigest_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir, pcg_include_dir, httplib_include_dir, fastfloat_include_dir]
 # paths of where to look for files to compile and include to the final amalgamation
 compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, hll_dir, fastpforlib_dir, utf8proc_dir, pg_query_dir]
 
