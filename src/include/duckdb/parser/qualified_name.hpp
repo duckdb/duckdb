@@ -27,6 +27,7 @@ struct QualifiedName {
 		for (idx_t i = 0; i < input.size(); i++) {
 			if (input[i] == '"') {
 				contains_quote = true;
+				must_be_quoted = true;
 			} else if (!StringUtil::CharacterIsAlpha(input[i])) {
 				must_be_quoted = true;
 			}

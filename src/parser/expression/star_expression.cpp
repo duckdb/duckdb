@@ -12,7 +12,7 @@ StarExpression::StarExpression(string relation_name_p)
 string StarExpression::ToString() const {
 	string result = relation_name.empty() ? "*" : relation_name + ".*";
 	if (!exclude_list.empty()) {
-		result += " EXCEPT (";
+		result += " EXCLUDE (";
 		bool first_entry = true;
 		for (auto &entry : exclude_list) {
 			if (!first_entry) {
