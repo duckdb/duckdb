@@ -96,7 +96,7 @@ string WindowExpression::ToString() const {
 		units = (start == WindowBoundary::EXPR_FOLLOWING_RANGE) ? "RANGE" : "ROWS";
 		break;
 	default:
-		break;
+		throw InternalException("Unrecognized FROM in WindowExpression");
 	}
 
 	string to;
@@ -114,18 +114,21 @@ string WindowExpression::ToString() const {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
 		to = "UNBOUNDED PRECEDING";
 		break;
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		to = "UNBOUNDED FOLLOWING";
+		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS:
 	case WindowBoundary::EXPR_PRECEDING_RANGE:
 		to = end_expr->GetName() + " PRECEDING";
-		units = (start == WindowBoundary::EXPR_PRECEDING_RANGE) ? "RANGE" : "ROWS";
+		units = (end == WindowBoundary::EXPR_PRECEDING_RANGE) ? "RANGE" : "ROWS";
 		break;
 	case WindowBoundary::EXPR_FOLLOWING_ROWS:
 	case WindowBoundary::EXPR_FOLLOWING_RANGE:
 		to = end_expr->GetName() + " FOLLOWING";
-		units = (start == WindowBoundary::EXPR_FOLLOWING_RANGE) ? "RANGE" : "ROWS";
+		units = (end == WindowBoundary::EXPR_FOLLOWING_RANGE) ? "RANGE" : "ROWS";
 		break;
 	default:
-		break;
+		throw InternalException("Unrecognized TO in WindowExpression");
 	}
 
 	if (!from.empty() || !to.empty()) {

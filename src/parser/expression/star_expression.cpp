@@ -30,9 +30,9 @@ string StarExpression::ToString() const {
 			if (!first_entry) {
 				result += ", ";
 			}
-			result += entry.first;
-			result += " AS ";
 			result += entry.second->ToString();
+			result += " AS ";
+			result += entry.first;
 			first_entry = false;
 		}
 		result += ")";
