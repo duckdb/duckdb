@@ -1009,7 +1009,9 @@ const aggregate_state_t &AggregateStateType::GetStateType(const LogicalType &typ
 const string AggregateStateType::GetTypeName(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::AGGREGATE_STATE);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
+	if (!info) {
+		return "AGGREGATE_STATE<?>";
+	}
 	auto aggr_state = ((AggregateStateTypeInfo &)*info).state_type;
 	return "AGGREGATE_STATE<" + aggr_state.function_name + "(" +
 	       StringUtil::Join(aggr_state.bound_argument_types, aggr_state.bound_argument_types.size(), ", ",

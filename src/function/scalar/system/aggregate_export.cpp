@@ -170,6 +170,9 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 
 	// the aggregate name and types are in the logical type of the aggregate state, make sure its sane
 	auto &arg_return_type = arguments[0]->return_type;
+	for (auto &arg_type : bound_function.arguments) {
+		arg_type = arg_return_type;
+	}
 
 	if (arg_return_type.id() != LogicalTypeId::AGGREGATE_STATE) {
 		throw BinderException("Can only FINALIZE aggregate state, not %s", arg_return_type.ToString());
@@ -276,13 +279,14 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 }
 
 ScalarFunction ExportAggregateFunction::GetFinalize() {
-	return ScalarFunction("finalize", {LogicalType::ANY}, LogicalType::INVALID, AggregateStateFinalize, false,
-	                      BindAggregateState, nullptr, nullptr, InitFinalizeState);
+	return ScalarFunction("finalize", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID, AggregateStateFinalize,
+	                      false, BindAggregateState, nullptr, nullptr, InitFinalizeState);
 }
 
 ScalarFunction ExportAggregateFunction::GetCombine() {
-	return ScalarFunction("combine", {LogicalType::ANY, LogicalType::ANY}, LogicalType::INVALID, AggregateStateCombine,
-	                      false, BindAggregateState, nullptr, nullptr, InitCombineState);
+	return ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::AGGREGATE_STATE},
+	                      LogicalTypeId::AGGREGATE_STATE, AggregateStateCombine, false, BindAggregateState, nullptr,
+	                      nullptr, InitCombineState);
 }
 
 } // namespace duckdb
