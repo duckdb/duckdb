@@ -162,7 +162,7 @@
     Code
       translate(regexpr("pattern", text))
     Output
-      <SQL> (LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX("text", 'pattern'), 0)) + 1)
+      <SQL> (CASE WHEN REGEXP_MATCHES("text" ,'pattern') THEN (LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX("text", 'pattern'),0))+1) ELSE -1 END)
     Code
       translate(round(x, digits = 1.1))
     Output

@@ -150,15 +150,9 @@ sql_translation.duckdb_connection <- function(con) {
       is.finite = function(a) build_sql("(NOT (", a, " IS NULL OR REGEXP_MATCHES(PRINTF('%f',", a, "),'inf|nan')))"),
       grepl = duckdb_grepl,
 
-      # Return index where first match starts, string length if no match (R would give -1 in case of no match)
+      # Return index where the first match starts,-1 if no match
       regexpr = function(p, x) {
-        sql_expr((LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX(!!x, !!p), 0L)) + 1L))
-        # The following version would give -1 in case of no match:
-        #        build_sql(
-        #          "(LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX(", x, ", ", p,
-        #          "),0))-(LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX(", x, ", ", p,
-        #          "),0))+2)/(LENGTH(", x, ")+2)*(LENGTH(", x, ")+2)+1)"
-        #        )
+        build_sql("(CASE WHEN REGEXP_MATCHES(", x," ,", p, ") THEN (LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX(", x, ", ", p,"),0))+1) ELSE -1 END)")
       },
       round = function(x, digits) sql_expr(ROUND(!!x, CAST(ROUND((!!digits), 0L) %AS% INTEGER))),
       as.Date = sql_cast("DATE"),
