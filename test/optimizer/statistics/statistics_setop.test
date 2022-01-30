@@ -34,13 +34,13 @@ logical_opt	<REGEX>:.*i=5.*
 query II
 EXPLAIN SELECT i IS NULL FROM (SELECT * FROM integers UNION ALL SELECT * FROM integers2) tbl(i);
 ----
-logical_opt	<!REGEX>:.*IS_NULL.*
+logical_opt	<!REGEX>:.*IS NULL.*
 
 # integers3 has null values, so once we include integers3 we need to execute the IS_NULL predicate
 query II
 EXPLAIN SELECT i IS NULL FROM (SELECT * FROM integers UNION ALL SELECT * FROM integers2 UNION ALL SELECT * FROM integers3) tbl(i);
 ----
-logical_opt	<REGEX>:.*IS_NULL.*
+logical_opt	<REGEX>:.*IS NULL.*
 
 # except
 # except has the same stats as the LHS (as in the worst case, nothing is filtered out)
@@ -58,7 +58,7 @@ logical_opt	<REGEX>:.*i=5.*
 query II
 EXPLAIN SELECT i IS NULL FROM (SELECT * FROM integers2 EXCEPT SELECT * FROM integers3) tbl(i);
 ----
-logical_opt	<!REGEX>:.*IS_NULL.*
+logical_opt	<!REGEX>:.*IS NULL.*
 
 # intersect
 # intersect has as stats the intersection of the LHS with the RHS
