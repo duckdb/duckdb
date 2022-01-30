@@ -68,18 +68,22 @@ expr_constant_R <- function(val) {
   .Call(`_duckdb_expr_constant_R`, val)
 }
 
-expr_function_R <- function(name, args) {
-  .Call(`_duckdb_expr_function_R`, name, args)
+expr_function_R <- function(name_p, args) {
+  .Call(`_duckdb_expr_function_R`, name_p, args)
 }
 
 expr_tostring_R <- function(expr) {
   .Call(`_duckdb_expr_tostring_R`, expr)
 }
 
-rel_df_R <- function(con_p, df) {
-  .Call(`_duckdb_rel_df_R`, con_p, df)
+rel_from_df_R <- function(con_p, df) {
+  .Call(`_duckdb_rel_from_df_R`, con_p, df)
 }
 
 rel_filter_R <- function(rel_p, expr_p) {
   .Call(`_duckdb_rel_filter_R`, rel_p, expr_p)
+}
+
+rel_to_df_R <- function(rel_p) {
+  .Call(`_duckdb_rel_to_df_R`, rel_p)
 }

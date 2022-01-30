@@ -456,7 +456,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 	}
 }
 
-static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
+SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result) {
 	// step 2: create result data frame and allocate columns
 	uint32_t ncols = result->types.size();
 	if (ncols == 0) {

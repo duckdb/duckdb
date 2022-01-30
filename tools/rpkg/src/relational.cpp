@@ -7,6 +7,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 
 #include "duckdb/main/relation/filter_relation.hpp"
 
@@ -28,16 +29,20 @@ external_pointer<T> make_external(Args &&...args) {
 	return make_external<ConstantExpression>(RApiTypes::SexpToValue(val, 0));
 }
 
-[[cpp11::register]] SEXP expr_function_R(strings name, list args) {
+[[cpp11::register]] SEXP expr_function_R(strings name_p, list args) {
 	vector<unique_ptr<ParsedExpression>> children;
 	for (auto arg : args) {
 		children.push_back(external_pointer<ParsedExpression>(arg)->Copy());
 	}
-	auto operator_type = OperatorToExpressionType((string)name[0]);
+	string name = (string)name_p[0];
+	auto operator_type = OperatorToExpressionType(name);
 	if (operator_type != ExpressionType::INVALID && children.size() == 2) {
 		return make_external<ComparisonExpression>(operator_type, move(children[0]), move(children[1]));
+	} else if (name == "||") {
+		return make_external<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, move(children[0]),
+		                                            move(children[1]));
 	}
-	return make_external<FunctionExpression>(name[0], move(children));
+	return make_external<FunctionExpression>(name, move(children));
 }
 
 [[cpp11::register]] SEXP expr_tostring_R(sexp expr) {
@@ -52,7 +57,7 @@ struct RelationWrapper {
 	shared_ptr<Relation> rel;
 };
 
-[[cpp11::register]] SEXP rel_df_R(sexp con_p, sexp df) {
+[[cpp11::register]] SEXP rel_from_df_R(sexp con_p, sexp df) {
 	external_pointer<ConnWrapper> con(con_p);
 	auto rel = con->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)(SEXP)df)});
 	auto res = sexp(make_external<RelationWrapper>(move(rel)));
@@ -65,4 +70,15 @@ struct RelationWrapper {
 	auto expr = external_pointer<ParsedExpression>(expr_p)->Copy();
 	auto res = std::make_shared<FilterRelation>(child->rel, move(expr));
 	return make_external<RelationWrapper>(res);
+}
+
+[[cpp11::register]] SEXP rel_to_df_R(sexp rel_p) {
+	external_pointer<RelationWrapper> rel(rel_p);
+	auto res = rel->rel->Execute();
+	if (res->type == QueryResultType::STREAM_RESULT) {
+		res = ((StreamQueryResult &)*res).Materialize();
+	}
+	D_ASSERT(res->type == QueryResultType::MATERIALIZED_RESULT);
+	auto mat_res = (MaterializedQueryResult *)res.get();
+	return duckdb_execute_R_impl(mat_res);
 }

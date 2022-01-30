@@ -129,4 +129,6 @@ private:
 	RStrings();
 };
 
+SEXP duckdb_execute_R_impl(MaterializedQueryResult *result);
+
 } // namespace duckdb
