@@ -1,8 +1,11 @@
 #include "duckdb_odbc.hpp"
 #include "api_info.hpp"
+#include "statement_functions.hpp"
 
 using duckdb::ApiInfo;
 using duckdb::idx_t;
+using duckdb::TypeInfo;
+using std::string;
 
 /*** ODBC API Functions ********************************/
 SQLRETURN SQL_API SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function_id, SQLUSMALLINT *supported_ptr) {
@@ -15,7 +18,27 @@ SQLRETURN SQL_API SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT functi
 }
 
 SQLRETURN SQL_API SQLGetTypeInfo(SQLHSTMT statement_handle, SQLSMALLINT data_type) {
-	return ApiInfo::CheckDataType(data_type);
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
+		string query("SELECT * FROM (VALUES ");
+
+		if (data_type == SQL_ALL_TYPES) {
+			auto vec_types = ApiInfo::GetVectorTypesAddr();
+			ApiInfo::WriteInfoTypesToQueryString(vec_types, query);
+		} else {
+			vector<TypeInfo> vec_types;
+			ApiInfo::FindDataType(data_type, vec_types);
+			ApiInfo::WriteInfoTypesToQueryString(vec_types, query);
+		}
+
+		query += ") AS odbc_types (\"TYPE_NAME\", \"DATA_TYPE\", \"COLUMN_SIZE\", \"LITERAL_PREFIX\", "
+		         "\"LITERAL_SUFFIX\", \"CREATE_PARAMS\", \"NULLABLE\", "
+		         "\"CASE_SENSITIVE\", \"SEARCHABLE\", \"UNSIGNED_ATTRIBUTE\", \"FIXED_PREC_SCALE\", "
+		         "\"AUTO_UNIQUE_VALUE\", \"LOCAL_TYPE_NAME\", "
+		         "\"MINIMUM_SCALE\", \"MAXIMUM_SCALE\", \"SQL_DATA_TYPE\", \"SQL_DATETIME_SUB\", \"NUM_PREC_RADIX\", "
+		         "\"INTERVAL_PRECISION\")";
+
+		return duckdb::ExecDirectStmt(stmt, (SQLCHAR *)query.c_str(), query.size());
+	});
 }
 
 /*** ApiInfo private attributes ********************************/
@@ -41,37 +64,103 @@ const std::unordered_set<SQLUSMALLINT> ApiInfo::ODBC3_EXTRA_SUPPORTED_FUNCTIONS 
     SQL_API_SQLGETDESCREC,    SQL_API_SQLPRIMARYKEYS,    SQL_API_SQLPROCEDURECOLUMNS, SQL_API_SQLPROCEDURES,
     SQL_API_SQLSETDESCREC,    SQL_API_SQLSETPOS,         SQL_API_SQLTABLEPRIVILEGES};
 
-const std::unordered_set<SQLSMALLINT> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {SQL_CHAR,
-                                                                           SQL_TINYINT,
-                                                                           SQL_SMALLINT,
-                                                                           SQL_INTEGER,
-                                                                           SQL_BIGINT,
-                                                                           SQL_DATE,
-                                                                           SQL_TYPE_DATE,
-                                                                           SQL_TIME,
-                                                                           SQL_TYPE_TIME,
-                                                                           SQL_TIMESTAMP,
-                                                                           SQL_TYPE_TIMESTAMP,
-                                                                           SQL_DECIMAL,
-                                                                           SQL_NUMERIC,
-                                                                           SQL_FLOAT,
-                                                                           SQL_DOUBLE,
-                                                                           SQL_VARCHAR,
-                                                                           SQL_BINARY,
-                                                                           SQL_VARBINARY,
-                                                                           SQL_INTERVAL_MONTH,
-                                                                           SQL_INTERVAL_YEAR,
-                                                                           SQL_INTERVAL_YEAR_TO_MONTH,
-                                                                           SQL_INTERVAL_DAY,
-                                                                           SQL_INTERVAL_HOUR,
-                                                                           SQL_INTERVAL_MINUTE,
-                                                                           SQL_INTERVAL_SECOND,
-                                                                           SQL_INTERVAL_DAY_TO_HOUR,
-                                                                           SQL_INTERVAL_DAY_TO_MINUTE,
-                                                                           SQL_INTERVAL_DAY_TO_SECOND,
-                                                                           SQL_INTERVAL_HOUR_TO_MINUTE,
-                                                                           SQL_INTERVAL_HOUR_TO_SECOND,
-                                                                           SQL_INTERVAL_MINUTE_TO_SECOND};
+const std::vector<duckdb::TypeInfo> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {
+    {"CHAR", SQL_CHAR, 1, "''''", "''''", "'length'", SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, -1, SQL_FALSE, SQL_FALSE,
+     "NULL", -1, -1, SQL_CHAR, -1, -1, -1},
+    {"BOOLEAN", SQL_BIT, 1, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_TRUE, SQL_TRUE,
+     SQL_FALSE, "'boolean'", -1, -1, SQL_BIT, -1, -1, -1},
+    {"TINYINT", SQL_TINYINT, 3, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE,
+     SQL_FALSE, "NULL", 0, 0, SQL_TINYINT, -1, 2, -1},
+    {"SMALLINT", SQL_SMALLINT, 5, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE,
+     SQL_FALSE, "NULL", 0, 0, SQL_SMALLINT, -1, 2, -1},
+    {"INTEGER", SQL_INTEGER, 10, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE,
+     SQL_FALSE, "NULL", 0, 0, SQL_INTEGER, -1, 2, -1},
+    {"BIGINT", SQL_BIGINT, 19, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE,
+     SQL_FALSE, "NULL", 0, 0, SQL_BIGINT, -1, 2, -1},
+    {"DATE", SQL_TYPE_DATE, 10, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1, SQL_FALSE, SQL_FALSE,
+     "NULL", -1, -1, SQL_DATETIME, SQL_CODE_DATE, -1, -1},
+    {"TIME", SQL_TYPE_TIME, 8, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1, SQL_FALSE, SQL_FALSE,
+     "NULL", 0, 0, SQL_DATETIME, SQL_CODE_TIME, -1, -1},
+    {"TIMESTAMP", SQL_TYPE_TIMESTAMP, 26, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1, SQL_FALSE,
+     SQL_FALSE, "NULL", 0, 0, SQL_DATETIME, SQL_CODE_TIMESTAMP, -1, -1},
+    {"DECIMAL", SQL_DECIMAL, 38, "'", "'", "'precision,scale'", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1, SQL_FALSE,
+     SQL_FALSE, "NULL", 0, 38, SQL_DECIMAL, -1, 10, -1},
+    {"NUMERIC", SQL_NUMERIC, 38, "'", "'", "'precision,scale'", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1, SQL_FALSE,
+     SQL_FALSE, "NULL", 0, 38, SQL_NUMERIC, -1, 10, -1},
+    {"FLOAT", SQL_FLOAT, 24, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE,
+     SQL_FALSE, "NULL", 0, 0, SQL_FLOAT, -1, 2, -1},
+    {"DOUBLE", SQL_DOUBLE, 53, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE,
+     SQL_FALSE, "NULL", 0, 0, SQL_DOUBLE, -1, 2, -1},
+    {"'VARCHAR'", SQL_VARCHAR, -1, "''''", "''''", "'length'", SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, -1, SQL_FALSE,
+     -1, "NULL", -1, -1, SQL_VARCHAR, -1, -1, -1},
+    {"BLOB", SQL_VARBINARY, -1, "'", "'", "length", SQL_NULLABLE, SQL_TRUE, SQL_PRED_BASIC, -1, SQL_FALSE, SQL_FALSE,
+     "NULL", -1, -1, SQL_VARBINARY, -1, -1, -1},
+    {"INTERVAL YEAR", SQL_INTERVAL_YEAR, 9, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1, SQL_FALSE,
+     -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_YEAR, -1, -1},
+    {"INTERVAL MONTH", SQL_INTERVAL_MONTH, 10, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1, SQL_FALSE,
+     -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_MONTH, -1, -1},
+    {"INTERVAL DAY", SQL_INTERVAL_DAY, 5, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1, SQL_FALSE, -1,
+     "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_DAY, -1, -1},
+    {"INTERVAL HOUR", SQL_INTERVAL_HOUR, 6, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1, SQL_FALSE,
+     -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_HOUR, -1, -1},
+    {"INTERVAL MINUTE", SQL_INTERVAL_MINUTE, 8, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1,
+     SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_MINUTE, -1, -1},
+    {"INTERVAL SECONDE", SQL_INTERVAL_SECOND, 10, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1,
+     SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_SECOND, -1, -1},
+    {"INTERVAL YEAR TO MONTH", SQL_INTERVAL_YEAR_TO_MONTH, 12, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE,
+     SQL_PRED_BASIC, -1, SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_YEAR_TO_MONTH, -1, -1},
+    {"INTERVAL DAY TO HOUR", SQL_INTERVAL_DAY_TO_HOUR, 8, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1,
+     SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_DAY_TO_HOUR, -1, -1},
+    {"INTERVAL DAY TO MINUTE", SQL_INTERVAL_DAY_TO_MINUTE, 11, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE,
+     SQL_PRED_BASIC, -1, SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_DAY_TO_MINUTE, -1, -1},
+    {"INTERVAL DAY TO SECOND", SQL_INTERVAL_DAY_TO_SECOND, 14, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE,
+     SQL_PRED_BASIC, -1, SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_DAY_TO_SECOND, -1, -1},
+    {"INTERVAL HOUR TO MINUTE", SQL_INTERVAL_HOUR_TO_MINUTE, 9, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE,
+     SQL_PRED_BASIC, -1, SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_HOUR_TO_MINUTE, -1, -1},
+    {"INTERVAL HOUR TO SECOND", SQL_INTERVAL_HOUR_TO_SECOND, 12, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE,
+     SQL_PRED_BASIC, -1, SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_HOUR_TO_SECOND, -1, -1},
+    {"INTERVAL MINUTE TO SECOND", SQL_INTERVAL_MINUTE_TO_SECOND, 12, "'", "'", "NULL", SQL_NULLABLE, SQL_FALSE,
+     SQL_PRED_BASIC, -1, SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_MINUTE_TO_SECOND, -1, -1}};
+
+void ApiInfo::FindDataType(SQLSMALLINT data_type, vector<TypeInfo> &vec_types) {
+	duckdb::idx_t size_types = ODBC_SUPPORTED_SQL_TYPES.size();
+	for (duckdb::idx_t i = 0; i < size_types; ++i) {
+		if (ODBC_SUPPORTED_SQL_TYPES[i].data_type == data_type) {
+			// get next info type using the same data type
+			for (duckdb::idx_t type_idx = i;
+			     type_idx < size_types && ODBC_SUPPORTED_SQL_TYPES[type_idx].data_type == data_type; ++type_idx) {
+				vec_types.emplace_back(ODBC_SUPPORTED_SQL_TYPES[type_idx]);
+			}
+			break;
+		}
+	}
+}
+
+void ApiInfo::WriteInfoTypesToQueryString(const vector<TypeInfo> &vec_types, string &query) {
+	for (auto info_type : vec_types) {
+		query += "(";
+		query += "CAST(" + string(info_type.type_name) + " AS VARCHAR),";
+		query += "CAST(" + std::to_string(info_type.data_type) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.column_size) + " AS INTEGER),";
+		query += "CAST(" + string(info_type.literal_prefix) + " AS VARCHAR),";
+		query += "CAST(" + string(info_type.literal_suffix) + " AS VARCHAR),";
+		query += "CAST(" + string(info_type.create_params) + " AS VARCHAR),";
+		query += "CAST(" + std::to_string(info_type.nullable) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.case_sensitive) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.searchable) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.unsigned_attribute) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.fixed_prec_scale) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.auto_unique_value) + " AS SMALLINT),";
+		query += "CAST(" + string(info_type.local_type_name) + " AS VARCHAR),";
+		query += "CAST(" + std::to_string(info_type.minimum_scale) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.maximum_scale) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.sql_data_type) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.sql_datetime_sub) + " AS SMALLINT),";
+		query += "CAST(" + std::to_string(info_type.num_prec_radix) + " AS integer),";
+		query += "CAST(" + std::to_string(info_type.interval_precision) + " AS SMALLINT)";
+		query += ")";
+	}
+}
 
 void ApiInfo::SetFunctionSupported(SQLUSMALLINT *flags, int function_id) {
 	flags[function_id >> 4] |= (1 << (function_id & 0xF));
@@ -153,13 +242,6 @@ SQLSMALLINT ApiInfo::FindRelatedSQLType(duckdb::LogicalTypeId type_id) {
 	}
 }
 
-SQLRETURN ApiInfo::CheckDataType(SQLSMALLINT data_type) {
-	if (ODBC_SUPPORTED_SQL_TYPES.find(data_type) != ODBC_SUPPORTED_SQL_TYPES.end()) {
-		return SQL_SUCCESS;
-	}
-	return SQL_ERROR;
-}
-
 /**
  * It receives the SQL_C type
  * Returns the size of bytes to increment by a pointer
@@ -228,7 +310,10 @@ SQLRETURN ApiInfo::GetColumnSize(const duckdb::LogicalType &logical_type, SQLULE
 		*col_size_ptr = 1;
 		return SQL_SUCCESS;
 	case SQL_TINYINT:
-		*col_size_ptr = 6;
+		*col_size_ptr = 3;
+		return SQL_SUCCESS;
+	case SQL_SMALLINT:
+		*col_size_ptr = 5;
 		return SQL_SUCCESS;
 	case SQL_INTEGER:
 		*col_size_ptr = 11;
@@ -260,4 +345,8 @@ SQLRETURN ApiInfo::GetColumnSize(const duckdb::LogicalType &logical_type, SQLULE
 	default:
 		return SQL_ERROR;
 	}
+}
+
+const vector<TypeInfo> &ApiInfo::GetVectorTypesAddr() {
+	return ApiInfo::ODBC_SUPPORTED_SQL_TYPES;
 }
