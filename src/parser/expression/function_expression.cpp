@@ -54,7 +54,7 @@ string FunctionExpression::ToString() const {
 		}
 	}
 	if (export_state) {
-		result += " EXPORT STATE";
+		result += " EXPORT_STATE";
 	}
 	return result + ")";
 }

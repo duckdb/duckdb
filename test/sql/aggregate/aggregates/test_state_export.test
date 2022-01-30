@@ -13,34 +13,23 @@ create table dummy as select range % 10 g, range d from range(100);
 query IIIIII nosort res0
 SELECT count(*), count(d), sum(d), avg(d)::integer, min(d), max(d) FROM dummy;
 ----
-100	100	4950	49	0	99
 
 query IIIIII nosort res0
-SELECT finalize(count(*) EXPORT STATE), finalize(count(d) EXPORT STATE), finalize(sum(d) EXPORT STATE), finalize(avg(d) EXPORT STATE)::integer, finalize(min(d) EXPORT STATE), finalize(max(d) EXPORT STATE)  FROM dummy;
+SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE)  FROM dummy;
 ----
 
 # grouped aggr
 query IIIIIII nosort res1
 SELECT g, count(*), count(d), sum(d), avg(d)::integer, min(d), max(d) FROM dummy GROUP BY g ORDER BY g;
 ----
-0	10	10	450	45	0	90
-1	10	10	460	46	1	91
-2	10	10	470	47	2	92
-3	10	10	480	48	3	93
-4	10	10	490	49	4	94
-5	10	10	500	50	5	95
-6	10	10	510	51	6	96
-7	10	10	520	52	7	97
-8	10	10	530	53	8	98
-9	10	10	540	54	9	99
 
 query IIIIIII nosort res1
-SELECT g, finalize(count(*) EXPORT STATE), finalize(count(d) EXPORT STATE), finalize(sum(d) EXPORT STATE), finalize(avg(d) EXPORT STATE)::integer, finalize(min(d) EXPORT STATE), finalize(max(d) EXPORT STATE)  FROM dummy GROUP BY g ORDER BY g;
+SELECT g, finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE)  FROM dummy GROUP BY g ORDER BY g;
 ----
 
 # we can persist this
 statement ok
-CREATE TABLE state AS SELECT g, count(*) EXPORT STATE count_star_state, count(d) EXPORT STATE count_state, sum(d) EXPORT STATE sum_state, avg(d) EXPORT STATE avg_state, min(d) EXPORT STATE min_state, max(d) EXPORT STATE max_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, count(*) EXPORT_STATE count_star_state, count(d) EXPORT_STATE count_state, sum(d) EXPORT_STATE sum_state, avg(d) EXPORT_STATE avg_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
 
 query IIIIIII nosort res1
 SELECT g, finalize(count_star_state),finalize(count_state), finalize(sum_state), finalize(avg_state)::integer, finalize(min_state), finalize(max_state) FROM state ORDER BY g;
@@ -49,48 +38,38 @@ SELECT g, finalize(count_star_state),finalize(count_state), finalize(sum_state),
 query II nosort res2
 SELECT sum(d)*2 FROM dummy;
 ----
-9900
+
 
 query II nosort res2
-SELECT FINALIZE(COMBINE(SUM(d) EXPORT STATE, SUM(d) EXPORT STATE)) FROM dummy;
+SELECT FINALIZE(COMBINE(SUM(d) EXPORT_STATE, SUM(d) EXPORT_STATE)) FROM dummy;
 ----
 
 
 query II nosort res3
 SELECT g, sum(d)*2 combined_sum FROM dummy GROUP BY g ORDER BY g;
 ----
-0	900
-1	920
-2	940
-3	960
-4	980
-5	1000
-6	1020
-7	1040
-8	1060
-9	1080
 
 query II nosort res3
-select g, finalize(combine(sum(d) export STATE, sum_state)) combined_sum from dummy join state using (g) group by g, sum_state ORDER BY g;
+select g, finalize(combine(sum(d) EXPORT_STATE, sum_state)) combined_sum from dummy join state using (g) group by g, sum_state ORDER BY g;
 ----
 
 # combine aggregate state in UNION
 statement ok
-CREATE TABLE state2 AS SELECT g, sum(d) EXPORT STATE sum_state FROM dummy WHERE g < 5 GROUP BY g ORDER BY g;
+CREATE TABLE state2 AS SELECT g, sum(d) EXPORT_STATE sum_state FROM dummy WHERE g < 5 GROUP BY g ORDER BY g;
 
 query II nosort res3
-select g, finalize(sum_state) * 2 combined_sum from (select g, sum(d) export STATE sum_state from dummy where g >= 5 GROUP BY g union all SELECT * FROM state2) ORDER BY g;
+select g, finalize(sum_state) * 2 combined_sum from (select g, sum(d) EXPORT_STATE sum_state from dummy where g >= 5 GROUP BY g union all SELECT * FROM state2) ORDER BY g;
 ----
 
 # combine aggregate states in JOINs with NULLs
 query II nosort res3
 with groups as (select distinct g from dummy)
-select g, FINALIZE(COMBINE(sum_state, sum_state2)) * 2 from groups left join state2 using(g) left join (select g, sum(d) export STATE sum_state2 from dummy where g >= 5 GROUP BY g) using (g)
+select g, FINALIZE(COMBINE(sum_state, sum_state2)) * 2 from groups left join state2 using(g) left join (select g, sum(d) EXPORT_STATE sum_state2 from dummy where g >= 5 GROUP BY g) using (g)
 ----
 
 query IIII
 with groups as (select distinct g from dummy)
-select g, FINALIZE(sum_state), FINALIZE(sum_state2), FINALIZE(COMBINE(sum_state, sum_state2))  from groups left join state2 using(g) left join (select g, sum(d) export STATE sum_state2 from dummy where g >= 3 GROUP BY g) using (g) order by g
+select g, FINALIZE(sum_state), FINALIZE(sum_state2), FINALIZE(COMBINE(sum_state, sum_state2))  from groups left join state2 using(g) left join (select g, sum(d) EXPORT_STATE sum_state2 from dummy where g >= 3 GROUP BY g) using (g) order by g
 ----
 0	450	NULL	450
 1	460	NULL	460
@@ -103,11 +82,74 @@ select g, FINALIZE(sum_state), FINALIZE(sum_state2), FINALIZE(COMBINE(sum_state,
 8	NULL	530	530
 9	NULL	540	540
 
+# empty groups
+query IIIIII nosort res4
+SELECT count(*), count(d), sum(d), avg(d)::integer, min(d), max(d) FROM dummy WHERE FALSE;
+----
+
+query IIIIII nosort res4
+SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM dummy WHERE FALSE;
+----
+
+# only null scanned
+query IIIIII nosort res5
+SELECT count(*), count(d), sum(d), avg(d)::integer, min(d), max(d) FROM (SELECT NULL::integer d);
+----
+
+query IIIIII nosort res5
+SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
+----
+
+# only null scanned, but grouped
+query IIIIII nosort res6
+SELECT count(*), count(d), sum(d), avg(d)::integer, min(d), max(d) FROM (SELECT NULL::integer d, g FROM dummy);
+----
+
+query IIIIII nosort res6
+SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
+----
+
+# more aggregates
+
+query II nosort res7
+select argmin(a,b), argmax(a,b) from (values (1,1), (2,2), (8,8), (10,10)) s(a,b);
+----
+
+query II nosort res7
+select FINALIZE(argmin(a,b) EXPORT_STATE), FINALIZE(argmax(a,b) EXPORT_STATE) from (values (1,1), (2,2), (8,8), (10,10)) s(a,b);
+----
+
+query IIIIIII nosort res8
+SELECT g, first(d), last(d), fsum(d), favg(d), product(d), bit_xor(d), bool_and(d > 5) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query IIIIIII nosort res8
+SELECT g, FINALIZE(first(d) EXPORT_STATE), FINALIZE(last(d) EXPORT_STATE), FINALIZE(fsum(d) EXPORT_STATE), FINALIZE(favg(d) EXPORT_STATE), FINALIZE(product(d) EXPORT_STATE), FINALIZE(bit_xor(d) EXPORT_STATE), FINALIZE(bool_and(d > 5) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res9
+SELECT corr(d, d+1), covar_pop(d, d+1)FROM dummy;
+----
+
+
+query II nosort res9
+SELECT FINALIZE(corr(d, d+1) EXPORT_STATE), FINALIZE(covar_pop(d, d+1) EXPORT_STATE) from dummy;
+----
+
 
 # you're holding it wrong:
 
 statement error
-SELECT FINALIZE(COMBINE(SUM(d) EXPORT STATE, AVG(d) EXPORT STATE)) FROM dummy;
+SELECT list(d) EXPORT_STATE from dummy;
+
+statement error
+SELECT string_agg(d, ',') EXPORT_STATE from dummy;
+
+statement error
+SELECT string_agg(d) EXPORT_STATE from dummy;
+
+statement error
+SELECT FINALIZE(COMBINE(SUM(d) EXPORT_STATE, AVG(d) EXPORT_STATE)) FROM dummy;
 
 statement error
 SELECT combine(NULL, NULL);
@@ -129,8 +171,36 @@ SELECT finalize(sum(d)) from dummy group by g;
 
 # can't finalize twice
 statement error
-SELECT finalize(finalize(sum(d) EXPORT STATE)) from dummy;
+SELECT finalize(finalize(sum(d) EXPORT_STATE)) from dummy;
 
 statement error
-select sum(42) export state over ();
+select sum(42) EXPORT_STATE over ();
+
+
+# tests with ze persistence
+load __TEST_DIR__/test_state_export.db
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+# we can persist this
+statement ok
+CREATE TABLE state AS SELECT g, count(*) EXPORT_STATE count_star_state, count(d) EXPORT_STATE count_state, sum(d) EXPORT_STATE sum_state, avg(d) EXPORT_STATE avg_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
+
+statement ok
+CREATE VIEW state_view AS SELECT g, count(*) EXPORT_STATE count_star_state, count(d) EXPORT_STATE count_state, sum(d) EXPORT_STATE sum_state, avg(d) EXPORT_STATE avg_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
+
+restart
+
+query IIIIIII nosort res10
+SELECT g, count(*), count(d), sum(d), avg(d)::integer, min(d), max(d) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query IIIIIII nosort res10
+SELECT g, finalize(count_star_state),finalize(count_state), finalize(sum_state), finalize(avg_state)::integer, finalize(min_state), finalize(max_state) FROM state ORDER BY g;
+----
+
+query IIIIIII nosort res10
+SELECT g, finalize(count_star_state),finalize(count_state), finalize(sum_state), finalize(avg_state)::integer, finalize(min_state), finalize(max_state) FROM state_view ORDER BY g;
+----
 

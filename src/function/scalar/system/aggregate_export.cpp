@@ -242,13 +242,13 @@ unique_ptr<BoundAggregateExpression>
 ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggregate) {
 	auto &bound_function = child_aggregate->function;
 	if (!bound_function.combine) {
-		throw BinderException("Cannot export state for non-combinable function %s", bound_function.name);
+		throw BinderException("Cannot use EXPORT_STATE for non-combinable function %s", bound_function.name);
 	}
 	if (bound_function.bind) {
-		throw BinderException("Cannot export state on functions with custom binders");
+		throw BinderException("Cannot use EXPORT_STATE on aggregate functions with custom binders");
 	}
 	if (bound_function.destructor) {
-		throw BinderException("Cannot export state on functions with destructors");
+		throw BinderException("Cannot use EXPORT_STATE on aggregate functions with custom destructors");
 	}
 	// this should be required
 	D_ASSERT(bound_function.state_size);

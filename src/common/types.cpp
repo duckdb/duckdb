@@ -1321,6 +1321,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 			throw InternalException("Invalid Physical Type for ENUMs");
 		}
 	}
+	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
+		return AggregateStateTypeInfo::Deserialize(reader);
+
 	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
 	}
