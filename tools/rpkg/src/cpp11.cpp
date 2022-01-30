@@ -144,6 +144,20 @@ extern "C" SEXP _duckdb_expr_tostring_R(SEXP expr) {
     return cpp11::as_sexp(expr_tostring_R(cpp11::as_cpp<cpp11::decay_t<sexp>>(expr)));
   END_CPP11
 }
+// relational.cpp
+SEXP rel_df_R(sexp con_p, sexp df);
+extern "C" SEXP _duckdb_rel_df_R(SEXP con_p, SEXP df) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rel_df_R(cpp11::as_cpp<cpp11::decay_t<sexp>>(con_p), cpp11::as_cpp<cpp11::decay_t<sexp>>(df)));
+  END_CPP11
+}
+// relational.cpp
+SEXP rel_filter_R(sexp rel_p, sexp expr_p);
+extern "C" SEXP _duckdb_rel_filter_R(SEXP rel_p, SEXP expr_p) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rel_filter_R(cpp11::as_cpp<cpp11::decay_t<sexp>>(rel_p), cpp11::as_cpp<cpp11::decay_t<sexp>>(expr_p)));
+  END_CPP11
+}
 
 extern "C" {
 static const R_CallMethodDef CallEntries[] = {
@@ -161,6 +175,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_ptr_to_str",           (DL_FUNC) &_duckdb_ptr_to_str,           1},
     {"_duckdb_register_R",           (DL_FUNC) &_duckdb_register_R,           3},
     {"_duckdb_register_arrow_R",     (DL_FUNC) &_duckdb_register_arrow_R,     4},
+    {"_duckdb_rel_df_R",             (DL_FUNC) &_duckdb_rel_df_R,             2},
+    {"_duckdb_rel_filter_R",         (DL_FUNC) &_duckdb_rel_filter_R,         2},
     {"_duckdb_release_R",            (DL_FUNC) &_duckdb_release_R,            1},
     {"_duckdb_shutdown_R",           (DL_FUNC) &_duckdb_shutdown_R,           1},
     {"_duckdb_startup_R",            (DL_FUNC) &_duckdb_startup_R,            3},

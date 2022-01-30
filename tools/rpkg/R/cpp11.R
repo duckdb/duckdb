@@ -75,3 +75,11 @@ expr_function_R <- function(name, args) {
 expr_tostring_R <- function(expr) {
   .Call(`_duckdb_expr_tostring_R`, expr)
 }
+
+rel_df_R <- function(con_p, df) {
+  .Call(`_duckdb_rel_df_R`, con_p, df)
+}
+
+rel_filter_R <- function(rel_p, expr_p) {
+  .Call(`_duckdb_rel_filter_R`, rel_p, expr_p)
+}
