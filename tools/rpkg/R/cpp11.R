@@ -68,8 +68,8 @@ expr_constant_R <- function(val) {
   .Call(`_duckdb_expr_constant_R`, val)
 }
 
-expr_function_R <- function(name, lhs, rhs) {
-  .Call(`_duckdb_expr_function_R`, name, lhs, rhs)
+expr_function_R <- function(name, args) {
+  .Call(`_duckdb_expr_function_R`, name, args)
 }
 
 expr_tostring_R <- function(expr) {

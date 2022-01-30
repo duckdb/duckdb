@@ -13,11 +13,14 @@ expr_reference <- function(ref) {
 }
 
 #' @export
-expr_function <- function(name, lhs, rhs) {
-    stopifnot(inherits(lhs, "duckdb_expr"))
-    stopifnot(inherits(rhs, "duckdb_expr"))
+expr_function <- function(name, args) {
 
-    res <- list(type="expr_function", ref=.Call(`_duckdb_expr_function_R`, name, lhs$ref, rhs$ref))
+    args_extptrs <- lapply(args, function(arg) {
+        stopifnot(inherits(arg, "duckdb_expr"))
+        arg$ref
+    })
+
+    res <- list(type="expr_function", ref=.Call(`_duckdb_expr_function_R`, name, args_extptrs))
     class(res) <- c("duckdb_expr_function", "duckdb_expr")
     res
 }

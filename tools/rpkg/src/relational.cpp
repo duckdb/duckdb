@@ -22,13 +22,11 @@ external_pointer<T> make_external(Args &&...args) {
 	return make_external<ConstantExpression>(RApiTypes::SexpToValue(val, 0));
 }
 
-// TODO maybe its better to pass a list to this one
-[[cpp11::register]] SEXP expr_function_R(strings name, sexp lhs, sexp rhs) {
-	// TODO: do we do verification in R-land or here?
-
+[[cpp11::register]] SEXP expr_function_R(strings name, list args) {
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(external_pointer<ParsedExpression>(lhs)->Copy());
-	children.push_back(external_pointer<ParsedExpression>(rhs)->Copy());
+	for (auto arg : args) {
+		children.push_back(external_pointer<ParsedExpression>(arg)->Copy());
+	}
 
 	return make_external<FunctionExpression>(name[0], move(children));
 }
