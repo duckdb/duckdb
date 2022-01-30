@@ -29,6 +29,9 @@ struct QualifiedName {
 				contains_quote = true;
 				must_be_quoted = true;
 			} else if (!StringUtil::CharacterIsAlpha(input[i])) {
+				if (i > 0 && (StringUtil::CharacterIsDigit(input[i]) || input[i] == '_')) {
+					continue;
+				}
 				must_be_quoted = true;
 			}
 		}

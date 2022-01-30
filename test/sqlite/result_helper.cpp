@@ -5,6 +5,7 @@
 #include "catch.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "duckdb/common/crypto/md5.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "test_helpers.hpp"
 
 #include <thread>
@@ -365,7 +366,7 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 		if (i > 0) {
 			struct_definition += ", ";
 		}
-		struct_definition += "\"" + names[i] + "\" := 'VARCHAR'";
+		struct_definition += QualifiedName::Quote(names[i]) + " := 'VARCHAR'";
 	}
 	struct_definition += ")";
 

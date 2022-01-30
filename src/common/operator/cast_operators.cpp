@@ -1049,7 +1049,7 @@ static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 	}
 	auto current_end = parse_result.ptr;
 	if (!strict) {
-		while(current_end < endptr && StringUtil::CharacterIsSpace(*current_end)) {
+		while (current_end < endptr && StringUtil::CharacterIsSpace(*current_end)) {
 			current_end++;
 		}
 	}
