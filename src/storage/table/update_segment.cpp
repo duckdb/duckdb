@@ -521,8 +521,8 @@ void UpdateSegment::CleanupUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 // Check for conflicts in update
 //===--------------------------------------------------------------------===//
-static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, row_t *ids, idx_t count, row_t offset,
-                              UpdateInfo *&node) {
+static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, row_t *ids, const SelectionVector &sel,
+                              idx_t count, row_t offset, UpdateInfo *&node) {
 	if (!info) {
 		return;
 	}
@@ -534,7 +534,7 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, row_t 
 		// as both ids and info->tuples are sorted, this is similar to a merge join
 		idx_t i = 0, j = 0;
 		while (true) {
-			auto id = ids[i] - offset;
+			auto id = ids[sel.get_index(i)] - offset;
 			if (id == info->tuples[j]) {
 				throw TransactionException("Conflict on update!");
 			} else if (id < info->tuples[j]) {
@@ -552,7 +552,7 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, row_t 
 			}
 		}
 	}
-	CheckForConflicts(info->next, transaction, ids, count, offset, node);
+	CheckForConflicts(info->next, transaction, ids, sel, count, offset, node);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1085,7 +1085,7 @@ void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector 
 		// there is already a version here, check if there are any conflicts and search for the node that belongs to
 		// this transaction in the version chain
 		auto base_info = root->info[vector_index]->info.get();
-		CheckForConflicts(base_info->next, transaction, ids, count, vector_offset, node);
+		CheckForConflicts(base_info->next, transaction, ids, sel, count, vector_offset, node);
 
 		// there are no conflicts
 		// first, check if this thread has already done any updates
