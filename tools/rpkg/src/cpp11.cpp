@@ -117,17 +117,31 @@ extern "C" SEXP _duckdb_ptr_to_str(SEXP extptr) {
   END_CPP11
 }
 // relational.cpp
-SEXP expr_ref_R(strings ref);
-extern "C" SEXP _duckdb_expr_ref_R(SEXP ref) {
+SEXP expr_reference_R(strings ref);
+extern "C" SEXP _duckdb_expr_reference_R(SEXP ref) {
   BEGIN_CPP11
-    return cpp11::as_sexp(expr_ref_R(cpp11::as_cpp<cpp11::decay_t<strings>>(ref)));
+    return cpp11::as_sexp(expr_reference_R(cpp11::as_cpp<cpp11::decay_t<strings>>(ref)));
   END_CPP11
 }
 // relational.cpp
-SEXP expr_constant_R(SEXP ref);
-extern "C" SEXP _duckdb_expr_constant_R(SEXP ref) {
+SEXP expr_constant_R(sexp val);
+extern "C" SEXP _duckdb_expr_constant_R(SEXP val) {
   BEGIN_CPP11
-    return cpp11::as_sexp(expr_constant_R(cpp11::as_cpp<cpp11::decay_t<SEXP>>(ref)));
+    return cpp11::as_sexp(expr_constant_R(cpp11::as_cpp<cpp11::decay_t<sexp>>(val)));
+  END_CPP11
+}
+// relational.cpp
+SEXP expr_function_R(strings name, sexp lhs, sexp rhs);
+extern "C" SEXP _duckdb_expr_function_R(SEXP name, SEXP lhs, SEXP rhs) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(expr_function_R(cpp11::as_cpp<cpp11::decay_t<strings>>(name), cpp11::as_cpp<cpp11::decay_t<sexp>>(lhs), cpp11::as_cpp<cpp11::decay_t<sexp>>(rhs)));
+  END_CPP11
+}
+// relational.cpp
+SEXP expr_tostring_R(sexp expr);
+extern "C" SEXP _duckdb_expr_tostring_R(SEXP expr) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(expr_tostring_R(cpp11::as_cpp<cpp11::decay_t<sexp>>(expr)));
   END_CPP11
 }
 
@@ -138,7 +152,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_disconnect_R",         (DL_FUNC) &_duckdb_disconnect_R,         1},
     {"_duckdb_execute_R",            (DL_FUNC) &_duckdb_execute_R,            2},
     {"_duckdb_expr_constant_R",      (DL_FUNC) &_duckdb_expr_constant_R,      1},
-    {"_duckdb_expr_ref_R",           (DL_FUNC) &_duckdb_expr_ref_R,           1},
+    {"_duckdb_expr_function_R",      (DL_FUNC) &_duckdb_expr_function_R,      3},
+    {"_duckdb_expr_reference_R",     (DL_FUNC) &_duckdb_expr_reference_R,     1},
+    {"_duckdb_expr_tostring_R",      (DL_FUNC) &_duckdb_expr_tostring_R,      1},
     {"_duckdb_fetch_arrow_R",        (DL_FUNC) &_duckdb_fetch_arrow_R,        4},
     {"_duckdb_fetch_record_batch_R", (DL_FUNC) &_duckdb_fetch_record_batch_R, 2},
     {"_duckdb_prepare_R",            (DL_FUNC) &_duckdb_prepare_R,            2},

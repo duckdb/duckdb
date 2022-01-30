@@ -60,10 +60,18 @@ ptr_to_str <- function(extptr) {
   .Call(`_duckdb_ptr_to_str`, extptr)
 }
 
-expr_ref_R <- function(ref) {
-  .Call(`_duckdb_expr_ref_R`, ref)
+expr_reference_R <- function(ref) {
+  .Call(`_duckdb_expr_reference_R`, ref)
 }
 
-expr_constant_R <- function(ref) {
-  .Call(`_duckdb_expr_constant_R`, ref)
+expr_constant_R <- function(val) {
+  .Call(`_duckdb_expr_constant_R`, val)
+}
+
+expr_function_R <- function(name, lhs, rhs) {
+  .Call(`_duckdb_expr_function_R`, name, lhs, rhs)
+}
+
+expr_tostring_R <- function(expr) {
+  .Call(`_duckdb_expr_tostring_R`, expr)
 }
