@@ -5,19 +5,11 @@
 
 using namespace duckdb;
 
-static SEXP duckdb_finalize_database_R(SEXP dbsexp) {
-	if (TYPEOF(dbsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_finalize_connection_R: Need external pointer parameter");
-	}
-	auto db_wrapper = (DBWrapper *)R_ExternalPtrAddr(dbsexp);
-	if (db_wrapper) {
-		cpp11::warning(
-		    "duckdb_finalize_database_R: Database is garbage-collected, use dbDisconnect(con, shutdown=TRUE) or "
+void DBDeleter(DBWrapper* db) {
+	Rf_warning(
+	    "Database is garbage-collected, use dbDisconnect(con, shutdown=TRUE) or "
 		    "duckdb::duckdb_shutdown(drv) to avoid this.");
-		R_ClearExternalPtr(dbsexp);
-		delete db_wrapper;
-	}
-	return R_NilValue;
+  delete db;
 }
 
 SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
@@ -77,8 +69,8 @@ SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
 	catalog.CreateTableFunction(context, &info);
 	context.transaction.Commit();
 
-	SEXP dbsexp = r.Protect(R_MakeExternalPtr(wrapper, R_NilValue, R_NilValue));
-	R_RegisterCFinalizer(dbsexp, (void (*)(SEXP))duckdb_finalize_database_R);
+	cpp11::external_pointer<DBWrapper, DBDeleter> dbsexp(wrapper);
+
 	return dbsexp;
 }
 

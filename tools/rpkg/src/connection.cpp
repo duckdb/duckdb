@@ -2,18 +2,10 @@
 
 using namespace duckdb;
 
-static SEXP duckdb_finalize_connection_R(SEXP connsexp) {
-	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_finalize_connection_R: Need external pointer parameter");
-	}
-	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
-	if (conn_wrapper) {
-		cpp11::warning(
-		    "duckdb_finalize_connection_R: Connection is garbage-collected, use dbDisconnect() to avoid this.");
-		R_ClearExternalPtr(connsexp);
-		delete conn_wrapper;
-	}
-	return R_NilValue;
+void ConnDeleter(ConnWrapper* conn) {
+	Rf_warning(
+	    "Connection is garbage-collected, use dbDisconnect() to avoid this.");
+  delete conn;
 }
 
 SEXP RApi::Connect(SEXP dbsexp) {
@@ -25,13 +17,11 @@ SEXP RApi::Connect(SEXP dbsexp) {
 		cpp11::stop("duckdb_connect_R: Invalid database reference");
 	}
 
-	RProtector r;
 	auto conn_wrapper = new ConnWrapper();
 	conn_wrapper->db_sexp = dbsexp;
 	conn_wrapper->conn = make_unique<Connection>(*db_wrapper->db);
 
-	SEXP connsexp = r.Protect(R_MakeExternalPtr(conn_wrapper, R_NilValue, R_NilValue));
-	R_RegisterCFinalizer(connsexp, (void (*)(SEXP))duckdb_finalize_connection_R);
+	cpp11::external_pointer<ConnWrapper, ConnDeleter> connsexp(conn_wrapper);
 
 	return connsexp;
 }

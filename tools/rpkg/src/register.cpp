@@ -203,18 +203,6 @@ private:
 	}
 };
 
-static SEXP duckdb_finalize_arrow_factory_R(SEXP factorysexp) {
-	if (TYPEOF(factorysexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_finalize_arrow_factory_R: Need external pointer parameter");
-	}
-	auto *factoryaddr = (RArrowTabularStreamFactory *)R_ExternalPtrAddr(factorysexp);
-	if (factoryaddr) {
-		R_ClearExternalPtr(factorysexp);
-		delete factoryaddr;
-	}
-	return R_NilValue;
-}
-
 unique_ptr<TableFunctionRef> RApi::ArrowScanReplacement(const string &table_name, void *data) {
 	auto db_wrapper = (DBWrapper *)data;
 	lock_guard<mutex> arrow_scans_lock(db_wrapper->lock);
@@ -256,8 +244,7 @@ void RApi::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP
 	RProtector r;
 	auto stream_factory = new RArrowTabularStreamFactory(export_funsexp, valuesexp);
 	// make r external ptr object to keep factory around until arrow table is unregistered
-	SEXP factorysexp = r.Protect(R_MakeExternalPtr(stream_factory, R_NilValue, R_NilValue));
-	R_RegisterCFinalizer(factorysexp, (void (*)(SEXP))duckdb_finalize_arrow_factory_R);
+	cpp11::external_pointer<RArrowTabularStreamFactory> factorysexp(stream_factory);
 
 	{
 		auto *db_wrapper = (DBWrapper *)R_ExternalPtrAddr(conn_wrapper->db_sexp);

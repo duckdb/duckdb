@@ -99,11 +99,3 @@ int AltrepString::NoNA(SEXP x) {
 	// we kinda know but it matters little
 	return 0;
 }
-
-void AltrepString::Finalize(SEXP x) {
-	auto *wrapper = (DuckDBAltrepStringWrapper *)R_ExternalPtrAddr(x);
-	if (wrapper) {
-		R_ClearExternalPtr(x);
-		delete wrapper;
-	}
-}
