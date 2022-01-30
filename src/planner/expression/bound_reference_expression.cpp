@@ -15,6 +15,9 @@ BoundReferenceExpression::BoundReferenceExpression(LogicalType type, idx_t index
 }
 
 string BoundReferenceExpression::ToString() const {
+	if (!alias.empty()) {
+		return alias;
+	}
 	return "#" + to_string(index);
 }
 

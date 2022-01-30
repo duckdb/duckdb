@@ -50,5 +50,52 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 
 	void Verify() const override;
+
+public:
+	template<class T, class BASE>
+	static string ToString(const T &entry, const string &schema, const string &function_name, bool is_operator = false, bool distinct = false, BASE *filter = nullptr, OrderModifier *order_bys = nullptr) {
+		if (is_operator) {
+			// built-in operator
+			D_ASSERT(!distinct);
+			if (entry.children.size() == 1) {
+				if (StringUtil::Contains(function_name, "__postfix")) {
+					return "(" + entry.children[0]->ToString() + ")" + StringUtil::Replace(function_name, "__postfix", "");
+				} else {
+					return function_name + "(" + entry.children[0]->ToString() + ")";
+				}
+			} else if (entry.children.size() == 2) {
+				return "(" + entry.children[0]->ToString() + " " + function_name + " " + entry.children[1]->ToString() + ")";
+			}
+		}
+		// standard function call
+		string result = schema.empty() ? function_name : schema + "." + function_name;
+		result += "(";
+		if (distinct) {
+			result += "DISTINCT ";
+		}
+		result += StringUtil::Join(entry.children, entry.children.size(), ", ",
+		                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+		// ordered aggregate
+		if (order_bys && !order_bys->orders.empty()) {
+			if (entry.children.empty()) {
+				result += ") WITHIN GROUP (";
+			}
+			result += " ORDER BY ";
+			for (idx_t i = 0; i < order_bys->orders.size(); i++) {
+				if (i > 0) {
+					result += ", ";
+				}
+				result += order_bys->orders[i].ToString();
+			}
+		}
+		result += ")";
+
+		// filtered aggregate
+		if (filter) {
+			result += " FILTER (WHERE " + filter->ToString() + ")";
+		}
+
+		return result;
+	}
 };
 } // namespace duckdb

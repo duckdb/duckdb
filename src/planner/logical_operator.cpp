@@ -3,6 +3,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
 
@@ -80,6 +81,7 @@ void LogicalOperator::Verify() {
 #ifdef DEBUG
 	// verify expressions
 	for (idx_t expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
+		auto str = expressions[expr_idx]->ToString();
 		// verify that we can (correctly) copy this expression
 		auto copy = expressions[expr_idx]->Copy();
 		auto original_hash = expressions[expr_idx]->Hash();
@@ -99,6 +101,10 @@ void LogicalOperator::Verify() {
 				D_ASSERT(!expr_equal);
 			}
 		}
+		D_ASSERT(!str.empty());
+		// we should be able to parse this expression
+		auto parsed_list = Parser::ParseExpressionList(str);
+		D_ASSERT(parsed_list.size() == 1);
 	}
 	D_ASSERT(!ToString().empty());
 	for (auto &child : children) {

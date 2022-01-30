@@ -35,5 +35,18 @@ public:
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
+
+public:
+	template<class T, class BASE>
+	static string ToString(const T &entry) {
+		string case_str = "CASE ";
+		for (auto &check : entry.case_checks) {
+			case_str += " WHEN (" + check.when_expr->ToString() + ")";
+			case_str += " THEN (" + check.then_expr->ToString() + ")";
+		}
+		case_str += " ELSE " + entry.else_expr->ToString();
+		case_str += " END";
+		return case_str;
+	}
 };
 } // namespace duckdb

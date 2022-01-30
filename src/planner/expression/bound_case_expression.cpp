@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 
 namespace duckdb {
 
@@ -17,14 +18,7 @@ BoundCaseExpression::BoundCaseExpression(unique_ptr<Expression> when_expr, uniqu
 }
 
 string BoundCaseExpression::ToString() const {
-	string result = "CASE";
-	for (auto &check : case_checks) {
-		result += " WHEN (" + check.when_expr->ToString() + ")";
-		result += " THEN (" + check.then_expr->ToString() + ")";
-	}
-	result += " ELSE (" + else_expr->ToString() + ")";
-	result += " END";
-	return result;
+	return CaseExpression::ToString<BoundCaseExpression, Expression>(*this);
 }
 
 bool BoundCaseExpression::Equals(const BaseExpression *other_p) const {

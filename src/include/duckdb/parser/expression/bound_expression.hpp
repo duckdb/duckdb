@@ -27,6 +27,9 @@ public:
 
 public:
 	string ToString() const override {
+		if (!expr) {
+			throw InternalException("ToString(): BoundExpression does not have a child");
+		}
 		return expr->ToString();
 	}
 

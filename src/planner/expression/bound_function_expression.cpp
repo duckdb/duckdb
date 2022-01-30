@@ -2,7 +2,6 @@
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
@@ -24,11 +23,7 @@ bool BoundFunctionExpression::IsFoldable() const {
 }
 
 string BoundFunctionExpression::ToString() const {
-	string result = function.name + "(";
-	result += StringUtil::Join(children, children.size(), ", ",
-	                           [](const unique_ptr<Expression> &child) { return child->GetName(); });
-	result += ")";
-	return result;
+	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), function.name, is_operator);
 }
 
 hash_t BoundFunctionExpression::Hash() const {

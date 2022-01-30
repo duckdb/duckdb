@@ -11,7 +11,7 @@ BoundConstantExpression::BoundConstantExpression(Value value_p)
 }
 
 string BoundConstantExpression::ToString() const {
-	return value.ToString();
+	return value.ToSQLString();
 }
 
 bool BoundConstantExpression::Equals(const BaseExpression *other_p) const {

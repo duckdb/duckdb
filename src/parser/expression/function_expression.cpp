@@ -28,48 +28,7 @@ FunctionExpression::FunctionExpression(const string &function_name, vector<uniqu
 }
 
 string FunctionExpression::ToString() const {
-	if (is_operator) {
-		// built-in operator
-		D_ASSERT(!distinct);
-		if (children.size() == 1) {
-			if (StringUtil::Contains(function_name, "__postfix")) {
-				return "(" + children[0]->ToString() + ")" + StringUtil::Replace(function_name, "__postfix", "");
-			} else {
-				return function_name + "(" + children[0]->ToString() + ")";
-			}
-		} else if (children.size() == 2) {
-			return "(" + children[0]->ToString() + " " + function_name + " " + children[1]->ToString() + ")";
-		}
-	}
-	// standard function call
-	string result = schema.empty() ? function_name : schema + "." + function_name;
-	result += "(";
-	if (distinct) {
-		result += "DISTINCT ";
-	}
-	result += StringUtil::Join(children, children.size(), ", ",
-	                           [](const unique_ptr<ParsedExpression> &child) { return child->ToString(); });
-	// ordered aggregate
-	if (!order_bys->orders.empty()) {
-		if (children.empty()) {
-			result += ") WITHIN GROUP (";
-		}
-		result += " ORDER BY ";
-		for (idx_t i = 0; i < order_bys->orders.size(); i++) {
-			if (i > 0) {
-				result += ", ";
-			}
-			result += order_bys->orders[i].ToString();
-		}
-	}
-	result += ")";
-
-	// filtered aggregate
-	if (filter) {
-		result += " FILTER (WHERE " + filter->ToString() + ")";
-	}
-
-	return result;
+	return ToString<FunctionExpression, ParsedExpression>(*this, schema, function_name, is_operator, distinct, filter.get(), order_bys.get());
 }
 
 bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpression *b) {
