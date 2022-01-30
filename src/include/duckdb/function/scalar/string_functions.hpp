@@ -183,9 +183,4 @@ struct JaccardFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct NumForFun {
-	static string_t NumberFormatScalarFunction(Vector &result, double num_value, string_t format);
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 } // namespace duckdb
