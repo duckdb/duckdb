@@ -22,6 +22,7 @@ public:
 
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;
+	string file_path;
 
 public:
 	// Source interface

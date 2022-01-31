@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/file_system.hpp"
 
 #include <algorithm>
 
@@ -25,6 +26,15 @@ public:
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
+void MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
+	auto &fs = FileSystem::GetFileSystem(context);
+	auto file_path = tmp_file_path.substr(0, tmp_file_path.length() - 4);
+	if (fs.FileExists(file_path)) {
+		fs.RemoveFile(file_path);
+	}
+	fs.MoveFile(tmp_file_path, file_path);
+}
+
 PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function_p,
                                        unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, move(types), estimated_cardinality),
@@ -55,6 +65,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 	auto &gstate = (CopyToFunctionGlobalState &)gstate_p;
 	if (function.copy_to_finalize) {
 		function.copy_to_finalize(context, *bind_data, *gstate.global_state);
+		MoveTmpFile(context, file_path);
 	}
 	return SinkFinalizeType::READY;
 }
@@ -63,7 +74,7 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 	return make_unique<CopyToFunctionLocalState>(function.copy_to_initialize_local(context.client, *bind_data));
 }
 unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data));
+	return make_unique<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
 }
 
 //===--------------------------------------------------------------------===//

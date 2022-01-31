@@ -42,6 +42,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	    copy_function->function.copy_to_bind(context, *stmt.info, select_node.names, select_node.types);
 	// now create the copy information
 	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, move(function_data));
+	copy->file_path = stmt.info->file_path;
 	copy->AddChild(move(select_node.plan));
 
 	result.plan = move(copy);

@@ -445,13 +445,13 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 	return move(bind_data);
 }
 
-unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data) {
+unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data, const string &file_path) {
 	auto global_state = make_unique<ParquetWriteGlobalState>();
 	auto &parquet_bind = (ParquetWriteBindData &)bind_data;
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer =
-	    make_unique<ParquetWriter>(fs, parquet_bind.file_name, FileSystem::GetFileOpener(context),
+	    make_unique<ParquetWriter>(fs, file_path, FileSystem::GetFileOpener(context),
 	                               parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec);
 	return move(global_state);
 }

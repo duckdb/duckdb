@@ -396,7 +396,7 @@ struct LocalReadCSVData : public LocalFunctionData {
 
 struct GlobalWriteCSVData : public GlobalFunctionData {
 	GlobalWriteCSVData(FileSystem &fs, const string &file_path, FileOpener *opener, FileCompressionType compression)
-	    : fs(fs), file_path(file_path) {
+	    : fs(fs) {
 		handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
 		                     FileLockType::WRITE_LOCK, compression, opener);
 	}
@@ -411,9 +411,6 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 	mutex lock;
 	//! The file handle to write to
 	unique_ptr<FileHandle> handle;
-
-	//! Path of the file to write to
-	const string file_path;
 };
 
 static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &context, FunctionData &bind_data) {
@@ -428,10 +425,10 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &cont
 	return move(local_data);
 }
 
-static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data) {
+static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data, const string &file_path) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
-	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), csv_data.files[0] + ".tmp",
+	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path,
 	                                                   FileSystem::GetFileOpener(context), options.compression);
 
 	if (options.header) {
@@ -523,18 +520,10 @@ static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, Glo
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void MoveTmpFile(FileSystem &fs, const string &tmp_file_path) {
-	auto file_path = tmp_file_path.substr(0, tmp_file_path.length() - 4);
-	if (fs.FileExists(file_path)) {
-		fs.RemoveFile(file_path);
-	}
-	fs.MoveFile(tmp_file_path, file_path);
-}
-
 void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
 	auto &global_state = (GlobalWriteCSVData &)gstate;
 
-	MoveTmpFile(global_state.fs, global_state.file_path);
+//	MoveTmpFile(global_state.fs, global_state.file_path);
 
 	global_state.handle->Close();
 	global_state.handle.reset();

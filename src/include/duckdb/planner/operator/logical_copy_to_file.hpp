@@ -20,6 +20,7 @@ public:
 	}
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;
+	std::string file_path;
 
 protected:
 	void ResolveTypes() override {
