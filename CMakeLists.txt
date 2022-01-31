@@ -211,6 +211,7 @@ option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extensio
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
+option(BUILD_SUBSTRAIT_EXTENSION "Enable building of Substrait Extension." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_ODBC_DRIVER "Build the DuckDB ODBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
@@ -454,6 +455,11 @@ function(add_extension_definitions)
     add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
   endif()
 
+  if(${BUILD_SUBSTRAIT_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/substrait/include)
+    add_definitions(-DBUILD_SUBSTRAIT_EXTENSION=${BUILD_SUBSTRAIT_EXTENSION})
+  endif()
+
   if(${BUILD_TPCDS_EXTENSION})
     include_directories(${PROJECT_SOURCE_DIR}/extension/tpcds/include)
     add_definitions(-DBUILD_TPCDS_EXTENSION=${BUILD_TPCDS_EXTENSION})
@@ -489,6 +495,10 @@ function(add_extension_dependencies LIBRARY)
     add_dependencies(${LIBRARY} tpch_extension)
   endif()
 
+  if(${BUILD_SUBSTRAIT_EXTENSION})
+    add_dependencies(${LIBRARY} substrait_extension)
+  endif()
+
   if(${BUILD_TPCDS_EXTENSION})
     add_dependencies(${LIBRARY} tpcds_extension)
   endif()
@@ -517,6 +527,10 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_TPCH_EXTENSION})
     target_link_libraries(${LIBRARY} tpch_extension)
+  endif()
+
+  if(${BUILD_SUBSTRAIT_EXTENSION})
+    target_link_libraries(${LIBRARY} substrait_extension)
   endif()
 
   if(${BUILD_TPCDS_EXTENSION})

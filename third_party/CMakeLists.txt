@@ -11,6 +11,10 @@ if(NOT AMALGAMATION_BUILD)
   add_subdirectory(fastpforlib)
 endif()
 
+if(${BUILD_SUBSTRAIT_EXTENSION})
+  add_subdirectory(substrait)
+endif()
+
 if(NOT WIN32
    AND NOT SUN
    AND ${BUILD_UNITTESTS})
