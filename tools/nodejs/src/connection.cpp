@@ -9,7 +9,7 @@ Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 
 	Napi::Function t =
 	    DefineClass(env, "Connection",
-	                {InstanceMethod("prepare", &Connection::Prepare), InstanceMethod("exec", &Connection::Exec)});
+	                {InstanceMethod("prepare", &Connection::Prepare), InstanceMethod("exec", &Connection::Exec), InstanceMethod("register", &Connection::Register)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -64,6 +64,27 @@ Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
 	auto res = Utils::NewUnwrap<Statement>(args);
 	res->SetProcessFirstParam();
 	return res->Value();
+}
+
+Napi::Value Connection::Register(const Napi::CallbackInfo &info) {
+	if (info.Length() != 2 || !info[0].IsString() || !info[1].IsFunction()) {
+		Napi::TypeError::New(info.Env(), "Holding it wrong").ThrowAsJavaScriptException();
+		return Value();
+	}
+
+	std::string name = info[0].As<Napi::String>();
+	Napi::Function udf = info[1].As<Napi::Function>();
+	Napi::FunctionReference udf_ref = Persistent(udf);
+
+	//cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error)});
+
+//	this->connection->CreateScalarFunction();
+
+	// create new udf that calls the udf
+	//Napi::FunctionReference callback;
+
+
+	return Value();
 }
 
 struct ExecTask : public Task {

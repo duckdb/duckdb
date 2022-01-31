@@ -85,6 +85,7 @@ public:
 public:
 	Napi::Value Prepare(const Napi::CallbackInfo &info);
 	Napi::Value Exec(const Napi::CallbackInfo &info);
+	Napi::Value Register(const Napi::CallbackInfo &info);
 
 	static bool HasInstance(Napi::Value val) {
 		Napi::Env env = val.Env();

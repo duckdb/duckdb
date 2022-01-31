@@ -62,6 +62,15 @@ Database.prototype.exec = function() {
     return this;
 }
 
+Database.prototype.register = function() {
+    if (this.default_connection == undefined) {
+        this.default_connection = new Connection(this);
+    }
+    this.default_connection.register.apply(this.default_connection, arguments);
+    return this;
+}
+
+
 Database.prototype.get = function() {
     throw "get() is not implemented because it's evil";
 }
