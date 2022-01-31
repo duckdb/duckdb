@@ -16,8 +16,7 @@ namespace duckdb {
 
 struct JSONCommon {
 private:
-	static constexpr auto READ_FLAGS =
-	    YYJSON_READ_ALLOW_COMMENTS | YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_STOP_WHEN_DONE;
+	static constexpr auto READ_FLAGS = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_STOP_WHEN_DONE;
 
 public:
 	//! Get root of JSON document (nullptr if malformed JSON)
@@ -29,7 +28,7 @@ public:
 	static inline yyjson_val *GetRoot(const string_t &input) {
 		auto root = GetRootUnsafe(input);
 		if (!root) {
-			throw InvalidInputException("malformed JSON");
+			throw Exception("malformed JSON");
 		}
 		return root;
 	}
@@ -61,19 +60,23 @@ public:
 			return nullptr;
 		}
 		auto root = GetRoot(input);
-		if (*ptr == '/') {
+		switch (*ptr) {
+		case '/':
 			return GetPointer(root, ptr, len);
-		} else if (*ptr == '$') {
+		case '$':
 			return GetPointerDollar(root, ptr, len);
+		default:
+			throw Exception("JSON path error");
 		}
-		throw InvalidInputException("JSON query %s", ptr);
 	}
 
 private:
+	//! Get JSON pointer using /field/index/... notation
 	static inline yyjson_val *GetPointer(yyjson_val *root, const char *ptr, const idx_t &len) {
 		return len == 1 ? root : unsafe_yyjson_get_pointer(root, ptr, len);
 	}
 
+	//! Get JSON pointer using $.field[index]... notation
 	static yyjson_val *GetPointerDollar(yyjson_val *val, const char *ptr, idx_t len);
 };
 
@@ -103,7 +106,7 @@ public:
 			constant = true;
 			auto value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 			if (!value.TryCastAs(LogicalType::VARCHAR)) {
-				throw InvalidInputException("JSON path");
+				throw Exception("JSON path error");
 			}
 			auto query = value.GetValueUnsafe<string_t>();
 			len = query.GetSize();

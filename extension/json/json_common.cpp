@@ -16,6 +16,9 @@ static const bool POINTER_CHAR_TABLE[] = {
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 static inline idx_t ReadString(const char *ptr, idx_t &len) {
+	if (!POINTER_CHAR_TABLE[(uint8_t)*ptr]) {
+		throw Exception("JSON path error");
+	}
 	const idx_t before = len;
 	while (POINTER_CHAR_TABLE[(uint8_t)*ptr++]) {
 		len--;
@@ -24,6 +27,9 @@ static inline idx_t ReadString(const char *ptr, idx_t &len) {
 }
 
 static inline bool ReadIndex(const char *ptr, idx_t &len, idx_t &idx, idx_t &i) {
+	if (!POINTER_CHAR_TABLE[(uint8_t)*ptr]) {
+		throw Exception("JSON path error");
+	}
 	idx = 0;
 	for (i = 0; i < IDX_T_SAFE_DIG; i++) {
 		const auto &c = *ptr++;
@@ -32,16 +38,16 @@ static inline bool ReadIndex(const char *ptr, idx_t &len, idx_t &idx, idx_t &i) 
 			i++;
 			return idx < (idx_t)IDX_T_MAX;
 		} else if (len == 0) {
-			return false;
+			break;
 		}
 		uint8_t add = (uint8_t)(c - '0');
 		if (add <= 9) {
 			idx = add + idx * 10;
 		} else {
-			return false;
+			break;
 		}
 	}
-	return false;
+	throw Exception("JSON path error");
 }
 
 yyjson_val *JSONCommon::GetPointerDollar(yyjson_val *val, const char *ptr, idx_t len) {
@@ -87,7 +93,7 @@ yyjson_val *JSONCommon::GetPointerDollar(yyjson_val *val, const char *ptr, idx_t
 				return nullptr;
 			}
 		} else {
-			return nullptr;
+			throw Exception("JSON path error");
 		}
 		if (len == 0) {
 			return val;

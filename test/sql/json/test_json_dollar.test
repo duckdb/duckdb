@@ -8,9 +8,14 @@ statement ok
 pragma enable_verification
 
 query T
-select json_extract_string('{"my_field": "duck"}}', '$.my_field')
+select json_extract_string('{"my_field": "duck"}', '$.my_field')
 ----
 duck
+
+query T
+select json_extract_int('[0, 1, 2]', '$[1]')
+----
+1
 
 statement ok
 create table test (j varchar, q varchar)
@@ -39,6 +44,11 @@ select json_extract_string(j, '$.my_field.my_nested_field[#-3]') from test
 NULL
 
 query T
+select json_extract_string(j, '$.my_field.my_nested_field[#]') from test
+----
+NULL
+
+query T
 select json_extract_string(j, q) from test
 ----
 goose
@@ -53,23 +63,27 @@ select json_extract_string('{"my_field": [{"my_nested_field": ["duck", "goose"]}
 ----
 goose
 
-# bogus
-query T
+# path error
+statement error
 select json_extract_string(j, '$.my_field[my_nested_field[#-3]') from test
-----
-NULL
 
-query T
+statement error
 select json_extract_string(j, '$.my_field.my_nested_field.3') from test
-----
-NULL
 
-query T
-select json_extract_string(j, '$.my_field.my_nested_field[#]') from test
-----
-NULL
-
-query T
+statement error
 select json_extract_string(j, '$.my_field.my_nested_field[!]') from test
-----
-NULL
+
+statement error
+select json_extract_int('{"a": {"b": "c"}}', '$.a..');
+
+statement error
+select json_extract_int('{"a": {"b": "c"}}', '$[]');
+
+statement error
+select json_extract_int('{"a": {"b": "c"}}', '$[[');
+
+statement error
+select json_extract_int('{"a": {"b": "c"}}', '$[.');
+
+statement error
+select json_extract_int('{"a": {"b": "c"}}', '$]');
