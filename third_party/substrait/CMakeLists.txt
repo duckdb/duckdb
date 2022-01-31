@@ -21,11 +21,11 @@ set(SUBSTRAIT_HEADERS
     substrait/function.pb.h
     substrait/parameterized_types.pb.h
     substrait/plan.pb.h
-   substrait/relations.pb.h
+    substrait/relations.pb.h
     substrait/type.pb.h
     substrait/type_expressions.pb.h
     substrait/extensions/extensions.pb.h)
 
-add_library(substrait STATIC ${SUBSTRAIT_SOURCES} ${SUBSTRAIT_HEADERS})
+add_library(substrait_og STATIC ${SUBSTRAIT_SOURCES} ${SUBSTRAIT_HEADERS})
 
-target_link_libraries(substrait ${Protobuf_LIBRARIES})
+target_link_libraries(substrait_og ${Protobuf_LIBRARIES})

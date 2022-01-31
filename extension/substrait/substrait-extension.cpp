@@ -159,7 +159,7 @@ void SubstraitExtension::Load(DuckDB &db) {
 	auto &catalog = Catalog::GetCatalog(*con.context);
 
 	// create the get_substrait pragma that allows us to get a substrait binary from a valid SQL Query
-	auto get_substrait_func = PragmaFunction::PragmaCall("get_substrait", PragmaGetSubstrait, {LogicalType::BLOB});
+	auto get_substrait_func = PragmaFunction::PragmaCall("get_substrait", PragmaGetSubstrait, {LogicalType::VARCHAR});
 	CreatePragmaFunctionInfo info(get_substrait_func);
 	catalog.CreatePragmaFunction(*con.context, &info);
 

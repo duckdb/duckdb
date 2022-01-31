@@ -1,0 +1,10 @@
+# name: test/sql/substrait/test_substrait.test
+# description: bla
+# group: [substrait]
+
+require substrait
+
+query I
+PRAGMA get_substrait("select 'bla'")
+----
+bla
