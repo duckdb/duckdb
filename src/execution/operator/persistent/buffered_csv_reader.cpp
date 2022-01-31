@@ -1532,8 +1532,8 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 	while (remaining > buffer_read_size) {
 		buffer_read_size *= 2;
 	}
-	if (remaining + buffer_read_size > MAXIMUM_CSV_LINE_SIZE) {
-		throw InvalidInputException("Maximum line size of %llu bytes exceeded!", MAXIMUM_CSV_LINE_SIZE);
+	if (remaining + buffer_read_size > options.maximum_line_size) {
+		throw InvalidInputException("Maximum line size of %llu bytes exceeded!", options.maximum_line_size);
 	}
 	buffer = unique_ptr<char[]>(new char[buffer_read_size + remaining + 1]);
 	buffer_size = remaining + buffer_read_size;

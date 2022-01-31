@@ -95,6 +95,9 @@ struct BufferedCSVReaderOptions {
 	idx_t buffer_size = STANDARD_VECTOR_SIZE * 100;
 	//! Consider all columns to be of type varchar
 	bool all_varchar = false;
+	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
+	idx_t maximum_line_size = 2097152;
+
 	//! The date format to use (if any is specified)
 	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
@@ -111,8 +114,6 @@ enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DA
 class BufferedCSVReader {
 	//! Initial buffer read size; can be extended for long lines
 	static constexpr idx_t INITIAL_BUFFER_SIZE = 16384;
-	//! Maximum CSV line size: specified because if we reach this amount, we likely have the wrong delimiters
-	static constexpr idx_t MAXIMUM_CSV_LINE_SIZE = 1048576;
 	ParserMode mode;
 
 public:
