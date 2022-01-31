@@ -159,6 +159,27 @@ extern "C" SEXP _duckdb_rel_filter_R(SEXP rel_p, SEXP expr_p) {
   END_CPP11
 }
 // relational.cpp
+SEXP rel_project_R(sexp rel_p, list exprs_p);
+extern "C" SEXP _duckdb_rel_project_R(SEXP rel_p, SEXP exprs_p) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rel_project_R(cpp11::as_cpp<cpp11::decay_t<sexp>>(rel_p), cpp11::as_cpp<cpp11::decay_t<list>>(exprs_p)));
+  END_CPP11
+}
+// relational.cpp
+SEXP rel_aggregate_R(sexp rel_p, list groups_p, list aggregates_p);
+extern "C" SEXP _duckdb_rel_aggregate_R(SEXP rel_p, SEXP groups_p, SEXP aggregates_p) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rel_aggregate_R(cpp11::as_cpp<cpp11::decay_t<sexp>>(rel_p), cpp11::as_cpp<cpp11::decay_t<list>>(groups_p), cpp11::as_cpp<cpp11::decay_t<list>>(aggregates_p)));
+  END_CPP11
+}
+// relational.cpp
+SEXP rel_order_R(sexp rel_p, list orders_p);
+extern "C" SEXP _duckdb_rel_order_R(SEXP rel_p, SEXP orders_p) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rel_order_R(cpp11::as_cpp<cpp11::decay_t<sexp>>(rel_p), cpp11::as_cpp<cpp11::decay_t<list>>(orders_p)));
+  END_CPP11
+}
+// relational.cpp
 SEXP rel_to_df_R(sexp rel_p);
 extern "C" SEXP _duckdb_rel_to_df_R(SEXP rel_p) {
   BEGIN_CPP11
@@ -182,8 +203,11 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_ptr_to_str",           (DL_FUNC) &_duckdb_ptr_to_str,           1},
     {"_duckdb_register_R",           (DL_FUNC) &_duckdb_register_R,           3},
     {"_duckdb_register_arrow_R",     (DL_FUNC) &_duckdb_register_arrow_R,     4},
+    {"_duckdb_rel_aggregate_R",      (DL_FUNC) &_duckdb_rel_aggregate_R,      3},
     {"_duckdb_rel_filter_R",         (DL_FUNC) &_duckdb_rel_filter_R,         2},
     {"_duckdb_rel_from_df_R",        (DL_FUNC) &_duckdb_rel_from_df_R,        2},
+    {"_duckdb_rel_order_R",          (DL_FUNC) &_duckdb_rel_order_R,          2},
+    {"_duckdb_rel_project_R",        (DL_FUNC) &_duckdb_rel_project_R,        2},
     {"_duckdb_rel_to_df_R",          (DL_FUNC) &_duckdb_rel_to_df_R,          1},
     {"_duckdb_release_R",            (DL_FUNC) &_duckdb_release_R,            1},
     {"_duckdb_shutdown_R",           (DL_FUNC) &_duckdb_shutdown_R,           1},

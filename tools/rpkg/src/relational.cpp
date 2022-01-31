@@ -10,6 +10,9 @@
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 
 #include "duckdb/main/relation/filter_relation.hpp"
+#include "duckdb/main/relation/projection_relation.hpp"
+#include "duckdb/main/relation/aggregate_relation.hpp"
+#include "duckdb/main/relation/order_relation.hpp"
 
 using namespace duckdb;
 using namespace cpp11;
@@ -42,6 +45,11 @@ external_pointer<T> make_external(Args &&...args) {
 		return make_external<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, move(children[0]),
 		                                            move(children[1]));
 	}
+	if (name == "mean") {
+		name = "avg";
+	} else if (name == "n") {
+		name = "count_star";
+	}
 	return make_external<FunctionExpression>(name, move(children));
 }
 
@@ -69,6 +77,61 @@ struct RelationWrapper {
 	external_pointer<RelationWrapper> child(rel_p);
 	auto expr = external_pointer<ParsedExpression>(expr_p)->Copy();
 	auto res = std::make_shared<FilterRelation>(child->rel, move(expr));
+	return make_external<RelationWrapper>(res);
+}
+
+[[cpp11::register]] SEXP rel_project_R(sexp rel_p, list exprs_p) {
+	external_pointer<RelationWrapper> child(rel_p);
+	vector<unique_ptr<ParsedExpression>> projections;
+	vector<string> aliases;
+
+	for (auto expr_p : exprs_p) {
+		auto expr = external_pointer<ParsedExpression>(expr_p);
+		aliases.push_back((expr->ToString()));
+		projections.push_back(expr->Copy());
+	}
+
+	auto res = std::make_shared<ProjectionRelation>(child->rel, move(projections), move(aliases));
+	return make_external<RelationWrapper>(res);
+}
+
+[[cpp11::register]] SEXP rel_aggregate_R(sexp rel_p, list groups_p, list aggregates_p) {
+	external_pointer<RelationWrapper> child(rel_p);
+	vector<unique_ptr<ParsedExpression>> groups;
+	vector<unique_ptr<ParsedExpression>> aggregates;
+
+	// TODO deal with aliases
+	// TODO deal with empty groups
+	vector<string> aliases;
+
+	for (auto expr_p : groups_p) {
+		auto expr = external_pointer<ParsedExpression>(expr_p);
+		groups.push_back(expr->Copy());
+	}
+
+	int aggr_idx = 0; // has to be int for - reasons
+	auto aggr_names = aggregates_p.names();
+	for (auto expr_p : aggregates_p) {
+		auto expr = external_pointer<ParsedExpression>(expr_p)->Copy();
+		expr->alias = aggr_names[aggr_idx];
+		aggregates.push_back(move(expr));
+		aggr_idx++;
+	}
+
+	auto res = std::make_shared<AggregateRelation>(child->rel, move(aggregates), move(groups));
+	return make_external<RelationWrapper>(res);
+}
+
+[[cpp11::register]] SEXP rel_order_R(sexp rel_p, list orders_p) {
+	external_pointer<RelationWrapper> child(rel_p);
+	vector<OrderByNode> orders;
+
+	for (auto expr_p : orders_p) {
+		auto expr = external_pointer<ParsedExpression>(expr_p);
+		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, expr->Copy());
+	}
+
+	auto res = std::make_shared<OrderRelation>(child->rel, move(orders));
 	return make_external<RelationWrapper>(res);
 }
 

@@ -54,6 +54,54 @@ rel_filter <- function(rel, expr) {
 }
 
 #' @export
+rel_project <- function(rel, exprs) {
+    stopifnot(inherits(rel, "duckdb_relation"))
+
+    exprs_extptrs <- lapply(exprs, function(expr) {
+        stopifnot(inherits(expr, "duckdb_expr"))
+        expr$ref
+    })
+
+    res <- list(ref=.Call(`_duckdb_rel_project_R`, rel$ref, exprs_extptrs))
+    class(res) <- c("duckdb_relation")
+    res
+}
+
+#' @export
+rel_aggregate <- function(rel, groups, aggregates) {
+    stopifnot(inherits(rel, "duckdb_relation"))
+
+    groups_extptrs <- lapply(groups, function(expr) {
+        stopifnot(inherits(expr, "duckdb_expr"))
+        expr$ref
+    })
+
+    aggregates_extptrs <- lapply(aggregates, function(expr) {
+        stopifnot(inherits(expr, "duckdb_expr"))
+        expr$ref
+    })
+
+    res <- list(ref=.Call(`_duckdb_rel_aggregate_R`, rel$ref, groups_extptrs, aggregates_extptrs))
+    class(res) <- c("duckdb_relation")
+    res
+}
+
+#' @export
+rel_order <- function(rel, orders) {
+    stopifnot(inherits(rel, "duckdb_relation"))
+
+    orders_extptrs <- lapply(orders, function(expr) {
+        stopifnot(inherits(expr, "duckdb_expr"))
+        expr$ref
+    })
+
+    res <- list(ref=.Call(`_duckdb_rel_order_R`, rel$ref, orders_extptrs))
+    class(res) <- c("duckdb_relation")
+    res
+}
+
+
+#' @export
 as.data.frame.duckdb_relation <- function(rel) {
     stopifnot(inherits(rel, "duckdb_relation"))
     x <- .Call(`_duckdb_rel_to_df_R`, rel$ref)

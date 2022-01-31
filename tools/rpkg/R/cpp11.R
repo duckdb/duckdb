@@ -84,6 +84,18 @@ rel_filter_R <- function(rel_p, expr_p) {
   .Call(`_duckdb_rel_filter_R`, rel_p, expr_p)
 }
 
+rel_project_R <- function(rel_p, exprs_p) {
+  .Call(`_duckdb_rel_project_R`, rel_p, exprs_p)
+}
+
+rel_aggregate_R <- function(rel_p, groups_p, aggregates_p) {
+  .Call(`_duckdb_rel_aggregate_R`, rel_p, groups_p, aggregates_p)
+}
+
+rel_order_R <- function(rel_p, orders_p) {
+  .Call(`_duckdb_rel_order_R`, rel_p, orders_p)
+}
+
 rel_to_df_R <- function(rel_p) {
   .Call(`_duckdb_rel_to_df_R`, rel_p)
 }
