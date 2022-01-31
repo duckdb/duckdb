@@ -66,24 +66,27 @@ Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
 	return res->Value();
 }
 
+// TODO
+static Napi::FunctionReference udf_ref;
+
+static int my_scalar_udf(int input) {
+	auto res = udf_ref.MakeCallback(Napi::Value(), {Napi::Number::New(udf_ref.Env(), input)});
+	//return res.ToNumber().Int32Value();
+	return 42;
+}
+
 Napi::Value Connection::Register(const Napi::CallbackInfo &info) {
+	auto env = info.Env();
 	if (info.Length() != 2 || !info[0].IsString() || !info[1].IsFunction()) {
-		Napi::TypeError::New(info.Env(), "Holding it wrong").ThrowAsJavaScriptException();
-		return Value();
+		Napi::TypeError::New(env, "Holding it wrong").ThrowAsJavaScriptException();
+		return env.Null();
 	}
 
 	std::string name = info[0].As<Napi::String>();
 	Napi::Function udf = info[1].As<Napi::Function>();
-	Napi::FunctionReference udf_ref = Persistent(udf);
+	udf_ref = Persistent(udf);
 
-	//cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error)});
-
-//	this->connection->CreateScalarFunction();
-
-	// create new udf that calls the udf
-	//Napi::FunctionReference callback;
-
-
+	connection->CreateScalarFunction<int, int>(name, {duckdb::LogicalType::INTEGER}, duckdb::LogicalType::INTEGER,my_scalar_udf);
 	return Value();
 }
 
