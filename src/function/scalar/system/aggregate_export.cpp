@@ -56,7 +56,8 @@ struct FinalizeState : public FunctionData {
 	Vector addresses;
 
 	explicit FinalizeState(idx_t state_size_p)
-	    : state_size(state_size_p), state_buffer(unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * state_size_p])),
+	    : state_size(state_size_p),
+	      state_buffer(unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * AlignValue(state_size_p)])),
 	      addresses(LogicalType::POINTER) {
 	}
 

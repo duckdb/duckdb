@@ -1047,7 +1047,7 @@ LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	return LogicalType(LogicalTypeId::STRUCT, move(info));
 }
 
-LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) {
+LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) { // NOLINT
 	auto info = make_shared<AggregateStateTypeInfo>(move(state_type));
 	return LogicalType(LogicalTypeId::AGGREGATE_STATE, move(info));
 }
