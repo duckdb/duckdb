@@ -1,9 +1,9 @@
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -45,6 +45,14 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, MacroCatalo
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
+
+	if (macro_func->function->isQuery()) {
+		auto error = StringUtil::Format("Table Macro %s is being used in the wrong context as a regular macro\n Try "
+		                                "running again with the command SELECT * FROM %s\n",
+		                                function.function_name, function.ToString());
+		return BindResult(binder.FormatError(*expr->get(), error));
+	}
+
 	string error = MacroFunction::ValidateArguments(*macro_func, function, positionals, defaults);
 	if (!error.empty()) {
 		return BindResult(binder.FormatError(*expr->get(), error));
