@@ -152,6 +152,7 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	Vector &b = args.data[1];
 	Vector &e = args.data[2];
 
+	s.Normalify(count);
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST:
 		// Share the value dictionary as we are just going to slice it
