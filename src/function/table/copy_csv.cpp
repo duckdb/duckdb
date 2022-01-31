@@ -425,7 +425,8 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &cont
 	return move(local_data);
 }
 
-static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data, const string &file_path) {
+static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data,
+                                                               const string &file_path) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
 	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path,
@@ -441,7 +442,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 			WriteQuotedString(serializer, csv_data, csv_data.names[i].c_str(), csv_data.names[i].size(), false);
 		}
 		serializer.WriteBufferData(csv_data.newline);
-		
+
 		global_data->WriteData(serializer.blob.data.get(), serializer.blob.size);
 	}
 	return move(global_data);
@@ -522,8 +523,6 @@ static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, Glo
 //===--------------------------------------------------------------------===//
 void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
 	auto &global_state = (GlobalWriteCSVData &)gstate;
-
-//	MoveTmpFile(global_state.fs, global_state.file_path);
 
 	global_state.handle->Close();
 	global_state.handle.reset();
