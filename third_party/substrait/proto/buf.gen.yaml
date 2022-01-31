@@ -1,0 +1,4 @@
+version: v1
+plugins:
+  - name: cpp
+    out: gen/proto/cpp

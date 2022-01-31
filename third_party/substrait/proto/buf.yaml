@@ -1,0 +1,11 @@
+version: v1
+name: buf.build/substrait-io/substrait
+lint:
+  use:
+    - DEFAULT
+  ignore_only:
+    PACKAGE_VERSION_SUFFIX:
+      - substrait
+breaking:
+  use:
+    - FILE
