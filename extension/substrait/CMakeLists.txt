@@ -19,8 +19,9 @@ set(SUBSTRAIT_SOURCES
     ../../third_party/substrait/substrait/type_expressions.pb.cc
     ../../third_party/substrait/substrait/extensions/extensions.pb.cc)
 
-add_library(substrait_extension STATIC to_substrait.cpp substrait-extension.cpp
-                                       ${SUBSTRAIT_SOURCES})
+add_library(
+  substrait_extension STATIC to_substrait.cpp from_substrait.cpp
+                             substrait-extension.cpp ${SUBSTRAIT_SOURCES})
 
 build_loadable_extension(substrait substrait-extension.cpp)
 target_link_libraries(substrait_extension ${Protobuf_LIBRARIES})
