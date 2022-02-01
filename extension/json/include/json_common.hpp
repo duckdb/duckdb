@@ -14,23 +14,48 @@
 
 namespace duckdb {
 
-struct JSONCommon {
-private:
-	static constexpr auto READ_FLAGS = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_STOP_WHEN_DONE;
+struct JSONFunctionData : public FunctionData {
+public:
+	explicit JSONFunctionData(bool constant, string path_p, idx_t len);
+	unique_ptr<FunctionData> Copy() override;
+	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                     vector<unique_ptr<Expression>> &arguments);
 
 public:
-	//! Get root of JSON document (returns nullptr if malformed JSON)
-	static inline yyjson_val *GetRootUnsafe(const string_t &input) {
-		return yyjson_doc_get_root(yyjson_read(input.GetDataUnsafe(), input.GetSize(), READ_FLAGS));
-	}
+	const bool constant;
+	const string path;
+	const size_t len;
+};
 
-	//! Get root of JSON document (throws error if malformed JSON)
-	static inline yyjson_val *GetRoot(const string_t &input) {
-		auto root = GetRootUnsafe(input);
-		if (!root) {
+struct JSONCommon {
+private:
+	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_STOP_WHEN_DONE;
+	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
+
+public:
+	//! Read JSON document (returns nullptr if invalid JSON)
+	static inline yyjson_doc *ReadDocumentUnsafe(const string_t &input) {
+		return yyjson_read(input.GetDataUnsafe(), input.GetSize(), READ_FLAG);
+	}
+	//! Read JSON document (throws error if malformed JSON)
+	static inline yyjson_doc *ReadDocument(const string_t &input) {
+		auto result = ReadDocumentUnsafe(input);
+		if (!result) {
 			throw Exception("malformed JSON");
 		}
-		return root;
+		return result;
+	}
+	//! Write JSON document
+	static inline string_t WriteDocument(yyjson_val *val) {
+		// Create mutable copy of the read val
+		auto *mut_doc = yyjson_mut_doc_new(nullptr);
+		auto *mut_val = yyjson_val_mut_copy(mut_doc, val);
+		yyjson_mut_doc_set_root(mut_doc, mut_val);
+		// Write mutable copy to string
+		idx_t len;
+		char *json = yyjson_mut_write(mut_doc, WRITE_FLAG, (size_t *)&len);
+		yyjson_mut_doc_free(mut_doc);
+		return string_t(json, len);
 	}
 
 public:
@@ -38,35 +63,34 @@ public:
 	static bool ValidPathDollar(const char *ptr, const idx_t &len);
 
 	//! Get JSON value using JSON path query (safe, checks the path query)
-	static inline yyjson_val *GetPointer(const string_t &input, const string_t &query) {
+	static inline yyjson_val *GetPointer(yyjson_val *root, const string_t &query) {
 		auto ptr = query.GetDataUnsafe();
 		auto len = query.GetSize();
 		if (len == 0) {
-			return GetPointerUnsafe(input, ptr, len);
+			return GetPointerUnsafe(root, ptr, len);
 		}
 		switch (*ptr) {
 		case '/': {
 			// '/' notation must be '\0'-terminated
 			auto str = string(ptr, len);
-			return GetPointerUnsafe(input, str.c_str(), len);
+			return GetPointerUnsafe(root, str.c_str(), len);
 		}
 		case '$':
 			if (!ValidPathDollar(ptr, len)) {
 				throw Exception("JSON path error");
 			}
-			return GetPointerUnsafe(input, ptr, len);
+			return GetPointerUnsafe(root, ptr, len);
 		default:
 			auto str = "/" + string(ptr, len);
-			return GetPointerUnsafe(input, str.c_str(), len);
+			return GetPointerUnsafe(root, str.c_str(), len);
 		}
 	}
 
 	//! Get JSON value using JSON path query (unsafe)
-	static inline yyjson_val *GetPointerUnsafe(const string_t &input, const char *ptr, const idx_t &len) {
+	static inline yyjson_val *GetPointerUnsafe(yyjson_val *root, const char *ptr, const idx_t &len) {
 		if (len == 0) {
 			return nullptr;
 		}
-		auto root = GetRoot(input);
 		switch (*ptr) {
 		case '/':
 			return GetPointer(root, ptr, len);
@@ -84,54 +108,65 @@ private:
 	}
 	//! Get JSON pointer using $.field[index]... notation
 	static yyjson_val *GetPointerDollar(yyjson_val *val, const char *ptr, const idx_t &len);
-};
 
-struct JSONFunctionData : public FunctionData {
 public:
-	explicit JSONFunctionData(bool constant, string path_p, idx_t len)
-	    : constant(constant), path(move(path_p)), len(len) {
+	//! Unary JSON function
+	template <class T>
+	static void TemplatedUnaryJSONFunction(DataChunk &args, ExpressionState &state, Vector &result,
+	                                       std::function<bool(yyjson_val *, T &)> fun) {
+		auto &inputs = args.data[0];
+		UnaryExecutor::ExecuteWithNulls<string_t, T>(inputs, result, args.size(),
+		                                             [&](string_t input, ValidityMask &mask, idx_t idx) {
+			                                             T result_val {};
+			                                             auto doc = JSONCommon::ReadDocument(input);
+			                                             auto root = doc->root;
+			                                             if (!root || !fun(root, result_val)) {
+				                                             mask.SetInvalid(idx);
+			                                             }
+			                                             yyjson_doc_free(doc);
+			                                             return result_val;
+		                                             });
 	}
 
-public:
-	const bool constant;
-	const string path;
-	const size_t len;
+	//! Binary JSON function
+	template <class T>
+	static void TemplatedBinaryJSONFunction(DataChunk &args, ExpressionState &state, Vector &result,
+	                                        std::function<bool(yyjson_val *, T &)> fun) {
+		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		const auto &info = (JSONFunctionData &)*func_expr.bind_info;
 
-public:
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<JSONFunctionData>(constant, path, len);
-	}
-
-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
-		D_ASSERT(bound_function.arguments.size() == 2);
-		bool constant = false;
-		string path = "";
-		idx_t len = 0;
-		if (arguments[1]->return_type.id() != LogicalTypeId::SQLNULL && arguments[1]->IsFoldable()) {
-			constant = true;
-			// Try to cast to string, so that we can allow integers as arguments (array index)
-			auto value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-			if (!value.TryCastAs(LogicalType::VARCHAR)) {
-				throw Exception("Cannot JSON path argument to VARCHAR");
-			}
-			// Get the string
-			auto query = value.GetValueUnsafe<string_t>();
-			len = query.GetSize();
-			auto ptr = query.GetDataUnsafe();
-			// Empty strings and invalid $ paths yield an error
-			if (len == 0 || (*ptr == '$' && !JSONCommon::ValidPathDollar(ptr, len))) {
-				throw Exception("JSON path error");
-			}
-			// Copy over string to the bind data
-			if (*ptr == '/' || *ptr == '$') {
-				path = string(ptr, len);
-			} else {
-				path = "/" + string(ptr, len);
-				len++;
-			}
+		auto &inputs = args.data[0];
+		if (info.constant) {
+			// Constant query
+			const char *ptr = info.path.c_str();
+			const idx_t &len = info.len;
+			UnaryExecutor::ExecuteWithNulls<string_t, T>(
+			    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
+				    T result_val {};
+				    auto doc = JSONCommon::ReadDocument(input);
+				    auto root = doc->root;
+				    if (!root || !fun(JSONCommon::GetPointerUnsafe(root, ptr, len), result_val)) {
+					    mask.SetInvalid(idx);
+				    }
+				    yyjson_doc_free(doc);
+				    return result_val;
+			    });
+		} else {
+			// Columnref query
+			auto &queries = args.data[1];
+			BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
+			    inputs, queries, result, args.size(),
+			    [&](string_t input, string_t query, ValidityMask &mask, idx_t idx) {
+				    T result_val {};
+				    auto doc = JSONCommon::ReadDocument(input);
+				    auto root = doc->root;
+				    if (!root || !fun(JSONCommon::GetPointer(root, query), result_val)) {
+					    mask.SetInvalid(idx);
+				    }
+				    yyjson_doc_free(doc);
+				    return result_val;
+			    });
 		}
-		return make_unique<JSONFunctionData>(constant, path, len);
 	}
 };
 

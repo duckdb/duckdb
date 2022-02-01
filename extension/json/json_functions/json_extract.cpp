@@ -5,12 +5,12 @@
 namespace duckdb {
 
 template <class T>
-static inline bool ExtractFromVal(yyjson_val *val, T &result) {
+static inline bool TypedExtractFromVal(yyjson_val *val, T &result) {
 	throw NotImplementedException("Cannot extract JSON of this type");
 }
 
 template <>
-inline bool ExtractFromVal(yyjson_val *val, bool &result) {
+inline bool TypedExtractFromVal(yyjson_val *val, bool &result) {
 	auto valid = yyjson_is_bool(val);
 	if (valid) {
 		result = unsafe_yyjson_get_bool(val);
@@ -19,7 +19,7 @@ inline bool ExtractFromVal(yyjson_val *val, bool &result) {
 }
 
 template <>
-inline bool ExtractFromVal(yyjson_val *val, int32_t &result) {
+inline bool TypedExtractFromVal(yyjson_val *val, int32_t &result) {
 	auto valid = yyjson_is_int(val);
 	if (valid) {
 		result = unsafe_yyjson_get_int(val);
@@ -28,7 +28,7 @@ inline bool ExtractFromVal(yyjson_val *val, int32_t &result) {
 }
 
 template <>
-inline bool ExtractFromVal(yyjson_val *val, int64_t &result) {
+inline bool TypedExtractFromVal(yyjson_val *val, int64_t &result) {
 	// Needs to check whether it is int first, otherwise we get NULL for small values
 	auto valid = yyjson_is_int(val) || yyjson_is_sint(val);
 	if (valid) {
@@ -38,7 +38,7 @@ inline bool ExtractFromVal(yyjson_val *val, int64_t &result) {
 }
 
 template <>
-inline bool ExtractFromVal(yyjson_val *val, uint64_t &result) {
+inline bool TypedExtractFromVal(yyjson_val *val, uint64_t &result) {
 	auto valid = yyjson_is_uint(val);
 	if (valid) {
 		result = unsafe_yyjson_get_uint(val);
@@ -47,7 +47,7 @@ inline bool ExtractFromVal(yyjson_val *val, uint64_t &result) {
 }
 
 template <>
-inline bool ExtractFromVal(yyjson_val *val, double &result) {
+inline bool TypedExtractFromVal(yyjson_val *val, double &result) {
 	auto valid = yyjson_is_real(val);
 	if (valid) {
 		result = unsafe_yyjson_get_real(val);
@@ -56,7 +56,7 @@ inline bool ExtractFromVal(yyjson_val *val, double &result) {
 }
 
 template <>
-inline bool ExtractFromVal(yyjson_val *val, string_t &result) {
+inline bool TypedExtractFromVal(yyjson_val *val, string_t &result) {
 	auto valid = yyjson_is_str(val);
 	if (valid) {
 		result = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
@@ -65,45 +65,19 @@ inline bool ExtractFromVal(yyjson_val *val, string_t &result) {
 }
 
 template <class T>
-static inline bool TemplatedExtract(const string_t &input, const string_t &query, T &result) {
-	return ExtractFromVal<T>(JSONCommon::GetPointer(input, query), result);
+static void TemplatedTypedExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	JSONCommon::TemplatedBinaryJSONFunction<T>(args, state, result, TypedExtractFromVal<T>);
 }
 
-template <class T>
-static inline bool TemplatedExtract(const string_t &input, const char *ptr, const idx_t &len, T &result) {
-	return ExtractFromVal<T>(JSONCommon::GetPointerUnsafe(input, ptr, len), result);
-}
-
-template <class T>
-static void TemplatedExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	const auto &info = (JSONFunctionData &)*func_expr.bind_info;
-
-	auto &inputs = args.data[0];
-	if (info.constant) {
-		// Constant query
-		const char *ptr = info.path.c_str();
-		const idx_t &len = info.len;
-		UnaryExecutor::ExecuteWithNulls<string_t, T>(inputs, result, args.size(),
-		                                             [&](string_t input, ValidityMask &mask, idx_t idx) {
-			                                             T result_val {};
-			                                             if (!TemplatedExtract<T>(input, ptr, len, result_val)) {
-				                                             mask.SetInvalid(idx);
-			                                             }
-			                                             return result_val;
-		                                             });
-	} else {
-		// Columnref query
-		auto &queries = args.data[1];
-		BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
-		    inputs, queries, result, args.size(), [&](string_t input, string_t query, ValidityMask &mask, idx_t idx) {
-			    T result_val {};
-			    if (!TemplatedExtract<T>(input, query, result_val)) {
-				    mask.SetInvalid(idx);
-			    }
-			    return result_val;
-		    });
+static inline bool ExtractFromVal(yyjson_val *val, string_t &result) {
+	if (val) {
+		result = JSONCommon::WriteDocument(val);
 	}
+	return val;
+}
+
+static void ExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	JSONCommon::TemplatedBinaryJSONFunction<string_t>(args, state, result, ExtractFromVal);
 }
 
 static void AddFunctionAliases(vector<CreateScalarFunctionInfo> &functions, vector<string> names, ScalarFunction fun) {
@@ -114,22 +88,26 @@ static void AddFunctionAliases(vector<CreateScalarFunctionInfo> &functions, vect
 }
 
 vector<CreateScalarFunctionInfo> JSONFunctions::GetExtractFunctions() {
+	// Typed extract functions
 	vector<CreateScalarFunctionInfo> functions;
-	auto bool_fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               TemplatedExtractFunction<bool>, false, JSONFunctionData::Bind, nullptr, nullptr);
-	auto int_fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::INTEGER,
-	                              TemplatedExtractFunction<int32_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	auto bool_fun =
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                   TemplatedTypedExtractFunction<bool>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	auto int_fun =
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::INTEGER,
+	                   TemplatedTypedExtractFunction<int32_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
 	auto bigint_fun =
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                   TemplatedExtractFunction<int64_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	                   TemplatedTypedExtractFunction<int64_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
 	auto ubigint_fun =
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::UBIGINT,
-	                   TemplatedExtractFunction<uint64_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
-	auto double_fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::DOUBLE,
-	                                 TemplatedExtractFunction<double>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	                   TemplatedTypedExtractFunction<uint64_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	auto double_fun =
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::DOUBLE,
+	                   TemplatedTypedExtractFunction<double>, false, JSONFunctionData::Bind, nullptr, nullptr);
 	auto string_fun =
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                   TemplatedExtractFunction<string_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	                   TemplatedTypedExtractFunction<string_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
 
 	AddFunctionAliases(functions, {"json_extract_bool", "json_extract_boolean"}, bool_fun);
 	AddFunctionAliases(functions, {"json_extract_int", "json_extract_integer"}, int_fun);
@@ -137,6 +115,13 @@ vector<CreateScalarFunctionInfo> JSONFunctions::GetExtractFunctions() {
 	AddFunctionAliases(functions, {"json_extract_ubigint"}, ubigint_fun);
 	AddFunctionAliases(functions, {"json_extract_double"}, double_fun);
 	AddFunctionAliases(functions, {"json_extract_string", "json_extract_varchar"}, string_fun);
+
+	// Non-typed extract function
+	// Set because we intend to add the {LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR)} variant
+	ScalarFunctionSet set("json_extract");
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, ExtractFunction,
+	                               false, JSONFunctionData::Bind, nullptr, nullptr));
+	functions.push_back(CreateScalarFunctionInfo(move(set)));
 
 	return functions;
 }

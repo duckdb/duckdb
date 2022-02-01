@@ -159,3 +159,54 @@ select json_type(json, query) from test
 integer
 integer
 null
+
+# some SQLite json_type tests
+query T
+SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}');
+----
+object
+
+query T
+SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$');
+----
+object
+
+query T
+SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a');
+----
+array
+
+query T
+SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[0]');
+----
+integer
+
+query T
+SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[1]');
+----
+real
+
+query T
+SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[2]');
+----
+boolean
+
+query T
+SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[3]');
+----
+boolean
+
+query T
+SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[4]');
+----
+null
+
+query T
+SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[5]');
+----
+string
+
+query T
+SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[6]');
+----
+NULL

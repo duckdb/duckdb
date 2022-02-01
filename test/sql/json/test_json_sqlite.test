@@ -10,6 +10,24 @@ pragma enable_verification
 # some of the more elaborate tests from SQLite JSON1 extension
 # https://github.com/sqlite/sqlite/blob/master/test/json101.test
 statement ok
+CREATE TABLE j1(x varchar);
+
+statement ok
+INSERT INTO j1(x)
+VALUES('true'),('false'),('null'),('123'),('-234'),('34.5e+6'),
+     ('""'),('"\""'),('"\\"'),('"abcdefghijlmnopqrstuvwxyz"'),
+     ('[]'),('{}'),('[true,false,null,123,-234,34.5e+6,{},[]]'),
+     ('{"a":true,"b":{"c":false}}');
+
+query T
+SELECT count(*) FROM j1 WHERE json_type(x) IN ('object','array');
+  SELECT x FROM j1
+   WHERE json_extract(x,'$')<>x
+     AND json_type(x) IN ('object','array');
+----
+4
+
+statement ok
 CREATE TABLE j2(id INTEGER PRIMARY KEY, json VARCHAR, src VARCHAR);
 
 statement ok

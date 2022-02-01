@@ -1,5 +1,5 @@
 # name: test/sql/json/test_json_extract.test
-# description: Test JSON extract
+# description: Test JSON typed extract
 # group: [json]
 
 require json
@@ -7,168 +7,142 @@ require json
 statement ok
 pragma enable_verification
 
-# basically, if anything goes wrong we return NULL
-# users need to know their JSON schema
-
-# tests with constant input and constant query
 query T
-select json_extract_string('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
+select json_extract('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
 ----
-duck
+"duck"
 
 query T
-select json_extract_int('[1, 2, 42]', 2)
+select json_extract('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}', '/my_field/my_nested_field/1')
+----
+"duckduckduckduck"
+
+query T
+select json_extract('[1, 2, 42]', 2)
 ----
 42
 
+# some sqlite tests
 query T
-select json_extract_string('{"str": 42}', 'str')
+SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$');
+----
+{"a":2,"c":[4,5,{"f":7}]}
+
+query T
+SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.c');
+----
+[4,5,{"f":7}]
+
+query T
+SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.c[2]');
+----
+{"f":7}
+
+query T
+SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.c[2].f');
+----
+7
+
+query T
+SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.x');
 ----
 NULL
 
-query T
-select json_extract_int('{"str": "quack"}', 'str')
-----
-NULL
+# FIXME: disabled for now until we support json_extract with a list of paths
+#query T
+#SELECT json_extract('{"a":2,"c":[4,5],"f":7}',['$.c','$.a']);
+#----
+#[[4,5],2]
 
-query T
-select json_extract_string('{"str": "quack"}', 'str')
-----
-quack
-
-query T
-select json_extract_varchar('{"str": "quack"}', 'str')
-----
-quack
-
-query T
-select json_extract_string('{"str": "quack"}', 'str2')
-----
-NULL
-
-query T
-select json_extract_string('{"str": "quack"}', NULL)
-----
-NULL
-
-query T
-select json_extract_string(NULL, 'str')
-----
-NULL
-
-# NaN and Infinity should become NULL
-query T
-select json_extract_string('{"null": NaN}', 'null')
-----
-NULL
-
-query T
-select json_extract_string('{"null": nan}', 'null')
-----
-NULL
-
-query T
-select json_extract_string('{"null": Infinity}', 'null')
-----
-NULL
-
-query T
-select json_extract_string('{"null": -Infinity}', 'null')
-----
-NULL
+#query T
+#SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', ['$.x', '$.a']);
+#----
+#[null,2]
 
 statement ok
-create table test(json varchar, query varchar)
+CREATE TABLE t1(j varchar);
 
 statement ok
-insert into test values
-    ('{"str": "quack", "int": 4, "double": 0.42, "bool": true, "arr": [], "nested": {"value": 1}}', '/nested/value'),
-    ('{"str": "woof", "int": -4, "double": -0.42, "bool": false, "arr": [0, 1, 2], "nested": {"value": 42}}', '/arr/2'),
-    ('{"str": null, "int": null, "double": null, "bool": null, "arr": null, "nested": null}', 'bool')
-
-# tests with columnref input and constant query
-query T
-select json_extract_string(json, 'str') from test
-----
-quack
-woof
-NULL
+INSERT INTO t1(j) VALUES('{"a":1,"b":[1,[2,3],4],"c":99}');
 
 query T
-select json_extract_int(json, 'str') from test
+SELECT json_extract(j, '$.b[#]') FROM t1;
 ----
 NULL
-NULL
-NULL
 
 query T
-select json_extract_int(json, 'int') from test
+SELECT json_extract(j, '$.b[#-1]') FROM t1;
 ----
 4
--4
-NULL
 
 query T
-select json_extract_integer(json, 'int') from test
+SELECT json_extract(j, '$.b[#-2]') FROM t1;
 ----
-4
--4
-NULL
+[2,3]
 
 query T
-select json_extract_bigint(json, 'int') from test
+SELECT json_extract(j, '$.b[#-02]') FROM t1;
 ----
-4
--4
-NULL
+[2,3]
 
 query T
-select json_extract_ubigint(json, 'int') from test
-----
-4
-NULL
-NULL
-
-query T
-select json_extract_double(json, 'double') from test
-----
-0.42
--0.42
-NULL
-
-query T
-select json_extract_bool(json, 'bool') from test
-----
-true
-false
-NULL
-
-query T
-select json_extract_int(json, 'arr') from test
-----
-NULL
-NULL
-NULL
-
-# json path queries
-query T
-select json_extract_int(json, '/arr/0') from test
-----
-NULL
-0
-NULL
-
-query T
-select json_extract_int(json, '/nested/value') from test
+SELECT json_extract(j, '$.b[#-3]') FROM t1;
 ----
 1
-42
+
+query T
+SELECT json_extract(j, '$.b[#-4]') FROM t1;
+----
 NULL
 
-# test with columnref input and columnref query
 query T
-select json_extract_int(json, query) from test
+SELECT json_extract(j, '$.b[#-2][#-1]') FROM t1;
 ----
-1
+3
+
+# FIXME: also disabled until we support json_extract with a list of paths
+#query T
+#SELECT json_extract(j, ['$.b[0]', '$.b[#-1]']) FROM t1;
+#----
+#[1,4]
+
+query T
+SELECT json_extract(j, '$.a[#-1]') FROM t1;
+----
+NULL
+
+query T
+SELECT json_extract(j, '$.b[#-000001]') FROM t1;
+----
+4
+
+statement error
+SELECT json_extract(j, '$.b[#-]') FROM t1;
+
+statement error
+SELECT json_extract(j, '$.b[#9]') FROM t1;
+
+statement error
+SELECT json_extract(j, '$.b[#+2]') FROM t1;
+
+statement error
+SELECT json_extract(j, '$.b[#-1') FROM t1;
+
+statement error
+SELECT json_extract(j, '$.b[#-1x]') FROM t1;
+
+statement ok
+CREATE TABLE obj(x varchar);
+
+statement ok
+INSERT INTO obj VALUES('{"a":1,"b":2}');
+
+query T
+SELECT json_extract(x, '$.b') FROM obj;
+----
 2
-NULL
+
+query T
+SELECT json_extract(x, '$."b"') FROM obj;
+----
+2

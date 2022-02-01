@@ -7,9 +7,6 @@ require json
 statement ok
 pragma enable_verification
 
-statement error
-select json_extract_string('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '$.my_field[my_nested_field[#-3]')
-
 query T
 select json_extract_string('{"my_field": "duck"}', '$.my_field')
 ----
@@ -78,12 +75,10 @@ select json_extract_string(j, '$.my_field.my_nested_field.3') from test
 ----
 NULL
 
-query T
-select json_extract_int('{"a": {"b": "c"}}', '$[]');
-----
-NULL
-
 # path error
+statement error
+select json_extract_int('{"a": {"b": "c"}}', '$[]');
+
 statement error
 select json_extract_string(j, '$.my_field[my_nested_field[#-3]') from test
 
