@@ -19,6 +19,7 @@ struct JoinCondition;
 
 class DuckDBToSubstrait {
 public:
+	substrait::Plan plan;
 	DuckDBToSubstrait() {};
 
 	~DuckDBToSubstrait() {
@@ -79,10 +80,9 @@ private:
 
 	vector<unique_ptr<substrait::Expression>> plan_expressions;
 	vector<unique_ptr<substrait::Rel>> plan_relations;
-	substrait::Plan plan;
+
 	std::unordered_map<std::string, uint64_t> functions_map;
 	// holds the substrait expressions
-
 	uint64_t last_function_id = 0;
 };
 } // namespace duckdb
