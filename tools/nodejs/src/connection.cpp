@@ -66,14 +66,40 @@ Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
 	return res->Value();
 }
 
-// TODO
-static Napi::FunctionReference udf_ref;
 
-static int my_scalar_udf(int input) {
-	auto res = udf_ref.MakeCallback(Napi::Value(), {Napi::Number::New(udf_ref.Env(), input)});
-	//return res.ToNumber().Int32Value();
-	return 42;
+static Napi::ThreadSafeFunction fun;
+
+static void MyUdfFunction(duckdb::DataChunk &input, duckdb::ExpressionState &state, duckdb::Vector &result) {
+	duckdb::UnaryExecutor::Execute<int, int>(input.data[0], result, input.size(), [&](int input) {
+		return input;
+	});
 }
+
+
+struct RegisterTask : public Task {
+	RegisterTask(Connection &connection_, std::string name_, Napi::Function callback_)
+	    : Task(connection_, callback_), name(name_)  {
+	}
+
+	void DoWork() override {
+		auto &connection = Get<Connection>();
+
+		duckdb::ScalarFunction function({duckdb::LogicalType::INTEGER}, duckdb::LogicalType::INTEGER, MyUdfFunction);
+		duckdb::CreateScalarFunctionInfo info(function);
+		info.name = name;
+
+		auto &con = *connection.connection;
+		con.BeginTransaction();
+		auto &context = *con.context;
+		auto &catalog = duckdb::Catalog::GetCatalog(context);
+		catalog.CreateFunction(context, &info);
+		con.Commit();
+
+	}
+	std::string name;
+	bool success;
+};
+
 
 Napi::Value Connection::Register(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
@@ -84,9 +110,9 @@ Napi::Value Connection::Register(const Napi::CallbackInfo &info) {
 
 	std::string name = info[0].As<Napi::String>();
 	Napi::Function udf = info[1].As<Napi::Function>();
-	udf_ref = Persistent(udf);
+	fun = Napi::ThreadSafeFunction::New(env, udf, name, 0, 1);
+	database_ref->Schedule(info.Env(), duckdb::make_unique<RegisterTask>(*this, name, udf));
 
-	connection->CreateScalarFunction<int, int>(name, {duckdb::LogicalType::INTEGER}, duckdb::LogicalType::INTEGER,my_scalar_udf);
 	return Value();
 }
 
