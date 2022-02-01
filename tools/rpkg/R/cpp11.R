@@ -60,42 +60,46 @@ ptr_to_str <- function(extptr) {
   .Call(`_duckdb_ptr_to_str`, extptr)
 }
 
-expr_reference_R <- function(ref) {
-  .Call(`_duckdb_expr_reference_R`, ref)
+expr_reference <- function(ref) {
+  .Call(`_duckdb_expr_reference`, ref)
 }
 
-expr_constant_R <- function(val) {
-  .Call(`_duckdb_expr_constant_R`, val)
+expr_constant <- function(val) {
+  .Call(`_duckdb_expr_constant`, val)
 }
 
-expr_function_R <- function(name_p, args) {
-  .Call(`_duckdb_expr_function_R`, name_p, args)
+expr_function <- function(name_p, args) {
+  .Call(`_duckdb_expr_function`, name_p, args)
 }
 
-expr_tostring_R <- function(expr) {
-  .Call(`_duckdb_expr_tostring_R`, expr)
+expr_tostring <- function(expr) {
+  .Call(`_duckdb_expr_tostring`, expr)
 }
 
-rel_from_df_R <- function(con_p, df) {
-  .Call(`_duckdb_rel_from_df_R`, con_p, df)
+rel_from_df_R <- function(con, df) {
+  .Call(`_duckdb_rel_from_df_R`, con, df)
 }
 
-rel_filter_R <- function(rel_p, expr_p) {
-  .Call(`_duckdb_rel_filter_R`, rel_p, expr_p)
+rel_filter <- function(rel, expr) {
+  .Call(`_duckdb_rel_filter`, rel, expr)
 }
 
-rel_project_R <- function(rel_p, exprs_p) {
-  .Call(`_duckdb_rel_project_R`, rel_p, exprs_p)
+rel_project <- function(rel, exprs_p) {
+  .Call(`_duckdb_rel_project`, rel, exprs_p)
 }
 
-rel_aggregate_R <- function(rel_p, groups_p, aggregates_p) {
-  .Call(`_duckdb_rel_aggregate_R`, rel_p, groups_p, aggregates_p)
+rel_aggregate <- function(rel, groups_p, aggregates_p) {
+  .Call(`_duckdb_rel_aggregate`, rel, groups_p, aggregates_p)
 }
 
-rel_order_R <- function(rel_p, orders_p) {
-  .Call(`_duckdb_rel_order_R`, rel_p, orders_p)
+rel_order <- function(rel, orders_p) {
+  .Call(`_duckdb_rel_order`, rel, orders_p)
 }
 
-rel_to_df_R <- function(rel_p) {
-  .Call(`_duckdb_rel_to_df_R`, rel_p)
+rel_to_df <- function(rel) {
+  .Call(`_duckdb_rel_to_df`, rel)
+}
+
+rel_tostring <- function(rel) {
+  .Call(`_duckdb_rel_tostring`, rel)
 }

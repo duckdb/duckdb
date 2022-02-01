@@ -26,10 +26,21 @@ struct ConnWrapper {
 	SEXP db_sexp;
 };
 
+typedef cpp11::external_pointer<ConnWrapper> con_extptr;
+
 struct RStatement {
 	unique_ptr<PreparedStatement> stmt;
 	vector<Value> parameters;
 };
+
+struct RelationWrapper {
+	RelationWrapper(std::shared_ptr<Relation> rel_p) : rel(move(rel_p)) {
+	}
+	shared_ptr<Relation> rel;
+};
+
+typedef cpp11::external_pointer<ParsedExpression> expr_extptr;
+typedef cpp11::external_pointer<RelationWrapper> rel_extptr;
 
 struct RApi {
 
