@@ -102,9 +102,6 @@ void LogicalOperator::Verify() {
 			}
 		}
 		D_ASSERT(!str.empty());
-		// we should be able to parse this expression
-		auto parsed_list = Parser::ParseExpressionList(str);
-		D_ASSERT(parsed_list.size() == 1);
 	}
 	D_ASSERT(!ToString().empty());
 	for (auto &child : children) {
