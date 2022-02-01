@@ -150,7 +150,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	auto df = sexp(duckdb_execute_R_impl(mat_res));
 	df.attr("class") = classes;
 	df.attr("row.names") = row_names;
-	return (df);
+	return df;
 }
 
 //' @export

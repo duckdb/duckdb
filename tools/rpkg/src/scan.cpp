@@ -28,7 +28,7 @@ static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx
 		if (val == NA_STRING) {
 			result_mask.SetInvalid(i);
 		} else {
-			result_data[i] = string_t((char *)CHAR(val));
+			result_data[i] = string_t((char *)CHAR(val), LENGTH(val));
 		}
 	}
 }
