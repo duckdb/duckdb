@@ -5,23 +5,24 @@
 using namespace duckdb;
 
 SEXP RApi::ToUtf8(SEXP string_sexp) {
-	return RApi::REvalThrows(Rf_lang2(RStrings::get().enc2utf8_sym, string_sexp));
+	cpp11::function enc2utf8 = RStrings::get().enc2utf8_sym;
+	return enc2utf8(string_sexp);
 }
 
 SEXP RApi::PointerToString(SEXP extptr) {
 	if (TYPEOF(extptr) != EXTPTRSXP) {
-		Rf_error("duckdb_ptr_to_str: Need external pointer parameter");
+		cpp11::stop("duckdb_ptr_to_str: Need external pointer parameter");
 	}
-	RProtector r;
-	SEXP ret = r.Protect(NEW_STRING(1));
-	SET_STRING_ELT(ret, 0, NA_STRING);
+
 	void *ptr = R_ExternalPtrAddr(extptr);
 	if (ptr != NULL) {
 		char buf[100];
 		snprintf(buf, 100, "%p", ptr);
-		SET_STRING_ELT(ret, 0, Rf_mkChar(buf));
+		cpp11::strings a;
+		return cpp11::writable::strings({buf});
+	} else {
+		return cpp11::strings(NA_STRING);
 	}
-	return ret;
 }
 
 static SEXP cstr_to_charsexp(const char *s) {
@@ -189,7 +190,7 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		return RIntegerType::IsNull(ts_val) ? Value(LogicalType::TIME) : Value::TIME(RTimeWeeksType::Convert(ts_val));
 	}
 	default:
-		Rf_error("duckdb_sexp_to_value: Unsupported type");
+		cpp11::stop("duckdb_sexp_to_value: Unsupported type");
 		return Value();
 	}
 }
@@ -198,64 +199,44 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 	if (val.IsNull()) {
 		return R_NilValue;
 	}
-	RProtector r;
-	SEXP res;
+
 	switch (val.type().id()) {
 	case LogicalTypeId::BOOLEAN:
-		res = r.Protect(NEW_LOGICAL(1));
-		LOGICAL_POINTER(res)[0] = val.GetValue<bool>();
-		return res;
+		return cpp11::logicals({val.GetValue<bool>()});
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
-		res = r.Protect(NEW_INTEGER(1));
-		INTEGER_POINTER(res)[0] = val.GetValue<int32_t>();
-		return res;
+		return cpp11::integers({val.GetValue<int32_t>()});
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
-		res = r.Protect(NEW_NUMERIC(1));
-		NUMERIC_POINTER(res)[0] = val.GetValue<double>();
-		return res;
+		return cpp11::doubles({val.GetValue<double>()});
 	case LogicalTypeId::VARCHAR:
-		res = r.Protect(NEW_STRING(1));
-		SET_STRING_ELT(res, 0, cpp_str_to_charsexp(val.ToString()));
-		return res;
+		return RApi::StringsToSexp({val.ToString()});
 	case LogicalTypeId::TIMESTAMP: {
+		cpp11::doubles res({(double)Timestamp::GetEpochSeconds(val.GetValue<timestamp_t>())});
 		// TODO bit of duplication here with statement.cpp, fix this
-		res = r.Protect(NEW_NUMERIC(1));
-		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
-		dest_ptr[0] = (double)Timestamp::GetEpochSeconds(val.GetValue<timestamp_t>());
 		// some dresssup for R
 		SET_CLASS(res, RStrings::get().POSIXct_POSIXt_str);
 		Rf_setAttrib(res, RStrings::get().tzone_sym, RStrings::get().UTC_str);
 		return res;
 	}
 	case LogicalTypeId::TIME: {
-		res = r.Protect(NEW_NUMERIC(1));
-		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
-		dest_ptr[0] = ((double)val.GetValue<dtime_t>().micros) / 1000;
-		NUMERIC_POINTER(res)[0] = val.GetValue<dtime_t>().micros;
+		cpp11::doubles res({(double)val.GetValue<dtime_t>().micros / Interval::MICROS_PER_SEC});
 		// some dresssup for R
-		RProtector r_time;
-		SEXP cl = r_time.Protect(NEW_STRING(2));
-		SET_STRING_ELT(cl, 0, r_time.Protect(Rf_mkChar("hms")));
-		SET_STRING_ELT(cl, 1, r_time.Protect(Rf_mkChar("difftime")));
-		SET_CLASS(res, cl);
-		// hms difftime is always stored as "seconds"
-		Rf_setAttrib(res, Rf_install("units"), r_time.Protect(Rf_mkString("secs")));
+		SET_CLASS(res, RStrings::get().difftime_str);
+		// we always return difftime as "seconds"
+		Rf_setAttrib(res, RStrings::get().units_sym, RStrings::get().secs_str);
 		return res;
 	}
 
 	case LogicalTypeId::DATE: {
-		res = r.Protect(NEW_NUMERIC(1));
-		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
-		dest_ptr[0] = (double)int32_t(val.GetValue<date_t>());
+		cpp11::doubles res({(double)int32_t(val.GetValue<date_t>())});
 		// some dresssup for R
 		SET_CLASS(res, RStrings::get().Date_str);
 		return res;
@@ -263,23 +244,5 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 
 	default:
 		throw NotImplementedException("Can't convert %s of type %s", val.ToString(), val.type().ToString());
-	}
-}
-
-SEXP RApi::REvalThrows(SEXP call, SEXP env) {
-	RProtector r;
-	int err;
-	auto res = r.Protect(R_tryEval(call, env, &err));
-	if (err) {
-		throw InternalException("Failed to eval R expression %s", R_curErrorBuf());
-	}
-	return res;
-}
-
-SEXP RApi::REvalRerror(SEXP call, SEXP env) {
-	try {
-		return REvalThrows(call, env);
-	} catch (std::exception &e) {
-		Rf_error(e.what());
 	}
 }

@@ -35,12 +35,12 @@ public:
 public:
 	bool Equals(const QueryNode *other) const override;
 	//! Create a copy of this SelectNode
-	unique_ptr<QueryNode> Copy() override;
+	unique_ptr<QueryNode> Copy() const override;
 
-	//! Serializes a SelectNode to a stand-alone binary blob
-	void Serialize(Serializer &serializer) override;
-	//! Deserializes a blob back into a SelectNode
-	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
+	//! Serializes a QueryNode to a stand-alone binary blob
+	void Serialize(FieldWriter &writer) const override;
+	//! Deserializes a blob back into a QueryNode
+	static unique_ptr<QueryNode> Deserialize(FieldReader &reader);
 };
 
 } // namespace duckdb

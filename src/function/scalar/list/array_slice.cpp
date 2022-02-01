@@ -141,17 +141,11 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(args.data.size() == 3);
 	auto count = args.size();
 
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-		}
-	}
-
 	Vector &s = args.data[0];
 	Vector &b = args.data[1];
 	Vector &e = args.data[2];
 
+	s.Normalify(count);
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST:
 		// Share the value dictionary as we are just going to slice it
@@ -163,6 +157,14 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented");
+	}
+
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	for (idx_t i = 0; i < args.ColumnCount(); i++) {
+		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::FLAT_VECTOR);
+			break;
+		}
 	}
 }
 

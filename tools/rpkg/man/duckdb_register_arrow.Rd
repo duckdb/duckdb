@@ -6,7 +6,7 @@
 \alias{duckdb_list_arrow}
 \title{Register an Arrow data source as a virtual table}
 \usage{
-duckdb_register_arrow(conn, name, arrow_scannable, use_async = FALSE)
+duckdb_register_arrow(conn, name, arrow_scannable, use_async = NULL)
 
 duckdb_unregister_arrow(conn, name)
 
@@ -19,7 +19,7 @@ duckdb_list_arrow(conn)
 
 \item{arrow_scannable}{A scannable Arrow-object}
 
-\item{use_async}{Switched to the asynchronous scanner. default FALSE}
+\item{use_async}{Switched to the asynchronous scanner. (deprecated)}
 }
 \value{
 These functions are called for their side effect.

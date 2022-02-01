@@ -16,17 +16,19 @@ setClass("duckdb_driver", contains = "DBIDriver", slots = list(database_ref = "e
 #' @export
 setClass("duckdb_connection",
   contains = "DBIConnection",
-  slots = list(conn_ref = "externalptr",
-               driver = "duckdb_driver",
-               debug = "logical",
-               timezone_out = "character",
-               tz_out_convert = "character")
+  slots = list(
+    conn_ref = "externalptr",
+    driver = "duckdb_driver",
+    debug = "logical",
+    timezone_out = "character",
+    tz_out_convert = "character"
+  )
 )
 
 duckdb_connection <- function(duckdb_driver, debug) {
   new(
     "duckdb_connection",
-    conn_ref = .Call(duckdb_connect_R, duckdb_driver@database_ref),
+    conn_ref = .Call(`_duckdb_connect_R`, duckdb_driver@database_ref),
     driver = duckdb_driver,
     debug = debug,
     timezone_out = "UTC",

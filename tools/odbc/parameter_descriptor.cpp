@@ -1,4 +1,5 @@
 #include "parameter_descriptor.hpp"
+#include "odbc_utils.hpp"
 #include "duckdb/common/types/decimal.hpp"
 
 using duckdb::Decimal;
@@ -239,12 +240,18 @@ SQLRETURN ParameterDescriptor::SetValue(idx_t rec_idx) {
 	case SQL_CHAR:
 	case SQL_VARCHAR: {
 		auto str_data = (char *)sql_data_ptr + (val_idx * ipd->records[rec_idx].sql_desc_length);
+		if (*sql_ind_ptr_val_set == SQL_NTS) {
+			*sql_ind_ptr_val_set = strlen(str_data);
+		}
 		auto str_len = *sql_ind_ptr_val_set;
 		value = Value(duckdb::OdbcUtils::ReadString(str_data, str_len));
 		break;
 	}
 	case SQL_WCHAR: {
 		auto str_data = (wchar_t *)sql_data_ptr + (val_idx * ipd->records[rec_idx].sql_desc_length);
+		if (*sql_ind_ptr_val_set == SQL_NTS) {
+			*sql_ind_ptr_val_set = wcslen(str_data);
+		}
 		auto str_len = *sql_ind_ptr_val_set;
 		value = Value(duckdb::OdbcUtils::ReadString(str_data, str_len));
 		break;

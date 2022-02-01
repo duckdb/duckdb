@@ -85,6 +85,9 @@ public:
 	DUCKDB_API shared_ptr<Relation> Join(const shared_ptr<Relation> &other, const string &condition,
 	                                     JoinType type = JoinType::INNER);
 
+	// CROSS PRODUCT operation
+	DUCKDB_API shared_ptr<Relation> CrossProduct(const shared_ptr<Relation> &other);
+
 	// SET operations
 	DUCKDB_API shared_ptr<Relation> Union(const shared_ptr<Relation> &other);
 	DUCKDB_API shared_ptr<Relation> Except(const shared_ptr<Relation> &other);
