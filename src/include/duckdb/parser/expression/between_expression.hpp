@@ -32,7 +32,7 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 
 public:
-	template<class T, class BASE>
+	template <class T, class BASE>
 	static string ToString(const T &entry) {
 		return entry.input->ToString() + " BETWEEN " + entry.lower->ToString() + " AND " + entry.upper->ToString();
 	}

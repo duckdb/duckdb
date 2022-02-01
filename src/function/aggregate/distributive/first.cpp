@@ -290,6 +290,7 @@ unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunct
                                           vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	function = GetFirstFunction<LAST>(decimal_type);
+	function.name = "first";
 	function.return_type = decimal_type;
 	return nullptr;
 }

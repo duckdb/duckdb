@@ -12,7 +12,7 @@ BoundOrderByNode::BoundOrderByNode(OrderType type, OrderByNullType null_order, u
     : type(type), null_order(null_order), expression(move(expression)) {
 }
 BoundOrderByNode::BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression,
-                 unique_ptr<BaseStatistics> stats)
+                                   unique_ptr<BaseStatistics> stats)
     : type(type), null_order(null_order), expression(move(expression)), stats(move(stats)) {
 }
 
@@ -59,7 +59,8 @@ BoundOrderModifier::BoundOrderModifier() : BoundResultModifier(ResultModifierTyp
 BoundDistinctModifier::BoundDistinctModifier() : BoundResultModifier(ResultModifierType::DISTINCT_MODIFIER) {
 }
 
-BoundLimitPercentModifier::BoundLimitPercentModifier() : BoundResultModifier(ResultModifierType::LIMIT_PERCENT_MODIFIER) {
+BoundLimitPercentModifier::BoundLimitPercentModifier()
+    : BoundResultModifier(ResultModifierType::LIMIT_PERCENT_MODIFIER) {
 }
 
-}
+} // namespace duckdb

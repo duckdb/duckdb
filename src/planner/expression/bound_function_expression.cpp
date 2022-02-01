@@ -11,6 +11,7 @@ BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, Scalar
                                                  unique_ptr<FunctionData> bind_info, bool is_operator)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, move(return_type)),
       function(move(bound_function)), children(move(arguments)), bind_info(move(bind_info)), is_operator(is_operator) {
+	D_ASSERT(!function.name.empty());
 }
 
 bool BoundFunctionExpression::HasSideEffects() const {
@@ -23,7 +24,8 @@ bool BoundFunctionExpression::IsFoldable() const {
 }
 
 string BoundFunctionExpression::ToString() const {
-	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), function.name, is_operator);
+	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), function.name,
+	                                                                         is_operator);
 }
 
 hash_t BoundFunctionExpression::Hash() const {

@@ -52,19 +52,22 @@ public:
 	void Verify() const override;
 
 public:
-	template<class T, class BASE>
-	static string ToString(const T &entry, const string &schema, const string &function_name, bool is_operator = false, bool distinct = false, BASE *filter = nullptr, OrderModifier *order_bys = nullptr) {
+	template <class T, class BASE>
+	static string ToString(const T &entry, const string &schema, const string &function_name, bool is_operator = false,
+	                       bool distinct = false, BASE *filter = nullptr, OrderModifier *order_bys = nullptr) {
 		if (is_operator) {
 			// built-in operator
 			D_ASSERT(!distinct);
 			if (entry.children.size() == 1) {
 				if (StringUtil::Contains(function_name, "__postfix")) {
-					return "(" + entry.children[0]->ToString() + ")" + StringUtil::Replace(function_name, "__postfix", "");
+					return "(" + entry.children[0]->ToString() + ")" +
+					       StringUtil::Replace(function_name, "__postfix", "");
 				} else {
 					return function_name + "(" + entry.children[0]->ToString() + ")";
 				}
 			} else if (entry.children.size() == 2) {
-				return "(" + entry.children[0]->ToString() + " " + function_name + " " + entry.children[1]->ToString() + ")";
+				return "(" + entry.children[0]->ToString() + " " + function_name + " " + entry.children[1]->ToString() +
+				       ")";
 			}
 		}
 		// standard function call

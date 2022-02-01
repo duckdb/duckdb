@@ -35,7 +35,7 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 
 public:
-	template<class T, class BASE>
+	template <class T, class BASE>
 	static string ToString(const T &entry) {
 		string result = entry.children[0]->ToString();
 		for (idx_t i = 1; i < entry.children.size(); i++) {

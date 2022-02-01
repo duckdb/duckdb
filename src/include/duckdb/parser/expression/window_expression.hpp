@@ -69,7 +69,7 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 
 public:
-	template<class T, class BASE, class ORDER_NODE>
+	template <class T, class BASE, class ORDER_NODE>
 	static string ToString(const T &entry, const string &schema, const string &function_name) {
 		// Start with function call
 		string result = schema.empty() ? function_name : schema + "." + function_name;
@@ -105,8 +105,8 @@ public:
 		if (!entry.orders.empty()) {
 			result += sep;
 			result += "ORDER BY ";
-			result +=
-			    StringUtil::Join(entry.orders, entry.orders.size(), ", ", [](const ORDER_NODE &order) { return order.ToString(); });
+			result += StringUtil::Join(entry.orders, entry.orders.size(), ", ",
+			                           [](const ORDER_NODE &order) { return order.ToString(); });
 			sep = " ";
 		}
 

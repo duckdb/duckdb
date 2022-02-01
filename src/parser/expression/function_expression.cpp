@@ -15,6 +15,7 @@ FunctionExpression::FunctionExpression(string schema, const string &function_nam
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(std::move(schema)),
       function_name(StringUtil::Lower(function_name)), is_operator(is_operator), children(move(children_p)),
       distinct(distinct), filter(move(filter)), order_bys(move(order_bys_p)) {
+	D_ASSERT(!function_name.empty());
 	if (!order_bys) {
 		order_bys = make_unique<OrderModifier>();
 	}
@@ -28,7 +29,8 @@ FunctionExpression::FunctionExpression(const string &function_name, vector<uniqu
 }
 
 string FunctionExpression::ToString() const {
-	return ToString<FunctionExpression, ParsedExpression>(*this, schema, function_name, is_operator, distinct, filter.get(), order_bys.get());
+	return ToString<FunctionExpression, ParsedExpression>(*this, schema, function_name, is_operator, distinct,
+	                                                      filter.get(), order_bys.get());
 }
 
 bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpression *b) {

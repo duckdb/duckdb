@@ -15,7 +15,8 @@ BoundWindowExpression::BoundWindowExpression(ExpressionType type, LogicalType re
 
 string BoundWindowExpression::ToString() const {
 	string function_name = aggregate.get() ? aggregate->name : ExpressionTypeToString(type);
-	return WindowExpression::ToString<BoundWindowExpression, Expression, BoundOrderByNode>(*this, string(), function_name);
+	return WindowExpression::ToString<BoundWindowExpression, Expression, BoundOrderByNode>(*this, string(),
+	                                                                                       function_name);
 }
 
 bool BoundWindowExpression::Equals(const BaseExpression *other_p) const {

@@ -35,6 +35,7 @@ public:
 	OrderByNullType null_order;
 	unique_ptr<Expression> expression;
 	unique_ptr<BaseStatistics> stats;
+
 public:
 	BoundOrderByNode Copy() const;
 	string ToString() const;

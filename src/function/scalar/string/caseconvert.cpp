@@ -164,8 +164,8 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 }
 
 ScalarFunction LowerFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<false>, false, nullptr,
-	                      nullptr, CaseConvertPropagateStats<false>);
+	return ScalarFunction("lower", {LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<false>, false,
+	                      nullptr, nullptr, CaseConvertPropagateStats<false>);
 }
 
 void LowerFun::RegisterFunction(BuiltinFunctions &set) {

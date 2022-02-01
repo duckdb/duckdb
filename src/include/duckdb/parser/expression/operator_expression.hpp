@@ -34,7 +34,7 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 
 public:
-	template<class T, class BASE>
+	template <class T, class BASE>
 	static string ToString(const T &entry) {
 		auto op = ExpressionTypeToOperator(entry.type);
 		if (!op.empty()) {
@@ -74,7 +74,8 @@ public:
 		case ExpressionType::ARRAY_EXTRACT:
 			return entry.children[0]->ToString() + "[" + entry.children[1]->ToString() + "]";
 		case ExpressionType::ARRAY_SLICE:
-			return entry.children[0]->ToString() + "[" + entry.children[1]->ToString() + ":" + entry.children[2]->ToString() + "]";
+			return entry.children[0]->ToString() + "[" + entry.children[1]->ToString() + ":" +
+			       entry.children[2]->ToString() + "]";
 		case ExpressionType::STRUCT_EXTRACT: {
 			D_ASSERT(entry.children[1]->type == ExpressionType::VALUE_CONSTANT);
 			auto child_string = entry.children[1]->ToString();
