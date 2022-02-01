@@ -2,103 +2,130 @@
 
 namespace duckdb {
 
+//! Some defines copied from yyjson.cpp
 #define IDX_T_SAFE_DIG 19
 #define IDX_T_MAX      ((idx_t)(~(idx_t)0))
 
-/* only 0x0, 0x2E ('.'), and 0x5B ('[') are excluded from this table */
-static const bool POINTER_CHAR_TABLE[] = {
-    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-static inline idx_t ReadString(const char *ptr, idx_t &len) {
-	if (!POINTER_CHAR_TABLE[(uint8_t)*ptr]) {
-		throw Exception("JSON path error");
+static inline idx_t ReadString(const char *ptr, const char *const end) {
+	const char *const before = ptr;
+	while (ptr != end) {
+		if (*ptr == '.' || *ptr == '[' || *ptr) {
+			break;
+		}
+		ptr++;
 	}
-	const idx_t before = len;
-	while (POINTER_CHAR_TABLE[(uint8_t)*ptr++]) {
-		len--;
-	}
-	return before - len;
+	return ptr - before;
 }
 
-static inline bool ReadIndex(const char *ptr, idx_t &len, idx_t &idx, idx_t &i) {
-	if (!POINTER_CHAR_TABLE[(uint8_t)*ptr]) {
-		throw Exception("JSON path error");
-	}
+static inline idx_t ReadIndex(const char *ptr, const char *const end, idx_t &idx) {
+	const char *const before = ptr;
 	idx = 0;
-	for (i = 0; i < IDX_T_SAFE_DIG; i++) {
+	for (idx_t i = 0; i < IDX_T_SAFE_DIG; i++) {
 		const auto &c = *ptr++;
-		len--;
-		if (c == ']') {
-			i++;
-			return idx < (idx_t)IDX_T_MAX;
-		} else if (len == 0) {
+		if (c == ']' || ptr == end) {
 			break;
 		}
 		uint8_t add = (uint8_t)(c - '0');
 		if (add <= 9) {
 			idx = add + idx * 10;
 		} else {
-			break;
+			// Not a digit
+			return 0;
 		}
 	}
-	throw Exception("JSON path error");
+	// Invalid if last char was not ']', or if overflow
+	if (*(ptr - 1) != ']' || idx >= (idx_t)IDX_T_MAX) {
+		return 0;
+	}
+	return ptr - before;
 }
 
-yyjson_val *JSONCommon::GetPointerDollar(yyjson_val *val, const char *ptr, idx_t len) {
+bool JSONCommon::ValidPathDollar(const char *ptr, const idx_t &len) {
+	const char *const end = ptr + len;
+	// Skip past '$'
+	ptr++;
+	while (ptr != end) {
+		const auto &c = *ptr++;
+		if (c == '.') {
+			// Object
+			auto key_len = ReadString(ptr, end);
+			if (key_len == 0) {
+				return false;
+			}
+			ptr += key_len;
+		} else if (c == '[') {
+			// Array
+			if (*ptr == '#') {
+				// Index from back of array
+				ptr++;
+				if (*ptr == '-') {
+					ptr++;
+				} else if (*ptr == ']') {
+					ptr++;
+					continue;
+				}
+			}
+			idx_t idx;
+			auto idx_len = ReadIndex(ptr, end, idx);
+			if (idx_len == 0) {
+				return false;
+			}
+			ptr += idx_len;
+		} else {
+			return false;
+		}
+	}
+	return true;
+}
+
+yyjson_val *JSONCommon::GetPointerDollar(yyjson_val *val, const char *ptr, const idx_t &len) {
 	if (len == 1) {
 		// Just '$'
 		return val;
 	}
+	const char *const end = ptr + len;
 	// Skip past '$'
 	ptr++;
-	len--;
-	while (true) {
+	while (val != nullptr && ptr != end) {
 		const auto &c = *ptr++;
-		len--;
-		if (c == '.' && yyjson_is_obj(val)) {
-			auto key_len = ReadString(ptr, len);
+		if (c == '.') {
+			// Object
+			if (!yyjson_is_obj(val)) {
+				return nullptr;
+			}
+			auto key_len = ReadString(ptr, end);
 			val = yyjson_obj_getn(val, ptr, key_len);
 			ptr += key_len;
-		} else if (c == '[' && yyjson_is_arr(val)) {
-			// We can index from back of array using #-<offset>
-			bool offset_from_back = false;
+		} else if (c == '[') {
+			// Array
+			if (!yyjson_is_arr(val)) {
+				return nullptr;
+			}
+			bool from_back = false;
 			if (*ptr == '#') {
+				// Index from back of array
 				ptr++;
-				if (*ptr++ != '-') {
+				if (*ptr == ']') {
 					return nullptr;
 				}
-				offset_from_back = true;
-				len -= 2;
+				from_back = true;
+				// Skip past '-'
+				ptr++;
 			}
 			// Read index
 			idx_t idx;
-			idx_t index_len;
-			if (ReadIndex(ptr, len, idx, index_len)) {
-				if (offset_from_back) {
-					auto arr_size = yyjson_arr_size(val);
-					if (idx > arr_size) {
-						return nullptr;
-					}
-					idx = arr_size - idx;
-				}
-				val = yyjson_arr_get(val, idx);
-				ptr += index_len;
-			} else {
-				return nullptr;
+			auto idx_len = ReadIndex(ptr, end, idx);
+			if (from_back) {
+				auto arr_size = yyjson_arr_size(val);
+				idx = idx > arr_size ? arr_size : arr_size - idx;
 			}
+			val = yyjson_arr_get(val, idx);
+			ptr += idx_len;
 		} else {
-			throw Exception("JSON path error");
-		}
-		if (len == 0) {
-			return val;
+			throw InternalException("Unexpected char when parsing JSON path");
 		}
 	}
+	return val;
 }
 
 } // namespace duckdb

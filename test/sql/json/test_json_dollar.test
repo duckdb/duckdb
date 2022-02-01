@@ -7,6 +7,9 @@ require json
 statement ok
 pragma enable_verification
 
+statement error
+select json_extract_string('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '$.my_field[my_nested_field[#-3]')
+
 query T
 select json_extract_string('{"my_field": "duck"}', '$.my_field')
 ----
@@ -14,6 +17,11 @@ duck
 
 query T
 select json_extract_int('[0, 1, 2]', '$[1]')
+----
+1
+
+query T
+select json_extract_int('[[1]]', '$[0][0]')
 ----
 1
 
@@ -63,21 +71,27 @@ select json_extract_string('{"my_field": [{"my_nested_field": ["duck", "goose"]}
 ----
 goose
 
+# some NULLs
+
+query T
+select json_extract_string(j, '$.my_field.my_nested_field.3') from test
+----
+NULL
+
+query T
+select json_extract_int('{"a": {"b": "c"}}', '$[]');
+----
+NULL
+
 # path error
 statement error
 select json_extract_string(j, '$.my_field[my_nested_field[#-3]') from test
-
-statement error
-select json_extract_string(j, '$.my_field.my_nested_field.3') from test
 
 statement error
 select json_extract_string(j, '$.my_field.my_nested_field[!]') from test
 
 statement error
 select json_extract_int('{"a": {"b": "c"}}', '$.a..');
-
-statement error
-select json_extract_int('{"a": {"b": "c"}}', '$[]');
 
 statement error
 select json_extract_int('{"a": {"b": "c"}}', '$[[');
