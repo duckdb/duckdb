@@ -20,3 +20,9 @@ as.data.frame.duckdb_relation <- function(rel) {
 print.duckdb_relation <- function(rel) {
     message("DuckDB Relation: ", rel_tostring(rel))
 }
+
+
+rel_explain <- function(rel) {
+    cat(.Call(`_duckdb_rel_explain_R`,rel)[[2]][[1]])
+    invisible(NULL)
+}

@@ -27,8 +27,8 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 // DuckDB Expressions
 
 //' @export
-[[cpp11::register]] SEXP expr_reference(strings ref) {
-	return make_external<ColumnRefExpression>("duckdb_expr", ref[0]);
+[[cpp11::register]] SEXP expr_reference(std::string ref) {
+	return make_external<ColumnRefExpression>("duckdb_expr", ref);
 }
 
 //' @export
@@ -37,13 +37,12 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 }
 
 //' @export
-[[cpp11::register]] SEXP expr_function(strings name_p, list args) {
+[[cpp11::register]] SEXP expr_function(std::string name, list args) {
 	// TODO check args
 	vector<unique_ptr<ParsedExpression>> children;
 	for (auto arg : args) {
 		children.push_back(expr_extptr(arg)->Copy());
 	}
-	string name = (string)name_p[0];
 	auto operator_type = OperatorToExpressionType(name);
 	if (operator_type != ExpressionType::INVALID && children.size() == 2) {
 		return make_external<ComparisonExpression>("duckdb_expr", operator_type, move(children[0]), move(children[1]));
@@ -130,9 +129,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-//' @export
-[[cpp11::register]] SEXP rel_to_df(duckdb::rel_extptr rel) {
-	auto res = rel->rel->Execute();
+static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	if (res->type == QueryResultType::STREAM_RESULT) {
 		res = ((StreamQueryResult &)*res).Materialize();
 	}
@@ -143,14 +140,34 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	row_names.push_back(NA_INTEGER);
 	row_names.push_back(-mat_res->collection.Count());
 
-	auto raw_res = sexp(duckdb_execute_R_impl(mat_res));
-	raw_res.attr("class") = "data.frame";
-	raw_res.attr("row.names") = row_names;
+	// TODO this thing we can probably cache
+	writable::strings classes;
+	classes.push_back("tbl_df");
+	classes.push_back("tbl");
+	classes.push_back("data.frame");
 
-	return (raw_res);
+	auto df = sexp(duckdb_execute_R_impl(mat_res));
+	df.attr("class") = classes;
+	df.attr("row.names") = row_names;
+	return (df);
+}
+
+//' @export
+[[cpp11::register]] SEXP rel_to_df(duckdb::rel_extptr rel) {
+	return result_to_df(rel->rel->Execute());
 }
 
 //' @export
 [[cpp11::register]] std::string rel_tostring(duckdb::rel_extptr rel) {
 	return rel->rel->ToString();
+}
+
+//' @export
+[[cpp11::register]] SEXP rel_explain_R(duckdb::rel_extptr rel) {
+	return result_to_df(rel->rel->Explain());
+}
+
+//' @export
+[[cpp11::register]] SEXP rel_sql(duckdb::rel_extptr rel, std::string sql) {
+	return result_to_df(rel->rel->Query("_", sql));
 }

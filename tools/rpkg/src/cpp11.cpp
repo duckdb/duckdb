@@ -117,10 +117,10 @@ extern "C" SEXP _duckdb_ptr_to_str(SEXP extptr) {
   END_CPP11
 }
 // relational.cpp
-SEXP expr_reference(strings ref);
+SEXP expr_reference(std::string ref);
 extern "C" SEXP _duckdb_expr_reference(SEXP ref) {
   BEGIN_CPP11
-    return cpp11::as_sexp(expr_reference(cpp11::as_cpp<cpp11::decay_t<strings>>(ref)));
+    return cpp11::as_sexp(expr_reference(cpp11::as_cpp<cpp11::decay_t<std::string>>(ref)));
   END_CPP11
 }
 // relational.cpp
@@ -131,10 +131,10 @@ extern "C" SEXP _duckdb_expr_constant(SEXP val) {
   END_CPP11
 }
 // relational.cpp
-SEXP expr_function(strings name_p, list args);
-extern "C" SEXP _duckdb_expr_function(SEXP name_p, SEXP args) {
+SEXP expr_function(std::string name, list args);
+extern "C" SEXP _duckdb_expr_function(SEXP name, SEXP args) {
   BEGIN_CPP11
-    return cpp11::as_sexp(expr_function(cpp11::as_cpp<cpp11::decay_t<strings>>(name_p), cpp11::as_cpp<cpp11::decay_t<list>>(args)));
+    return cpp11::as_sexp(expr_function(cpp11::as_cpp<cpp11::decay_t<std::string>>(name), cpp11::as_cpp<cpp11::decay_t<list>>(args)));
   END_CPP11
 }
 // relational.cpp
@@ -193,6 +193,20 @@ extern "C" SEXP _duckdb_rel_tostring(SEXP rel) {
     return cpp11::as_sexp(rel_tostring(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr>>(rel)));
   END_CPP11
 }
+// relational.cpp
+SEXP rel_explain_R(duckdb::rel_extptr rel);
+extern "C" SEXP _duckdb_rel_explain_R(SEXP rel) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rel_explain_R(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr>>(rel)));
+  END_CPP11
+}
+// relational.cpp
+SEXP rel_sql(duckdb::rel_extptr rel, std::string sql);
+extern "C" SEXP _duckdb_rel_sql(SEXP rel, SEXP sql) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rel_sql(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr>>(rel), cpp11::as_cpp<cpp11::decay_t<std::string>>(sql)));
+  END_CPP11
+}
 
 extern "C" {
 static const R_CallMethodDef CallEntries[] = {
@@ -211,10 +225,12 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_register_R",           (DL_FUNC) &_duckdb_register_R,           3},
     {"_duckdb_register_arrow_R",     (DL_FUNC) &_duckdb_register_arrow_R,     4},
     {"_duckdb_rel_aggregate",        (DL_FUNC) &_duckdb_rel_aggregate,        3},
+    {"_duckdb_rel_explain_R",        (DL_FUNC) &_duckdb_rel_explain_R,        1},
     {"_duckdb_rel_filter",           (DL_FUNC) &_duckdb_rel_filter,           2},
     {"_duckdb_rel_from_df_R",        (DL_FUNC) &_duckdb_rel_from_df_R,        2},
     {"_duckdb_rel_order",            (DL_FUNC) &_duckdb_rel_order,            2},
     {"_duckdb_rel_project",          (DL_FUNC) &_duckdb_rel_project,          2},
+    {"_duckdb_rel_sql",              (DL_FUNC) &_duckdb_rel_sql,              2},
     {"_duckdb_rel_to_df",            (DL_FUNC) &_duckdb_rel_to_df,            1},
     {"_duckdb_rel_tostring",         (DL_FUNC) &_duckdb_rel_tostring,         1},
     {"_duckdb_release_R",            (DL_FUNC) &_duckdb_release_R,            1},
