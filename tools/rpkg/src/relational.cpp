@@ -101,6 +101,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	vector<string> aliases;
 
 	for (expr_extptr expr : groups_p) {
+		aggregates.push_back(expr->Copy());
 		groups.push_back(expr->Copy());
 	}
 
