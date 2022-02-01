@@ -1,6 +1,7 @@
 #include "duckdb_odbc.hpp"
 #include "driver.hpp"
 #include "odbc_fetch.hpp"
+#include "odbc_utils.hpp"
 
 #include <odbcinst.h>
 #include <locale>

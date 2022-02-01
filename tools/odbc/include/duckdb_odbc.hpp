@@ -54,6 +54,7 @@ public:
 	OdbcHandleEnv *env;
 	unique_ptr<Connection> conn;
 	bool autocommit;
+	SQLUINTEGER sql_attr_metadata_id;
 	// reference to an open statement handled by this connection
 	std::vector<OdbcHandleStmt *> vec_stmt_ref;
 
@@ -132,21 +133,6 @@ public:
 	DescHeader header;
 	std::vector<DescRecord> records;
 	OdbcHandleDbc *dbc;
-};
-
-struct OdbcUtils {
-	static string ReadString(const SQLPOINTER ptr, const SQLSMALLINT len) {
-		return len == SQL_NTS ? string((const char *)ptr) : string((const char *)ptr, (size_t)len);
-	}
-
-	static void WriteString(const string &s, SQLCHAR *out_buf, SQLSMALLINT buf_len, SQLSMALLINT *out_len) {
-		if (out_buf) {
-			snprintf((char *)out_buf, buf_len, "%s", s.c_str());
-		}
-		if (out_len) {
-			*out_len = s.size();
-		}
-	}
 };
 
 template <class T>

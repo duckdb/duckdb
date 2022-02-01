@@ -1,0 +1,21 @@
+# name: test/sql/types/decimal/test_decimal_2975.test
+# description: Test #2975: Insert with large decimal fails
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table q (big decimal (38,10))
+
+statement ok
+insert into q (big ) values (9999999999999999899999999999.9999999999);
+
+statement ok
+insert into q (big ) values (-9999999999999999899999999999.9999999999);
+
+query I
+SELECT * FROM q
+----
+9999999999999999899999999999.9999999999
+-9999999999999999899999999999.9999999999
