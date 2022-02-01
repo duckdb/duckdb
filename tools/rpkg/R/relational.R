@@ -1,33 +1,21 @@
 #' @export
 expr_constant <- function(val) {
-    res <- list(ref=.Call(`_duckdb_expr_constant_R`, val))
-    class(res) <- c("duckdb_expr")
-    res
+    structure(.Call(`_duckdb_expr_constant_R`, val), class="duckdb_expr")
 }
 
 #' @export
 expr_reference <- function(ref) {
-    res <- list(ref=.Call(`_duckdb_expr_reference_R`, as.character(ref)))
-    class(res) <- c("duckdb_expr")
-    res
+    structure(.Call(`_duckdb_expr_reference_R`, as.character(ref)), class="duckdb_expr")
 }
 
 #' @export
 expr_function <- function(name, args) {
-    args_extptrs <- lapply(args, function(arg) {
-        stopifnot(inherits(arg, "duckdb_expr"))
-        arg$ref
-    })
-
-    res <- list(ref=.Call(`_duckdb_expr_function_R`, name, args_extptrs))
-    class(res) <- c("duckdb_expr")
-    res
+    structure(.Call(`_duckdb_expr_function_R`, name, args), class="duckdb_expr")
 }
 
 #' @export
 expr_tostring <- function(expr) {
-   stopifnot(inherits(expr, "duckdb_expr"))
-   .Call(`_duckdb_expr_tostring_R`, expr$ref)
+   .Call(`_duckdb_expr_tostring_R`, expr)
 }
 
 #' @export
@@ -38,73 +26,33 @@ print.duckdb_expr <- function(expr) {
 
 #' @export
 rel_from_df <- function(con, df) {
-    stopifnot(inherits(df, "data.frame"))
-    res <- list(ref=.Call(`_duckdb_rel_from_df_R`,con@conn_ref, as.data.frame(df)))
-    class(res) <- c("duckdb_relation")
-    res
+    structure(.Call(`_duckdb_rel_from_df_R`, con@conn_ref, as.data.frame(df)), class="duckdb_relation")
 }
 
 #' @export
 rel_filter <- function(rel, expr) {
-    stopifnot(inherits(rel, "duckdb_relation"))
-    stopifnot(inherits(expr, "duckdb_expr"))
-    res <- list(ref=.Call(`_duckdb_rel_filter_R`, rel$ref, expr$ref))
-    class(res) <- c("duckdb_relation")
-    res
+    structure(.Call(`_duckdb_rel_filter_R`, rel, expr), class="duckdb_relation")
 }
 
 #' @export
 rel_project <- function(rel, exprs) {
-    stopifnot(inherits(rel, "duckdb_relation"))
-
-    exprs_extptrs <- lapply(exprs, function(expr) {
-        stopifnot(inherits(expr, "duckdb_expr"))
-        expr$ref
-    })
-
-    res <- list(ref=.Call(`_duckdb_rel_project_R`, rel$ref, exprs_extptrs))
-    class(res) <- c("duckdb_relation")
-    res
+    structure(.Call(`_duckdb_rel_project_R`, rel, exprs), class="duckdb_relation")
 }
 
 #' @export
 rel_aggregate <- function(rel, groups, aggregates) {
-    stopifnot(inherits(rel, "duckdb_relation"))
-
-    groups_extptrs <- lapply(groups, function(expr) {
-        stopifnot(inherits(expr, "duckdb_expr"))
-        expr$ref
-    })
-
-    aggregates_extptrs <- lapply(aggregates, function(expr) {
-        stopifnot(inherits(expr, "duckdb_expr"))
-        expr$ref
-    })
-
-    res <- list(ref=.Call(`_duckdb_rel_aggregate_R`, rel$ref, groups_extptrs, aggregates_extptrs))
-    class(res) <- c("duckdb_relation")
-    res
+    structure(.Call(`_duckdb_rel_aggregate_R`, rel, groups, aggregates), class="duckdb_relation")
 }
 
 #' @export
 rel_order <- function(rel, orders) {
-    stopifnot(inherits(rel, "duckdb_relation"))
-
-    orders_extptrs <- lapply(orders, function(expr) {
-        stopifnot(inherits(expr, "duckdb_expr"))
-        expr$ref
-    })
-
-    res <- list(ref=.Call(`_duckdb_rel_order_R`, rel$ref, orders_extptrs))
-    class(res) <- c("duckdb_relation")
-    res
+    structure(.Call(`_duckdb_rel_order_R`, rel, orders), class="duckdb_relation")
 }
 
 
 #' @export
 as.data.frame.duckdb_relation <- function(rel) {
-    stopifnot(inherits(rel, "duckdb_relation"))
-    x <- .Call(`_duckdb_rel_to_df_R`, rel$ref)
+    x <- .Call(`_duckdb_rel_to_df_R`, rel)
     attr(x, "row.names") <- c(NA_integer_, -length(x[[1]]))
     class(x) <- "data.frame"
     x
