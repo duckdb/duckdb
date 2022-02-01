@@ -55,12 +55,17 @@ static void allocate_new(parser_state *state, size_t n) {
 
 void *palloc(size_t n) {
 	// we need to align our pointers for the sanitizer
-	auto aligned_n = ((n + 7) / 8) * 8;
+	auto allocate_n = n + sizeof(size_t);
+	auto aligned_n = ((allocate_n + 7) / 8) * 8;
 	if (pg_parser_state.malloc_pos + aligned_n > PG_MALLOC_SIZE) {
 		allocate_new(&pg_parser_state, aligned_n);
 	}
 
-	void *ptr = pg_parser_state.malloc_ptrs[pg_parser_state.malloc_ptr_idx - 1] + pg_parser_state.malloc_pos;
+	// store the length of the allocation
+	char *base_ptr = pg_parser_state.malloc_ptrs[pg_parser_state.malloc_ptr_idx - 1] + pg_parser_state.malloc_pos;
+	memcpy(base_ptr, &n, sizeof(size_t));
+	// store the actual pointer
+	char *ptr = (char*) base_ptr + sizeof(size_t);
 	memset(ptr, 0, n);
 	pg_parser_state.malloc_pos += aligned_n;
 	return ptr;
@@ -173,7 +178,14 @@ void *palloc0fast(size_t n) { // very fast
 	return palloc(n);
 }
 void *repalloc(void *ptr, size_t n) {
-	return palloc(n);
+	// get the length of the allocation
+	size_t old_len;
+	char *old_len_ptr = (char *) ptr - sizeof(size_t);
+	memcpy((void *) &old_len, old_len_ptr, sizeof(size_t));
+	// re-allocate and copy the data
+	void *new_buf = palloc(n);
+	memcpy(new_buf, ptr, old_len);
+	return new_buf;
 }
 char *NameListToString(PGList *names) {
 	throw std::runtime_error("NameListToString NOT IMPLEMENTED");
