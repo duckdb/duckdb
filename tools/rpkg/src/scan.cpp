@@ -5,6 +5,7 @@
 #include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
+using namespace cpp11;
 
 template <class SRC, class DST, class RTYPE>
 static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
@@ -37,7 +38,7 @@ struct DataFrameScanFunctionData : public TableFunctionData {
 	DataFrameScanFunctionData(SEXP df, idx_t row_count, vector<RType> rtypes)
 	    : df(df), row_count(row_count), rtypes(rtypes) {
 	}
-	SEXP df;
+	data_frame df;
 	idx_t row_count;
 	vector<RType> rtypes;
 };
@@ -54,16 +55,14 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
                                                     vector<LogicalType> &input_table_types,
                                                     vector<string> &input_table_names,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
-	RProtector r;
-	SEXP df((SEXP)inputs[0].GetPointer());
+	data_frame df((SEXP)inputs[0].GetPointer());
 
-	auto df_names = r.Protect(GET_NAMES(df));
+	auto df_names = df.names();
 	vector<RType> rtypes;
 
-	for (idx_t col_idx = 0; col_idx < (idx_t)Rf_length(df); col_idx++) {
-		auto column_name = string(CHAR(STRING_ELT(df_names, col_idx)));
-		names.push_back(column_name);
-		SEXP coldata = VECTOR_ELT(df, col_idx);
+	for (int col_idx = 0; col_idx < (idx_t)Rf_length(df); col_idx++) {
+		names.push_back(df_names[col_idx]);
+		auto coldata = df[col_idx];
 		rtypes.push_back(RApiTypes::DetectRType(coldata));
 		LogicalType duckdb_col_type;
 		switch (rtypes[col_idx]) {
@@ -79,13 +78,12 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 		case RType::FACTOR: {
 			// TODO What about factors that use numeric?
 
-			auto levels = r.Protect(GET_LEVELS(coldata));
-			idx_t size = LENGTH(levels);
-			Vector duckdb_levels(LogicalType::VARCHAR, size);
-			for (idx_t level_idx = 0; level_idx < size; level_idx++) {
-				duckdb_levels.SetValue(level_idx, string(CHAR(STRING_ELT(levels, level_idx))));
+			strings levels = GET_LEVELS(coldata);
+			Vector duckdb_levels(LogicalType::VARCHAR, levels.size());
+			for (int level_idx = 0; level_idx < levels.size(); level_idx++) {
+				duckdb_levels.SetValue(level_idx, (string)levels[level_idx]);
 			}
-			duckdb_col_type = LogicalType::ENUM(column_name, duckdb_levels, size);
+			duckdb_col_type = LogicalType::ENUM(df_names[col_idx], duckdb_levels, levels.size());
 			break;
 		}
 		case RType::STRING:
@@ -111,7 +109,7 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 			duckdb_col_type = LogicalType::DATE;
 			break;
 		default:
-			cpp11::stop("Unsupported column type for scan");
+			stop("Unsupported column type for scan");
 		}
 		return_types.push_back(duckdb_col_type);
 	}
@@ -137,9 +135,9 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 
 	output.SetCardinality(this_count);
 
-	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+	for (int col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 		auto &v = output.data[col_idx];
-		SEXP coldata = VECTOR_ELT(data.df, col_idx);
+		sexp coldata = data.df[col_idx];
 
 		switch (data.rtypes[col_idx]) {
 		case RType::LOGICAL: {
@@ -177,8 +175,8 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 				break;
 
 			default:
-				cpp11::stop("duckdb_execute_R: Unknown enum type for scan: %s",
-				            TypeIdToString(v.GetType().InternalType()).c_str());
+				stop("duckdb_execute_R: Unknown enum type for scan: %s",
+				     TypeIdToString(v.GetType().InternalType()).c_str());
 			}
 			break;
 		}
