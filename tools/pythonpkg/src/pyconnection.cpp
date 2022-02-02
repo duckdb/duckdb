@@ -474,19 +474,30 @@ TryReplacement(py::dict &dict, py::str &table_name,
 static unique_ptr<TableFunctionRef> ScanReplacement(const string &table_name, void *data) {
 	py::gil_scoped_acquire acquire;
 	auto registered_objects = (unordered_map<string, unique_ptr<RegisteredObject>> *)data;
-	// look in the locals first
-	PyObject *p = PyEval_GetLocals();
 	auto py_table_name = py::str(table_name);
-	if (p) {
-		auto local_dict = py::reinterpret_borrow<py::dict>(p);
-		auto result = TryReplacement(local_dict, py_table_name, *registered_objects);
-		if (result) {
-			return result;
+	// Here we do an exhaustive search on the frame lineage
+	auto current_frame = py::module::import("inspect").attr("currentframe")();
+	while (hasattr(current_frame, "f_locals")) {
+		auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
+		// search local dictionary
+		if (local_dict) {
+			auto result = TryReplacement(local_dict, py_table_name, *registered_objects);
+			if (result) {
+				return result;
+			}
 		}
+		// search global dictionary
+		auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
+		if (global_dict) {
+			auto result = TryReplacement(global_dict, py_table_name, *registered_objects);
+			if (result) {
+				return result;
+			}
+		}
+		current_frame = current_frame.attr("f_back");
 	}
-	// otherwise look in the globals
-	auto global_dict = py::globals();
-	return TryReplacement(global_dict, py_table_name, *registered_objects);
+	// Not found :(
+	return nullptr;
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
@@ -506,7 +517,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		config.SetOption(*config_property, Value(val));
 	}
 	if (config.enable_external_access) {
-		//		ReplacementScan replacement_scan(ScanReplacement, (void *) &res->registered_objects);
 		config.replacement_scans.emplace_back(ScanReplacement, (void *)&res->registered_objects);
 	}
 
