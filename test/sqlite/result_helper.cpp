@@ -330,7 +330,7 @@ void TestResultHelper::CheckStatementResult() {
 		// even in the case of "statement error", we do not accept ALL errors
 		// internal errors are never expected
 		// neither are "unoptimized result differs from original result" errors
-		bool internal_error = TestIsInternalError(result.error);
+		bool internal_error = TestIsInternalError(runner.always_fail_error_messages, result.error);
 		if (!internal_error) {
 			error = !error;
 		} else {
@@ -415,11 +415,10 @@ void TestResultHelper::PrintExpectedResult(vector<string> &values, idx_t columns
 }
 
 bool TestResultHelper::SkipErrorMessage(const string &message) {
-	if (StringUtil::Contains(message, "HTTP")) {
-		return true;
-	}
-	if (StringUtil::Contains(message, "Unable to connect")) {
-		return true;
+	for (auto& error_message : runner.ignore_error_messages)  {
+		if (StringUtil::Contains(message, error_message)) {
+			return true;
+		}
 	}
 	return false;
 }

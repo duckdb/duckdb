@@ -133,6 +133,8 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_HALT;
 	} else if (token == "mode") {
 		return SQLLogicTokenType::SQLLOGIC_MODE;
+	} else if (token == "set") {
+		return SQLLogicTokenType::SQLLOGIC_SET;
 	} else if (token == "loop") {
 		return SQLLogicTokenType::SQLLOGIC_LOOP;
 	} else if (token == "foreach") {
@@ -141,6 +143,8 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_ENDLOOP;
 	} else if (token == "require") {
 		return SQLLogicTokenType::SQLLOGIC_REQUIRE;
+	} else if (token == "require-env") {
+		return SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV;
 	} else if (token == "load") {
 		return SQLLogicTokenType::SQLLOGIC_LOAD;
 	} else if (token == "restart") {

@@ -47,10 +47,9 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	cli.enable_server_certificate_verification(false);
 
 	string content_type = "application/octet-stream";
-	string buffer_str(buffer_in, buffer_in_len); // TODO remove Copy
 	idx_t out_offset = 0;
 	auto res = cli.Post(
-	    path.c_str(), *headers, buffer_str,
+	    path.c_str(), *headers, buffer_in, buffer_in_len,
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
 			    std::cout << response.body << std::endl;

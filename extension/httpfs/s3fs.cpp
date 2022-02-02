@@ -369,9 +369,19 @@ void S3FileSystem::S3UrlParse(FileHandle &handle, string url, string &host_out, 
 		throw std::runtime_error("URL needs to contain key");
 	}
 
-	// actual request
-	host_out = bucket + "." + static_cast<S3FileHandle &>(handle).auth_params.endpoint;
-	http_host_out = "http://" + host_out; // TODO: restore https
+	auto endpoint = static_cast<S3FileHandle &>(handle).auth_params.endpoint;
+
+	// Endpoint can be speficied as full url in which case we switch to: {endpoint}/{bucket} for host
+	if (endpoint.rfind("http://", 0) == 0 || endpoint.rfind("https://", 0) == 0) {
+		http_host_out = endpoint + "/" + bucket;
+		auto url_start = http_host_out.rfind("://") + 3;
+		host_out = http_host_out.substr(url_start);
+	} else {
+		// Endpoint is not a full url and the regular https://{bucket}.{domain} format will be used
+		// actual request
+		host_out = bucket + "." + endpoint;
+		http_host_out = "http://" + host_out; // TODO: restore https
+	}
 }
 
 string S3FileSystem::GetPayloadHash(char *buffer, idx_t buffer_len) {

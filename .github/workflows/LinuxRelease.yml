@@ -452,6 +452,7 @@ jobs:
     env:
       BUILD_VISUALIZER: 1
       BUILD_HTTPFS: 1
+      S3_TEST_SERVER_AVAILABLE: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -462,8 +463,18 @@ jobs:
       with:
         python-version: '3.7'
 
+    - uses: actions/setup-node@v2
+      with:
+        node-version: '17'
+
     - name: Build
       run: make
+
+    - name: Start S3/HTTP test server
+      run: |
+        npm install -g s3rver
+        mkdir -p ./.tmp/s3rver
+        s3rver -d "./.tmp/s3rver" -p "4923" -a "localhost" -s --configure-bucket "test-bucket-non-existent" &
 
     - name: Test
       run: make allunit

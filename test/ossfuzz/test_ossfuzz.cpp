@@ -24,8 +24,10 @@ static void test_runner() {
 	buffer << t.rdbuf();
 	auto query = buffer.str();
 	result = con.Query(query.c_str());
+
+	unordered_set<string> internal_error_messages = {"Unoptimized Result differs from original result!", "INTERNAL"};
 	if (!result->success) {
-		if (TestIsInternalError(result->error)) {
+		if (TestIsInternalError(internal_error_messages, result->error)) {
 			REQUIRE(result->error.empty());
 		}
 	}
