@@ -444,11 +444,11 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 void BufferedCSVReader::JumpToBeginning(idx_t skip_rows = 0, bool skip_header = false) {
 	ResetBuffer();
 	ResetStream();
-	SkipRowsAndReadHeader(skip_rows, skip_header);
 	sample_chunk_idx = 0;
 	bytes_in_chunk = 0;
 	end_of_file_reached = false;
 	bom_checked = false;
+	SkipRowsAndReadHeader(skip_rows, skip_header);
 }
 
 void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header) {

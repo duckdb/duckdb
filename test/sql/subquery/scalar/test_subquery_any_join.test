@@ -1,0 +1,79 @@
+# name: test/sql/subquery/scalar/test_subquery_any_join.test
+# description: Test subqueries on ANY join
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+# correlated expressions in inner/left/right joins
+query I
+SELECT i IN (SELECT i1.i FROM (SELECT * FROM integers i1 WHERE i1.i=integers.i) i1 JOIN generate_series(1, 2, 1) tbl(i) ON i1.i=tbl.i) FROM integers ORDER BY i NULLS LAST;
+----
+true
+true
+false
+false
+
+query I
+SELECT i IN (SELECT i1.i FROM (SELECT * FROM integers i1 WHERE i1.i=integers.i) i1 LEFT JOIN generate_series(1, 2, 1) tbl(i) ON i1.i=tbl.i) FROM integers ORDER BY i NULLS LAST;
+----
+true
+true
+true
+false
+
+query I
+SELECT i IN (SELECT i1.i FROM (SELECT * FROM integers i1 WHERE i1.i=integers.i) i1 RIGHT JOIN generate_series(1, 2, 1) tbl(i) ON i1.i=tbl.i) FROM integers ORDER BY i NULLS LAST;
+----
+true
+true
+NULL
+NULL
+
+# other way around
+query I
+SELECT i IN (SELECT i1.i FROM generate_series(1, 2, 1) tbl(i) LEFT JOIN (SELECT * FROM integers i1 WHERE i1.i=integers.i) i1 ON i1.i=tbl.i) FROM integers ORDER BY i NULLS LAST;
+----
+true
+true
+NULL
+NULL
+
+query I
+SELECT i IN (SELECT i1.i FROM generate_series(1, 2, 1) tbl(i) RIGHT JOIN (SELECT * FROM integers i1 WHERE i1.i=integers.i) i1 ON i1.i=tbl.i) FROM integers ORDER BY i NULLS LAST;
+----
+true
+true
+true
+false
+
+# complex join condition
+query I
+SELECT i IN (SELECT i1.i FROM (SELECT * FROM integers i1 WHERE i1.i IS NOT DISTINCT FROM integers.i) i1 JOIN generate_series(1, 2, 1) tbl(i) ON i1.i=tbl.i OR (i1.i IS NULL AND tbl.i IS NULL)) FROM integers ORDER BY i NULLS LAST;
+----
+true
+true
+false
+false
+
+query I
+SELECT i IN (SELECT i1.i FROM (SELECT * FROM integers i1 WHERE i1.i IS NOT DISTINCT FROM integers.i) i1 LEFT JOIN generate_series(1, 2, 1) tbl(i) ON i1.i=tbl.i OR (i1.i IS NULL AND tbl.i IS NULL)) FROM integers ORDER BY i NULLS LAST;
+----
+true
+true
+true
+NULL
+
+query I
+SELECT i IN (SELECT i1.i FROM (SELECT * FROM integers i1 WHERE i1.i IS NOT DISTINCT FROM integers.i) i1 RIGHT JOIN generate_series(1, 2, 1) tbl(i) ON i1.i=tbl.i OR (i1.i IS NULL AND tbl.i IS NULL)) FROM integers ORDER BY i NULLS LAST;
+----
+true
+true
+NULL
+NULL
