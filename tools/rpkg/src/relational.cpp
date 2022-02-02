@@ -74,7 +74,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 
 //' @export
 [[cpp11::register]] SEXP rel_filter(duckdb::rel_extptr rel, duckdb::expr_extptr expr) {
-	auto res = std::make_shared<FilterRelation>(rel->rel, move(expr->Copy()));
+	auto res = std::make_shared<FilterRelation>(rel->rel, expr->Copy());
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
