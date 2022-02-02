@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
@@ -31,6 +32,8 @@ public:
 	vector<string> names;
 	//! The types returned by this QueryNode.
 	vector<LogicalType> types;
+	//! Bound unreferenced CTEs
+	vector<unique_ptr<BoundTableRef>> unreferenced;
 
 public:
 	virtual idx_t GetRootIndex() = 0;

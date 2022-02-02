@@ -16,6 +16,7 @@ struct BoundStatement {
 	unique_ptr<LogicalOperator> plan;
 	vector<LogicalType> types;
 	vector<string> names;
+	vector<unique_ptr<BoundTableRef>> unreferenced;
 };
 
 } // namespace duckdb
