@@ -1,0 +1,34 @@
+# name: test/sql/aggregate/aggregates/test_simple_filter.test
+# description: Test simple aggregate filtering
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SELECT
+    count(*) as total_rows,
+    count(*) FILTER (WHERE i <= 5) as lte_five,
+    count(*) FILTER (WHERE i % 2 = 1) as odds
+FROM generate_series(1,11) tbl(i)
+----
+11	5	6
+
+query III
+SELECT
+    count(*) FILTER (WHERE i % 2 = 1) as odds,
+    count(*) FILTER (WHERE i <= 5) as lte_five,
+    count(*) as total_rows
+FROM generate_series(1,11) tbl(i)
+----
+6	5	11
+
+query III
+SELECT
+    count(*) FILTER (WHERE i <= 5) as lte_five,
+    count(*) FILTER (WHERE i % 2 = 1) as odds,
+    count(*) as total_rows
+FROM generate_series(1,11) tbl(i)
+----
+5	6	11
+
