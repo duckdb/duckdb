@@ -103,7 +103,7 @@ public:
 	S3FileSystem() {
 	}
 
-	unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url,HeaderMap header_map, char *buffer_out, idx_t buffer_out_len, char* buffer_in, idx_t buffer_in_len) override;
+	unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url,HeaderMap header_map, unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len, char* buffer_in, idx_t buffer_in_len) override;
 	unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map, char* buffer_in, idx_t buffer_in_len) override;
 	unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url,HeaderMap header_map) override;
 	unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map, idx_t file_offset, char *buffer_out, idx_t buffer_out_len) override;
@@ -120,6 +120,8 @@ public:
 	string InitializeMultipartUpload(S3FileHandle &file_handle);
 	void FinalizeMultipartUpload(S3FileHandle &file_handle);
 
+	void FlushAllBuffers(S3FileHandle &handle);
+
 	// Uploads the contents of write_buffer to S3.
 	// Note: caller is responsible to not call this method twice on the same buffer
 	static void UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer);
@@ -130,7 +132,6 @@ protected:
 
 	// TODO: allow resuming upload after flushing non-full buffer?
 	void FlushBuffer(S3FileHandle &handle, std::shared_ptr<S3WriteBuffer> write_buffer);
-	void FlushAllBuffers(S3FileHandle &handle);
 
 	// Helper functions
 	void S3UrlParse(FileHandle &handle, string url, string& host_out, string& http_host_out, string& path_out, string& query_param);

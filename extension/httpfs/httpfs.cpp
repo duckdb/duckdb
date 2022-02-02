@@ -35,9 +35,8 @@ unique_ptr<duckdb_httplib_openssl::Headers> InitializeHTTPHeaders(HeaderMap head
 	return headers;
 }
 
-// Todo clean up requests further? Make sure error handling is correct
 unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
-                                                        char *buffer_out, idx_t buffer_out_len, char *buffer_in,
+                                                        unique_ptr<char[]>& buffer_out, idx_t &buffer_out_len, char *buffer_in,
                                                         idx_t buffer_in_len) {
 	auto headers = InitializeHTTPHeaders(header_map);
 	string path, proto_host_port;
@@ -48,7 +47,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	cli.enable_server_certificate_verification(false);
 
 	string content_type = "application/octet-stream";
-	string buffer_str(buffer_in, buffer_in_len); // TODO why copy?
+	string buffer_str(buffer_in, buffer_in_len); // TODO remove Copy
 	idx_t out_offset = 0;
 	auto res = cli.Post(
 	    path.c_str(), *headers, buffer_str,
@@ -60,7 +59,16 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 		    return true;
 	    },
 	    [&](const char *data, size_t data_length) {
-		    memcpy(buffer_out + out_offset, data, data_length);
+		    if (out_offset + data_length > buffer_out_len) {
+			    // Buffer too small, increase its size by at least 2x to fit the new value
+			    auto new_size = MaxValue<idx_t>(out_offset + data_length, buffer_out_len*2);
+			    std::cout << "resize from " << buffer_out_len << " to " << new_size << "\n";
+			    auto tmp = unique_ptr<char[]>{new char[new_size]};
+			    memcpy(tmp.get(), buffer_out.get(), buffer_out_len);
+				buffer_out = move(tmp);
+				buffer_out_len = new_size;
+			}
+		    memcpy(buffer_out.get() + out_offset, data, data_length);
 		    out_offset += data_length;
 		    return true;
 	    },
@@ -129,7 +137,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 		    if (response.status >= 400) {
 			    throw std::runtime_error("HTTP error");
 		    }
-		    if (response.status < 300) { // done redirectering
+		    if (response.status < 300) { // done redirecting
 			    out_offset = 0;
 			    auto content_length = std::stoll(response.get_header_value("Content-Length", 0));
 			    if ((idx_t)content_length != buffer_out_len) {
@@ -290,7 +298,7 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 		read_buffer = std::unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
 	}
 
-	length = std::atoll(res->headers["Contentx-Length"].c_str());
+	length = std::atoll(res->headers["Content-Length"].c_str());
 
 	auto last_modified = res->headers["Last-Modified"];
 	if (last_modified.empty()) {

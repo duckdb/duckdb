@@ -14,7 +14,7 @@ using HeaderMap = unordered_map<string, string>;
 
 struct ResponseWrapper { /* avoid including httplib in header */
 public:
-	ResponseWrapper(duckdb_httplib_openssl::Response &res);
+	explicit ResponseWrapper(duckdb_httplib_openssl::Response &res);
 	int code;
 	string error;
 	HeaderMap headers;
@@ -50,17 +50,19 @@ class HTTPFileSystem : public FileSystem {
 public:
 	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
 	                                     FileCompressionType compression = DEFAULT_COMPRESSION,
-	                                     FileOpener *opener = nullptr) override final;
+	                                     FileOpener *opener = nullptr) final;
 
 	std::vector<std::string> Glob(const std::string &path) override {
 		return {path}; // FIXME
 	}
 
 	// HTTP Requests
-	virtual unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url,HeaderMap header_map, char *buffer_out, idx_t buffer_out_len, char* buffer_in, idx_t buffer_in_len);
 	virtual unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map, char* buffer_in, idx_t buffer_in_len);
 	virtual unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url,HeaderMap header_map);
+	// Get Request with range parameter that GETs exactly buffer_out_len bytes from the url
 	virtual unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map, idx_t file_offset, char *buffer_out, idx_t buffer_out_len);
+	// Post Request that can handle variable sized responses without a content-length header, which is necessary for S3 Multipart
+	virtual unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url,HeaderMap header_map, unique_ptr<char[]>& buffer_out, idx_t &buffer_out_len, char* buffer_in, idx_t buffer_in_len);
 
 	// FS methods
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;

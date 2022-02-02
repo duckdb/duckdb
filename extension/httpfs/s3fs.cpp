@@ -150,11 +150,14 @@ void S3FileHandle::Close() {
 // Opens the multipart upload and returns the ID
 string S3FileSystem::InitializeMultipartUpload(S3FileHandle &file_handle) {
 	auto &hfs = (HTTPFileSystem &)file_handle.file_system;
-	char response_buffer[1000]; // TODO clean up
+
+	// AWS response is around 300~ chars in docs so this should be enough to not need a resize
+	idx_t response_buffer_len = 1000;
+	auto response_buffer = unique_ptr<char[]>{ new char[response_buffer_len]};
 
 	string query_param = "?" + uri_encode("uploads") + "=";
-	auto res = hfs.PostRequest(file_handle, file_handle.path + query_param, {}, response_buffer, 1000, nullptr, 0);
-	string result(response_buffer, 1000);
+	auto res = hfs.PostRequest(file_handle, file_handle.path + query_param, {}, response_buffer, response_buffer_len, nullptr, 0);
+	string result(response_buffer.get(), response_buffer_len);
 
 	auto open_tag_pos = result.find("<UploadId>", 0);
 	auto close_tag_pos = result.find("</UploadId>", open_tag_pos);
@@ -283,11 +286,13 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle& file_handle) {
 	ss << "</CompleteMultipartUpload>";
 	string body = ss.str();
 
-	char response_buffer[1000]; // TODO clean up
+	// Response is around ~400 in AWS docs so this should be enough to not need a resize
+	idx_t response_buffer_len = 1000;
+	auto response_buffer = unique_ptr<char[]>{new char[response_buffer_len]};
 
 	string query_param = "?" + uri_encode("uploadId") + "=" + file_handle.multipart_upload_id;
-	auto res = s3fs.PostRequest(file_handle, file_handle.path + query_param, {}, response_buffer, 1000, (char*)body.c_str(), body.length());
-	string result(response_buffer, 1000);
+	auto res = s3fs.PostRequest(file_handle, file_handle.path + query_param, {}, response_buffer, response_buffer_len, (char*)body.c_str(), body.length());
+	string result(response_buffer.get(), response_buffer_len);
 
 	auto open_tag_pos = result.find("<CompleteMultipartUploadResult", 0);
 	if (open_tag_pos == string::npos) {
@@ -381,8 +386,7 @@ string S3FileSystem::GetPayloadHash(char *buffer, idx_t buffer_len) {
 	}
 }
 
-unique_ptr<ResponseWrapper> S3FileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
-                                                      char *buffer_out, idx_t buffer_out_len, char *buffer_in,
+unique_ptr<ResponseWrapper> S3FileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map, unique_ptr<char[]>& buffer_out, idx_t &buffer_out_len, char *buffer_in,
                                                       idx_t buffer_in_len) {
 	string host, http_host, path, query_param;
 	S3UrlParse(handle, url, host, http_host, path, query_param);
