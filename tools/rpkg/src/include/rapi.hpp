@@ -31,15 +31,21 @@ struct RStatement {
 	vector<Value> parameters;
 };
 
+void ConnDeleter(ConnWrapper* conn);
+void DBDeleter(DBWrapper* db);
+
+typedef cpp11::external_pointer<DBWrapper, DBDeleter> db_eptr_t;
+typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
+
 struct RApi {
 
-	static SEXP Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp);
+	static db_eptr_t Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp);
 
-	static void Shutdown(SEXP dbsexp);
+	static void Shutdown(db_eptr_t dbsexp);
 
-	static SEXP Connect(SEXP dbsexp);
+	static conn_eptr_t Connect(db_eptr_t dbsexp);
 
-	static void Disconnect(SEXP connsexp);
+	static void Disconnect(conn_eptr_t connsexp);
 
 	static SEXP Prepare(SEXP connsexp, SEXP querysexp);
 

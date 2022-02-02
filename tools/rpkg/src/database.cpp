@@ -5,6 +5,8 @@
 
 using namespace duckdb;
 
+namespace duckdb {
+
 void DBDeleter(DBWrapper* db) {
 	Rf_warning(
 	    "Database is garbage-collected, use dbDisconnect(con, shutdown=TRUE) or "
@@ -12,7 +14,9 @@ void DBDeleter(DBWrapper* db) {
   delete db;
 }
 
-SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
+}
+
+db_eptr_t RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
 	if (TYPEOF(dbdirsexp) != STRSXP || Rf_length(dbdirsexp) != 1) {
 		cpp11::stop("duckdb_startup_R: Need string parameter for dbdir");
 	}
@@ -69,18 +73,14 @@ SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
 	catalog.CreateTableFunction(context, &info);
 	context.transaction.Commit();
 
-	cpp11::external_pointer<DBWrapper, DBDeleter> dbsexp(wrapper);
+	db_eptr_t dbsexp(wrapper);
 
 	return dbsexp;
 }
 
-void RApi::Shutdown(SEXP dbsexp) {
-	if (TYPEOF(dbsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_finalize_connection_R: Need external pointer parameter");
-	}
-	auto db_wrapper = (DBWrapper *)R_ExternalPtrAddr(dbsexp);
+void RApi::Shutdown(db_eptr_t dbsexp) {
+	auto db_wrapper = dbsexp.release();
 	if (db_wrapper) {
-		R_ClearExternalPtr(dbsexp);
 		delete db_wrapper;
 	}
 }
