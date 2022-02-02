@@ -1,6 +1,5 @@
 #include "rapi.hpp"
 #include "typesr.hpp"
-#include "altrepstring.hpp"
 
 #include "duckdb/main/client_context.hpp"
 
@@ -21,33 +20,41 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 	}
 }
 
-static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
+static void AppendStringSegment(strings coldata, Vector &result, idx_t row_idx, idx_t count) {
 	auto result_data = FlatVector::GetData<string_t>(result);
 	auto &result_mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
-		SEXP val = STRING_ELT(coldata, row_idx + i);
+		auto val = coldata[(R_xlen_t)(row_idx + i)];
 		if (val == NA_STRING) {
 			result_mask.SetInvalid(i);
 		} else {
-			result_data[i] = string_t((char *)CHAR(val), LENGTH(val));
+			result_data[i] = string_t((char *)CHAR(val), val.size());
 		}
 	}
 }
 
-struct DataFrameScanFunctionData : public TableFunctionData {
-	DataFrameScanFunctionData(SEXP df, idx_t row_count, vector<RType> rtypes)
+struct DataFrameScanBindData : public TableFunctionData {
+	DataFrameScanBindData(SEXP df, idx_t row_count, vector<RType> rtypes)
 	    : df(df), row_count(row_count), rtypes(rtypes) {
 	}
 	data_frame df;
 	idx_t row_count;
 	vector<RType> rtypes;
+
+	idx_t rows_per_task = 2;
 };
 
-struct DataFrameScanState : public FunctionOperatorData {
-	DataFrameScanState() : position(0) {
-	}
+struct DataFrameParallelState : public ParallelState {
+	mutex lock;
+	idx_t row_group_index = 0;
+};
 
+struct DataFrameOperatorData : public FunctionOperatorData {
+	bool done = false;
+	vector<column_t> column_ids;
 	idx_t position;
+	idx_t offset;
+	idx_t count;
 };
 
 static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
@@ -60,7 +67,7 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 	auto df_names = df.names();
 	vector<RType> rtypes;
 
-	for (int col_idx = 0; col_idx < (idx_t)Rf_length(df); col_idx++) {
+	for (R_xlen_t col_idx = 0; col_idx < df.size(); col_idx++) {
 		names.push_back(df_names[col_idx]);
 		auto coldata = df[col_idx];
 		rtypes.push_back(RApiTypes::DetectRType(coldata));
@@ -80,7 +87,7 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 
 			strings levels = GET_LEVELS(coldata);
 			Vector duckdb_levels(LogicalType::VARCHAR, levels.size());
-			for (int level_idx = 0; level_idx < levels.size(); level_idx++) {
+			for (R_xlen_t level_idx = 0; level_idx < levels.size(); level_idx++) {
 				duckdb_levels.SetValue(level_idx, (string)levels[level_idx]);
 			}
 			duckdb_col_type = LogicalType::ENUM(df_names[col_idx], duckdb_levels, levels.size());
@@ -113,54 +120,72 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 		}
 		return_types.push_back(duckdb_col_type);
 	}
-
 	auto row_count = Rf_length(VECTOR_ELT(df, 0));
-	return make_unique<DataFrameScanFunctionData>(df, row_count, rtypes);
+	return make_unique<DataFrameScanBindData>(df, row_count, rtypes);
 }
 
-static unique_ptr<FunctionOperatorData> dataframe_scan_init(ClientContext &context, const FunctionData *bind_data,
+static void dataframe_scan_init_internal(ClientContext &context, const DataFrameScanBindData *bind_data,
+                                         DataFrameOperatorData *operator_state, idx_t offset, idx_t count) {
+	D_ASSERT(bind_data);
+	D_ASSERT(operator_state);
+
+	operator_state->position = 0;
+	operator_state->offset = offset;
+	operator_state->count = count;
+	operator_state->done = false;
+}
+
+static unique_ptr<FunctionOperatorData> dataframe_scan_init(ClientContext &context, const FunctionData *bind_data_p,
                                                             const vector<column_t> &column_ids,
                                                             TableFilterCollection *filters) {
-	return make_unique<DataFrameScanState>();
+	D_ASSERT(bind_data_p);
+	auto bind_data = (const DataFrameScanBindData *)bind_data_p;
+	auto operator_data = make_unique<DataFrameOperatorData>();
+
+	operator_data->column_ids = column_ids;
+	dataframe_scan_init_internal(context, bind_data, operator_data.get(), 0, bind_data->row_count);
+	return move(operator_data);
 }
 
-static void dataframe_scan_function(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (DataFrameScanFunctionData &)*bind_data;
-	auto &state = (DataFrameScanState &)*operator_state;
-	if (state.position >= data.row_count) {
+static void dataframe_scan_function(ClientContext &context, const FunctionData *bind_data_p,
+                                    FunctionOperatorData *operator_data_p, DataChunk *input, DataChunk &output) {
+	auto &bind_data = (DataFrameScanBindData &)*bind_data_p;
+	auto &operator_data = (DataFrameOperatorData &)*operator_data_p;
+	if (operator_data.position >= operator_data.count) {
 		return;
 	}
-	idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, data.row_count - state.position);
+	idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, operator_data.count - operator_data.position);
 
 	output.SetCardinality(this_count);
 
-	for (int col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-		auto &v = output.data[col_idx];
-		sexp coldata = data.df[col_idx];
+	auto sexp_offset = operator_data.offset + operator_data.position;
 
-		switch (data.rtypes[col_idx]) {
+	for (R_xlen_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+		auto &v = output.data[col_idx];
+		sexp coldata = bind_data.df[col_idx];
+
+		switch (bind_data.rtypes[col_idx]) {
 		case RType::LOGICAL: {
-			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			auto data_ptr = INTEGER_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<int, bool, RBooleanType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::INTEGER: {
-			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			auto data_ptr = INTEGER_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<int, int, RIntegerType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::NUMERIC: {
-			auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
+			auto data_ptr = NUMERIC_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<double, double, RDoubleType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::STRING: {
-			AppendStringSegment(coldata, v, state.position, this_count);
+			AppendStringSegment((strings)coldata, v, sexp_offset, this_count);
 			break;
 		}
 		case RType::FACTOR: {
-			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			auto data_ptr = INTEGER_POINTER(coldata) + sexp_offset;
 			switch (v.GetType().InternalType()) {
 			case PhysicalType::UINT8:
 				AppendColumnSegment<int, uint8_t, RFactorType>(data_ptr, v, this_count);
@@ -181,67 +206,67 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 			break;
 		}
 		case RType::TIMESTAMP: {
-			auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
+			auto data_ptr = NUMERIC_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::TIME_SECONDS: {
-			auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
+			auto data_ptr = NUMERIC_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<double, dtime_t, RTimeSecondsType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::TIME_MINUTES: {
-			auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
+			auto data_ptr = NUMERIC_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<double, dtime_t, RTimeMinutesType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::TIME_HOURS: {
-			auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
+			auto data_ptr = NUMERIC_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<double, dtime_t, RTimeHoursType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::TIME_DAYS: {
-			auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
+			auto data_ptr = NUMERIC_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<double, dtime_t, RTimeDaysType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::TIME_WEEKS: {
-			auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
+			auto data_ptr = NUMERIC_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<double, dtime_t, RTimeWeeksType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::TIME_SECONDS_INTEGER: {
-			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			auto data_ptr = INTEGER_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<int, dtime_t, RTimeSecondsType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::TIME_MINUTES_INTEGER: {
-			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			auto data_ptr = INTEGER_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<int, dtime_t, RTimeMinutesType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::TIME_HOURS_INTEGER: {
-			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			auto data_ptr = INTEGER_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<int, dtime_t, RTimeHoursType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::TIME_DAYS_INTEGER: {
-			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			auto data_ptr = INTEGER_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<int, dtime_t, RTimeDaysType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::TIME_WEEKS_INTEGER: {
-			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			auto data_ptr = INTEGER_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<int, dtime_t, RTimeWeeksType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::DATE: {
-			auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
+			auto data_ptr = NUMERIC_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<double, date_t, RDateType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::DATE_INTEGER: {
-			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			auto data_ptr = INTEGER_POINTER(coldata) + sexp_offset;
 			AppendColumnSegment<int, date_t, RDateType>(data_ptr, v, this_count);
 			break;
 		}
@@ -250,14 +275,67 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 		}
 	}
 
-	state.position += this_count;
+	operator_data.position += this_count;
 }
 
-static unique_ptr<NodeStatistics> dataframe_scan_cardinality(ClientContext &context, const FunctionData *bind_data) {
-	auto &data = (DataFrameScanFunctionData &)*bind_data;
-	return make_unique<NodeStatistics>(data.row_count, data.row_count);
+static unique_ptr<NodeStatistics> dataframe_scan_cardinality(ClientContext &context, const FunctionData *bind_data_p) {
+	auto &bind_data = (DataFrameScanBindData &)*bind_data_p;
+	return make_unique<NodeStatistics>(bind_data.row_count, bind_data.row_count);
+}
+
+static string dataframe_scan_tostring(const FunctionData *bind_data_p) {
+	return "data.frame";
+}
+
+static idx_t dataframe_scan_max_threads(ClientContext &context, const FunctionData *bind_data_p) {
+	D_ASSERT(bind_data_p);
+	auto bind_data = (const DataFrameScanBindData *)bind_data_p;
+	return ceil((double)bind_data->row_count / bind_data->rows_per_task);
+}
+
+static unique_ptr<ParallelState> dataframe_scan_init_parallel_state(ClientContext &context, const FunctionData *,
+                                                                    const vector<column_t> &column_ids,
+                                                                    TableFilterCollection *) {
+	auto result = make_unique<DataFrameParallelState>();
+	result->row_group_index = 0;
+	return move(result);
+}
+
+static bool dataframe_scan_parallel_next(ClientContext &context, const FunctionData *bind_data_p,
+                                         FunctionOperatorData *operator_data_p, ParallelState *parallel_state_p) {
+	D_ASSERT(bind_data_p);
+	D_ASSERT(operator_data_p);
+	D_ASSERT(parallel_state_p);
+
+	auto bind_data = (const DataFrameScanBindData *)bind_data_p;
+	auto operator_data = (DataFrameOperatorData *)operator_data_p;
+	auto &parallel_state = (DataFrameParallelState &)*parallel_state_p;
+
+	lock_guard<mutex> parallel_lock(parallel_state.lock);
+
+	if (parallel_state.row_group_index < ceil((double)bind_data->row_count / bind_data->rows_per_task)) {
+		dataframe_scan_init_internal(context, bind_data, operator_data,
+		                             parallel_state.row_group_index * bind_data->rows_per_task,
+		                             (parallel_state.row_group_index + 1) * bind_data->rows_per_task - 1);
+		parallel_state.row_group_index++;
+		return true;
+	}
+	return false;
+}
+
+static unique_ptr<FunctionOperatorData>
+dataframe_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_p, ParallelState *parallel_state_p,
+                             const vector<column_t> &column_ids, TableFilterCollection *) {
+	auto operator_data = make_unique<DataFrameOperatorData>();
+	operator_data->column_ids = column_ids;
+	if (!dataframe_scan_parallel_next(context, bind_data_p, operator_data.get(), parallel_state_p)) {
+		operator_data->done = true;
+	}
+	return move(operator_data);
 }
 
 DataFrameScanFunction::DataFrameScanFunction()
     : TableFunction("r_dataframe_scan", {LogicalType::POINTER}, dataframe_scan_function, dataframe_scan_bind,
-                    dataframe_scan_init, nullptr, nullptr, nullptr, dataframe_scan_cardinality) {};
+                    dataframe_scan_init, nullptr, nullptr, nullptr, dataframe_scan_cardinality, nullptr,
+                    dataframe_scan_tostring, dataframe_scan_max_threads, dataframe_scan_init_parallel_state, nullptr,
+                    dataframe_scan_parallel_init, dataframe_scan_parallel_next, true, false, nullptr) {};
