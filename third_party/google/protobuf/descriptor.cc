@@ -1007,7 +1007,7 @@ class TableArena {
     }
 
     for (int i = kSmallSizes.size(); --i >= 0;) {
-      if (to_relocate->space_left() >= 1 + kSmallSizes[i]) {
+      if ((int) to_relocate->space_left() >= 1 + kSmallSizes[i]) {
         to_relocate->PrependTo(small_size_blocks_[i]);
         return;
       }
