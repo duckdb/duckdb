@@ -205,12 +205,12 @@ shared_ptr<duckdb::Relation> SubstraitToDuckDB::TransformOp(const substrait::Rel
 		                                                 TransformOp(sjoin.right())->Alias("right"),
 		                                                 TransformExpr(sjoin.expression()), djointype);
 	}
-		//	case substrait::Rel::RelTypeCase::kCross: {
-		//		auto &sub_cross = sop.cross();
-		//
-		//		return duckdb::make_shared<duckdb::CrossProductRelation>(TransformOp(sub_cross.left())->Alias("left"),
-		//		                                                         TransformOp(sub_cross.right())->Alias("right"));
-		//	}
+	case substrait::Rel::RelTypeCase::kCross: {
+		auto &sub_cross = sop.cross();
+
+		return duckdb::make_shared<duckdb::CrossProductRelation>(TransformOp(sub_cross.left())->Alias("left"),
+		                                                         TransformOp(sub_cross.right())->Alias("right"));
+	}
 	case substrait::Rel::RelTypeCase::kFetch: {
 		auto &slimit = sop.fetch();
 		return duckdb::make_shared<duckdb::LimitRelation>(TransformOp(slimit.input()), slimit.count(), slimit.offset());

@@ -392,7 +392,7 @@ void DuckDBToSubstrait::ComparisonJoinTransform(duckdb::LogicalOperator &dop, su
 		//		sjoin->set_mark_index(djoin.mark_index);
 		//		break;
 	default:
-		throw runtime_error("Unsupported join type");
+		throw runtime_error("Unsupported join type " + JoinTypeToString(djoin.join_type));
 	}
 
 	// somewhat odd semantics on our side
@@ -580,21 +580,21 @@ void DuckDBToSubstrait::TransformOp(duckdb::LogicalOperator &dop, substrait::Rel
 		return;
 	}
 
-		//	case duckdb::LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		//		auto sub_cross_rel = new substrait::Rel();
-		//		auto sub_cross_prod = sub_cross_rel->mutable_cross();
-		//		auto &djoin = (duckdb::LogicalCrossProduct &)dop;
-		//		TransformOp(*dop.children[0], *sub_cross_prod->mutable_left());
-		//		TransformOp(*dop.children[1], *sub_cross_prod->mutable_right());
-		//		auto bindings = djoin.GetColumnBindings();
-		//
-		//		for (uint32_t idx = 0; idx < bindings.size(); idx++) {
-		//			CreateFieldRef(sop.mutable_project()->add_expressions(), idx);
-		//		}
-		//
-		//		sop.mutable_project()->set_allocated_input(sub_cross_rel);
-		//		return;
-		//	}
+	case duckdb::LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
+		auto sub_cross_rel = new substrait::Rel();
+		auto sub_cross_prod = sub_cross_rel->mutable_cross();
+		auto &djoin = (duckdb::LogicalCrossProduct &)dop;
+		TransformOp(*dop.children[0], *sub_cross_prod->mutable_left());
+		TransformOp(*dop.children[1], *sub_cross_prod->mutable_right());
+		auto bindings = djoin.GetColumnBindings();
+
+		for (uint32_t idx = 0; idx < bindings.size(); idx++) {
+			CreateFieldRef(sop.mutable_project()->add_expressions(), idx);
+		}
+
+		sop.mutable_project()->set_allocated_input(sub_cross_rel);
+		return;
+	}
 
 	default:
 		throw runtime_error(duckdb::LogicalOperatorToString(dop.type));

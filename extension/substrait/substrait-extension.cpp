@@ -32,6 +32,65 @@ static unique_ptr<FunctionData> ToSubstraitBind(ClientContext &context, vector<V
 	return move(result);
 }
 
+void CompareQueryResults(QueryResult &actual_result, QueryResult &roundtrip_result) {
+	// actual_result compare the success state of the results
+	if (!actual_result.success) {
+		throw runtime_error("Query failed");
+	}
+	if (actual_result.success != roundtrip_result.success) {
+		throw runtime_error("Roundtrip substrait plan failed");
+	}
+
+	// FIXME: How to name expression?
+	//	// compare names
+	//	if (names != other.names) {
+	//		return false;
+	//	}
+	// compare types
+	if (actual_result.types != roundtrip_result.types) {
+		throw runtime_error("Substrait Plan Types differ from Actual Result Types");
+	}
+	// now compare the actual values
+	// fetch chunks
+	while (true) {
+		auto lchunk = actual_result.Fetch();
+		auto rchunk = roundtrip_result.Fetch();
+		if (!lchunk && !rchunk) {
+			return;
+		}
+		if (!lchunk || !rchunk) {
+			throw runtime_error("Substrait Plan Types chunk differs from Actual Result chunk");
+		}
+		if (lchunk->size() == 0 && rchunk->size() == 0) {
+			return;
+		}
+		if (lchunk->size() != rchunk->size()) {
+			throw runtime_error("Substrait Plan Types chunk size differs from Actual Result chunk size");
+		}
+		for (idx_t col = 0; col < rchunk->ColumnCount(); col++) {
+			for (idx_t row = 0; row < rchunk->size(); row++) {
+				auto lvalue = lchunk->GetValue(col, row);
+				auto rvalue = rchunk->GetValue(col, row);
+				if (lvalue.IsNull() && rvalue.IsNull()) {
+					continue;
+				}
+				if (lvalue != rvalue) {
+					lchunk->Print();
+					rchunk->Print();
+					throw runtime_error("Substrait Plan Result differs from Actual Result");
+				}
+			}
+		}
+	}
+}
+
+shared_ptr<Relation> SubstraitPlanToDuckDBRel(Connection &conn, string &serialized) {
+	substrait::Plan plan;
+	plan.ParseFromString(serialized);
+	SubstraitToDuckDB transformer_s2d(conn, plan);
+	return transformer_s2d.TransformPlan(plan);
+}
+
 static void ToSubFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
                           DataChunk *input, DataChunk &output) {
 	auto &data = (ToSubstraitFunctionData &)*bind_data;
@@ -48,6 +107,13 @@ static void ToSubFunction(ClientContext &context, const FunctionData *bind_data,
 
 	output.SetValue(0, 0, Value::BLOB_RAW(serialized));
 	data.finished = true;
+	if (context.config.query_verification_enabled) {
+		// We round-trip the generated blob and verify if the result is the same
+		auto actual_result = new_conn.Query(data.query);
+		auto sub_relation = SubstraitPlanToDuckDBRel(new_conn, serialized);
+		auto substrait_result = sub_relation->Execute();
+		CompareQueryResults(*actual_result, *substrait_result);
+	}
 }
 
 struct FromSubstraitFunctionData : public TableFunctionData {
@@ -64,12 +130,9 @@ static unique_ptr<FunctionData> FromSubstraitBind(ClientContext &context, vector
                                                   vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                   vector<string> &names) {
 	auto result = make_unique<FromSubstraitFunctionData>();
-	substrait::Plan plan;
 	result->conn = make_unique<Connection>(*context.db);
 	string serialized = inputs[0].GetValueUnsafe<string>();
-	plan.ParseFromString(serialized);
-	SubstraitToDuckDB transformer_s2d(*result->conn, plan);
-	result->plan = transformer_s2d.TransformPlan(plan);
+	result->plan = SubstraitPlanToDuckDBRel(*result->conn, serialized);
 	for (auto &column : result->plan->Columns()) {
 		return_types.emplace_back(column.type);
 		names.emplace_back(column.name);
@@ -87,8 +150,8 @@ static void FromSubFunction(ClientContext &context, const FunctionData *bind_dat
 	if (!result_chunk) {
 		return;
 	}
+	// Move should work here, no?
 	result_chunk->Copy(output);
-	//	output.Copy(*result_chunk);
 }
 
 void SubstraitExtension::Load(DuckDB &db) {
