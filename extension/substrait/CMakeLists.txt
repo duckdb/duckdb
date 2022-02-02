@@ -4,9 +4,57 @@ set(CMAKE_CXX_STANDARD 17)
 project(SubstraitExtension)
 
 include_directories(include ../../third_party/substrait)
-
-find_package(Protobuf REQUIRED)
-include_directories(${Protobuf_INCLUDE_DIRS})
+include_directories(include ../../third_party/)
+# find_package(Protobuf REQUIRED) include_directories(${Protobuf_INCLUDE_DIRS})
+set(PROTOBUF_SOURCES
+    ../../third_party/google/protobuf/any.cc
+    ../../third_party/google/protobuf/any.pb.cc
+    ../../third_party/google/protobuf/any_lite.cc
+    ../../third_party/google/protobuf/arena.cc
+    ../../third_party/google/protobuf/arenastring.cc
+    ../../third_party/google/protobuf/descriptor.cc
+    ../../third_party/google/protobuf/descriptor.pb.cc
+    ../../third_party/google/protobuf/descriptor_database.cc
+    ../../third_party/google/protobuf/dynamic_message.cc
+    ../../third_party/google/protobuf/extension_set.cc
+    ../../third_party/google/protobuf/extension_set_heavy.cc
+    ../../third_party/google/protobuf/generated_enum_util.cc
+    ../../third_party/google/protobuf/generated_message_bases.cc
+    ../../third_party/google/protobuf/generated_message_reflection.cc
+    ../../third_party/google/protobuf/generated_message_table_driven.cc
+    ../../third_party/google/protobuf/generated_message_table_driven_lite.cc
+    ../../third_party/google/protobuf/generated_message_util.cc
+    ../../third_party/google/protobuf/implicit_weak_message.cc
+    ../../third_party/google/protobuf/inlined_string_field.cc
+    ../../third_party/google/protobuf/map.cc
+    ../../third_party/google/protobuf/map_field.cc
+    ../../third_party/google/protobuf/message.cc
+    ../../third_party/google/protobuf/message_lite.cc
+    ../../third_party/google/protobuf/parse_context.cc
+    ../../third_party/google/protobuf/port_def.inc
+    ../../third_party/google/protobuf/port_undef.inc
+    ../../third_party/google/protobuf/reflection_ops.cc
+    ../../third_party/google/protobuf/repeated_field.cc
+    ../../third_party/google/protobuf/repeated_ptr_field.cc
+    ../../third_party/google/protobuf/text_format.cc
+    ../../third_party/google/protobuf/unknown_field_set.cc
+    ../../third_party/google/protobuf/wire_format.cc
+    ../../third_party/google/protobuf/wire_format_lite.cc
+    ../../third_party/google/protobuf/io/coded_stream.cc
+    ../../third_party/google/protobuf/io/io_win32.cc
+    ../../third_party/google/protobuf/io/strtod.cc
+    ../../third_party/google/protobuf/io/tokenizer.cc
+    ../../third_party/google/protobuf/io/zero_copy_stream.cc
+    ../../third_party/google/protobuf/io/zero_copy_stream_impl.cc
+    ../../third_party/google/protobuf/io/zero_copy_stream_impl_lite.cc
+    ../../third_party/google/protobuf/stubs/common.cc
+    ../../third_party/google/protobuf/stubs/int128.cc
+    ../../third_party/google/protobuf/stubs/status.cc
+    ../../third_party/google/protobuf/stubs/stringpiece.cc
+    ../../third_party/google/protobuf/stubs/stringprintf.cc
+    ../../third_party/google/protobuf/stubs/structurally_valid.cc
+    ../../third_party/google/protobuf/stubs/strutil.cc
+    ../../third_party/google/protobuf/stubs/substitute.cc)
 
 set(SUBSTRAIT_SOURCES
     ../../third_party/substrait/substrait/capabilities.pb.cc
@@ -20,11 +68,12 @@ set(SUBSTRAIT_SOURCES
     ../../third_party/substrait/substrait/extensions/extensions.pb.cc)
 
 add_library(
-  substrait_extension STATIC to_substrait.cpp from_substrait.cpp
-                             substrait-extension.cpp ${SUBSTRAIT_SOURCES})
+  substrait_extension STATIC
+  to_substrait.cpp from_substrait.cpp substrait-extension.cpp
+  ${SUBSTRAIT_SOURCES} ${PROTOBUF_SOURCES})
 
 build_loadable_extension(substrait substrait-extension.cpp)
-target_link_libraries(substrait_extension ${Protobuf_LIBRARIES})
+# target_link_libraries(substrait_extension protobuf)
 install(
   TARGETS substrait_extension
   EXPORT "${DUCKDB_EXPORT_SET}"
