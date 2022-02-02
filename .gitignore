@@ -237,8 +237,6 @@ io_file
 *.lib
 
 # Compiled protocol buffers
-*.pb.h
-*.pb.cc
 *_pb2.py
 
 # Compiled python
