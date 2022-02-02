@@ -21,7 +21,7 @@ unique_ptr<FunctionData> JSONFunctionData::Bind(ClientContext &context, ScalarFu
 		// Try to cast to string, so that we can allow integers as arguments (array index)
 		auto value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 		if (!value.TryCastAs(LogicalType::VARCHAR)) {
-			throw Exception("Cannot JSON path argument to VARCHAR");
+			throw Exception("Cannot cast JSON path argument to VARCHAR");
 		}
 		// Get the string
 		auto query = value.GetValueUnsafe<string_t>();

@@ -11,7 +11,7 @@ static void ValidFunction(DataChunk &args, ExpressionState &state, Vector &resul
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetValidFunction() {
-	return CreateScalarFunctionInfo(ScalarFunction("json_valid", {LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	return CreateScalarFunctionInfo(ScalarFunction("json_valid", {LogicalType::JSON}, LogicalType::BOOLEAN,
 	                                               ValidFunction, false, nullptr, nullptr, nullptr));
 }
 

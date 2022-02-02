@@ -146,3 +146,34 @@ query T
 SELECT json_extract(x, '$."b"') FROM obj;
 ----
 2
+
+statement ok
+CREATE TABLE t12(x varchar);
+
+statement ok
+INSERT INTO t12(x) VALUES(
+'{"settings":
+    {"layer2":
+       {"hapax.legomenon":
+          {"forceDisplay":true,
+           "transliterate":true,
+           "add.footnote":true,
+           "summary.report":true},
+        "dis.legomenon":
+          {"forceDisplay":true,
+           "transliterate":false,
+           "add.footnote":false,
+           "summary.report":true},
+        "tris.legomenon":
+          {"forceDisplay":true,
+           "transliterate":false,
+           "add.footnote":false,
+           "summary.report":false}
+       }
+    }
+ }');
+
+query T
+SELECT json_extract(x, '$.settings.layer2."tris.legomenon"."summary.report"') FROM t12;
+----
+false

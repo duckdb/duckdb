@@ -21,9 +21,9 @@ static void BinaryArrayLengthFunction(DataChunk &args, ExpressionState &state, V
 
 CreateScalarFunctionInfo JSONFunctions::GetArrayLengthFunction() {
 	ScalarFunctionSet set("json_array_length");
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::UBIGINT, UnaryArrayLengthFunction, false,
-	                               nullptr, nullptr, nullptr));
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::UBIGINT,
+	set.AddFunction(ScalarFunction({LogicalType::JSON}, LogicalType::UBIGINT, UnaryArrayLengthFunction, false, nullptr,
+	                               nullptr, nullptr));
+	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::UBIGINT,
 	                               BinaryArrayLengthFunction, false, JSONFunctionData::Bind, nullptr, nullptr));
 
 	return CreateScalarFunctionInfo(move(set));

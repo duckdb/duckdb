@@ -12,6 +12,7 @@ set(JSON_EXTENSION_FILES
     json_common.cpp
     json_functions/json_array_length.cpp
     json_functions/json_extract.cpp
+    json_functions/json_json.cpp
     json_functions/json_type.cpp
     json_functions/json_valid.cpp
     ${YYJSON_OBJECT_FILES})

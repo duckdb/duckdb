@@ -484,6 +484,10 @@ Value Vector::GetValue(idx_t index) const {
 		auto str = ((string_t *)data)[index];
 		return Value(str.GetString());
 	}
+	case LogicalTypeId::JSON: {
+		auto str = ((string_t *)data)[index];
+		return Value::JSON(str.GetString());
+	}
 	case LogicalTypeId::BLOB: {
 		auto str = ((string_t *)data)[index];
 		return Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
@@ -999,7 +1003,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			break;
 		}
 	}
-	if (GetType().id() == LogicalTypeId::VARCHAR) {
+	if (GetType().id() == LogicalTypeId::VARCHAR || GetType().id() == LogicalTypeId::JSON) {
 		// verify that there are no '\0' bytes in string values
 		switch (GetVectorType()) {
 		case VectorType::FLAT_VECTOR: {
@@ -1226,7 +1230,7 @@ string_t StringVector::AddString(Vector &vector, const string &data) {
 }
 
 string_t StringVector::AddString(Vector &vector, string_t data) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::VARCHAR);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::VARCHAR || vector.GetType().id() == LogicalTypeId::JSON);
 	if (data.IsInlined()) {
 		// string will be inlined: no need to store in string heap
 		return data;

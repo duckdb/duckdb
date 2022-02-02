@@ -52,10 +52,10 @@ static void BinaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &
 
 CreateScalarFunctionInfo JSONFunctions::GetTypeFunction() {
 	ScalarFunctionSet set("json_type");
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTypeFunction, false, nullptr,
-	                               nullptr, nullptr));
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                               BinaryTypeFunction, false, JSONFunctionData::Bind, nullptr, nullptr));
+	set.AddFunction(
+	    ScalarFunction({LogicalType::JSON}, LogicalType::VARCHAR, UnaryTypeFunction, false, nullptr, nullptr, nullptr));
+	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::VARCHAR, BinaryTypeFunction,
+	                               false, JSONFunctionData::Bind, nullptr, nullptr));
 
 	return CreateScalarFunctionInfo(move(set));
 }
