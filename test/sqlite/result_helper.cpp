@@ -366,7 +366,7 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 		if (i > 0) {
 			struct_definition += ", ";
 		}
-		struct_definition += QualifiedName::Quote(names[i]) + " := 'VARCHAR'";
+		struct_definition += KeywordHelper::WriteOptionallyQuoted(names[i]) + " := 'VARCHAR'";
 	}
 	struct_definition += ")";
 

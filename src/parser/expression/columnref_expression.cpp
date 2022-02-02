@@ -48,7 +48,7 @@ string ColumnRefExpression::ToString() const {
 		if (i > 0) {
 			result += ".";
 		}
-		result += QualifiedName::Quote(column_names[i]);
+		result += KeywordHelper::WriteOptionallyQuoted(column_names[i]);
 	}
 	return result;
 }
