@@ -5,7 +5,7 @@
 // When changing this file, run cpp11::cpp_register() from R
 
 [[cpp11::register]] duckdb::db_eptr_t
-startup_R(cpp11::strings dbdirsexp, cpp11::logicals readonlysexp, cpp11::list configsexp) {
+startup_R(std::string dbdirsexp, bool readonlysexp, cpp11::list configsexp) {
 	return duckdb::RApi::Startup(dbdirsexp, readonlysexp, configsexp);
 }
 

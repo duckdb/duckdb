@@ -16,66 +16,60 @@ void DBDeleter(DBWrapper* db) {
 
 }
 
-db_eptr_t RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
-	if (TYPEOF(dbdirsexp) != STRSXP || Rf_length(dbdirsexp) != 1) {
-		cpp11::stop("duckdb_startup_R: Need string parameter for dbdir");
-	}
-	char *dbdir = (char *)CHAR(STRING_ELT(dbdirsexp, 0));
+db_eptr_t RApi::Startup(std::string dbdirsexp, bool readonlysexp, cpp11::list configsexp) {
 
-	if (TYPEOF(readonlysexp) != LGLSXP || Rf_length(readonlysexp) != 1) {
-		cpp11::stop("duckdb_startup_R: Need string parameter for read_only");
-	}
-	bool read_only = (bool)LOGICAL_ELT(readonlysexp, 0);
+	const char *dbdir;
 
-	if (strlen(dbdir) == 0 || strcmp(dbdir, ":memory:") == 0) {
-		dbdir = NULL;
-	}
+  if (dbdirsexp.length() == 0 || dbdirsexp.compare(":memory:") == 0) {
+    dbdir = NULL;
+  } else {
+    dbdir = dbdirsexp.c_str();
+  }
 
-	DBConfig config;
-	if (read_only) {
-		config.access_mode = AccessMode::READ_ONLY;
-	}
+  DBConfig config;
+  if (readonlysexp) {
+    config.access_mode = AccessMode::READ_ONLY;
+  }
 
-	RProtector r;
-	auto confignamessexp = r.Protect(GET_NAMES(configsexp));
+  auto confignames = configsexp.names();
 
-	for (idx_t i = 0; i < (idx_t)Rf_length(configsexp); i++) {
-		string key = string(CHAR(STRING_ELT(confignamessexp, i)));
-		string val = string(CHAR(STRING_ELT(VECTOR_ELT(configsexp, i), 0)));
-		auto config_property = DBConfig::GetOptionByName(key);
-		if (!config_property) {
-			cpp11::stop("Unrecognized configuration property '%s'", key.c_str());
-		}
-		try {
-			config.SetOption(*config_property, Value(val));
-		} catch (std::exception &e) {
-			cpp11::stop("duckdb_startup_R: Failed to set configuration option: %s", e.what());
-		}
-	}
+  for (auto it = confignames.begin(); it != confignames.end(); ++it) {
+    std::string key = *it;
+    std::string val = cpp11::as_cpp<std::string>(configsexp[key]);
+    auto config_property = DBConfig::GetOptionByName(key);
+    if (!config_property) {
+      cpp11::stop("Unrecognized configuration property '%s'", key.c_str());
+    }
+    try {
+      config.SetOption(*config_property, Value(val));
+    } catch (std::exception &e) {
+      cpp11::stop("duckdb_startup_R: Failed to set configuration option: %s", e.what());
+    }
+  }
 
-	DBWrapper *wrapper;
+  DBWrapper *wrapper;
 
-	try {
-		wrapper = new DBWrapper();
-		config.replacement_scans.emplace_back(ArrowScanReplacement, wrapper);
-		wrapper->db = make_unique<DuckDB>(dbdir, &config);
-	} catch (std::exception &e) {
-		cpp11::stop("duckdb_startup_R: Failed to open database: %s", e.what());
-	}
-	D_ASSERT(wrapper->db);
+  try {
+    wrapper = new DBWrapper();
+    config.replacement_scans.emplace_back(ArrowScanReplacement, wrapper);
+    wrapper->db = make_unique<DuckDB>(dbdir, &config);
+  } catch (std::exception &e) {
+    cpp11::stop("duckdb_startup_R: Failed to open database: %s", e.what());
+  }
+  D_ASSERT(wrapper->db);
 
-	DataFrameScanFunction scan_fun;
-	CreateTableFunctionInfo info(scan_fun);
-	Connection conn(*wrapper->db);
-	auto &context = *conn.context;
-	auto &catalog = Catalog::GetCatalog(context);
-	context.transaction.BeginTransaction();
-	catalog.CreateTableFunction(context, &info);
-	context.transaction.Commit();
+  DataFrameScanFunction scan_fun;
+  CreateTableFunctionInfo info(scan_fun);
+  Connection conn(*wrapper->db);
+  auto &context = *conn.context;
+  auto &catalog = Catalog::GetCatalog(context);
+  context.transaction.BeginTransaction();
+  catalog.CreateTableFunction(context, &info);
+  context.transaction.Commit();
 
-	db_eptr_t dbsexp(wrapper);
+  db_eptr_t dbsexp(wrapper);
 
-	return dbsexp;
+  return dbsexp;
 }
 
 void RApi::Shutdown(db_eptr_t dbsexp) {

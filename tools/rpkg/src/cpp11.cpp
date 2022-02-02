@@ -6,10 +6,10 @@
 #include <R_ext/Visibility.h>
 
 // rapi.cpp
-duckdb::db_eptr_t startup_R(cpp11::strings dbdirsexp, cpp11::logicals readonlysexp, cpp11::list configsexp);
+duckdb::db_eptr_t startup_R(std::string dbdirsexp, bool readonlysexp, cpp11::list configsexp);
 extern "C" SEXP _duckdb_startup_R(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
   BEGIN_CPP11
-    return cpp11::as_sexp(startup_R(cpp11::as_cpp<cpp11::decay_t<cpp11::strings>>(dbdirsexp), cpp11::as_cpp<cpp11::decay_t<cpp11::logicals>>(readonlysexp), cpp11::as_cpp<cpp11::decay_t<cpp11::list>>(configsexp)));
+    return cpp11::as_sexp(startup_R(cpp11::as_cpp<cpp11::decay_t<std::string>>(dbdirsexp), cpp11::as_cpp<cpp11::decay_t<bool>>(readonlysexp), cpp11::as_cpp<cpp11::decay_t<cpp11::list>>(configsexp)));
   END_CPP11
 }
 // rapi.cpp

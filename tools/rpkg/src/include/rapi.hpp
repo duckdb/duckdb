@@ -31,15 +31,15 @@ struct RStatement {
 	vector<Value> parameters;
 };
 
-void ConnDeleter(ConnWrapper* conn);
-void DBDeleter(DBWrapper* db);
+void ConnDeleter(ConnWrapper*);
+void DBDeleter(DBWrapper*);
 
 typedef cpp11::external_pointer<DBWrapper, DBDeleter> db_eptr_t;
 typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
 
 struct RApi {
 
-	static db_eptr_t Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp);
+	static db_eptr_t Startup(std::string, bool, cpp11::list);
 
 	static void Shutdown(db_eptr_t dbsexp);
 
@@ -71,9 +71,9 @@ struct RApi {
 	static SEXP PointerToString(SEXP extptr);
 
 	// internal
-	static unique_ptr<TableFunctionRef> ArrowScanReplacement(const string &table_name, void *data);
+	static unique_ptr<TableFunctionRef> ArrowScanReplacement(const std::string &table_name, void *data);
 
-	static SEXP StringsToSexp(vector<string> s);
+	static SEXP StringsToSexp(vector<std::string> s);
 
 	static SEXP ToUtf8(SEXP string_sexp);
 };
