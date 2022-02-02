@@ -128,7 +128,7 @@ void SubstituteAndAppend(std::string* output, const char* format,
     }
   }
 
-  GOOGLE_DCHECK_EQ(target - output->data(), output->size());
+  GOOGLE_DCHECK_EQ(target - output->data(), (int)output->size());
 }
 
 }  // namespace strings

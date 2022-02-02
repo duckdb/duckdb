@@ -697,7 +697,7 @@ bool safe_parse_positive_int(std::string text, IntType *value_p) {
   IntType value = 0;
   const IntType vmax = std::numeric_limits<IntType>::max();
   assert(vmax > 0);
-  assert(vmax >= base);
+  assert((int) vmax >= base);
   const IntType vmax_over_base = vmax / base;
   const char* start = text.data();
   const char* end = start + text.size();

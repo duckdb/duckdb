@@ -277,11 +277,11 @@ LogHandler* SetLogHandler(LogHandler* new_func) {
 
 LogSilencer::LogSilencer() {
   ++internal::log_silencer_count_;
-};
+}
 
 LogSilencer::~LogSilencer() {
   --internal::log_silencer_count_;
-};
+}
 
 // ===================================================================
 // emulates google3/base/callback.cc

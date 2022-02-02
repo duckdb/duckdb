@@ -151,7 +151,7 @@ inline bool IsOk(bool status) { return status; }
 #define GOOGLE_CHECK(EXPRESSION) \
   GOOGLE_LOG_IF(FATAL, !(EXPRESSION)) << "CHECK failed: " #EXPRESSION ": "
 #define GOOGLE_CHECK_OK(A) GOOGLE_CHECK(::google::protobuf::internal::IsOk(A))
-#define GOOGLE_CHECK_EQ(A, B) GOOGLE_CHECK((A) == (B))
+#define GOOGLE_CHECK_EQ(A, B) GOOGLE_CHECK((A) ==  (B))
 #define GOOGLE_CHECK_NE(A, B) GOOGLE_CHECK((A) != (B))
 #define GOOGLE_CHECK_LT(A, B) GOOGLE_CHECK((A) <  (B))
 #define GOOGLE_CHECK_LE(A, B) GOOGLE_CHECK((A) <= (B))
