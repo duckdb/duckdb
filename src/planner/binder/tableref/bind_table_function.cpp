@@ -95,7 +95,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		  // std::cout<<"Binder::Bind(TableFunctionRef &ref) - entry is TABLE_MACRO_ENTRY\n";
 		   auto macro_func=(MacroCatalogEntry*)func_catalog;
 
-		   auto query_node = BindMacroSelect(*fexpr, macro_func, 0);
+		   auto query_node = BindTableMacro(*fexpr, macro_func, 0);
 		   D_ASSERT(query_node);
 
 		   auto binder = Binder::CreateBinder(context, this);
@@ -188,56 +188,6 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	}
 
 	return make_unique_base<BoundTableRef, BoundTableFunction>(move(get));
-}
-
-unique_ptr<BoundTableRef> Binder::BindToMacro(TableFunctionRef &ref) {
-	QueryErrorContext error_context(root_statement, ref.query_location);
-
-	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
-
-	auto fexpr = (FunctionExpression *)ref.function.get();
-	auto &catalog = Catalog::GetCatalog(context);
-
-	// try the SCALAR_FUNCTION ENTRY Catalog - will throw if not present here
-	auto macro_func = (MacroCatalogEntry *)catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, fexpr->schema,
-	                                                        fexpr->function_name, true, error_context);
-
-	if (!macro_func) {
-		string error = StringUtil::Format(
-		    "Function \"%s\" not found in Table Function Catalog nor Macro Function Catalog\n", fexpr->function_name);
-		throw BinderException(FormatError(ref, error));
-	}
-
-	// if (fexpr->is_operator || fexpr->IsWindow() || fexpr->IsScalar() || fexpr->IsAggregate() ) {
-	if (macro_func->type != CatalogType::MACRO_ENTRY) {
-		string error = StringUtil::Format("Function \"%s\" is being used in the wrong context as a Table Macro\n",
-		                                  fexpr->function_name);
-		throw BinderException(FormatError(ref, error));
-	}
-
-	if (!macro_func->function->isQuery()) {
-		string error =
-		    StringUtil::Format("Function Macro \"%s\" is being used as a Table Macro\n", fexpr->function_name);
-		throw BinderException(FormatError(ref, error));
-	}
-
-	auto query_node = BindMacroSelect(*fexpr, macro_func, 0);
-	D_ASSERT(query_node);
-
-	auto binder = Binder::CreateBinder(context, this);
-	binder->can_contain_nulls = true;
-
-	binder->alias = ref.alias.empty() ? "unnamed_query" : ref.alias;
-	auto query = binder->BindNode(*query_node);
-
-	idx_t bind_index = query->GetRootIndex();
-	// string alias;
-	string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index) : ref.alias);
-
-	auto result = make_unique<BoundSubqueryRef>(move(binder), move(query));
-	bind_context.AddSubquery(bind_index, alias, (SubqueryRef &)ref, *result->subquery);
-	MoveCorrelatedExpressions(*result->binder);
-	return move(result);
 }
 
 } // namespace duckdb
