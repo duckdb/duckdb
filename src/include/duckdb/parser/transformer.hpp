@@ -66,6 +66,8 @@ private:
 private:
 	//! Transforms a Postgres statement into a single SQL statement
 	unique_ptr<SQLStatement> TransformStatement(duckdb_libpgquery::PGNode *stmt);
+	//! Transforms a Postgres statement into a single SQL statement
+	unique_ptr<SQLStatement> TransformStatementInternal(duckdb_libpgquery::PGNode *stmt);
 	//===--------------------------------------------------------------------===//
 	// Statement transformation
 	//===--------------------------------------------------------------------===//

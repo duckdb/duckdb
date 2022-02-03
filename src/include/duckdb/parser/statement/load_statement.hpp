@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/statement/set_statement.hpp
+// duckdb/parser/statement/load_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -16,6 +16,9 @@ namespace duckdb {
 class LoadStatement : public SQLStatement {
 public:
 	LoadStatement();
+
+protected:
+	LoadStatement(const LoadStatement &other);
 
 public:
 	unique_ptr<SQLStatement> Copy() const override;

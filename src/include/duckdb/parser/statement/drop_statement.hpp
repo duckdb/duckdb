@@ -19,6 +19,9 @@ public:
 
 	unique_ptr<DropInfo> info;
 
+protected:
+	DropStatement(const DropStatement &other);
+
 public:
 	unique_ptr<SQLStatement> Copy() const override;
 };

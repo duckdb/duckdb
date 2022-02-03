@@ -71,7 +71,10 @@ unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGNod
 		throw NotImplementedException("Schema element not supported yet!");
 	}
 	D_ASSERT(info);
-	return make_unique<AlterStatement>(move(info));
+
+	auto result = make_unique<AlterStatement>();
+	result->info = move(info);
+	return result;
 }
 
 } // namespace duckdb

@@ -54,6 +54,12 @@ StackChecker Transformer::StackCheck(idx_t extra_stack) {
 }
 
 unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNode *stmt) {
+	auto result = TransformStatementInternal(stmt);
+	result->n_param = ParamCount();
+	return result;
+}
+
+unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgquery::PGNode *stmt) {
 	switch (stmt->type) {
 	case duckdb_libpgquery::T_PGRawStmt: {
 		auto raw_stmt = (duckdb_libpgquery::PGRawStmt *)stmt;

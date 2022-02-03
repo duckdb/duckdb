@@ -5,11 +5,12 @@ namespace duckdb {
 PrepareStatement::PrepareStatement() : SQLStatement(StatementType::PREPARE_STATEMENT), statement(nullptr), name("") {
 }
 
+PrepareStatement::PrepareStatement(const PrepareStatement &other)
+    : SQLStatement(other), statement(other.statement->Copy()), name(other.name) {
+}
+
 unique_ptr<SQLStatement> PrepareStatement::Copy() const {
-	auto result = make_unique<PrepareStatement>();
-	result->statement = statement->Copy();
-	result->name = name;
-	return move(result);
+	return unique_ptr<PrepareStatement>(new PrepareStatement(*this));
 }
 
 } // namespace duckdb

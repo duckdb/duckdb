@@ -2,7 +2,6 @@
 
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -98,22 +97,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 		result = BindNode((SetOperationNode &)node);
 		break;
 	}
-	// bind any CTEs that were not referenced
-	// to make sure that the parameters are built
-	for (auto &cte_it : node.cte_map) {
-		const auto &name = cte_it.first;
-		string err;
-		if (bind_context.GetBinding(name, err)) {
-			continue;
-		}
-		auto cte = cte_it.second.get();
-		BaseTableRef ref;
-		ref.table_name = name;
-		ref.column_name_alias = cte->aliases;
-
-		auto bound_cte = Bind(ref);
-		result->unreferenced.emplace_back(move(bound_cte));
-	}
 	return result;
 }
 
@@ -123,7 +106,6 @@ BoundStatement Binder::Bind(QueryNode &node) {
 	BoundStatement result;
 	result.names = bound_node->names;
 	result.types = bound_node->types;
-	result.unreferenced = move(bound_node->unreferenced);
 
 	// and plan it
 	result.plan = CreatePlan(*bound_node);

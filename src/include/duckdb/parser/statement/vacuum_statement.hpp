@@ -20,6 +20,9 @@ public:
 
 	unique_ptr<VacuumInfo> info;
 
+protected:
+	VacuumStatement(const VacuumStatement &other) : SQLStatement(other) {};
+
 public:
 	unique_ptr<SQLStatement> Copy() const override;
 };

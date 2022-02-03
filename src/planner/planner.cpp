@@ -103,7 +103,9 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 	vector<Value> bind_values;
 	for (idx_t i = 0; i < stmt.values.size(); i++) {
 		ConstantBinder cbinder(*binder, context, "EXECUTE statement");
-		cbinder.target_type = prepared->GetType(i + 1);
+		if (prepared->value_map.count(i + 1)) {
+			cbinder.target_type = prepared->GetType(i + 1);
+		}
 		auto bound_expr = cbinder.Bind(stmt.values[i]);
 
 		Value value = ExpressionExecutor::EvaluateScalar(*bound_expr);
