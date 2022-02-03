@@ -236,9 +236,15 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 	case LogicalTypeId::BLOB:
 		varvalue = r_varvalue.Protect(NEW_LIST(nrows));
 		break;
-	case LogicalTypeId::ENUM:
-		varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
+	case LogicalTypeId::ENUM: {
+		auto physical_type = type.InternalType();
+		if (physical_type == PhysicalType::UINT64) { // DEDUP_POINTER_ENUM
+			varvalue = r_varvalue.Protect(NEW_STRING(nrows));
+		} else {
+			varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
+		}
 		break;
+	}
 	default:
 		cpp11::stop("duckdb_execute_R: Unknown column type for execute: %s", type.ToString().c_str());
 	}
@@ -413,6 +419,12 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 	}
 	case LogicalTypeId::ENUM: {
 		auto physical_type = src_vec.GetType().InternalType();
+
+		// TODO we need to somehow mark the string as used otherwise the input df needs to stay alive
+		if (physical_type == PhysicalType::UINT64) { // DEDUP_POINTER_ENUM
+			VectorToR<SEXP, SEXP>(src_vec, n, (SEXP *)DATAPTR(dest), dest_offset, NA_STRING);
+			break;
+		}
 
 		switch (physical_type) {
 		case PhysicalType::UINT8:

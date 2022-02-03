@@ -93,6 +93,7 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 			// TODO What about factors that use numeric?
 			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
 			strings levels = GET_LEVELS(coldata);
+			// TODO not use SetValue here
 			Vector duckdb_levels(LogicalType::VARCHAR, levels.size());
 			for (R_xlen_t level_idx = 0; level_idx < levels.size(); level_idx++) {
 				duckdb_levels.SetValue(level_idx, (string)levels[level_idx]);
@@ -101,7 +102,7 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 			break;
 		}
 		case RType::STRING:
-			duckdb_col_type = LogicalType::VARCHAR;
+			duckdb_col_type = LogicalType::DEDUP_POINTER_ENUM();
 			coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
 			break;
 		case RType::TIMESTAMP:
@@ -163,6 +164,15 @@ static unique_ptr<FunctionOperatorData> dataframe_scan_init(ClientContext &conte
 	return move(operator_data);
 }
 
+struct DedupPointerEnumType {
+	static bool IsNull(SEXP val) {
+		return val == NA_STRING;
+	}
+	static SEXP Convert(SEXP val) {
+		return val;
+	}
+};
+
 static void dataframe_scan_function(ClientContext &context, const FunctionData *bind_data_p,
                                     FunctionOperatorData *operator_data_p, DataChunk *input, DataChunk &output) {
 	auto &bind_data = (DataFrameScanBindData &)*bind_data_p;
@@ -197,7 +207,10 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 		}
 		case RType::STRING: {
 			auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
-			AppendStringSegment(data_ptr, v, this_count);
+			// AppendStringSegment(data_ptr, v, this_count);
+			//  DEDUP_POINTER_ENUM
+			AppendColumnSegment<SEXP, SEXP, DedupPointerEnumType>(data_ptr, v, this_count);
+
 			break;
 		}
 		case RType::FACTOR: {
