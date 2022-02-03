@@ -41,11 +41,11 @@ struct RApi {
 
 	static db_eptr_t Startup(std::string, bool, cpp11::list);
 
-	static void Shutdown(db_eptr_t dbsexp);
+	static void Shutdown(db_eptr_t);
 
-	static conn_eptr_t Connect(db_eptr_t dbsexp);
+	static conn_eptr_t Connect(db_eptr_t);
 
-	static void Disconnect(conn_eptr_t connsexp);
+	static void Disconnect(conn_eptr_t);
 
 	static SEXP Prepare(SEXP connsexp, SEXP querysexp);
 
@@ -60,9 +60,9 @@ struct RApi {
 
 	static SEXP Release(SEXP stmtsexp);
 
-	static void RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp);
+	static void RegisterDataFrame(conn_eptr_t, std::string, cpp11::data_frame);
 
-	static void UnregisterDataFrame(SEXP connsexp, SEXP namesexp);
+	static void UnregisterDataFrame(conn_eptr_t, std::string);
 
 	static void RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp);
 

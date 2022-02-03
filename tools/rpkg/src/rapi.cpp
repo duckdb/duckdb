@@ -5,21 +5,20 @@
 // When changing this file, run cpp11::cpp_register() from R
 
 [[cpp11::register]] duckdb::db_eptr_t
-startup_R(std::string dbdirsexp, bool readonlysexp, cpp11::list configsexp) {
-	return duckdb::RApi::Startup(dbdirsexp, readonlysexp, configsexp);
+startup_R(std::string dbdir, bool readonly, cpp11::list config) {
+	return duckdb::RApi::Startup(dbdir, readonly, config);
 }
 
-[[cpp11::register]] void shutdown_R(duckdb::db_eptr_t dbsexp) {
-	return duckdb::RApi::Shutdown(dbsexp);
+[[cpp11::register]] void shutdown_R(duckdb::db_eptr_t db) {
+	return duckdb::RApi::Shutdown(db);
 }
 
-[[cpp11::register]] duckdb::conn_eptr_t
-connect_R(duckdb::db_eptr_t dbsexp) {
-	return duckdb::RApi::Connect(dbsexp);
+[[cpp11::register]] duckdb::conn_eptr_t connect_R(duckdb::db_eptr_t db) {
+	return duckdb::RApi::Connect(db);
 }
 
-[[cpp11::register]] void disconnect_R(duckdb::conn_eptr_t connsexp) {
-	return duckdb::RApi::Disconnect(connsexp);
+[[cpp11::register]] void disconnect_R(duckdb::conn_eptr_t conn) {
+	return duckdb::RApi::Disconnect(conn);
 }
 
 [[cpp11::register]] cpp11::list prepare_R(duckdb::conn_eptr_t connsexp,
@@ -49,13 +48,12 @@ connect_R(duckdb::db_eptr_t dbsexp) {
 	return duckdb::RApi::Release(stmtsexp);
 }
 
-[[cpp11::register]] void register_R(duckdb::conn_eptr_t connsexp, cpp11::strings namesexp,
-                                    cpp11::list valuesexp) {
-	return duckdb::RApi::RegisterDataFrame(connsexp, namesexp, valuesexp);
+[[cpp11::register]] void register_R(duckdb::conn_eptr_t conn, std::string name, cpp11::data_frame value) {
+	return duckdb::RApi::RegisterDataFrame(conn, name, value);
 }
 
-[[cpp11::register]] void unregister_R(duckdb::conn_eptr_t connsexp, cpp11::strings namesexp) {
-	return duckdb::RApi::UnregisterDataFrame(connsexp, namesexp);
+[[cpp11::register]] void unregister_R(duckdb::conn_eptr_t conn, std::string name) {
+	return duckdb::RApi::UnregisterDataFrame(conn, name);
 }
 
 [[cpp11::register]] void register_arrow_R(duckdb::conn_eptr_t connsexp,

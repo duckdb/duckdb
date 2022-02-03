@@ -5,29 +5,25 @@
 
 using namespace duckdb;
 
-namespace duckdb {
-
-void DBDeleter(DBWrapper* db) {
+void duckdb::DBDeleter(DBWrapper* db) {
 	Rf_warning(
 	    "Database is garbage-collected, use dbDisconnect(con, shutdown=TRUE) or "
 		    "duckdb::duckdb_shutdown(drv) to avoid this.");
   delete db;
 }
 
-}
+db_eptr_t RApi::Startup(std::string dbdir, bool readonly, cpp11::list configsexp) {
 
-db_eptr_t RApi::Startup(std::string dbdirsexp, bool readonlysexp, cpp11::list configsexp) {
+	const char *dbdirchar;
 
-	const char *dbdir;
-
-  if (dbdirsexp.length() == 0 || dbdirsexp.compare(":memory:") == 0) {
-    dbdir = NULL;
+  if (dbdir.length() == 0 || dbdir.compare(":memory:") == 0) {
+    dbdirchar = NULL;
   } else {
-    dbdir = dbdirsexp.c_str();
+    dbdirchar = dbdir.c_str();
   }
 
   DBConfig config;
-  if (readonlysexp) {
+  if (readonly) {
     config.access_mode = AccessMode::READ_ONLY;
   }
 
@@ -52,7 +48,7 @@ db_eptr_t RApi::Startup(std::string dbdirsexp, bool readonlysexp, cpp11::list co
   try {
     wrapper = new DBWrapper();
     config.replacement_scans.emplace_back(ArrowScanReplacement, wrapper);
-    wrapper->db = make_unique<DuckDB>(dbdir, &config);
+    wrapper->db = make_unique<DuckDB>(dbdirchar, &config);
   } catch (std::exception &e) {
     cpp11::stop("duckdb_startup_R: Failed to open database: %s", e.what());
   }

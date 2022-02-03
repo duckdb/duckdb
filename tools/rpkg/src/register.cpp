@@ -10,50 +10,31 @@
 
 using namespace duckdb;
 
-void RApi::RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
-	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_register_R: Need external pointer parameter for connection");
-	}
-	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
-	if (!conn_wrapper || !conn_wrapper->conn) {
+void RApi::RegisterDataFrame(conn_eptr_t conn, std::string name, cpp11::data_frame value) {
+	if (!conn || !conn->conn) {
 		cpp11::stop("duckdb_register_R: Invalid connection");
 	}
-	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
-		cpp11::stop("duckdb_register_R: Need single string parameter for name");
-	}
-	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
 	if (name.empty()) {
-		cpp11::stop("duckdb_register_R: name parameter cannot be empty");
+		cpp11::stop("duckdb_register_R: Name cannot be empty");
 	}
-	if (TYPEOF(valuesexp) != VECSXP || Rf_length(valuesexp) < 1 ||
-	    strcmp("data.frame", CHAR(STRING_ELT(GET_CLASS(valuesexp), 0))) != 0) {
-		cpp11::stop("duckdb_register_R: Need at least one-column data frame parameter for value");
+	if (value.ncol() < 1) {
+		cpp11::stop("duckdb_register_R: Data frame with at least one column required");
 	}
 	try {
-		conn_wrapper->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)valuesexp)})
+		conn->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)value.data())})
 		    ->CreateView(name, true, true);
-		auto key = Rf_install(("_registered_df_" + name).c_str());
-		Rf_setAttrib(connsexp, key, valuesexp);
+		static_cast<cpp11::sexp>(conn).attr("_registered_df_" + name) = value;
 	} catch (std::exception &e) {
 		cpp11::stop("duckdb_register_R: Failed to register data frame: %s", e.what());
 	}
 }
 
-void RApi::UnregisterDataFrame(SEXP connsexp, SEXP namesexp) {
-	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_unregister_R: Need external pointer parameter for connection");
-	}
-	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
-	if (!conn_wrapper || !conn_wrapper->conn) {
+void RApi::UnregisterDataFrame(conn_eptr_t conn, std::string name) {
+	if (!conn || !conn->conn) {
 		cpp11::stop("duckdb_unregister_R: Invalid connection");
 	}
-	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
-		cpp11::stop("duckdb_unregister_R: Need single string parameter for name");
-	}
-	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
-	auto key = Rf_install(("_registered_df_" + name).c_str());
-	Rf_setAttrib(connsexp, key, R_NilValue);
-	auto res = conn_wrapper->conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
+	static_cast<cpp11::sexp>(conn).attr("_registered_df_" + name) = R_NilValue;
+	auto res = conn->conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
 	if (!res->success) {
 		cpp11::stop(res->error.c_str());
 	}
