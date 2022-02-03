@@ -24,18 +24,20 @@ public:
 public:
 	const bool constant;
 	const string path;
+	const char *ptr;
 	const size_t len;
 };
 
 struct JSONReadManyFunctionData : public FunctionData {
 public:
-	explicit JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p);
+	JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p);
 	unique_ptr<FunctionData> Copy() override;
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments);
 
 public:
 	const vector<string> paths;
+	vector<const char *> ptrs;
 	const vector<size_t> lens;
 };
 
@@ -75,9 +77,9 @@ public:
 	static bool ValidPathDollar(const char *ptr, const idx_t &len);
 
 	//! Get JSON value using JSON path query (safe, checks the path query)
-	static inline yyjson_val *GetPointer(yyjson_val *root, const string_t &query) {
-		auto ptr = query.GetDataUnsafe();
-		auto len = query.GetSize();
+	static inline yyjson_val *GetPointer(yyjson_val *root, const string_t &path_str) {
+		auto ptr = path_str.GetDataUnsafe();
+		auto len = path_str.GetSize();
 		if (len == 0) {
 			return GetPointerUnsafe(root, ptr, len);
 		}
@@ -122,7 +124,7 @@ private:
 	static yyjson_val *GetPointerDollar(yyjson_val *val, const char *ptr, const idx_t &len);
 
 public:
-	//! Unary JSON function
+	//! Single-argument JSON read function, i.e. json_type('[1, 2, 3]')
 	template <class T>
 	static void UnaryJSONReadFunction(DataChunk &args, ExpressionState &state, Vector &result,
 	                                  std::function<bool(yyjson_val *, T &)> fun) {
@@ -131,8 +133,8 @@ public:
 		                                             [&](string_t input, ValidityMask &mask, idx_t idx) {
 			                                             T result_val {};
 			                                             auto doc = JSONCommon::ReadDocument(input);
-			                                             auto root = doc->root;
-			                                             if (!root || !fun(root, result_val)) {
+			                                             if (!fun(doc->root, result_val)) {
+				                                             // Cannot find path
 				                                             mask.SetInvalid(idx);
 			                                             }
 			                                             yyjson_doc_free(doc);
@@ -140,7 +142,7 @@ public:
 		                                             });
 	}
 
-	//! Binary JSON function
+	//! Two-argument JSON read function (with path query), i.e. json_type('[1, 2, 3]', '$[0]')
 	template <class T>
 	static void BinaryJSONReadFunction(DataChunk &args, ExpressionState &state, Vector &result,
 	                                   std::function<bool(yyjson_val *, T &)> fun) {
@@ -149,30 +151,29 @@ public:
 
 		auto &inputs = args.data[0];
 		if (info.constant) {
-			// Constant query
-			const char *ptr = info.path.c_str();
+			// Constant path
+			const char *ptr = info.ptr;
 			const idx_t &len = info.len;
 			UnaryExecutor::ExecuteWithNulls<string_t, T>(
 			    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
 				    T result_val {};
 				    auto doc = JSONCommon::ReadDocument(input);
-				    auto root = doc->root;
-				    if (!root || !fun(JSONCommon::GetPointerUnsafe(root, ptr, len), result_val)) {
+				    if (!fun(JSONCommon::GetPointerUnsafe(doc->root, ptr, len), result_val)) {
+					    // Cannot find path
 					    mask.SetInvalid(idx);
 				    }
 				    yyjson_doc_free(doc);
 				    return result_val;
 			    });
 		} else {
-			// Columnref query
-			auto &queries = args.data[1];
+			// Columnref path
+			auto &paths = args.data[1];
 			BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
-			    inputs, queries, result, args.size(),
-			    [&](string_t input, string_t query, ValidityMask &mask, idx_t idx) {
+			    inputs, paths, result, args.size(), [&](string_t input, string_t path, ValidityMask &mask, idx_t idx) {
 				    T result_val {};
 				    auto doc = JSONCommon::ReadDocument(input);
-				    auto root = doc->root;
-				    if (!root || !fun(JSONCommon::GetPointer(root, query), result_val)) {
+				    if (!fun(JSONCommon::GetPointer(doc->root, path), result_val)) {
+					    // Cannot find path
 					    mask.SetInvalid(idx);
 				    }
 				    yyjson_doc_free(doc);
@@ -181,30 +182,70 @@ public:
 		}
 	}
 
-	//! Binary JSON function
+	//! JSON read function with list of path queries, i.e. json_type('[1, 2, 3]', ['$[0]', '$[1]'])
 	template <class T>
-	static void JSONReadManyFunction(DataChunk &args, ExpressionState &state, Vector &result,
+	static void ManyJSONReadFunction(DataChunk &args, ExpressionState &state, Vector &result,
 	                                 std::function<bool(yyjson_val *, T &)> fun) {
 		auto &func_expr = (BoundFunctionExpression &)state.expr;
-		const auto &info = (JSONReadFunctionData &)*func_expr.bind_info;
+		const auto &info = (JSONReadManyFunctionData &)*func_expr.bind_info;
+		const auto &ptrs = info.ptrs;
+		const auto &lens = info.lens;
+		D_ASSERT(ptrs.size() == lens.size());
+		const idx_t num_paths = ptrs.size();
 
-		auto &inputs = args.data[0];
-		if (info.constant) {
-			// Constant query
-			const char *ptr = info.path.c_str();
-			const idx_t &len = info.len;
-			UnaryExecutor::ExecuteWithNulls<string_t, T>(
-			    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
-				    T result_val {};
-				    auto doc = JSONCommon::ReadDocument(input);
-				    auto root = doc->root;
-				    if (!root || !fun(JSONCommon::GetPointerUnsafe(root, ptr, len), result_val)) {
-					    mask.SetInvalid(idx);
-				    }
-				    yyjson_doc_free(doc);
-				    return result_val;
-			    });
+		const auto count = args.size();
+		VectorData input_data;
+		auto &input_vector = args.data[0];
+		input_vector.Orrify(count, input_data);
+		auto inputs = (string_t *)input_data.data;
+
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		auto result_entries = FlatVector::GetData<list_entry_t>(result);
+		auto &result_validity = FlatVector::Validity(result);
+		auto &result_child = ListVector::GetEntry(result);
+
+		idx_t offset = 0;
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = input_data.sel->get_index(i);
+			if (!input_data.validity.RowIsValid(idx)) {
+				result_validity.SetInvalid(i);
+				continue;
+			}
+			auto doc = JSONCommon::ReadDocument(inputs[idx]);
+			for (idx_t path_i = 0; path_i < num_paths; path_i++) {
+				T result_val {};
+				if (!fun(JSONCommon::GetPointerUnsafe(doc->root, ptrs[path_i], lens[path_i]), result_val)) {
+					// Cannot find path
+					ListVector::PushBack(result, Value());
+				} else {
+					PushBack<T>(result, result_child, move(result_val));
+				}
+			}
+			yyjson_doc_free(doc);
+			result_entries[i].offset = offset;
+			result_entries[i].length = num_paths;
+			offset += num_paths;
 		}
+		D_ASSERT(ListVector::GetListSize(result) == offset);
+
+		if (input_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
+	}
+
+	//! Helper functions for JSONReadManyFunction
+	template <class T>
+	static inline void PushBack(Vector &result, Vector &result_child, T val) {
+		throw NotImplementedException("Cannot insert Value with this type into JSON result list");
+	}
+	template <>
+	inline void PushBack(Vector &result, Vector &result_child, uint64_t val) {
+		ListVector::PushBack(result, Value::UBIGINT(move(val)));
+	}
+	template <>
+	inline void PushBack(Vector &result, Vector &result_child, string_t val) {
+		Value to_insert(StringVector::AddString(result_child, val));
+		ListVector::PushBack(result, to_insert);
 	}
 };
 

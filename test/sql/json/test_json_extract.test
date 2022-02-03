@@ -49,15 +49,15 @@ SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.x');
 NULL
 
 # FIXME: disabled for now until we support json_extract with a list of paths
-#query T
-#SELECT json_extract('{"a":2,"c":[4,5],"f":7}',['$.c','$.a']);
-#----
-#[[4,5],2]
+query T
+SELECT json_extract('{"a":2,"c":[4,5],"f":7}', ['$.c','$.a']);
+----
+[[4,5], 2]
 
-#query T
-#SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', ['$.x', '$.a']);
-#----
-#[null,2]
+query T
+SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', ['$.x', '$.a']);
+----
+[NULL, 2]
 
 statement ok
 CREATE TABLE t1(j varchar);

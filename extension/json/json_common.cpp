@@ -2,8 +2,30 @@
 
 namespace duckdb {
 
+static void CheckPath(const Value &path_val, string &path, size_t &len) {
+	string error;
+	Value path_str_val;
+	if (!path_val.TryCastAs(LogicalType::VARCHAR, path_str_val, &error)) {
+		throw InvalidInputException("Cannot cast JSON path to VARCHAR");
+	}
+	auto path_str = path_str_val.GetValueUnsafe<string_t>();
+	len = path_str.GetSize();
+	auto ptr = path_str.GetDataUnsafe();
+	// Empty strings and invalid $ paths yield an error
+	if (len == 0 || (*ptr == '$' && !JSONCommon::ValidPathDollar(ptr, len))) {
+		throw Exception("JSON path error");
+	}
+	// Copy over string to the bind data
+	if (*ptr == '/' || *ptr == '$') {
+		path = string(ptr, len);
+	} else {
+		path = "/" + string(ptr, len);
+		len++;
+	}
+}
+
 JSONReadFunctionData::JSONReadFunctionData(bool constant, string path_p, idx_t len)
-    : constant(constant), path(move(path_p)), len(len) {
+    : constant(constant), path(move(path_p)), ptr(path.c_str()), len(len) {
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Copy() {
@@ -15,71 +37,46 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	D_ASSERT(bound_function.arguments.size() == 2);
 	bool constant = false;
 	string path = "";
-	idx_t len = 0;
+	size_t len = 0;
 	if (arguments[1]->return_type.id() != LogicalTypeId::SQLNULL && arguments[1]->IsFoldable()) {
 		constant = true;
-		// Try to cast to string, so that we can allow integers as arguments (array index)
-		auto value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-		if (!value.TryCastAs(LogicalType::VARCHAR)) {
-			throw Exception("Cannot cast JSON path argument to VARCHAR");
-		}
-		// Get the string
-		auto query = value.GetValueUnsafe<string_t>();
-		len = query.GetSize();
-		auto ptr = query.GetDataUnsafe();
-		// Empty strings and invalid $ paths yield an error
-		if (len == 0 || (*ptr == '$' && !JSONCommon::ValidPathDollar(ptr, len))) {
-			throw Exception("JSON path error");
-		}
-		// Copy over string to the bind data
-		if (*ptr == '/' || *ptr == '$') {
-			path = string(ptr, len);
-		} else {
-			path = "/" + string(ptr, len);
-			len++;
-		}
+		const auto path_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+		CheckPath(path_val, path, len);
 	}
-	return make_unique<JSONReadFunctionData>(constant, path, len);
+	return make_unique<JSONReadFunctionData>(constant, move(path), len);
 }
 
 JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p)
     : paths(move(paths_p)), lens(move(lens_p)) {
+	for (const auto &path : paths) {
+		ptrs.push_back(path.c_str());
+	}
+}
+
+unique_ptr<FunctionData> JSONReadManyFunctionData::Copy() {
+	return make_unique<JSONReadManyFunctionData>(paths, lens);
 }
 
 unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
                                                         vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
-	bool constant = false;
-	string path = "";
-	idx_t len = 0;
-	if (arguments[1]->return_type.id() != LogicalTypeId::SQLNULL && arguments[1]->IsFoldable()) {
-		constant = true;
-		// Try to cast to string, so that we can allow integers as arguments (array index)
-		auto value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-		if (!value.TryCastAs(LogicalType::VARCHAR)) {
-			throw Exception("Cannot cast JSON path argument to VARCHAR");
-		}
-		// Get the string
-		auto query = value.GetValueUnsafe<string_t>();
-		len = query.GetSize();
-		auto ptr = query.GetDataUnsafe();
-		// Empty strings and invalid $ paths yield an error
-		if (len == 0 || (*ptr == '$' && !JSONCommon::ValidPathDollar(ptr, len))) {
-			throw Exception("JSON path error");
-		}
-		// Copy over string to the bind data
-		if (*ptr == '/' || *ptr == '$') {
-			path = string(ptr, len);
-		} else {
-			path = "/" + string(ptr, len);
-			len++;
-		}
+	if (!arguments[1]->IsFoldable()) {
+		throw InvalidInputException("List of paths must be constant");
 	}
-	return make_unique<JSONReadFunctionData>(constant, path, len);
-}
+	if (arguments[1]->return_type.id() == LogicalTypeId::SQLNULL) {
+		return make_unique<JSONReadManyFunctionData>(vector<string>(), vector<size_t>());
+	}
 
-unique_ptr<FunctionData> JSONReadManyFunctionData::Copy() {
-	return make_unique<JSONReadManyFunctionData>(paths, lens);
+	vector<string> paths;
+	vector<size_t> lens;
+	auto paths_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+	for (auto &path_val : ListValue::GetChildren(paths_val)) {
+		paths.push_back("");
+		lens.push_back(0);
+		CheckPath(path_val, paths.back(), lens.back());
+	}
+
+	return make_unique<JSONReadManyFunctionData>(move(paths), move(lens));
 }
 
 //! Some defines copied from yyjson.cpp

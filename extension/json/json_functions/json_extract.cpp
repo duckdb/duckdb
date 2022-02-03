@@ -80,6 +80,10 @@ static void ExtractFunction(DataChunk &args, ExpressionState &state, Vector &res
 	JSONCommon::BinaryJSONReadFunction<string_t>(args, state, result, ExtractFromVal);
 }
 
+static void ExtractManyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	JSONCommon::ManyJSONReadFunction<string_t>(args, state, result, ExtractFromVal);
+}
+
 static void AddFunctionAliases(vector<CreateScalarFunctionInfo> &functions, vector<string> names, ScalarFunction fun) {
 	for (const auto &name : names) {
 		fun.name = name;
@@ -121,6 +125,9 @@ vector<CreateScalarFunctionInfo> JSONFunctions::GetExtractFunctions() {
 	ScalarFunctionSet set("json_extract");
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::JSON, ExtractFunction, false,
 	                               JSONReadFunctionData::Bind, nullptr, nullptr));
+	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::LIST(LogicalType::VARCHAR)},
+	                               LogicalType::LIST(LogicalType::JSON), ExtractManyFunction, false,
+	                               JSONReadManyFunctionData::Bind, nullptr, nullptr));
 	functions.push_back(CreateScalarFunctionInfo(set));
 
 	return functions;
