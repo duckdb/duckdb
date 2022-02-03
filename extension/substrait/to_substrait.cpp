@@ -209,7 +209,7 @@ void DuckDBToSubstrait::TransformExpr(duckdb::Expression &dexpr, substrait::Expr
 		auto scase = sexpr.mutable_if_then();
 
 		for (auto &dcheck : dcase.case_checks) {
-			auto sif = scase->mutable_ifs(2);
+			auto sif = scase->mutable_ifs()->Add();
 			TransformExpr(*dcheck.when_expr, *sif->mutable_if_());
 			TransformExpr(*dcheck.then_expr, *sif->mutable_then());
 		}
@@ -484,16 +484,17 @@ substrait::Rel *DuckDBToSubstrait::TransformComparisonJoin(duckdb::LogicalOperat
 			djoin.right_projection_map.push_back(i);
 		}
 	}
+	auto proj_rel = new substrait::Rel();
+	auto projection = proj_rel->mutable_project();
+	for (auto left_idx : djoin.left_projection_map) {
+		CreateFieldRef(projection->add_expressions(), left_idx);
+	}
 
-	//	for (auto left_idx : djoin.left_projection_map) {
-	//		CreateFieldRef(sop.mutable_project()->add_expressions(), left_idx);
-	//	}
-	//
-	//	for (auto right_idx : djoin.right_projection_map) {
-	//		CreateFieldRef(sop.mutable_project()->add_expressions(), right_idx + left_col_count);
-	//	}
-	//	sop.mutable_project()->set_allocated_input(sjoin_rel);
-	return res;
+	for (auto right_idx : djoin.right_projection_map) {
+		CreateFieldRef(projection->add_expressions(), right_idx + left_col_count);
+	}
+	projection->set_allocated_input(res);
+	return proj_rel;
 }
 
 substrait::Rel *DuckDBToSubstrait::TransformAggregateGroup(duckdb::LogicalOperator &dop) {
