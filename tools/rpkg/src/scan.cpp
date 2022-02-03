@@ -20,19 +20,6 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 	}
 }
 
-static void AppendStringSegment(SEXP *coldata, Vector &result, idx_t count) {
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Validity(result);
-	for (idx_t i = 0; i < count; i++) {
-		SEXP val = coldata[i];
-		if (val == NA_STRING) {
-			result_mask.SetInvalid(i);
-		} else {
-			result_data[i] = string_t((char *)CHAR(val), LENGTH(val));
-		}
-	}
-}
-
 struct DataFrameScanBindData : public TableFunctionData {
 	DataFrameScanBindData(SEXP df_p, idx_t row_count_p, vector<RType> &rtypes_p, vector<data_ptr_t> &dataptrs_p)
 	    : df(df_p), row_count(row_count_p), rtypes(rtypes_p), data_ptrs(dataptrs_p) {
@@ -168,8 +155,8 @@ struct DedupPointerEnumType {
 	static bool IsNull(SEXP val) {
 		return val == NA_STRING;
 	}
-	static SEXP Convert(SEXP val) {
-		return val;
+	static uint64_t Convert(SEXP val) {
+		return (uint64_t)val;
 	}
 };
 
@@ -186,10 +173,11 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 	auto sexp_offset = operator_data.offset + operator_data.position;
 	D_ASSERT(sexp_offset + this_count <= bind_data.row_count);
 
-	for (R_xlen_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-		auto &v = output.data[col_idx];
-		auto coldata_ptr = bind_data.data_ptrs[col_idx];
-		switch (bind_data.rtypes[col_idx]) {
+	for (R_xlen_t out_col_idx = 0; out_col_idx < output.ColumnCount(); out_col_idx++) {
+		auto &v = output.data[out_col_idx];
+		auto src_df_col_idx = operator_data.column_ids[out_col_idx];
+		auto coldata_ptr = bind_data.data_ptrs[src_df_col_idx];
+		switch (bind_data.rtypes[src_df_col_idx]) {
 		case RType::LOGICAL: {
 			auto data_ptr = (int *)coldata_ptr + sexp_offset;
 			AppendColumnSegment<int, bool, RBooleanType>(data_ptr, v, this_count);
@@ -207,9 +195,8 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 		}
 		case RType::STRING: {
 			auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
-			// AppendStringSegment(data_ptr, v, this_count);
 			//  DEDUP_POINTER_ENUM
-			AppendColumnSegment<SEXP, SEXP, DedupPointerEnumType>(data_ptr, v, this_count);
+			AppendColumnSegment<SEXP, uint64_t, DedupPointerEnumType>(data_ptr, v, this_count);
 
 			break;
 		}
