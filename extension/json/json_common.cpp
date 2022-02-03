@@ -2,16 +2,16 @@
 
 namespace duckdb {
 
-JSONFunctionData::JSONFunctionData(bool constant, string path_p, idx_t len)
+JSONReadFunctionData::JSONReadFunctionData(bool constant, string path_p, idx_t len)
     : constant(constant), path(move(path_p)), len(len) {
 }
 
-unique_ptr<FunctionData> JSONFunctionData::Copy() {
-	return make_unique<JSONFunctionData>(constant, path, len);
+unique_ptr<FunctionData> JSONReadFunctionData::Copy() {
+	return make_unique<JSONReadFunctionData>(constant, path, len);
 }
 
-unique_ptr<FunctionData> JSONFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
+                                                    vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	bool constant = false;
 	string path = "";
@@ -39,7 +39,47 @@ unique_ptr<FunctionData> JSONFunctionData::Bind(ClientContext &context, ScalarFu
 			len++;
 		}
 	}
-	return make_unique<JSONFunctionData>(constant, path, len);
+	return make_unique<JSONReadFunctionData>(constant, path, len);
+}
+
+JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p)
+    : paths(move(paths_p)), lens(move(lens_p)) {
+}
+
+unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
+                                                        vector<unique_ptr<Expression>> &arguments) {
+	D_ASSERT(bound_function.arguments.size() == 2);
+	bool constant = false;
+	string path = "";
+	idx_t len = 0;
+	if (arguments[1]->return_type.id() != LogicalTypeId::SQLNULL && arguments[1]->IsFoldable()) {
+		constant = true;
+		// Try to cast to string, so that we can allow integers as arguments (array index)
+		auto value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+		if (!value.TryCastAs(LogicalType::VARCHAR)) {
+			throw Exception("Cannot cast JSON path argument to VARCHAR");
+		}
+		// Get the string
+		auto query = value.GetValueUnsafe<string_t>();
+		len = query.GetSize();
+		auto ptr = query.GetDataUnsafe();
+		// Empty strings and invalid $ paths yield an error
+		if (len == 0 || (*ptr == '$' && !JSONCommon::ValidPathDollar(ptr, len))) {
+			throw Exception("JSON path error");
+		}
+		// Copy over string to the bind data
+		if (*ptr == '/' || *ptr == '$') {
+			path = string(ptr, len);
+		} else {
+			path = "/" + string(ptr, len);
+			len++;
+		}
+	}
+	return make_unique<JSONReadFunctionData>(constant, path, len);
+}
+
+unique_ptr<FunctionData> JSONReadManyFunctionData::Copy() {
+	return make_unique<JSONReadManyFunctionData>(paths, lens);
 }
 
 //! Some defines copied from yyjson.cpp

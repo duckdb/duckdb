@@ -66,7 +66,7 @@ inline bool TypedExtractFromVal(yyjson_val *val, string_t &result) {
 
 template <class T>
 static void TemplatedTypedExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::TemplatedBinaryJSONFunction<T>(args, state, result, TypedExtractFromVal<T>);
+	JSONCommon::BinaryJSONReadFunction<T>(args, state, result, TypedExtractFromVal<T>);
 }
 
 static inline bool ExtractFromVal(yyjson_val *val, string_t &result) {
@@ -77,7 +77,7 @@ static inline bool ExtractFromVal(yyjson_val *val, string_t &result) {
 }
 
 static void ExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::TemplatedBinaryJSONFunction<string_t>(args, state, result, ExtractFromVal);
+	JSONCommon::BinaryJSONReadFunction<string_t>(args, state, result, ExtractFromVal);
 }
 
 static void AddFunctionAliases(vector<CreateScalarFunctionInfo> &functions, vector<string> names, ScalarFunction fun) {
@@ -92,22 +92,22 @@ vector<CreateScalarFunctionInfo> JSONFunctions::GetExtractFunctions() {
 	vector<CreateScalarFunctionInfo> functions;
 	auto bool_fun =
 	    ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                   TemplatedTypedExtractFunction<bool>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	                   TemplatedTypedExtractFunction<bool>, false, JSONReadFunctionData::Bind, nullptr, nullptr);
 	auto int_fun =
 	    ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::INTEGER,
-	                   TemplatedTypedExtractFunction<int32_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	                   TemplatedTypedExtractFunction<int32_t>, false, JSONReadFunctionData::Bind, nullptr, nullptr);
 	auto bigint_fun =
 	    ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                   TemplatedTypedExtractFunction<int64_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	                   TemplatedTypedExtractFunction<int64_t>, false, JSONReadFunctionData::Bind, nullptr, nullptr);
 	auto ubigint_fun =
 	    ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::UBIGINT,
-	                   TemplatedTypedExtractFunction<uint64_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	                   TemplatedTypedExtractFunction<uint64_t>, false, JSONReadFunctionData::Bind, nullptr, nullptr);
 	auto double_fun =
 	    ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::DOUBLE,
-	                   TemplatedTypedExtractFunction<double>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	                   TemplatedTypedExtractFunction<double>, false, JSONReadFunctionData::Bind, nullptr, nullptr);
 	auto string_fun =
 	    ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                   TemplatedTypedExtractFunction<string_t>, false, JSONFunctionData::Bind, nullptr, nullptr);
+	                   TemplatedTypedExtractFunction<string_t>, false, JSONReadFunctionData::Bind, nullptr, nullptr);
 
 	AddFunctionAliases(functions, {"json_extract_bool", "json_extract_boolean"}, bool_fun);
 	AddFunctionAliases(functions, {"json_extract_int", "json_extract_integer"}, int_fun);
@@ -120,10 +120,8 @@ vector<CreateScalarFunctionInfo> JSONFunctions::GetExtractFunctions() {
 	// Set because we intend to add the {LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR)} variant
 	ScalarFunctionSet set("json_extract");
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::JSON, ExtractFunction, false,
-	                               JSONFunctionData::Bind, nullptr, nullptr));
+	                               JSONReadFunctionData::Bind, nullptr, nullptr));
 	functions.push_back(CreateScalarFunctionInfo(set));
-	set.name = "->";
-	functions.push_back(CreateScalarFunctionInfo(move(set)));
 
 	return functions;
 }

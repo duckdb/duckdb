@@ -12,7 +12,7 @@ static inline bool JSON(yyjson_val *val, string_t &result) {
 }
 
 static void JSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::TemplatedUnaryJSONFunction<string_t>(args, state, result, JSON);
+	JSONCommon::UnaryJSONReadFunction<string_t>(args, state, result, JSON);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetJSONFunction() {

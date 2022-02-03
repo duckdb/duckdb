@@ -38,7 +38,7 @@ SELECT json(j) from test;
 ----
 {"this":"is","a":["test"]}
 
-#query T
-#select '{"duck": 42}'::JSON->'duck';
-#----
-#42
+query T
+select '{"duck": 42}'::JSON->'duck';
+----
+42

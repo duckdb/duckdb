@@ -1921,19 +1921,11 @@ a_expr:		c_expr									{ $$ = $1; }
 				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
 				$$ = (PGNode *) n;
 			}
-			| row LAMBDA_ARROW a_expr
+			| a_expr LAMBDA_ARROW a_expr
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
-				n->parameters = $1;
-				n->function = $3;
-				n->location = @2;
-				$$ = (PGNode *) n;
-			}
-			| columnref LAMBDA_ARROW a_expr
-			{
-				PGLambdaFunction *n = makeNode(PGLambdaFunction);
-				n->parameters = list_make1($1);
-				n->function = $3;
+				n->lhs = $1;
+				n->rhs = $3;
 				n->location = @2;
 				$$ = (PGNode *) n;
 			}

@@ -14,9 +14,9 @@
 
 namespace duckdb {
 
-struct JSONFunctionData : public FunctionData {
+struct JSONReadFunctionData : public FunctionData {
 public:
-	explicit JSONFunctionData(bool constant, string path_p, idx_t len);
+	JSONReadFunctionData(bool constant, string path_p, idx_t len);
 	unique_ptr<FunctionData> Copy() override;
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments);
@@ -25,6 +25,18 @@ public:
 	const bool constant;
 	const string path;
 	const size_t len;
+};
+
+struct JSONReadManyFunctionData : public FunctionData {
+public:
+	explicit JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p);
+	unique_ptr<FunctionData> Copy() override;
+	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                     vector<unique_ptr<Expression>> &arguments);
+
+public:
+	const vector<string> paths;
+	const vector<size_t> lens;
 };
 
 struct JSONCommon {
@@ -112,8 +124,8 @@ private:
 public:
 	//! Unary JSON function
 	template <class T>
-	static void TemplatedUnaryJSONFunction(DataChunk &args, ExpressionState &state, Vector &result,
-	                                       std::function<bool(yyjson_val *, T &)> fun) {
+	static void UnaryJSONReadFunction(DataChunk &args, ExpressionState &state, Vector &result,
+	                                  std::function<bool(yyjson_val *, T &)> fun) {
 		auto &inputs = args.data[0];
 		UnaryExecutor::ExecuteWithNulls<string_t, T>(inputs, result, args.size(),
 		                                             [&](string_t input, ValidityMask &mask, idx_t idx) {
@@ -130,10 +142,10 @@ public:
 
 	//! Binary JSON function
 	template <class T>
-	static void TemplatedBinaryJSONFunction(DataChunk &args, ExpressionState &state, Vector &result,
-	                                        std::function<bool(yyjson_val *, T &)> fun) {
+	static void BinaryJSONReadFunction(DataChunk &args, ExpressionState &state, Vector &result,
+	                                   std::function<bool(yyjson_val *, T &)> fun) {
 		auto &func_expr = (BoundFunctionExpression &)state.expr;
-		const auto &info = (JSONFunctionData &)*func_expr.bind_info;
+		const auto &info = (JSONReadFunctionData &)*func_expr.bind_info;
 
 		auto &inputs = args.data[0];
 		if (info.constant) {
@@ -161,6 +173,32 @@ public:
 				    auto doc = JSONCommon::ReadDocument(input);
 				    auto root = doc->root;
 				    if (!root || !fun(JSONCommon::GetPointer(root, query), result_val)) {
+					    mask.SetInvalid(idx);
+				    }
+				    yyjson_doc_free(doc);
+				    return result_val;
+			    });
+		}
+	}
+
+	//! Binary JSON function
+	template <class T>
+	static void JSONReadManyFunction(DataChunk &args, ExpressionState &state, Vector &result,
+	                                 std::function<bool(yyjson_val *, T &)> fun) {
+		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		const auto &info = (JSONReadFunctionData &)*func_expr.bind_info;
+
+		auto &inputs = args.data[0];
+		if (info.constant) {
+			// Constant query
+			const char *ptr = info.path.c_str();
+			const idx_t &len = info.len;
+			UnaryExecutor::ExecuteWithNulls<string_t, T>(
+			    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
+				    T result_val {};
+				    auto doc = JSONCommon::ReadDocument(input);
+				    auto root = doc->root;
+				    if (!root || !fun(JSONCommon::GetPointerUnsafe(root, ptr, len), result_val)) {
 					    mask.SetInvalid(idx);
 				    }
 				    yyjson_doc_free(doc);

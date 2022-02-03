@@ -12,11 +12,11 @@ static inline bool GetArrayLength(yyjson_val *val, uint64_t &result) {
 }
 
 static void UnaryArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::TemplatedUnaryJSONFunction<uint64_t>(args, state, result, GetArrayLength);
+	JSONCommon::UnaryJSONReadFunction<uint64_t>(args, state, result, GetArrayLength);
 }
 
 static void BinaryArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::TemplatedBinaryJSONFunction<uint64_t>(args, state, result, GetArrayLength);
+	JSONCommon::BinaryJSONReadFunction<uint64_t>(args, state, result, GetArrayLength);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetArrayLengthFunction() {
@@ -24,7 +24,7 @@ CreateScalarFunctionInfo JSONFunctions::GetArrayLengthFunction() {
 	set.AddFunction(ScalarFunction({LogicalType::JSON}, LogicalType::UBIGINT, UnaryArrayLengthFunction, false, nullptr,
 	                               nullptr, nullptr));
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::UBIGINT,
-	                               BinaryArrayLengthFunction, false, JSONFunctionData::Bind, nullptr, nullptr));
+	                               BinaryArrayLengthFunction, false, JSONReadFunctionData::Bind, nullptr, nullptr));
 
 	return CreateScalarFunctionInfo(move(set));
 }

@@ -43,11 +43,11 @@ static inline bool GetType(yyjson_val *val, string_t &result) {
 }
 
 static void UnaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::TemplatedUnaryJSONFunction<string_t>(args, state, result, GetType);
+	JSONCommon::UnaryJSONReadFunction<string_t>(args, state, result, GetType);
 }
 
 static void BinaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::TemplatedBinaryJSONFunction<string_t>(args, state, result, GetType);
+	JSONCommon::BinaryJSONReadFunction<string_t>(args, state, result, GetType);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetTypeFunction() {
@@ -55,7 +55,7 @@ CreateScalarFunctionInfo JSONFunctions::GetTypeFunction() {
 	set.AddFunction(
 	    ScalarFunction({LogicalType::JSON}, LogicalType::VARCHAR, UnaryTypeFunction, false, nullptr, nullptr, nullptr));
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::VARCHAR, BinaryTypeFunction,
-	                               false, JSONFunctionData::Bind, nullptr, nullptr));
+	                               false, JSONReadFunctionData::Bind, nullptr, nullptr));
 
 	return CreateScalarFunctionInfo(move(set));
 }

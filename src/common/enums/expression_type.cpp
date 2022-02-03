@@ -135,6 +135,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "POSITIONAL_REFERENCE";
 	case ExpressionType::LAMBDA:
 		return "LAMBDA";
+	case ExpressionType::ARROW:
+		return "ARROW";
 	case ExpressionType::INVALID:
 		break;
 	}

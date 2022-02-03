@@ -4,59 +4,38 @@
 
 namespace duckdb {
 
-LambdaExpression::LambdaExpression(vector<string> parameters, unique_ptr<ParsedExpression> expression)
-    : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), parameters(move(parameters)),
-      expression(move(expression)) {
+LambdaExpression::LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> rhs)
+    : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), lhs(move(lhs)), rhs(move(rhs)) {
 }
 
 string LambdaExpression::ToString() const {
-	string parameter_str;
-	if (parameters.size() == 1) {
-		parameter_str = parameters[0];
-	} else {
-		for (auto &parameter : parameters) {
-			if (!parameter_str.empty()) {
-				parameter_str += ", ";
-			}
-			parameter_str += parameter;
-		}
-		parameter_str = "(" + parameter_str + ")";
-	}
-	return parameter_str + " -> " + expression->ToString();
+	return lhs->ToString() + " -> " + rhs->ToString();
 }
 
 bool LambdaExpression::Equals(const LambdaExpression *a, const LambdaExpression *b) {
-	if (a->parameters != b->parameters) {
-		return false;
-	}
-	if (!a->expression->Equals(b->expression.get())) {
-		return false;
-	}
-	return true;
+	return a->lhs->Equals(b->lhs.get()) && a->rhs->Equals(b->rhs.get());
 }
 
 hash_t LambdaExpression::Hash() const {
-	hash_t result = ParsedExpression::Hash();
-	for (auto &parameter : parameters) {
-		result = CombineHash(result, duckdb::Hash<const char *>(parameter.c_str()));
-	}
-	result = CombineHash(result, expression->Hash());
+	hash_t result = lhs->Hash();
+	ParsedExpression::Hash();
+	result = CombineHash(result, rhs->Hash());
 	return result;
 }
 
 unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
-	return make_unique<LambdaExpression>(parameters, expression->Copy());
+	return make_unique<LambdaExpression>(lhs->Copy(), rhs->Copy());
 }
 
 void LambdaExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteList<string>(parameters);
-	writer.WriteSerializable(*expression);
+	writer.WriteSerializable(*lhs);
+	writer.WriteSerializable(*rhs);
 }
 
 unique_ptr<ParsedExpression> LambdaExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto parameters = reader.ReadRequiredList<string>();
-	auto expression = reader.ReadRequiredSerializable<ParsedExpression>();
-	return make_unique<LambdaExpression>(move(parameters), move(expression));
+	auto lhs = reader.ReadRequiredSerializable<ParsedExpression>();
+	auto rhs = reader.ReadRequiredSerializable<ParsedExpression>();
+	return make_unique<LambdaExpression>(move(lhs), move(rhs));
 }
 
 } // namespace duckdb

@@ -92,6 +92,9 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	case ExpressionType::ARRAY_CONSTRUCTOR:
 		function_name = "list_value";
 		break;
+	case ExpressionType::ARROW:
+		function_name = "json_extract";
+		break;
 	default:
 		break;
 	}
