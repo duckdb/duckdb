@@ -3,10 +3,10 @@
 #include "substrait/expression.pb.h"
 #include <string>
 #include <unordered_map>
-#include <memory>
-#include <vector>
+#include "duckdb/common/helper.hpp"
 #include "substrait/plan.pb.h"
 #include "substrait/relations.pb.h"
+
 using namespace std;
 
 namespace duckdb {

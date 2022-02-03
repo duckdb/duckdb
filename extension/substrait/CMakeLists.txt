@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 2.8.12)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 11)
 project(SubstraitExtension)
 
 include_directories(include ../../third_party/substrait)
 include_directories(include ../../third_party/)
-# find_package(Protobuf REQUIRED) include_directories(${Protobuf_INCLUDE_DIRS})
+
 set(PROTOBUF_SOURCES
     ../../third_party/google/protobuf/any.cc
     ../../third_party/google/protobuf/any.pb.cc
@@ -73,7 +73,7 @@ add_library(
   ${SUBSTRAIT_SOURCES} ${PROTOBUF_SOURCES})
 
 build_loadable_extension(substrait substrait-extension.cpp)
-# target_link_libraries(substrait_extension protobuf)
+
 install(
   TARGETS substrait_extension
   EXPORT "${DUCKDB_EXPORT_SET}"

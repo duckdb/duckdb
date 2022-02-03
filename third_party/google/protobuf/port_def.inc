@@ -456,16 +456,7 @@
 # define PROTOBUF_PREDICT_FALSE(x) (x)
 #endif
 
-#ifdef PROTOBUF_NODISCARD
-#error PROTOBUF_NODISCARD was previously defined
-#endif
-#if __has_cpp_attribute(nodiscard)
-#define PROTOBUF_NODISCARD [[nodiscard]]
-#elif __has_attribute(warn_unused_result) || PROTOBUF_GNUC_MIN(4, 8)
-#define PROTOBUF_NODISCARD __attribute__((warn_unused_result))
-#else
 #define PROTOBUF_NODISCARD
-#endif
 
 #ifdef PROTOBUF_FORCE_COPY_IN_RELEASE
 #error PROTOBUF_FORCE_COPY_IN_RELEASE was previously defined
@@ -485,18 +476,8 @@
 #error PROTOBUF_FORCE_COPY_DEFAULT_STRING was previously defined
 #endif
 
-#ifdef PROTOBUF_FALLTHROUGH_INTENDED
-#error PROTOBUF_FALLTHROUGH_INTENDED was previously defined
-#endif
-#if __has_cpp_attribute(fallthrough)
-#define PROTOBUF_FALLTHROUGH_INTENDED [[fallthrough]]
-#elif __has_feature(cxx_attributes) && __has_warning("-Wimplicit-fallthrough")
-#define PROTOBUF_FALLTHROUGH_INTENDED [[clang::fallthrough]]
-#elif PROTOBUF_GNUC_MIN(7, 0)
-#define PROTOBUF_FALLTHROUGH_INTENDED [[gnu::fallthrough]]
-#else
+
 #define PROTOBUF_FALLTHROUGH_INTENDED
-#endif
 
 // PROTOBUF_ASSUME(pred) tells the compiler that it can assume pred is true. To
 // be safe, we also validate the assumption with a GOOGLE_DCHECK in unoptimized
