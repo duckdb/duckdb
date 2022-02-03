@@ -84,44 +84,33 @@ static void ExtractManyFunction(DataChunk &args, ExpressionState &state, Vector 
 	JSONCommon::ManyJSONReadFunction<string_t>(args, state, result, ExtractFromVal);
 }
 
-static void AddFunctionAliases(vector<CreateScalarFunctionInfo> &functions, vector<string> names, ScalarFunction fun) {
+template <class T>
+static void AddFunction(vector<CreateScalarFunctionInfo> &functions, vector<string> names, LogicalType return_type) {
+	ScalarFunctionSet set("");
+	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, return_type,
+	                               TemplatedTypedExtractFunction<T>, false, JSONReadFunctionData::Bind, nullptr,
+	                               nullptr));
+	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::LIST(LogicalType::VARCHAR)},
+	                               LogicalType::LIST(return_type), TemplatedTypedExtractFunction<T>, false,
+	                               JSONReadManyFunctionData::Bind, nullptr, nullptr));
 	for (const auto &name : names) {
-		fun.name = name;
-		functions.push_back(CreateScalarFunctionInfo(fun));
+		set.name = name;
+		functions.push_back(CreateScalarFunctionInfo(set));
 	}
 }
 
 vector<CreateScalarFunctionInfo> JSONFunctions::GetExtractFunctions() {
-	// Typed extract functions
 	vector<CreateScalarFunctionInfo> functions;
-	auto bool_fun =
-	    ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                   TemplatedTypedExtractFunction<bool>, false, JSONReadFunctionData::Bind, nullptr, nullptr);
-	auto int_fun =
-	    ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::INTEGER,
-	                   TemplatedTypedExtractFunction<int32_t>, false, JSONReadFunctionData::Bind, nullptr, nullptr);
-	auto bigint_fun =
-	    ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                   TemplatedTypedExtractFunction<int64_t>, false, JSONReadFunctionData::Bind, nullptr, nullptr);
-	auto ubigint_fun =
-	    ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::UBIGINT,
-	                   TemplatedTypedExtractFunction<uint64_t>, false, JSONReadFunctionData::Bind, nullptr, nullptr);
-	auto double_fun =
-	    ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::DOUBLE,
-	                   TemplatedTypedExtractFunction<double>, false, JSONReadFunctionData::Bind, nullptr, nullptr);
-	auto string_fun =
-	    ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                   TemplatedTypedExtractFunction<string_t>, false, JSONReadFunctionData::Bind, nullptr, nullptr);
 
-	AddFunctionAliases(functions, {"json_extract_bool", "json_extract_boolean"}, bool_fun);
-	AddFunctionAliases(functions, {"json_extract_int", "json_extract_integer"}, int_fun);
-	AddFunctionAliases(functions, {"json_extract_bigint"}, bigint_fun);
-	AddFunctionAliases(functions, {"json_extract_ubigint"}, ubigint_fun);
-	AddFunctionAliases(functions, {"json_extract_double"}, double_fun);
-	AddFunctionAliases(functions, {"json_extract_string", "json_extract_varchar"}, string_fun);
+	// Typed extract functions
+	AddFunction<bool>(functions, {"json_extract_bool", "json_extract_boolean"}, LogicalType::BOOLEAN);
+	AddFunction<int32_t>(functions, {"json_extract_int", "json_extract_integer"}, LogicalType::INTEGER);
+	AddFunction<int64_t>(functions, {"json_extract_bigint"}, LogicalType::BIGINT);
+	AddFunction<uint64_t>(functions, {"json_extract_ubigint"}, LogicalType::UBIGINT);
+	AddFunction<double>(functions, {"json_extract_double"}, LogicalType::DOUBLE);
+	AddFunction<string_t>(functions, {"json_extract_string", "json_extract_varchar"}, LogicalType::VARCHAR);
 
-	// Non-typed extract function
-	// Set because we intend to add the {LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR)} variant
+	// Generic extract function
 	ScalarFunctionSet set("json_extract");
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::JSON, ExtractFunction, false,
 	                               JSONReadFunctionData::Bind, nullptr, nullptr));

@@ -63,6 +63,7 @@ CreateScalarFunctionInfo JSONFunctions::GetTypeFunction() {
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::LIST(LogicalType::VARCHAR)},
 	                               LogicalType::LIST(LogicalType::VARCHAR), ManyTypeFunction, false,
 	                               JSONReadManyFunctionData::Bind, nullptr, nullptr));
+
 	return CreateScalarFunctionInfo(move(set));
 }
 

@@ -32,6 +32,7 @@ CreateScalarFunctionInfo JSONFunctions::GetArrayLengthFunction() {
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::LIST(LogicalType::VARCHAR)},
 	                               LogicalType::LIST(LogicalType::UBIGINT), ManyArrayLengthFunction, false,
 	                               JSONReadManyFunctionData::Bind, nullptr, nullptr));
+
 	return CreateScalarFunctionInfo(move(set));
 }
 

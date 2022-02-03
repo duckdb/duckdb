@@ -41,6 +41,21 @@ public:
 	const vector<size_t> lens;
 };
 
+//! Helper functions for JSONReadManyFunction
+template <class T>
+static inline void PushBack(Vector &result, Vector &result_child, T val) {
+	throw NotImplementedException("Cannot insert Value with this type into JSON result list");
+}
+template <>
+inline void PushBack(Vector &result, Vector &result_child, uint64_t val) {
+	ListVector::PushBack(result, Value::UBIGINT(move(val)));
+}
+template <>
+inline void PushBack(Vector &result, Vector &result_child, string_t val) {
+	Value to_insert(StringVector::AddString(result_child, val));
+	ListVector::PushBack(result, to_insert);
+}
+
 struct JSONCommon {
 private:
 	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_STOP_WHEN_DONE;
@@ -231,21 +246,6 @@ public:
 		if (input_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
-	}
-
-	//! Helper functions for JSONReadManyFunction
-	template <class T>
-	static inline void PushBack(Vector &result, Vector &result_child, T val) {
-		throw NotImplementedException("Cannot insert Value with this type into JSON result list");
-	}
-	template <>
-	inline void PushBack(Vector &result, Vector &result_child, uint64_t val) {
-		ListVector::PushBack(result, Value::UBIGINT(move(val)));
-	}
-	template <>
-	inline void PushBack(Vector &result, Vector &result_child, string_t val) {
-		Value to_insert(StringVector::AddString(result_child, val));
-		ListVector::PushBack(result, to_insert);
 	}
 };
 
