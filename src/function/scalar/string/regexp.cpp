@@ -49,6 +49,10 @@ static void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &r
 			// case-insensitive matching
 			result.set_case_sensitive(false);
 			break;
+		case 'l':
+		  // literal matching
+		  result.set_literal(true);
+		  break;		
 		case 'm':
 		case 'n':
 		case 'p':
