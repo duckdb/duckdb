@@ -65,7 +65,10 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 	auto &gstate = (CopyToFunctionGlobalState &)gstate_p;
 	if (function.copy_to_finalize) {
 		function.copy_to_finalize(context, *bind_data, *gstate.global_state);
-		MoveTmpFile(context, file_path);
+		
+		if (file_path.find("stdout") == std::string::npos) {
+			MoveTmpFile(context, file_path);
+		}
 	}
 	return SinkFinalizeType::READY;
 }

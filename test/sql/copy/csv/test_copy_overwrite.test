@@ -61,3 +61,7 @@ SELECT * FROM test ORDER BY 1;
 ----
 1	hello
 2	world 
+
+# Write to pipe - should pass since .tmp is not added when writing to a pipe
+statement ok 
+copy (select 42) to '/dev/stdout'

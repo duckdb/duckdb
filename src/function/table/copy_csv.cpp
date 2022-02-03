@@ -82,7 +82,11 @@ static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, 
 		options.compression = FileCompressionTypeFromString(ParseString(set));
 	} else if (loption == "skip") {
 		options.skip_rows = ParseInteger(set);
-	} else {
+	} 
+//	else if (loption == "use_tmp_file") {
+//		options.use_tmp_file = ParseBoolean(set);
+//	}
+	else {
 		// unrecognized option in base CSV
 		return false;
 	}

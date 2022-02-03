@@ -21,6 +21,7 @@ public:
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;
 	std::string file_path;
+	bool use_tmp_file;
 
 protected:
 	void ResolveTypes() override {
