@@ -109,7 +109,8 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		   string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index) : ref.alias);
 
 		   auto result = make_unique<BoundSubqueryRef>(move(binder), move(query));
-		   bind_context.AddSubquery(bind_index, alias, (SubqueryRef &)ref, *result->subquery);
+		   // remember ref here is TableFunctionRef and NOT base class
+		   bind_context.AddSubquery(bind_index, alias, ref, *result->subquery);
 		   MoveCorrelatedExpressions(*result->binder);
 		   return move(result);
 	  }
