@@ -23,7 +23,15 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode 
 
 			if (expr->type == ExpressionType::COMPARE_EQUAL) {
 				auto &comp = (ComparisonExpression &)*expr;
-				info.named_parameters[comp.left->ToString()] = Value(comp.right->ToString());
+				if (comp.right->type != ExpressionType::VALUE_CONSTANT) {
+					throw ParserException("Named parameter requires a constant on the RHS");
+				}
+				if (comp.left->type != ExpressionType::COLUMN_REF) {
+					throw ParserException("Named parameter requires a column reference on the LHS");
+				}
+				auto &columnref = (ColumnRefExpression &) *comp.left;
+				auto &constant = (ConstantExpression &) *comp.right;
+				info.named_parameters[columnref.GetName()] = constant.value;
 			} else if (node->type == duckdb_libpgquery::T_PGAConst) {
 				auto constant = TransformConstant((duckdb_libpgquery::PGAConst *)node);
 				info.parameters.push_back(((ConstantExpression &)*constant).value);
