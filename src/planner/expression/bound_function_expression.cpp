@@ -1,5 +1,5 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/parser/expression_util.hpp"
