@@ -91,7 +91,6 @@ protected:
 	std::mutex part_etags_mutex;
 	std::unordered_map<uint16_t, string> part_etags;
 
-	// For debugging
 	std::atomic<uint16_t> parts_uploaded;
 
 	// This variable is set after the upload is finalized, it will prevent any further writes.
@@ -100,6 +99,9 @@ protected:
 
 class S3FileSystem : public HTTPFileSystem {
 public:
+	constexpr static int MULTIPART_UPLOAD_TIMEOUT_MS = 30*1000;
+	constexpr static int MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS = 1000;
+
 	S3FileSystem() {
 	}
 

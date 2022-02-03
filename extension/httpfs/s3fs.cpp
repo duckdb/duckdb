@@ -8,6 +8,8 @@
 #endif
 
 #include <iostream>
+#include <chrono>
+#include <thread>
 
 namespace duckdb {
 
@@ -176,16 +178,49 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 
 	string query_param = uri_encode("partNumber") + "=" + to_string(write_buffer->part_no + 1) + "&" +
 	                     uri_encode("uploadId") + "=" + uri_encode(file_handle.multipart_upload_id, true);
-	auto res = hfs.PutRequest(file_handle, file_handle.path + "?" + query_param, {},
-	                          (char *)write_buffer->buffer.get(), write_buffer->idx);
+	unique_ptr<ResponseWrapper> res;
 
-	if (res->code != 200) {
-		throw std::runtime_error("Unable to connect to URL \"" + file_handle.path +
-		                         "\": " + std::to_string(res->code) + " (" + res->error + ")");
+	bool success = false;
+	string last_error = "";
+	auto time_at_start = duration_cast<std::chrono::milliseconds>(system_clock::now().time_since_epoch()).count();
+
+	// Retry loop to make large uploads resilient to brief connection issues
+	while (true) {
+		try {
+			res = hfs.PutRequest(file_handle, file_handle.path + "?" + query_param, {},
+			                     (char *)write_buffer->buffer.get(), write_buffer->idx);
+
+			if (res->code == 200) {
+				success = true;
+				break;
+			} else {
+				last_error = res->error + " (HTTP code " + std::to_string(res->code) + ")";
+			}
+		} catch (std::runtime_error& e) {
+			if (strncmp(e.what(), "HTTP PUT error", 14) != 0){
+				throw e;
+			}
+			last_error = e.what();
+		}
+
+		// If there are no parts uploaded yet, failing immediately makes more sense than waiting for the time-out
+		if (file_handle.parts_uploaded.load() == 0) {
+			break;
+		}
+
+		auto current_time = duration_cast<std::chrono::milliseconds>(system_clock::now().time_since_epoch()).count();
+		if (current_time - time_at_start > MULTIPART_UPLOAD_TIMEOUT_MS) {
+			break;
+		}
+
+		// TODO +1?
+		std::this_thread::sleep_for(std::chrono::milliseconds(MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS+1));
+	}
+	if (!success) {
+		throw std::runtime_error("Unable to connect to URL \"" + file_handle.path + "\"(last attempt failed with: \"" + last_error + "\")");
 	}
 
 	auto etag_lookup = res->headers.find("ETag");
-
 	if (etag_lookup == res->headers.end()) {
 		throw std::runtime_error("Unexpected reponse when uploading part to S3");
 	}
@@ -200,9 +235,9 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 
 	// Free up space for another thread to acquire a S3WriteBuffer
 	file_handle.buffers_available++;
-	// if the write_buffer.use_count() would be higher here, we would exceed our allowed memory briefly.
-	// TODO: if this never hits, can we use unique_ptrs instead?
-//	D_ASSERT(write_buffer.use_count() == 1);
+
+	// TODO: we briefly exceed our allowed memory limit here if the FlushAllBuffers function has acquired a shared_ptr
+	// to this buffer at the same time.
 	write_buffer.reset();
 	file_handle.buffers_available_cv.notify_one();
 
@@ -313,7 +348,7 @@ std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle& file_handle
 	}
 	file_handle.write_buffers_mutex.unlock();
 
-	// Wait for buffer creation rights
+	// Wait for a buffer to become available
 	std::cout << "Waiting for buffer allocation for part " << write_buffer_idx << std::endl;
 	std::cout << "Buffers: available: " << file_handle.buffers_available.load() << std::endl;
 	{
@@ -322,12 +357,13 @@ std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle& file_handle
 		file_handle.buffers_available--;
 	}
 
-	// We're now allowed to allocate a buffer on the idx we want
+	// We're now allowed to allocate a buffer at the requested idx
 	auto new_buffer = make_shared<S3WriteBuffer>(write_buffer_idx * S3WriteBuffer::BUFFER_LEN);
 	file_handle.write_buffers_mutex.lock();
 	lookup_result = file_handle.write_buffers.find(write_buffer_idx);
 
-	// check whether other thread has created the same buffer, if so we return theirs and drop ours.
+	// Check if other thread has created the same buffer, if so we return theirs and drop ours.
+	// TODO: this only happens in concurrent writes which are problematic anyway. Should we even support this?
 	if (lookup_result != file_handle.write_buffers.end()) {
 		std::cout << "Found same buffer being created, returning found buffer and discarded ours " << write_buffer_idx
 		          << std::endl;
@@ -372,6 +408,7 @@ void S3FileSystem::S3UrlParse(FileHandle &handle, string url, string &host_out, 
 	auto endpoint = static_cast<S3FileHandle &>(handle).auth_params.endpoint;
 
 	// Endpoint can be speficied as full url in which case we switch to: {endpoint}/{bucket} for host
+	// This is mostly usefull in testing to specify a localhost address
 	if (endpoint.rfind("http://", 0) == 0 || endpoint.rfind("https://", 0) == 0) {
 		http_host_out = endpoint + "/" + bucket;
 		auto url_start = http_host_out.rfind("://") + 3;
@@ -564,6 +601,7 @@ void S3FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx
 
 	// TODO: What will happen when we block on writing beyond curr_offset + MAX_MEMORY_USAGE?
 	// TODO: also non-sequential writes? At least we should ensure we fail nicely?
+	// TODO: make sure we test multitreaded copy for CSV and parquet
 	int64_t bytes_written = 0;
 
 	while(bytes_written < nr_bytes) {

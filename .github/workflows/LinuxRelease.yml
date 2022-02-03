@@ -474,10 +474,14 @@ jobs:
       run: |
         npm install -g s3rver
         mkdir -p ./.tmp/s3rver
-        s3rver -d "./.tmp/s3rver" -p "4923" -a "localhost" -s --configure-bucket "test-bucket-non-existent" &
+        s3rver -d "./.tmp/s3rver" -p "4923" -a "localhost" -s --configure-bucket "test-bucket" &>./.tmp/s3rver/access_log.txt &
 
     - name: Test
       run: make allunit
+
+    - name: Check S3/HTTP server log
+      if: always()
+      run: cat ./.tmp/s3rver/access_log.txt
 
  amalgamation-tests:
     name: Amalgamation Tests

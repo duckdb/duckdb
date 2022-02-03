@@ -53,7 +53,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
 			    std::cout << response.body << std::endl;
-			    throw std::runtime_error("HTTP error2");
+			    throw std::runtime_error("HTTP POST error on '" + url + "' (HTTP " + std::to_string(response.status) + ")");
 		    }
 		    return true;
 	    },
@@ -73,7 +73,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	    },
 	    content_type.c_str());
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP POST error on '" + url + "' " + std::to_string(res.error()));
+		throw std::runtime_error("HTTP POST error on '" + url + "' (Error code " + std::to_string(res.error()) + ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
@@ -91,7 +91,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 	string content_type = "application/octet-stream";
 	auto res = cli.Put(path.c_str(), *headers, buffer_in, buffer_in_len, content_type.c_str());
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP PUT error on '" + url + "' " + std::to_string(res.error()));
+		throw std::runtime_error("HTTP PUT error on '" + url + "' (Error code " + std::to_string(res.error()) + ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
@@ -107,7 +107,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 
 	auto res = cli.Head(path.c_str(), *headers);
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP HEAD error on '" + url + "' " + std::to_string(res.error()));
+		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + std::to_string(res.error()) + ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
@@ -134,7 +134,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 	    path.c_str(), *headers,
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
-			    throw std::runtime_error("HTTP error");
+			    throw std::runtime_error("HTTP GET error on '" + url + "' (HTTP " + std::to_string(response.status) + ")");
 		    }
 		    if (response.status < 300) { // done redirecting
 			    out_offset = 0;
@@ -151,7 +151,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 		    return true;
 	    });
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP GET error on '" + url + "' " + std::to_string(res.error()));
+		throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + std::to_string(res.error()) + ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
