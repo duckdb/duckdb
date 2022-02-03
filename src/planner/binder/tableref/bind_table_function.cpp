@@ -1,3 +1,4 @@
+#include <iostream>
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -79,24 +80,50 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
 	auto fexpr = (FunctionExpression *)ref.function.get();
 
-	// evaluate the input parameters to the function
-	vector<LogicalType> arguments;
-	vector<Value> parameters;
-	named_parameter_map_t named_parameters;
-	unique_ptr<BoundSubqueryRef> subquery;
-	string error;
-	if (!BindFunctionParameters(fexpr->children, arguments, parameters, named_parameters, subquery, error)) {
-		throw BinderException(FormatError(ref, error));
-	}
+	TableFunctionCatalogEntry* function=NULL;
 
 	// fetch the function from the catalog
 	auto &catalog = Catalog::GetCatalog(context);
-	auto function =
-	    catalog.GetEntry<TableFunctionCatalogEntry>(context, fexpr->schema, fexpr->function_name, true, error_context);
 
-	if (!function) {
-		return nullptr;
+	auto func_catalog = catalog.GetEntry(context , CatalogType::TABLE_FUNCTION_ENTRY,   fexpr->schema, fexpr->function_name, false, error_context);
+
+	if (func_catalog->type == CatalogType::TABLE_FUNCTION_ENTRY ) {
+		  function=(TableFunctionCatalogEntry*)func_catalog;
 	}
+	   // deal with a Table Macro
+	else if (func_catalog->type == CatalogType::TABLE_MACRO_ENTRY) {
+		  // std::cout<<"Binder::Bind(TableFunctionRef &ref) - entry is TABLE_MACRO_ENTRY\n";
+		   auto macro_func=(MacroCatalogEntry*)func_catalog;
+
+		   auto query_node = BindMacroSelect(*fexpr, macro_func, 0);
+		   D_ASSERT(query_node);
+
+		   auto binder = Binder::CreateBinder(context, this);
+		   binder->can_contain_nulls = true;
+
+		   binder->alias = ref.alias.empty() ? "unnamed_query" : ref.alias;
+		   auto query = binder->BindNode(*query_node);
+
+		   idx_t bind_index = query->GetRootIndex();
+		   // string alias;
+		   string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index) : ref.alias);
+
+		   auto result = make_unique<BoundSubqueryRef>(move(binder), move(query));
+		   bind_context.AddSubquery(bind_index, alias, (SubqueryRef &)ref, *result->subquery);
+		   MoveCorrelatedExpressions(*result->binder);
+		   return move(result);
+	  }
+
+	  // evaluate the input parameters to the function
+	  vector<LogicalType> arguments;
+	  vector<Value> parameters;
+	  named_parameter_map_t named_parameters;
+	  unique_ptr<BoundSubqueryRef> subquery;
+	  string error;
+	  if (!BindFunctionParameters(fexpr->children, arguments, parameters, named_parameters, subquery, error)) {
+		  throw BinderException(FormatError(ref, error));
+	  }
+
 
 	// select the function based on the input parameters
 	idx_t best_function_idx = Function::BindFunction(function->name, function->functions, arguments, error);

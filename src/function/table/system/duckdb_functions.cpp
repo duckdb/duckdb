@@ -375,6 +375,7 @@ void DuckDBFunctionsFunction(ClientContext &context, const FunctionData *bind_da
 			finished = ExtractFunctionData<AggregateFunctionCatalogEntry, AggregateFunctionExtractor>(
 			    standard_entry, data.offset_in_entry, output, count);
 			break;
+		case CatalogType::TABLE_MACRO_ENTRY:
 		case CatalogType::MACRO_ENTRY:
 			finished = ExtractFunctionData<MacroCatalogEntry, MacroExtractor>(standard_entry, data.offset_in_entry,
 			                                                                  output, count);

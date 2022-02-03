@@ -80,6 +80,10 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::MACRO_ENTRY:
 		log->WriteCreateMacro((MacroCatalogEntry *)parent);
 		break;
+	case CatalogType::TABLE_MACRO_ENTRY:
+		log->WriteCreateMacro((MacroCatalogEntry *)parent);
+		break;
+
 	case CatalogType::TYPE_ENTRY:
 		log->WriteCreateType((TypeCatalogEntry *)parent);
 		break;

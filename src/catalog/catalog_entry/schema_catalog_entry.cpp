@@ -190,6 +190,11 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 		// create a macro function
 		function = make_unique_base<StandardEntry, MacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
 		break;
+
+	case CatalogType::TABLE_MACRO_ENTRY:
+		// create a macro function
+		function = make_unique_base<StandardEntry, MacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
+		break;
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		D_ASSERT(info->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 		// create an aggregate function
@@ -320,6 +325,7 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 	case CatalogType::INDEX_ENTRY:
 		return indexes;
 	case CatalogType::TABLE_FUNCTION_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY:
 		return table_functions;
 	case CatalogType::COPY_FUNCTION_ENTRY:
 		return copy_functions;

@@ -33,6 +33,7 @@ enum class CatalogType : uint8_t {
 	PRAGMA_FUNCTION_ENTRY = 28,
 	COPY_FUNCTION_ENTRY = 29,
 	MACRO_ENTRY = 30,
+	TABLE_MACRO_ENTRY = 31,
 
 	// version info
 	UPDATED_ENTRY = 50,

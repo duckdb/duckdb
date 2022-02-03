@@ -8,6 +8,9 @@ MacroCatalogEntry::MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
     : StandardEntry(CatalogType::MACRO_ENTRY, schema, catalog, info->name), function(move(info->function)) {
 	this->temporary = info->temporary;
 	this->internal = info->internal;
+
+	if( function->isQuery())
+		StandardEntry::type = CatalogType::TABLE_MACRO_ENTRY;
 }
 
 void MacroCatalogEntry::Serialize(Serializer &serializer) {
