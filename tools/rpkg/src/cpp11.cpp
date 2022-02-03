@@ -36,10 +36,10 @@ extern "C" SEXP _duckdb_disconnect_R(SEXP conn) {
   END_CPP11
 }
 // rapi.cpp
-cpp11::list prepare_R(duckdb::conn_eptr_t connsexp, cpp11::strings querysexp);
-extern "C" SEXP _duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
+cpp11::list prepare_R(duckdb::conn_eptr_t conn, std::string query);
+extern "C" SEXP _duckdb_prepare_R(SEXP conn, SEXP query) {
   BEGIN_CPP11
-    return cpp11::as_sexp(prepare_R(cpp11::as_cpp<cpp11::decay_t<duckdb::conn_eptr_t>>(connsexp), cpp11::as_cpp<cpp11::decay_t<cpp11::strings>>(querysexp)));
+    return cpp11::as_sexp(prepare_R(cpp11::as_cpp<cpp11::decay_t<duckdb::conn_eptr_t>>(conn), cpp11::as_cpp<cpp11::decay_t<std::string>>(query)));
   END_CPP11
 }
 // rapi.cpp
@@ -71,10 +71,11 @@ extern "C" SEXP _duckdb_fetch_record_batch_R(SEXP query_resultsexp, SEXP approx_
   END_CPP11
 }
 // rapi.cpp
-SEXP release_R(cpp11::external_pointer<duckdb::RStatement> stmtsexp);
-extern "C" SEXP _duckdb_release_R(SEXP stmtsexp) {
+void release_R(duckdb::stmt_eptr_t stmt);
+extern "C" SEXP _duckdb_release_R(SEXP stmt) {
   BEGIN_CPP11
-    return cpp11::as_sexp(release_R(cpp11::as_cpp<cpp11::decay_t<cpp11::external_pointer<duckdb::RStatement>>>(stmtsexp)));
+    release_R(cpp11::as_cpp<cpp11::decay_t<duckdb::stmt_eptr_t>>(stmt));
+    return R_NilValue;
   END_CPP11
 }
 // rapi.cpp

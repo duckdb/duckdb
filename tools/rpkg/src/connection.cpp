@@ -20,9 +20,7 @@ conn_eptr_t RApi::Connect(db_eptr_t db) {
 	conn_wrapper->db_sexp = db;
 	conn_wrapper->conn = make_unique<Connection>(*db_wrapper->db);
 
-	conn_eptr_t conn(conn_wrapper);
-
-	return conn;
+	return conn_eptr_t(conn_wrapper);
 }
 
 void RApi::Disconnect(conn_eptr_t conn) {

@@ -16,8 +16,8 @@ disconnect_R <- function(conn) {
   invisible(.Call(`_duckdb_disconnect_R`, conn))
 }
 
-prepare_R <- function(connsexp, querysexp) {
-  .Call(`_duckdb_prepare_R`, connsexp, querysexp)
+prepare_R <- function(conn, query) {
+  .Call(`_duckdb_prepare_R`, conn, query)
 }
 
 bind_R <- function(stmtsexp, paramsexp, arrowsexp) {
@@ -36,8 +36,8 @@ fetch_record_batch_R <- function(query_resultsexp, approx_batch_sizeexp) {
   .Call(`_duckdb_fetch_record_batch_R`, query_resultsexp, approx_batch_sizeexp)
 }
 
-release_R <- function(stmtsexp) {
-  .Call(`_duckdb_release_R`, stmtsexp)
+release_R <- function(stmt) {
+  invisible(.Call(`_duckdb_release_R`, stmt))
 }
 
 register_R <- function(conn, name, value) {

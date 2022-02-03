@@ -36,6 +36,7 @@ void DBDeleter(DBWrapper*);
 
 typedef cpp11::external_pointer<DBWrapper, DBDeleter> db_eptr_t;
 typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
+typedef cpp11::external_pointer<RStatement> stmt_eptr_t;
 
 struct RApi {
 
@@ -47,7 +48,7 @@ struct RApi {
 
 	static void Disconnect(conn_eptr_t);
 
-	static SEXP Prepare(SEXP connsexp, SEXP querysexp);
+	static cpp11::list Prepare(conn_eptr_t, std::string);
 
 	static SEXP Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp);
 
@@ -58,7 +59,7 @@ struct RApi {
 
 	static SEXP DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp);
 
-	static SEXP Release(SEXP stmtsexp);
+	static void Release(stmt_eptr_t);
 
 	static void RegisterDataFrame(conn_eptr_t, std::string, cpp11::data_frame);
 

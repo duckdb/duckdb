@@ -63,9 +63,7 @@ db_eptr_t RApi::Startup(std::string dbdir, bool readonly, cpp11::list configsexp
   catalog.CreateTableFunction(context, &info);
   context.transaction.Commit();
 
-  db_eptr_t dbsexp(wrapper);
-
-  return dbsexp;
+  return db_eptr_t(wrapper);
 }
 
 void RApi::Shutdown(db_eptr_t dbsexp) {

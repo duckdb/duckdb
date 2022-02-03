@@ -7,6 +7,7 @@
 #include "duckdb/common/arrow_wrapper.hpp"
 
 using namespace duckdb;
+using namespace cpp11::literals;
 
 // converter for primitive types
 template <class SRC, class DEST>
@@ -19,60 +20,35 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 	}
 }
 
-SEXP RApi::Release(SEXP stmtsexp) {
-	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_release_R: Need external pointer parameter");
+void RApi::Release(stmt_eptr_t stmt) {
+	auto stmt_ptr = stmt.release();
+	if (stmt_ptr) {
+		delete stmt_ptr;
 	}
-	RStatement *stmtholder = (RStatement *)R_ExternalPtrAddr(stmtsexp);
-	if (stmtsexp) {
-		R_ClearExternalPtr(stmtsexp);
-		delete stmtholder;
-	}
-	return R_NilValue;
 }
 
-SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
-	if (TYPEOF(querysexp) != STRSXP || Rf_length(querysexp) != 1) {
-		cpp11::stop("duckdb_prepare_R: Need single string parameter for query");
-	}
-	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_prepare_R: Need external pointer parameter for connections");
-	}
-
-	char *query = (char *)CHAR(STRING_ELT(querysexp, 0));
-	if (!query) {
-		cpp11::stop("duckdb_prepare_R: No query");
-	}
-
-	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
-	if (!conn_wrapper || !conn_wrapper->conn) {
+cpp11::list RApi::Prepare(conn_eptr_t conn, std::string query) {
+	if (!conn || !conn->conn) {
 		cpp11::stop("duckdb_prepare_R: Invalid connection");
 	}
 
-	auto stmt = conn_wrapper->conn->Prepare(query);
+	auto stmt = conn->conn->Prepare(query.c_str());
 	if (!stmt->success) {
-		cpp11::stop("duckdb_prepare_R: Failed to prepare query %s\nError: %s", query, stmt->error.c_str());
+		cpp11::stop("duckdb_prepare_R: Failed to prepare query %s\nError: %s", query.c_str(), stmt->error.c_str());
 	}
+
+	cpp11::writable::list retlist;
+	retlist.reserve(6);
+	retlist.push_back({"str"_nm = query});
 
 	auto stmtholder = new RStatement();
 	stmtholder->stmt = move(stmt);
 
-	cpp11::list retlist(NEW_LIST(6));
+	retlist.push_back({"ref"_nm = stmt_eptr_t(stmtholder)});
+	retlist.push_back({"type"_nm = StatementTypeToString(stmtholder->stmt->GetStatementType())});
+	retlist.push_back({"names"_nm = cpp11::as_sexp(stmtholder->stmt->GetNames())});
 
-	cpp11::external_pointer<RStatement> stmtsexp(stmtholder);
-
-	SET_NAMES(retlist, RStrings::get().str_ref_type_names_rtypes_n_param_str);
-
-	SET_VECTOR_ELT(retlist, 0, querysexp);
-	SET_VECTOR_ELT(retlist, 1, stmtsexp);
-
-	SEXP stmt_type = RApi::StringsToSexp({StatementTypeToString(stmtholder->stmt->GetStatementType())});
-	SET_VECTOR_ELT(retlist, 2, stmt_type);
-
-	SEXP col_names = RApi::StringsToSexp(stmtholder->stmt->GetNames());
-	SET_VECTOR_ELT(retlist, 3, col_names);
-
-	vector<string> rtypes;
+	cpp11::writable::strings rtypes;
 
 	for (auto &stype : stmtholder->stmt->GetTypes()) {
 		string rtype = "";
@@ -124,10 +100,8 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 		rtypes.push_back(rtype);
 	}
 
-	SEXP rtypessexp = StringsToSexp(rtypes);
-	SET_VECTOR_ELT(retlist, 4, rtypessexp);
-
-	SET_VECTOR_ELT(retlist, 5, Rf_ScalarInteger(stmtholder->stmt->n_param));
+	retlist.push_back({"rtypes"_nm = rtypes});
+	retlist.push_back({"n_param"_nm = stmtholder->stmt->n_param});
 
 	return retlist;
 }

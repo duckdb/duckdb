@@ -21,9 +21,9 @@ startup_R(std::string dbdir, bool readonly, cpp11::list config) {
 	return duckdb::RApi::Disconnect(conn);
 }
 
-[[cpp11::register]] cpp11::list prepare_R(duckdb::conn_eptr_t connsexp,
-                                          cpp11::strings querysexp) {
-	return duckdb::RApi::Prepare(connsexp, querysexp);
+[[cpp11::register]] cpp11::list prepare_R(duckdb::conn_eptr_t conn,
+                                          std::string query) {
+	return duckdb::RApi::Prepare(conn, query);
 }
 
 [[cpp11::register]] cpp11::list bind_R(cpp11::external_pointer<duckdb::RStatement> stmtsexp, cpp11::list paramsexp,
@@ -44,8 +44,8 @@ startup_R(std::string dbdir, bool readonly, cpp11::list config) {
 	return duckdb::RApi::DuckDBRecordBatchR(query_resultsexp, approx_batch_sizeexp);
 }
 
-[[cpp11::register]] SEXP release_R(cpp11::external_pointer<duckdb::RStatement> stmtsexp) {
-	return duckdb::RApi::Release(stmtsexp);
+[[cpp11::register]] void release_R(duckdb::stmt_eptr_t stmt) {
+	return duckdb::RApi::Release(stmt);
 }
 
 [[cpp11::register]] void register_R(duckdb::conn_eptr_t conn, std::string name, cpp11::data_frame value) {
