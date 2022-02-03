@@ -19,12 +19,17 @@ static void LoadInternal(DatabaseInstance &instance) {
 	config.AddExtensionOption("s3_secret_access_key", "S3 Access Key", LogicalType::VARCHAR);
 	config.AddExtensionOption("s3_session_token", "S3 Session Token", LogicalType::VARCHAR);
 	config.AddExtensionOption("s3_endpoint", "S3 Endpoint (default s3.amazonaws.com)", LogicalType::VARCHAR);
+
+	// TODO add verification callback
+	config.AddExtensionOption("s3_uploader_max_memory", "S3 Uploader max memory usage (default 1GB)", LogicalType::VARCHAR);
+	config.AddExtensionOption("s3_uploader_max_filesize", "S3 Uploader max filesize (default 52GB)", LogicalType::VARCHAR);
+	config.AddExtensionOption("s3_uploader_timeout", "S3 Uploader timeout (default 30000ms)", LogicalType::VARCHAR);
+	config.AddExtensionOption("s3_uploader_max_requests", "S3 Uploader part size (default 10000)", LogicalType::VARCHAR);
 }
 
 void HTTPFsExtension::Load(DuckDB &db) {
 	LoadInternal(*db.instance);
 }
-
 std::string HTTPFsExtension::Name() {
 	return "httpfs";
 }

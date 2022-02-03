@@ -52,7 +52,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	    path.c_str(), *headers, buffer_in, buffer_in_len,
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
-			    std::cout << response.body << std::endl;
+			    //std::cout << response.body << std::endl;
 			    throw std::runtime_error("HTTP POST error on '" + url + "' (HTTP " + std::to_string(response.status) + ")");
 		    }
 		    return true;
@@ -61,7 +61,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 		    if (out_offset + data_length > buffer_out_len) {
 			    // Buffer too small, increase its size by at least 2x to fit the new value
 			    auto new_size = MaxValue<idx_t>(out_offset + data_length, buffer_out_len*2);
-			    std::cout << "resize from " << buffer_out_len << " to " << new_size << "\n";
+			    //std::cout << "resize from " << buffer_out_len << " to " << new_size << "\n";
 			    auto tmp = unique_ptr<char[]>{new char[new_size]};
 			    memcpy(tmp.get(), buffer_out.get(), buffer_out_len);
 				buffer_out = move(tmp);

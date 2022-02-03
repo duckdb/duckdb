@@ -20,25 +20,30 @@ struct S3AuthParams {
 	static S3AuthParams ReadFrom(FileOpener *opener);
 };
 
+struct S3ConfigParams {
+	uint64_t max_file_size;
+	uint64_t max_memory;
+	uint64_t uploader_timeout;
+	uint64_t max_requests_per_upload;
+
+	static S3ConfigParams ReadFrom(FileOpener *opener);
+};
+
 class S3FileSystem;
 
 // Holds the buffered data for 1 part of an S3 Multipart upload
 class S3WriteBuffer {
 public:
-	explicit S3WriteBuffer(idx_t buffer_start) : idx(0), buffer_start(buffer_start) {
-		buffer_end = buffer_start + BUFFER_LEN;
-		part_no = buffer_start / BUFFER_LEN;
-		buffer = std::unique_ptr<data_t[]>(new data_t[BUFFER_LEN]);
+	explicit S3WriteBuffer(idx_t buffer_start, size_t buffer_size) : idx(0), buffer_start(buffer_start) {
+		buffer_end = buffer_start + buffer_size;
+		part_no = buffer_start / buffer_size;
+		buffer = std::unique_ptr<data_t[]>(new data_t[buffer_size]);
 		uploading = false;
 	}
 
 	// The S3 multipart part number.
 	// Note that we internally start at 0 but AWS S3 starts at 1
 	idx_t part_no;
-
-	// TODO make configurable
-	//	constexpr static idx_t BUFFER_LEN = 1 << 27; // 128 MiB
-	constexpr static idx_t BUFFER_LEN = 6000000; // 128 MiB
 
 	idx_t idx;
 	idx_t buffer_start;
@@ -52,8 +57,8 @@ class S3FileHandle : public HTTPFileHandle {
 friend class S3FileSystem;
 
 public:
-	S3FileHandle(FileSystem &fs, std::string path, uint8_t flags, const S3AuthParams &auth_params_p)
-	    : HTTPFileHandle(fs, std::move(path), flags), auth_params(auth_params_p) {
+	S3FileHandle(FileSystem &fs, std::string path, uint8_t flags, const S3AuthParams &auth_params_p, const S3ConfigParams &config_params)
+	    : HTTPFileHandle(fs, std::move(path), flags), auth_params(auth_params_p), config_params(config_params) {
 
 		if (flags & FileFlags::FILE_FLAGS_WRITE && flags & FileFlags::FILE_FLAGS_READ) {
 			throw NotImplementedException("Cannot open an HTTP file for both reading and writing");
@@ -64,16 +69,14 @@ public:
 		}
 	}
 	const S3AuthParams auth_params;
+	const S3ConfigParams config_params;
 
 	void Close() override;
 	unique_ptr<ResponseWrapper> Initialize() override;
 
 protected:
-	constexpr static idx_t WRITE_MAX_UPLOADS = 10;
-	constexpr static idx_t MAX_MEMORY_USAGE = WRITE_MAX_UPLOADS * S3WriteBuffer::BUFFER_LEN;
-	constexpr static idx_t MAX_FILE_SIZE = 10000 * S3WriteBuffer::BUFFER_LEN;
-
 	string multipart_upload_id;
+	size_t part_size;
 
 	std::mutex write_buffers_mutex;
 	unordered_map<uint16_t, std::shared_ptr<S3WriteBuffer>> write_buffers;
@@ -99,7 +102,7 @@ protected:
 
 class S3FileSystem : public HTTPFileSystem {
 public:
-	constexpr static int MULTIPART_UPLOAD_TIMEOUT_MS = 30*1000;
+	constexpr static int MULTIPART_UPLOAD_MAX_THREADS = 1;
 	constexpr static int MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS = 1000;
 
 	S3FileSystem() {

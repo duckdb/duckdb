@@ -35,6 +35,7 @@ SELECT count(i), sum(i) FROM "s3://test-bucket/multipart/export.csv";
 10	45
 
 # Medium sized parquet file
+# TODO sf1?
 statement ok
 CALL DBGEN(sf=0.1)
 
