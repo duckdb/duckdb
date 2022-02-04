@@ -7,7 +7,7 @@ check_flag <- function(x) {
 }
 
 extptr_str <- function(e, n = 5) {
-  x <- .Call(`_duckdb_ptr_to_str`, e)
+  x <- ptr_to_str(e)
   substr(x, nchar(x) - n + 1, nchar(x))
 }
 
@@ -50,7 +50,7 @@ duckdb_shutdown <- function(drv) {
     warning("invalid driver object, already closed?")
     invisible(FALSE)
   }
-  .Call(`_duckdb_shutdown_R`, drv@database_ref)
+  shutdown_R(drv@database_ref)
   invisible(TRUE)
 }
 
