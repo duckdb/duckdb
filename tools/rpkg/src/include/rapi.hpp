@@ -43,10 +43,6 @@ SEXP DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_
 
 SEXP DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp);
 
-void RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp);
-
-void UnregisterArrow(SEXP connsexp, SEXP namesexp);
-
 SEXP PointerToString(SEXP extptr);
 
 // internal
@@ -135,3 +131,7 @@ void rapi_release(duckdb::stmt_eptr_t);
 void rapi_register_df(duckdb::conn_eptr_t, std::string, cpp11::data_frame);
 
 void rapi_unregister_df(duckdb::conn_eptr_t, std::string);
+
+void rapi_register_arrow(duckdb::conn_eptr_t, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp);
+
+void rapi_unregister_arrow(duckdb::conn_eptr_t, SEXP namesexp);

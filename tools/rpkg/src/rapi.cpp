@@ -13,16 +13,6 @@
 	return duckdb::DuckDBRecordBatchR(query_resultsexp, approx_batch_sizeexp);
 }
 
-[[cpp11::register]] void register_arrow_R(duckdb::conn_eptr_t connsexp,
-                                          cpp11::strings namesexp, cpp11::list export_funsexp, SEXP valuesexp) {
-	return duckdb::RegisterArrow(connsexp, namesexp, export_funsexp, valuesexp);
-}
-
-[[cpp11::register]] void unregister_arrow_R(duckdb::conn_eptr_t connsexp,
-                                            cpp11::strings namesexp) {
-	return duckdb::UnregisterArrow(connsexp, namesexp);
-}
-
 [[cpp11::register]] cpp11::strings ptr_to_str(SEXP extptr) {
 	return duckdb::PointerToString(extptr);
 }
