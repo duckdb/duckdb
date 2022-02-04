@@ -38,8 +38,6 @@ typedef cpp11::external_pointer<DBWrapper, DBDeleter> db_eptr_t;
 typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
 typedef cpp11::external_pointer<RStatement> stmt_eptr_t;
 
-cpp11::list Prepare(conn_eptr_t, std::string);
-
 SEXP Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp);
 
 SEXP Execute(SEXP stmtsexp, SEXP arrowsexp);
@@ -48,12 +46,6 @@ SEXP DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_
                                SEXP return_tablesexp);
 
 SEXP DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp);
-
-void Release(stmt_eptr_t);
-
-void RegisterDataFrame(conn_eptr_t, std::string, cpp11::data_frame);
-
-void UnregisterDataFrame(conn_eptr_t, std::string);
 
 void RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp);
 
@@ -136,3 +128,11 @@ void rapi_shutdown(duckdb::db_eptr_t);
 duckdb::conn_eptr_t rapi_connect(duckdb::db_eptr_t);
 
 void rapi_disconnect(duckdb::conn_eptr_t);
+
+cpp11::list rapi_prepare(duckdb::conn_eptr_t, std::string);
+
+void rapi_release(duckdb::stmt_eptr_t);
+
+void rapi_register_df(duckdb::conn_eptr_t, std::string, cpp11::data_frame);
+
+void rapi_unregister_df(duckdb::conn_eptr_t, std::string);

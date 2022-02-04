@@ -43,7 +43,7 @@ encode_values <- function(value) {
 duckdb_register <- function(conn, name, df) {
   stopifnot(dbIsValid(conn))
   df <- encode_values(as.data.frame(df))
-  register_R(conn@conn_ref, enc2utf8(as.character(name)), df)
+  rapi_register_df(conn@conn_ref, enc2utf8(as.character(name)), df)
   invisible(TRUE)
 }
 
@@ -51,7 +51,7 @@ duckdb_register <- function(conn, name, df) {
 #' @export
 duckdb_unregister <- function(conn, name) {
   stopifnot(dbIsValid(conn))
-  unregister_R(conn@conn_ref, enc2utf8(as.character(name)))
+  rapi_unregister_df(conn@conn_ref, enc2utf8(as.character(name)))
   invisible(TRUE)
 }
 

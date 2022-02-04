@@ -4,11 +4,6 @@
 
 // When changing this file, run cpp11::cpp_register() from R
 
-[[cpp11::register]] cpp11::list prepare_R(duckdb::conn_eptr_t conn,
-                                          std::string query) {
-	return duckdb::Prepare(conn, query);
-}
-
 [[cpp11::register]] cpp11::list bind_R(cpp11::external_pointer<duckdb::RStatement> stmtsexp, cpp11::list paramsexp,
                                        cpp11::logicals arrowsexp) {
 	return duckdb::Bind(stmtsexp, paramsexp, arrowsexp);
@@ -25,18 +20,6 @@
 
 [[cpp11::register]] SEXP fetch_record_batch_R(SEXP query_resultsexp, cpp11::doubles approx_batch_sizeexp) {
 	return duckdb::DuckDBRecordBatchR(query_resultsexp, approx_batch_sizeexp);
-}
-
-[[cpp11::register]] void release_R(duckdb::stmt_eptr_t stmt) {
-	return duckdb::Release(stmt);
-}
-
-[[cpp11::register]] void register_R(duckdb::conn_eptr_t conn, std::string name, cpp11::data_frame value) {
-	return duckdb::RegisterDataFrame(conn, name, value);
-}
-
-[[cpp11::register]] void unregister_R(duckdb::conn_eptr_t conn, std::string name) {
-	return duckdb::UnregisterDataFrame(conn, name);
 }
 
 [[cpp11::register]] void register_arrow_R(duckdb::conn_eptr_t connsexp,

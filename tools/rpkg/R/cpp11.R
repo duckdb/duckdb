@@ -16,10 +16,6 @@ rapi_shutdown <- function(dbsexp) {
   invisible(.Call(`_duckdb_rapi_shutdown`, dbsexp))
 }
 
-prepare_R <- function(conn, query) {
-  .Call(`_duckdb_prepare_R`, conn, query)
-}
-
 bind_R <- function(stmtsexp, paramsexp, arrowsexp) {
   .Call(`_duckdb_bind_R`, stmtsexp, paramsexp, arrowsexp)
 }
@@ -36,18 +32,6 @@ fetch_record_batch_R <- function(query_resultsexp, approx_batch_sizeexp) {
   .Call(`_duckdb_fetch_record_batch_R`, query_resultsexp, approx_batch_sizeexp)
 }
 
-release_R <- function(stmt) {
-  invisible(.Call(`_duckdb_release_R`, stmt))
-}
-
-register_R <- function(conn, name, value) {
-  invisible(.Call(`_duckdb_register_R`, conn, name, value))
-}
-
-unregister_R <- function(conn, name) {
-  invisible(.Call(`_duckdb_unregister_R`, conn, name))
-}
-
 register_arrow_R <- function(connsexp, namesexp, export_funsexp, valuesexp) {
   invisible(.Call(`_duckdb_register_arrow_R`, connsexp, namesexp, export_funsexp, valuesexp))
 }
@@ -58,4 +42,20 @@ unregister_arrow_R <- function(connsexp, namesexp) {
 
 ptr_to_str <- function(extptr) {
   .Call(`_duckdb_ptr_to_str`, extptr)
+}
+
+rapi_register_df <- function(conn, name, value) {
+  invisible(.Call(`_duckdb_rapi_register_df`, conn, name, value))
+}
+
+rapi_unregister_df <- function(conn, name) {
+  invisible(.Call(`_duckdb_rapi_unregister_df`, conn, name))
+}
+
+rapi_release <- function(stmt) {
+  invisible(.Call(`_duckdb_rapi_release`, stmt))
+}
+
+rapi_prepare <- function(conn, query) {
+  .Call(`_duckdb_rapi_prepare`, conn, query)
 }

@@ -36,13 +36,6 @@ extern "C" SEXP _duckdb_rapi_shutdown(SEXP dbsexp) {
   END_CPP11
 }
 // rapi.cpp
-cpp11::list prepare_R(duckdb::conn_eptr_t conn, std::string query);
-extern "C" SEXP _duckdb_prepare_R(SEXP conn, SEXP query) {
-  BEGIN_CPP11
-    return cpp11::as_sexp(prepare_R(cpp11::as_cpp<cpp11::decay_t<duckdb::conn_eptr_t>>(conn), cpp11::as_cpp<cpp11::decay_t<std::string>>(query)));
-  END_CPP11
-}
-// rapi.cpp
 cpp11::list bind_R(cpp11::external_pointer<duckdb::RStatement> stmtsexp, cpp11::list paramsexp, cpp11::logicals arrowsexp);
 extern "C" SEXP _duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
   BEGIN_CPP11
@@ -71,30 +64,6 @@ extern "C" SEXP _duckdb_fetch_record_batch_R(SEXP query_resultsexp, SEXP approx_
   END_CPP11
 }
 // rapi.cpp
-void release_R(duckdb::stmt_eptr_t stmt);
-extern "C" SEXP _duckdb_release_R(SEXP stmt) {
-  BEGIN_CPP11
-    release_R(cpp11::as_cpp<cpp11::decay_t<duckdb::stmt_eptr_t>>(stmt));
-    return R_NilValue;
-  END_CPP11
-}
-// rapi.cpp
-void register_R(duckdb::conn_eptr_t conn, std::string name, cpp11::data_frame value);
-extern "C" SEXP _duckdb_register_R(SEXP conn, SEXP name, SEXP value) {
-  BEGIN_CPP11
-    register_R(cpp11::as_cpp<cpp11::decay_t<duckdb::conn_eptr_t>>(conn), cpp11::as_cpp<cpp11::decay_t<std::string>>(name), cpp11::as_cpp<cpp11::decay_t<cpp11::data_frame>>(value));
-    return R_NilValue;
-  END_CPP11
-}
-// rapi.cpp
-void unregister_R(duckdb::conn_eptr_t conn, std::string name);
-extern "C" SEXP _duckdb_unregister_R(SEXP conn, SEXP name) {
-  BEGIN_CPP11
-    unregister_R(cpp11::as_cpp<cpp11::decay_t<duckdb::conn_eptr_t>>(conn), cpp11::as_cpp<cpp11::decay_t<std::string>>(name));
-    return R_NilValue;
-  END_CPP11
-}
-// rapi.cpp
 void register_arrow_R(duckdb::conn_eptr_t connsexp, cpp11::strings namesexp, cpp11::list export_funsexp, SEXP valuesexp);
 extern "C" SEXP _duckdb_register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp) {
   BEGIN_CPP11
@@ -117,6 +86,37 @@ extern "C" SEXP _duckdb_ptr_to_str(SEXP extptr) {
     return cpp11::as_sexp(ptr_to_str(cpp11::as_cpp<cpp11::decay_t<SEXP>>(extptr)));
   END_CPP11
 }
+// register.cpp
+void rapi_register_df(duckdb::conn_eptr_t conn, std::string name, cpp11::data_frame value);
+extern "C" SEXP _duckdb_rapi_register_df(SEXP conn, SEXP name, SEXP value) {
+  BEGIN_CPP11
+    rapi_register_df(cpp11::as_cpp<cpp11::decay_t<duckdb::conn_eptr_t>>(conn), cpp11::as_cpp<cpp11::decay_t<std::string>>(name), cpp11::as_cpp<cpp11::decay_t<cpp11::data_frame>>(value));
+    return R_NilValue;
+  END_CPP11
+}
+// register.cpp
+void rapi_unregister_df(duckdb::conn_eptr_t conn, std::string name);
+extern "C" SEXP _duckdb_rapi_unregister_df(SEXP conn, SEXP name) {
+  BEGIN_CPP11
+    rapi_unregister_df(cpp11::as_cpp<cpp11::decay_t<duckdb::conn_eptr_t>>(conn), cpp11::as_cpp<cpp11::decay_t<std::string>>(name));
+    return R_NilValue;
+  END_CPP11
+}
+// statement.cpp
+void rapi_release(duckdb::stmt_eptr_t stmt);
+extern "C" SEXP _duckdb_rapi_release(SEXP stmt) {
+  BEGIN_CPP11
+    rapi_release(cpp11::as_cpp<cpp11::decay_t<duckdb::stmt_eptr_t>>(stmt));
+    return R_NilValue;
+  END_CPP11
+}
+// statement.cpp
+cpp11::list rapi_prepare(duckdb::conn_eptr_t conn, std::string query);
+extern "C" SEXP _duckdb_rapi_prepare(SEXP conn, SEXP query) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_prepare(cpp11::as_cpp<cpp11::decay_t<duckdb::conn_eptr_t>>(conn), cpp11::as_cpp<cpp11::decay_t<std::string>>(query)));
+  END_CPP11
+}
 
 extern "C" {
 static const R_CallMethodDef CallEntries[] = {
@@ -124,16 +124,16 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_execute_R",            (DL_FUNC) &_duckdb_execute_R,            2},
     {"_duckdb_fetch_arrow_R",        (DL_FUNC) &_duckdb_fetch_arrow_R,        4},
     {"_duckdb_fetch_record_batch_R", (DL_FUNC) &_duckdb_fetch_record_batch_R, 2},
-    {"_duckdb_prepare_R",            (DL_FUNC) &_duckdb_prepare_R,            2},
     {"_duckdb_ptr_to_str",           (DL_FUNC) &_duckdb_ptr_to_str,           1},
     {"_duckdb_rapi_connect",         (DL_FUNC) &_duckdb_rapi_connect,         1},
     {"_duckdb_rapi_disconnect",      (DL_FUNC) &_duckdb_rapi_disconnect,      1},
+    {"_duckdb_rapi_prepare",         (DL_FUNC) &_duckdb_rapi_prepare,         2},
+    {"_duckdb_rapi_register_df",     (DL_FUNC) &_duckdb_rapi_register_df,     3},
+    {"_duckdb_rapi_release",         (DL_FUNC) &_duckdb_rapi_release,         1},
     {"_duckdb_rapi_shutdown",        (DL_FUNC) &_duckdb_rapi_shutdown,        1},
     {"_duckdb_rapi_startup",         (DL_FUNC) &_duckdb_rapi_startup,         3},
-    {"_duckdb_register_R",           (DL_FUNC) &_duckdb_register_R,           3},
+    {"_duckdb_rapi_unregister_df",   (DL_FUNC) &_duckdb_rapi_unregister_df,   2},
     {"_duckdb_register_arrow_R",     (DL_FUNC) &_duckdb_register_arrow_R,     4},
-    {"_duckdb_release_R",            (DL_FUNC) &_duckdb_release_R,            1},
-    {"_duckdb_unregister_R",         (DL_FUNC) &_duckdb_unregister_R,         2},
     {"_duckdb_unregister_arrow_R",   (DL_FUNC) &_duckdb_unregister_arrow_R,   2},
     {NULL, NULL, 0}
 };

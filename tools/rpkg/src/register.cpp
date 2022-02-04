@@ -10,7 +10,7 @@
 
 using namespace duckdb;
 
-void duckdb::RegisterDataFrame(conn_eptr_t conn, std::string name, cpp11::data_frame value) {
+[[cpp11::register]] void rapi_register_df(duckdb::conn_eptr_t conn, std::string name, cpp11::data_frame value) {
 	if (!conn || !conn->conn) {
 		cpp11::stop("duckdb_register_R: Invalid connection");
 	}
@@ -29,7 +29,7 @@ void duckdb::RegisterDataFrame(conn_eptr_t conn, std::string name, cpp11::data_f
 	}
 }
 
-void duckdb::UnregisterDataFrame(conn_eptr_t conn, std::string name) {
+[[cpp11::register]] void rapi_unregister_df(duckdb::conn_eptr_t conn, std::string name) {
 	if (!conn || !conn->conn) {
 		cpp11::stop("duckdb_unregister_R: Invalid connection");
 	}

@@ -20,14 +20,14 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 	}
 }
 
-void duckdb::Release(stmt_eptr_t stmt) {
+[[cpp11::register]] void rapi_release(duckdb::stmt_eptr_t stmt) {
 	auto stmt_ptr = stmt.release();
 	if (stmt_ptr) {
 		delete stmt_ptr;
 	}
 }
 
-cpp11::list duckdb::Prepare(conn_eptr_t conn, std::string query) {
+[[cpp11::register]] cpp11::list rapi_prepare(duckdb::conn_eptr_t conn, std::string query) {
 	if (!conn || !conn->conn) {
 		cpp11::stop("duckdb_prepare_R: Invalid connection");
 	}
