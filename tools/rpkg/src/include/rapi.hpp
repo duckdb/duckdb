@@ -21,21 +21,22 @@ struct DBWrapper {
 	mutex lock;
 };
 
+void DBDeleter(DBWrapper*);
+typedef cpp11::external_pointer<DBWrapper, DBDeleter> db_eptr_t;
+
 struct ConnWrapper {
 	unique_ptr<Connection> conn;
-	SEXP db_sexp;
+	db_eptr_t db_eptr;
 };
+
+void ConnDeleter(ConnWrapper*);
+typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
 
 struct RStatement {
 	unique_ptr<PreparedStatement> stmt;
 	vector<Value> parameters;
 };
 
-void ConnDeleter(ConnWrapper*);
-void DBDeleter(DBWrapper*);
-
-typedef cpp11::external_pointer<DBWrapper, DBDeleter> db_eptr_t;
-typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
 typedef cpp11::external_pointer<RStatement> stmt_eptr_t;
 
 SEXP DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp,

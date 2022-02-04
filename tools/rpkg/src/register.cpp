@@ -215,14 +215,13 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(const string &table_na
 	cpp11::external_pointer<RArrowTabularStreamFactory> factorysexp(stream_factory);
 
 	{
-		auto *db_wrapper = (DBWrapper *)R_ExternalPtrAddr(conn->db_sexp);
 		// TODO check if this name already exists?
-		lock_guard<mutex> arrow_scans_lock(db_wrapper->lock);
-		auto &arrow_scans = db_wrapper->arrow_scans;
+		lock_guard<mutex> arrow_scans_lock(conn->db_eptr->lock);
+		auto &arrow_scans = conn->db_eptr->arrow_scans;
 		arrow_scans[name] = factorysexp;
 	}
 	cpp11::writable::list state_list = {export_funs, valuesexp, factorysexp};
-	static_cast<cpp11::sexp>(conn->db_sexp).attr("_registered_arrow_" + name) = state_list;
+	static_cast<cpp11::sexp>(conn->db_eptr).attr("_registered_arrow_" + name) = state_list;
 }
 
 [[cpp11::register]] void rapi_unregister_arrow(duckdb::conn_eptr_t conn, std::string name) {
@@ -231,10 +230,9 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(const string &table_na
 	}
 
 	{
-		auto *db_wrapper = (DBWrapper *)R_ExternalPtrAddr(conn->db_sexp);
-		lock_guard<mutex> arrow_scans_lock(db_wrapper->lock);
-		auto &arrow_scans = db_wrapper->arrow_scans;
+		lock_guard<mutex> arrow_scans_lock(conn->db_eptr->lock);
+		auto &arrow_scans = conn->db_eptr->arrow_scans;
 		arrow_scans.erase(name);
 	}
-	static_cast<cpp11::sexp>(conn->db_sexp).attr("_registered_arrow_" + name) = R_NilValue;
+	static_cast<cpp11::sexp>(conn->db_eptr).attr("_registered_arrow_" + name) = R_NilValue;
 }

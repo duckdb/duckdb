@@ -9,16 +9,13 @@ void duckdb::ConnDeleter(ConnWrapper* conn) {
 }
 
 [[cpp11::register]] duckdb::conn_eptr_t rapi_connect(duckdb::db_eptr_t db) {
-
-	auto db_wrapper = db.get();
-
-	if (!db_wrapper || !db_wrapper->db) {
+	if (!db || !db->db) {
 		cpp11::stop("duckdb_connect_R: Invalid database reference");
 	}
 
 	auto conn_wrapper = new ConnWrapper();
-	conn_wrapper->db_sexp = db;
-	conn_wrapper->conn = make_unique<Connection>(*db_wrapper->db);
+	conn_wrapper->conn = make_unique<Connection>(*db->db);
+	conn_wrapper->db_eptr.swap(db);
 
 	return conn_eptr_t(conn_wrapper);
 }
