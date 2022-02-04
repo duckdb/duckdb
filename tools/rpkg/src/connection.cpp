@@ -8,7 +8,7 @@ void duckdb::ConnDeleter(ConnWrapper* conn) {
   delete conn;
 }
 
-conn_eptr_t RApi::Connect(db_eptr_t db) {
+conn_eptr_t duckdb::Connect(db_eptr_t db) {
 
 	auto db_wrapper = db.get();
 
@@ -23,7 +23,7 @@ conn_eptr_t RApi::Connect(db_eptr_t db) {
 	return conn_eptr_t(conn_wrapper);
 }
 
-void RApi::Disconnect(conn_eptr_t conn) {
+void duckdb::Disconnect(conn_eptr_t conn) {
 	auto conn_wrapper = conn.release();
 	if (conn_wrapper) {
 		delete conn_wrapper;

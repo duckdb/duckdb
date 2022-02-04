@@ -20,14 +20,14 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 	}
 }
 
-void RApi::Release(stmt_eptr_t stmt) {
+void duckdb::Release(stmt_eptr_t stmt) {
 	auto stmt_ptr = stmt.release();
 	if (stmt_ptr) {
 		delete stmt_ptr;
 	}
 }
 
-cpp11::list RApi::Prepare(conn_eptr_t conn, std::string query) {
+cpp11::list duckdb::Prepare(conn_eptr_t conn, std::string query) {
 	if (!conn || !conn->conn) {
 		cpp11::stop("duckdb_prepare_R: Invalid connection");
 	}
@@ -106,7 +106,7 @@ cpp11::list RApi::Prepare(conn_eptr_t conn, std::string query) {
 	return retlist;
 }
 
-SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
+SEXP duckdb::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
 		cpp11::stop("duckdb_bind_R: Need external pointer parameter");
 	}
@@ -155,7 +155,7 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 		}
 
 		// No protection, assigned immediately
-		auto exec_result = RApi::Execute(stmtsexp, arrowsexp);
+		auto exec_result = Execute(stmtsexp, arrowsexp);
 		SET_VECTOR_ELT(out, row_idx, exec_result);
 	}
 
@@ -412,7 +412,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 			str_c_vec[i] = str_vec.GetValue(i).ToString();
 		}
 
-		SET_LEVELS(dest, RApi::StringsToSexp(str_c_vec));
+		SET_LEVELS(dest, StringsToSexp(str_c_vec));
 		SET_CLASS(dest, RStrings::get().factor_str);
 		break;
 	}
@@ -431,7 +431,7 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 
 	uint64_t nrows = result->collection.Count();
 	cpp11::list retlist(NEW_LIST(ncols));
-	SET_NAMES(retlist, RApi::StringsToSexp(result->names));
+	SET_NAMES(retlist, StringsToSexp(result->names));
 
 	for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
 		// TODO move the protector to allocate?
@@ -516,7 +516,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 }
 
 // Turn a DuckDB result set into an Arrow Table
-SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp,
+SEXP duckdb::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp,
                               SEXP return_tablesexp) {
 	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
 	auto result = query_result_holder->result.get();
@@ -574,7 +574,7 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 }
 
 // Turn a DuckDB result set into an RecordBatchReader
-SEXP RApi::DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp) {
+SEXP duckdb::DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp) {
 	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
 	int approx_batch_size = NUMERIC_POINTER(approx_batch_sizeexp)[0];
 	if (TYPEOF(approx_batch_sizeexp) != REALSXP || LENGTH(approx_batch_sizeexp) != 1) {
@@ -592,7 +592,7 @@ SEXP RApi::DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp) 
 	return cpp11::safe[Rf_eval](record_batch_reader, arrow_namespace);
 }
 
-SEXP RApi::Execute(SEXP stmtsexp, SEXP arrowsexp) {
+SEXP duckdb::Execute(SEXP stmtsexp, SEXP arrowsexp) {
 	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
 		cpp11::stop("duckdb_execute_R: Need external pointer for first parameter");
 	}

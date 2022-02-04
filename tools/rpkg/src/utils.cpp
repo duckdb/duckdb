@@ -4,12 +4,12 @@
 
 using namespace duckdb;
 
-SEXP RApi::ToUtf8(SEXP string_sexp) {
+SEXP duckdb::ToUtf8(SEXP string_sexp) {
 	cpp11::function enc2utf8 = RStrings::get().enc2utf8_sym;
 	return enc2utf8(string_sexp);
 }
 
-SEXP RApi::PointerToString(SEXP extptr) {
+SEXP duckdb::PointerToString(SEXP extptr) {
 	if (TYPEOF(extptr) != EXTPTRSXP) {
 		cpp11::stop("duckdb_ptr_to_str: Need external pointer parameter");
 	}
@@ -33,7 +33,7 @@ static SEXP cpp_str_to_charsexp(string s) {
 	return cstr_to_charsexp(s.c_str());
 }
 
-SEXP RApi::StringsToSexp(vector<string> s) {
+SEXP duckdb::StringsToSexp(vector<string> s) {
 	RProtector r;
 	SEXP retsexp = r.Protect(NEW_STRING(s.size()));
 	for (idx_t i = 0; i < s.size(); i++) {
@@ -61,7 +61,7 @@ RStrings::RStrings() {
 	SET_VECTOR_ELT(chars, 2, difftime_str = Rf_mkString("difftime"));
 	SET_VECTOR_ELT(chars, 3, secs_str = Rf_mkString("secs"));
 	SET_VECTOR_ELT(chars, 4, arrow_str = Rf_mkString("arrow"));
-	SET_VECTOR_ELT(chars, 5, POSIXct_POSIXt_str = RApi::StringsToSexp({"POSIXct", "POSIXt"}));
+	SET_VECTOR_ELT(chars, 5, POSIXct_POSIXt_str = StringsToSexp({"POSIXct", "POSIXt"}));
 	SET_VECTOR_ELT(chars, 6, factor_str = Rf_mkString("factor"));
 
 	R_PreserveObject(chars);
@@ -113,7 +113,7 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		}
 	}
 	case RType::STRING: {
-		auto str_val = STRING_ELT(RApi::ToUtf8(valsexp), idx);
+		auto str_val = STRING_ELT(ToUtf8(valsexp), idx);
 		return str_val == NA_STRING ? Value(LogicalType::VARCHAR) : Value(CHAR(str_val));
 	}
 	case RType::FACTOR: {
@@ -214,7 +214,7 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 	case LogicalTypeId::DECIMAL:
 		return cpp11::doubles({val.GetValue<double>()});
 	case LogicalTypeId::VARCHAR:
-		return RApi::StringsToSexp({val.ToString()});
+		return StringsToSexp({val.ToString()});
 	case LogicalTypeId::TIMESTAMP: {
 		cpp11::doubles res({(double)Timestamp::GetEpochSeconds(val.GetValue<timestamp_t>())});
 		// TODO bit of duplication here with statement.cpp, fix this

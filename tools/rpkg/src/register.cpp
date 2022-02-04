@@ -10,7 +10,7 @@
 
 using namespace duckdb;
 
-void RApi::RegisterDataFrame(conn_eptr_t conn, std::string name, cpp11::data_frame value) {
+void duckdb::RegisterDataFrame(conn_eptr_t conn, std::string name, cpp11::data_frame value) {
 	if (!conn || !conn->conn) {
 		cpp11::stop("duckdb_register_R: Invalid connection");
 	}
@@ -29,7 +29,7 @@ void RApi::RegisterDataFrame(conn_eptr_t conn, std::string name, cpp11::data_fra
 	}
 }
 
-void RApi::UnregisterDataFrame(conn_eptr_t conn, std::string name) {
+void duckdb::UnregisterDataFrame(conn_eptr_t conn, std::string name) {
 	if (!conn || !conn->conn) {
 		cpp11::stop("duckdb_unregister_R: Invalid connection");
 	}
@@ -60,7 +60,7 @@ public:
 		if (project_columns.second.empty()) {
 			export_fun(factory->arrow_scannable, stream_ptr_sexp);
 		} else {
-			auto projection_sexp = r.Protect(RApi::StringsToSexp(project_columns.second));
+			auto projection_sexp = r.Protect(StringsToSexp(project_columns.second));
 			SEXP filters_sexp = r.Protect(Rf_ScalarLogical(true));
 			if (filters && filters->table_filters && !filters->table_filters->filters.empty()) {
 
@@ -184,7 +184,7 @@ private:
 	}
 };
 
-unique_ptr<TableFunctionRef> RApi::ArrowScanReplacement(const string &table_name, void *data) {
+unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(const string &table_name, void *data) {
 	auto db_wrapper = (DBWrapper *)data;
 	lock_guard<mutex> arrow_scans_lock(db_wrapper->lock);
 	for (auto &e : db_wrapper->arrow_scans) {
@@ -202,7 +202,7 @@ unique_ptr<TableFunctionRef> RApi::ArrowScanReplacement(const string &table_name
 	return nullptr;
 }
 
-void RApi::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp) {
+void duckdb::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		cpp11::stop("duckdb_register_R: Need external pointer parameter for connection");
 	}
@@ -243,7 +243,7 @@ void RApi::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP
 	Rf_setAttrib(conn_wrapper->db_sexp, key, state_list);
 }
 
-void RApi::UnregisterArrow(SEXP connsexp, SEXP namesexp) {
+void duckdb::UnregisterArrow(SEXP connsexp, SEXP namesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		cpp11::stop("duckdb_unregister_R: Need external pointer parameter for connection");
 	}

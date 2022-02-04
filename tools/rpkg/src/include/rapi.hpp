@@ -38,46 +38,43 @@ typedef cpp11::external_pointer<DBWrapper, DBDeleter> db_eptr_t;
 typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
 typedef cpp11::external_pointer<RStatement> stmt_eptr_t;
 
-struct RApi {
+db_eptr_t Startup(std::string, bool, cpp11::list);
 
-	static db_eptr_t Startup(std::string, bool, cpp11::list);
+void Shutdown(db_eptr_t);
 
-	static void Shutdown(db_eptr_t);
+conn_eptr_t Connect(db_eptr_t);
 
-	static conn_eptr_t Connect(db_eptr_t);
+void Disconnect(conn_eptr_t);
 
-	static void Disconnect(conn_eptr_t);
+cpp11::list Prepare(conn_eptr_t, std::string);
 
-	static cpp11::list Prepare(conn_eptr_t, std::string);
+SEXP Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp);
 
-	static SEXP Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp);
+SEXP Execute(SEXP stmtsexp, SEXP arrowsexp);
 
-	static SEXP Execute(SEXP stmtsexp, SEXP arrowsexp);
+SEXP DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp,
+                               SEXP return_tablesexp);
 
-	static SEXP DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp,
-	                               SEXP return_tablesexp);
+SEXP DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp);
 
-	static SEXP DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp);
+void Release(stmt_eptr_t);
 
-	static void Release(stmt_eptr_t);
+void RegisterDataFrame(conn_eptr_t, std::string, cpp11::data_frame);
 
-	static void RegisterDataFrame(conn_eptr_t, std::string, cpp11::data_frame);
+void UnregisterDataFrame(conn_eptr_t, std::string);
 
-	static void UnregisterDataFrame(conn_eptr_t, std::string);
+void RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp);
 
-	static void RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp);
+void UnregisterArrow(SEXP connsexp, SEXP namesexp);
 
-	static void UnregisterArrow(SEXP connsexp, SEXP namesexp);
+SEXP PointerToString(SEXP extptr);
 
-	static SEXP PointerToString(SEXP extptr);
+// internal
+unique_ptr<TableFunctionRef> ArrowScanReplacement(const std::string &table_name, void *data);
 
-	// internal
-	static unique_ptr<TableFunctionRef> ArrowScanReplacement(const std::string &table_name, void *data);
+SEXP StringsToSexp(vector<std::string> s);
 
-	static SEXP StringsToSexp(vector<std::string> s);
-
-	static SEXP ToUtf8(SEXP string_sexp);
-};
+SEXP ToUtf8(SEXP string_sexp);
 
 struct RProtector {
 	RProtector() : protect_count(0) {
