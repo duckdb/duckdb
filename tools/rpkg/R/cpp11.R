@@ -60,54 +60,54 @@ ptr_to_str <- function(extptr) {
   .Call(`_duckdb_ptr_to_str`, extptr)
 }
 
-expr_reference <- function(ref) {
-  .Call(`_duckdb_expr_reference`, ref)
+expr_reference_cpp <- function(ref) {
+  .Call(`_duckdb_expr_reference_cpp`, ref)
 }
 
-expr_constant <- function(val) {
-  .Call(`_duckdb_expr_constant`, val)
+expr_constant_cpp <- function(val) {
+  .Call(`_duckdb_expr_constant_cpp`, val)
 }
 
-expr_function <- function(name, args) {
-  .Call(`_duckdb_expr_function`, name, args)
+expr_function_cpp <- function(name, args) {
+  .Call(`_duckdb_expr_function_cpp`, name, args)
 }
 
-expr_tostring <- function(expr) {
-  .Call(`_duckdb_expr_tostring`, expr)
+expr_tostring_cpp <- function(expr) {
+  .Call(`_duckdb_expr_tostring_cpp`, expr)
 }
 
-rel_from_df_R <- function(con, df) {
-  .Call(`_duckdb_rel_from_df_R`, con, df)
+rel_from_df_cpp <- function(con, df) {
+  .Call(`_duckdb_rel_from_df_cpp`, con, df)
 }
 
-rel_filter <- function(rel, expr) {
-  .Call(`_duckdb_rel_filter`, rel, expr)
+rel_filter_cpp <- function(rel, expr) {
+  .Call(`_duckdb_rel_filter_cpp`, rel, expr)
 }
 
-rel_project <- function(rel, exprs_p) {
-  .Call(`_duckdb_rel_project`, rel, exprs_p)
+rel_project_cpp <- function(rel, exprs_p) {
+  .Call(`_duckdb_rel_project_cpp`, rel, exprs_p)
 }
 
-rel_aggregate <- function(rel, groups_p, aggregates_p) {
-  .Call(`_duckdb_rel_aggregate`, rel, groups_p, aggregates_p)
+rel_aggregate_cpp <- function(rel, groups_p, aggregates_p) {
+  .Call(`_duckdb_rel_aggregate_cpp`, rel, groups_p, aggregates_p)
 }
 
-rel_order <- function(rel, orders_p) {
-  .Call(`_duckdb_rel_order`, rel, orders_p)
+rel_order_cpp <- function(rel, orders_p) {
+  .Call(`_duckdb_rel_order_cpp`, rel, orders_p)
 }
 
-rel_to_df <- function(rel) {
-  .Call(`_duckdb_rel_to_df`, rel)
+rel_to_df_cpp <- function(rel) {
+  .Call(`_duckdb_rel_to_df_cpp`, rel)
 }
 
-rel_tostring <- function(rel) {
-  .Call(`_duckdb_rel_tostring`, rel)
+rel_tostring_cpp <- function(rel) {
+  .Call(`_duckdb_rel_tostring_cpp`, rel)
 }
 
-rel_explain_R <- function(rel) {
-  .Call(`_duckdb_rel_explain_R`, rel)
+rel_explain_cpp <- function(rel) {
+  .Call(`_duckdb_rel_explain_cpp`, rel)
 }
 
-rel_sql <- function(rel, sql) {
-  .Call(`_duckdb_rel_sql`, rel, sql)
+rel_sql_cpp <- function(rel, sql) {
+  .Call(`_duckdb_rel_sql_cpp`, rel, sql)
 }

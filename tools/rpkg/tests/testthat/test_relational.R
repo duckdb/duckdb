@@ -61,17 +61,33 @@ test_that("we can create various expressions and don't crash", {
 test_that("we can cast R strings to DuckDB strings", {
     chars <- c(letters, LETTERS)
     max_len <- 100
-    n <- 100
+    n <- 100000
 
-# yay R one-liners
+    # yay R one-liners
     gen_rand_string <- function(x, max_len) paste0(chars[sample(1:length(chars), runif(1)*max_len, replace=TRUE)], collapse="")
 
-    test_string_vec <- vapply(1:n, gen_rand_string, "character", max_len)
+    test_string_vec <- c(vapply(1:n, gen_rand_string, "character", max_len), NA, NA, NA, NA, NA, NA, NA, NA) # batman
 
     df <- data.frame(s=test_string_vec, stringsAsFactors=FALSE)
     expect_equivalent(df, as.data.frame(duckdb::rel_from_df(con, df)))
 
     res <- duckdb::rel_from_df(con, df) |> duckdb::rel_sql("SELECT s::string FROM _")
     expect_equivalent(df, res)
+
+    res <- duckdb::rel_from_df(con, df) |> duckdb::rel_sql("SELECT COUNT(*) c FROM _")
+    expect_equal(nrow(df), res$c)
+
+    # many rounds yay
+    df2 <- df
+    for (i in 1:10) {
+        df2 <- as.data.frame(duckdb::rel_from_df(con, df2))
+        expect_equivalent(df, df2)
+    }
+
+    df2 <- df
+    for (i in 1:10) {
+        df2 <- as.data.frame(duckdb::rel_from_df(con, df2) |> duckdb::rel_sql("SELECT s::string s FROM _"))
+        expect_equivalent(df, df2)
+    }
 })
 

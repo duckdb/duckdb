@@ -176,6 +176,13 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 	for (R_xlen_t out_col_idx = 0; out_col_idx < output.ColumnCount(); out_col_idx++) {
 		auto &v = output.data[out_col_idx];
 		auto src_df_col_idx = operator_data.column_ids[out_col_idx];
+
+		if (src_df_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+			Value constant_42 = Value::BIGINT(42);
+			output.data[out_col_idx].Reference(constant_42);
+			continue;
+		}
+
 		auto coldata_ptr = bind_data.data_ptrs[src_df_col_idx];
 		switch (bind_data.rtypes[src_df_col_idx]) {
 		case RType::LOGICAL: {
@@ -197,7 +204,6 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 			auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
 			//  DEDUP_POINTER_ENUM
 			AppendColumnSegment<SEXP, uint64_t, DedupPointerEnumType>(data_ptr, v, this_count);
-
 			break;
 		}
 		case RType::FACTOR: {
