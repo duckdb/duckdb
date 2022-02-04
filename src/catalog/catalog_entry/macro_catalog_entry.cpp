@@ -4,58 +4,66 @@
 
 namespace duckdb {
 
+// if function->expression initialized then macro is  SCALAR
+//  and is stored in the SCALAR_FUNCTION catalog
+//  if function->query_node is initialized then macro is  a Table Macro
+//  and is stored in the TABLE_FUNCTION catalog
 MacroCatalogEntry::MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
-    : StandardEntry(CatalogType::MACRO_ENTRY, schema, catalog, info->name), function(move(info->function)) {
+    : StandardEntry(  (info->function->expression ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY),
+                    schema, catalog, info->name), function(move(info->function)) {
 	this->temporary = info->temporary;
 	this->internal = info->internal;
-
-	if( function->isQuery())
-		StandardEntry::type = CatalogType::TABLE_MACRO_ENTRY;
 }
 
-void MacroCatalogEntry::Serialize(Serializer &serializer) {
+void MacroCatalogEntry::Serialize(Serializer &main_serializer) {
 	D_ASSERT(!internal);
-	serializer.WriteString(schema->name);
-	serializer.WriteString(name);
-	serializer.Write<uint32_t>((uint32_t)function->parameters.size());
-	for (auto &param : function->parameters) {
-		param->Serialize(serializer);
-	}
-	serializer.Write<uint32_t>((uint32_t)function->default_parameters.size());
+	FieldWriter writer(main_serializer);
+	writer.WriteString(schema->name);
+	writer.WriteString(name);
+	writer.WriteSerializable(*function->expression);
+	writer.WriteSerializableList(function->parameters);
+	writer.WriteField<uint32_t>((uint32_t)function->default_parameters.size());
+	auto &serializer = writer.GetSerializer();
 	for (auto &kv : function->default_parameters) {
 		serializer.WriteString(kv.first);
 		kv.second->Serialize(serializer);
 	}
-	serializer.Write<bool>(function->isQuery() ? true : false);
-	if (function->isQuery())
-		function->query_node->Serialize(serializer);
-	else
-		function->expression->Serialize(serializer);
+	if (function->query_node) {
+		function->query_node->Serialize(writer);
+	}
+	writer.Finalize();
+
 }
 
-unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &source) {
-	bool is_query = false;
+unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &main_source) {
 	auto info = make_unique<CreateMacroInfo>();
-	info->schema = source.Read<string>();
-	info->name = source.Read<string>();
-	auto param_count = source.Read<uint32_t>();
-	info->function = make_unique<MacroFunction>();
-	for (idx_t i = 0; i < param_count; i++) {
-		info->function->parameters.push_back(ParsedExpression::Deserialize(source));
-	}
 
-	auto default_param_count = source.Read<uint32_t>();
+	FieldReader reader(main_source);
+	info->schema = reader.ReadRequired<string>();
+	info->name = reader.ReadRequired<string>();
+	auto expression = reader.ReadRequiredSerializable<ParsedExpression>();
+	info->function = make_unique<MacroFunction>(move(expression));
+	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>();
+	auto default_param_count = reader.ReadRequired<uint32_t>();
+	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < default_param_count; i++) {
 		auto name = source.Read<string>();
 		info->function->default_parameters[name] = ParsedExpression::Deserialize(source);
 	}
 
-	is_query = source.Read<bool>();
-	if (is_query)
-		info->function->query_node = unique_ptr<QueryNode>(QueryNode::Deserialize(source));
-	else
-		info->function->expression = unique_ptr<ParsedExpression>(ParsedExpression::Deserialize(source));
+	info->function->query_node=reader.ReadOptional<QueryNode>(nullptr);
+
+	// either expression or query_node but not both
+	D_ASSERT ( info->function->expression && !info->function->query_node  ||
+	          !info->function->expression && info->function->query_node);
+
+
+	reader.Finalize();
+
 	return info;
 }
 
 } // namespace duckdb
+
+
+
