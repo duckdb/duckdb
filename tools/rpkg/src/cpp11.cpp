@@ -36,20 +36,6 @@ extern "C" SEXP _duckdb_rapi_shutdown(SEXP dbsexp) {
   END_CPP11
 }
 // rapi.cpp
-cpp11::list bind_R(cpp11::external_pointer<duckdb::RStatement> stmtsexp, cpp11::list paramsexp, cpp11::logicals arrowsexp);
-extern "C" SEXP _duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
-  BEGIN_CPP11
-    return cpp11::as_sexp(bind_R(cpp11::as_cpp<cpp11::decay_t<cpp11::external_pointer<duckdb::RStatement>>>(stmtsexp), cpp11::as_cpp<cpp11::decay_t<cpp11::list>>(paramsexp), cpp11::as_cpp<cpp11::decay_t<cpp11::logicals>>(arrowsexp)));
-  END_CPP11
-}
-// rapi.cpp
-SEXP execute_R(cpp11::external_pointer<duckdb::RStatement> stmtsexp, cpp11::logicals arrowsexp);
-extern "C" SEXP _duckdb_execute_R(SEXP stmtsexp, SEXP arrowsexp) {
-  BEGIN_CPP11
-    return cpp11::as_sexp(execute_R(cpp11::as_cpp<cpp11::decay_t<cpp11::external_pointer<duckdb::RStatement>>>(stmtsexp), cpp11::as_cpp<cpp11::decay_t<cpp11::logicals>>(arrowsexp)));
-  END_CPP11
-}
-// rapi.cpp
 SEXP fetch_arrow_R(SEXP query_resultsexp, cpp11::logicals streamsexp, cpp11::doubles vector_per_chunksexp, cpp11::logicals return_tablesexp);
 extern "C" SEXP _duckdb_fetch_arrow_R(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp, SEXP return_tablesexp) {
   BEGIN_CPP11
@@ -117,16 +103,30 @@ extern "C" SEXP _duckdb_rapi_prepare(SEXP conn, SEXP query) {
     return cpp11::as_sexp(rapi_prepare(cpp11::as_cpp<cpp11::decay_t<duckdb::conn_eptr_t>>(conn), cpp11::as_cpp<cpp11::decay_t<std::string>>(query)));
   END_CPP11
 }
+// statement.cpp
+cpp11::list rapi_bind(duckdb::stmt_eptr_t stmt, cpp11::list params, bool arrow);
+extern "C" SEXP _duckdb_rapi_bind(SEXP stmt, SEXP params, SEXP arrow) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_bind(cpp11::as_cpp<cpp11::decay_t<duckdb::stmt_eptr_t>>(stmt), cpp11::as_cpp<cpp11::decay_t<cpp11::list>>(params), cpp11::as_cpp<cpp11::decay_t<bool>>(arrow)));
+  END_CPP11
+}
+// statement.cpp
+SEXP rapi_execute(duckdb::stmt_eptr_t stmt, bool arrow);
+extern "C" SEXP _duckdb_rapi_execute(SEXP stmt, SEXP arrow) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_execute(cpp11::as_cpp<cpp11::decay_t<duckdb::stmt_eptr_t>>(stmt), cpp11::as_cpp<cpp11::decay_t<bool>>(arrow)));
+  END_CPP11
+}
 
 extern "C" {
 static const R_CallMethodDef CallEntries[] = {
-    {"_duckdb_bind_R",               (DL_FUNC) &_duckdb_bind_R,               3},
-    {"_duckdb_execute_R",            (DL_FUNC) &_duckdb_execute_R,            2},
     {"_duckdb_fetch_arrow_R",        (DL_FUNC) &_duckdb_fetch_arrow_R,        4},
     {"_duckdb_fetch_record_batch_R", (DL_FUNC) &_duckdb_fetch_record_batch_R, 2},
     {"_duckdb_ptr_to_str",           (DL_FUNC) &_duckdb_ptr_to_str,           1},
+    {"_duckdb_rapi_bind",            (DL_FUNC) &_duckdb_rapi_bind,            3},
     {"_duckdb_rapi_connect",         (DL_FUNC) &_duckdb_rapi_connect,         1},
     {"_duckdb_rapi_disconnect",      (DL_FUNC) &_duckdb_rapi_disconnect,      1},
+    {"_duckdb_rapi_execute",         (DL_FUNC) &_duckdb_rapi_execute,         2},
     {"_duckdb_rapi_prepare",         (DL_FUNC) &_duckdb_rapi_prepare,         2},
     {"_duckdb_rapi_register_df",     (DL_FUNC) &_duckdb_rapi_register_df,     3},
     {"_duckdb_rapi_release",         (DL_FUNC) &_duckdb_rapi_release,         1},

@@ -40,7 +40,7 @@ duckdb_result <- function(connection, stmt_lst, arrow) {
 }
 
 duckdb_execute <- function(res) {
-  out <- execute_R(res@stmt_lst$ref, res@arrow)
+  out <- rapi_execute(res@stmt_lst$ref, res@arrow)
   duckdb_post_execute(res, out)
 }
 

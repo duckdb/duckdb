@@ -4,15 +4,6 @@
 
 // When changing this file, run cpp11::cpp_register() from R
 
-[[cpp11::register]] cpp11::list bind_R(cpp11::external_pointer<duckdb::RStatement> stmtsexp, cpp11::list paramsexp,
-                                       cpp11::logicals arrowsexp) {
-	return duckdb::Bind(stmtsexp, paramsexp, arrowsexp);
-}
-
-[[cpp11::register]] SEXP execute_R(cpp11::external_pointer<duckdb::RStatement> stmtsexp, cpp11::logicals arrowsexp) {
-	return duckdb::Execute(stmtsexp, arrowsexp);
-}
-
 [[cpp11::register]] SEXP fetch_arrow_R(SEXP query_resultsexp, cpp11::logicals streamsexp,
                                        cpp11::doubles vector_per_chunksexp, cpp11::logicals return_tablesexp) {
 	return duckdb::DuckDBExecuteArrow(query_resultsexp, streamsexp, vector_per_chunksexp, return_tablesexp);

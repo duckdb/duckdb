@@ -106,57 +106,46 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 	return retlist;
 }
 
-SEXP duckdb::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
-	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_bind_R: Need external pointer parameter");
-	}
-	RStatement *stmtholder = (RStatement *)R_ExternalPtrAddr(stmtsexp);
-	if (!stmtholder || !stmtholder->stmt) {
+[[cpp11::register]] cpp11::list rapi_bind(duckdb::stmt_eptr_t stmt, cpp11::list params, bool arrow) {
+	if (!stmt || !stmt->stmt) {
 		cpp11::stop("duckdb_bind_R: Invalid statement");
 	}
 
-	stmtholder->parameters.clear();
-	stmtholder->parameters.resize(stmtholder->stmt->n_param);
+	stmt->parameters.clear();
+	stmt->parameters.resize(stmt->stmt->n_param);
 
-	if (stmtholder->stmt->n_param == 0) {
+	if (stmt->stmt->n_param == 0) {
 		cpp11::stop("duckdb_bind_R: dbBind called but query takes no parameters");
 	}
 
-	if (TYPEOF(paramsexp) != VECSXP || (idx_t)Rf_length(paramsexp) != stmtholder->stmt->n_param) {
-		cpp11::stop("duckdb_bind_R: bind parameters need to be a list of length %i", stmtholder->stmt->n_param);
+	if (params.size() != stmt->stmt->n_param) {
+		cpp11::stop("duckdb_bind_R: bind parameters need to be a list of length %i", stmt->stmt->n_param);
 	}
 
-	if (TYPEOF(arrowsexp) != LGLSXP) {
-		cpp11::stop("duckdb_bind_R: Need logical for third parameter");
-	}
+	R_len_t n_rows = Rf_length(params[0]);
 
-	bool arrow_fetch = LOGICAL_POINTER(arrowsexp)[0] != 0;
-
-	R_len_t n_rows = Rf_length(VECTOR_ELT(paramsexp, 0));
-
-	for (idx_t param_idx = 1; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
-		SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
-		if (Rf_length(valsexp) != n_rows) {
+	for (auto param = std::next(params.begin()); param != params.end(); ++param) {
+		if (Rf_length(*param) != n_rows) {
 			cpp11::stop("duckdb_bind_R: bind parameter values need to have the same length");
 		}
 	}
 
-	if (n_rows != 1 && arrow_fetch) {
+	if (n_rows != 1 && arrow) {
 		cpp11::stop("duckdb_bind_R: bind parameter values need to have length one for arrow queries");
 	}
 
-	cpp11::list out(NEW_LIST(n_rows));
+	cpp11::writable::list out;
+	out.reserve(n_rows);
 
 	for (idx_t row_idx = 0; row_idx < (size_t)n_rows; ++row_idx) {
-		for (idx_t param_idx = 0; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
-			SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
+		for (idx_t param_idx = 0; param_idx < (idx_t)params.size(); param_idx++) {
+			SEXP valsexp = params[(size_t)param_idx];
 			auto val = RApiTypes::SexpToValue(valsexp, row_idx);
-			stmtholder->parameters[param_idx] = val;
+			stmt->parameters[param_idx] = val;
 		}
 
 		// No protection, assigned immediately
-		auto exec_result = Execute(stmtsexp, arrowsexp);
-		SET_VECTOR_ELT(out, row_idx, exec_result);
+		out.push_back(rapi_execute(stmt, arrow));
 	}
 
 	return out;
@@ -592,25 +581,17 @@ SEXP duckdb::DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp
 	return cpp11::safe[Rf_eval](record_batch_reader, arrow_namespace);
 }
 
-SEXP duckdb::Execute(SEXP stmtsexp, SEXP arrowsexp) {
-	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_execute_R: Need external pointer for first parameter");
-	}
-	if (TYPEOF(arrowsexp) != LGLSXP) {
-		cpp11::stop("duckdb_execute_R: Need logical for second parameter");
-	}
-	RStatement *stmtholder = (RStatement *)R_ExternalPtrAddr(stmtsexp);
-	if (!stmtholder || !stmtholder->stmt) {
+[[cpp11::register]] SEXP rapi_execute(duckdb::stmt_eptr_t stmt, bool arrow) {
+	if (!stmt || !stmt->stmt) {
 		cpp11::stop("duckdb_execute_R: Invalid statement");
 	}
 
-	bool arrow_fetch = LOGICAL_POINTER(arrowsexp)[0] != 0;
-	auto generic_result = stmtholder->stmt->Execute(stmtholder->parameters, arrow_fetch);
+	auto generic_result = stmt->stmt->Execute(stmt->parameters, arrow);
 	if (!generic_result->success) {
 		cpp11::stop("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
 	}
 
-	if (arrow_fetch) {
+	if (arrow) {
 		auto query_result = new RQueryResult();
 		query_result->result = move(generic_result);
 		cpp11::external_pointer<RQueryResult> query_resultsexp(query_result);

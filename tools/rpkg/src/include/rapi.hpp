@@ -38,10 +38,6 @@ typedef cpp11::external_pointer<DBWrapper, DBDeleter> db_eptr_t;
 typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
 typedef cpp11::external_pointer<RStatement> stmt_eptr_t;
 
-SEXP Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp);
-
-SEXP Execute(SEXP stmtsexp, SEXP arrowsexp);
-
 SEXP DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp,
                                SEXP return_tablesexp);
 
@@ -97,7 +93,6 @@ struct RStrings {
 	SEXP secs_str;
 	SEXP arrow_str; // StringsToSexp
 	SEXP POSIXct_POSIXt_str;
-	SEXP str_ref_type_names_rtypes_n_param_str;
 	SEXP enc2utf8_sym; // Rf_install
 	SEXP tzone_sym;
 	SEXP units_sym;
@@ -130,6 +125,10 @@ duckdb::conn_eptr_t rapi_connect(duckdb::db_eptr_t);
 void rapi_disconnect(duckdb::conn_eptr_t);
 
 cpp11::list rapi_prepare(duckdb::conn_eptr_t, std::string);
+
+cpp11::list rapi_bind(duckdb::stmt_eptr_t, SEXP paramsexp, bool);
+
+SEXP rapi_execute(duckdb::stmt_eptr_t, bool);
 
 void rapi_release(duckdb::stmt_eptr_t);
 

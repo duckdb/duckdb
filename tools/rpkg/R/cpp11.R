@@ -16,14 +16,6 @@ rapi_shutdown <- function(dbsexp) {
   invisible(.Call(`_duckdb_rapi_shutdown`, dbsexp))
 }
 
-bind_R <- function(stmtsexp, paramsexp, arrowsexp) {
-  .Call(`_duckdb_bind_R`, stmtsexp, paramsexp, arrowsexp)
-}
-
-execute_R <- function(stmtsexp, arrowsexp) {
-  .Call(`_duckdb_execute_R`, stmtsexp, arrowsexp)
-}
-
 fetch_arrow_R <- function(query_resultsexp, streamsexp, vector_per_chunksexp, return_tablesexp) {
   .Call(`_duckdb_fetch_arrow_R`, query_resultsexp, streamsexp, vector_per_chunksexp, return_tablesexp)
 }
@@ -58,4 +50,12 @@ rapi_release <- function(stmt) {
 
 rapi_prepare <- function(conn, query) {
   .Call(`_duckdb_rapi_prepare`, conn, query)
+}
+
+rapi_bind <- function(stmt, params, arrow) {
+  .Call(`_duckdb_rapi_bind`, stmt, params, arrow)
+}
+
+rapi_execute <- function(stmt, arrow) {
+  .Call(`_duckdb_rapi_execute`, stmt, arrow)
 }
