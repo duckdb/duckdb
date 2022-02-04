@@ -35,10 +35,10 @@ static unique_ptr<FunctionData> ToSubstraitBind(ClientContext &context, vector<V
 void CompareQueryResults(QueryResult &actual_result, QueryResult &roundtrip_result) {
 	// actual_result compare the success state of the results
 	if (!actual_result.success) {
-		throw runtime_error("Query failed");
+		throw InternalException("Query failed");
 	}
 	if (actual_result.success != roundtrip_result.success) {
-		throw runtime_error("Roundtrip substrait plan failed");
+		throw InternalException("Roundtrip substrait plan failed");
 	}
 
 	// FIXME: How to name expression?
@@ -48,7 +48,7 @@ void CompareQueryResults(QueryResult &actual_result, QueryResult &roundtrip_resu
 	//	}
 	// compare types
 	if (actual_result.types != roundtrip_result.types) {
-		throw runtime_error("Substrait Plan Types differ from Actual Result Types");
+		throw InternalException("Substrait Plan Types differ from Actual Result Types");
 	}
 	// now compare the actual values
 	// fetch chunks
@@ -59,13 +59,13 @@ void CompareQueryResults(QueryResult &actual_result, QueryResult &roundtrip_resu
 			return;
 		}
 		if (!lchunk || !rchunk) {
-			throw runtime_error("Substrait Plan Types chunk differs from Actual Result chunk");
+			throw InternalException("Substrait Plan Types chunk differs from Actual Result chunk");
 		}
 		if (lchunk->size() == 0 && rchunk->size() == 0) {
 			return;
 		}
 		if (lchunk->size() != rchunk->size()) {
-			throw runtime_error("Substrait Plan Types chunk size differs from Actual Result chunk size");
+			throw InternalException("Substrait Plan Types chunk size differs from Actual Result chunk size");
 		}
 		for (idx_t col = 0; col < rchunk->ColumnCount(); col++) {
 			for (idx_t row = 0; row < rchunk->size(); row++) {
@@ -77,7 +77,7 @@ void CompareQueryResults(QueryResult &actual_result, QueryResult &roundtrip_resu
 				if (lvalue != rvalue) {
 					lchunk->Print();
 					rchunk->Print();
-					throw runtime_error("Substrait Plan Result differs from Actual Result");
+					throw InternalException("Substrait Plan Result differs from Actual Result");
 				}
 			}
 		}
@@ -98,12 +98,10 @@ static void ToSubFunction(ClientContext &context, const FunctionData *bind_data,
 		return;
 	}
 	output.SetCardinality(1);
-	DuckDBToSubstrait transformer_d2s;
 	auto new_conn = Connection(*context.db);
 	auto query_plan = new_conn.context->ExtractPlan(data.query);
-	transformer_d2s.TransformPlan(*query_plan);
-	string serialized;
-	transformer_d2s.SerializeToString(serialized);
+	DuckDBToSubstrait transformer_d2s(*query_plan);
+	auto serialized = transformer_d2s.SerializeToString();
 
 	output.SetValue(0, 0, Value::BLOB_RAW(serialized));
 	data.finished = true;

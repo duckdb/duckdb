@@ -2,21 +2,27 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/list.hpp"
-
 #include "duckdb/function/table/table_scan.hpp"
 
 #include "substrait/plan.pb.h"
 #include "substrait/expression.pb.h"
 namespace duckdb {
-using namespace std;
+
+// using namespace std;
+
+string DuckDBToSubstrait::SerializeToString() {
+	string serialized;
+	if (!plan.SerializeToString(&serialized)) {
+		throw InternalException("It was not possible to serialize the substrait plan");
+	}
+	return serialized;
+}
 
 string GetDecimalInternalString(duckdb::Value &value) {
 	switch (value.type().InternalType()) {
@@ -31,200 +37,241 @@ string GetDecimalInternalString(duckdb::Value &value) {
 	case duckdb::PhysicalType::INT128:
 		return value.GetValueUnsafe<duckdb::hugeint_t>().ToString();
 	default:
-		throw runtime_error("Not accepted internal type for decimal");
+		throw InternalException("Not accepted internal type for decimal");
 	}
+}
+
+void DuckDBToSubstrait::TransformDecimal(duckdb::Value &dval, substrait::Expression &sexpr) {
+	auto &sval = *sexpr.mutable_literal();
+	auto *allocated_decimal = new ::substrait::Expression_Literal_Decimal();
+	uint8_t scale, width;
+	dval.type().GetDecimalProperties(width, scale);
+	allocated_decimal->set_scale(scale);
+	allocated_decimal->set_precision(width);
+	auto *decimal_value = new string();
+	*decimal_value = GetDecimalInternalString(dval);
+	allocated_decimal->set_allocated_value(decimal_value);
+	sval.set_allocated_decimal(allocated_decimal);
+}
+
+void DuckDBToSubstrait::TransformInteger(duckdb::Value &dval, substrait::Expression &sexpr) {
+	auto &sval = *sexpr.mutable_literal();
+	sval.set_i32(dval.GetValue<int32_t>());
+}
+
+void DuckDBToSubstrait::TransformBigInt(duckdb::Value &dval, substrait::Expression &sexpr) {
+	auto &sval = *sexpr.mutable_literal();
+	sval.set_i64(dval.GetValue<int64_t>());
+}
+
+void DuckDBToSubstrait::TransformDate(duckdb::Value &dval, substrait::Expression &sexpr) {
+	// TODO how are we going to represent dates?
+	auto &sval = *sexpr.mutable_literal();
+	sval.set_string(dval.ToString());
+}
+
+void DuckDBToSubstrait::TransformVarchar(duckdb::Value &dval, substrait::Expression &sexpr) {
+	auto &sval = *sexpr.mutable_literal();
+	string duck_str = dval.GetValue<string>();
+	sval.set_string(dval.GetValue<string>());
+}
+
+void DuckDBToSubstrait::TransformHugeInt(duckdb::Value &dval, substrait::Expression &sexpr) {
+	// Must create a cast from decimal to hugeint
+	auto sfun = sexpr.mutable_scalar_function();
+	sfun->set_function_reference(RegisterFunction("cast"));
+	auto &sval = *sfun->add_args()->mutable_literal();
+	auto *allocated_decimal = new ::substrait::Expression_Literal_Decimal();
+	auto hugeint_str = dval.ToString();
+	allocated_decimal->set_scale(0);
+	allocated_decimal->set_precision((int32_t)hugeint_str.size());
+
+	auto *decimal_value = new string();
+	*decimal_value = hugeint_str;
+	allocated_decimal->set_allocated_value(decimal_value);
+	sval.set_allocated_decimal(allocated_decimal);
+	sfun->add_args()->mutable_literal()->set_string("HUGEINT");
+}
+
+void DuckDBToSubstrait::TransformBoolean(duckdb::Value &dval, substrait::Expression &sexpr) {
+	auto &sval = *sexpr.mutable_literal();
+	sval.set_boolean(dval.GetValue<bool>());
 }
 void DuckDBToSubstrait::TransformConstant(duckdb::Value &dval, substrait::Expression &sexpr) {
 	auto &duckdb_type = dval.type();
 	switch (duckdb_type.id()) {
-	case duckdb::LogicalTypeId::DECIMAL: {
-		auto &sval = *sexpr.mutable_literal();
-		auto *allocated_decimal = new ::substrait::Expression_Literal_Decimal();
-		uint8_t scale, width;
-		dval.type().GetDecimalProperties(width, scale);
-		allocated_decimal->set_scale(scale);
-		allocated_decimal->set_precision(width);
-		auto *decimal_value = new string();
-		*decimal_value = GetDecimalInternalString(dval);
-		allocated_decimal->set_allocated_value(decimal_value);
-		sval.set_allocated_decimal(allocated_decimal);
+	case duckdb::LogicalTypeId::DECIMAL:
+		TransformDecimal(dval, sexpr);
 		break;
-	}
-	case duckdb::LogicalTypeId::INTEGER: {
-		auto &sval = *sexpr.mutable_literal();
-		sval.set_i32(dval.GetValue<int32_t>());
+	case duckdb::LogicalTypeId::INTEGER:
+		TransformInteger(dval, sexpr);
 		break;
-	}
-	case duckdb::LogicalTypeId::BIGINT: {
-		auto &sval = *sexpr.mutable_literal();
-		sval.set_i64(dval.GetValue<int64_t>());
+	case duckdb::LogicalTypeId::BIGINT:
+		TransformBigInt(dval, sexpr);
 		break;
-	}
-	case duckdb::LogicalTypeId::DATE: {
-		// TODO how are we going to represent dates?
-		auto &sval = *sexpr.mutable_literal();
-		sval.set_string(dval.ToString());
+	case duckdb::LogicalTypeId::DATE:
+		TransformDate(dval, sexpr);
 		break;
-	}
-	case duckdb::LogicalTypeId::VARCHAR: {
-		auto &sval = *sexpr.mutable_literal();
-		string duck_str = dval.GetValue<string>();
-		sval.set_string(dval.GetValue<string>());
+	case duckdb::LogicalTypeId::VARCHAR:
+		TransformVarchar(dval, sexpr);
 		break;
-	}
-
-	case duckdb::LogicalTypeId::HUGEINT: {
-		// Must create a cast from decimal to hugeint
-		auto sfun = sexpr.mutable_scalar_function();
-		sfun->set_function_reference(RegisterFunction("cast"));
-		auto &sval = *sfun->add_args()->mutable_literal();
-		auto *allocated_decimal = new ::substrait::Expression_Literal_Decimal();
-		auto hugeint_str = dval.ToString();
-		allocated_decimal->set_scale(0);
-		allocated_decimal->set_precision((int32_t)hugeint_str.size());
-
-		auto *decimal_value = new string();
-		*decimal_value = hugeint_str;
-		allocated_decimal->set_allocated_value(decimal_value);
-		sval.set_allocated_decimal(allocated_decimal);
-		sfun->add_args()->mutable_literal()->set_string("HUGEINT");
+	case duckdb::LogicalTypeId::HUGEINT:
+		TransformHugeInt(dval, sexpr);
 		break;
-	}
-	case duckdb::LogicalTypeId::BOOLEAN: {
-		auto &sval = *sexpr.mutable_literal();
-		sval.set_boolean(dval.GetValue<bool>());
+	case duckdb::LogicalTypeId::BOOLEAN:
+		TransformBoolean(dval, sexpr);
 		break;
-	}
 	default:
-		throw runtime_error(duckdb_type.ToString());
+		throw InternalException(duckdb_type.ToString());
 	}
 }
 
+void DuckDBToSubstrait::TransformBoundRefExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr,
+                                                    uint64_t col_offset) {
+	auto &dref = (duckdb::BoundReferenceExpression &)dexpr;
+	CreateFieldRef(&sexpr, dref.index + col_offset);
+}
+
+void DuckDBToSubstrait::TransformCastExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr,
+                                                uint64_t col_offset) {
+	auto &dcast = (duckdb::BoundCastExpression &)dexpr;
+	auto sfun = sexpr.mutable_scalar_function();
+	sfun->set_function_reference(RegisterFunction("cast"));
+	TransformExpr(*dcast.child, *sfun->add_args(), col_offset);
+	sfun->add_args()->mutable_literal()->set_string(dcast.return_type.ToString());
+}
+
+void DuckDBToSubstrait::TransformFunctionExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr,
+                                                    uint64_t col_offset) {
+	auto &dfun = (duckdb::BoundFunctionExpression &)dexpr;
+	auto sfun = sexpr.mutable_scalar_function();
+	sfun->set_function_reference(RegisterFunction(dfun.function.name));
+
+	for (auto &darg : dfun.children) {
+		auto sarg = sfun->add_args();
+		TransformExpr(*darg, *sarg, col_offset);
+	}
+}
+
+void DuckDBToSubstrait::TransformConstantExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr) {
+	auto &dconst = (duckdb::BoundConstantExpression &)dexpr;
+	TransformConstant(dconst.value, sexpr);
+}
+
+void DuckDBToSubstrait::TransformComparisonExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr) {
+	auto &dcomp = (duckdb::BoundComparisonExpression &)dexpr;
+
+	string fname;
+	switch (dexpr.type) {
+	case duckdb::ExpressionType::COMPARE_EQUAL:
+		fname = "equal";
+		break;
+	case duckdb::ExpressionType::COMPARE_LESSTHAN:
+		fname = "lessthan";
+		break;
+	case duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		fname = "lessthanequal";
+		break;
+	case duckdb::ExpressionType::COMPARE_GREATERTHAN:
+		fname = "greaterthan";
+		break;
+	case duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		fname = "greaterthanequal";
+		break;
+	case duckdb::ExpressionType::COMPARE_NOTEQUAL:
+		fname = "notequal";
+		break;
+	default:
+		throw InternalException(duckdb::ExpressionTypeToString(dexpr.type));
+	}
+
+	auto scalar_fun = sexpr.mutable_scalar_function();
+	scalar_fun->set_function_reference(RegisterFunction(fname));
+	TransformExpr(*dcomp.left, *scalar_fun->add_args(), 0);
+	TransformExpr(*dcomp.right, *scalar_fun->add_args(), 0);
+}
+
+void DuckDBToSubstrait::TransformConjunctionExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr,
+                                                       uint64_t col_offset) {
+	auto &dconj = (duckdb::BoundConjunctionExpression &)dexpr;
+	string fname;
+	switch (dexpr.type) {
+	case duckdb::ExpressionType::CONJUNCTION_AND:
+		fname = "and";
+		break;
+	case duckdb::ExpressionType::CONJUNCTION_OR:
+		fname = "or";
+		break;
+	default:
+		throw InternalException(duckdb::ExpressionTypeToString(dexpr.type));
+	}
+
+	auto scalar_fun = sexpr.mutable_scalar_function();
+	scalar_fun->set_function_reference(RegisterFunction(fname));
+	for (auto &child : dconj.children) {
+		TransformExpr(*child, *scalar_fun->add_args(), col_offset);
+	}
+}
+
+void DuckDBToSubstrait::TransformNotNullExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr,
+                                                   uint64_t col_offset) {
+	auto &dop = (duckdb::BoundOperatorExpression &)dexpr;
+	auto scalar_fun = sexpr.mutable_scalar_function();
+	scalar_fun->set_function_reference(RegisterFunction("is_not_null"));
+	TransformExpr(*dop.children[0], *scalar_fun->add_args(), col_offset);
+}
+
+void DuckDBToSubstrait::TransformCaseExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr) {
+	auto &dcase = (duckdb::BoundCaseExpression &)dexpr;
+	auto scase = sexpr.mutable_if_then();
+
+	for (auto &dcheck : dcase.case_checks) {
+		auto sif = scase->mutable_ifs()->Add();
+		TransformExpr(*dcheck.when_expr, *sif->mutable_if_());
+		TransformExpr(*dcheck.then_expr, *sif->mutable_then());
+	}
+	TransformExpr(*dcase.else_expr, *scase->mutable_else_());
+}
 void DuckDBToSubstrait::TransformExpr(duckdb::Expression &dexpr, substrait::Expression &sexpr, uint64_t col_offset) {
 	switch (dexpr.type) {
-	case duckdb::ExpressionType::BOUND_REF: {
-		auto &dref = (duckdb::BoundReferenceExpression &)dexpr;
-		CreateFieldRef(&sexpr, dref.index + col_offset);
-		return;
-	}
-	case duckdb::ExpressionType::OPERATOR_CAST: {
-		auto &dcast = (duckdb::BoundCastExpression &)dexpr;
-		auto sfun = sexpr.mutable_scalar_function();
-		sfun->set_function_reference(RegisterFunction("cast"));
-		TransformExpr(*dcast.child, *sfun->add_args(), col_offset);
-		sfun->add_args()->mutable_literal()->set_string(dcast.return_type.ToString());
-		return;
-	}
-	case duckdb::ExpressionType::BOUND_FUNCTION: {
-		auto &dfun = (duckdb::BoundFunctionExpression &)dexpr;
-		auto sfun = sexpr.mutable_scalar_function();
-		sfun->set_function_reference(RegisterFunction(dfun.function.name));
-
-		for (auto &darg : dfun.children) {
-			auto sarg = sfun->add_args();
-			TransformExpr(*darg, *sarg, col_offset);
-		}
-
-		return;
-	}
-	case duckdb::ExpressionType::VALUE_CONSTANT: {
-		auto &dconst = (duckdb::BoundConstantExpression &)dexpr;
-		TransformConstant(dconst.value, sexpr);
-		return;
-	}
+	case duckdb::ExpressionType::BOUND_REF:
+		TransformBoundRefExpression(dexpr, sexpr, col_offset);
+		break;
+	case duckdb::ExpressionType::OPERATOR_CAST:
+		TransformCastExpression(dexpr, sexpr, col_offset);
+		break;
+	case duckdb::ExpressionType::BOUND_FUNCTION:
+		TransformFunctionExpression(dexpr, sexpr, col_offset);
+		break;
+	case duckdb::ExpressionType::VALUE_CONSTANT:
+		TransformConstantExpression(dexpr, sexpr);
+		break;
 	case duckdb::ExpressionType::COMPARE_EQUAL:
 	case duckdb::ExpressionType::COMPARE_LESSTHAN:
 	case duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO:
 	case duckdb::ExpressionType::COMPARE_GREATERTHAN:
 	case duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 	case duckdb::ExpressionType::COMPARE_NOTEQUAL:
-
-	{
-		auto &dcomp = (duckdb::BoundComparisonExpression &)dexpr;
-
-		string fname;
-		switch (dexpr.type) {
-		case duckdb::ExpressionType::COMPARE_EQUAL:
-			fname = "equal";
-			break;
-		case duckdb::ExpressionType::COMPARE_LESSTHAN:
-			fname = "lessthan";
-			break;
-		case duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			fname = "lessthanequal";
-			break;
-		case duckdb::ExpressionType::COMPARE_GREATERTHAN:
-			fname = "greaterthan";
-			break;
-		case duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			fname = "greaterthanequal";
-			break;
-		case duckdb::ExpressionType::COMPARE_NOTEQUAL:
-			fname = "notequal";
-			break;
-		default:
-			throw runtime_error(duckdb::ExpressionTypeToString(dexpr.type));
-		}
-
-		auto scalar_fun = sexpr.mutable_scalar_function();
-		scalar_fun->set_function_reference(RegisterFunction(fname));
-		TransformExpr(*dcomp.left, *scalar_fun->add_args(), 0);
-		TransformExpr(*dcomp.right, *scalar_fun->add_args(), 0);
-
-		return;
-	}
+		TransformComparisonExpression(dexpr, sexpr);
+		break;
 	case duckdb::ExpressionType::CONJUNCTION_AND:
-	case duckdb::ExpressionType::CONJUNCTION_OR: {
-		auto &dconj = (duckdb::BoundConjunctionExpression &)dexpr;
-		string fname;
-		switch (dexpr.type) {
-		case duckdb::ExpressionType::CONJUNCTION_AND:
-			fname = "and";
-			break;
-		case duckdb::ExpressionType::CONJUNCTION_OR:
-			fname = "or";
-			break;
-		default:
-			throw runtime_error(duckdb::ExpressionTypeToString(dexpr.type));
-		}
-
-		auto scalar_fun = sexpr.mutable_scalar_function();
-		scalar_fun->set_function_reference(RegisterFunction(fname));
-		for (auto &child : dconj.children) {
-			TransformExpr(*child, *scalar_fun->add_args(), col_offset);
-		}
-		return;
-	}
-	case duckdb::ExpressionType::OPERATOR_IS_NOT_NULL: {
-		auto &dop = (duckdb::BoundOperatorExpression &)dexpr;
-
-		auto scalar_fun = sexpr.mutable_scalar_function();
-		scalar_fun->set_function_reference(RegisterFunction("is_not_null"));
-		TransformExpr(*dop.children[0], *scalar_fun->add_args(), col_offset);
-
-		return;
-	}
-	case duckdb::ExpressionType::CASE_EXPR: {
-		auto &dcase = (duckdb::BoundCaseExpression &)dexpr;
-		auto scase = sexpr.mutable_if_then();
-
-		for (auto &dcheck : dcase.case_checks) {
-			auto sif = scase->mutable_ifs()->Add();
-			TransformExpr(*dcheck.when_expr, *sif->mutable_if_());
-			TransformExpr(*dcheck.then_expr, *sif->mutable_then());
-		}
-		TransformExpr(*dcase.else_expr, *scase->mutable_else_());
-		return;
-	}
-
+	case duckdb::ExpressionType::CONJUNCTION_OR:
+		TransformConjunctionExpression(dexpr, sexpr, col_offset);
+		break;
+	case duckdb::ExpressionType::OPERATOR_IS_NOT_NULL:
+		TransformNotNullExpression(dexpr, sexpr, col_offset);
+		break;
+	case duckdb::ExpressionType::CASE_EXPR:
+		TransformCaseExpression(dexpr, sexpr);
+		break;
 	default:
-		throw runtime_error(duckdb::ExpressionTypeToString(dexpr.type));
+		throw InternalException(duckdb::ExpressionTypeToString(dexpr.type));
 	}
 }
 
-uint64_t DuckDBToSubstrait::RegisterFunction(string name) {
+uint64_t DuckDBToSubstrait::RegisterFunction(const string &name) {
 	if (name.empty()) {
-		throw runtime_error("empty function name bad");
+		throw InternalException("Missing function name");
 	}
 	if (functions_map.find(name) == functions_map.end()) {
 		auto function_id = last_function_id++;
@@ -241,53 +288,62 @@ void DuckDBToSubstrait::CreateFieldRef(substrait::Expression *expr, uint64_t col
 	expr->mutable_selection()->mutable_direct_reference()->mutable_struct_field()->set_field((int32_t)col_idx);
 }
 
-substrait::Expression *DuckDBToSubstrait::TransformFilter(uint64_t col_idx, duckdb::TableFilter &dfilter) {
+substrait::Expression *DuckDBToSubstrait::TransformIsNotNullFilter(uint64_t col_idx, duckdb::TableFilter &dfilter) {
+	auto s_expr = new substrait::Expression();
+	auto scalar_fun = s_expr->mutable_scalar_function();
+	scalar_fun->set_function_reference(RegisterFunction("is_not_null"));
+	CreateFieldRef(scalar_fun->add_args(), col_idx);
+	return s_expr;
+}
 
-	switch (dfilter.filter_type) {
-	case duckdb::TableFilterType::IS_NOT_NULL: {
-		auto s_expr = new substrait::Expression();
-		auto scalar_fun = s_expr->mutable_scalar_function();
-		scalar_fun->set_function_reference(RegisterFunction("is_not_null"));
-		CreateFieldRef(scalar_fun->add_args(), col_idx);
-		return s_expr;
-	}
-	case duckdb::TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_filter = (duckdb::ConjunctionAndFilter &)dfilter;
-		return CreateConjunction(conjunction_filter.child_filters,
-		                         [&](unique_ptr<duckdb::TableFilter> &in) { return TransformFilter(col_idx, *in); });
-	}
-	case duckdb::TableFilterType::CONSTANT_COMPARISON: {
-		auto s_expr = new substrait::Expression();
-		auto s_scalar = s_expr->mutable_scalar_function();
-		auto &constant_filter = (duckdb::ConstantFilter &)dfilter;
-		CreateFieldRef(s_scalar->add_args(), col_idx);
-		TransformConstant(constant_filter.constant, *s_scalar->add_args());
+substrait::Expression *DuckDBToSubstrait::TransformConjuctionAndFilter(uint64_t col_idx, duckdb::TableFilter &dfilter) {
+	auto &conjunction_filter = (duckdb::ConjunctionAndFilter &)dfilter;
+	return CreateConjunction(conjunction_filter.child_filters,
+	                         [&](unique_ptr<duckdb::TableFilter> &in) { return TransformFilter(col_idx, *in); });
+}
 
-		uint64_t function_id;
-		switch (constant_filter.comparison_type) {
-		case duckdb::ExpressionType::COMPARE_EQUAL:
-			function_id = RegisterFunction("equal");
-			break;
-		case duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			function_id = RegisterFunction("lessthanequal");
-			break;
-		case duckdb::ExpressionType::COMPARE_LESSTHAN:
-			function_id = RegisterFunction("lessthan");
-			break;
-		case duckdb::ExpressionType::COMPARE_GREATERTHAN:
-			function_id = RegisterFunction("greaterthan");
-			break;
-		case duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			function_id = RegisterFunction("greaterthanequal");
-			break;
-		default:
-			throw runtime_error(duckdb::ExpressionTypeToString(constant_filter.comparison_type));
-		}
-		s_scalar->set_function_reference(function_id);
-		return s_expr;
-	}
+substrait::Expression *DuckDBToSubstrait::TransformConstantComparisonFilter(uint64_t col_idx,
+                                                                            duckdb::TableFilter &dfilter) {
+	auto s_expr = new substrait::Expression();
+	auto s_scalar = s_expr->mutable_scalar_function();
+	auto &constant_filter = (duckdb::ConstantFilter &)dfilter;
+	CreateFieldRef(s_scalar->add_args(), col_idx);
+	TransformConstant(constant_filter.constant, *s_scalar->add_args());
+
+	uint64_t function_id;
+	switch (constant_filter.comparison_type) {
+	case duckdb::ExpressionType::COMPARE_EQUAL:
+		function_id = RegisterFunction("equal");
+		break;
+	case duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		function_id = RegisterFunction("lessthanequal");
+		break;
+	case duckdb::ExpressionType::COMPARE_LESSTHAN:
+		function_id = RegisterFunction("lessthan");
+		break;
+	case duckdb::ExpressionType::COMPARE_GREATERTHAN:
+		function_id = RegisterFunction("greaterthan");
+		break;
+	case duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		function_id = RegisterFunction("greaterthanequal");
+		break;
 	default:
-		throw runtime_error("Unsupported table filter type");
+		throw InternalException(duckdb::ExpressionTypeToString(constant_filter.comparison_type));
+	}
+	s_scalar->set_function_reference(function_id);
+	return s_expr;
+}
+
+substrait::Expression *DuckDBToSubstrait::TransformFilter(uint64_t col_idx, duckdb::TableFilter &dfilter) {
+	switch (dfilter.filter_type) {
+	case duckdb::TableFilterType::IS_NOT_NULL:
+		return TransformIsNotNullFilter(col_idx, dfilter);
+	case duckdb::TableFilterType::CONJUNCTION_AND:
+		return TransformConjuctionAndFilter(col_idx, dfilter);
+	case duckdb::TableFilterType::CONSTANT_COMPARISON:
+		return TransformConstantComparisonFilter(col_idx, dfilter);
+	default:
+		throw InternalException("Unsupported table filter type");
 	}
 }
 
@@ -302,7 +358,7 @@ substrait::Expression *DuckDBToSubstrait::TransformJoinCond(duckdb::JoinConditio
 		join_comparision = "greaterthan";
 		break;
 	default:
-		throw runtime_error("Unsupported join comparision");
+		throw InternalException("Unsupported join comparision");
 	}
 	auto scalar_fun = expr->mutable_scalar_function();
 	scalar_fun->set_function_reference(RegisterFunction(join_comparision));
@@ -325,7 +381,7 @@ void DuckDBToSubstrait::TransformOrder(duckdb::BoundOrderByNode &dordf, substrai
 
 			break;
 		default:
-			throw runtime_error("Unsupported ordering type");
+			throw InternalException("Unsupported ordering type");
 		}
 		break;
 	case duckdb::OrderType::DESCENDING:
@@ -340,11 +396,11 @@ void DuckDBToSubstrait::TransformOrder(duckdb::BoundOrderByNode &dordf, substrai
 
 			break;
 		default:
-			throw runtime_error("Unsupported ordering type");
+			throw InternalException("Unsupported ordering type");
 		}
 		break;
 	default:
-		throw runtime_error("Unsupported ordering type");
+		throw InternalException("Unsupported ordering type");
 	}
 	TransformExpr(*dordf.expression, *sordf.mutable_expr());
 }
@@ -470,7 +526,7 @@ substrait::Rel *DuckDBToSubstrait::TransformComparisonJoin(duckdb::LogicalOperat
 		//		sjoin->set_mark_index(djoin.mark_index);
 		//		break;
 	default:
-		throw runtime_error("Unsupported join type " + JoinTypeToString(djoin.join_type));
+		throw InternalException("Unsupported join type " + JoinTypeToString(djoin.join_type));
 	}
 
 	// somewhat odd semantics on our side
@@ -507,7 +563,7 @@ substrait::Rel *DuckDBToSubstrait::TransformAggregateGroup(duckdb::LogicalOperat
 	for (auto &dgrp : daggr.groups) {
 		if (dgrp->type != duckdb::ExpressionType::BOUND_REF) {
 			// TODO push projection or push substrait to allow expressions here
-			throw runtime_error("No expressions in groupings yet");
+			throw InternalException("No expressions in groupings yet");
 		}
 		TransformExpr(*dgrp, *sgrp->add_grouping_expressions());
 	}
@@ -515,7 +571,7 @@ substrait::Rel *DuckDBToSubstrait::TransformAggregateGroup(duckdb::LogicalOperat
 		auto smeas = saggr->add_measures()->mutable_measure();
 		if (dmeas->type != duckdb::ExpressionType::BOUND_AGGREGATE) {
 			// TODO push projection or push substrait, too
-			throw runtime_error("No non-aggregate expressions in measures yet");
+			throw InternalException("No non-aggregate expressions in measures yet");
 		}
 		auto &daexpr = (duckdb::BoundAggregateExpression &)*dmeas;
 		smeas->set_function_reference(RegisterFunction(daexpr.function.name));
@@ -535,7 +591,7 @@ substrait::Rel *DuckDBToSubstrait::TransformGet(duckdb::LogicalOperator &dop) {
 
 	if (!dget.table_filters.filters.empty()) {
 		sget->unsafe_arena_set_allocated_filter(CreateConjunction(
-		    dget.table_filters.filters, [&](pair<const duckdb::idx_t, unique_ptr<duckdb::TableFilter>> &in) {
+		    dget.table_filters.filters, [&](std::pair<const duckdb::idx_t, unique_ptr<duckdb::TableFilter>> &in) {
 			    auto col_idx = in.first;
 			    auto &filter = *in.second;
 			    return TransformFilter(col_idx, filter);
@@ -604,7 +660,7 @@ substrait::Rel *DuckDBToSubstrait::TransformOp(duckdb::LogicalOperator &dop) {
 		return TransformCrossProduct(dop);
 
 	default:
-		throw runtime_error(duckdb::LogicalOperatorToString(dop.type));
+		throw InternalException(duckdb::LogicalOperatorToString(dop.type));
 	}
 }
 
