@@ -6,7 +6,7 @@
 using namespace duckdb;
 
 void duckdb::DBDeleter(DBWrapper* db) {
-	Rf_warning(
+	cpp11::warning(
 	    "Database is garbage-collected, use dbDisconnect(con, shutdown=TRUE) or "
 		    "duckdb::duckdb_shutdown(drv) to avoid this.");
   delete db;
