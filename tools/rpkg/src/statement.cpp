@@ -94,7 +94,11 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 		case LogicalTypeId::INTEGER:
 			rtype = "integer";
 			break;
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_NS:
 			rtype = "POSIXct";
 			break;
 		case LogicalTypeId::DATE:
@@ -215,7 +219,11 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
 		varvalue = r_varvalue.Protect(NEW_NUMERIC(nrows));
@@ -249,6 +257,52 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 	return varvalue;
 }
 
+// Convert DuckDB's timestamp to R's timestamp (POSIXct). This is a represented as the number of seconds since the
+// epoch, stored as a double.
+template <LogicalTypeId>
+double ConvertTimestampValue(int64_t timestamp);
+
+template <>
+double ConvertTimestampValue<LogicalTypeId::TIMESTAMP_SEC>(int64_t timestamp) {
+	return static_cast<double>(timestamp);
+}
+
+template <>
+double ConvertTimestampValue<LogicalTypeId::TIMESTAMP_MS>(int64_t timestamp) {
+	return static_cast<double>(timestamp) / Interval::MSECS_PER_SEC;
+}
+
+template <>
+double ConvertTimestampValue<LogicalTypeId::TIMESTAMP>(int64_t timestamp) {
+	return static_cast<double>(timestamp) / Interval::MICROS_PER_SEC;
+}
+
+template <>
+double ConvertTimestampValue<LogicalTypeId::TIMESTAMP_TZ>(int64_t timestamp) {
+	return ConvertTimestampValue<LogicalTypeId::TIMESTAMP>(timestamp);
+}
+
+template <>
+double ConvertTimestampValue<LogicalTypeId::TIMESTAMP_NS>(int64_t timestamp) {
+	return static_cast<double>(timestamp) / Interval::NANOS_PER_SEC;
+}
+
+template <LogicalTypeId LT>
+void ConvertTimestampVector(Vector &src_vec, size_t count, SEXP &dest, uint64_t dest_offset) {
+	auto src_data = FlatVector::GetData<int64_t>(src_vec);
+	auto &mask = FlatVector::Validity(src_vec);
+	double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
+	for (size_t row_idx = 0; row_idx < count; row_idx++) {
+		dest_ptr[row_idx] = !mask.RowIsValid(row_idx) ? NA_REAL : ConvertTimestampValue<LT>(src_data[row_idx]);
+	}
+
+	// some dresssup for R
+	SET_CLASS(dest, RStrings::get().POSIXct_POSIXt_str);
+	Rf_setAttrib(dest, RStrings::get().tzone_sym, RStrings::get().UTC_str);
+}
+
+std::once_flag nanosecond_coercion_warning;
+
 static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 	switch (src_vec.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -269,20 +323,23 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 	case LogicalTypeId::INTEGER:
 		VectorToR<int32_t, uint32_t>(src_vec, n, INTEGER_POINTER(dest), dest_offset, NA_INTEGER);
 		break;
-	case LogicalTypeId::TIMESTAMP: {
-		auto src_data = FlatVector::GetData<timestamp_t>(src_vec);
-		auto &mask = FlatVector::Validity(src_vec);
-		double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
-		for (size_t row_idx = 0; row_idx < n; row_idx++) {
-			dest_ptr[row_idx] =
-			    !mask.RowIsValid(row_idx) ? NA_REAL : (double)Timestamp::GetEpochSeconds(src_data[row_idx]);
-		}
-
-		// some dresssup for R
-		SET_CLASS(dest, RStrings::get().POSIXct_POSIXt_str);
-		Rf_setAttrib(dest, RStrings::get().tzone_sym, RStrings::get().UTC_str);
+	case LogicalTypeId::TIMESTAMP_SEC:
+		ConvertTimestampVector<LogicalTypeId::TIMESTAMP_SEC>(src_vec, n, dest, dest_offset);
 		break;
-	}
+	case LogicalTypeId::TIMESTAMP_MS:
+		ConvertTimestampVector<LogicalTypeId::TIMESTAMP_MS>(src_vec, n, dest, dest_offset);
+		break;
+	case LogicalTypeId::TIMESTAMP:
+		ConvertTimestampVector<LogicalTypeId::TIMESTAMP>(src_vec, n, dest, dest_offset);
+		break;
+	case LogicalTypeId::TIMESTAMP_TZ:
+		ConvertTimestampVector<LogicalTypeId::TIMESTAMP_TZ>(src_vec, n, dest, dest_offset);
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		ConvertTimestampVector<LogicalTypeId::TIMESTAMP_NS>(src_vec, n, dest, dest_offset);
+		std::call_once(nanosecond_coercion_warning, Rf_warning,
+		               "Coercing nanoseconds to a lower resolution may result in a loss of data.");
+		break;
 	case LogicalTypeId::DATE: {
 		auto src_data = FlatVector::GetData<date_t>(src_vec);
 		auto &mask = FlatVector::Validity(src_vec);
