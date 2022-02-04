@@ -6,7 +6,7 @@ namespace duckdb {
 
 // if function->expression initialized then macro is  SCALAR
 //  and is stored in the SCALAR_FUNCTION catalog
-//  if function->query_node is initialized then macro is  a Table Macro
+//  if function->query_node iniatialized then macro is  a Table Macro
 //  and is stored in the TABLE_FUNCTION catalog
 MacroCatalogEntry::MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
     : StandardEntry(  (info->function->expression ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY),
@@ -20,7 +20,15 @@ void MacroCatalogEntry::Serialize(Serializer &main_serializer) {
 	FieldWriter writer(main_serializer);
 	writer.WriteString(schema->name);
 	writer.WriteString(name);
-	writer.WriteSerializable(*function->expression);
+
+	if (function->expression != nullptr) {
+		writer.WriteSerializable(*function->expression);
+	} else {
+		// cannot serialize a nullptr so use a dummy value
+		auto pe= unique_ptr<ParsedExpression>();
+		pe=make_unique<ConstantExpression>(Value::BIGINT(10));
+		writer.WriteSerializable(*pe);
+	}
 	writer.WriteSerializableList(function->parameters);
 	writer.WriteField<uint32_t>((uint32_t)function->default_parameters.size());
 	auto &serializer = writer.GetSerializer();
@@ -52,10 +60,13 @@ unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &main_so
 	}
 
 	info->function->query_node=reader.ReadOptional<QueryNode>(nullptr);
+	if (info->function->query_node) {
+		info->function->expression.release();
+	}
 
 	// either expression or query_node but not both
-	D_ASSERT ( info->function->expression && !info->function->query_node  ||
-	          !info->function->expression && info->function->query_node);
+	D_ASSERT ( ( info->function->expression && !info->function->query_node )  ||
+	             (!info->function->expression && info->function->query_node ));
 
 
 	reader.Finalize();
