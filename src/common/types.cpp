@@ -122,7 +122,6 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::BIT;
 	case LogicalTypeId::ENUM: {
 		D_ASSERT(type_info_);
-		auto size = EnumType::GetSize(*this);
 		return EnumType::GetPhysicalType(*this);
 	}
 	case LogicalTypeId::TABLE:

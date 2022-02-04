@@ -28,17 +28,25 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 
 //' @export
 [[cpp11::register]] SEXP expr_reference(std::string ref) {
+	if (ref.size() == 0) {
+		stop("expr_reference: Zero length name");
+	}
 	return make_external<ColumnRefExpression>("duckdb_expr", ref);
 }
 
 //' @export
 [[cpp11::register]] SEXP expr_constant(sexp val) {
+	if (LENGTH(val) != 1) {
+		stop("expr_constant: Need value of length one");
+	}
 	return make_external<ConstantExpression>("duckdb_expr", RApiTypes::SexpToValue(val, 0));
 }
 
 //' @export
 [[cpp11::register]] SEXP expr_function(std::string name, list args) {
-	// TODO check args
+	if (name.size() == 0) {
+		stop("expr_function: Zero length name");
+	}
 	vector<unique_ptr<ParsedExpression>> children;
 	for (auto arg : args) {
 		children.push_back(expr_extptr(arg)->Copy());
@@ -65,7 +73,14 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 
 // DuckDB Relations
 
-[[cpp11::register]] SEXP rel_from_df_R(duckdb::con_extptr con, sexp df) {
+[[cpp11::register]] SEXP rel_from_df_R(duckdb::con_extptr con, data_frame df) {
+	if (!con->conn) {
+		stop("rel_from_df: Invalid connection");
+	}
+	if (df.size() == 0) {
+		stop("rel_from_df: Invalid data frame");
+	}
+
 	auto rel = con->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)(SEXP)df)});
 	auto res = sexp(make_external<RelationWrapper>("duckdb_relation", move(rel)));
 	res.attr("df") = df;
@@ -170,5 +185,9 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 
 //' @export
 [[cpp11::register]] SEXP rel_sql(duckdb::rel_extptr rel, std::string sql) {
-	return result_to_df(rel->rel->Query("_", sql));
+	auto res = rel->rel->Query("_", sql);
+	if (!res->success) {
+		stop(res->error);
+	}
+	return result_to_df(move(res));
 }

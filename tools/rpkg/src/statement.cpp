@@ -419,10 +419,20 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 	}
 	case LogicalTypeId::ENUM: {
 		auto physical_type = src_vec.GetType().InternalType();
-
-		// TODO we need to somehow mark the string as used otherwise the input df needs to stay alive
-		if (physical_type == PhysicalType::UINT64) { // DEDUP_POINTER_ENUM
-			VectorToR<SEXP, SEXP>(src_vec, n, (SEXP *)DATAPTR(dest), dest_offset, NA_STRING);
+		auto dummy = NEW_STRING(1);
+		ptrdiff_t sexp_header_size = (data_ptr_t)DATAPTR(dummy) - (data_ptr_t)dummy; // don't tell anyone
+		if (physical_type == PhysicalType::UINT64) {                                 // DEDUP_POINTER_ENUM
+			auto src_ptr = FlatVector::GetData<uint64_t>(src_vec);
+			auto &mask = FlatVector::Validity(src_vec);
+			/* we have to use SET_STRING_ELT here because otherwise those SEXPs dont get referenced */
+			for (size_t row_idx = 0; row_idx < n; row_idx++) {
+				if (!mask.RowIsValid(row_idx)) {
+					SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
+				} else {
+					SET_STRING_ELT(dest, dest_offset + row_idx,
+					               (SEXP)((data_ptr_t)src_ptr[row_idx] - sexp_header_size));
+				}
+			}
 			break;
 		}
 

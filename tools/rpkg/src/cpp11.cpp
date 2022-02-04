@@ -145,10 +145,10 @@ extern "C" SEXP _duckdb_expr_tostring(SEXP expr) {
   END_CPP11
 }
 // relational.cpp
-SEXP rel_from_df_R(duckdb::con_extptr con, sexp df);
+SEXP rel_from_df_R(duckdb::con_extptr con, data_frame df);
 extern "C" SEXP _duckdb_rel_from_df_R(SEXP con, SEXP df) {
   BEGIN_CPP11
-    return cpp11::as_sexp(rel_from_df_R(cpp11::as_cpp<cpp11::decay_t<duckdb::con_extptr>>(con), cpp11::as_cpp<cpp11::decay_t<sexp>>(df)));
+    return cpp11::as_sexp(rel_from_df_R(cpp11::as_cpp<cpp11::decay_t<duckdb::con_extptr>>(con), cpp11::as_cpp<cpp11::decay_t<data_frame>>(df)));
   END_CPP11
 }
 // relational.cpp

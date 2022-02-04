@@ -156,7 +156,7 @@ struct DedupPointerEnumType {
 		return val == NA_STRING;
 	}
 	static uint64_t Convert(SEXP val) {
-		return (uint64_t)val;
+		return (uint64_t)DATAPTR(val);
 	}
 };
 
