@@ -38,14 +38,6 @@ typedef cpp11::external_pointer<DBWrapper, DBDeleter> db_eptr_t;
 typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
 typedef cpp11::external_pointer<RStatement> stmt_eptr_t;
 
-db_eptr_t Startup(std::string, bool, cpp11::list);
-
-void Shutdown(db_eptr_t);
-
-conn_eptr_t Connect(db_eptr_t);
-
-void Disconnect(conn_eptr_t);
-
 cpp11::list Prepare(conn_eptr_t, std::string);
 
 SEXP Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp);
@@ -134,3 +126,13 @@ private:
 };
 
 } // namespace duckdb
+
+// moved out of duckdb namespace for the time being (r-lib/cpp11#262)
+
+duckdb::db_eptr_t rapi_startup(std::string, bool, cpp11::list);
+
+void rapi_shutdown(duckdb::db_eptr_t);
+
+duckdb::conn_eptr_t rapi_connect(duckdb::db_eptr_t);
+
+void rapi_disconnect(duckdb::conn_eptr_t);

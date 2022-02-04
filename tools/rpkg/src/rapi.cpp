@@ -4,23 +4,6 @@
 
 // When changing this file, run cpp11::cpp_register() from R
 
-[[cpp11::register]] duckdb::db_eptr_t
-startup_R(std::string dbdir, bool readonly, cpp11::list config) {
-	return duckdb::Startup(dbdir, readonly, config);
-}
-
-[[cpp11::register]] void shutdown_R(duckdb::db_eptr_t db) {
-	return duckdb::Shutdown(db);
-}
-
-[[cpp11::register]] duckdb::conn_eptr_t connect_R(duckdb::db_eptr_t db) {
-	return duckdb::Connect(db);
-}
-
-[[cpp11::register]] void disconnect_R(duckdb::conn_eptr_t conn) {
-	return duckdb::Disconnect(conn);
-}
-
 [[cpp11::register]] cpp11::list prepare_R(duckdb::conn_eptr_t conn,
                                           std::string query) {
 	return duckdb::Prepare(conn, query);

@@ -12,7 +12,7 @@ void duckdb::DBDeleter(DBWrapper* db) {
   delete db;
 }
 
-db_eptr_t duckdb::Startup(std::string dbdir, bool readonly, cpp11::list configsexp) {
+[[cpp11::register]] duckdb::db_eptr_t rapi_startup(std::string dbdir, bool readonly, cpp11::list configsexp) {
 
 	const char *dbdirchar;
 
@@ -66,7 +66,7 @@ db_eptr_t duckdb::Startup(std::string dbdir, bool readonly, cpp11::list configse
   return db_eptr_t(wrapper);
 }
 
-void duckdb::Shutdown(db_eptr_t dbsexp) {
+[[cpp11::register]] void rapi_shutdown(duckdb::db_eptr_t dbsexp) {
 	auto db_wrapper = dbsexp.release();
 	if (db_wrapper) {
 		delete db_wrapper;

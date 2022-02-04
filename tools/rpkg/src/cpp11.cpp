@@ -5,33 +5,33 @@
 #include "cpp11/declarations.hpp"
 #include <R_ext/Visibility.h>
 
-// rapi.cpp
-duckdb::db_eptr_t startup_R(std::string dbdir, bool readonly, cpp11::list config);
-extern "C" SEXP _duckdb_startup_R(SEXP dbdir, SEXP readonly, SEXP config) {
+// connection.cpp
+duckdb::conn_eptr_t rapi_connect(duckdb::db_eptr_t db);
+extern "C" SEXP _duckdb_rapi_connect(SEXP db) {
   BEGIN_CPP11
-    return cpp11::as_sexp(startup_R(cpp11::as_cpp<cpp11::decay_t<std::string>>(dbdir), cpp11::as_cpp<cpp11::decay_t<bool>>(readonly), cpp11::as_cpp<cpp11::decay_t<cpp11::list>>(config)));
+    return cpp11::as_sexp(rapi_connect(cpp11::as_cpp<cpp11::decay_t<duckdb::db_eptr_t>>(db)));
   END_CPP11
 }
-// rapi.cpp
-void shutdown_R(duckdb::db_eptr_t db);
-extern "C" SEXP _duckdb_shutdown_R(SEXP db) {
+// connection.cpp
+void rapi_disconnect(duckdb::conn_eptr_t conn);
+extern "C" SEXP _duckdb_rapi_disconnect(SEXP conn) {
   BEGIN_CPP11
-    shutdown_R(cpp11::as_cpp<cpp11::decay_t<duckdb::db_eptr_t>>(db));
+    rapi_disconnect(cpp11::as_cpp<cpp11::decay_t<duckdb::conn_eptr_t>>(conn));
     return R_NilValue;
   END_CPP11
 }
-// rapi.cpp
-duckdb::conn_eptr_t connect_R(duckdb::db_eptr_t db);
-extern "C" SEXP _duckdb_connect_R(SEXP db) {
+// database.cpp
+duckdb::db_eptr_t rapi_startup(std::string dbdir, bool readonly, cpp11::list configsexp);
+extern "C" SEXP _duckdb_rapi_startup(SEXP dbdir, SEXP readonly, SEXP configsexp) {
   BEGIN_CPP11
-    return cpp11::as_sexp(connect_R(cpp11::as_cpp<cpp11::decay_t<duckdb::db_eptr_t>>(db)));
+    return cpp11::as_sexp(rapi_startup(cpp11::as_cpp<cpp11::decay_t<std::string>>(dbdir), cpp11::as_cpp<cpp11::decay_t<bool>>(readonly), cpp11::as_cpp<cpp11::decay_t<cpp11::list>>(configsexp)));
   END_CPP11
 }
-// rapi.cpp
-void disconnect_R(duckdb::conn_eptr_t conn);
-extern "C" SEXP _duckdb_disconnect_R(SEXP conn) {
+// database.cpp
+void rapi_shutdown(duckdb::db_eptr_t dbsexp);
+extern "C" SEXP _duckdb_rapi_shutdown(SEXP dbsexp) {
   BEGIN_CPP11
-    disconnect_R(cpp11::as_cpp<cpp11::decay_t<duckdb::conn_eptr_t>>(conn));
+    rapi_shutdown(cpp11::as_cpp<cpp11::decay_t<duckdb::db_eptr_t>>(dbsexp));
     return R_NilValue;
   END_CPP11
 }
@@ -121,18 +121,18 @@ extern "C" SEXP _duckdb_ptr_to_str(SEXP extptr) {
 extern "C" {
 static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_bind_R",               (DL_FUNC) &_duckdb_bind_R,               3},
-    {"_duckdb_connect_R",            (DL_FUNC) &_duckdb_connect_R,            1},
-    {"_duckdb_disconnect_R",         (DL_FUNC) &_duckdb_disconnect_R,         1},
     {"_duckdb_execute_R",            (DL_FUNC) &_duckdb_execute_R,            2},
     {"_duckdb_fetch_arrow_R",        (DL_FUNC) &_duckdb_fetch_arrow_R,        4},
     {"_duckdb_fetch_record_batch_R", (DL_FUNC) &_duckdb_fetch_record_batch_R, 2},
     {"_duckdb_prepare_R",            (DL_FUNC) &_duckdb_prepare_R,            2},
     {"_duckdb_ptr_to_str",           (DL_FUNC) &_duckdb_ptr_to_str,           1},
+    {"_duckdb_rapi_connect",         (DL_FUNC) &_duckdb_rapi_connect,         1},
+    {"_duckdb_rapi_disconnect",      (DL_FUNC) &_duckdb_rapi_disconnect,      1},
+    {"_duckdb_rapi_shutdown",        (DL_FUNC) &_duckdb_rapi_shutdown,        1},
+    {"_duckdb_rapi_startup",         (DL_FUNC) &_duckdb_rapi_startup,         3},
     {"_duckdb_register_R",           (DL_FUNC) &_duckdb_register_R,           3},
     {"_duckdb_register_arrow_R",     (DL_FUNC) &_duckdb_register_arrow_R,     4},
     {"_duckdb_release_R",            (DL_FUNC) &_duckdb_release_R,            1},
-    {"_duckdb_shutdown_R",           (DL_FUNC) &_duckdb_shutdown_R,           1},
-    {"_duckdb_startup_R",            (DL_FUNC) &_duckdb_startup_R,            3},
     {"_duckdb_unregister_R",         (DL_FUNC) &_duckdb_unregister_R,         2},
     {"_duckdb_unregister_arrow_R",   (DL_FUNC) &_duckdb_unregister_arrow_R,   2},
     {NULL, NULL, 0}
