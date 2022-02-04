@@ -85,10 +85,8 @@ void CompareQueryResults(QueryResult &actual_result, QueryResult &roundtrip_resu
 }
 
 shared_ptr<Relation> SubstraitPlanToDuckDBRel(Connection &conn, string &serialized) {
-	substrait::Plan plan;
-	plan.ParseFromString(serialized);
-	SubstraitToDuckDB transformer_s2d(conn, plan);
-	return transformer_s2d.TransformPlan(plan);
+	SubstraitToDuckDB transformer_s2d(conn, serialized);
+	return transformer_s2d.TransformPlan();
 }
 
 static void ToSubFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
