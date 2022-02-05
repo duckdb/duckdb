@@ -1316,6 +1316,55 @@ public static void test_duckdb_timestamp() throws Exception {
 		conn.close();
 	}
 
+	public static void test_appender_null_integer() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE data (a INTEGER)");
+
+		DuckDBAppender appender = conn.createAppender("main", "data");
+
+		appender.beginRow();
+		appender.append(null);
+		appender.endRow();
+		appender.flush();
+		appender.close();
+
+		ResultSet results = stmt.executeQuery("SELECT * FROM data");
+		assertTrue(results.next());
+		// java.sql.ResultSet.getInt(int) returns 0 if the value is NULL
+		assertEquals(0, results.getInt(1));
+		assertTrue(results.wasNull());
+
+		results.close();
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_appender_null_varchar() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE data (a VARCHAR)");
+
+		DuckDBAppender appender = conn.createAppender("main", "data");
+
+		appender.beginRow();
+		appender.append(null);
+		appender.endRow();
+		appender.flush();
+		appender.close();
+
+		ResultSet results = stmt.executeQuery("SELECT * FROM data");
+		assertTrue(results.next());
+		assertNull(results.getString(1));
+		assertTrue(results.wasNull());
+
+		results.close();
+		stmt.close();
+		conn.close();
+	}
+
 	public static void test_get_catalog() throws Exception {
 		Connection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
 		ResultSet rs = conn.getMetaData().getCatalogs();

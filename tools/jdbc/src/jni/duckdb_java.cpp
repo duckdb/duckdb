@@ -534,10 +534,16 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1string(JNIEnv *env, jclass,
                                                                                            jobject appender_ref_buf,
-                                                                                           jbyteArray value) {
+                                                                                           jstring value) {
 	try {
-		auto string_value = byte_array_to_string(env, value);
-		get_appender(env, appender_ref_buf)->Append(string_value.c_str());
+	    if (env->IsSameObject(value, NULL)) {
+	        get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
+	        return;
+	    }
+
+		auto c_string_value = env->GetStringUTFChars(value, NULL);
+		get_appender(env, appender_ref_buf)->Append(c_string_value);
+		env->ReleaseStringUTFChars(value, c_string_value);
 	} catch (exception &e) {
 		env->ThrowNew(env->FindClass("java/sql/SQLException"), e.what());
 	}
