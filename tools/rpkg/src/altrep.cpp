@@ -99,3 +99,10 @@ int AltrepString::NoNA(SEXP x) {
 	// we kinda know but it matters little
 	return 0;
 }
+
+// exception required as long as r-lib/decor#6 remains
+// clang-format off
+[[cpp11::init]] void AltrepString_Initialize(DllInfo* dll) {
+	// clang-format on
+	AltrepString::Initialize(dll);
+}

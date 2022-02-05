@@ -26,7 +26,6 @@ include_directories(inst/include)
 # this is used for clang-tidy checks and IDE support
 add_library(
   duckdb_r_shlib SHARED
-  src/rapi.cpp
   src/database.cpp
   src/connection.cpp
   src/statement.cpp
