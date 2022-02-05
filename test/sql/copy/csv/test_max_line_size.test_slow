@@ -2,9 +2,9 @@
 # description: Test lines that exceed the maximum line size
 # group: [csv]
 
-# generate CSV file with 20 MB string
+# generate CSV file with 4 MB string
 statement ok
-COPY (SELECT 10, REPEAT('a', 2048576), 20) TO '__TEST_DIR__/test.csv'
+COPY (SELECT 10, REPEAT('a', 4048576), 20) TO '__TEST_DIR__/test.csv'
 
 # value is too big for loading
 statement ok
@@ -13,3 +13,10 @@ CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 statement error
 COPY test FROM '__TEST_DIR__/test.csv';
 
+# we can override the max line size
+statement ok
+COPY test FROM '__TEST_DIR__/test.csv' (max_line_size 204857600);
+
+# also in the read_csv call
+statement ok
+INSERT INTO test SELECT * FROM read_csv_auto('__TEST_DIR__/test.csv', max_line_size=204857600);

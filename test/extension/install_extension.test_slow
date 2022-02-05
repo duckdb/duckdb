@@ -1,4 +1,4 @@
-# name: test/extension/install_extension.test
+# name: test/extension/install_extension.test_slow
 # description: Try loading a shared object with an extension
 # group: [extension]
 
