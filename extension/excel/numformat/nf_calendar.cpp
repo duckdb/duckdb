@@ -1,3 +1,24 @@
+/**************************************************************
+ * 
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ * 
+ *************************************************************/
+
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -20,11 +41,6 @@ namespace duckdb_excel {
 #define DUMP_ICU_CAL_MSG(x)
 #define DUMP_I18N_CAL_MSG(x)
 
-//#define ERROR RuntimeException()
-
-/**
-    Values to be passed to <member>XCalendar::getDisplayName()</member>.
- */
 namespace CalendarDisplayIndex {
 /// name of an AM/PM value
 const short CDI_AM_PM = 0;
@@ -60,10 +76,6 @@ void Calendar::init(Era *_eraArray) {
 Calendar::~Calendar() {
 	delete pNullDate;
 }
-
-#if (0)
-static Era gengou_eraArray[] = {{1868, 1, 1}, {1912, 7, 30}, {1926, 12, 25}, {1989, 1, 8}, {2019, 5, 1}, {0, 0, 0}};
-#endif
 
 void Calendar::setValue(sal_Int16 fieldIndex, sal_Int16 value) {
 	if (fieldIndex < 0 || FIELD_INDEX_COUNT <= fieldIndex) {
@@ -128,22 +140,6 @@ sal_Int16 Calendar::getValue(sal_Int16 fieldIndex) {
 }
 
 bool Calendar::isValid() {
-#if (0)
-	if (fieldSet) {
-		sal_Int32 tmp = fieldSet;
-		setValue();
-		sal_Int16 fieldSetValue[FIELD_INDEX_COUNT];
-		memcpy(fieldSetValue, fieldValue, sizeof(fieldSetValue));
-		getValue();
-		for (sal_Int16 fieldIndex = 0; fieldIndex < FIELD_INDEX_COUNT; fieldIndex++) {
-			// compare only with fields that are set and reset fieldSet[]
-			if (tmp & (1 << fieldIndex)) {
-				if (fieldSetValue[fieldIndex] != fieldValue[fieldIndex])
-					return false;
-			}
-		}
-	}
-#endif
 	return true;
 }
 
@@ -308,31 +304,10 @@ std::wstring Calendar::getDisplayString(sal_Int32 nCalendarDisplayCode, sal_Int1
 		}
 		aOUStr = aStr;
 	}
-	//  if (nNativeNumberMode > 0) {
-	//      // For Japanese calendar, first year calls GAN, see bug 111668 for detail.
-	// if (eraArray == gengou_eraArray && value == 1
-	//	&& (nCalendarDisplayCode == CalendarDisplayCode::SHORT_YEAR ||
-	//		nCalendarDisplayCode == CalendarDisplayCode::LONG_YEAR)
-	//	&& (nNativeNumberMode == NativeNumberMode::NATNUM1 ||
-	//		nNativeNumberMode == NativeNumberMode::NATNUM2)) {
-	//	static sal_Unicode gan = 0x5143;
-	//	return std::wstring(&gan, 1);
-	//}
-	//      sal_Int16 nNatNum = nNativeNumberMode;
-	//      if (nNatNum > 0)
-	//          return aNatNum.getNativeNumberString(aOUStr, aLocale, nNatNum);
-	//  }
 	return aOUStr;
 }
 
 void Calendar::setDateTime(double timeInDays_val) {
-#if (0)
-	UErrorCode status;
-	body->setTime(timeInDays_val * U_MILLIS_PER_DAY, status = U_ZERO_ERROR);
-	if (!U_SUCCESS(status))
-		throw ERROR;
-	getValue();
-#else
 	double fDiff = DateTime(*(GetNullDate())) - getEpochStart();
 	timeInDays = timeInDays_val - fDiff;
 	DateTime dt;
@@ -348,23 +323,10 @@ void Calendar::setDateTime(double timeInDays_val) {
 	setValue(CalendarFieldIndex::WEEK_OF_YEAR, dt.GetWeekOfYear());
 	setValue(CalendarFieldIndex::CFI_YEAR, dt.GetYear());
 	setValue(CalendarFieldIndex::CFI_MONTH, dt.GetMonth() - 1);
-#endif
 }
 
 double Calendar::getDateTime() {
-#if (0)
-	////if (fieldSet) {
-	////	setValue();
-	////	getValue();
-	////}
-	UErrorCode status;
-	double r = body->getTime(status = U_ZERO_ERROR);
-	if (!U_SUCCESS(status))
-		throw ERROR;
-	return r / U_MILLIS_PER_DAY;
-#else
 	return timeInDays;
-#endif
 }
 
 sal_Int32 Calendar::getCombinedOffsetInMillis(sal_Int16 nParentFieldIndex, sal_Int16 nChildFieldIndex) {
@@ -413,9 +375,6 @@ double Calendar::getLocalDateTime() {
 	return nTimeInDays;
 }
 
-//---------------------------------------------------------------------------
-//      ChangeNullDate
-
 void Calendar::ChangeNullDate(const sal_uInt16 Day, const sal_uInt16 Month, const sal_uInt16 Year) {
 	if (pNullDate)
 		*pNullDate = Date(Day, Month, Year);
@@ -426,16 +385,6 @@ void Calendar::ChangeNullDate(const sal_uInt16 Day, const sal_uInt16 Month, cons
 
 //------------- datetime.cxx ------------------------------------
 
-/*************************************************************************
-|*
-|*    DateTime::IsBetween()
-|*
-|*    Beschreibung      DATETIME.SDW
-|*    Ersterstellung    TH 18.05.92
-|*    Letzte Aenderung  TH 18.05.92
-|*
-*************************************************************************/
-
 bool DateTime::IsBetween( const DateTime& rFrom,
                           const DateTime& rTo ) const
 {
@@ -444,16 +393,6 @@ bool DateTime::IsBetween( const DateTime& rFrom,
     else
         return false;
 }
-
-/*************************************************************************
-|*
-|*    DateTime::operator >()
-|*
-|*    Beschreibung      DATETIME.SDW
-|*    Ersterstellung    TH 18.05.92
-|*    Letzte Aenderung  TH 18.05.92
-|*
-*************************************************************************/
 
 bool DateTime::operator >( const DateTime& rDateTime ) const
 {
@@ -464,16 +403,6 @@ bool DateTime::operator >( const DateTime& rDateTime ) const
         return false;
 }
 
-/*************************************************************************
-|*
-|*    DateTime::operator <()
-|*
-|*    Beschreibung      DATETIME.SDW
-|*    Ersterstellung    TH 18.05.92
-|*    Letzte Aenderung  TH 18.05.92
-|*
-*************************************************************************/
-
 bool DateTime::operator <( const DateTime& rDateTime ) const
 {
     if ( (Date::operator<( rDateTime )) ||
@@ -482,16 +411,6 @@ bool DateTime::operator <( const DateTime& rDateTime ) const
     else
         return false;
 }
-
-/*************************************************************************
-|*
-|*    DateTime::operator >=()
-|*
-|*    Beschreibung      DATETIME.SDW
-|*    Ersterstellung    TH 18.05.92
-|*    Letzte Aenderung  TH 18.05.92
-|*
-*************************************************************************/
 
 bool DateTime::operator >=( const DateTime& rDateTime ) const
 {
@@ -502,16 +421,6 @@ bool DateTime::operator >=( const DateTime& rDateTime ) const
         return false;
 }
 
-/*************************************************************************
-|*
-|*    DateTime::operator <=()
-|*
-|*    Beschreibung      DATETIME.SDW
-|*    Ersterstellung    TH 18.05.92
-|*    Letzte Aenderung  TH 18.05.92
-|*
-*************************************************************************/
-
 bool DateTime::operator <=( const DateTime& rDateTime ) const
 {
     if ( (Date::operator<( rDateTime )) ||
@@ -520,16 +429,6 @@ bool DateTime::operator <=( const DateTime& rDateTime ) const
     else
         return false;
 }
-
-/*************************************************************************
-|*
-|*    DateTime::GetSecFromDateTime()
-|*
-|*    Beschreibung      DATETIME.SDW
-|*    Ersterstellung    TH 02.10.96
-|*    Letzte Aenderung  TH 02.10.96
-|*
-*************************************************************************/
 
 long DateTime::GetSecFromDateTime( const Date& rDate ) const
 {
@@ -546,16 +445,6 @@ long DateTime::GetSecFromDateTime( const Date& rDate ) const
     }
 }
 
-/*************************************************************************
-|*
-|*    DateTime::GetSecFromDateTime()
-|*
-|*    Beschreibung      DATETIME.SDW
-|*    Ersterstellung    TH 02.10.96
-|*    Letzte Aenderung  TH 02.10.96
-|*
-*************************************************************************/
-
 void DateTime::MakeDateTimeFromSec( const Date& rDate, sal_uIntPtr nSec )
 {
     long nDays = nSec / (24UL*60*60);
@@ -566,16 +455,6 @@ void DateTime::MakeDateTimeFromSec( const Date& rDate, sal_uIntPtr nSec )
     ((Time*)this)->operator=( Time( 0, nMin, (sal_uInt16)nSec ) );
     operator+=( nDays );
 }
-
-/*************************************************************************
-|*
-|*    DateTime::operator +=()
-|*
-|*    Beschreibung      DATETIME.SDW
-|*    Ersterstellung    TH 02.10.96
-|*    Letzte Aenderung  TH 02.10.96
-|*
-*************************************************************************/
 
 DateTime& DateTime::operator +=( const Time& rTime )
 {
@@ -606,16 +485,6 @@ DateTime& DateTime::operator +=( const Time& rTime )
     return *this;
 }
 
-/*************************************************************************
-|*
-|*    DateTime::operator -=()
-|*
-|*    Beschreibung      DATETIME.SDW
-|*    Ersterstellung    TH 02.10.96
-|*    Letzte Aenderung  TH 02.10.96
-|*
-*************************************************************************/
-
 DateTime& DateTime::operator -=( const Time& rTime )
 {
     Time aTime = *this;
@@ -645,32 +514,12 @@ DateTime& DateTime::operator -=( const Time& rTime )
     return *this;
 }
 
-/*************************************************************************
-|*
-|*    DateTime::operator+()
-|*
-|*    Beschreibung      DATETIME.SDW
-|*    Ersterstellung    TH 02.10.96
-|*    Letzte Aenderung  TH 02.10.96
-|*
-*************************************************************************/
-
 DateTime operator +( const DateTime& rDateTime, long nDays )
 {
     DateTime aDateTime( rDateTime );
     aDateTime += nDays;
     return aDateTime;
 }
-
-/*************************************************************************
-|*
-|*    DateTime::operator-()
-|*
-|*    Beschreibung      DATETIME.SDW
-|*    Ersterstellung    TH 02.10.96
-|*    Letzte Aenderung  TH 02.10.96
-|*
-*************************************************************************/
 
 DateTime operator -( const DateTime& rDateTime, long nDays )
 {
@@ -679,16 +528,6 @@ DateTime operator -( const DateTime& rDateTime, long nDays )
     return aDateTime;
 }
 
-/*************************************************************************
-|*
-|*    DateTime::operator+()
-|*
-|*    Beschreibung      DATETIME.SDW
-|*    Ersterstellung    TH 02.10.96
-|*    Letzte Aenderung  TH 02.10.96
-|*
-*************************************************************************/
-
 DateTime operator +( const DateTime& rDateTime, const Time& rTime )
 {
     DateTime aDateTime( rDateTime );
@@ -696,28 +535,12 @@ DateTime operator +( const DateTime& rDateTime, const Time& rTime )
     return aDateTime;
 }
 
-/*************************************************************************
-|*
-|*    DateTime::operator-()
-|*
-|*    Beschreibung      DATETIME.SDW
-|*    Ersterstellung    TH 02.10.96
-|*    Letzte Aenderung  TH 02.10.96
-|*
-*************************************************************************/
-
 DateTime operator -( const DateTime& rDateTime, const Time& rTime )
 {
     DateTime aDateTime( rDateTime );
     aDateTime -= rTime;
     return aDateTime;
 }
-
-/*************************************************************************
-|*
-|*    DateTime::operator +=( double )
-|*
-*************************************************************************/
 
 DateTime& DateTime::operator +=( double fTimeInDays )
 {
@@ -743,24 +566,12 @@ DateTime& DateTime::operator +=( double fTimeInDays )
 	return *this;
 }
 
-/*************************************************************************
-|*
-|*    DateTime::operator +( double )
-|*
-*************************************************************************/
-
 DateTime operator +( const DateTime& rDateTime, double fTimeInDays )
 {
     DateTime aDateTime( rDateTime );
 	aDateTime += fTimeInDays;
 	return aDateTime;
 }
-
-/*************************************************************************
-|*
-|*    DateTime::operator -()
-|*
-*************************************************************************/
 
 double operator -( const DateTime& rDateTime1, const DateTime& rDateTime2 )
 {
@@ -839,14 +650,9 @@ DateTime DateTime::CreateFromWin32FileDateTime( const sal_uInt32 & rLower, const
 
 // ----------------------- tdate.cxx -------------------------------------
 
-// =======================================================================
-
-static sal_uInt16 aDaysInMonth[12] = { 31, 28, 31, 30, 31, 30,
-								   31, 31, 30, 31, 30, 31 };
+static sal_uInt16 aDaysInMonth[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
 #define MAX_DAYS	3636532
-
-// =======================================================================
 
 inline bool ImpIsLeapYear( sal_uInt16 nYear )
 {
@@ -855,8 +661,6 @@ inline bool ImpIsLeapYear( sal_uInt16 nYear )
                  ( (nYear % 400) == 0 )
                );
 }
-
-// -----------------------------------------------------------------------
 
 inline sal_uInt16 DaysInMonth( sal_uInt16 nMonth, sal_uInt16 nYear )
 {
@@ -871,8 +675,6 @@ inline sal_uInt16 DaysInMonth( sal_uInt16 nMonth, sal_uInt16 nYear )
 	}
 }
 
-// -----------------------------------------------------------------------
-
 long Date::DateToDays( sal_uInt16 nDay, sal_uInt16 nMonth, sal_uInt16 nYear )
 {
 	long nDays;
@@ -884,8 +686,6 @@ long Date::DateToDays( sal_uInt16 nDay, sal_uInt16 nMonth, sal_uInt16 nYear )
 	nDays += nDay;
 	return nDays;
 }
-
-// -----------------------------------------------------------------------
 
 static void DaysToDate( long nDays,
 						sal_uInt16& rDay, sal_uInt16& rMonth, sal_uInt16& rYear )
@@ -929,38 +729,14 @@ static void DaysToDate( long nDays,
 	rDay = (sal_uInt16)nTempDays;
 }
 
-// =======================================================================
-
 Date::Date()
 {
-#if defined( OS2 )
-	PM_DATETIME aDateTime;
-	DosGetDateTime( &aDateTime );
-
-	// Datum zusammenbauen
-	nDate = ((sal_uIntPtr)aDateTime.day) +
-			(((sal_uIntPtr)aDateTime.month)*100) +
-			(((sal_uIntPtr)aDateTime.year)*10000);
-#else
 	time_t	   nTmpTime;
 	struct tm aTime;
 
-	// Zeit ermitteln
 	nTmpTime = time( 0 );
-	
-	// Datum zusammenbauen
-	// if ( localtime_r( &nTmpTime, &aTime ) )
-	// {
-	// 	nDate = ((sal_uIntPtr)aTime.tm_mday) +
-	// 			(((sal_uIntPtr)(aTime.tm_mon+1))*100) +
-	// 			(((sal_uIntPtr)(aTime.tm_year+1900))*10000);
-	// }
-	// else
-		nDate = 30 + 1200 + (((sal_uIntPtr)1899)*10000);
-#endif
+	nDate = 30 + 1200 + (((sal_uIntPtr)1899)*10000);
 }
-
-// -----------------------------------------------------------------------
 
 void Date::SetDay( sal_uInt16 nNewDay )
 {
@@ -970,8 +746,6 @@ void Date::SetDay( sal_uInt16 nNewDay )
 	nDate = ((sal_uIntPtr)(nNewDay%100)) + (nMonth*100) + (nYear*10000);
 }
 
-// -----------------------------------------------------------------------
-
 void Date::SetMonth( sal_uInt16 nNewMonth )
 {
 	sal_uIntPtr  nDay 	 = GetDay();
@@ -979,8 +753,6 @@ void Date::SetMonth( sal_uInt16 nNewMonth )
 
 	nDate = nDay + (((sal_uIntPtr)(nNewMonth%100))*100) + (nYear*10000);
 }
-
-// -----------------------------------------------------------------------
 
 void Date::SetYear( sal_uInt16 nNewYear )
 {
@@ -990,14 +762,10 @@ void Date::SetYear( sal_uInt16 nNewYear )
 	nDate = nDay + (nMonth*100) + (((sal_uIntPtr)(nNewYear%10000))*10000);
 }
 
-// -----------------------------------------------------------------------
-
 DayOfWeek Date::GetDayOfWeek() const
 {
 	return (DayOfWeek)((sal_uIntPtr)(DateToDays( GetDay(), GetMonth(), GetYear() )-1) % 7);
 }
-
-// -----------------------------------------------------------------------
 
 sal_uInt16 Date::GetDayOfYear() const
 {
@@ -1006,8 +774,6 @@ sal_uInt16 Date::GetDayOfYear() const
          nDay = nDay + DaysInMonth( i, GetYear() );   // += yields a warning on MSVC, so don't use it
 	return nDay;
 }
-
-// -----------------------------------------------------------------------
 
 sal_uInt16 Date::GetWeekOfYear( DayOfWeek eStartDay,
 							sal_Int16 nMinimumNumberOfDaysInWeek ) const
@@ -1098,22 +864,16 @@ sal_uInt16 Date::GetWeekOfYear( DayOfWeek eStartDay,
 	return (sal_uInt16)nWeek;
 }
 
-// -----------------------------------------------------------------------
-
 sal_uInt16 Date::GetDaysInMonth() const
 {
 	return DaysInMonth( GetMonth(), GetYear() );
 }
-
-// -----------------------------------------------------------------------
 
 bool Date::IsLeapYear() const
 {
 	sal_uInt16 nYear = GetYear();
 	return ImpIsLeapYear( nYear );
 }
-
-// -----------------------------------------------------------------------
 
 bool Date::IsValid() const
 {
@@ -1138,8 +898,6 @@ bool Date::IsValid() const
 	return true;
 }
 
-// -----------------------------------------------------------------------
-
 Date& Date::operator +=( long nDays )
 {
 	sal_uInt16	nDay;
@@ -1160,8 +918,6 @@ Date& Date::operator +=( long nDays )
 
 	return *this;
 }
-
-// -----------------------------------------------------------------------
 
 Date& Date::operator -=( long nDays )
 {
@@ -1184,8 +940,6 @@ Date& Date::operator -=( long nDays )
 	return *this;
 }
 
-// -----------------------------------------------------------------------
-
 Date& Date::operator ++()
 {
 	sal_uInt16	nDay;
@@ -1202,8 +956,6 @@ Date& Date::operator ++()
 
 	return *this;
 }
-
-// -----------------------------------------------------------------------
 
 Date& Date::operator --()
 {
@@ -1223,16 +975,12 @@ Date& Date::operator --()
 
 #ifndef MPW33
 
-// -----------------------------------------------------------------------
-
 Date Date::operator ++( int )
 {
 	Date aOldDate = *this;
 	Date::operator++();
 	return aOldDate;
 }
-
-// -----------------------------------------------------------------------
 
 Date Date::operator --( int )
 {
@@ -1243,8 +991,6 @@ Date Date::operator --( int )
 
 #endif
 
-// -----------------------------------------------------------------------
-
 Date operator +( const Date& rDate, long nDays )
 {
 	Date aDate( rDate );
@@ -1252,16 +998,12 @@ Date operator +( const Date& rDate, long nDays )
 	return aDate;
 }
 
-// -----------------------------------------------------------------------
-
 Date operator -( const Date& rDate, long nDays )
 {
 	Date aDate( rDate );
 	aDate -= nDays;
 	return aDate;
 }
-
-// -----------------------------------------------------------------------
 
 long operator -( const Date& rDate1, const Date& rDate2 )
 {
@@ -1274,8 +1016,6 @@ long operator -( const Date& rDate1, const Date& rDate2 )
 
 
 // -------------------------- ttime.cxx ----------------------------------------
-
-// =======================================================================
 
 static sal_Int32 TimeToSec100( const Time& rTime )
 {
@@ -1296,8 +1036,6 @@ static sal_Int32 TimeToSec100( const Time& rTime )
 	return (nRet * nSign);
 }
 
-// -----------------------------------------------------------------------
-
 static Time Sec100ToTime( sal_Int32 nSec100 )
 {
 	short nSign;
@@ -1314,50 +1052,18 @@ static Time Sec100ToTime( sal_Int32 nSec100 )
 	return aTime;
 }
 
-// =======================================================================
-
 Time::Time()
 {
-#if defined( OS2 )
-	PM_DATETIME aDateTime;
-	DosGetDateTime( &aDateTime );
-
-	// Zeit zusammenbauen
-	nTime = (((sal_Int32)aDateTime.hours)*1000000) +
-			(((sal_Int32)aDateTime.minutes)*10000) +
-			(((sal_Int32)aDateTime.seconds)*100) +
-			((sal_Int32)aDateTime.hundredths);
-#else
-	time_t	   nTmpTime;
-	struct tm aTime;
-
-	// Zeit ermitteln
-	nTmpTime = time( 0 );
-
-	// Zeit zusammenbauen
-	// if ( localtime_s(&aTime, &nTmpTime ) )
-	// {
-	// 	nTime = (((sal_Int32)aTime.tm_hour)*1000000) +
-	// 			(((sal_Int32)aTime.tm_min)*10000) +
-	// 			(((sal_Int32)aTime.tm_sec)*100);
-	// }
-	// else
-		nTime = 0;
-#endif
+	nTime = 0;
 }
-
-// -----------------------------------------------------------------------
 
 Time::Time( const Time& rTime )
 {
 	nTime = rTime.nTime;
 }
 
-// -----------------------------------------------------------------------
-
 Time::Time( sal_uIntPtr nHour, sal_uIntPtr nMin, sal_uIntPtr nSec, sal_uIntPtr n100Sec )
 {
-	// Zeit normalisieren
 	nSec	+= n100Sec / 100;
 	n100Sec  = n100Sec % 100;
 	nMin	+= nSec / 60;
@@ -1365,11 +1071,8 @@ Time::Time( sal_uIntPtr nHour, sal_uIntPtr nMin, sal_uIntPtr nSec, sal_uIntPtr n
 	nHour	+= nMin / 60;
 	nMin	 = nMin % 60;
 
-	// Zeit zusammenbauen
 	nTime = (sal_Int32)(n100Sec + (nSec*100) + (nMin*10000) + (nHour*1000000));
 }
-
-// -----------------------------------------------------------------------
 
 void Time::SetHour( sal_uInt16 nNewHour )
 {
@@ -1382,8 +1085,6 @@ void Time::SetHour( sal_uInt16 nNewHour )
 			(((sal_Int32)nNewHour)*1000000)) * nSign;
 }
 
-// -----------------------------------------------------------------------
-
 void Time::SetMin( sal_uInt16 nNewMin )
 {
 	short  nSign	  = (nTime >= 0) ? +1 : -1;
@@ -1391,14 +1092,11 @@ void Time::SetMin( sal_uInt16 nNewMin )
 	sal_Int32   nSec 	  = GetSec();
 	sal_Int32   n100Sec	  = Get100Sec();
 
-	// kein Ueberlauf
 	nNewMin = nNewMin % 60;
 
 	nTime = (n100Sec + (nSec*100) + (((sal_Int32)nNewMin)*10000) +
 			(nHour*1000000)) * nSign;
 }
-
-// -----------------------------------------------------------------------
 
 void Time::SetSec( sal_uInt16 nNewSec )
 {
@@ -1407,14 +1105,11 @@ void Time::SetSec( sal_uInt16 nNewSec )
 	sal_Int32   nMin 	  = GetMin();
 	sal_Int32   n100Sec	  = Get100Sec();
 
-	// kein Ueberlauf
 	nNewSec = nNewSec % 60;
 
 	nTime = (n100Sec + (((sal_Int32)nNewSec)*100) + (nMin*10000) +
 			(nHour*1000000)) * nSign;
 }
-
-// -----------------------------------------------------------------------
 
 void Time::Set100Sec( sal_uInt16 nNew100Sec )
 {
@@ -1423,14 +1118,11 @@ void Time::Set100Sec( sal_uInt16 nNew100Sec )
 	sal_Int32   nMin 	  = GetMin();
 	sal_Int32   nSec 	  = GetSec();
 
-	// kein Ueberlauf
 	nNew100Sec = nNew100Sec % 100;
 
 	nTime = (((sal_Int32)nNew100Sec) + (nSec*100) + (nMin*10000) +
 			(nHour*1000000)) * nSign;
 }
-
-// -----------------------------------------------------------------------
 
 sal_Int32 Time::GetMSFromTime() const
 {
@@ -1442,8 +1134,6 @@ sal_Int32 Time::GetMSFromTime() const
 
 	return (((nHour*3600000)+(nMin*60000)+(nSec*1000)+(n100Sec*10))*nSign);
 }
-
-// -----------------------------------------------------------------------
 
 void Time::MakeTimeFromMS( sal_Int32 nMS )
 {
@@ -1460,8 +1150,6 @@ void Time::MakeTimeFromMS( sal_Int32 nMS )
 	SetTime( aTime.GetTime() * nSign );
 }
 
-// -----------------------------------------------------------------------
-
 double Time::GetTimeInDays() const
 {
 	short  nSign	  = (nTime >= 0) ? +1 : -1;
@@ -1473,15 +1161,11 @@ double Time::GetTimeInDays() const
     return (nHour+(nMin/60)+(nSec/(60*60))+(n100Sec/(60*60*100))) / 24 * nSign;
 }
 
-// -----------------------------------------------------------------------
-
 Time& Time::operator =( const Time& rTime )
 {
 	nTime = rTime.nTime;
 	return *this;
 }
-
-// -----------------------------------------------------------------------
 
 Time& Time::operator +=( const Time& rTime )
 {
@@ -1490,8 +1174,6 @@ Time& Time::operator +=( const Time& rTime )
 	return *this;
 }
 
-// -----------------------------------------------------------------------
-
 Time& Time::operator -=( const Time& rTime )
 {
 	nTime = Sec100ToTime( TimeToSec100( *this ) -
@@ -1499,15 +1181,11 @@ Time& Time::operator -=( const Time& rTime )
 	return *this;
 }
 
-// -----------------------------------------------------------------------
-
 Time operator +( const Time& rTime1, const Time& rTime2 )
 {
 	return Sec100ToTime( TimeToSec100( rTime1 ) +
 						 TimeToSec100( rTime2 ) );
 }
-
-// -----------------------------------------------------------------------
 
 Time operator -( const Time& rTime1, const Time& rTime2 )
 {
@@ -1515,16 +1193,12 @@ Time operator -( const Time& rTime1, const Time& rTime2 )
 						 TimeToSec100( rTime2 ) );
 }
 
-// -----------------------------------------------------------------------
-
 bool Time::IsEqualIgnore100Sec( const Time& rTime ) const
 {
     sal_Int32 n1 = (nTime < 0 ? -Get100Sec() : Get100Sec() );
     sal_Int32 n2 = (rTime.nTime < 0 ? -rTime.Get100Sec() : rTime.Get100Sec() );
     return (nTime - n1) == (rTime.nTime - n2);
 }
-
-// -----------------------------------------------------------------------
 
 Time Time::GetUTCOffset()
 {
@@ -1600,8 +1274,6 @@ Time Time::GetUTCOffset()
 }
 
 
-// -----------------------------------------------------------------------
-
 sal_uIntPtr Time::GetSystemTicks()
 {
 #if defined _WIN32
@@ -1622,8 +1294,6 @@ sal_uIntPtr Time::GetSystemTicks()
 	return sal_uIntPtr(fTicks);
 #endif
 }
-
-// -----------------------------------------------------------------------
 
 sal_uIntPtr Time::GetProcessTicks()
 {
