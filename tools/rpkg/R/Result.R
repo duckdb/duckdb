@@ -85,7 +85,7 @@ duckdb_fetch_arrow <- function(res, stream = FALSE, vector_per_chunk = 1, return
   if (vector_per_chunk < 0) {
     stop("cannot fetch negative vector_per_chunk")
   }
-  fetch_arrow_R(res@query_result, stream, vector_per_chunk, return_table)
+  rapi_execute_arrow(res@query_result, stream, vector_per_chunk, return_table)
 }
 
 #' @rdname duckdb_result-class
@@ -93,7 +93,7 @@ duckdb_fetch_arrow <- function(res, stream = FALSE, vector_per_chunk = 1, return
 #' @param approx_batch_size If streaming, how many vectors per chunk we should emit
 #' @export
 duckdb_fetch_record_batch <- function(res, approx_batch_size = 1) {
-  fetch_record_batch_R(res@query_result, approx_batch_size)
+  rapi_record_batch(res@query_result, approx_batch_size)
 }
 
 set_output_tz <- function(x, timezone, convert) {

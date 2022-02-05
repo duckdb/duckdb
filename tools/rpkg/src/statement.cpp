@@ -481,10 +481,6 @@ struct AppendableRList {
 	RProtector r;
 };
 
-struct RQueryResult {
-	unique_ptr<QueryResult> result;
-};
-
 bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowArray &arrow_data,
                      ArrowSchema &arrow_schema, SEXP batch_import_from_c, SEXP arrow_namespace) {
 	if (result->type == QueryResultType::STREAM_RESULT) {
@@ -505,26 +501,12 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 }
 
 // Turn a DuckDB result set into an Arrow Table
-SEXP duckdb::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp,
-                              SEXP return_tablesexp) {
-	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
-	auto result = query_result_holder->result.get();
+[[cpp11::register]] SEXP rapi_execute_arrow(duckdb::rqry_eptr_t qry_res, bool stream, int vec_per_chunk, bool return_table) {
+	auto result = qry_res->result.get();
 	// somewhat dark magic below
 	cpp11::function getNamespace = RStrings::get().getNamespace_sym;
 	cpp11::sexp arrow_namespace(getNamespace(RStrings::get().arrow_str));
 
-	bool stream = LOGICAL_POINTER(streamsexp)[0] != 0;
-	int num_of_vectors = NUMERIC_POINTER(vector_per_chunksexp)[0];
-	bool return_table = LOGICAL_POINTER(return_tablesexp)[0] != 0;
-	if (TYPEOF(streamsexp) != LGLSXP || LENGTH(streamsexp) != 1) {
-		cpp11::stop("stream parameter needs to be single-value logical");
-	}
-	if (TYPEOF(return_tablesexp) != LGLSXP || LENGTH(return_tablesexp) != 1) {
-		cpp11::stop("return_table parameter needs to be single-value logical");
-	}
-	if (TYPEOF(vector_per_chunksexp) != REALSXP || LENGTH(vector_per_chunksexp) != 1) {
-		cpp11::stop("vector_per_chunks parameter needs to be single-value numeric");
-	}
 	// export schema setup
 	ArrowSchema arrow_schema;
 	cpp11::doubles schema_ptr_sexp(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_schema))));
@@ -537,7 +519,7 @@ SEXP duckdb::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vec
 	// create data batches
 	AppendableRList batches_list;
 	if (stream) {
-		for (idx_t i = 0; i < (size_t)num_of_vectors; i++) {
+		for (idx_t i = 0; i < (size_t)vec_per_chunk; i++) {
 			if (!FetchArrowChunk(result, batches_list, arrow_data, arrow_schema, batch_import_from_c,
 			                     arrow_namespace)) {
 				break;
@@ -563,18 +545,13 @@ SEXP duckdb::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vec
 }
 
 // Turn a DuckDB result set into an RecordBatchReader
-SEXP duckdb::DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp) {
-	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
-	int approx_batch_size = NUMERIC_POINTER(approx_batch_sizeexp)[0];
-	if (TYPEOF(approx_batch_sizeexp) != REALSXP || LENGTH(approx_batch_sizeexp) != 1) {
-		cpp11::stop("vector_per_chunks parameter needs to be single-value numeric");
-	}
+[[cpp11::register]] SEXP rapi_record_batch(duckdb::rqry_eptr_t qry_res, int approx_batch_size) {
 	// somewhat dark magic below
 	cpp11::function getNamespace = RStrings::get().getNamespace_sym;
 	cpp11::sexp arrow_namespace(getNamespace(RStrings::get().arrow_str));
 
 	ResultArrowArrayStreamWrapper *result_stream =
-	    new ResultArrowArrayStreamWrapper(move(query_result_holder->result), approx_batch_size);
+	    new ResultArrowArrayStreamWrapper(move(qry_res->result), approx_batch_size);
 	cpp11::sexp stream_ptr_sexp(
 	    Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&result_stream->stream))));
 	cpp11::sexp record_batch_reader(Rf_lang2(RStrings::get().ImportRecordBatchReader_sym, stream_ptr_sexp));
@@ -594,7 +571,7 @@ SEXP duckdb::DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp
 	if (arrow) {
 		auto query_result = new RQueryResult();
 		query_result->result = move(generic_result);
-		cpp11::external_pointer<RQueryResult> query_resultsexp(query_result);
+		rqry_eptr_t query_resultsexp(query_result);
 		return query_resultsexp;
 	} else {
 		D_ASSERT(generic_result->type == QueryResultType::MATERIALIZED_RESULT);

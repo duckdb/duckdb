@@ -7,7 +7,7 @@ check_flag <- function(x) {
 }
 
 extptr_str <- function(e, n = 5) {
-  x <- ptr_to_str(e)
+  x <- rapi_ptr_to_str(e)
   substr(x, nchar(x) - n + 1, nchar(x))
 }
 

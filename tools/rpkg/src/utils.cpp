@@ -9,7 +9,7 @@ SEXP duckdb::ToUtf8(SEXP string_sexp) {
 	return enc2utf8(string_sexp);
 }
 
-SEXP duckdb::PointerToString(SEXP extptr) {
+[[cpp11::register]] cpp11::r_string rapi_ptr_to_str(SEXP extptr) {
 	if (TYPEOF(extptr) != EXTPTRSXP) {
 		cpp11::stop("duckdb_ptr_to_str: Need external pointer parameter");
 	}
@@ -18,10 +18,9 @@ SEXP duckdb::PointerToString(SEXP extptr) {
 	if (ptr != NULL) {
 		char buf[100];
 		snprintf(buf, 100, "%p", ptr);
-		cpp11::strings a;
-		return cpp11::writable::strings({buf});
+		return cpp11::r_string(buf);
 	} else {
-		return cpp11::strings(NA_STRING);
+		return cpp11::r_string(NA_STRING);
 	}
 }
 

@@ -16,18 +16,6 @@ rapi_shutdown <- function(dbsexp) {
   invisible(.Call(`_duckdb_rapi_shutdown`, dbsexp))
 }
 
-fetch_arrow_R <- function(query_resultsexp, streamsexp, vector_per_chunksexp, return_tablesexp) {
-  .Call(`_duckdb_fetch_arrow_R`, query_resultsexp, streamsexp, vector_per_chunksexp, return_tablesexp)
-}
-
-fetch_record_batch_R <- function(query_resultsexp, approx_batch_sizeexp) {
-  .Call(`_duckdb_fetch_record_batch_R`, query_resultsexp, approx_batch_sizeexp)
-}
-
-ptr_to_str <- function(extptr) {
-  .Call(`_duckdb_ptr_to_str`, extptr)
-}
-
 rapi_register_df <- function(conn, name, value) {
   invisible(.Call(`_duckdb_rapi_register_df`, conn, name, value))
 }
@@ -56,6 +44,18 @@ rapi_bind <- function(stmt, params, arrow) {
   .Call(`_duckdb_rapi_bind`, stmt, params, arrow)
 }
 
+rapi_execute_arrow <- function(qry_res, stream, vec_per_chunk, return_table) {
+  .Call(`_duckdb_rapi_execute_arrow`, qry_res, stream, vec_per_chunk, return_table)
+}
+
+rapi_record_batch <- function(qry_res, approx_batch_size) {
+  .Call(`_duckdb_rapi_record_batch`, qry_res, approx_batch_size)
+}
+
 rapi_execute <- function(stmt, arrow) {
   .Call(`_duckdb_rapi_execute`, stmt, arrow)
+}
+
+rapi_ptr_to_str <- function(extptr) {
+  .Call(`_duckdb_rapi_ptr_to_str`, extptr)
 }
