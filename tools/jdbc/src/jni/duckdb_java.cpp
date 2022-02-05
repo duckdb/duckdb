@@ -536,10 +536,10 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
                                                                                            jobject appender_ref_buf,
                                                                                            jstring value) {
 	try {
-	    if (env->IsSameObject(value, NULL)) {
-	        get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
-	        return;
-	    }
+		if (env->IsSameObject(value, NULL)) {
+			get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
+			return;
+		}
 
 		auto c_string_value = env->GetStringUTFChars(value, NULL);
 		get_appender(env, appender_ref_buf)->Append(c_string_value);
