@@ -57,6 +57,20 @@ date_t AddOperator::Operation(int32_t left, date_t right) {
 }
 
 template <>
+timestamp_t AddOperator::Operation(date_t left, dtime_t right) {
+	timestamp_t result;
+	if (!Timestamp::TryFromDatetime(left, right, result)) {
+		throw OutOfRangeException("Timestamp out of range");
+	}
+	return result;
+}
+
+template <>
+timestamp_t AddOperator::Operation(dtime_t left, date_t right) {
+	return AddOperator::Operation<date_t, dtime_t, timestamp_t>(right, left);
+}
+
+template <>
 date_t AddOperator::Operation(date_t left, interval_t right) {
 	return Interval::Add(left, right);
 }

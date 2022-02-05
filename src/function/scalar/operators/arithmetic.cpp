@@ -263,6 +263,9 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::DATE,
 			                      ScalarFunction::BinaryFunction<date_t, interval_t, date_t, AddOperator>);
+		} else if (right_type.id() == LogicalTypeId::TIME) {
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			                      ScalarFunction::BinaryFunction<date_t, dtime_t, timestamp_t, AddOperator>);
 		}
 		break;
 	case LogicalTypeId::INTEGER:
@@ -290,6 +293,9 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIME,
 			                      ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, AddTimeOperator>);
+		} else if (right_type.id() == LogicalTypeId::DATE) {
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			                      ScalarFunction::BinaryFunction<dtime_t, date_t, timestamp_t, AddOperator>);
 		}
 		break;
 	case LogicalTypeId::TIMESTAMP:
@@ -329,6 +335,11 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 
 	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
 	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP));
+
+	// we can add times to dates
+	functions.AddFunction(GetFunction(LogicalType::TIME, LogicalType::DATE));
+	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::TIME));
+
 	// we can add lists together
 	functions.AddFunction(ListConcatFun::GetFunction());
 
