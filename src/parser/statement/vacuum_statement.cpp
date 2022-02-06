@@ -6,7 +6,7 @@ VacuumStatement::VacuumStatement() : SQLStatement(StatementType::VACUUM_STATEMEN
 }
 
 unique_ptr<SQLStatement> VacuumStatement::Copy() const {
-	return make_unique<VacuumStatement>();
+	return unique_ptr<VacuumStatement>(new VacuumStatement(*this));
 }
 
 } // namespace duckdb
