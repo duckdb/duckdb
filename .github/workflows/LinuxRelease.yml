@@ -473,10 +473,11 @@ jobs:
     - name: Start S3/HTTP test server
       run: |
         pwd
-        ls
+        ls -al
         npm install -g s3rver
-        mkdir -p ./.tmp/s3rver
-        s3rver -d "./.tmp/s3rver" -p "4923" -a "localhost" -s --configure-bucket "test-bucket" &>./.tmp/s3rver/access_log.txt &
+        mkdir -p /tmp/s3rver
+        ls -al /tmp
+        s3rver -d "/tmp/s3rver" -p "4923" -a "localhost" --configure-bucket "test-bucket" &> /tmp/s3rver/access_log.txt &
 
     - name: Test
       run: make allunit
@@ -485,9 +486,9 @@ jobs:
       if: always()
       run: |
         pwd
-        ls
-        ls ./.tmp/s3rver
-        cat ./.tmp/s3rver/access_log.txt
+        ls -al /tmp
+        ls -al /tmp/s3rver
+        cat /tmp/s3rver/access_log.txt
 
  amalgamation-tests:
     name: Amalgamation Tests

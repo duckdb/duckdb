@@ -3,6 +3,7 @@
 #include "httpfs.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -22,9 +23,9 @@ struct S3AuthParams {
 
 struct S3ConfigParams {
 	uint64_t max_file_size;
-	uint64_t max_memory;
-	uint64_t uploader_timeout;
-	uint64_t max_requests_per_upload;
+	uint64_t max_parts_per_file;
+	uint64_t part_upload_timeout;
+	uint64_t max_upload_threads;
 
 	static S3ConfigParams ReadFrom(FileOpener *opener);
 };
@@ -34,22 +35,22 @@ class S3FileSystem;
 // Holds the buffered data for 1 part of an S3 Multipart upload
 class S3WriteBuffer {
 public:
-	explicit S3WriteBuffer(idx_t buffer_start, size_t buffer_size) : idx(0), buffer_start(buffer_start) {
+	explicit S3WriteBuffer(idx_t buffer_start, size_t buffer_size, unique_ptr<BufferHandle>& buffer) : idx(0), buffer_start(buffer_start), buffer(std::move(buffer)) {
 		buffer_end = buffer_start + buffer_size;
 		part_no = buffer_start / buffer_size;
-		buffer = std::unique_ptr<data_t[]>(new data_t[buffer_size]);
 		uploading = false;
 	}
 
-	// The S3 multipart part number.
-	// Note that we internally start at 0 but AWS S3 starts at 1
-	idx_t part_no;
+	void* Ptr() {
+		return buffer->Ptr();
+	}
 
+	// The S3 multipart part number. Note that internally we start at 0 but AWS S3 starts at 1
+	idx_t part_no;
 	idx_t idx;
 	idx_t buffer_start;
 	idx_t buffer_end;
-
-	std::unique_ptr<data_t[]> buffer;
+	unique_ptr<BufferHandle> buffer;
 	std::atomic<bool> uploading;
 };
 
@@ -75,38 +76,38 @@ public:
 	unique_ptr<ResponseWrapper> Initialize() override;
 
 protected:
+	// Global write buffer availability
+	static std::mutex buffers_available_lock;
+	static std::condition_variable buffers_available_cv;
+	static std::atomic<uint16_t> buffers_available;
+
 	string multipart_upload_id;
 	size_t part_size;
 
-	std::mutex write_buffers_mutex;
+	std::mutex write_buffers_lock;
 	unordered_map<uint16_t, std::shared_ptr<S3WriteBuffer>> write_buffers;
-	//	std::vector<std::unique_ptr<S3WriteBuffer>> write_buffers_unused; // Todo make recycling bin for write buffers
+	//	std::vector<std::unique_ptr<S3WriteBuffer>> write_buffers_unused; // Todo make recycling bin for write buffers?
 
-	std::mutex buffers_available_mutex;
-	std::condition_variable buffers_available_cv;
-	std::atomic<uint16_t> buffers_available;
-
-	std::mutex uploads_in_progress_mutex;
+	std::mutex uploads_in_progress_lock;
 	std::condition_variable uploads_in_progress_cv;
-	std::atomic<uint16_t> uploads_in_progress;
+	std::atomic<uint16_t> uploads_in_progress; // TODO does not actually need to be atomic due to lock
 
 	// Etags are stored for each part
-	std::mutex part_etags_mutex;
+	std::mutex part_etags_lock;
 	std::unordered_map<uint16_t, string> part_etags;
 
 	std::atomic<uint16_t> parts_uploaded;
-
-	// This variable is set after the upload is finalized, it will prevent any further writes.
 	bool upload_finalized;
 };
 
 class S3FileSystem : public HTTPFileSystem {
 public:
-	constexpr static int MULTIPART_UPLOAD_MAX_THREADS = 1;
 	constexpr static int MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS = 1000;
 
-	S3FileSystem() {
+	explicit S3FileSystem(BufferManager &buffer_manager): buffer_manager(buffer_manager) {
 	}
+
+	BufferManager &buffer_manager;
 
 	unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url,HeaderMap header_map, unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len, char* buffer_in, idx_t buffer_in_len) override;
 	unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map, char* buffer_in, idx_t buffer_in_len) override;
@@ -132,6 +133,7 @@ public:
 	static void UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer);
 
 protected:
+	std::atomic<uint16_t> threads_waiting_for_memory = {0};
 	std::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
 	                                             FileCompressionType compression, FileOpener *opener) override;
 

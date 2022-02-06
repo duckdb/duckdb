@@ -1,6 +1,6 @@
-# name: test/sql/copy/s3_test.test_coverage
-# description: Copy csv/parquet files from and to S3.
-# group: [copy]
+# name: test/sql/copy/s3/upload_large_file.test
+# description: Copy large csv/parquet files from and to S3.
+# group: [s3]
 
 require tpch
 
@@ -16,37 +16,18 @@ set ignore_error_messages
 statement ok
 SET s3_secret_access_key='S3RVER';SET s3_access_key_id='S3RVER';SET s3_region='eu-west-1'; SET s3_endpoint='http://localhost:4923';
 
-# Small parquet file
 statement ok
-COPY (select i from range(0,10) tbl(i)) TO 's3://test-bucket/multipart/export.parquet' (FORMAT 'parquet');
+CALL DBGEN(sf=1)
 
-query II
-SELECT count(i), sum(i) FROM "s3://test-bucket/multipart/export.parquet";
-----
-10	45
-
-# Small csv file
+# Parquet file
 statement ok
-COPY (select i from range(0,10) tbl(i)) TO 's3://test-bucket/multipart/export.csv' WITH (HEADER 1);
-
-query II
-SELECT count(i), sum(i) FROM "s3://test-bucket/multipart/export.csv";
-----
-10	45
-
-# Medium sized parquet file
-# TODO sf1?
-statement ok
-CALL DBGEN(sf=0.1)
-
-statement ok
-COPY lineitem TO 's3://test-bucket/multipart/export.parquet' (FORMAT 'parquet');
+COPY lineitem TO 's3://test-bucket/multipart/export_large.parquet' (FORMAT 'parquet');
 
 query I
 SELECT
     sum(l_extendedprice * l_discount) AS revenue
 FROM
-    "s3://test-bucket/multipart/export.parquet"
+    "s3://test-bucket/multipart/export_large.parquet"
 WHERE
     l_shipdate >= CAST('1994-01-01' AS date)
     AND l_shipdate < CAST('1995-01-01' AS date)
@@ -56,15 +37,15 @@ WHERE
 ----
 11803420.2534
 
-# Medium sized csv file
+# CSV file
 statement ok
-COPY lineitem TO 's3://test-bucket/multipart/export_out.csv' WITH (HEADER 1, DELIMITER '|');
+COPY lineitem TO 's3://test-bucket/multipart/export_large.csv' WITH (HEADER 1, DELIMITER '|');
 
 query I
 SELECT
     sum(l_extendedprice * l_discount) AS revenue
 FROM
-    "s3://test-bucket/multipart/export_out.csv"
+    "s3://test-bucket/multipart/export_large.csv"
 WHERE
     l_shipdate >= CAST('1994-01-01' AS date)
     AND l_shipdate < CAST('1995-01-01' AS date)
