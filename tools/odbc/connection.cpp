@@ -160,6 +160,8 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
                              SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr) {
 
 		// https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetinfo-function?view=sql-server-ver15
+
+		// verify numeric info value type and null value pointer 
 		if (duckdb::ApiInfo::IsNumericInfoType(info_type) && info_value_ptr == nullptr) {
 			return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) -> SQLRETURN {
 				dbc->error_messages.emplace_back("Invalid null value pointer for numeric info type");
