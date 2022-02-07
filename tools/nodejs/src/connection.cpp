@@ -1,4 +1,5 @@
 #include "duckdb_node.hpp"
+#include <thread>
 
 namespace node_duckdb {
 
@@ -51,6 +52,9 @@ Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connec
 Connection::~Connection() {
 	database_ref->Unref();
 	database_ref = nullptr;
+	for (auto& fun : udfs) {
+		fun.Release();
+	}
 }
 
 Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
@@ -69,11 +73,12 @@ Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
 
 static Napi::ThreadSafeFunction fun;
 
-static void MyUdfFunction(duckdb::DataChunk &input, duckdb::ExpressionState &state, duckdb::Vector &result) {
-	duckdb::UnaryExecutor::Execute<int, int>(input.data[0], result, input.size(), [&](int input) {
-		return input;
-	});
-}
+struct JSArgs {
+	JSArgs(duckdb::DataChunk& args_p, duckdb::Vector& result_p) : args(args_p), result(result_p) {}
+
+	duckdb::DataChunk &args;
+	duckdb::Vector &result;
+};
 
 
 struct RegisterTask : public Task {
@@ -84,7 +89,33 @@ struct RegisterTask : public Task {
 	void DoWork() override {
 		auto &connection = Get<Connection>();
 
-		duckdb::ScalarFunction function({duckdb::LogicalType::INTEGER}, duckdb::LogicalType::INTEGER, MyUdfFunction);
+
+		duckdb::scalar_function_t udf_function = [&](duckdb::DataChunk &args, duckdb::ExpressionState &state, duckdb::Vector &result) -> void {
+			auto jsargs = new JSArgs(args, result);
+			bool done = false;
+
+			auto arg_data = jsargs->args.Orrify();
+
+			auto callback = [&](Napi::Env env, Napi::Function jsCallback, void* data = nullptr) -> void {
+				auto jsargs = (JSArgs*) data;
+				for (idx_t i = 0; i < jsargs->args.size(); i++) {
+					auto real_i = arg_data[0].sel->get_index(i);
+					auto val = ((int*) arg_data[0].data)[real_i];
+					auto call_res = jsCallback.Call({Napi::Number::New(env, val)});
+					result.SetValue(i, duckdb::Value::INTEGER(call_res.ToNumber().Int32Value())) ;
+				}
+				done = true;
+			};
+
+			fun.BlockingCall(jsargs, callback);
+			while (!done) {
+				std::this_thread::yield();
+			}
+			// TODO this is wrong
+			//fun.Release();
+		};
+
+		duckdb::ScalarFunction function({duckdb::LogicalType::INTEGER}, duckdb::LogicalType::INTEGER, udf_function);
 		duckdb::CreateScalarFunctionInfo info(function);
 		info.name = name;
 

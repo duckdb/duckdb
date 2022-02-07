@@ -100,6 +100,7 @@ public:
 	static Napi::FunctionReference constructor;
 	std::unique_ptr<duckdb::Connection> connection;
 	Database *database_ref;
+	std::vector<Napi::ThreadSafeFunction> udfs;
 };
 
 struct StatementParam;
