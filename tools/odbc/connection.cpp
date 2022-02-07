@@ -159,11 +159,12 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINTER info_value_ptr,
                              SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr) {
 
-	return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) -> SQLRETURN {
 		// https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetinfo-function?view=sql-server-ver15
 		if (duckdb::ApiInfo::IsNumericInfoType(info_type) && info_value_ptr == nullptr) {
-			dbc->error_messages.emplace_back("Invalid null value pointer for numeric info type");
-			return SQL_ERROR;
+			return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) -> SQLRETURN {
+				dbc->error_messages.emplace_back("Invalid null value pointer for numeric info type");
+				return SQL_ERROR;
+			});
 		}
 
 		// Default strings: YES or NO
@@ -191,6 +192,25 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		}
 		case SQL_ALTER_DOMAIN: {
 			*(SQLUINTEGER *)info_value_ptr = 0;
+			return SQL_SUCCESS;
+		}
+		case SQL_ALTER_TABLE: {
+			// options suppoerd by the DuckDB's tables
+			SQLUINTEGER mask = SQL_AT_ADD_COLUMN_COLLATION | SQL_AT_ADD_COLUMN_DEFAULT | SQL_AT_ADD_COLUMN_SINGLE |
+			                   SQL_AT_ADD_CONSTRAINT | SQL_AT_ADD_TABLE_CONSTRAINT | SQL_AT_DROP_COLUMN_DEFAULT |
+			                   SQL_AT_SET_COLUMN_DEFAULT;
+			return SQL_SUCCESS;
+		}
+		case SQL_ASYNC_DBC_FUNCTIONS: {
+			*(SQLUINTEGER *) info_value_ptr = SQL_ASYNC_DBC_NOT_CAPABLE;
+			return SQL_SUCCESS;
+		}
+		case SQL_AM_NONE: {
+			*(SQLUINTEGER *) info_value_ptr = SQL_ASYNC_DBC_NOT_CAPABLE;
+			return SQL_SUCCESS;
+		}
+		case SQL_ASYNC_NOTIFICATION: {
+			*(SQLUINTEGER *) info_value_ptr = SQL_ASYNC_NOTIFICATION_NOT_CAPABLE;
 			return SQL_SUCCESS;
 		}
 
@@ -278,7 +298,6 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		default:
 			return SQL_ERROR;
 		}
-	}); // end lambda function
 }
 
 SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT completion_type) {
