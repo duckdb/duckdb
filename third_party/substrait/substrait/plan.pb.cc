@@ -83,30 +83,30 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
 };
 
 const char descriptor_table_protodef_substrait_2fplan_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
-  "\n\024substrait/plan.proto\022\tsubstrait\032\031subst"
-  "rait/relations.proto\032%substrait/extensio"
-  "ns/extensions.proto\"c\n\007PlanRel\022\"\n\003rel\030\001 "
-  "\001(\0132\016.substrait.RelH\000R\003rel\022(\n\004root\030\002 \001(\013"
-  "2\022.substrait.RelRootH\000R\004rootB\n\n\010rel_type"
-  "\"\343\002\n\004Plan\022O\n\016extension_uris\030\001 \003(\0132(.subs"
-  "trait.extensions.SimpleExtensionURIR\rext"
-  "ensionUris\022P\n\nextensions\030\002 \003(\01320.substra"
-  "it.extensions.SimpleExtensionDeclaration"
-  "R\nextensions\0220\n\trelations\030\003 \003(\0132\022.substr"
-  "ait.PlanRelR\trelations\022X\n\023advanced_exten"
-  "sions\030\004 \001(\0132\'.substrait.extensions.Advan"
-  "cedExtensionR\022advancedExtensions\022,\n\022expe"
-  "cted_type_urls\030\005 \003(\tR\020expectedTypeUrlsB+"
-  "\n\022io.substrait.protoP\001\252\002\022Substrait.Proto"
-  "bufb\006proto3"
+  "\n\024substrait/plan.proto\022\tsubstrait\032\027subst"
+  "rait/algebra.proto\032%substrait/extensions"
+  "/extensions.proto\"c\n\007PlanRel\022\"\n\003rel\030\001 \001("
+  "\0132\016.substrait.RelH\000R\003rel\022(\n\004root\030\002 \001(\0132\022"
+  ".substrait.RelRootH\000R\004rootB\n\n\010rel_type\"\343"
+  "\002\n\004Plan\022O\n\016extension_uris\030\001 \003(\0132(.substr"
+  "ait.extensions.SimpleExtensionURIR\rexten"
+  "sionUris\022P\n\nextensions\030\002 \003(\01320.substrait"
+  ".extensions.SimpleExtensionDeclarationR\n"
+  "extensions\0220\n\trelations\030\003 \003(\0132\022.substrai"
+  "t.PlanRelR\trelations\022X\n\023advanced_extensi"
+  "ons\030\004 \001(\0132\'.substrait.extensions.Advance"
+  "dExtensionR\022advancedExtensions\022,\n\022expect"
+  "ed_type_urls\030\005 \003(\tR\020expectedTypeUrlsB+\n\022"
+  "io.substrait.protoP\001\252\002\022Substrait.Protobu"
+  "fb\006proto3"
   ;
 static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_substrait_2fplan_2eproto_deps[2] = {
+  &::descriptor_table_substrait_2falgebra_2eproto,
   &::descriptor_table_substrait_2fextensions_2fextensions_2eproto,
-  &::descriptor_table_substrait_2frelations_2eproto,
 };
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_substrait_2fplan_2eproto_once;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_substrait_2fplan_2eproto = {
-  false, false, 611, descriptor_table_protodef_substrait_2fplan_2eproto, "substrait/plan.proto", 
+  false, false, 609, descriptor_table_protodef_substrait_2fplan_2eproto, "substrait/plan.proto", 
   &descriptor_table_substrait_2fplan_2eproto_once, descriptor_table_substrait_2fplan_2eproto_deps, 2, 2,
   schemas, file_default_instances, TableStruct_substrait_2fplan_2eproto::offsets,
   file_level_metadata_substrait_2fplan_2eproto, file_level_enum_descriptors_substrait_2fplan_2eproto, file_level_service_descriptors_substrait_2fplan_2eproto,

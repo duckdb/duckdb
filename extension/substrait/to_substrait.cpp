@@ -11,10 +11,9 @@
 #include "duckdb/function/table/table_scan.hpp"
 
 #include "substrait/plan.pb.h"
-#include "substrait/expression.pb.h"
-namespace duckdb {
+#include "substrait/algebra.pb.h"
 
-// using namespace std;
+namespace duckdb {
 
 string DuckDBToSubstrait::SerializeToString() {
 	string serialized;
@@ -426,7 +425,9 @@ substrait::Rel *DuckDBToSubstrait::TransformFilter(duckdb::LogicalOperator &dop)
 		auto projection = new substrait::Rel();
 		projection->mutable_project()->set_allocated_input(res);
 		for (auto col_idx : dfilter.projection_map) {
-			CreateFieldRef(projection->mutable_project()->add_expressions(), col_idx);
+			auto mut_project = projection->mutable_project();
+			auto expression = mut_project->add_expressions();
+			CreateFieldRef(expression->mutable_expression(), col_idx);
 		}
 		res = projection;
 	}
@@ -440,8 +441,9 @@ substrait::Rel *DuckDBToSubstrait::TransformProjection(duckdb::LogicalOperator &
 	sproj->set_allocated_input(TransformOp(*dop.children[0]));
 
 	for (auto &dexpr : dproj.expressions) {
-		TransformExpr(*dexpr, *sproj->add_expressions());
-		//			sproj->add_aliases(dexpr->GetName());
+		auto &substrait_expression = *sproj->add_expressions();
+		TransformExpr(*dexpr, *substrait_expression.mutable_expression());
+		substrait_expression.set_alias(dexpr->GetName());
 	}
 	return res;
 }
@@ -498,8 +500,6 @@ substrait::Rel *DuckDBToSubstrait::TransformComparisonJoin(duckdb::LogicalOperat
 	sjoin->set_allocated_left(TransformOp(*dop.children[0]));
 	sjoin->set_allocated_right(TransformOp(*dop.children[1]));
 
-	//	TransformOp(*dop.children[1], sjoin->mutable_right());
-
 	auto left_col_count = dop.children[0]->types.size();
 
 	sjoin->set_allocated_expression(CreateConjunction(
@@ -543,11 +543,13 @@ substrait::Rel *DuckDBToSubstrait::TransformComparisonJoin(duckdb::LogicalOperat
 	auto proj_rel = new substrait::Rel();
 	auto projection = proj_rel->mutable_project();
 	for (auto left_idx : djoin.left_projection_map) {
-		CreateFieldRef(projection->add_expressions(), left_idx);
+		auto substrait_expression = projection->add_expressions();
+		CreateFieldRef(substrait_expression->mutable_expression(), left_idx);
 	}
 
 	for (auto right_idx : djoin.right_projection_map) {
-		CreateFieldRef(projection->add_expressions(), right_idx + left_col_count);
+		auto substrait_expression = projection->add_expressions();
+		CreateFieldRef(substrait_expression->mutable_expression(), right_idx + left_col_count);
 	}
 	projection->set_allocated_input(res);
 	return proj_rel;
@@ -616,12 +618,6 @@ substrait::Rel *DuckDBToSubstrait::TransformCrossProduct(duckdb::LogicalOperator
 	sub_cross_prod->set_allocated_left(TransformOp(*dop.children[0]));
 	sub_cross_prod->set_allocated_right(TransformOp(*dop.children[1]));
 	auto bindings = djoin.GetColumnBindings();
-
-	//		for (uint32_t idx = 0; idx < bindings.size(); idx++) {
-	//			CreateFieldRef(sop->mutable_project()->add_expressions(), idx);
-	//		}
-	//
-	//		sop->mutable_project()->set_allocated_input(sub_cross_rel);
 	return rel;
 }
 

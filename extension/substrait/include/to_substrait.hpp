@@ -1,10 +1,9 @@
 #pragma once
 
-#include "substrait/expression.pb.h"
+#include "substrait/algebra.pb.h"
 #include <string>
 #include <unordered_map>
 #include "substrait/plan.pb.h"
-#include "substrait/relations.pb.h"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/planner/logical_operator.hpp"

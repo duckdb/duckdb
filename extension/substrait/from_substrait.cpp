@@ -229,10 +229,10 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformFilterOp(const substrait::Rel &
 shared_ptr<Relation> SubstraitToDuckDB::TransformProjectOp(const substrait::Rel &sop) {
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<string> aliases;
-	idx_t expr_idx = 1;
-	for (auto &sexpr : sop.project().expressions()) {
-		expressions.push_back(TransformExpr(sexpr));
-		aliases.push_back("expr_" + to_string(expr_idx++));
+	auto &substrait_expressions = sop.project().expressions();
+	for (size_t expr_idx = 0; expr_idx < substrait_expressions.size(); expr_idx++) {
+		expressions.push_back(TransformExpr(substrait_expressions[expr_idx].expression()));
+		aliases.push_back(substrait_expressions[expr_idx].alias());
 	}
 	return make_shared<ProjectionRelation>(TransformOp(sop.project().input()), move(expressions), move(aliases));
 }
