@@ -75,7 +75,11 @@ dbWriteTable__duckdb_connection_character_data.frame <- function(conn,
       if (name %in% names(field.types)) {
         cols <- c(cols, sprintf("#%d::%s %s", col_idx, field.types[name], dbQuoteIdentifier(conn, name)))
       } else {
+      if (inherits(value[[name]], "character")) {
+        cols <- c(cols, sprintf("#%d::VARCHAR", col_idx))
+      } else {
         cols <- c(cols, sprintf("#%d", col_idx))
+        }
       }
       col_idx <- col_idx + 1
     }

@@ -77,7 +77,9 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 		stop("rel_from_df: Invalid data frame");
 	}
 
-	auto rel = con->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)(SEXP)df)});
+	named_parameter_map_t other_params;
+	other_params["experimental"] = Value::BOOLEAN(true);
+	auto rel = con->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)(SEXP)df)}, other_params);
 	auto res = sexp(make_external<RelationWrapper>("duckdb_relation", move(rel)));
 	res.attr("df") = df;
 	return res;
@@ -148,7 +150,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	row_names.push_back(NA_INTEGER);
 	row_names.push_back(-mat_res->collection.Count());
 
-	// TODO this thing we can probably cache
+	// TODO this thing we can probably statically cache
 	writable::strings classes;
 	classes.push_back("tbl_df");
 	classes.push_back("tbl");

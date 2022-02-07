@@ -20,15 +20,40 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 	}
 }
 
+static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
+	auto result_data = FlatVector::GetData<string_t>(result);
+	auto &result_mask = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		SEXP val = STRING_ELT(coldata, row_idx + i);
+		if (val == NA_STRING) {
+			result_mask.SetInvalid(i);
+		} else {
+			result_data[i] = string_t((char *)CHAR(val));
+		}
+	}
+}
+
+static bool get_bool_param(named_parameter_map_t &named_parameters, string name, bool dflt = false) {
+	bool res = dflt;
+	auto entry = named_parameters.find(name);
+	if (entry != named_parameters.end()) {
+		res = BooleanValue::Get(entry->second);
+	}
+	return res;
+}
+
 struct DataFrameScanBindData : public TableFunctionData {
-	DataFrameScanBindData(SEXP df_p, idx_t row_count_p, vector<RType> &rtypes_p, vector<data_ptr_t> &dataptrs_p)
+	DataFrameScanBindData(SEXP df_p, idx_t row_count_p, vector<RType> &rtypes_p, vector<data_ptr_t> &dataptrs_p,
+	                      named_parameter_map_t &named_parameters)
 	    : df(df_p), row_count(row_count_p), rtypes(rtypes_p), data_ptrs(dataptrs_p) {
+		experimental = get_bool_param(named_parameters, "experimental", false);
 	}
 	data_frame df;
 	idx_t row_count;
 	vector<RType> rtypes;
 	vector<data_ptr_t> data_ptrs;
 	idx_t rows_per_task = 1000000;
+	bool experimental;
 };
 
 struct DataFrameParallelState : public ParallelState {
@@ -50,6 +75,8 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
                                                     vector<string> &input_table_names,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	data_frame df((SEXP)inputs[0].GetPointer());
+
+	auto experimental = get_bool_param(named_parameters, "experimental", false);
 
 	auto df_names = df.names();
 	vector<RType> rtypes;
@@ -89,8 +116,12 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 			break;
 		}
 		case RType::STRING:
-			duckdb_col_type = LogicalType::DEDUP_POINTER_ENUM();
-			coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
+			if (experimental) {
+				duckdb_col_type = LogicalType::DEDUP_POINTER_ENUM();
+				coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
+			} else {
+				duckdb_col_type = LogicalType::VARCHAR;
+			}
 			break;
 		case RType::TIMESTAMP:
 			duckdb_col_type = LogicalType::TIMESTAMP;
@@ -125,7 +156,7 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 		data_ptrs.push_back(coldata_ptr);
 	}
 	auto row_count = Rf_length(VECTOR_ELT(df, 0));
-	return make_unique<DataFrameScanBindData>(df, row_count, rtypes, data_ptrs);
+	return make_unique<DataFrameScanBindData>(df, row_count, rtypes, data_ptrs, named_parameters);
 }
 
 static void dataframe_scan_init_internal(ClientContext &context, const DataFrameScanBindData *bind_data,
@@ -201,9 +232,14 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 			break;
 		}
 		case RType::STRING: {
-			auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
-			//  DEDUP_POINTER_ENUM
-			AppendColumnSegment<SEXP, uint64_t, DedupPointerEnumType>(data_ptr, v, this_count);
+			if (bind_data.experimental) {
+				auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
+				//  DEDUP_POINTER_ENUM
+				AppendColumnSegment<SEXP, uint64_t, DedupPointerEnumType>(data_ptr, v, this_count);
+			} else {
+				AppendStringSegment(((data_frame)bind_data.df)[(R_xlen_t)src_df_col_idx], v, sexp_offset, this_count);
+			}
+
 			break;
 		}
 		case RType::FACTOR: {
@@ -312,6 +348,9 @@ static string dataframe_scan_tostring(const FunctionData *bind_data_p) {
 static idx_t dataframe_scan_max_threads(ClientContext &context, const FunctionData *bind_data_p) {
 	D_ASSERT(bind_data_p);
 	auto bind_data = (const DataFrameScanBindData *)bind_data_p;
+	if (!bind_data->experimental) {
+		return 1;
+	}
 	return ceil((double)bind_data->row_count / bind_data->rows_per_task);
 }
 
@@ -360,4 +399,6 @@ DataFrameScanFunction::DataFrameScanFunction()
     : TableFunction("r_dataframe_scan", {LogicalType::POINTER}, dataframe_scan_function, dataframe_scan_bind,
                     dataframe_scan_init, nullptr, nullptr, nullptr, dataframe_scan_cardinality, nullptr,
                     dataframe_scan_tostring, dataframe_scan_max_threads, dataframe_scan_init_parallel_state, nullptr,
-                    dataframe_scan_parallel_init, dataframe_scan_parallel_next, true, false, nullptr) {};
+                    dataframe_scan_parallel_init, dataframe_scan_parallel_next, true, false, nullptr) {
+	named_parameters["experimental"] = LogicalType::BOOLEAN;
+};

@@ -10,6 +10,9 @@ expr_constant <- expr_constant_cpp
 expr_function <- expr_function_cpp
 
 #' @export
+expr_tostring <- expr_tostring_cpp
+
+#' @export
 rel_project <- rel_project_cpp
 
 #' @export
@@ -20,6 +23,9 @@ rel_aggregate <- rel_aggregate_cpp
 
 #' @export
 rel_order <- rel_order_cpp
+
+#' @export
+rel_sql <- rel_sql_cpp
 
 #' @export
 print.duckdb_expr <- function(expr) {
