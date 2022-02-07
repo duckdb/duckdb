@@ -27,6 +27,9 @@ public:
 	//! The main query node
 	unique_ptr<QueryNode> node;
 
+protected:
+	SelectStatement(const SelectStatement &other);
+
 public:
 	//! Create a copy of this SelectStatement
 	unique_ptr<SQLStatement> Copy() const override;

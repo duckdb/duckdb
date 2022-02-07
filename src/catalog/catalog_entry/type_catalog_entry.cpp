@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include <algorithm>
@@ -42,7 +43,7 @@ string TypeCatalogEntry::ToSQL() {
 		Vector values_insert_order(EnumType::GetValuesInsertOrder(user_type));
 		idx_t size = EnumType::GetSize(user_type);
 		ss << "CREATE TYPE ";
-		ss << name;
+		ss << KeywordHelper::WriteOptionallyQuoted(name);
 		ss << " AS ENUM ( ";
 
 		for (idx_t i = 0; i < size; i++) {
