@@ -114,3 +114,21 @@ SELECT * FROM test;
 statement ok
 DROP TABLE test;
 
+# CSV with UTF-8 BOM marker that could mess up the header line parsing
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/auto/utf8bom.csv');
+
+query II
+SELECT * FROM test;
+----
+1	Mark
+2	Hannes
+
+query I
+SELECT id FROM test;
+----
+1
+2
+
+statement ok
+DROP TABLE test;

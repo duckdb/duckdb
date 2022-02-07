@@ -20,6 +20,9 @@ public:
 	unique_ptr<SQLStatement> statement;
 	string name;
 
+protected:
+	PrepareStatement(const PrepareStatement &other);
+
 public:
 	unique_ptr<SQLStatement> Copy() const override;
 };
