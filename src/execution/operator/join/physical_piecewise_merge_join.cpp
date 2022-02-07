@@ -843,13 +843,24 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		                          state.right_position, rhs_not_null);
 
 		idx_t result_count = MergeJoinComplexBlocks(left_info, right_info, conditions[0].comparison);
-		auto sel = FlatVector::IncrementalSelectionVector();
-		if (result_count) {
+		if (result_count == 0) {
+			// exhausted this chunk on the right side
+			// move to the next right chunk
+			state.left_position = 0;
+			state.right_position = 0;
+			state.right_base += rsorted.radix_sorting_data[state.right_chunk_index].count;
+			state.right_chunk_index++;
+			if (state.right_chunk_index >= rsorted.radix_sorting_data.size()) {
+				state.finished = true;
+			}
+		} else {
 			// found matches: extract them
+			chunk.Reset();
 			SliceSortedPayload(chunk, left_info, result_count, input.size());
 			SliceSortedPayload(chunk, right_info, result_count, right_info.entry_idx + 1, left_cols);
 			chunk.SetCardinality(result_count);
 
+			auto sel = FlatVector::IncrementalSelectionVector();
 			if (tail_cols) {
 				// If there are more expressions to compute,
 				// split the result chunk into the left and right halves
@@ -883,19 +894,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 					chunk.Slice(*sel, result_count);
 				}
 			}
-		}
 
-		if (result_count == 0) {
-			// exhausted this chunk on the right side
-			// move to the next right chunk
-			state.left_position = 0;
-			state.right_position = 0;
-			state.right_base += rsorted.radix_sorting_data[state.right_chunk_index].count;
-			state.right_chunk_index++;
-			if (state.right_chunk_index >= rsorted.radix_sorting_data.size()) {
-				state.finished = true;
-			}
-		} else {
 			// found matches: mark the found matches if required
 			if (state.lhs_found_match) {
 				for (idx_t i = 0; i < result_count; i++) {

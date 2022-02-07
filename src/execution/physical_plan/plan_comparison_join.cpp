@@ -229,7 +229,17 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		                                     op.estimated_cardinality, perfect_join_stats);
 
 	} else {
-		if (has_range /* && op.conditions.size() == 1*/) {
+		bool can_merge = has_range;
+		switch (op.join_type) {
+		case JoinType::SEMI:
+		case JoinType::ANTI:
+		case JoinType::MARK:
+			can_merge = can_merge && op.conditions.size() == 1;
+			break;
+		default:
+			break;
+		}
+		if (can_merge) {
 			// range join: use piecewise merge join
 			plan = make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions),
 			                                               op.join_type, op.estimated_cardinality);
