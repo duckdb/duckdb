@@ -1,6 +1,6 @@
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
