@@ -88,8 +88,6 @@ struct RegisterTask : public Task {
 
 	void DoWork() override {
 		auto &connection = Get<Connection>();
-
-
 		duckdb::scalar_function_t udf_function = [&](duckdb::DataChunk &args, duckdb::ExpressionState &state, duckdb::Vector &result) -> void {
 			auto jsargs = new JSArgs(args, result);
 			bool done = false;
