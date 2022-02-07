@@ -10,6 +10,12 @@
 
 namespace duckdb {
 
+static void SetResultFalse(Vector &result) {
+	auto result_data = ConstantVector::GetData<bool>(result);
+	result_data[0] = false;
+	return;
+}
+
 template <class T>
 static void TemplatedListContainsStringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
@@ -18,24 +24,29 @@ static void TemplatedListContainsStringFunction(DataChunk &args, ExpressionState
 	Vector &list = args.data[0];
 	Vector &value = args.data[1];
 
+	if (list.GetType().id() == LogicalTypeId::SQLNULL) {
+		SetResultFalse(result);
+		return;
+	}
+
+	auto list_size = ListVector::GetListSize(list);
+	if (list_size == 0) { // empty list will never contain a value
+		SetResultFalse(result);
+		return;
+	}
+	auto &child_vector = ListVector::GetEntry(list);
+	if (child_vector.GetType().id() == LogicalTypeId::SQLNULL) {
+		SetResultFalse(result);
+		return;
+	}
+
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
-//	auto &key_type = ListType::GetChildType(list.GetType());
-//	if (key_type != LogicalTypeId::SQLNULL) {
-//		value = value.CastAs(key_type);
-//	}
-
-	if (list.GetType().id() == LogicalTypeId::SQLNULL) {
-		result.Reference(false);
-	}
 	VectorData list_data;
 	VectorData value_data;
 
 	list.Orrify(count, list_data);
 	value.Orrify(count, value_data);
-
-	auto list_size = ListVector::GetListSize(list);
-	auto &child_vector = ListVector::GetEntry(list);
 
 	VectorData child_data;
 	child_vector.Orrify(list_size, child_data);
@@ -43,7 +54,6 @@ static void TemplatedListContainsStringFunction(DataChunk &args, ExpressionState
 	for (idx_t i = 0; i < count; i++) {
 		auto list_index = list_data.sel->get_index(i);
 		if (list_data.validity.RowIsValid(list_index)) {
-			//			auto list_entry = ((list_entry_t *)list_data.data)[list_index];
 			for (idx_t j = 0; j < list_size; j++) {
 				if (child_data.validity.RowIsValid(j)) {
 					auto child_value = ((T *)child_data.data)[j];
@@ -56,10 +66,10 @@ static void TemplatedListContainsStringFunction(DataChunk &args, ExpressionState
 			}
 		}
 	}
-	auto result_data = ConstantVector::GetData<bool>(result);
-	result_data[0] = false;
+	SetResultFalse(result);
 	return;
 }
+
 
 template <class T>
 static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -69,57 +79,51 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 	Vector &list = args.data[0];
 	Vector &value = args.data[1];
 
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-
-//	auto &key_type = ListType::GetChildType(list.GetType());
-//	if (key_type != LogicalTypeId::SQLNULL) {
-//		value = value.CastAs(key_type);
-//	}
-
 	if (list.GetType().id() == LogicalTypeId::SQLNULL) {
-		auto result_data = ConstantVector::GetData<bool>(result);
-		result_data[0] = false;
+		SetResultFalse(result);
 		return;
 	}
+
+	auto list_size = ListVector::GetListSize(list);
+	if (list_size == 0) { // empty list will never contain a value
+		SetResultFalse(result);
+		return;
+	}
+	auto &child_vector = ListVector::GetEntry(list);
+	if (child_vector.GetType().id() == LogicalTypeId::SQLNULL) {
+		SetResultFalse(result);
+		return;
+	}
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+
 	VectorData list_data;
 	VectorData value_data;
 
 	list.Orrify(count, list_data);
 	value.Orrify(count, value_data);
 
-	auto list_size = ListVector::GetListSize(list);
-	if (list_size == 0) { // empty list will never contain a value
-		auto result_data = ConstantVector::GetData<bool>(result);
-		result_data[0] = false;
-		return;
-	}
-	auto &child_vector = ListVector::GetEntry(list);
-	if (child_vector.GetType().id() == LogicalTypeId::SQLNULL) {
-		auto result_data = ConstantVector::GetData<bool>(result);
-		result_data[0] = false;
-		return;
-	}
 	VectorData child_data;
 	child_vector.Orrify(list_size, child_data);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto list_index = list_data.sel->get_index(i);
-		if (list_data.validity.RowIsValid(list_index)) {
-//			auto list_entry = ((list_entry_t *)list_data.data)[list_index];
-			for (idx_t j = 0; j < list_size; j++) {
-				if (child_data.validity.RowIsValid(j)) {
-					auto child_value = ((T *)child_data.data)[j];
-					if (child_value == ((T *)value_data.data)[0]) {
-						auto result_data = ConstantVector::GetData<bool>(result);
-						result_data[0] = true;
-						return;
-					}
-				}
+		auto result_data = FlatVector::GetData<bool>(result);
+		result_data[list_index] = false;
+		if (!list_data.validity.RowIsValid(list_index)) {
+			continue;
+		}
+		for (idx_t child_idx = 0; child_idx < list_size; child_idx++) {
+			if (!child_data.validity.RowIsValid(child_idx)) {
+				continue;
+			}
+			auto child_value = ((T *)child_data.data)[child_idx];
+			if (child_value == ((T *)value_data.data)[0]) {
+				result_data[list_index] = true;
+				continue;
 			}
 		}
 	}
-	auto result_data = ConstantVector::GetData<bool>(result);
-	result_data[0] = false;
 	return;
 }
 
@@ -162,11 +166,12 @@ static void ListContainsFunction(DataChunk &args, ExpressionState &state, Vector
 	case PhysicalType::VARCHAR:
 		TemplatedListContainsStringFunction<string_t>(args, state, result);
 		break;
+	case PhysicalType::LIST:
+		throw NotImplementedException("This function has not yet been implemented for nested types" );
 	default:
 		throw InvalidTypeException(args.data[1].GetType().id(), "Invalid type for List Vector Search");
 	}
 }
-
 
 
 static unique_ptr<FunctionData> ListContainsBind(ClientContext &context, ScalarFunction &bound_function,
