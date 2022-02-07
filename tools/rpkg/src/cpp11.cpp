@@ -159,24 +159,24 @@ extern "C" SEXP _duckdb_rel_filter_cpp(SEXP rel, SEXP expr) {
   END_CPP11
 }
 // relational.cpp
-SEXP rel_project_cpp(duckdb::rel_extptr rel, list exprs_p);
-extern "C" SEXP _duckdb_rel_project_cpp(SEXP rel, SEXP exprs_p) {
+SEXP rel_project_cpp(duckdb::rel_extptr rel, list exprs);
+extern "C" SEXP _duckdb_rel_project_cpp(SEXP rel, SEXP exprs) {
   BEGIN_CPP11
-    return cpp11::as_sexp(rel_project_cpp(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr>>(rel), cpp11::as_cpp<cpp11::decay_t<list>>(exprs_p)));
+    return cpp11::as_sexp(rel_project_cpp(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr>>(rel), cpp11::as_cpp<cpp11::decay_t<list>>(exprs)));
   END_CPP11
 }
 // relational.cpp
-SEXP rel_aggregate_cpp(duckdb::rel_extptr rel, list groups_p, list aggregates_p);
-extern "C" SEXP _duckdb_rel_aggregate_cpp(SEXP rel, SEXP groups_p, SEXP aggregates_p) {
+SEXP rel_aggregate_cpp(duckdb::rel_extptr rel, list groups, list aggregates);
+extern "C" SEXP _duckdb_rel_aggregate_cpp(SEXP rel, SEXP groups, SEXP aggregates) {
   BEGIN_CPP11
-    return cpp11::as_sexp(rel_aggregate_cpp(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr>>(rel), cpp11::as_cpp<cpp11::decay_t<list>>(groups_p), cpp11::as_cpp<cpp11::decay_t<list>>(aggregates_p)));
+    return cpp11::as_sexp(rel_aggregate_cpp(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr>>(rel), cpp11::as_cpp<cpp11::decay_t<list>>(groups), cpp11::as_cpp<cpp11::decay_t<list>>(aggregates)));
   END_CPP11
 }
 // relational.cpp
-SEXP rel_order_cpp(duckdb::rel_extptr rel, list orders_p);
-extern "C" SEXP _duckdb_rel_order_cpp(SEXP rel, SEXP orders_p) {
+SEXP rel_order_cpp(duckdb::rel_extptr rel, list orders);
+extern "C" SEXP _duckdb_rel_order_cpp(SEXP rel, SEXP orders) {
   BEGIN_CPP11
-    return cpp11::as_sexp(rel_order_cpp(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr>>(rel), cpp11::as_cpp<cpp11::decay_t<list>>(orders_p)));
+    return cpp11::as_sexp(rel_order_cpp(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr>>(rel), cpp11::as_cpp<cpp11::decay_t<list>>(orders)));
   END_CPP11
 }
 // relational.cpp

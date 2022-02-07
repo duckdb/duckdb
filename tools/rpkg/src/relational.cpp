@@ -90,11 +90,11 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rel_project_cpp(duckdb::rel_extptr rel, list exprs_p) {
+[[cpp11::register]] SEXP rel_project_cpp(duckdb::rel_extptr rel, list exprs) {
 	vector<unique_ptr<ParsedExpression>> projections;
 	vector<string> aliases;
 
-	for (expr_extptr expr : exprs_p) {
+	for (expr_extptr expr : exprs) {
 		aliases.push_back((expr->ToString()));
 		projections.push_back(expr->Copy());
 	}
@@ -103,39 +103,41 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rel_aggregate_cpp(duckdb::rel_extptr rel, list groups_p, list aggregates_p) {
-	vector<unique_ptr<ParsedExpression>> groups;
-	vector<unique_ptr<ParsedExpression>> aggregates;
+[[cpp11::register]] SEXP rel_aggregate_cpp(duckdb::rel_extptr rel, list groups, list aggregates) {
+	vector<unique_ptr<ParsedExpression>> res_groups, res_aggregates;
 
 	// TODO deal with empty groups
 	vector<string> aliases;
 
-	for (expr_extptr expr : groups_p) {
-		aggregates.push_back(expr->Copy());
-		groups.push_back(expr->Copy());
+	for (expr_extptr expr : groups) {
+		res_groups.push_back(expr->Copy());
+		res_aggregates.push_back(expr->Copy());
 	}
 
 	int aggr_idx = 0; // has to be int for - reasons
-	auto aggr_names = aggregates_p.names();
-	for (expr_extptr expr_p : aggregates_p) {
+	auto aggr_names = aggregates.names();
+
+	for (expr_extptr expr_p : aggregates) {
 		auto expr = expr_p->Copy();
-		expr->alias = aggr_names[aggr_idx];
-		aggregates.push_back(move(expr));
+		if (aggr_names.size() > aggr_idx) {
+			expr->alias = aggr_names[aggr_idx];
+		}
+		res_aggregates.push_back(move(expr));
 		aggr_idx++;
 	}
 
-	auto res = std::make_shared<AggregateRelation>(rel->rel, move(aggregates), move(groups));
+	auto res = std::make_shared<AggregateRelation>(rel->rel, move(res_aggregates), move(res_groups));
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rel_order_cpp(duckdb::rel_extptr rel, list orders_p) {
-	vector<OrderByNode> orders;
+[[cpp11::register]] SEXP rel_order_cpp(duckdb::rel_extptr rel, list orders) {
+	vector<OrderByNode> res_orders;
 
-	for (expr_extptr expr : orders_p) {
-		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, expr->Copy());
+	for (expr_extptr expr : orders) {
+		res_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, expr->Copy());
 	}
 
-	auto res = std::make_shared<OrderRelation>(rel->rel, move(orders));
+	auto res = std::make_shared<OrderRelation>(rel->rel, move(res_orders));
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
