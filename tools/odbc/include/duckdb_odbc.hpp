@@ -26,6 +26,9 @@ std::string OdbcHandleTypeToString(OdbcHandleType type);
 
 struct OdbcHandle {
 	explicit OdbcHandle(OdbcHandleType type_p) : type(type_p) {};
+	OdbcHandle(const OdbcHandle &other);
+	OdbcHandle &operator=(const OdbcHandle &other);
+
 	OdbcHandleType type;
 	// appending all error messages into it
 	std::vector<std::string> error_messages;
@@ -41,7 +44,8 @@ struct OdbcHandleDesc;
 
 struct OdbcHandleDbc : public OdbcHandle {
 public:
-	explicit OdbcHandleDbc(OdbcHandleEnv *env_p) : OdbcHandle(OdbcHandleType::DBC), env(env_p), autocommit(true) {
+	explicit OdbcHandleDbc(OdbcHandleEnv *env_p)
+	    : OdbcHandle(OdbcHandleType::DBC), env(env_p), autocommit(true), sql_attr_access_mode(SQL_MODE_READ_WRITE) {
 		D_ASSERT(env_p);
 		D_ASSERT(env_p->db);
 	};
@@ -55,12 +59,15 @@ public:
 	unique_ptr<Connection> conn;
 	bool autocommit;
 	SQLUINTEGER sql_attr_metadata_id;
+	SQLUINTEGER sql_attr_access_mode;
+	// this is the database name, see: SQLSetConnectAttr
+	std::string sql_attr_current_catalog;
 	// reference to an open statement handled by this connection
 	std::vector<OdbcHandleStmt *> vec_stmt_ref;
 
 	// explicitly allocated Application Descriptors
-	OdbcHandleDesc *apd = nullptr;
-	OdbcHandleDesc *ard = nullptr;
+	// OdbcHandleDesc *apd = nullptr;
+	// OdbcHandleDesc *ard = nullptr;
 };
 
 inline bool IsSQLVariableLengthType(SQLSMALLINT type) {
@@ -98,6 +105,9 @@ public:
 	SQLRETURN MaterializeResult();
 	void SetARD(OdbcHandleDesc *new_ard);
 	void SetAPD(OdbcHandleDesc *new_apd);
+	bool IsPrepared() {
+		return stmt != nullptr;
+	}
 
 public:
 	OdbcHandleDbc *dbc;
@@ -119,20 +129,40 @@ struct OdbcHandleDesc : public OdbcHandle {
 	//! https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/descriptors?view=sql-server-ver15
 	// TODO requires full implmentation
 public:
-	explicit OdbcHandleDesc(OdbcHandleDbc *dbc_ptr) : OdbcHandle(OdbcHandleType::DESC), dbc(dbc_ptr) {
+	explicit OdbcHandleDesc(OdbcHandleDbc *dbc_ptr = nullptr, OdbcHandleStmt *stmt_ptr = nullptr,
+	                        bool explicit_desc = false)
+	    : OdbcHandle(OdbcHandleType::DESC), dbc(dbc_ptr), stmt(stmt_ptr) {
+		header.sql_desc_alloc_type = SQL_DESC_ALLOC_AUTO;
+		if (explicit_desc) {
+			header.sql_desc_alloc_type = SQL_DESC_ALLOC_USER;
+		}
 	}
+	OdbcHandleDesc(const OdbcHandleDesc &other);
 	~OdbcHandleDesc() {
 	}
+	OdbcHandleDesc &operator=(const OdbcHandleDesc &other);
+	void CopyOnlyOdbcFields(const OdbcHandleDesc &other);
+	void CopyFieldByField(const OdbcHandleDesc &other);
+
 	DescRecord *GetDescRecord(idx_t param_idx);
 	SQLRETURN SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field_identifier, SQLPOINTER value_ptr,
 	                       SQLINTEGER buffer_length);
 	void Clear();
 	void Reset();
+	void Copy(OdbcHandleDesc &other);
+
+	// verify Implementation Descriptor (ID)
+	bool IsID();
+	// verify Application Descriptor (AD)
+	bool IsAD();
+	bool IsIRD();
+	bool IsIPD();
 
 public:
 	DescHeader header;
 	std::vector<DescRecord> records;
 	OdbcHandleDbc *dbc;
+	OdbcHandleStmt *stmt;
 };
 
 template <class T>
@@ -190,6 +220,18 @@ SQLRETURN WithStatementResult(SQLHANDLE &statement_handle, T &&lambda) {
 		}
 		return lambda(stmt);
 	});
+}
+
+template <class T>
+SQLRETURN WithDescriptor(SQLHANDLE &descriptor_handle, T &&lambda) {
+	if (!descriptor_handle) {
+		return SQL_ERROR;
+	}
+	auto *hdl = (OdbcHandleDesc *)descriptor_handle;
+	if (hdl->type != OdbcHandleType::DESC) {
+		return SQL_ERROR;
+	}
+	return lambda(hdl);
 }
 
 } // namespace duckdb

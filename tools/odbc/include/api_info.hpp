@@ -69,6 +69,10 @@ public:
 
 	static void WriteInfoTypesToQueryString(const vector<TypeInfo> &vec_types, string &query);
 
+	static bool IsNumericDescriptorField(SQLSMALLINT field_identifier);
+
+	static bool IsNumericInfoType(SQLUSMALLINT info_type);
+
 }; // end ApiInfo struct
 
 } // namespace duckdb

@@ -5,6 +5,7 @@
 #include "parameter_descriptor.hpp"
 #include "row_descriptor.hpp"
 
+using duckdb::OdbcHandle;
 using duckdb::OdbcHandleDbc;
 using duckdb::OdbcHandleDesc;
 using duckdb::OdbcHandleStmt;
@@ -22,6 +23,18 @@ std::string duckdb::OdbcHandleTypeToString(OdbcHandleType type) {
 		return "DESC";
 	}
 	return "INVALID";
+}
+
+//! OdbcHandle functions ***************************************************
+OdbcHandle::OdbcHandle(const OdbcHandle &other) {
+	// calling copy assigment opetator;
+	*this = other;
+}
+
+OdbcHandle &OdbcHandle::operator=(const OdbcHandle &other) {
+	type = other.type;
+	std::copy(other.error_messages.begin(), other.error_messages.end(), std::back_inserter(error_messages));
+	return *this;
 }
 
 //! OdbcHandleDbc functions ***************************************************
@@ -67,7 +80,7 @@ OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
 	D_ASSERT(dbc_p);
 	D_ASSERT(dbc_p->conn);
 
-	odbc_fetcher = make_unique<OdbcFetch>();
+	odbc_fetcher = make_unique<OdbcFetch>(this);
 	dbc->vec_stmt_ref.emplace_back(this);
 
 	// Implicit parameter and row descriptor associated with this ODBC handle statement

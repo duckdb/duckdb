@@ -350,3 +350,46 @@ SQLRETURN ApiInfo::GetColumnSize(const duckdb::LogicalType &logical_type, SQLULE
 const vector<TypeInfo> &ApiInfo::GetVectorTypesAddr() {
 	return ApiInfo::ODBC_SUPPORTED_SQL_TYPES;
 }
+
+bool ApiInfo::IsNumericDescriptorField(SQLSMALLINT field_identifier) {
+	switch (field_identifier) {
+	case SQL_DESC_ALLOC_TYPE:
+	case SQL_DESC_ARRAY_SIZE:
+	case SQL_DESC_BIND_TYPE:
+	case SQL_DESC_COUNT:
+	case SQL_DESC_AUTO_UNIQUE_VALUE:
+	case SQL_DESC_CASE_SENSITIVE:
+	case SQL_DESC_CONCISE_TYPE:
+	case SQL_DESC_DATETIME_INTERVAL_CODE:
+	case SQL_DESC_DATETIME_INTERVAL_PRECISION:
+	case SQL_DESC_DISPLAY_SIZE:
+	case SQL_DESC_FIXED_PREC_SCALE:
+	case SQL_DESC_LENGTH:
+	case SQL_DESC_NULLABLE:
+	case SQL_DESC_NUM_PREC_RADIX:
+	case SQL_DESC_OCTET_LENGTH:
+	case SQL_DESC_PARAMETER_TYPE:
+	case SQL_DESC_PRECISION:
+	case SQL_DESC_ROWVER:
+	case SQL_DESC_SCALE:
+	case SQL_DESC_SEARCHABLE:
+	case SQL_DESC_TYPE:
+	case SQL_DESC_UNNAMED:
+	case SQL_DESC_UNSIGNED:
+	case SQL_DESC_UPDATABLE:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool ApiInfo::IsNumericInfoType(SQLUSMALLINT info_type) {
+	switch (info_type) {
+	case SQL_ACTIVE_ENVIRONMENTS:
+	case SQL_AGGREGATE_FUNCTIONS:
+	case SQL_ALTER_DOMAIN:
+		return true;
+	default:
+		return false;
+	}
+}

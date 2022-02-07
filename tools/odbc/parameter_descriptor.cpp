@@ -32,6 +32,7 @@ void ParameterDescriptor::Clear() {
 
 void ParameterDescriptor::SetCurrentAPD(OdbcHandleDesc *new_apd) {
 	cur_apd = new_apd;
+	cur_apd->header.sql_desc_alloc_type = SQL_DESC_ALLOC_USER;
 }
 
 void ParameterDescriptor::Reset() {
@@ -85,11 +86,31 @@ SQLRETURN ParameterDescriptor::GetParamValues(std::vector<Value> &values) {
 	return SetParamIndex();
 }
 
-void ParameterDescriptor::SetParamProcessedPtr(SQLPOINTER value_ptr) {
-	ipd->header.sql_desc_rows_processed_ptr = (SQLULEN *)value_ptr;
+void ParameterDescriptor::SetParamProcessedPtr(SQLULEN *value_ptr) {
+	ipd->header.sql_desc_rows_processed_ptr = value_ptr;
 	if (ipd->header.sql_desc_rows_processed_ptr) {
 		*ipd->header.sql_desc_rows_processed_ptr = 0;
 	}
+}
+
+SQLULEN *ParameterDescriptor::GetParamProcessedPtr() {
+	return ipd->header.sql_desc_rows_processed_ptr;
+}
+
+void ParameterDescriptor::SetArrayStatusPtr(SQLUSMALLINT *value_ptr) {
+	ipd->header.sql_desc_array_status_ptr = value_ptr;
+}
+
+SQLUSMALLINT *ParameterDescriptor::SetArrayStatusPtr() {
+	return ipd->header.sql_desc_array_status_ptr;
+}
+
+void ParameterDescriptor::SetBindOffesetPtr(SQLLEN *value_ptr) {
+	stmt->param_desc->apd->header.sql_desc_bind_offset_ptr = (SQLLEN *)value_ptr;
+}
+
+SQLLEN *ParameterDescriptor::GetBindOffesetPtr() {
+	return stmt->param_desc->apd->header.sql_desc_bind_offset_ptr;
 }
 
 SQLRETURN ParameterDescriptor::GetNextParam(SQLPOINTER *param) {

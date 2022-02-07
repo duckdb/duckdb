@@ -3,6 +3,8 @@
 #include "odbc_fetch.hpp"
 #include "odbc_utils.hpp"
 
+#include "duckdb/main/config.hpp"
+
 #include <odbcinst.h>
 #include <locale>
 
@@ -87,13 +89,67 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 	}
 	switch (attribute) {
 	case SQL_ATTR_ODBC_VERSION: {
-		// TODO actually do something with this?
-		// auto version = (SQLINTEGER)(uintptr_t)value_ptr;
-		return SQL_SUCCESS;
+		switch ((SQLUINTEGER)(intptr_t)value_ptr) {
+		case SQL_OV_ODBC3:
+			// TODO actually do something with this?
+			// auto version = (SQLINTEGER)(uintptr_t)value_ptr;
+			return SQL_SUCCESS;
+		default:
+			env->error_messages.emplace_back("ODBC version not supported.");
+			return SQL_ERROR;
+		}
 	}
+	case SQL_ATTR_CONNECTION_POOLING:
+		switch ((SQLINTEGER)(intptr_t)value_ptr) {
+		case SQL_CP_OFF:
+		case SQL_CP_ONE_PER_DRIVER:
+		case SQL_CP_ONE_PER_HENV:
+			return SQL_SUCCESS;
+		default:
+			env->error_messages.emplace_back("Connection pool option not supported.");
+			return SQL_ERROR;
+		}
+	case SQL_ATTR_CP_MATCH:
+		env->error_messages.emplace_back("Optional feature not supported.");
+		return SQL_ERROR;
+	case SQL_ATTR_OUTPUT_NTS: /* SQLINTEGER */
+		switch (*(SQLINTEGER *)value_ptr) {
+		case SQL_TRUE:
+			return SQL_SUCCESS;
+		default:
+			env->error_messages.emplace_back("Optional feature not supported.");
+			return SQL_ERROR;
+		}
 	default:
 		return SQL_ERROR;
 	}
+}
+
+SQLRETURN SQL_API SQLGetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+                                SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
+	if (value_ptr == nullptr) {
+		return SQL_ERROR;
+	}
+	auto *env = (duckdb::OdbcHandleEnv *)environment_handle;
+	if (env->type != duckdb::OdbcHandleType::ENV) {
+		return SQL_ERROR;
+	}
+
+	switch (attribute) {
+	case SQL_ATTR_ODBC_VERSION:
+		*(SQLUINTEGER *)value_ptr = SQL_OV_ODBC3;
+		break;
+	case SQL_ATTR_CONNECTION_POOLING:
+		*(SQLINTEGER *)value_ptr = SQL_CP_OFF;
+		break;
+	case SQL_ATTR_OUTPUT_NTS:
+		*(SQLINTEGER *)value_ptr = SQL_TRUE;
+		break;
+	case SQL_ATTR_CP_MATCH:
+		env->error_messages.emplace_back("Optional feature not supported.");
+		return SQL_ERROR;
+	}
+	return SQL_SUCCESS;
 }
 
 static void GetValueFromDSN(const string &dsn, const char *key, string &value) {
@@ -118,9 +174,15 @@ static void GetValueFromDSN(const string &dsn, const char *key, string &value) {
  * Get the new database name from the DSN string.
  * Otherwise, try to read the database name from odbc.ini
  */
-static void GetDatabaseName(SQLCHAR *dsn, string &new_db_name) {
+static void GetDatabaseName(duckdb::OdbcHandleDbc *dbc, SQLCHAR *dsn, string &new_db_name) {
 	string dsn_str((char *)dsn);
 	GetValueFromDSN(dsn_str, "Database", new_db_name);
+
+	// given preference for the connection attribute
+	if (!dbc->sql_attr_current_catalog.empty() && new_db_name.empty()) {
+		new_db_name = dbc->sql_attr_current_catalog;
+		return;
+	}
 #ifdef ODBC_LINK_ODBCINST
 	if (new_db_name.empty()) {
 		string dsn_name;
@@ -146,9 +208,14 @@ static SQLRETURN SetConnection(SQLHDBC connection_handle, SQLCHAR *conn_str) {
 	}
 
 	string db_name;
-	GetDatabaseName(conn_str, db_name);
+	GetDatabaseName(dbc, conn_str, db_name);
+
 	if (!db_name.empty()) {
-		dbc->env->db = duckdb::make_unique<duckdb::DuckDB>(db_name);
+		duckdb::DBConfig config;
+		if (dbc->sql_attr_access_mode == SQL_MODE_READ_ONLY) {
+			config.access_mode = duckdb::AccessMode::READ_ONLY;
+		}
+		dbc->env->db = duckdb::make_unique<duckdb::DuckDB>(db_name, &config);
 	}
 
 	if (!dbc->conn) {
@@ -247,5 +314,22 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
 SQLRETURN SQL_API SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number,
                                   SQLSMALLINT diag_identifier, SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length,
                                   SQLSMALLINT *string_length_ptr) {
+	return SQL_ERROR;
+}
+
+SQLRETURN SQL_API SQLDataSources(SQLHENV environment_handle, SQLUSMALLINT direction, SQLCHAR *server_name,
+                                 SQLSMALLINT buffer_length1, SQLSMALLINT *name_length1_ptr, SQLCHAR *description,
+                                 SQLSMALLINT buffer_length2, SQLSMALLINT *name_length2_ptr) {
+	auto *env = (duckdb::OdbcHandleEnv *)environment_handle;
+	env->error_messages.emplace_back("Driver Manager only function");
+	return SQL_ERROR;
+}
+
+SQLRETURN SQL_API SQLDrivers(SQLHENV environment_handle, SQLUSMALLINT direction, SQLCHAR *driver_description,
+                             SQLSMALLINT buffer_length1, SQLSMALLINT *description_length_ptr,
+                             SQLCHAR *driver_attributes, SQLSMALLINT buffer_length2,
+                             SQLSMALLINT *attributes_length_ptr) {
+	auto *env = (duckdb::OdbcHandleEnv *)environment_handle;
+	env->error_messages.emplace_back("Driver Manager only function");
 	return SQL_ERROR;
 }

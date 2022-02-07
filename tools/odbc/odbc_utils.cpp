@@ -12,15 +12,6 @@ string OdbcUtils::ReadString(const SQLPOINTER ptr, const SQLSMALLINT len) {
 	return len == SQL_NTS ? string((const char *)ptr) : string((const char *)ptr, (size_t)len);
 }
 
-void OdbcUtils::WriteString(const string &s, SQLCHAR *out_buf, SQLSMALLINT buf_len, SQLSMALLINT *out_len) {
-	if (out_buf) {
-		snprintf((char *)out_buf, buf_len, "%s", s.c_str());
-	}
-	if (out_len) {
-		*out_len = s.size();
-	}
-}
-
 SQLRETURN OdbcUtils::SetStringValueLength(const string &val_str, SQLLEN *str_len_or_ind_ptr) {
 	if (str_len_or_ind_ptr) {
 		// it fills the required lenght from string value
