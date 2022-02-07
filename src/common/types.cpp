@@ -1052,7 +1052,7 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 	}
 	explicit EnumTypeInfo()
 	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), dict_type(EnumDictType::DEDUP_POINTER),
-	      enum_name(move("dedup_pointer")), values_insert_order(Vector(LogicalType::VARCHAR)), dict_size(0) {
+	      enum_name("dedup_pointer"), values_insert_order(Vector(LogicalType::VARCHAR)), dict_size(0) {
 	}
 	EnumDictType dict_type;
 	string enum_name;
