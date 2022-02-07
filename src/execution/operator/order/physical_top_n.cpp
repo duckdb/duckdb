@@ -356,6 +356,7 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload) {
 		idx_t false_count = remaining_count - true_count;
 		if (false_count > 0) {
 			// check what we should continue to check
+			compare_chunk.data[i].Slice(sort_chunk.data[i], false_sel, false_count);
 			remaining_count = VectorOperations::NotDistinctFrom(compare_chunk.data[i], boundary_values.data[i],
 			                                                    &false_sel, false_count, &new_remaining_sel, nullptr);
 			if (is_last) {
