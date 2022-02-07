@@ -98,6 +98,14 @@ static void PragmaDisableOptimizer(ClientContext &context, const FunctionParamet
 	ClientConfig::GetConfig(context).enable_optimizer = false;
 }
 
+static void PragmaEnableUniqueJoin(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).enable_unique_join = true;
+}
+
+static void PragmaDisableUniqueJoin(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).enable_unique_join = false;
+}
+
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
@@ -115,6 +123,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", PragmaEnableOptimizer));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", PragmaDisableOptimizer));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_unique_join", PragmaEnableUniqueJoin));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_unique_join", PragmaDisableUniqueJoin));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_index_join", PragmaEnableForceIndexJoin));
 	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", PragmaForceCheckpoint));

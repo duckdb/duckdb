@@ -97,3 +97,16 @@ SELECT integers2.i, integers2.j FROM integers RIGHT JOIN integers2 ON (integers.
 6	7
 
 # test multiple vectors
+
+
+# test PRAGMA
+statement ok
+PRAGMA disable_unique_join;
+
+query II
+SELECT integers.i, integers.j FROM integers JOIN integers2 ON (integers.i = integers2.i);
+----
+1	1
+2	2
+3	3
+4	4
