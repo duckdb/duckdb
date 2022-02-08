@@ -22,6 +22,9 @@ public:
 	unique_ptr<TableRef> table;
 	vector<unique_ptr<TableRef>> using_clauses;
 
+protected:
+	DeleteStatement(const DeleteStatement &other);
+
 public:
 	unique_ptr<SQLStatement> Copy() const override;
 };
