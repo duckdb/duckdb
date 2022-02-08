@@ -213,8 +213,17 @@ void FileSystem::RemoveFile(const string &filename) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
 }
 
-bool FileSystem::IsPipe(const string &filename) {
-	throw NotImplementedException("%s: IsPipe is not implemented!", GetName());
+bool FileSystem::IsFile(const string &filename) {
+	if (!filename.empty()) {
+		if (access(filename.c_str(), 0) == 0) {
+			struct stat status;
+			stat(filename.c_str(), &status);
+			if (S_ISREG(status.st_mode)) {
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 void FileSystem::FileSync(FileHandle &handle) {

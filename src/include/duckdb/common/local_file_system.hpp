@@ -57,8 +57,6 @@ public:
 	void RemoveFile(const string &filename) override;
 	//! Sync a file handle to disk
 	void FileSync(FileHandle &handle) override;
-	//! Run stat
-	bool IsPipe(const string &filename) override;
 
 	//! Runs a glob on the file system, returning a list of matching files
 	vector<string> Glob(const string &path) override;

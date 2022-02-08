@@ -23,7 +23,7 @@ public:
 	unique_ptr<FunctionData> bind_data;
 	std::string file_path;
 	bool use_tmp_file;
-	bool is_pipe;
+	bool is_file;
 
 protected:
 	void ResolveTypes() override {

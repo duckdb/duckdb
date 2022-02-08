@@ -44,10 +44,9 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// now create the copy information
 	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, move(function_data));
 	copy->file_path = stmt.info->file_path;
-	
-	LocalFileSystem fs;
-	copy->is_pipe = fs.IsPipe(copy->file_path);
-	
+
+	copy->is_file = FileSystem::IsFile(copy->file_path);
+
 	copy->AddChild(move(select_node.plan));
 
 	result.plan = move(copy);
