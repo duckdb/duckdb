@@ -213,6 +213,10 @@ void FileSystem::RemoveFile(const string &filename) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
 }
 
+bool FileSystem::IsPipe(const string &filename) {
+	throw NotImplementedException("%s: IsPipe is not implemented!", GetName());
+}
+
 void FileSystem::FileSync(FileHandle &handle) {
 	throw NotImplementedException("%s: FileSync is not implemented!", GetName());
 }

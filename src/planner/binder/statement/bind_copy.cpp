@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
@@ -43,6 +44,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// now create the copy information
 	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, move(function_data));
 	copy->file_path = stmt.info->file_path;
+	
+	LocalFileSystem fs;
+	copy->is_pipe = fs.IsPipe(copy->file_path);
+	
 	copy->AddChild(move(select_node.plan));
 
 	result.plan = move(copy);

@@ -361,6 +361,21 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 	}
 }
 
+bool LocalFileSystem::IsPipe(const string &filename) {
+	if (!filename.empty()) {
+		if (access(filename.c_str(), 0) == 0) {
+			struct stat status;
+			stat(filename.c_str(), &status);
+			// Does not work yet - need to check
+			if (S_ISFIFO(status.st_mode)) {
+				return true;
+			}
+		}
+	}
+	// if any condition fails
+	return false;
+}
+
 bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(string, bool)> &callback) {
 	if (!DirectoryExists(directory)) {
 		return false;

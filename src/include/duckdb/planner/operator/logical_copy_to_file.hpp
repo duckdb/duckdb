@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/copy_function.hpp"
+#include "duckdb/common/local_file_system.hpp"
 
 namespace duckdb {
 
@@ -22,6 +23,7 @@ public:
 	unique_ptr<FunctionData> bind_data;
 	std::string file_path;
 	bool use_tmp_file;
+	bool is_pipe;
 
 protected:
 	void ResolveTypes() override {

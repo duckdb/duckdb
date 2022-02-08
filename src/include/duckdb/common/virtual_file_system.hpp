@@ -83,6 +83,10 @@ public:
 	virtual void RemoveFile(const string &filename) override {
 		FindFileSystem(filename)->RemoveFile(filename);
 	}
+	
+	bool IsPipe(const string &filename) override {
+		return FindFileSystem(filename)->IsPipe(filename);
+	}
 
 	vector<string> Glob(const string &path) override {
 		return FindFileSystem(path)->Glob(path);

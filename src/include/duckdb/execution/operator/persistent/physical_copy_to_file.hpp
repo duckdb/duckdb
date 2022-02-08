@@ -23,6 +23,7 @@ public:
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;
 	string file_path;
+	bool is_pipe;
 
 public:
 	// Source interface
