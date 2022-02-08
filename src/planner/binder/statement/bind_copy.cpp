@@ -39,16 +39,21 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	if (!copy_function->function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
-
+	bool use_tmp_file = true;
+	for (auto &option : stmt.info->options) {
+		auto loption = StringUtil::Lower(option.first);
+		if (loption == "use_tmp_file") {
+			use_tmp_file = option.second[0].CastAs(LogicalType::BOOLEAN).GetValue<bool>();
+			stmt.info->options.erase(option.first);
+			break;
+		}
+	}
 	auto function_data =
 	    copy_function->function.copy_to_bind(context, *stmt.info, select_node.names, select_node.types);
 	// now create the copy information
 	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, move(function_data));
 	copy->file_path = stmt.info->file_path;
-	if (copy->function.name == "csv") {
-		auto csv_data = (BaseCSVData *)copy->bind_data.get();
-		copy->use_tmp_file = csv_data->options.use_temp_file;
-	}
+	copy->use_tmp_file = use_tmp_file;
 	copy->is_file = FileSystem::IsFile(copy->file_path);
 
 	copy->AddChild(move(select_node.plan));
