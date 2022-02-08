@@ -21,9 +21,10 @@ test_that("EXPLAIN shows logical, optimized and physical plan", {
 test_that("EXPLAIN ANALYZE outputs query tree", {
   con <- DBI::dbConnect(duckdb::duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
-  expect_snapshot({
-    DBI::dbGetQuery(con, "EXPLAIN ANALYZE SELECT 1;")
-  })
+  rs <- DBI::dbGetQuery(con, "EXPLAIN ANALYZE SELECT 1;")
+  expect_true(is(rs, c("duckdb_explain")))
+  expect_true(grepl("Total Time", rs$explain_value))
+  expect_true(grepl("DUMMY_SCAN", rs$explain_value))
 })
 
 test_that("wrong type of input forwards handling to the next method", {
