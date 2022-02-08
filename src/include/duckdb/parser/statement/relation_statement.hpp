@@ -19,6 +19,9 @@ public:
 
 	shared_ptr<Relation> relation;
 
+protected:
+	RelationStatement(const RelationStatement &other) = default;
+
 public:
 	unique_ptr<SQLStatement> Copy() const override;
 };

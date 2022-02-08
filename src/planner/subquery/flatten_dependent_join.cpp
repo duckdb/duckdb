@@ -197,8 +197,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		join->children.push_back(move(plan->children[1]));
 		return move(join);
 	}
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &join = (LogicalComparisonJoin &)*plan;
+		auto &join = (LogicalJoin &)*plan;
 		D_ASSERT(plan->children.size() == 2);
 		// check the correlated expressions in the children of the join
 		bool left_has_correlation = has_correlated_expressions.find(plan->children[0].get())->second;
@@ -223,6 +224,13 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 				return plan;
 			}
+		} else if (join.join_type == JoinType::RIGHT) {
+			// left outer join
+			if (!left_has_correlation) {
+				// only right has correlation: push into right
+				plan->children[1] = PushDownDependentJoinInternal(move(plan->children[1]));
+				return plan;
+			}
 		} else if (join.join_type == JoinType::MARK) {
 			if (right_has_correlation) {
 				throw Exception("MARK join with correlation in RHS not supported");
@@ -238,27 +246,42 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		// both sides have correlation
 		// push into both sides
-		// NOTE: for OUTER JOINS it matters what the BASE BINDING is after the join
-		// for the LEFT OUTER JOIN, we want the LEFT side to be the base binding after we push
-		// because the RIGHT binding might contain NULL values
 		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 		auto left_binding = this->base_binding;
 		plan->children[1] = PushDownDependentJoinInternal(move(plan->children[1]));
 		auto right_binding = this->base_binding;
+		// NOTE: for OUTER JOINS it matters what the BASE BINDING is after the join
+		// for the LEFT OUTER JOIN, we want the LEFT side to be the base binding after we push
+		// because the RIGHT binding might contain NULL values
 		if (join.join_type == JoinType::LEFT) {
 			this->base_binding = left_binding;
+		} else if (join.join_type == JoinType::RIGHT) {
+			this->base_binding = right_binding;
 		}
 		// add the correlated columns to the join conditions
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			JoinCondition cond;
-
-			cond.left = make_unique<BoundColumnRefExpression>(
+			auto left = make_unique<BoundColumnRefExpression>(
 			    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
-			cond.right = make_unique<BoundColumnRefExpression>(
+			auto right = make_unique<BoundColumnRefExpression>(
 			    correlated_columns[i].type, ColumnBinding(right_binding.table_index, right_binding.column_index + i));
-			cond.comparison = ExpressionType::COMPARE_EQUAL;
-			cond.null_values_are_equal = true;
-			join.conditions.push_back(move(cond));
+
+			if (join.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+				JoinCondition cond;
+				cond.left = move(left);
+				cond.right = move(right);
+				cond.comparison = ExpressionType::COMPARE_EQUAL;
+				cond.null_values_are_equal = true;
+
+				auto &comparison_join = (LogicalComparisonJoin &)join;
+				comparison_join.conditions.push_back(move(cond));
+			} else {
+				auto &any_join = (LogicalAnyJoin &)join;
+				auto comparison = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+				                                                         move(left), move(right));
+				auto conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+				                                                           move(comparison), move(any_join.condition));
+				any_join.condition = move(conjunction);
+			}
 		}
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
 		RewriteCorrelatedExpressions rewriter(right_binding, correlated_map);
