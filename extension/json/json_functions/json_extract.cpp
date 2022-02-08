@@ -69,9 +69,14 @@ static void TemplatedTypedExtractFunction(DataChunk &args, ExpressionState &stat
 	JSONCommon::BinaryJSONReadFunction<T>(args, state, result, TypedExtractFromVal<T>);
 }
 
+template <class T>
+static void TemplatedTypedExtractManyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	JSONCommon::JSONReadManyFunction<T>(args, state, result, TypedExtractFromVal<T>);
+}
+
 static inline bool ExtractFromVal(yyjson_val *val, string_t &result) {
 	if (val) {
-		result = JSONCommon::WriteDocument(val);
+		result = JSONCommon::WriteVal(val);
 	}
 	return val;
 }
@@ -81,7 +86,7 @@ static void ExtractFunction(DataChunk &args, ExpressionState &state, Vector &res
 }
 
 static void ExtractManyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::ManyJSONReadFunction<string_t>(args, state, result, ExtractFromVal);
+	JSONCommon::JSONReadManyFunction<string_t>(args, state, result, ExtractFromVal);
 }
 
 template <class T>
@@ -91,8 +96,8 @@ static void AddFunction(vector<CreateScalarFunctionInfo> &functions, vector<stri
 	                               TemplatedTypedExtractFunction<T>, false, JSONReadFunctionData::Bind, nullptr,
 	                               nullptr));
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::LIST(LogicalType::VARCHAR)},
-	                               LogicalType::LIST(return_type), TemplatedTypedExtractFunction<T>, false,
-	                               JSONReadManyFunctionData::Bind, nullptr, nullptr));
+	                               LogicalType::LIST(return_type), TemplatedTypedExtractManyFunction<T>, false,
+	                               JSONReadFunctionData::Bind, nullptr, nullptr));
 	for (const auto &name : names) {
 		set.name = name;
 		functions.push_back(CreateScalarFunctionInfo(set));

@@ -6,7 +6,7 @@ namespace duckdb {
 
 static inline bool JSON(yyjson_val *val, string_t &result) {
 	if (val) {
-		result = JSONCommon::WriteDocument(val);
+		result = JSONCommon::WriteVal(val);
 	}
 	return val;
 }

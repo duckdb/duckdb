@@ -1549,8 +1549,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		schema_path.emplace_back("key_value");
 
 		// construct the child types recursively
-		vector<LogicalType> kv_types {ListType::GetChildType(MapType::KeyType(type)),
-		                              ListType::GetChildType(MapType::ValueType(type))};
+		vector<LogicalType> kv_types {MapType::KeyType(type), MapType::ValueType(type)};
 		vector<string> kv_names {"key", "value"};
 		vector<unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(2);

@@ -20,7 +20,7 @@ static void BinaryArrayLengthFunction(DataChunk &args, ExpressionState &state, V
 }
 
 static void ManyArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::ManyJSONReadFunction<uint64_t>(args, state, result, GetArrayLength);
+	JSONCommon::JSONReadManyFunction<uint64_t>(args, state, result, GetArrayLength);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetArrayLengthFunction() {

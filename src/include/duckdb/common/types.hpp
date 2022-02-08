@@ -353,7 +353,7 @@ enum class LogicalTypeId : uint8_t {
 	UBIGINT = 31,
 	TIMESTAMP_TZ = 32,
 	TIME_TZ = 34,
-
+	JSON = 35,
 
 	HUGEINT = 50,
 	POINTER = 51,
@@ -365,8 +365,7 @@ enum class LogicalTypeId : uint8_t {
 	LIST = 101,
 	MAP = 102,
 	TABLE = 103,
-	ENUM = 104,
-	JSON = 105
+	ENUM = 104
 };
 
 struct ExtraTypeInfo;

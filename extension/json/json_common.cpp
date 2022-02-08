@@ -181,7 +181,63 @@ bool JSONCommon::ValidPathDollar(const char *ptr, const idx_t &len) {
 	return true;
 }
 
-yyjson_val *JSONCommon::GetPointerDollar(yyjson_val *val, const char *ptr, const idx_t &len) {
+template <class yyjson_t>
+static inline bool IsObj(yyjson_t *val) {
+	throw InternalException("Unknown yyjson type");
+}
+inline bool IsObj(yyjson_val *val) {
+	return yyjson_is_obj(val);
+}
+inline bool IsObj(yyjson_mut_val *val) {
+	return yyjson_mut_is_obj(val);
+}
+
+template <class yyjson_t>
+static inline yyjson_t *ObjGetN(yyjson_t *val, const char *ptr, idx_t key_len) {
+	throw InternalException("Unknown yyjson type");
+}
+inline yyjson_val *ObjGetN(yyjson_val *val, const char *ptr, idx_t key_len) {
+	return yyjson_obj_getn(val, ptr, key_len);
+}
+inline yyjson_mut_val *ObjGetN(yyjson_mut_val *val, const char *ptr, idx_t key_len) {
+	return yyjson_mut_obj_getn(val, ptr, key_len);
+}
+
+template <class yyjson_t>
+static inline bool IsArr(yyjson_t *val) {
+	throw InternalException("Unknown yyjson type");
+}
+inline bool IsArr(yyjson_val *val) {
+	return yyjson_is_arr(val);
+}
+inline bool IsArr(yyjson_mut_val *val) {
+	return yyjson_mut_is_arr(val);
+}
+
+template <class yyjson_t>
+static inline size_t ArrSize(yyjson_t *val) {
+	throw InternalException("Unknown yyjson type");
+}
+inline size_t ArrSize(yyjson_val *val) {
+	return yyjson_arr_size(val);
+}
+inline size_t ArrSize(yyjson_mut_val *val) {
+	return yyjson_mut_arr_size(val);
+}
+
+template <class yyjson_t>
+static inline yyjson_t *ArrGet(yyjson_t *val, idx_t index) {
+	throw InternalException("Unknown yyjson type");
+}
+inline yyjson_val *ArrGet(yyjson_val *val, idx_t index) {
+	return yyjson_arr_get(val, index);
+}
+inline yyjson_mut_val *ArrGet(yyjson_mut_val *val, idx_t index) {
+	return yyjson_mut_arr_get(val, index);
+}
+
+template <class yyjson_t>
+yyjson_t *GetPointerDollar(yyjson_t *val, const char *ptr, const idx_t &len) {
 	if (len == 1) {
 		// Just '$'
 		return val;
@@ -193,7 +249,7 @@ yyjson_val *JSONCommon::GetPointerDollar(yyjson_val *val, const char *ptr, const
 		const auto &c = *ptr++;
 		if (c == '.') {
 			// Object
-			if (!yyjson_is_obj(val)) {
+			if (!IsObj<yyjson_t>(val)) {
 				return nullptr;
 			}
 			bool escaped = false;
@@ -203,7 +259,7 @@ yyjson_val *JSONCommon::GetPointerDollar(yyjson_val *val, const char *ptr, const
 				escaped = true;
 			}
 			auto key_len = ReadString(ptr, end, escaped);
-			val = yyjson_obj_getn(val, ptr, key_len);
+			val = ObjGetN<yyjson_t>(val, ptr, key_len);
 			ptr += key_len;
 			if (escaped) {
 				// Skip past closing '"'
@@ -211,7 +267,7 @@ yyjson_val *JSONCommon::GetPointerDollar(yyjson_val *val, const char *ptr, const
 			}
 		} else if (c == '[') {
 			// Array
-			if (!yyjson_is_arr(val)) {
+			if (!IsArr<yyjson_t>(val)) {
 				return nullptr;
 			}
 			bool from_back = false;
@@ -229,10 +285,10 @@ yyjson_val *JSONCommon::GetPointerDollar(yyjson_val *val, const char *ptr, const
 			idx_t idx;
 			auto idx_len = ReadIndex(ptr, end, idx);
 			if (from_back) {
-				auto arr_size = yyjson_arr_size(val);
+				auto arr_size = ArrSize<yyjson_t>(val);
 				idx = idx > arr_size ? arr_size : arr_size - idx;
 			}
-			val = yyjson_arr_get(val, idx);
+			val = ArrGet<yyjson_t>(val, idx);
 			ptr += idx_len;
 			// Skip past closing ']'
 			ptr++;
@@ -241,6 +297,14 @@ yyjson_val *JSONCommon::GetPointerDollar(yyjson_val *val, const char *ptr, const
 		}
 	}
 	return val;
+}
+
+yyjson_val *JSONCommon::GetPointerDollar(yyjson_val *val, const char *ptr, const idx_t &len) {
+	return GetPointerDollar<yyjson_val>(val, ptr, len);
+}
+
+yyjson_mut_val *JSONCommon::GetPointerDollar(yyjson_mut_val *val, const char *ptr, const idx_t &len) {
+	return GetPointerDollar<yyjson_mut_val>(val, ptr, len);
 }
 
 } // namespace duckdb

@@ -51,7 +51,7 @@ static void BinaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 static void ManyTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::ManyJSONReadFunction<string_t>(args, state, result, GetType);
+	JSONCommon::JSONReadManyFunction<string_t>(args, state, result, GetType);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetTypeFunction() {

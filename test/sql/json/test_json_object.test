@@ -1,0 +1,33 @@
+# name: test/sql/json/test_json_object.test
+# description: Test JSON object
+# group: [json]
+
+require json
+
+statement ok
+pragma enable_verification
+
+query T
+select json_object('duck', 42)
+----
+{"duck":42}
+
+query T
+select json_object('duck', '{"goose": [1, 2, 3, 4, 5, 6, 7]}'::JSON)
+----
+{"duck":{"goose":[1,2,3,4,5,6,7]}}
+
+query T
+select json_object('nested', {duck: 42})
+----
+{"nested":{"duck":42}}
+
+query T
+select json_object('nested', map(['duck'], [42]))
+----
+{"nested":{"duck":42}}
+
+query T
+select json_object('nested', [1, 2, 3])
+----
+{"nested":[1,2,3]}

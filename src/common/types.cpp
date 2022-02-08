@@ -169,6 +169,7 @@ constexpr const LogicalTypeId LogicalType::HASH;
 constexpr const LogicalTypeId LogicalType::POINTER;
 
 constexpr const LogicalTypeId LogicalType::VARCHAR;
+constexpr const LogicalTypeId LogicalType::JSON;
 
 constexpr const LogicalTypeId LogicalType::BLOB;
 constexpr const LogicalTypeId LogicalType::INTERVAL;
@@ -202,7 +203,7 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,     LogicalType::USMALLINT,
 	    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,         LogicalTypeId::LIST,
 	    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,
-	    LogicalType::UUID};
+	    LogicalType::UUID,     LogicalType::JSON};
 	return types;
 }
 
@@ -993,12 +994,12 @@ LogicalType LogicalType::MAP(LogicalType key, LogicalType value) {
 
 const LogicalType &MapType::KeyType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::MAP);
-	return StructType::GetChildTypes(type)[0].second;
+	return ListType::GetChildType(StructType::GetChildTypes(type)[0].second);
 }
 
 const LogicalType &MapType::ValueType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::MAP);
-	return StructType::GetChildTypes(type)[1].second;
+	return ListType::GetChildType(StructType::GetChildTypes(type)[1].second);
 }
 
 //===--------------------------------------------------------------------===//
