@@ -43,8 +43,13 @@ public:
 
 struct JSONCommon {
 private:
+	//! Read/Write flag that make sense for us
 	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_STOP_WHEN_DONE;
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
+
+	//! Some defines copied from yyjson.cpp
+	static constexpr auto IDX_T_SAFE_DIG = 19;
+	static constexpr auto IDX_T_MAX = ((idx_t)(~(idx_t)0));
 
 public:
 	//! Read JSON document (returns nullptr if invalid JSON)
@@ -113,36 +118,13 @@ public:
 		}
 		switch (*ptr) {
 		case '/':
-			return GetPointer<yyjson_t>(root, ptr, len);
+			return TemplatedGetPointer<yyjson_t>(root, ptr, len);
 		case '$':
-			return GetPointerDollar<yyjson_t>(root, ptr, len);
+			return TemplatedGetPointerDollar<yyjson_t>(root, ptr, len);
 		default:
 			throw InternalException("JSON path does not start with '/' or '$'");
 		}
 	}
-
-private:
-	//! Get JSON pointer using /field/index/... notation
-	template <class yyjson_t>
-	static inline yyjson_t *GetPointer(yyjson_t *root, const char *ptr, const idx_t &len) {
-		throw InternalException("Unknown yyjson type");
-	}
-	template <>
-	inline yyjson_val *GetPointer(yyjson_val *root, const char *ptr, const idx_t &len) {
-		return len == 1 ? root : unsafe_yyjson_get_pointer(root, ptr, len);
-	}
-	template <>
-	inline yyjson_mut_val *GetPointer(yyjson_mut_val *root, const char *ptr, const idx_t &len) {
-		return len == 1 ? root : unsafe_yyjson_mut_get_pointer(root, ptr, len);
-	}
-
-	//! Get JSON pointer using $.field[index]... notation
-	template <class yyjson_t>
-	static yyjson_t *GetPointerDollar(yyjson_t *val, const char *ptr, const idx_t &len) {
-		throw InternalException("Unknown yyjson type");
-	}
-	static yyjson_val *GetPointerDollar(yyjson_val *val, const char *ptr, const idx_t &len);
-	static yyjson_mut_val *GetPointerDollar(yyjson_mut_val *val, const char *ptr, const idx_t &len);
 
 public:
 	//! Single-argument JSON read function, i.e. json_type('[1, 2, 3]')
@@ -255,20 +237,205 @@ public:
 	}
 
 private:
-	//! Helper functions for JSONReadManyFunction
+	//! Get JSON pointer using /field/index/... notation
+	template <class yyjson_t>
+	static inline yyjson_t *TemplatedGetPointer(yyjson_t *root, const char *ptr, const idx_t &len) {
+		throw InternalException("Unknown yyjson type");
+	}
+
+	//! Get JSON pointer using $.field[index]... notation
+	template <class yyjson_t>
+	static yyjson_t *TemplatedGetPointerDollar(yyjson_t *val, const char *ptr, const idx_t &len) {
+		if (len == 1) {
+			// Just '$'
+			return val;
+		}
+		const char *const end = ptr + len;
+		// Skip past '$'
+		ptr++;
+		while (val != nullptr && ptr != end) {
+			const auto &c = *ptr++;
+			if (c == '.') {
+				// Object
+				if (!IsObj<yyjson_t>(val)) {
+					return nullptr;
+				}
+				bool escaped = false;
+				if (*ptr == '"') {
+					// Skip past opening '"'
+					ptr++;
+					escaped = true;
+				}
+				auto key_len = ReadString(ptr, end, escaped);
+				val = ObjGetN<yyjson_t>(val, ptr, key_len);
+				ptr += key_len;
+				if (escaped) {
+					// Skip past closing '"'
+					ptr++;
+				}
+			} else if (c == '[') {
+				// Array
+				if (!IsArr<yyjson_t>(val)) {
+					return nullptr;
+				}
+				bool from_back = false;
+				if (*ptr == '#') {
+					// Index from back of array
+					ptr++;
+					if (*ptr == ']') {
+						return nullptr;
+					}
+					from_back = true;
+					// Skip past '-'
+					ptr++;
+				}
+				// Read index
+				idx_t idx;
+				auto idx_len = ReadIndex(ptr, end, idx);
+				if (from_back) {
+					auto arr_size = ArrSize<yyjson_t>(val);
+					idx = idx > arr_size ? arr_size : arr_size - idx;
+				}
+				val = ArrGet<yyjson_t>(val, idx);
+				ptr += idx_len;
+				// Skip past closing ']'
+				ptr++;
+			} else {
+				throw InternalException("Unexpected char when parsing JSON path");
+			}
+		}
+		return val;
+	}
+
+	static inline idx_t ReadString(const char *ptr, const char *const end, const bool escaped) {
+		const char *const before = ptr;
+		if (escaped) {
+			while (ptr != end) {
+				if (*ptr == '"') {
+					break;
+				}
+				ptr++;
+			}
+			return ptr == end ? 0 : ptr - before;
+		} else {
+			while (ptr != end) {
+				if (*ptr == '.' || *ptr == '[') {
+					break;
+				}
+				ptr++;
+			}
+			return ptr - before;
+		}
+	}
+
+	static inline idx_t ReadIndex(const char *ptr, const char *const end, idx_t &idx) {
+		const char *const before = ptr;
+		idx = 0;
+		for (idx_t i = 0; i < IDX_T_SAFE_DIG; i++) {
+			if (ptr == end) {
+				// No closing ']'
+				return 0;
+			}
+			if (*ptr == ']') {
+				break;
+			}
+			uint8_t add = (uint8_t)(*ptr - '0');
+			if (add <= 9) {
+				idx = add + idx * 10;
+			} else {
+				// Not a digit
+				return 0;
+			}
+			ptr++;
+		}
+		// Invalid if overflow
+		return idx >= (idx_t)IDX_T_MAX ? 0 : ptr - before;
+	}
+
+	template <class yyjson_t>
+	static inline bool IsObj(yyjson_t *val) {
+		throw InternalException("Unknown yyjson type");
+	}
+
+	template <class yyjson_t>
+	static inline yyjson_t *ObjGetN(yyjson_t *val, const char *ptr, idx_t key_len) {
+		throw InternalException("Unknown yyjson type");
+	}
+
+	template <class yyjson_t>
+	static inline bool IsArr(yyjson_t *val) {
+		throw InternalException("Unknown yyjson type");
+	}
+
+	template <class yyjson_t>
+	static inline size_t ArrSize(yyjson_t *val) {
+		throw InternalException("Unknown yyjson type");
+	}
+
+	template <class yyjson_t>
+	static inline yyjson_t *ArrGet(yyjson_t *val, idx_t index) {
+		throw InternalException("Unknown yyjson type");
+	}
+
 	template <class T>
 	static inline void PushBack(Vector &result, Vector &result_child, T val) {
 		throw NotImplementedException("Cannot insert Value with this type into JSON result list");
 	}
-
-	inline void PushBack(Vector &result, Vector &result_child, uint64_t val) {
-		ListVector::PushBack(result, Value::UBIGINT(move(val)));
-	}
-
-	inline void PushBack(Vector &result, Vector &result_child, string_t val) {
-		Value to_insert(StringVector::AddString(result_child, val));
-		ListVector::PushBack(result, to_insert);
-	}
 };
+
+template <>
+inline yyjson_val *JSONCommon::TemplatedGetPointer(yyjson_val *root, const char *ptr, const idx_t &len) {
+	return len == 1 ? root : unsafe_yyjson_get_pointer(root, ptr, len);
+}
+template <>
+inline yyjson_mut_val *JSONCommon::TemplatedGetPointer(yyjson_mut_val *root, const char *ptr, const idx_t &len) {
+	return len == 1 ? root : unsafe_yyjson_mut_get_pointer(root, ptr, len);
+}
+
+template <>
+inline bool JSONCommon::IsObj(yyjson_val *val) {
+	return yyjson_is_obj(val);
+}
+template <>
+inline bool JSONCommon::IsObj(yyjson_mut_val *val) {
+	return yyjson_mut_is_obj(val);
+}
+
+template <>
+inline yyjson_val *JSONCommon::ObjGetN(yyjson_val *val, const char *ptr, idx_t key_len) {
+	return yyjson_obj_getn(val, ptr, key_len);
+}
+template <>
+inline yyjson_mut_val *JSONCommon::ObjGetN(yyjson_mut_val *val, const char *ptr, idx_t key_len) {
+	return yyjson_mut_obj_getn(val, ptr, key_len);
+}
+
+template <>
+inline bool JSONCommon::IsArr(yyjson_val *val) {
+	return yyjson_is_arr(val);
+}
+template <>
+inline bool JSONCommon::IsArr(yyjson_mut_val *val) {
+	return yyjson_mut_is_arr(val);
+}
+
+template <>
+inline size_t JSONCommon::ArrSize(yyjson_val *val) {
+	return yyjson_arr_size(val);
+}
+template <>
+inline size_t JSONCommon::ArrSize(yyjson_mut_val *val) {
+	return yyjson_mut_arr_size(val);
+}
+
+template <>
+inline void JSONCommon::PushBack(Vector &result, Vector &result_child, uint64_t val) {
+	ListVector::PushBack(result, Value::UBIGINT(move(val)));
+}
+template <>
+inline void JSONCommon::PushBack(Vector &result, Vector &result_child, string_t val) {
+	Value to_insert(StringVector::AddString(result_child, val));
+	ListVector::PushBack(result, to_insert);
+}
 
 } // namespace duckdb
