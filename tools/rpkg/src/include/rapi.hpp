@@ -21,7 +21,7 @@ struct DBWrapper {
 	mutex lock;
 };
 
-void DBDeleter(DBWrapper*);
+void DBDeleter(DBWrapper *);
 typedef cpp11::external_pointer<DBWrapper, DBDeleter> db_eptr_t;
 
 struct ConnWrapper {
@@ -29,7 +29,7 @@ struct ConnWrapper {
 	db_eptr_t db_eptr;
 };
 
-void ConnDeleter(ConnWrapper*);
+void ConnDeleter(ConnWrapper *);
 typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
 
 struct RStatement {

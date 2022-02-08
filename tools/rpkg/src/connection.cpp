@@ -2,10 +2,9 @@
 
 using namespace duckdb;
 
-void duckdb::ConnDeleter(ConnWrapper* conn) {
-	cpp11::warning(
-	    "Connection is garbage-collected, use dbDisconnect() to avoid this.");
-  delete conn;
+void duckdb::ConnDeleter(ConnWrapper *conn) {
+	cpp11::warning("Connection is garbage-collected, use dbDisconnect() to avoid this.");
+	delete conn;
 }
 
 [[cpp11::register]] duckdb::conn_eptr_t rapi_connect(duckdb::db_eptr_t db) {

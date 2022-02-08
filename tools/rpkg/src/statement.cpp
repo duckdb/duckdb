@@ -501,7 +501,8 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 }
 
 // Turn a DuckDB result set into an Arrow Table
-[[cpp11::register]] SEXP rapi_execute_arrow(duckdb::rqry_eptr_t qry_res, bool stream, int vec_per_chunk, bool return_table) {
+[[cpp11::register]] SEXP rapi_execute_arrow(duckdb::rqry_eptr_t qry_res, bool stream, int vec_per_chunk,
+                                            bool return_table) {
 	auto result = qry_res->result.get();
 	// somewhat dark magic below
 	cpp11::function getNamespace = RStrings::get().getNamespace_sym;

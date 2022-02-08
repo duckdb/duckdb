@@ -202,7 +202,8 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(const string &table_na
 	return nullptr;
 }
 
-[[cpp11::register]] void rapi_register_arrow(duckdb::conn_eptr_t conn, std::string name, cpp11::list export_funs, cpp11::sexp valuesexp) {
+[[cpp11::register]] void rapi_register_arrow(duckdb::conn_eptr_t conn, std::string name, cpp11::list export_funs,
+                                             cpp11::sexp valuesexp) {
 	if (!conn || !conn->conn) {
 		cpp11::stop("duckdb_register_R: Invalid connection");
 	}
