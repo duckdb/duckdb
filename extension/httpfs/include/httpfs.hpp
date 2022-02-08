@@ -48,6 +48,10 @@ public:
 
 class HTTPFileSystem : public FileSystem {
 public:
+	static constexpr int HTTP_WRITE_TIMEOUT_SEC = 60;
+	static constexpr int HTTP_READ_TIMEOUT_SEC = 60;
+	static constexpr int HTTP_CONNECTION_TIMEOUT_SEC = 60;
+
 	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
 	                                     FileCompressionType compression = DEFAULT_COMPRESSION,
 	                                     FileOpener *opener = nullptr) final;

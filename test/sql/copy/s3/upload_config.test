@@ -19,7 +19,10 @@ SET s3_secret_access_key='S3RVER';SET s3_access_key_id='S3RVER';SET s3_region='e
 statement ok
 CALL DBGEN(sf=1)
 
-# First try a valid config: 5TB in 10000 parts will have a fairly reasonably 500 MB per part
+# First try a valid config: 5TB in 10000 parts will have a fairly reasonable 500 MB per part
+statement ok
+SET memory_limit='3GB';
+
 statement ok
 SET s3_uploader_max_parts_per_file=10000;
 
@@ -46,7 +49,8 @@ WHERE
 ----
 123141078.228299
 
-# Now set an invalid config, there should not be enough memory to support this config as a single part would require 2GB of memory
+# Now set an invalid config: there should is not enough memory to support this config as a single upload buffer would require
+# 2GB of memory
 statement ok
 SET memory_limit='1GB';
 
@@ -56,25 +60,16 @@ SET s3_uploader_max_parts_per_file=1000;
 statement ok
 SET s3_uploader_max_filesize='2TB';
 
+statement ok
+SET s3_uploader_thread_limit = 1;
+
 statement error
 COPY lineitem TO 's3://test-bucket/multipart/export_out_should_not_exist.csv' WITH (HEADER 1, DELIMITER '|');
 
+# Uploading with limited memory: part size is 100MB, memory limit is 300MB, this should cause allocation to fail requiring the
+# uploader to wait for memory to become available. We repeat this test a few times to confirm the memory is freed properly
+foreach iteration 1 2 3 4 5
 
-statement ok
-PRAGMA TPCH(1);
-
-statement ok
-PRAGMA TPCH(2);
-
-statement ok
-PRAGMA TPCH(3);
-
-statement ok
-PRAGMA TPCH(4);
-
-# This should work barely: part size is 100MB, memory limit is 300MB, this will cause allocation to fail requiring the
-# uploader to wait for memory to become available
-# Only be able to do 1 buffer at a time.
 statement ok
 SET memory_limit='300MB';
 
@@ -88,23 +83,6 @@ statement ok
 SET s3_uploader_thread_limit=10;
 
 statement ok
-COPY lineitem TO 's3://test-bucket/multipart/export_out_should_not_exist.csv' WITH (HEADER 1, DELIMITER '|');
+COPY lineitem TO 's3://test-bucket/multipart/export_out_limited_memory${iteration}.csv' WITH (HEADER 1, DELIMITER '|');
 
-
-# This should work barely: part size is 100MB, memory limit is 300MB, this will cause allocation to fail requiring the
-# uploader to wait for memory to become available
-# Only be able to do 1 buffer at a time.
-statement ok
-SET memory_limit='1GB';
-
-statement ok
-SET s3_uploader_max_parts_per_file=10000;
-
-statement ok
-SET s3_uploader_max_filesize='1TB';
-
-statement ok
-SET s3_uploader_thread_limit=0;
-
-statement ok
-COPY lineitem TO 's3://test-bucket/multipart/export_out_should_not_exist.csv' WITH (HEADER 1, DELIMITER '|');
+endloop

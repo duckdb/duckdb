@@ -14,10 +14,6 @@
 
 namespace duckdb {
 
-std::mutex S3FileHandle::buffers_available_lock;
-std::condition_variable S3FileHandle::buffers_available_cv;
-std::atomic<uint16_t> S3FileHandle::buffers_available;
-
 static std::string uri_encode(const std::string &input, bool encode_slash = false) {
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 	static const char *hex_digit = "0123456789ABCDEF";
@@ -153,7 +149,7 @@ S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener) {
 	if (opener->TryGetCurrentSetting("s3_uploader_max_filesize", value)) {
 		uploader_max_filesize = DBConfig::ParseMemoryLimit(value.GetValue<string>());
 	} else {
-		uploader_max_filesize = 100000000000; // 100GB
+		uploader_max_filesize = 400000000000;
 	}
 
 	if (opener->TryGetCurrentSetting("s3_uploader_max_parts_per_file", value)) {
@@ -188,14 +184,14 @@ void S3FileHandle::Close() {
 
 // Opens the multipart upload and returns the ID
 string S3FileSystem::InitializeMultipartUpload(S3FileHandle &file_handle) {
-	auto &hfs = (HTTPFileSystem &)file_handle.file_system;
+	auto &s3fs = (S3FileSystem &)file_handle.file_system;
 
 	// AWS response is around 300~ chars in docs so this should be enough to not need a resize
 	idx_t response_buffer_len = 1000;
 	auto response_buffer = unique_ptr<char[]>{ new char[response_buffer_len]};
 
 	string query_param = "?" + uri_encode("uploads") + "=";
-	auto res = hfs.PostRequest(file_handle, file_handle.path + query_param, {}, response_buffer, response_buffer_len, nullptr, 0);
+	auto res = s3fs.PostRequest(file_handle, file_handle.path + query_param, {}, response_buffer, response_buffer_len, nullptr, 0);
 	string result(response_buffer.get(), response_buffer_len);
 
 	auto open_tag_pos = result.find("<UploadId>", 0);
@@ -211,7 +207,7 @@ string S3FileSystem::InitializeMultipartUpload(S3FileHandle &file_handle) {
 }
 
 void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer) {
-	auto &hfs = (HTTPFileSystem &)file_handle.file_system;
+	auto &s3fs = (S3FileSystem &)file_handle.file_system;
 
 	string query_param = uri_encode("partNumber") + "=" + to_string(write_buffer->part_no + 1) + "&" +
 	                     uri_encode("uploadId") + "=" + uri_encode(file_handle.multipart_upload_id, true);
@@ -224,7 +220,7 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 	// Retry loop to make large uploads resilient to brief connection issues
 	while (true) {
 		try {
-			res = hfs.PutRequest(file_handle, file_handle.path + "?" + query_param, {},
+			res = s3fs.PutRequest(file_handle, file_handle.path + "?" + query_param, {},
 			                     (char *)write_buffer->Ptr(), write_buffer->idx);
 
 			if (res->code == 200) {
@@ -250,8 +246,9 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 			break;
 		}
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS));
+		std::this_thread::sleep_for(std::chrono::milliseconds(MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS+1));
 	}
+
 	if (!success) {
 		throw std::runtime_error("Unable to connect to URL \"" + file_handle.path + "\"(last attempt failed with: \"" + last_error + "\")");
 	}
@@ -268,25 +265,22 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 
 	file_handle.parts_uploaded++;
 
-	// Free up space for another thread to acquire a S3WriteBuffer
-	file_handle.buffers_available++;
-
-	// to this buffer at the same time.
+	// Free up space for another thread to acquire an S3WriteBuffer
 	write_buffer.reset();
-	file_handle.buffers_available_cv.notify_one();
+	s3fs.buffers_available++;
+	s3fs.buffers_available_cv.notify_one();
 
 	// Update uploads in progress
+	//std::cout << "[END] buffers_available: " << s3fs.buffers_available.load() << " parts_uploaded: " << file_handle.parts_uploaded.load() << " uploads in progress: " << file_handle.uploads_in_progress.load() << std::endl;
 	file_handle.uploads_in_progress--;
-	//std::cout << "[END] buffers_available: " << file_handle.buffers_available.load() << " parts_uploaded: " << file_handle.parts_uploaded.load() << " uploads in progress: " << file_handle.uploads_in_progress.load() << std::endl;
 	file_handle.uploads_in_progress_cv.notify_one();
 }
 
 void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, std::shared_ptr<S3WriteBuffer> write_buffer) {
 	if (write_buffer->idx == 0) {
-		return; // Nothing to write
+		return;
 	}
 
-	// If another thread is uploading this buffer, we can safely return.
 	auto uploading = write_buffer->uploading.load();
 	if (uploading) {
 		return;
@@ -299,9 +293,6 @@ void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, std::shared_ptr<S3Writ
 	file_handle.write_buffers_lock.lock();
 	file_handle.write_buffers.erase(write_buffer->part_no);
 	file_handle.write_buffers_lock.unlock();
-
-	// note that this must be increased synchronously because the caller of this function should be able to use the
-	// uploads_in_progress function to wait for all uploads to finish
 	file_handle.uploads_in_progress++;
 
 	thread upload_thread(UploadBuffer, std::ref(file_handle), write_buffer);
@@ -309,9 +300,8 @@ void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, std::shared_ptr<S3Writ
 }
 
 // Note that FlushAll currently does not allow to continue writing afterwards. Therefore, FinalizeMultipartUpload should
-// be called right after it!
-// TODO we can fix this be keeping the last partially written buffer in memory and allow "restarting" it we continueing
-// to write to it and overwriting the part in S3. Note that we should update the ETag!
+// be called right after it! TODO: we can fix this be keeping the last partially written buffer in memory and allow
+//  "restarting" it we continueing
 void S3FileSystem::FlushAllBuffers(S3FileHandle &file_handle) {
 	//std::cout << "Flushing all:" << std::endl;
 	// Collect references to all buffers to check
@@ -353,6 +343,8 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle& file_handle) {
 	ss << "</CompleteMultipartUpload>";
 	string body = ss.str();
 
+	//std::cout << body << "\n";
+
 	// Response is around ~400 in AWS docs so this should be enough to not need a resize
 	idx_t response_buffer_len = 1000;
 	auto response_buffer = unique_ptr<char[]>{new char[response_buffer_len]};
@@ -370,6 +362,7 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle& file_handle) {
 }
 
 std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle& file_handle, uint16_t write_buffer_idx) {
+	auto &s3fs = (S3FileSystem &)file_handle.file_system;
 	// Check if write buffer already exists
 	{
 		std::unique_lock<std::mutex> lck(file_handle.write_buffers_lock);
@@ -382,12 +375,11 @@ std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle& file_handle
 
 	// Wait for a buffer to become available
 	//std::cout << "Waiting for buffer allocation for part " << write_buffer_idx << std::endl;
-	//std::cout << "Buffers: available: " << file_handle.buffers_available.load() << std::endl;
-
+	//std::cout << "Buffers: available: " << s3fs.buffers_available.load() << std::endl;
 	{
-		std::unique_lock<std::mutex> lck(file_handle.buffers_available_lock);
-		file_handle.buffers_available_cv.wait(lck, [&file_handle] { return file_handle.buffers_available > 0; });
-		file_handle.buffers_available--;
+		std::unique_lock<std::mutex> lck(s3fs.buffers_available_lock);
+		s3fs.buffers_available_cv.wait(lck, [&s3fs] { return s3fs.buffers_available > 0; });
+		s3fs.buffers_available--;
 	}
 
 	// Try to allocate a buffer from the buffer manager
@@ -396,7 +388,7 @@ std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle& file_handle
 
 	while(true) {
 		try {
-			//std::cout << "Allocating duckdb memory...\n";
+//			//std::cout << "Allocating duckdb memory...\n";
 			duckdb_buffer = buffer_manager.Allocate(file_handle.part_size);
 			//std::cout << "Allocating duckdb memory complete\n";
 
@@ -409,27 +401,26 @@ std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle& file_handle
 				threads_waiting_for_memory++;
 				set_waiting_for_memory = true;
 			}
-			//std::cout << "DuckDB out of memory, we're waiting for buffers to become available\n";
-			auto buffers_available = file_handle.buffers_available.load();
+//			//std::cout << "DuckDB out of memory, we're waiting for buffers to become available\n";
+			auto buffers_available = s3fs.buffers_available.load();
 
 			if (buffers_available >= file_handle.config_params.max_upload_threads - threads_waiting_for_memory) {
-				//std::cout << "avail: " << buffers_available << " total: " << file_handle.config_params.max_upload_threads << " waiting " <<  threads_waiting_for_memory << std::endl;
+//				//std::cout << "avail: " << buffers_available << " total: " << file_handle.config_params.max_upload_threads << " waiting " <<  threads_waiting_for_memory << std::endl;
 				// There exist no upload write buffers that can release more memory. We really ran out of memory here.
 				throw e;
 			} else {
 
 				// Wait for more buffers to become available before trying again
 				{
-					std::unique_lock<std::mutex> lck(file_handle.buffers_available_lock);
-					file_handle.buffers_available_cv.wait(lck,
-														  [&file_handle, buffers_available] { return file_handle.buffers_available > buffers_available;});
-					//std::cout << "A buffer just became available, rechecking!\n";
+					std::unique_lock<std::mutex> lck(s3fs.buffers_available_lock);
+					s3fs.buffers_available_cv.wait(lck,
+														  [&s3fs, &buffers_available] { return s3fs.buffers_available > buffers_available;});
+//					//std::cout << "A buffer just became available, rechecking!\n";
 				}
 			}
 		}
 	}
 
-	// We're now allowed to allocate a buffer at the requested idx
 	auto new_write_buffer = make_shared<S3WriteBuffer>(write_buffer_idx * file_handle.part_size, file_handle.part_size, duckdb_buffer);
 
 	{
@@ -489,7 +480,7 @@ void S3FileSystem::S3UrlParse(FileHandle &handle, string url, string &host_out, 
 		// Endpoint is not a full url and the regular https://{bucket}.{domain} format will be used
 		// actual request
 		host_out = bucket + "." + endpoint;
-		http_host_out = "http://" + host_out; // TODO: restore https
+		http_host_out = "http://" + host_out;
 	}
 }
 
@@ -654,7 +645,7 @@ unique_ptr<ResponseWrapper> S3FileHandle::Initialize() {
 		multipart_upload_id = s3fs.InitializeMultipartUpload(*this);
 
 		// Threads are limited by limiting the amount of write buffers available, since each
-		buffers_available = config_params.max_upload_threads;
+		s3fs.buffers_available = config_params.max_upload_threads;
 		uploads_in_progress =  0;
 		parts_uploaded = 0;
 		upload_finalized = false;
@@ -662,7 +653,7 @@ unique_ptr<ResponseWrapper> S3FileHandle::Initialize() {
 		//std::cout << "require part size: " << required_part_size << "\n";
 		//std::cout << "chosen part size: " << part_size << "\n";
 		//std::cout << "max_uploads: " << config_params.max_upload_threads << "\n";
-		//std::cout << "max_buffers: " << buffers_available << "\n";
+		//std::cout << "max_buffers: " << s3fs.buffers_available << "\n";
 	}
 
 	return res;

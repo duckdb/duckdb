@@ -30,6 +30,7 @@ string ParseUrl(string url, string &path, string &proto_host_port) {
 unique_ptr<duckdb_httplib_openssl::Headers> InitializeHTTPHeaders(HeaderMap header_map) {
 	auto headers = make_unique<duckdb_httplib_openssl::Headers>();
 	for (auto &entry : header_map) {
+		//std::cout << "adding header " << entry.first << "=" << entry.second << "\n";
 		headers->insert(entry);
 	}
 	return headers;
@@ -45,7 +46,11 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	duckdb_httplib_openssl::Client cli(proto_host_port.c_str());
 	cli.set_follow_location(true);
 	cli.enable_server_certificate_verification(false);
+	cli.set_read_timeout(HTTP_READ_TIMEOUT_SEC);
+	cli.set_write_timeout(HTTP_WRITE_TIMEOUT_SEC);
+	cli.set_connection_timeout(HTTP_WRITE_TIMEOUT_SEC);
 
+	//std::cout << "making post request to " << url << "\n";
 	string content_type = "application/octet-stream";
 	idx_t out_offset = 0;
 	auto res = cli.Post(
@@ -67,6 +72,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 				buffer_out = move(tmp);
 				buffer_out_len = new_size;
 			}
+		    //std::cout << "Copying " << data_length << "bytes \n";
 		    memcpy(buffer_out.get() + out_offset, data, data_length);
 		    out_offset += data_length;
 		    return true;
@@ -87,6 +93,9 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 	duckdb_httplib_openssl::Client cli(proto_host_port.c_str());
 	cli.set_follow_location(true);
 	cli.enable_server_certificate_verification(false);
+	cli.set_read_timeout(HTTP_READ_TIMEOUT_SEC);
+	cli.set_write_timeout(HTTP_WRITE_TIMEOUT_SEC);
+	cli.set_connection_timeout(HTTP_WRITE_TIMEOUT_SEC);
 
 	string content_type = "application/octet-stream";
 	auto res = cli.Put(path.c_str(), *headers, buffer_in, buffer_in_len, content_type.c_str());
@@ -104,6 +113,9 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	duckdb_httplib_openssl::Client cli(proto_host_port.c_str());
 	cli.set_follow_location(true);
 	cli.enable_server_certificate_verification(false);
+	cli.set_read_timeout(HTTP_READ_TIMEOUT_SEC);
+	cli.set_write_timeout(HTTP_WRITE_TIMEOUT_SEC);
+	cli.set_connection_timeout(HTTP_WRITE_TIMEOUT_SEC);
 
 	auto res = cli.Head(path.c_str(), *headers);
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
@@ -121,6 +133,9 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 	duckdb_httplib_openssl::Client cli(proto_host_port.c_str());
 	cli.set_follow_location(true);
 	cli.enable_server_certificate_verification(false);
+	cli.set_read_timeout(HTTP_READ_TIMEOUT_SEC);
+	cli.set_write_timeout(HTTP_WRITE_TIMEOUT_SEC);
+	cli.set_connection_timeout(HTTP_WRITE_TIMEOUT_SEC);
 
 	std::string range_expr =
 	    "bytes=" + std::to_string(file_offset) + "-" + std::to_string(file_offset + buffer_out_len - 1);
@@ -239,7 +254,7 @@ int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes
 }
 
 void HTTPFileSystem::FileSync(FileHandle &handle) {
-	throw NotImplementedException("FileSync for HTTP files not implemented"); // tODO is it?
+	throw NotImplementedException("FileSync for HTTP files not implemented");
 }
 
 int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
@@ -324,5 +339,4 @@ ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res) {
 		headers[h.first] = h.second;
 	}
 }
-
 }

@@ -47,6 +47,7 @@ public:
 
 	// The S3 multipart part number. Note that internally we start at 0 but AWS S3 starts at 1
 	idx_t part_no;
+
 	idx_t idx;
 	idx_t buffer_start;
 	idx_t buffer_end;
@@ -76,21 +77,15 @@ public:
 	unique_ptr<ResponseWrapper> Initialize() override;
 
 protected:
-	// Global write buffer availability
-	static std::mutex buffers_available_lock;
-	static std::condition_variable buffers_available_cv;
-	static std::atomic<uint16_t> buffers_available;
-
 	string multipart_upload_id;
 	size_t part_size;
 
 	std::mutex write_buffers_lock;
 	unordered_map<uint16_t, std::shared_ptr<S3WriteBuffer>> write_buffers;
-	//	std::vector<std::unique_ptr<S3WriteBuffer>> write_buffers_unused; // Todo make recycling bin for write buffers?
 
 	std::mutex uploads_in_progress_lock;
 	std::condition_variable uploads_in_progress_cv;
-	std::atomic<uint16_t> uploads_in_progress; // TODO does not actually need to be atomic due to lock
+	std::atomic<uint16_t> uploads_in_progress;
 
 	// Etags are stored for each part
 	std::mutex part_etags_lock;
@@ -104,11 +99,18 @@ class S3FileSystem : public HTTPFileSystem {
 public:
 	constexpr static int MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS = 1000;
 
+	// Global limits to write buffers
+	std::mutex buffers_available_lock;
+	std::condition_variable buffers_available_cv;
+	std::atomic<uint16_t> buffers_available;
+	std::atomic<uint16_t> threads_waiting_for_memory = {0};
+
 	explicit S3FileSystem(BufferManager &buffer_manager): buffer_manager(buffer_manager) {
 	}
 
 	BufferManager &buffer_manager;
 
+	// HTTP Requests
 	unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url,HeaderMap header_map, unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len, char* buffer_in, idx_t buffer_in_len) override;
 	unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map, char* buffer_in, idx_t buffer_in_len) override;
 	unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url,HeaderMap header_map) override;
@@ -133,11 +135,9 @@ public:
 	static void UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer);
 
 protected:
-	std::atomic<uint16_t> threads_waiting_for_memory = {0};
 	std::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
 	                                             FileCompressionType compression, FileOpener *opener) override;
 
-	// TODO: allow resuming upload after flushing non-full buffer?
 	void FlushBuffer(S3FileHandle &handle, std::shared_ptr<S3WriteBuffer> write_buffer);
 
 	// Helper functions
@@ -145,7 +145,7 @@ protected:
 	string GetPayloadHash(char* buffer, idx_t buffer_len);
 
 	// Allocate an S3WriteBuffer
-	// Note: call will block if no buffers are available
+	// Note: call may block if no buffers are available or if the buffer manager fails to allocate more memory.
 	std::shared_ptr<S3WriteBuffer> GetBuffer(S3FileHandle &file_handle, uint16_t write_buffer_idx);
 };
 } // namespace duckdb

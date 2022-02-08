@@ -14,20 +14,19 @@ require-env S3_TEST_SERVER_AVAILABLE 1
 set ignore_error_messages
 
 statement ok
-SET s3_secret_access_key='S3RVER';SET s3_access_key_id='S3RVER';SET s3_region='eu-west-1'; SET s3_endpoint='http://localhost:4923';
+SET s3_secret_access_key='S3RVER';SET s3_access_key_id='S3RVER';SET s3_region='eu-west-1'; SET s3_endpoint='http://localhost:1337';
 
 statement ok
-CALL DBGEN(sf=1)
+SET s3_uploader_thread_limit = 5;
 
-# Parquet file
 statement ok
-COPY lineitem TO 's3://test-bucket/multipart/export_large.parquet' (FORMAT 'parquet');
+CALL DBGEN(sf=10)
 
 query I
 SELECT
     sum(l_extendedprice * l_discount) AS revenue
 FROM
-    "s3://test-bucket/multipart/export_large.parquet"
+    lineitem
 WHERE
     l_shipdate >= CAST('1994-01-01' AS date)
     AND l_shipdate < CAST('1995-01-01' AS date)
@@ -35,11 +34,29 @@ WHERE
     AND 0.07
     AND l_quantity < 24;
 ----
-11803420.2534
+1230113636.0101
 
-# CSV file
+# Parquet file # CSV file: ~3GB
 statement ok
-COPY lineitem TO 's3://test-bucket/multipart/export_large.csv' WITH (HEADER 1, DELIMITER '|');
+COPY lineitem TO 's3://test-bucket/multipart/export_large_15.parquet' (FORMAT 'parquet');
+
+query I
+SELECT
+    sum(l_extendedprice * l_discount) AS revenue
+FROM
+    "s3://test-bucket/multipart/export_large_15.parquet"
+WHERE
+    l_shipdate >= CAST('1994-01-01' AS date)
+    AND l_shipdate < CAST('1995-01-01' AS date)
+    AND l_discount BETWEEN 0.05
+    AND 0.07
+    AND l_quantity < 24;
+----
+1230113636.0101
+
+# CSV file: ~7GB
+statement ok
+COPY lineitem TO 's3://test-bucket/multipart/export_large_15.csv' WITH (HEADER 1, DELIMITER '|');
 
 query I
 SELECT
@@ -53,4 +70,4 @@ WHERE
     AND 0.07
     AND l_quantity < 24;
 ----
-11803420.2534
+1230113636.0101
