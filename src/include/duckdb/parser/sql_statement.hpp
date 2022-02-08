@@ -32,6 +32,9 @@ public:
 	//! The query text that corresponds to this SQL statement
 	string query;
 
+protected:
+	SQLStatement(const SQLStatement &other) = default;
+
 public:
 	//! Create a copy of this SelectStatement
 	virtual unique_ptr<SQLStatement> Copy() const = 0;
