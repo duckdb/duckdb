@@ -14,7 +14,8 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-
+#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -44,7 +45,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// now create the copy information
 	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, move(function_data));
 	copy->file_path = stmt.info->file_path;
-
+	if (copy->function.name == "csv") {
+		auto csv_data = (BaseCSVData *)copy->bind_data.get();
+		copy->use_tmp_file = csv_data->options.use_temp_file;
+	}
 	copy->is_file = FileSystem::IsFile(copy->file_path);
 
 	copy->AddChild(move(select_node.plan));

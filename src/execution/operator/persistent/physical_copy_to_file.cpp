@@ -66,7 +66,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 	if (function.copy_to_finalize) {
 		function.copy_to_finalize(context, *bind_data, *gstate.global_state);
 
-		if (is_file) {
+		if (use_tmp_file) {
 			MoveTmpFile(context, file_path);
 		}
 	}

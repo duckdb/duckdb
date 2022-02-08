@@ -6,13 +6,14 @@ namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	auto plan = CreatePlan(*op.children[0]);
-	if (op.is_file) {
+	bool use_tmp_file = op.is_file && op.use_tmp_file;
+	if (use_tmp_file) {
 		op.file_path += ".tmp";
 	}
 	// COPY from select statement to file
 	auto copy = make_unique<PhysicalCopyToFile>(op.types, op.function, move(op.bind_data), op.estimated_cardinality);
 	copy->file_path = op.file_path;
-	copy->is_file = op.is_file;
+	copy->use_tmp_file = use_tmp_file;
 
 	copy->children.push_back(move(plan));
 	return move(copy);
