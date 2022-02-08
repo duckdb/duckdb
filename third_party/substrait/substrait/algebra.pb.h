@@ -51,7 +51,7 @@ struct TableStruct_substrait_2falgebra_2eproto {
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
   static const ::PROTOBUF_NAMESPACE_ID::internal::AuxiliaryParseTableField aux[]
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
-  static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTable schema[83]
+  static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTable schema[82]
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
   static const ::PROTOBUF_NAMESPACE_ID::internal::FieldMetadata field_metadata[];
   static const ::PROTOBUF_NAMESPACE_ID::internal::SerializationTable serialization_table[];
@@ -254,9 +254,6 @@ extern JoinRelDefaultTypeInternal _JoinRel_default_instance_;
 class ProjectRel;
 struct ProjectRelDefaultTypeInternal;
 extern ProjectRelDefaultTypeInternal _ProjectRel_default_instance_;
-class ProjectRel_ProjectedExpression;
-struct ProjectRel_ProjectedExpressionDefaultTypeInternal;
-extern ProjectRel_ProjectedExpressionDefaultTypeInternal _ProjectRel_ProjectedExpression_default_instance_;
 class ReadRel;
 struct ReadRelDefaultTypeInternal;
 extern ReadRelDefaultTypeInternal _ReadRel_default_instance_;
@@ -375,7 +372,6 @@ template<> ::substrait::FetchRel* Arena::CreateMaybeMessage<::substrait::FetchRe
 template<> ::substrait::FilterRel* Arena::CreateMaybeMessage<::substrait::FilterRel>(Arena*);
 template<> ::substrait::JoinRel* Arena::CreateMaybeMessage<::substrait::JoinRel>(Arena*);
 template<> ::substrait::ProjectRel* Arena::CreateMaybeMessage<::substrait::ProjectRel>(Arena*);
-template<> ::substrait::ProjectRel_ProjectedExpression* Arena::CreateMaybeMessage<::substrait::ProjectRel_ProjectedExpression>(Arena*);
 template<> ::substrait::ReadRel* Arena::CreateMaybeMessage<::substrait::ReadRel>(Arena*);
 template<> ::substrait::ReadRel_ExtensionTable* Arena::CreateMaybeMessage<::substrait::ReadRel_ExtensionTable>(Arena*);
 template<> ::substrait::ReadRel_LocalFiles* Arena::CreateMaybeMessage<::substrait::ReadRel_LocalFiles>(Arena*);
@@ -2992,177 +2988,6 @@ class ReadRel final :
 };
 // -------------------------------------------------------------------
 
-class ProjectRel_ProjectedExpression final :
-    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:substrait.ProjectRel.ProjectedExpression) */ {
- public:
-  inline ProjectRel_ProjectedExpression() : ProjectRel_ProjectedExpression(nullptr) {}
-  ~ProjectRel_ProjectedExpression() override;
-  explicit constexpr ProjectRel_ProjectedExpression(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  ProjectRel_ProjectedExpression(const ProjectRel_ProjectedExpression& from);
-  ProjectRel_ProjectedExpression(ProjectRel_ProjectedExpression&& from) noexcept
-    : ProjectRel_ProjectedExpression() {
-    *this = ::std::move(from);
-  }
-
-  inline ProjectRel_ProjectedExpression& operator=(const ProjectRel_ProjectedExpression& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline ProjectRel_ProjectedExpression& operator=(ProjectRel_ProjectedExpression&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* descriptor() {
-    return GetDescriptor();
-  }
-  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  static const ProjectRel_ProjectedExpression& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const ProjectRel_ProjectedExpression* internal_default_instance() {
-    return reinterpret_cast<const ProjectRel_ProjectedExpression*>(
-               &_ProjectRel_ProjectedExpression_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    12;
-
-  friend void swap(ProjectRel_ProjectedExpression& a, ProjectRel_ProjectedExpression& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(ProjectRel_ProjectedExpression* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(ProjectRel_ProjectedExpression* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  ProjectRel_ProjectedExpression* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<ProjectRel_ProjectedExpression>(arena);
-  }
-  using ::PROTOBUF_NAMESPACE_ID::Message::CopyFrom;
-  void CopyFrom(const ProjectRel_ProjectedExpression& from);
-  using ::PROTOBUF_NAMESPACE_ID::Message::MergeFrom;
-  void MergeFrom(const ProjectRel_ProjectedExpression& from);
-  private:
-  static void MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to, const ::PROTOBUF_NAMESPACE_ID::Message& from);
-  public:
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _cached_size_.Get(); }
-
-  private:
-  void SharedCtor();
-  void SharedDtor();
-  void SetCachedSize(int size) const final;
-  void InternalSwap(ProjectRel_ProjectedExpression* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "substrait.ProjectRel.ProjectedExpression";
-  }
-  protected:
-  explicit ProjectRel_ProjectedExpression(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  private:
-  static void ArenaDtor(void* object);
-  inline void RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena* arena);
-  public:
-
-  static const ClassData _class_data_;
-  const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*GetClassData() const final;
-
-  ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kAliasFieldNumber = 2,
-    kExpressionFieldNumber = 1,
-  };
-  // string alias = 2 [json_name = "alias"];
-  void clear_alias();
-  const std::string& alias() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_alias(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_alias();
-  PROTOBUF_NODISCARD std::string* release_alias();
-  void set_allocated_alias(std::string* alias);
-  private:
-  const std::string& _internal_alias() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_alias(const std::string& value);
-  std::string* _internal_mutable_alias();
-  public:
-
-  // .substrait.Expression expression = 1 [json_name = "expression"];
-  bool has_expression() const;
-  private:
-  bool _internal_has_expression() const;
-  public:
-  void clear_expression();
-  const ::substrait::Expression& expression() const;
-  PROTOBUF_NODISCARD ::substrait::Expression* release_expression();
-  ::substrait::Expression* mutable_expression();
-  void set_allocated_expression(::substrait::Expression* expression);
-  private:
-  const ::substrait::Expression& _internal_expression() const;
-  ::substrait::Expression* _internal_mutable_expression();
-  public:
-  void unsafe_arena_set_allocated_expression(
-      ::substrait::Expression* expression);
-  ::substrait::Expression* unsafe_arena_release_expression();
-
-  // @@protoc_insertion_point(class_scope:substrait.ProjectRel.ProjectedExpression)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr alias_;
-  ::substrait::Expression* expression_;
-  mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  friend struct ::TableStruct_substrait_2falgebra_2eproto;
-};
-// -------------------------------------------------------------------
-
 class ProjectRel final :
     public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:substrait.ProjectRel) */ {
  public:
@@ -3211,7 +3036,7 @@ class ProjectRel final :
                &_ProjectRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    13;
+    12;
 
   friend void swap(ProjectRel& a, ProjectRel& b) {
     a.Swap(&b);
@@ -3282,8 +3107,6 @@ class ProjectRel final :
 
   // nested types ----------------------------------------------------
 
-  typedef ProjectRel_ProjectedExpression ProjectedExpression;
-
   // accessors -------------------------------------------------------
 
   enum : int {
@@ -3292,22 +3115,22 @@ class ProjectRel final :
     kInputFieldNumber = 2,
     kAdvancedExtensionFieldNumber = 10,
   };
-  // repeated .substrait.ProjectRel.ProjectedExpression expressions = 3 [json_name = "expressions"];
+  // repeated .substrait.Expression expressions = 3 [json_name = "expressions"];
   int expressions_size() const;
   private:
   int _internal_expressions_size() const;
   public:
   void clear_expressions();
-  ::substrait::ProjectRel_ProjectedExpression* mutable_expressions(int index);
-  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::ProjectRel_ProjectedExpression >*
+  ::substrait::Expression* mutable_expressions(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >*
       mutable_expressions();
   private:
-  const ::substrait::ProjectRel_ProjectedExpression& _internal_expressions(int index) const;
-  ::substrait::ProjectRel_ProjectedExpression* _internal_add_expressions();
+  const ::substrait::Expression& _internal_expressions(int index) const;
+  ::substrait::Expression* _internal_add_expressions();
   public:
-  const ::substrait::ProjectRel_ProjectedExpression& expressions(int index) const;
-  ::substrait::ProjectRel_ProjectedExpression* add_expressions();
-  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::ProjectRel_ProjectedExpression >&
+  const ::substrait::Expression& expressions(int index) const;
+  ::substrait::Expression* add_expressions();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >&
       expressions() const;
 
   // .substrait.RelCommon common = 1 [json_name = "common"];
@@ -3371,7 +3194,7 @@ class ProjectRel final :
   template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
   typedef void InternalArenaConstructable_;
   typedef void DestructorSkippable_;
-  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::ProjectRel_ProjectedExpression > expressions_;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression > expressions_;
   ::substrait::RelCommon* common_;
   ::substrait::Rel* input_;
   ::substrait::extensions::AdvancedExtension* advanced_extension_;
@@ -3428,7 +3251,7 @@ class JoinRel final :
                &_JoinRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    14;
+    13;
 
   friend void swap(JoinRel& a, JoinRel& b) {
     a.Swap(&b);
@@ -3736,7 +3559,7 @@ class CrossRel final :
                &_CrossRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    15;
+    14;
 
   friend void swap(CrossRel& a, CrossRel& b) {
     a.Swap(&b);
@@ -3951,7 +3774,7 @@ class FetchRel final :
                &_FetchRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    16;
+    15;
 
   friend void swap(FetchRel& a, FetchRel& b) {
     a.Swap(&b);
@@ -4168,7 +3991,7 @@ class AggregateRel_Grouping final :
                &_AggregateRel_Grouping_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    17;
+    16;
 
   friend void swap(AggregateRel_Grouping& a, AggregateRel_Grouping& b) {
     a.Swap(&b);
@@ -4323,7 +4146,7 @@ class AggregateRel_Measure final :
                &_AggregateRel_Measure_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    18;
+    17;
 
   friend void swap(AggregateRel_Measure& a, AggregateRel_Measure& b) {
     a.Swap(&b);
@@ -4498,7 +4321,7 @@ class AggregateRel final :
                &_AggregateRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    19;
+    18;
 
   friend void swap(AggregateRel& a, AggregateRel& b) {
     a.Swap(&b);
@@ -4736,7 +4559,7 @@ class SortRel final :
                &_SortRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    20;
+    19;
 
   friend void swap(SortRel& a, SortRel& b) {
     a.Swap(&b);
@@ -4951,7 +4774,7 @@ class FilterRel final :
                &_FilterRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    21;
+    20;
 
   friend void swap(FilterRel& a, FilterRel& b) {
     a.Swap(&b);
@@ -5166,7 +4989,7 @@ class SetRel final :
                &_SetRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    22;
+    21;
 
   friend void swap(SetRel& a, SetRel& b) {
     a.Swap(&b);
@@ -5412,7 +5235,7 @@ class ExtensionSingleRel final :
                &_ExtensionSingleRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    23;
+    22;
 
   friend void swap(ExtensionSingleRel& a, ExtensionSingleRel& b) {
     a.Swap(&b);
@@ -5607,7 +5430,7 @@ class ExtensionLeafRel final :
                &_ExtensionLeafRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    24;
+    23;
 
   friend void swap(ExtensionLeafRel& a, ExtensionLeafRel& b) {
     a.Swap(&b);
@@ -5782,7 +5605,7 @@ class ExtensionMultiRel final :
                &_ExtensionMultiRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    25;
+    24;
 
   friend void swap(ExtensionMultiRel& a, ExtensionMultiRel& b) {
     a.Swap(&b);
@@ -5977,7 +5800,7 @@ class RelRoot final :
                &_RelRoot_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    26;
+    25;
 
   friend void swap(RelRoot& a, RelRoot& b) {
     a.Swap(&b);
@@ -6174,7 +5997,7 @@ class Rel final :
                &_Rel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    27;
+    26;
 
   friend void swap(Rel& a, Rel& b) {
     a.Swap(&b);
@@ -6571,7 +6394,7 @@ class Expression_Enum_Empty final :
                &_Expression_Enum_Empty_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    28;
+    27;
 
   friend void swap(Expression_Enum_Empty& a, Expression_Enum_Empty& b) {
     a.Swap(&b);
@@ -6696,7 +6519,7 @@ class Expression_Enum final :
                &_Expression_Enum_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    29;
+    28;
 
   friend void swap(Expression_Enum& a, Expression_Enum& b) {
     a.Swap(&b);
@@ -6886,7 +6709,7 @@ class Expression_Literal_VarChar final :
                &_Expression_Literal_VarChar_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    30;
+    29;
 
   friend void swap(Expression_Literal_VarChar& a, Expression_Literal_VarChar& b) {
     a.Swap(&b);
@@ -7048,7 +6871,7 @@ class Expression_Literal_Decimal final :
                &_Expression_Literal_Decimal_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    31;
+    30;
 
   friend void swap(Expression_Literal_Decimal& a, Expression_Literal_Decimal& b) {
     a.Swap(&b);
@@ -7221,7 +7044,7 @@ class Expression_Literal_Map_KeyValue final :
                &_Expression_Literal_Map_KeyValue_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    32;
+    31;
 
   friend void swap(Expression_Literal_Map_KeyValue& a, Expression_Literal_Map_KeyValue& b) {
     a.Swap(&b);
@@ -7396,7 +7219,7 @@ class Expression_Literal_Map final :
                &_Expression_Literal_Map_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    33;
+    32;
 
   friend void swap(Expression_Literal_Map& a, Expression_Literal_Map& b) {
     a.Swap(&b);
@@ -7553,7 +7376,7 @@ class Expression_Literal_IntervalYearToMonth final :
                &_Expression_Literal_IntervalYearToMonth_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    34;
+    33;
 
   friend void swap(Expression_Literal_IntervalYearToMonth& a, Expression_Literal_IntervalYearToMonth& b) {
     a.Swap(&b);
@@ -7710,7 +7533,7 @@ class Expression_Literal_IntervalDayToSecond final :
                &_Expression_Literal_IntervalDayToSecond_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    35;
+    34;
 
   friend void swap(Expression_Literal_IntervalDayToSecond& a, Expression_Literal_IntervalDayToSecond& b) {
     a.Swap(&b);
@@ -7867,7 +7690,7 @@ class Expression_Literal_Struct final :
                &_Expression_Literal_Struct_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    36;
+    35;
 
   friend void swap(Expression_Literal_Struct& a, Expression_Literal_Struct& b) {
     a.Swap(&b);
@@ -8022,7 +7845,7 @@ class Expression_Literal_List final :
                &_Expression_Literal_List_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    37;
+    36;
 
   friend void swap(Expression_Literal_List& a, Expression_Literal_List& b) {
     a.Swap(&b);
@@ -8207,7 +8030,7 @@ class Expression_Literal final :
                &_Expression_Literal_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    38;
+    37;
 
   friend void swap(Expression_Literal& a, Expression_Literal& b) {
     a.Swap(&b);
@@ -8863,7 +8686,7 @@ class Expression_ScalarFunction final :
                &_Expression_ScalarFunction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    39;
+    38;
 
   friend void swap(Expression_ScalarFunction& a, Expression_ScalarFunction& b) {
     a.Swap(&b);
@@ -9049,7 +8872,7 @@ class Expression_WindowFunction_Bound_Preceding final :
                &_Expression_WindowFunction_Bound_Preceding_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    40;
+    39;
 
   friend void swap(Expression_WindowFunction_Bound_Preceding& a, Expression_WindowFunction_Bound_Preceding& b) {
     a.Swap(&b);
@@ -9195,7 +9018,7 @@ class Expression_WindowFunction_Bound_Following final :
                &_Expression_WindowFunction_Bound_Following_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    41;
+    40;
 
   friend void swap(Expression_WindowFunction_Bound_Following& a, Expression_WindowFunction_Bound_Following& b) {
     a.Swap(&b);
@@ -9340,7 +9163,7 @@ class Expression_WindowFunction_Bound_CurrentRow final :
                &_Expression_WindowFunction_Bound_CurrentRow_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    42;
+    41;
 
   friend void swap(Expression_WindowFunction_Bound_CurrentRow& a, Expression_WindowFunction_Bound_CurrentRow& b) {
     a.Swap(&b);
@@ -9458,7 +9281,7 @@ class Expression_WindowFunction_Bound_Unbounded final :
                &_Expression_WindowFunction_Bound_Unbounded_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    43;
+    42;
 
   friend void swap(Expression_WindowFunction_Bound_Unbounded& a, Expression_WindowFunction_Bound_Unbounded& b) {
     a.Swap(&b);
@@ -9585,7 +9408,7 @@ class Expression_WindowFunction_Bound final :
                &_Expression_WindowFunction_Bound_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    44;
+    43;
 
   friend void swap(Expression_WindowFunction_Bound& a, Expression_WindowFunction_Bound& b) {
     a.Swap(&b);
@@ -9820,7 +9643,7 @@ class Expression_WindowFunction final :
                &_Expression_WindowFunction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    45;
+    44;
 
   friend void swap(Expression_WindowFunction& a, Expression_WindowFunction& b) {
     a.Swap(&b);
@@ -10099,7 +9922,7 @@ class Expression_IfThen_IfClause final :
                &_Expression_IfThen_IfClause_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    46;
+    45;
 
   friend void swap(Expression_IfThen_IfClause& a, Expression_IfThen_IfClause& b) {
     a.Swap(&b);
@@ -10274,7 +10097,7 @@ class Expression_IfThen final :
                &_Expression_IfThen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    47;
+    46;
 
   friend void swap(Expression_IfThen& a, Expression_IfThen& b) {
     a.Swap(&b);
@@ -10451,7 +10274,7 @@ class Expression_Cast final :
                &_Expression_Cast_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    48;
+    47;
 
   friend void swap(Expression_Cast& a, Expression_Cast& b) {
     a.Swap(&b);
@@ -10626,7 +10449,7 @@ class Expression_SwitchExpression_IfValue final :
                &_Expression_SwitchExpression_IfValue_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    49;
+    48;
 
   friend void swap(Expression_SwitchExpression_IfValue& a, Expression_SwitchExpression_IfValue& b) {
     a.Swap(&b);
@@ -10801,7 +10624,7 @@ class Expression_SwitchExpression final :
                &_Expression_SwitchExpression_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    50;
+    49;
 
   friend void swap(Expression_SwitchExpression& a, Expression_SwitchExpression& b) {
     a.Swap(&b);
@@ -10978,7 +10801,7 @@ class Expression_SingularOrList final :
                &_Expression_SingularOrList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    51;
+    50;
 
   friend void swap(Expression_SingularOrList& a, Expression_SingularOrList& b) {
     a.Swap(&b);
@@ -11153,7 +10976,7 @@ class Expression_MultiOrList_Record final :
                &_Expression_MultiOrList_Record_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    52;
+    51;
 
   friend void swap(Expression_MultiOrList_Record& a, Expression_MultiOrList_Record& b) {
     a.Swap(&b);
@@ -11308,7 +11131,7 @@ class Expression_MultiOrList final :
                &_Expression_MultiOrList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    53;
+    52;
 
   friend void swap(Expression_MultiOrList& a, Expression_MultiOrList& b) {
     a.Swap(&b);
@@ -11485,7 +11308,7 @@ class Expression_EmbeddedFunction_PythonPickleFunction final :
                &_Expression_EmbeddedFunction_PythonPickleFunction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    54;
+    53;
 
   friend void swap(Expression_EmbeddedFunction_PythonPickleFunction& a, Expression_EmbeddedFunction_PythonPickleFunction& b) {
     a.Swap(&b);
@@ -11662,7 +11485,7 @@ class Expression_EmbeddedFunction_WebAssemblyFunction final :
                &_Expression_EmbeddedFunction_WebAssemblyFunction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    55;
+    54;
 
   friend void swap(Expression_EmbeddedFunction_WebAssemblyFunction& a, Expression_EmbeddedFunction_WebAssemblyFunction& b) {
     a.Swap(&b);
@@ -11845,7 +11668,7 @@ class Expression_EmbeddedFunction final :
                &_Expression_EmbeddedFunction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    56;
+    55;
 
   friend void swap(Expression_EmbeddedFunction& a, Expression_EmbeddedFunction& b) {
     a.Swap(&b);
@@ -12076,7 +11899,7 @@ class Expression_ReferenceSegment_MapKey final :
                &_Expression_ReferenceSegment_MapKey_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    57;
+    56;
 
   friend void swap(Expression_ReferenceSegment_MapKey& a, Expression_ReferenceSegment_MapKey& b) {
     a.Swap(&b);
@@ -12251,7 +12074,7 @@ class Expression_ReferenceSegment_StructField final :
                &_Expression_ReferenceSegment_StructField_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    58;
+    57;
 
   friend void swap(Expression_ReferenceSegment_StructField& a, Expression_ReferenceSegment_StructField& b) {
     a.Swap(&b);
@@ -12417,7 +12240,7 @@ class Expression_ReferenceSegment_ListElement final :
                &_Expression_ReferenceSegment_ListElement_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    59;
+    58;
 
   friend void swap(Expression_ReferenceSegment_ListElement& a, Expression_ReferenceSegment_ListElement& b) {
     a.Swap(&b);
@@ -12590,7 +12413,7 @@ class Expression_ReferenceSegment final :
                &_Expression_ReferenceSegment_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    60;
+    59;
 
   friend void swap(Expression_ReferenceSegment& a, Expression_ReferenceSegment& b) {
     a.Swap(&b);
@@ -12810,7 +12633,7 @@ class Expression_MaskExpression_Select final :
                &_Expression_MaskExpression_Select_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    61;
+    60;
 
   friend void swap(Expression_MaskExpression_Select& a, Expression_MaskExpression_Select& b) {
     a.Swap(&b);
@@ -13019,7 +12842,7 @@ class Expression_MaskExpression_StructSelect final :
                &_Expression_MaskExpression_StructSelect_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    62;
+    61;
 
   friend void swap(Expression_MaskExpression_StructSelect& a, Expression_MaskExpression_StructSelect& b) {
     a.Swap(&b);
@@ -13174,7 +12997,7 @@ class Expression_MaskExpression_StructItem final :
                &_Expression_MaskExpression_StructItem_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    63;
+    62;
 
   friend void swap(Expression_MaskExpression_StructItem& a, Expression_MaskExpression_StructItem& b) {
     a.Swap(&b);
@@ -13340,7 +13163,7 @@ class Expression_MaskExpression_ListSelect_ListSelectItem_ListElement final :
                &_Expression_MaskExpression_ListSelect_ListSelectItem_ListElement_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    64;
+    63;
 
   friend void swap(Expression_MaskExpression_ListSelect_ListSelectItem_ListElement& a, Expression_MaskExpression_ListSelect_ListSelectItem_ListElement& b) {
     a.Swap(&b);
@@ -13486,7 +13309,7 @@ class Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice final :
                &_Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    65;
+    64;
 
   friend void swap(Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice& a, Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice& b) {
     a.Swap(&b);
@@ -13649,7 +13472,7 @@ class Expression_MaskExpression_ListSelect_ListSelectItem final :
                &_Expression_MaskExpression_ListSelect_ListSelectItem_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    66;
+    65;
 
   friend void swap(Expression_MaskExpression_ListSelect_ListSelectItem& a, Expression_MaskExpression_ListSelect_ListSelectItem& b) {
     a.Swap(&b);
@@ -13840,7 +13663,7 @@ class Expression_MaskExpression_ListSelect final :
                &_Expression_MaskExpression_ListSelect_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    67;
+    66;
 
   friend void swap(Expression_MaskExpression_ListSelect& a, Expression_MaskExpression_ListSelect& b) {
     a.Swap(&b);
@@ -14017,7 +13840,7 @@ class Expression_MaskExpression_MapSelect_MapKey final :
                &_Expression_MaskExpression_MapSelect_MapKey_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    68;
+    67;
 
   friend void swap(Expression_MaskExpression_MapSelect_MapKey& a, Expression_MaskExpression_MapSelect_MapKey& b) {
     a.Swap(&b);
@@ -14168,7 +13991,7 @@ class Expression_MaskExpression_MapSelect_MapKeyExpression final :
                &_Expression_MaskExpression_MapSelect_MapKeyExpression_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    69;
+    68;
 
   friend void swap(Expression_MaskExpression_MapSelect_MapKeyExpression& a, Expression_MaskExpression_MapSelect_MapKeyExpression& b) {
     a.Swap(&b);
@@ -14325,7 +14148,7 @@ class Expression_MaskExpression_MapSelect final :
                &_Expression_MaskExpression_MapSelect_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    70;
+    69;
 
   friend void swap(Expression_MaskExpression_MapSelect& a, Expression_MaskExpression_MapSelect& b) {
     a.Swap(&b);
@@ -14536,7 +14359,7 @@ class Expression_MaskExpression final :
                &_Expression_MaskExpression_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    71;
+    70;
 
   friend void swap(Expression_MaskExpression& a, Expression_MaskExpression& b) {
     a.Swap(&b);
@@ -14707,7 +14530,7 @@ class Expression_FieldReference_RootReference final :
                &_Expression_FieldReference_RootReference_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    72;
+    71;
 
   friend void swap(Expression_FieldReference_RootReference& a, Expression_FieldReference_RootReference& b) {
     a.Swap(&b);
@@ -14826,7 +14649,7 @@ class Expression_FieldReference_OuterReference final :
                &_Expression_FieldReference_OuterReference_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    73;
+    72;
 
   friend void swap(Expression_FieldReference_OuterReference& a, Expression_FieldReference_OuterReference& b) {
     a.Swap(&b);
@@ -14985,7 +14808,7 @@ class Expression_FieldReference final :
                &_Expression_FieldReference_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    74;
+    73;
 
   friend void swap(Expression_FieldReference& a, Expression_FieldReference& b) {
     a.Swap(&b);
@@ -15248,7 +15071,7 @@ class Expression_Subquery_Scalar final :
                &_Expression_Subquery_Scalar_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    75;
+    74;
 
   friend void swap(Expression_Subquery_Scalar& a, Expression_Subquery_Scalar& b) {
     a.Swap(&b);
@@ -15403,7 +15226,7 @@ class Expression_Subquery_InPredicate final :
                &_Expression_Subquery_InPredicate_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    76;
+    75;
 
   friend void swap(Expression_Subquery_InPredicate& a, Expression_Subquery_InPredicate& b) {
     a.Swap(&b);
@@ -15578,7 +15401,7 @@ class Expression_Subquery_SetPredicate final :
                &_Expression_Subquery_SetPredicate_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    77;
+    76;
 
   friend void swap(Expression_Subquery_SetPredicate& a, Expression_Subquery_SetPredicate& b) {
     a.Swap(&b);
@@ -15776,7 +15599,7 @@ class Expression_Subquery_SetComparison final :
                &_Expression_Subquery_SetComparison_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    78;
+    77;
 
   friend void swap(Expression_Subquery_SetComparison& a, Expression_Subquery_SetComparison& b) {
     a.Swap(&b);
@@ -16053,7 +15876,7 @@ class Expression_Subquery final :
                &_Expression_Subquery_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    79;
+    78;
 
   friend void swap(Expression_Subquery& a, Expression_Subquery& b) {
     a.Swap(&b);
@@ -16303,7 +16126,7 @@ class Expression final :
                &_Expression_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    80;
+    79;
 
   friend void swap(Expression& a, Expression& b) {
     a.Swap(&b);
@@ -16701,7 +16524,7 @@ class SortField final :
                &_SortField_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    81;
+    80;
 
   friend void swap(SortField& a, SortField& b) {
     a.Swap(&b);
@@ -16937,7 +16760,7 @@ class AggregateFunction final :
                &_AggregateFunction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    82;
+    81;
 
   friend void swap(AggregateFunction& a, AggregateFunction& b) {
     a.Swap(&b);
@@ -19596,151 +19419,6 @@ inline ReadRel::ReadTypeCase ReadRel::read_type_case() const {
 }
 // -------------------------------------------------------------------
 
-// ProjectRel_ProjectedExpression
-
-// .substrait.Expression expression = 1 [json_name = "expression"];
-inline bool ProjectRel_ProjectedExpression::_internal_has_expression() const {
-  return this != internal_default_instance() && expression_ != nullptr;
-}
-inline bool ProjectRel_ProjectedExpression::has_expression() const {
-  return _internal_has_expression();
-}
-inline void ProjectRel_ProjectedExpression::clear_expression() {
-  if (GetArenaForAllocation() == nullptr && expression_ != nullptr) {
-    delete expression_;
-  }
-  expression_ = nullptr;
-}
-inline const ::substrait::Expression& ProjectRel_ProjectedExpression::_internal_expression() const {
-  const ::substrait::Expression* p = expression_;
-  return p != nullptr ? *p : reinterpret_cast<const ::substrait::Expression&>(
-      ::substrait::_Expression_default_instance_);
-}
-inline const ::substrait::Expression& ProjectRel_ProjectedExpression::expression() const {
-  // @@protoc_insertion_point(field_get:substrait.ProjectRel.ProjectedExpression.expression)
-  return _internal_expression();
-}
-inline void ProjectRel_ProjectedExpression::unsafe_arena_set_allocated_expression(
-    ::substrait::Expression* expression) {
-  if (GetArenaForAllocation() == nullptr) {
-    delete reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(expression_);
-  }
-  expression_ = expression;
-  if (expression) {
-    
-  } else {
-    
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:substrait.ProjectRel.ProjectedExpression.expression)
-}
-inline ::substrait::Expression* ProjectRel_ProjectedExpression::release_expression() {
-  
-  ::substrait::Expression* temp = expression_;
-  expression_ = nullptr;
-#ifdef PROTOBUF_FORCE_COPY_IN_RELEASE
-  auto* old =  reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(temp);
-  temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-  if (GetArenaForAllocation() == nullptr) { delete old; }
-#else  // PROTOBUF_FORCE_COPY_IN_RELEASE
-  if (GetArenaForAllocation() != nullptr) {
-    temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-  }
-#endif  // !PROTOBUF_FORCE_COPY_IN_RELEASE
-  return temp;
-}
-inline ::substrait::Expression* ProjectRel_ProjectedExpression::unsafe_arena_release_expression() {
-  // @@protoc_insertion_point(field_release:substrait.ProjectRel.ProjectedExpression.expression)
-  
-  ::substrait::Expression* temp = expression_;
-  expression_ = nullptr;
-  return temp;
-}
-inline ::substrait::Expression* ProjectRel_ProjectedExpression::_internal_mutable_expression() {
-  
-  if (expression_ == nullptr) {
-    auto* p = CreateMaybeMessage<::substrait::Expression>(GetArenaForAllocation());
-    expression_ = p;
-  }
-  return expression_;
-}
-inline ::substrait::Expression* ProjectRel_ProjectedExpression::mutable_expression() {
-  ::substrait::Expression* _msg = _internal_mutable_expression();
-  // @@protoc_insertion_point(field_mutable:substrait.ProjectRel.ProjectedExpression.expression)
-  return _msg;
-}
-inline void ProjectRel_ProjectedExpression::set_allocated_expression(::substrait::Expression* expression) {
-  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
-  if (message_arena == nullptr) {
-    delete expression_;
-  }
-  if (expression) {
-    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
-        ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::Expression>::GetOwningArena(expression);
-    if (message_arena != submessage_arena) {
-      expression = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
-          message_arena, expression, submessage_arena);
-    }
-    
-  } else {
-    
-  }
-  expression_ = expression;
-  // @@protoc_insertion_point(field_set_allocated:substrait.ProjectRel.ProjectedExpression.expression)
-}
-
-// string alias = 2 [json_name = "alias"];
-inline void ProjectRel_ProjectedExpression::clear_alias() {
-  alias_.ClearToEmpty();
-}
-inline const std::string& ProjectRel_ProjectedExpression::alias() const {
-  // @@protoc_insertion_point(field_get:substrait.ProjectRel.ProjectedExpression.alias)
-  return _internal_alias();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void ProjectRel_ProjectedExpression::set_alias(ArgT0&& arg0, ArgT... args) {
- 
- alias_.Set(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:substrait.ProjectRel.ProjectedExpression.alias)
-}
-inline std::string* ProjectRel_ProjectedExpression::mutable_alias() {
-  std::string* _s = _internal_mutable_alias();
-  // @@protoc_insertion_point(field_mutable:substrait.ProjectRel.ProjectedExpression.alias)
-  return _s;
-}
-inline const std::string& ProjectRel_ProjectedExpression::_internal_alias() const {
-  return alias_.Get();
-}
-inline void ProjectRel_ProjectedExpression::_internal_set_alias(const std::string& value) {
-  
-  alias_.Set(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, value, GetArenaForAllocation());
-}
-inline std::string* ProjectRel_ProjectedExpression::_internal_mutable_alias() {
-  
-  return alias_.Mutable(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, GetArenaForAllocation());
-}
-inline std::string* ProjectRel_ProjectedExpression::release_alias() {
-  // @@protoc_insertion_point(field_release:substrait.ProjectRel.ProjectedExpression.alias)
-  return alias_.Release(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), GetArenaForAllocation());
-}
-inline void ProjectRel_ProjectedExpression::set_allocated_alias(std::string* alias) {
-  if (alias != nullptr) {
-    
-  } else {
-    
-  }
-  alias_.SetAllocated(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), alias,
-      GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (alias_.IsDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited())) {
-    alias_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:substrait.ProjectRel.ProjectedExpression.alias)
-}
-
-// -------------------------------------------------------------------
-
 // ProjectRel
 
 // .substrait.RelCommon common = 1 [json_name = "common"];
@@ -19923,7 +19601,7 @@ inline void ProjectRel::set_allocated_input(::substrait::Rel* input) {
   // @@protoc_insertion_point(field_set_allocated:substrait.ProjectRel.input)
 }
 
-// repeated .substrait.ProjectRel.ProjectedExpression expressions = 3 [json_name = "expressions"];
+// repeated .substrait.Expression expressions = 3 [json_name = "expressions"];
 inline int ProjectRel::_internal_expressions_size() const {
   return expressions_.size();
 }
@@ -19933,31 +19611,31 @@ inline int ProjectRel::expressions_size() const {
 inline void ProjectRel::clear_expressions() {
   expressions_.Clear();
 }
-inline ::substrait::ProjectRel_ProjectedExpression* ProjectRel::mutable_expressions(int index) {
+inline ::substrait::Expression* ProjectRel::mutable_expressions(int index) {
   // @@protoc_insertion_point(field_mutable:substrait.ProjectRel.expressions)
   return expressions_.Mutable(index);
 }
-inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::ProjectRel_ProjectedExpression >*
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >*
 ProjectRel::mutable_expressions() {
   // @@protoc_insertion_point(field_mutable_list:substrait.ProjectRel.expressions)
   return &expressions_;
 }
-inline const ::substrait::ProjectRel_ProjectedExpression& ProjectRel::_internal_expressions(int index) const {
+inline const ::substrait::Expression& ProjectRel::_internal_expressions(int index) const {
   return expressions_.Get(index);
 }
-inline const ::substrait::ProjectRel_ProjectedExpression& ProjectRel::expressions(int index) const {
+inline const ::substrait::Expression& ProjectRel::expressions(int index) const {
   // @@protoc_insertion_point(field_get:substrait.ProjectRel.expressions)
   return _internal_expressions(index);
 }
-inline ::substrait::ProjectRel_ProjectedExpression* ProjectRel::_internal_add_expressions() {
+inline ::substrait::Expression* ProjectRel::_internal_add_expressions() {
   return expressions_.Add();
 }
-inline ::substrait::ProjectRel_ProjectedExpression* ProjectRel::add_expressions() {
-  ::substrait::ProjectRel_ProjectedExpression* _add = _internal_add_expressions();
+inline ::substrait::Expression* ProjectRel::add_expressions() {
+  ::substrait::Expression* _add = _internal_add_expressions();
   // @@protoc_insertion_point(field_add:substrait.ProjectRel.expressions)
   return _add;
 }
-inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::ProjectRel_ProjectedExpression >&
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >&
 ProjectRel::expressions() const {
   // @@protoc_insertion_point(field_list:substrait.ProjectRel.expressions)
   return expressions_;
@@ -33793,8 +33471,6 @@ inline void AggregateFunction::set_allocated_output_type(::substrait::Type* outp
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
-// -------------------------------------------------------------------
-
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------
