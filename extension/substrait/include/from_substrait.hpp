@@ -14,13 +14,15 @@ public:
 	shared_ptr<Relation> TransformPlan();
 
 private:
+	//! Transforms Substrait Plan Root To a DuckDB Relation
+	shared_ptr<Relation> TransformRootOp(const substrait::RelRoot &sop);
 	//! Transform Substrait Operations to DuckDB Relations
 	shared_ptr<Relation> TransformOp(const substrait::Rel &sop);
 	shared_ptr<Relation> TransformJoinOp(const substrait::Rel &sop);
 	shared_ptr<Relation> TransformCrossProductOp(const substrait::Rel &sop);
 	shared_ptr<Relation> TransformFetchOp(const substrait::Rel &sop);
 	shared_ptr<Relation> TransformFilterOp(const substrait::Rel &sop);
-	shared_ptr<Relation> TransformProjectOp(const substrait::Rel &sop);
+	shared_ptr<Relation> TransformProjectOp(const substrait::Rel &sop, vector<string> *aliases = nullptr);
 	shared_ptr<Relation> TransformAggregateOp(const substrait::Rel &sop);
 	shared_ptr<Relation> TransformReadOp(const substrait::Rel &sop);
 	shared_ptr<Relation> TransformSortOp(const substrait::Rel &sop);

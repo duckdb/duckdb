@@ -226,15 +226,21 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformFilterOp(const substrait::Rel &
 	return make_shared<FilterRelation>(TransformOp(sfilter.input()), TransformExpr(sfilter.condition()));
 }
 
-shared_ptr<Relation> SubstraitToDuckDB::TransformProjectOp(const substrait::Rel &sop) {
+shared_ptr<Relation> SubstraitToDuckDB::TransformProjectOp(const substrait::Rel &sop, vector<string> *aliases) {
 	vector<unique_ptr<ParsedExpression>> expressions;
-	vector<string> aliases;
-	auto &substrait_expressions = sop.project().expressions();
-	for (size_t expr_idx = 0; expr_idx < substrait_expressions.size(); expr_idx++) {
-		expressions.push_back(TransformExpr(substrait_expressions[expr_idx].expression()));
-		aliases.push_back(substrait_expressions[expr_idx].alias());
+	for (auto &sexpr : sop.project().expressions()) {
+		expressions.push_back(TransformExpr(sexpr));
 	}
-	return make_shared<ProjectionRelation>(TransformOp(sop.project().input()), move(expressions), move(aliases));
+	if (aliases) {
+		return make_shared<ProjectionRelation>(TransformOp(sop.project().input()), move(expressions), *aliases);
+	} else {
+		vector<string> mock_aliases;
+		for (size_t i = 0; i < expressions.size(); i++) {
+			mock_aliases.push_back("expr_" + to_string(i));
+		}
+		return make_shared<ProjectionRelation>(TransformOp(sop.project().input()), move(expressions),
+		                                       move(mock_aliases));
+	}
 }
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformAggregateOp(const substrait::Rel &sop) {
@@ -321,7 +327,24 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformOp(const substrait::Rel &sop) {
 	}
 }
 
-shared_ptr<Relation> SubstraitToDuckDB::TransformPlan() {
-	return TransformOp(plan.relations(0).rel());
+shared_ptr<Relation> SubstraitToDuckDB::TransformRootOp(const substrait::RelRoot &sop) {
+	const auto &rel = sop.input();
+	switch (sop.input().rel_type_case()) {
+	case substrait::Rel::RelTypeCase::kProject: {
+		vector<string> aliases;
+		auto column_names = sop.names();
+		for (auto &column_name : column_names) {
+			aliases.push_back(column_name);
+		}
+		return TransformProjectOp(rel, &aliases);
+	}
+	default:
+		throw InternalException("Unsupported relation type as root " + to_string(rel.rel_type_case()));
+	}
 }
+
+shared_ptr<Relation> SubstraitToDuckDB::TransformPlan() {
+	return TransformRootOp(plan.relations(0).root());
+}
+
 } // namespace duckdb

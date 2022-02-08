@@ -32,6 +32,9 @@ private:
 	//! Creates a reference to a table column
 	void CreateFieldRef(substrait::Expression *expr, uint64_t col_idx);
 
+	//! Transforms Relation Root
+	substrait::RelRoot *TransformRootOp(LogicalOperator &dop);
+
 	//! Methods to Transform Logical Operators to Substrait Relations
 	substrait::Rel *TransformOp(duckdb::LogicalOperator &dop);
 	substrait::Rel *TransformFilter(duckdb::LogicalOperator &dop);
