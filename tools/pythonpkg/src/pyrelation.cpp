@@ -22,6 +22,10 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("aggregate", &DuckDBPyRelation::Aggregate,
 	         "Compute the aggregate aggr_expr by the optional groups group_expr on the relation", py::arg("aggr_expr"),
 	         py::arg("group_expr") = "")
+	    .def(
+	        "sum", &DuckDBPyRelation::Sum,
+	        "Compute the aggregate sum of a single column or a list of columns  by the optional groups on the relation",
+	        py::arg("sum_aggr"), py::arg("group_expr") = "")
 	    .def("union", &DuckDBPyRelation::Union,
 	         "Create the set union of this relation object with another relation object in other_rel")
 	    .def("except_", &DuckDBPyRelation::Except,
@@ -155,6 +159,19 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, con
 		return make_unique<DuckDBPyRelation>(rel->Aggregate(expr, groups));
 	}
 	return make_unique<DuckDBPyRelation>(rel->Aggregate(expr));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Sum(const string &sum_columns, const string &groups) {
+	auto input = StringUtil::Split(sum_columns, ',');
+	string expr;
+	for (idx_t i = 0; i < input.size(); i++) {
+		expr += "sum(" + input[i] + ")";
+		if (i < input.size() - 1) {
+			expr += ",";
+		}
+	}
+	//! Construct Aggregation Expression
+	return Aggregate(expr, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(py::object df, const string &expr, const string &groups,
