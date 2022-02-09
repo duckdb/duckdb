@@ -12,6 +12,8 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/winapi.hpp"
 
+#include "duckdb/common/arrow_wrapper.hpp"
+
 struct ArrowArray;
 
 namespace duckdb {

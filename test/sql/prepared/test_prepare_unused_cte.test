@@ -1,0 +1,26 @@
+# name: test/sql/prepared/test_prepare_unused_cte.test
+# description: Test binding unreferenced CTE parameters
+# group: [prepared]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE "user" (name string);
+
+statement ok
+PREPARE s2965 AS
+WITH temp_first AS (
+    SELECT * FROM "user"
+    WHERE "name" = ?
+), temp_second AS (
+    SELECT * FROM "user"
+    WHERE "name" = ?
+)
+SELECT * FROM temp_second;
+
+statement ok
+EXECUTE s2965('val1', 'val2')
+
+statement ok
+DEALLOCATE s2965

@@ -5,10 +5,11 @@ namespace duckdb {
 CallStatement::CallStatement() : SQLStatement(StatementType::CALL_STATEMENT) {
 }
 
+CallStatement::CallStatement(const CallStatement &other) : SQLStatement(other), function(other.function->Copy()) {
+}
+
 unique_ptr<SQLStatement> CallStatement::Copy() const {
-	auto result = make_unique<CallStatement>();
-	result->function = function->Copy();
-	return move(result);
+	return unique_ptr<CallStatement>(new CallStatement(*this));
 }
 
 } // namespace duckdb
