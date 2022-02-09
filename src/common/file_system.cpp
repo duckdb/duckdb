@@ -20,6 +20,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #else
+#inlclude < io.h>
 #include <string>
 
 #ifdef __MINGW32__
