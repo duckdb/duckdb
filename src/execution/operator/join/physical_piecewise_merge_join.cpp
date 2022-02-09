@@ -402,6 +402,7 @@ public:
 			memset(lhs_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 		}
 		lhs_layout.Initialize(op.children[0]->types);
+		lhs_payload.Initialize(op.children[0]->types);
 
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
 
@@ -421,6 +422,7 @@ public:
 
 	// Block sorting
 	DataChunk lhs_keys;
+	DataChunk lhs_payload;
 	ExpressionExecutor lhs_executor;
 	unique_ptr<bool[]> lhs_found_match;
 	vector<BoundOrderByNode> lhs_order;
@@ -471,6 +473,16 @@ public:
 			merge_sorter.PerformInMergeRound();
 			lhs_global_state->CompleteMergeRound();
 		}
+
+		// Scan the sorted payload
+		D_ASSERT(lhs_global_state->sorted_blocks.size() == 1);
+
+		PayloadScanner scanner(*lhs_global_state->sorted_blocks[0]->payload_data, *lhs_global_state);
+		scanner.Scan(lhs_payload);
+
+		// Recompute the sorted keys from the sorted input
+		lhs_keys.Reset();
+		lhs_executor.Execute(lhs_payload, lhs_keys);
 	}
 
 	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
@@ -856,7 +868,9 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		} else {
 			// found matches: extract them
 			chunk.Reset();
-			SliceSortedPayload(chunk, left_info, result_count, input.size());
+			for (idx_t c = 0; c < state.lhs_payload.ColumnCount(); ++c) {
+				chunk.data[c].Slice(state.lhs_payload.data[c], left_info.result, result_count);
+			}
 			SliceSortedPayload(chunk, right_info, result_count, right_info.entry_idx + 1, left_cols);
 			chunk.SetCardinality(result_count);
 
@@ -866,15 +880,13 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 				// split the result chunk into the left and right halves
 				// so we can compute the values for comparison.
 				chunk.Split(state.rhs_input, left_cols);
-				state.lhs_executor.SetChunk(chunk);
 				state.rhs_executor.SetChunk(state.rhs_input);
-				state.lhs_keys.Reset();
 				state.rhs_keys.Reset();
 
 				auto tail_count = result_count;
 				for (size_t cmp_idx = 1; cmp_idx < conditions.size(); ++cmp_idx) {
-					auto &left = state.lhs_keys.data[cmp_idx];
-					state.lhs_executor.ExecuteExpression(cmp_idx, left);
+					Vector left(state.lhs_keys.data[cmp_idx]);
+					left.Slice(left_info.result, result_count);
 
 					auto &right = state.rhs_keys.data[cmp_idx];
 					state.rhs_executor.ExecuteExpression(cmp_idx, right);
