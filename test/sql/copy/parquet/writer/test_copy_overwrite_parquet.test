@@ -62,7 +62,7 @@ query IT
 SELECT * FROM test ORDER BY 1;
 ----
 1	hello
-2	world
+2	world 
 
 # Test USE_TMP_FILE flag with parquet
 statement error
