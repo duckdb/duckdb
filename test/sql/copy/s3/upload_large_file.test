@@ -14,7 +14,7 @@ require-env S3_TEST_SERVER_AVAILABLE 1
 set ignore_error_messages
 
 statement ok
-SET s3_secret_access_key='S3RVER';SET s3_access_key_id='S3RVER';SET s3_region='eu-west-1'; SET s3_endpoint='http://localhost:1337';
+SET s3_secret_access_key='S3RVER';SET s3_access_key_id='S3RVER';SET s3_region='eu-west-1'; SET s3_endpoint='http://localhost:4923';
 
 statement ok
 SET s3_uploader_thread_limit = 5;
@@ -38,13 +38,13 @@ WHERE
 
 # Parquet file # CSV file: ~3GB
 statement ok
-COPY lineitem TO 's3://test-bucket/multipart/export_large_15.parquet' (FORMAT 'parquet');
+COPY lineitem TO 's3://test-bucket/multipart/export_large.parquet' (FORMAT 'parquet');
 
 query I
 SELECT
     sum(l_extendedprice * l_discount) AS revenue
 FROM
-    "s3://test-bucket/multipart/export_large_15.parquet"
+    "s3://test-bucket/multipart/export_large.parquet"
 WHERE
     l_shipdate >= CAST('1994-01-01' AS date)
     AND l_shipdate < CAST('1995-01-01' AS date)
@@ -56,7 +56,7 @@ WHERE
 
 # CSV file: ~7GB
 statement ok
-COPY lineitem TO 's3://test-bucket/multipart/export_large_15.csv' WITH (HEADER 1, DELIMITER '|');
+COPY lineitem TO 's3://test-bucket/multipart/export_large.csv' WITH (HEADER 1, DELIMITER '|');
 
 query I
 SELECT

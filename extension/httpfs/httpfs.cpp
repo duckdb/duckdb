@@ -1,16 +1,16 @@
 #include "httpfs.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
-#define CPPHTTPLIB_OPENSSL_SUPPORT
-#include "httplib.hpp"
 #include "duckdb/common/thread.hpp"
-#include "duckdb/common/mutex.hpp"
+
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+#include "httplib.h"
 
 #include <map>
 #include <atomic>
 
 namespace duckdb {
 
-string ParseUrl(string url, string &path, string &proto_host_port) {
+static string parse_url(string url, string &path, string &proto_host_port) {
 	if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0) {
 		throw std::runtime_error("URL needs to start with http:// or https://");
 	}
@@ -27,10 +27,22 @@ string ParseUrl(string url, string &path, string &proto_host_port) {
 	return path;
 }
 
-unique_ptr<duckdb_httplib_openssl::Headers> InitializeHTTPHeaders(HeaderMap header_map) {
-	auto headers = make_unique<duckdb_httplib_openssl::Headers>();
+static string init_request(HTTPFileHandle &handle, string& url) {
+	string path, proto_host_port;
+	parse_url(url, path, proto_host_port);
+	auto& hfs = (HTTPFileHandle&) handle;
+	if (!hfs.http_client) {
+		handle.http_client = unique_ptr<httplib::Client, ClientDeleter>( new httplib::Client(proto_host_port.c_str()));
+		handle.http_client->set_follow_location(true);
+		handle.http_client->set_keep_alive(true);
+		handle.http_client->enable_server_certificate_verification(false);
+	}
+	return path;
+}
+
+static unique_ptr<httplib::Headers> initialize_http_headers(HeaderMap header_map) {
+	auto headers = make_unique<httplib::Headers>();
 	for (auto &entry : header_map) {
-		//std::cout << "adding header " << entry.first << "=" << entry.second << "\n";
 		headers->insert(entry);
 	}
 	return headers;
@@ -39,115 +51,81 @@ unique_ptr<duckdb_httplib_openssl::Headers> InitializeHTTPHeaders(HeaderMap head
 unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                         unique_ptr<char[]>& buffer_out, idx_t &buffer_out_len, char *buffer_in,
                                                         idx_t buffer_in_len) {
-	auto headers = InitializeHTTPHeaders(header_map);
-	string path, proto_host_port;
-	ParseUrl(url, path, proto_host_port);
+	auto& hfs = (HTTPFileHandle&)handle;
+	auto path = init_request(hfs, url);
+	unique_ptr<httplib::Headers> headers = initialize_http_headers(header_map);
 
-	duckdb_httplib_openssl::Client cli(proto_host_port.c_str());
-	cli.set_follow_location(true);
-	cli.enable_server_certificate_verification(false);
-	cli.set_read_timeout(HTTP_READ_TIMEOUT_SEC);
-	cli.set_write_timeout(HTTP_WRITE_TIMEOUT_SEC);
-	cli.set_connection_timeout(HTTP_WRITE_TIMEOUT_SEC);
-
-	//std::cout << "making post request to " << url << "\n";
-	string content_type = "application/octet-stream";
+	// We use a custom Request method here, because there is no Post call with a contentreceiver in httplib
 	idx_t out_offset = 0;
-	auto res = cli.Post(
-	    path.c_str(), *headers, buffer_in, buffer_in_len,
-	    [&](const duckdb_httplib_openssl::Response &response) {
-		    if (response.status >= 400) {
-			    //std::cout << response.body << std::endl;
-			    throw std::runtime_error("HTTP POST error on '" + url + "' (HTTP " + std::to_string(response.status) + ")");
-		    }
-		    return true;
-	    },
-	    [&](const char *data, size_t data_length) {
-		    if (out_offset + data_length > buffer_out_len) {
-			    // Buffer too small, increase its size by at least 2x to fit the new value
-			    auto new_size = MaxValue<idx_t>(out_offset + data_length, buffer_out_len*2);
-			    //std::cout << "resize from " << buffer_out_len << " to " << new_size << "\n";
-			    auto tmp = unique_ptr<char[]>{new char[new_size]};
-			    memcpy(tmp.get(), buffer_out.get(), buffer_out_len);
-				buffer_out = move(tmp);
-				buffer_out_len = new_size;
-			}
-		    //std::cout << "Copying " << data_length << "bytes \n";
-		    memcpy(buffer_out.get() + out_offset, data, data_length);
-		    out_offset += data_length;
-		    return true;
-	    },
-	    content_type.c_str());
-	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP POST error on '" + url + "' (Error code " + std::to_string(res.error()) + ")");
+	httplib::Request req;
+	req.method = "POST";
+	req.path = path;
+	req.headers = *headers;
+	req.headers.emplace("Content-Type", "application/octet-stream");
+	req.content_receiver = [&](const char *data, size_t data_length,
+	                                          uint64_t /*offset*/, uint64_t /*total_length*/) {
+		if (out_offset + data_length > buffer_out_len) {
+			// Buffer too small, increase its size by at least 2x to fit the new value
+			auto new_size = MaxValue<idx_t>(out_offset + data_length, buffer_out_len*2);
+			//std::cout << "resize from " << buffer_out_len << " to " << new_size << "\n";
+			auto tmp = unique_ptr<char[]>{new char[new_size]};
+			memcpy(tmp.get(), buffer_out.get(), buffer_out_len);
+			buffer_out = move(tmp);
+			buffer_out_len = new_size;
+		}
+		//std::cout << "Copying " << data_length << "bytes \n";
+		memcpy(buffer_out.get() + out_offset, data, data_length);
+		out_offset += data_length;
+		return true;
+	};
+	req.body.assign(buffer_in, buffer_in_len);
+	auto res = hfs.http_client->send(req);
+	if (res.error() != httplib::Error::Success) {
+		throw std::runtime_error("HTTP POST error on '" + url + "' (Error code " + std::to_string((int)res.error()) + ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                        char *buffer_in, idx_t buffer_in_len) {
-	auto headers = InitializeHTTPHeaders(header_map);
-	string path, proto_host_port;
-	ParseUrl(url, path, proto_host_port);
+	auto& hfs = (HTTPFileHandle&)handle;
+	auto path = init_request(hfs, url);
+	unique_ptr<httplib::Headers> headers = initialize_http_headers(header_map);
 
-	duckdb_httplib_openssl::Client cli(proto_host_port.c_str());
-	cli.set_follow_location(true);
-	cli.enable_server_certificate_verification(false);
-	cli.set_read_timeout(HTTP_READ_TIMEOUT_SEC);
-	cli.set_write_timeout(HTTP_WRITE_TIMEOUT_SEC);
-	cli.set_connection_timeout(HTTP_WRITE_TIMEOUT_SEC);
-
-	string content_type = "application/octet-stream";
-	auto res = cli.Put(path.c_str(), *headers, buffer_in, buffer_in_len, content_type.c_str());
-	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP PUT error on '" + url + "' (Error code " + std::to_string(res.error()) + ")");
+	auto res = hfs.http_client->Put(path.c_str(), *headers, buffer_in, buffer_in_len, "application/octet-stream");
+	if (res.error() != httplib::Error::Success) {
+		throw std::runtime_error("HTTP PUT error on '" + url + "' (Error code " + std::to_string((int)res.error()) + ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	auto headers = InitializeHTTPHeaders(header_map);
-	string path, proto_host_port;
-	ParseUrl(url, path, proto_host_port);
+	auto& hfs = (HTTPFileHandle&)handle;
+	auto path = init_request(hfs, url);
+	unique_ptr<httplib::Headers> headers = initialize_http_headers(header_map);
 
-	duckdb_httplib_openssl::Client cli(proto_host_port.c_str());
-	cli.set_follow_location(true);
-	cli.enable_server_certificate_verification(false);
-	cli.set_read_timeout(HTTP_READ_TIMEOUT_SEC);
-	cli.set_write_timeout(HTTP_WRITE_TIMEOUT_SEC);
-	cli.set_connection_timeout(HTTP_WRITE_TIMEOUT_SEC);
-
-	auto res = cli.Head(path.c_str(), *headers);
-	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + std::to_string(res.error()) + ")");
+	auto res = hfs.http_client->Head(path.c_str(), *headers);
+	if (res.error() != httplib::Error::Success) {
+		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + std::to_string((int)res.error()) + ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
-
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                             idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
-	auto headers = InitializeHTTPHeaders(header_map);
-	string path, proto_host_port;
-	ParseUrl(url, path, proto_host_port);
-
-	duckdb_httplib_openssl::Client cli(proto_host_port.c_str());
-	cli.set_follow_location(true);
-	cli.enable_server_certificate_verification(false);
-	cli.set_read_timeout(HTTP_READ_TIMEOUT_SEC);
-	cli.set_write_timeout(HTTP_WRITE_TIMEOUT_SEC);
-	cli.set_connection_timeout(HTTP_WRITE_TIMEOUT_SEC);
-
-	std::string range_expr =
-	    "bytes=" + std::to_string(file_offset) + "-" + std::to_string(file_offset + buffer_out_len - 1);
+	auto& hfs = (HTTPFileHandle&)handle;
+	auto path = init_request(hfs, url);
+	unique_ptr<httplib::Headers> headers = initialize_http_headers(header_map);
 
 	// send the Range header to read only subset of file
+	std::string range_expr =
+	    "bytes=" + std::to_string(file_offset) + "-" + std::to_string(file_offset + buffer_out_len - 1);
 	headers->insert(std::pair<std::string, std::string>("Range", range_expr));
 
 	idx_t out_offset = 0;
 
-	auto res = cli.Get(
+	auto res = hfs.http_client->Get(
 	    path.c_str(), *headers,
-	    [&](const duckdb_httplib_openssl::Response &response) {
+	    [&](const httplib::Response &response) {
 		    if (response.status >= 400) {
 			    throw std::runtime_error("HTTP GET error on '" + url + "' (HTTP " + std::to_string(response.status) + ")");
 		    }
@@ -165,8 +143,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 		    out_offset += data_length;
 		    return true;
 	    });
-	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + std::to_string(res.error()) + ")");
+	if (res.error() != httplib::Error::Success) {
+		throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + std::to_string((int)res.error()) + ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
@@ -248,7 +226,6 @@ void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 
 int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &hfh = (HTTPFileHandle &)handle;
-	;
 	Write(handle, buffer, nr_bytes, hfh.file_offset);
 	return nr_bytes;
 }
@@ -332,11 +309,15 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 	return res;
 }
 
-ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res) {
+ResponseWrapper::ResponseWrapper(httplib::Response &res) {
 	code = res.status;
 	error = res.reason;
 	for (auto &h : res.headers) {
 		headers[h.first] = h.second;
 	}
+}
+
+void ClientDeleter::operator()(httplib::Client* client){
+	delete client;
 }
 }
