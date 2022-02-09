@@ -1,5 +1,5 @@
-#ifndef ODBC_UTIL_HPP
-#define ODBC_UTIL_HPP
+#ifndef ODBC_UTILS_HPP
+#define ODBC_UTILS_HPP
 
 // needs to be first because BOOL
 #include "duckdb.hpp"

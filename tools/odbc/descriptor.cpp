@@ -407,7 +407,7 @@ SQLRETURN SQL_API SQLSetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
 				return SQL_ERROR;
 			}
-			if ((SQLULEN *)value_ptr < 0) {
+			if (*(SQLULEN *)value_ptr < 0) {
 				handle_desc->error_messages.emplace_back("Invalid descriptor index");
 				return SQL_ERROR;
 			}
@@ -634,9 +634,11 @@ OdbcHandleDesc::OdbcHandleDesc(const OdbcHandleDesc &other) : OdbcHandle(other) 
 }
 
 OdbcHandleDesc &OdbcHandleDesc::operator=(const OdbcHandleDesc &other) {
-	OdbcHandle::operator=(other);
-	dbc = other.dbc;
-	CopyOnlyOdbcFields(other);
+	if (&other != this) {
+		OdbcHandle::operator=(other);
+		dbc = other.dbc;
+		CopyOnlyOdbcFields(other);
+	}
 	return *this;
 }
 
@@ -696,7 +698,7 @@ bool OdbcHandleDesc::IsID() {
 }
 
 bool OdbcHandleDesc::IsAD() {
-	return stmt == NULL;
+	return stmt == nullptr;
 }
 
 bool OdbcHandleDesc::IsIRD() {

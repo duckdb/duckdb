@@ -6,6 +6,7 @@ using duckdb::ApiInfo;
 using duckdb::idx_t;
 using duckdb::TypeInfo;
 using std::string;
+using std::vector;
 
 /*** ODBC API Functions ********************************/
 SQLRETURN SQL_API SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function_id, SQLUSMALLINT *supported_ptr) {
@@ -391,7 +392,9 @@ bool ApiInfo::IsNumericInfoType(SQLUSMALLINT info_type) {
 	case SQL_ALTER_TABLE:
 	case SQL_ASYNC_DBC_FUNCTIONS:
 	case SQL_ASYNC_MODE:
+#ifdef SQL_ASYNC_NOTIFICATION
 	case SQL_ASYNC_NOTIFICATION:
+#endif
 	case SQL_BATCH_ROW_COUNT:
 	case SQL_BOOKMARK_PERSISTENCE:
 	case SQL_CATALOG_LOCATION:
@@ -434,7 +437,9 @@ bool ApiInfo::IsNumericInfoType(SQLUSMALLINT info_type) {
 	case SQL_DATETIME_LITERALS:
 	case SQL_DDL_INDEX:
 	case SQL_DEFAULT_TXN_ISOLATION:
+#ifdef SQL_DRIVER_AWARE_POOLING_SUPPORTED
 	case SQL_DRIVER_AWARE_POOLING_SUPPORTED:
+#endif
 #ifdef SQL_DRIVER_HDBCSQL_DRIVER_HENV
 	case SQL_DRIVER_HDBCSQL_DRIVER_HENV:
 #endif

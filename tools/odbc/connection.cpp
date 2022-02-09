@@ -219,10 +219,12 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		duckdb::Store<SQLUINTEGER>(SQL_AM_NONE, (duckdb::data_ptr_t)info_value_ptr);
 		return SQL_SUCCESS;
 	}
+#ifdef SQL_ASYNC_NOTIFICATION
 	case SQL_ASYNC_NOTIFICATION: {
 		duckdb::Store<SQLUINTEGER>(SQL_ASYNC_NOTIFICATION_NOT_CAPABLE, (duckdb::data_ptr_t)info_value_ptr);
 		return SQL_SUCCESS;
 	}
+#endif
 	case SQL_BATCH_ROW_COUNT: {
 		duckdb::Store<SQLUINTEGER>(SQL_BRC_EXPLICIT, (duckdb::data_ptr_t)info_value_ptr);
 		return SQL_SUCCESS;
@@ -507,10 +509,12 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		duckdb::OdbcUtils::WriteString(dm_version, (SQLCHAR *)info_value_ptr, buffer_length, string_length_ptr);
 		return SQL_SUCCESS;
 	}
+#ifdef SQL_DRIVER_AWARE_POOLING_SUPPORTED
 	case SQL_DRIVER_AWARE_POOLING_SUPPORTED: {
 		duckdb::Store<SQLUINTEGER>(SQL_DRIVER_AWARE_POOLING_NOT_CAPABLE, (duckdb::data_ptr_t)info_value_ptr);
 		return SQL_SUCCESS;
 	}
+#endif
 		// weird info types ("This information type is implemented by the Driver Manager alone.")
 		// case SQL_DRIVER_HDBCSQL_DRIVER_HENV:
 		// case SQL_DRIVER_HDESC:
@@ -648,7 +652,7 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		SQLCHAR *keyword = (SQLCHAR *)malloc(sizeof(SQLCHAR) * keyword_size);
 		std::string reserved_keywords;
 		while ((rc = SQLFetch(hstmt)) != SQL_NO_DATA) {
-			if (!SQL_SUCCEEDED(SQLGetData(hstmt, 1, SQL_C_CHAR, keyword, keyword_size, NULL))) {
+			if (!SQL_SUCCEEDED(SQLGetData(hstmt, 1, SQL_C_CHAR, keyword, keyword_size, nullptr))) {
 				duckdb::FreeHandle(SQL_HANDLE_STMT, hstmt);
 				free(keyword);
 				return SQL_ERROR;

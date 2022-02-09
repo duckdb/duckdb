@@ -42,7 +42,7 @@ private:
 	bool resultset_end;
 
 public:
-	OdbcFetch(OdbcHandleStmt *stmt)
+	explicit OdbcFetch(OdbcHandleStmt *stmt)
 	    : cursor_type(SQL_CURSOR_FORWARD_ONLY), row_count(0), stmt_ref(stmt), resultset_end(false) {
 		ResetLastFetchedVariableVal();
 	}
