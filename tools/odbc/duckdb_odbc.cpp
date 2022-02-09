@@ -74,6 +74,16 @@ void OdbcHandleDbc::ResetStmtDescriptors(OdbcHandleDesc *old_desc) {
 	}
 }
 
+void OdbcHandleDbc::SetDatabaseName(const string &db_name) {
+	if (!db_name.empty()) {
+		sql_attr_current_catalog = db_name;
+	}
+}
+
+std::string OdbcHandleDbc::GetDatabaseName() {
+	return sql_attr_current_catalog;
+}
+
 //! OdbcHandleStmt functions **************************************************
 OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
     : OdbcHandle(OdbcHandleType::STMT), dbc(dbc_p), rows_fetched_ptr(nullptr) {

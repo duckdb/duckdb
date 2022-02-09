@@ -8,6 +8,7 @@
 #include <odbcinst.h>
 #include <locale>
 
+using duckdb::OdbcUtils;
 using std::string;
 
 SQLRETURN duckdb::FreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
@@ -152,31 +153,12 @@ SQLRETURN SQL_API SQLGetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 	return SQL_SUCCESS;
 }
 
-static void GetValueFromDSN(const string &dsn, const char *key, string &value) {
-	auto pos_key = dsn.find(key);
-	if (pos_key != string::npos) {
-		auto pos_start_value = dsn.find('=', pos_key);
-		if (pos_start_value == string::npos) {
-			// an equal '=' char must be present (syntax error)
-			return;
-		}
-		++pos_start_value;
-		auto pos_end_value = dsn.find(';', pos_start_value);
-		if (pos_end_value == string::npos) {
-			// there is no ';', reached the string end
-			pos_end_value = dsn.size();
-		}
-		value = dsn.substr(pos_start_value, pos_end_value - pos_start_value);
-	}
-}
-
 /**
  * Get the new database name from the DSN string.
  * Otherwise, try to read the database name from odbc.ini
  */
-static void GetDatabaseName(duckdb::OdbcHandleDbc *dbc, SQLCHAR *dsn, string &new_db_name) {
-	string dsn_str((char *)dsn);
-	GetValueFromDSN(dsn_str, "Database", new_db_name);
+static void GetDatabaseNameFromDSN(duckdb::OdbcHandleDbc *dbc, SQLCHAR *dsn, string &new_db_name) {
+	OdbcUtils::SetValueFromConnStr(dsn, "Database", new_db_name);
 
 	// given preference for the connection attribute
 	if (!dbc->sql_attr_current_catalog.empty() && new_db_name.empty()) {
@@ -186,7 +168,7 @@ static void GetDatabaseName(duckdb::OdbcHandleDbc *dbc, SQLCHAR *dsn, string &ne
 #ifdef ODBC_LINK_ODBCINST
 	if (new_db_name.empty()) {
 		string dsn_name;
-		GetValueFromDSN(dsn_str, "DSN", dsn_name);
+		OdbcUtils::SetValueFromConnStr(dsn, "DSN", dsn_name);
 		if (!dsn_name.empty()) {
 			const int MAX_DB_NAME = 256;
 			char db_name[MAX_DB_NAME];
@@ -207,8 +189,13 @@ static SQLRETURN SetConnection(SQLHDBC connection_handle, SQLCHAR *conn_str) {
 		return SQL_ERROR;
 	}
 
+	// set DSN
+	OdbcUtils::SetValueFromConnStr(conn_str, "DSN", dbc->dsn);
+
 	string db_name;
-	GetDatabaseName(dbc, conn_str, db_name);
+	GetDatabaseNameFromDSN(dbc, conn_str, db_name);
+	dbc->SetDatabaseName(db_name);
+	db_name = dbc->GetDatabaseName();
 
 	if (!db_name.empty()) {
 		duckdb::DBConfig config;
@@ -252,7 +239,7 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
                                 SQLSMALLINT *text_length_ptr) {
 	if (!handle) {
 		std::string msg_str("Handle is NULL.");
-		duckdb::OdbcUtils::WriteString(msg_str, message_text, buffer_length, text_length_ptr);
+		OdbcUtils::WriteString(msg_str, message_text, buffer_length, text_length_ptr);
 		return SQL_INVALID_HANDLE;
 	}
 	if (rec_number <= 0 || buffer_length < 0) {
@@ -279,14 +266,14 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
 		    if (hdl->type != target_type) {
 			    std::string msg_str("Handle type " + duckdb::OdbcHandleTypeToString(hdl->type) + " mismatch with " +
 			                        duckdb::OdbcHandleTypeToString(target_type));
-			    duckdb::OdbcUtils::WriteString(msg_str, message_text, buffer_length, text_length_ptr);
+			    OdbcUtils::WriteString(msg_str, message_text, buffer_length, text_length_ptr);
 			    return SQL_SUCCESS;
 		    }
 
 		    // Errors should be placed at the error_messages
 		    if ((size_t)rec_number <= hdl->error_messages.size()) {
-			    duckdb::OdbcUtils::WriteString(hdl->error_messages[rec_number - 1], message_text, buffer_length,
-			                                   text_length_ptr);
+			    OdbcUtils::WriteString(hdl->error_messages[rec_number - 1], message_text, buffer_length,
+			                           text_length_ptr);
 			    return SQL_SUCCESS;
 		    } else {
 			    return SQL_NO_DATA;

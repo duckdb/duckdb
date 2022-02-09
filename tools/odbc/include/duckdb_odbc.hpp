@@ -54,6 +54,9 @@ public:
 	SQLRETURN MaterializeResult();
 	void ResetStmtDescriptors(OdbcHandleDesc *old_desc);
 
+	void SetDatabaseName(const string &db_name);
+	std::string GetDatabaseName();
+
 public:
 	OdbcHandleEnv *env;
 	unique_ptr<Connection> conn;
@@ -62,12 +65,11 @@ public:
 	SQLUINTEGER sql_attr_access_mode;
 	// this is the database name, see: SQLSetConnectAttr
 	std::string sql_attr_current_catalog;
+	// this is DSN get in string connection, see: SQLConnect
+	// Ex: "DSN=DuckDB"
+	std::string dsn;
 	// reference to an open statement handled by this connection
 	std::vector<OdbcHandleStmt *> vec_stmt_ref;
-
-	// explicitly allocated Application Descriptors
-	// OdbcHandleDesc *apd = nullptr;
-	// OdbcHandleDesc *ard = nullptr;
 };
 
 inline bool IsSQLVariableLengthType(SQLSMALLINT type) {

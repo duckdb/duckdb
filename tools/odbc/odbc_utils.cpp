@@ -180,3 +180,29 @@ string OdbcUtils::GetQueryDuckdbTables(const string &schema_filter, const string
 
 	return sql_duckdb_tables;
 }
+
+void OdbcUtils::SetValueFromConnStr(const string &conn_str, const char *key, string &value) {
+	auto pos_key = conn_str.find(key);
+	if (pos_key != string::npos) {
+		auto pos_start_value = conn_str.find('=', pos_key);
+		if (pos_start_value == string::npos) {
+			// an equal '=' char must be present (syntax error)
+			return;
+		}
+		++pos_start_value;
+		auto pos_end_value = conn_str.find(';', pos_start_value);
+		if (pos_end_value == string::npos) {
+			// there is no ';', reached the end of the string
+			pos_end_value = conn_str.size();
+		}
+		value = conn_str.substr(pos_start_value, pos_end_value - pos_start_value);
+	}
+}
+
+void OdbcUtils::SetValueFromConnStr(SQLCHAR *conn_c_str, const char *key, string &value) {
+	if (conn_c_str == nullptr || key == nullptr) {
+		return;
+	}
+	string conn_str((char *)conn_c_str);
+	SetValueFromConnStr(conn_str, key, value);
+}
