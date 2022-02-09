@@ -1,4 +1,5 @@
 skip_on_cran()
+skip_on_os(c("windows"))
 local_edition(3)
 
 test_that("EXPLAIN gives reasonable output", {
