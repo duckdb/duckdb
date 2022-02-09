@@ -675,16 +675,9 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 	memset(found_match, 0, sizeof(found_match));
 	MergeJoinSimpleBlocks(state, gstate, found_match, conditions[0].comparison);
 
-	// extract the sorted payload
-	idx_t left_position = 0;
+	// use the sorted payload
 	const auto lhs_not_null = state.lhs_count - state.lhs_has_null;
-	BlockMergeInfo left_info(*state.lhs_global_state, 0, 0, left_position, lhs_not_null);
-	left_info.result.Initialize(nullptr);
-
-	DataChunk payload;
-	payload.Initialize(input.GetTypes());
-	SliceSortedPayload(payload, left_info, state.lhs_count, state.lhs_count);
-	payload.SetCardinality(state.lhs_count);
+	auto &payload = state.lhs_payload;
 
 	// now construct the result based on the join result
 	switch (join_type) {
