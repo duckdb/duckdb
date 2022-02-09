@@ -15,28 +15,28 @@ public:
 
 private:
 	//! Transform Substrait Operations to DuckDB Relations
-	DUCKDB_API shared_ptr<Relation> TransformOp(const substrait::Rel &sop);
-	DUCKDB_API shared_ptr<Relation> TransformJoinOp(const substrait::Rel &sop);
-	DUCKDB_API shared_ptr<Relation> TransformCrossProductOp(const substrait::Rel &sop);
-	DUCKDB_API shared_ptr<Relation> TransformFetchOp(const substrait::Rel &sop);
-	DUCKDB_API shared_ptr<Relation> TransformFilterOp(const substrait::Rel &sop);
-	DUCKDB_API shared_ptr<Relation> TransformProjectOp(const substrait::Rel &sop);
-	DUCKDB_API shared_ptr<Relation> TransformAggregateOp(const substrait::Rel &sop);
-	DUCKDB_API shared_ptr<Relation> TransformReadOp(const substrait::Rel &sop);
-	DUCKDB_API shared_ptr<Relation> TransformSortOp(const substrait::Rel &sop);
+	shared_ptr<Relation> TransformOp(const substrait::Rel &sop);
+	shared_ptr<Relation> TransformJoinOp(const substrait::Rel &sop);
+	shared_ptr<Relation> TransformCrossProductOp(const substrait::Rel &sop);
+	shared_ptr<Relation> TransformFetchOp(const substrait::Rel &sop);
+	shared_ptr<Relation> TransformFilterOp(const substrait::Rel &sop);
+	shared_ptr<Relation> TransformProjectOp(const substrait::Rel &sop);
+	shared_ptr<Relation> TransformAggregateOp(const substrait::Rel &sop);
+	shared_ptr<Relation> TransformReadOp(const substrait::Rel &sop);
+	shared_ptr<Relation> TransformSortOp(const substrait::Rel &sop);
 
 	//! Transform Substrait Expressions to DuckDB Expressions
-	DUCKDB_API unique_ptr<ParsedExpression> TransformExpr(const substrait::Expression &sexpr);
-	DUCKDB_API unique_ptr<ParsedExpression> TransformLiteralExpr(const substrait::Expression &sexpr);
-	DUCKDB_API unique_ptr<ParsedExpression> TransformSelectionExpr(const substrait::Expression &sexpr);
-	DUCKDB_API unique_ptr<ParsedExpression> TransformScalarFunctionExpr(const substrait::Expression &sexpr);
-	DUCKDB_API unique_ptr<ParsedExpression> TransformIfThenExpr(const substrait::Expression &sexpr);
+	unique_ptr<ParsedExpression> TransformExpr(const substrait::Expression &sexpr);
+	unique_ptr<ParsedExpression> TransformLiteralExpr(const substrait::Expression &sexpr);
+	unique_ptr<ParsedExpression> TransformSelectionExpr(const substrait::Expression &sexpr);
+	unique_ptr<ParsedExpression> TransformScalarFunctionExpr(const substrait::Expression &sexpr);
+	unique_ptr<ParsedExpression> TransformIfThenExpr(const substrait::Expression &sexpr);
 
 	//! Looks up for aggregation function in functions_map
-	DUCKDB_API string FindFunction(uint64_t id);
+	string FindFunction(uint64_t id);
 
 	//! Transform Substrait Sort Order to DuckDB Order
-	DUCKDB_API OrderByNode TransformOrder(const substrait::SortField &sordf);
+	OrderByNode TransformOrder(const substrait::SortField &sordf);
 	//! DuckDB Connection
 	Connection &con;
 	//! Substrait Plan
