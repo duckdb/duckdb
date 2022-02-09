@@ -203,9 +203,9 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return -1;
 	}
 	if ((from.id() == LogicalTypeId::VARCHAR && to.id() == LogicalTypeId::JSON) ||
-	    (to.id() == LogicalTypeId::JSON && from.id() == LogicalTypeId::VARCHAR)) {
-		// No cost, just a different tag
-		return 0;
+	    (from.id() == LogicalTypeId::JSON && to.id() == LogicalTypeId::VARCHAR)) {
+		// Virtually no cost, just a different tag
+		return 1;
 	}
 	if (to.id() == LogicalTypeId::VARCHAR || to.id() == LogicalTypeId::JSON) {
 		// everything can be cast to VARCHAR/JSON, but this cast has a high cost
