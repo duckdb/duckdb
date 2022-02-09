@@ -79,6 +79,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromQuery(const string &query, co
 	return conn->FromQuery(query, alias);
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::RunQuery(const string &query, const string &alias,
+                                                        DuckDBPyConnection *conn) {
+	return conn->RunQuery(query, alias);
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filename, DuckDBPyConnection *conn) {
 	return conn->FromCsvAuto(filename);
 }

@@ -3,7 +3,7 @@
 #' @usage NULL
 dbClearResult__duckdb_result <- function(res, ...) {
   if (res@env$open) {
-    .Call(duckdb_release_R, res@stmt_lst$ref)
+    .Call(`_duckdb_release_R`, res@stmt_lst$ref)
     res@env$open <- FALSE
   } else {
     warning("Result was cleared already")

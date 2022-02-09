@@ -1,3 +1,24 @@
+/**************************************************************
+ * 
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ * 
+ *************************************************************/
+
 #ifndef _NF_CALENDAR_H
 #define _NF_CALENDAR_H
 
@@ -74,25 +95,6 @@ typedef sal_uInt64 sal_uIntPtr;
 #define ConvertToUpper(A)        std::transform(A.begin(), A.end(), A.begin(), ::toupper)
 #define ConvertToLower(A)        std::transform(A.begin(), A.end(), A.begin(), ::tolower)
 
-//=============================================================================
-
-/**
-    Field indices to be passed to various <type>XCalendar</type> methods.
-
-    <p> Field is writable only if marked both Get/Set. </p>
-
-    <p> ZONE_OFFSET and DST_OFFSET cooperate such that both values are added,
-    for example, ZoneOffset=1*60 and DstOffset=1*60 results in a time
-    difference of GMT+2. The calculation in minutes is
-    GMT = LocalTime - ZoneOffset - DstOffset </p>
-
-    <p> With introduction of ZONE_OFFSET_SECOND_MILLIS and
-    DST_OFFSET_SECOND_MILLIS the exact calculation in milliseconds is
-    GMT = LocalTime
-        - (ZoneOffset*60000 + ZoneOffsetMillis * sign(ZoneOffset))
-        - (DstOffset*60000 + DstOffsetMillis * sign(DstOffset))
-    <p>
- */
 namespace CalendarFieldIndex {
 /// Get     <type>AmPmValue</type>.
 const short AM_PM = 0;
@@ -102,12 +104,6 @@ const short DAY_OF_MONTH = 1;
 const short DAY_OF_WEEK = 2;
 /// Get     day of  year.
 const short DAY_OF_YEAR = 3;
-/** Get     daylight saving time offset in minutes, e.g. [0*60..1*60]
-    <p> The DST offset value depends on the actual date set at the
-    calendar and is determined according to the timezone rules of
-    the locale used with the calendar. </p>
-    <p> Note that there is a bug in OpenOffice.org 1.0 / StarOffice 6.0
-    that prevents interpreting this value correctly. </p> */
 const short DST_OFFSET = 4;
 /// Get/Set hour [0-23].
 const short CFI_HOUR = 5;
@@ -123,9 +119,6 @@ const short WEEK_OF_MONTH = 9;
 const short WEEK_OF_YEAR = 10;
 /// Get/Set year.
 const short CFI_YEAR = 11;
-/** Get/Set month [0-...].
-    <p> Note that the maximum value is <b>not</b> necessarily 11 for
-    December but depends on the calendar used instead. </p> */
 const short CFI_MONTH = 12;
 /// Get/Set era, for example, 0:= Before Christ, 1:= After Christ.
 const short ERA = 13;
@@ -135,52 +128,14 @@ const short ZONE_OFFSET = 14;
 /// Total number of fields for &lt; OpenOffice 3.1
 const short FIELD_COUNT = 15;
 
-/** Get/Set additional offset in milliseconds that <b>adds</b> to
-    the value of ZONE_OFFSET. This may be necessary to correctly
-    interpret historical timezone data that consists of fractions of
-    minutes, e.g. seconds. 1 minute == 60000 milliseconds.
-
-    @ATTENTION! Though the field's type is signed 16-bit, the field
-    value is treated as unsigned 16-bit to allow for values up to
-    60000 and expresses an absolute value that inherits its sign
-    from the parent ZONE_OFFSET field.
-
-    @since OpenOffice 3.1
- */
 const short ZONE_OFFSET_SECOND_MILLIS = 15;
 
-/** Get     additional offset in milliseconds that <b>adds</b> to
-    the value of DST_OFFSET. This may be necessary to correctly
-    interpret historical timezone data that consists of fractions of
-    minutes, e.g. seconds. 1 minute == 60000 milliseconds.
-
-    @ATTENTION! Though the field's type is signed 16-bit, the field
-    value is treated as unsigned 16-bit to allow for values up to
-    60000 and expresses an absolute value that inherits its sign
-    from the parent DST_OFFSET field.
-
-    @since OpenOffice 3.1
- */
 const short DST_OFFSET_SECOND_MILLIS = 16;
 
-/** Total number of fields as of OpenOffice 3.1
-
-    @since OpenOffice 3.1
- */
 const short FIELD_COUNT2 = 17;
 
 } // namespace CalendarFieldIndex
 
-//=============================================================================
-
-// #45717# IsNumberFormat( "98-10-24", 30, x ), YMD Format set with DMY
-// International settings doesn't recognize the string as a date.
-/** enum values for <method>SvNumberFormatter::SetEvalDateFormat</method>
-
-    <p>How <method>ImpSvNumberInputScan::GetDateRef</method> shall take the
-    DateFormat order (YMD,DMY,MDY) into account, if called from IsNumberFormat
-    with a date format to match against.
- */
 enum NfEvalDateFormat {
 	/** DateFormat only from International, default. */
 	NF_EVALDATEFORMAT_INTL,
@@ -246,18 +201,6 @@ const long SHORT_QUARTER = 15;
 const long LONG_QUARTER = 16;
 } // namespace CalendarDisplayCode
 
-//=============================================================================
-
-//============================================================================
-
-/**
-    Offsets into the sequence of strings returned by
-    <member>XLocaleData::getReservedWord()</member>.
-
-    @see XLocaleData
-        for links to DTD of XML locale data files.
- */
-
 namespace reservedWords {
 /// "true"
 const short TRUE_WORD = 0;
@@ -290,11 +233,6 @@ const short QUARTER4_ABBREVIATION = 11;
 const short COUNT = 12;
 } // namespace reservedWords
 
-//============================================================================
-
-/** Formatting modes for rtl_math_doubleToString and rtl_math_doubleToUString
-    and rtl_math_doubleToUStringBuffer.
- */
 enum rtl_math_StringFormat {
 	/** Like sprintf() %E.
 	 */
@@ -319,9 +257,6 @@ enum rtl_math_StringFormat {
 	rtl_math_StringFormat_FORCE_EQUAL_SIZE = SAL_MAX_ENUM
 };
 
-/** Special decimal places constants for rtl_math_doubleToString and
-    rtl_math_doubleToUString and rtl_math_doubleToUStringBuffer.
- */
 enum rtl_math_DecimalPlaces {
 	/** Value to be used with rtl_math_StringFormat_Automatic.
 	 */
@@ -374,20 +309,6 @@ enum rtl_math_RoundingMode {
 	rtl_math_RoundingMode_FORCE_EQUAL_SIZE = SAL_MAX_ENUM
 };
 
-//! For ImpSvNumberformatScan: first the short symbols, then the long symbols!
-//! e.g. first TT then TTTT
-//! The internal order is essentially for the format code string scanner!
-//! New keywords MUST NOT be inserted, only the NF_KEY_UNUSEDn may be used,
-//! NF_KEY_LASTKEYWORD must be adjusted accordingly. Otherwise old versions
-//! will fail upon reading these entries. Nevertheless, old versions are NOT
-//! able to display those new keywords => blank display.
-//
-// Note: 2005-09-02: the above applies to the binary file format.
-//
-// ER 15.12.99: This table is externally only to be used with method
-// String SvNumberformat::GetMappedFormatstring( const NfKeywordTable&, const LocaleDataWrapper& );
-// and method
-// void SvNumberFormatter::FillKeywordTable( NfKeywordTable&, LanguageType );
 enum NfKeywordIndex
 {
     NF_KEY_NONE = 0,
@@ -468,14 +389,6 @@ public:
     const String & operator[] (Keywords_t::size_type n) const { return m_keywords[n]; }
 };
 
-/* ATTENTION! If new types arrive that had its content previously handled as
- * SYMBOLTYPE_STRING, they have to be added at several places in zforscan.cxx
- * and/or zformat.cxx, and in xmloff/source/style/xmlnumfe.cxx. Mostly these
- * are places where already NF_SYMBOLTYPE_STRING together with
- * NF_SYMBOLTYPE_CURRENCY or NF_SYMBOLTYPE_DATESEP are used in the same case of
- * a switch respectively an if-condition.
- */
-
 /// Number formatter's symbol types of a token, if not key words, which are >0
 enum NfSymbolType
 {
@@ -504,40 +417,6 @@ enum NfSymbolType
 
 
 // ------------------------- digitgroupingiterator.hxx -----------------------------------------
-
-/** Iterator to be used with a digit grouping as obtained through
-    LocaleDataWrapper::getDigitGrouping().
-
-    The iterator advances over the digit groupings, returning the number of
-    digits per group. If the last group was encountered the iterator will
-    always return the last grouping.
-    
-    Grouping values are sanitized to be 0 <= value <= SAL_MAX_UINT16, even if
-    originally Int32, to be able to easily cast it down to String's uint16_t.
-    This shouldn't make any difference in practice.
-
-    Usage example with a string buffer containing a decimal representation of
-    an integer number. Note that of course this loop could be optimized to not
-    count single characters but hunks of groups instead using the get() method,
-    this is just for illustrating usage. Anyway, for double values it is highly
-    more efficient to use ::rtl::math::doubleToString() and pass the grouping
-    sequence, instead of using this iterator and inserting charcters into
-    strings.
-
-    DigitGroupingIterator aGrouping(...)
-    sal_Int32 nCount = 0;
-    sal_Int32 n = aBuffer.getLength();
-    // >1 because we don't want to insert a separator if there is no leading digit.
-    while (n-- > 1)
-    {
-        if (++nCount >= aGrouping.getPos())
-        {
-            aBuffer.insert( n, cSeparator);
-            nGroupDigits = aGrouping.advance();
-        }
-    }
-
- */
 
 class DigitGroupingIterator
 {
@@ -649,16 +528,8 @@ public:
 
 class ResId;
 
-// --------------
-// - Date-Types -
-// --------------
-
 enum DayOfWeek { MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY,
 				 SATURDAY, SUNDAY };
-
-// --------
-// - Date -
-// --------
 
 class TOOLS_DLLPUBLIC Date
 {
@@ -737,10 +608,6 @@ public:
 
 // ----------------------------------------- time.hxx -----------------------------------------------------
 
-// --------
-// - Time -
-// --------
-
 class TOOLS_DLLPUBLIC Time
 {
 private:
@@ -817,10 +684,6 @@ public:
 
 // --------------------------------------------- datetime.hxx ---------------------------------------------------
 
-// ------------
-// - DateTime -
-// ------------
-
 class TOOLS_DLLPUBLIC DateTime : public Date, public Time
 {
 public:
@@ -896,10 +759,6 @@ inline DateTime& DateTime::operator =( const DateTime& rDateTime )
 
 // ---------------------------------------- calendar.hxx -----------------------------------------------------------
 
-//	----------------------------------------------------
-//	class Calendar
-//	----------------------------------------------------
-
 struct Era {
 	sal_Int32 year;
 	sal_Int32 month;
@@ -917,9 +776,6 @@ public:
 	Calendar(Era *_eraArray);
 	void init(Era *_eraArray);
 
-	/**
-	 * Destructor
-	 */
 	~Calendar();
 
 	void setValue(sal_Int16 nFieldIndex, sal_Int16 nValue);

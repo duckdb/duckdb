@@ -35,6 +35,9 @@ public:
 	static unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias,
 	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
+	static unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias,
+	                                             DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
 	static unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename,
 	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 

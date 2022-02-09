@@ -100,8 +100,11 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.def("from_query", &DuckDBPyRelation::FromQuery, "Create a relation object from the given SQL query",
 	      py::arg("query"), py::arg("alias") = "query_relation",
 	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
-	m.def("query", &DuckDBPyRelation::FromQuery, "Create a relation object from the given SQL query", py::arg("query"),
-	      py::arg("alias") = "query_relation", py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	m.def("query", &DuckDBPyRelation::RunQuery,
+	      "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
+	      "run the query as-is.",
+	      py::arg("query"), py::arg("alias") = "query_relation",
+	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("from_csv_auto", &DuckDBPyRelation::FromCsvAuto, "Creates a relation object from the CSV file in file_name",
 	      py::arg("file_name"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("from_parquet", &DuckDBPyRelation::FromParquet,
