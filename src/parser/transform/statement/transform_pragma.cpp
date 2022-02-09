@@ -30,8 +30,8 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode 
 				if (comp.left->type != ExpressionType::COLUMN_REF) {
 					throw ParserException("Named parameter requires a column reference on the LHS");
 				}
-				auto &columnref = (ColumnRefExpression &) *comp.left;
-				auto &constant = (ConstantExpression &) *comp.right;
+				auto &columnref = (ColumnRefExpression &)*comp.left;
+				auto &constant = (ConstantExpression &)*comp.right;
 				info.named_parameters[columnref.GetName()] = constant.value;
 			} else if (node->type == duckdb_libpgquery::T_PGAConst) {
 				auto constant = TransformConstant((duckdb_libpgquery::PGAConst *)node);
