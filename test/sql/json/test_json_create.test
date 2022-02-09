@@ -1,11 +1,16 @@
-# name: test/sql/json/test_json_object.test
-# description: Test JSON object
+# name: test/sql/json/test_json_create.test
+# description: Test JSON create functions {json_object(), json_array(), json()}
 # group: [json]
 
 require json
 
 statement ok
 pragma enable_verification
+
+query T
+select json({n:42})
+----
+{"n":42}
 
 query T
 select json_object('duck', 42)
@@ -31,3 +36,13 @@ query T
 select json_object('nested', [1, 2, 3])
 ----
 {"nested":[1,2,3]}
+
+query T
+select json_object('nested', {nested2: [1, 2, 3]})
+----
+{"nested":{"nested2":[1,2,3]}}
+
+query T
+select json_object('nested', [{nested2: 1}, {nested2: 2}, {nested2: 3}])
+----
+{"nested":[{"nested2":1},{"nested2":2},{"nested2":3}]}

@@ -3,8 +3,7 @@ add_library_unity(
   OBJECT
   json_array_length.cpp
   json_extract.cpp
-  json_json.cpp
-  json_object.cpp
+  json_create.cpp
   json_type.cpp
   json_valid.cpp)
 set(ALL_OBJECT_FILES
