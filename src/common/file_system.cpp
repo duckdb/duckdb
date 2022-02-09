@@ -30,6 +30,10 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #undef FILE_CREATE // woo mingw
 #endif
 
+#if !defined(S_ISREG) && defined(S_IFMT) && defined(S_IFREG)
+#define S_ISREG(m) (((m)&S_IFMT) == S_IFREG)
+#endif
+
 namespace duckdb {
 
 FileSystem::~FileSystem() {
@@ -215,6 +219,7 @@ void FileSystem::RemoveFile(const string &filename) {
 
 bool FileSystem::IsFile(const string &filename) {
 	if (!filename.empty()) {
+#ifndef _WIN32
 		if (access(filename.c_str(), 0) == 0) {
 			struct stat status;
 			stat(filename.c_str(), &status);
@@ -222,6 +227,15 @@ bool FileSystem::IsFile(const string &filename) {
 				return true;
 			}
 		}
+#else
+		if (_access(filename.c_str(), 0) == 0) {
+			struct stat status;
+			stat(filename.c_str(), &status);
+			if (S_ISREG(status.st_mode)) {
+				return true;
+			}
+		}
+#endif
 	}
 	return false;
 }
