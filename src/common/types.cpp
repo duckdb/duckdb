@@ -15,6 +15,7 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
@@ -481,10 +482,10 @@ string LogicalType::ToString() const {
 		return StringUtil::Format("DECIMAL(%d,%d)", width, scale);
 	}
 	case LogicalTypeId::ENUM: {
-		return "\"" + EnumType::GetTypeName(*this) + "\"";
+		return KeywordHelper::WriteOptionallyQuoted(EnumType::GetTypeName(*this));
 	}
 	case LogicalTypeId::USER: {
-		return "\"" + UserType::GetTypeName(*this) + "\"";
+		return KeywordHelper::WriteOptionallyQuoted(UserType::GetTypeName(*this));
 	}
 	default:
 		return LogicalTypeIdToString(id_);
