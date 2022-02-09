@@ -26,6 +26,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/types/geometry.hpp"
 
 namespace duckdb {
 
@@ -565,6 +566,26 @@ Value Value::BLOB(const string &data) {
 	result.str_value = Blob::ToBlob(string_t(data));
 	return result;
 }
+
+Value Value::GEOMETRY(const string &data) {
+	Value result(LogicalType::GEOMETRY);
+	result.is_null = false;
+	if (data.size() == 0) {
+		result.str_value = data;
+	} else {
+		result.str_value = Geometry::ToGeometry(string_t(data));
+	}
+
+	return result;
+}
+
+Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
+	Value result(LogicalType::GEOMETRY);
+	result.is_null = false;
+	result.str_value = string((const char *)data, len);
+	return result;
+}
+
 Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 	D_ASSERT(original_type.id() == LogicalTypeId::ENUM);
 	Value result(original_type);
@@ -1338,6 +1359,13 @@ string Value::ToString() const {
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
 		return values_insert_order.GetValue(enum_idx).ToString();
+	}
+	case LogicalTypeId::GEOMETRY: {
+		if (str_value.size() == 0) {
+			return str_value;
+		}
+		auto str = Geometry::ToString(string_t(str_value));
+		return str;
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString());

@@ -373,6 +373,10 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		entry.offset = offset;
 		break;
 	}
+	case PhysicalType::GEOMETRY: {
+		((string_t *)data)[index] = StringVector::AddStringOrGeometry(*this, val.str_value);
+		break;
+	}
 	default:
 		throw InternalException("Unimplemented type for Vector::SetValue");
 	}
@@ -513,6 +517,10 @@ Value Vector::GetValue(idx_t index) const {
 			children.push_back(child_vec.GetValue(i));
 		}
 		return Value::LIST(ListType::GetChildType(GetType()), move(children));
+	}
+	case LogicalTypeId::GEOMETRY: {
+		auto str = ((string_t *)data)[index];
+		return Value::GEOMETRY((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
 	}
 	default:
 		throw InternalException("Unimplemented type for value access");
@@ -1251,6 +1259,20 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
 	return string_buffer.AddBlob(data);
+}
+
+string_t StringVector::AddStringOrGeometry(Vector &vector, string_t data) {
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+	if (data.IsInlined()) {
+		// string will be inlined: no need to store in string heap
+		return data;
+	}
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
+	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
+	return string_buffer.AddGeometry(data);
 }
 
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {

@@ -317,6 +317,9 @@ static bool StringCastSwitch(Vector &source, Vector &result, idx_t count, bool s
 		                                                                           error_message);
 	case LogicalTypeId::SQLNULL:
 		return TryVectorNullCast(source, result, count, error_message);
+	case LogicalTypeId::GEOMETRY:
+		return VectorTryCastStringLoop<string_t, string_t, duckdb::TryCastToGeometry>(source, result, count, strict,
+																					error_message);
 	default:
 		return VectorStringCastNumericSwitch(source, result, count, strict, error_message);
 	}
@@ -517,6 +520,19 @@ static bool BlobCastSwitch(Vector &source, Vector &result, idx_t count, string *
 	case LogicalTypeId::VARCHAR:
 		// blob to varchar
 		VectorStringCast<string_t, duckdb::CastFromBlob>(source, result, count);
+		break;
+	default:
+		return TryVectorNullCast(source, result, count, error_message);
+	}
+	return true;
+}
+
+static bool GeometryCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
+	// now switch on the result type
+	switch (result.GetType().id()) {
+	case LogicalTypeId::VARCHAR:
+		// geometry to varchar
+		VectorStringCast<string_t, duckdb::CastFromGeometry>(source, result, count);
 		break;
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
@@ -821,6 +837,8 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 		return ListCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::ENUM:
 		return EnumCastSwitch(source, result, count, error_message, strict);
+	case LogicalTypeId::GEOMETRY:
+		return GeometryCastSwitch(source, result, count, error_message);
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}

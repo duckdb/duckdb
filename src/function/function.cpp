@@ -116,6 +116,8 @@ void BuiltinFunctions::Initialize() {
 	RegisterNestedFunctions();
 	RegisterTrigonometricsFunctions();
 
+	RegisterGeometryFunctions();
+
 	RegisterPragmaFunctions();
 
 	// initialize collations

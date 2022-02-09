@@ -97,6 +97,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::GEOMETRY:
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
@@ -428,6 +429,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "ENUM";
 	case LogicalTypeId::USER:
 		return "USER";
+	case LogicalTypeId::GEOMETRY:
+		return "GEOMETRY";
 	}
 	return "UNDEFINED";
 }
@@ -549,6 +552,8 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		return LogicalTypeId::TIMESTAMP_TZ;
 	} else if (lower_str == "timetz") {
 		return LogicalTypeId::TIME_TZ;
+	} else if (lower_str == "geometry") {
+		return LogicalTypeId::GEOMETRY;
 	} else {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder
