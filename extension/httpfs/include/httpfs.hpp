@@ -4,23 +4,23 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 
-namespace httplib {
+namespace duckdb_httplib_openssl {
 struct Response;
 struct Client;
-} // namespace httplib
+} // namespace duckdb_httplib_openssl
 namespace duckdb {
 
 using HeaderMap = unordered_map<string, string>;
 
 // avoid including httplib in header
 struct ClientDeleter {
-	void operator()(httplib::Client *client);
+	void operator()(duckdb_httplib_openssl::Client *client);
 };
 
 // avoid including httplib in header
 struct ResponseWrapper {
 public:
-	explicit ResponseWrapper(httplib::Response &res);
+	explicit ResponseWrapper(duckdb_httplib_openssl::Response &res);
 	int code;
 	string error;
 	HeaderMap headers;
@@ -33,7 +33,7 @@ public:
 	virtual unique_ptr<ResponseWrapper> Initialize();
 
 	// We keep an http client stored for connection reuse with keep-alive headers
-	unique_ptr<httplib::Client, ClientDeleter> http_client = nullptr;
+	unique_ptr<duckdb_httplib_openssl::Client, ClientDeleter> http_client = nullptr;
 
 	// File handle info
 	uint8_t flags;

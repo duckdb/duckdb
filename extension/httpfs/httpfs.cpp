@@ -3,10 +3,10 @@
 #include "duckdb/common/thread.hpp"
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
-#include "httplib.h"
+#include "httplib.hpp"
 
-#include <map>
 #include <atomic>
+#include <map>
 
 namespace duckdb {
 
@@ -32,16 +32,20 @@ static string init_request(HTTPFileHandle &handle, string &url) {
 	parse_url(url, path, proto_host_port);
 	auto &hfs = (HTTPFileHandle &)handle;
 	if (!hfs.http_client) {
-		handle.http_client = unique_ptr<httplib::Client, ClientDeleter>(new httplib::Client(proto_host_port.c_str()));
+		handle.http_client = unique_ptr<duckdb_httplib_openssl::Client, ClientDeleter>(
+		    new duckdb_httplib_openssl::Client(proto_host_port.c_str()));
 		handle.http_client->set_follow_location(true);
 		handle.http_client->set_keep_alive(true);
 		handle.http_client->enable_server_certificate_verification(false);
+		handle.http_client->set_write_timeout(30);
+		handle.http_client->set_read_timeout(30);
+		handle.http_client->set_connection_timeout(30);
 	}
 	return path;
 }
 
-static unique_ptr<httplib::Headers> initialize_http_headers(HeaderMap header_map) {
-	auto headers = make_unique<httplib::Headers>();
+static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap header_map) {
+	auto headers = make_unique<duckdb_httplib_openssl::Headers>();
 	for (auto &entry : header_map) {
 		headers->insert(entry);
 	}
@@ -53,11 +57,11 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
                                                         char *buffer_in, idx_t buffer_in_len) {
 	auto &hfs = (HTTPFileHandle &)handle;
 	auto path = init_request(hfs, url);
-	unique_ptr<httplib::Headers> headers = initialize_http_headers(header_map);
+	unique_ptr<duckdb_httplib_openssl::Headers> headers = initialize_http_headers(header_map);
 
 	// We use a custom Request method here, because there is no Post call with a contentreceiver in httplib
 	idx_t out_offset = 0;
-	httplib::Request req;
+	duckdb_httplib_openssl::Request req;
 	req.method = "POST";
 	req.path = path;
 	req.headers = *headers;
@@ -79,7 +83,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	};
 	req.body.assign(buffer_in, buffer_in_len);
 	auto res = hfs.http_client->send(req);
-	if (res.error() != httplib::Error::Success) {
+	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP POST error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
 		                         ")");
 	}
@@ -90,10 +94,10 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
                                                        char *buffer_in, idx_t buffer_in_len) {
 	auto &hfs = (HTTPFileHandle &)handle;
 	auto path = init_request(hfs, url);
-	unique_ptr<httplib::Headers> headers = initialize_http_headers(header_map);
+	unique_ptr<duckdb_httplib_openssl::Headers> headers = initialize_http_headers(header_map);
 
 	auto res = hfs.http_client->Put(path.c_str(), *headers, buffer_in, buffer_in_len, "application/octet-stream");
-	if (res.error() != httplib::Error::Success) {
+	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP PUT error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
 		                         ")");
 	}
@@ -103,10 +107,10 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, string url, HeaderMap header_map) {
 	auto &hfs = (HTTPFileHandle &)handle;
 	auto path = init_request(hfs, url);
-	unique_ptr<httplib::Headers> headers = initialize_http_headers(header_map);
+	unique_ptr<duckdb_httplib_openssl::Headers> headers = initialize_http_headers(header_map);
 
 	auto res = hfs.http_client->Head(path.c_str(), *headers);
-	if (res.error() != httplib::Error::Success) {
+	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
 		                         ")");
 	}
@@ -116,7 +120,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
                                                             idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
 	auto &hfs = (HTTPFileHandle &)handle;
 	auto path = init_request(hfs, url);
-	unique_ptr<httplib::Headers> headers = initialize_http_headers(header_map);
+	unique_ptr<duckdb_httplib_openssl::Headers> headers = initialize_http_headers(header_map);
 
 	// send the Range header to read only subset of file
 	std::string range_expr =
@@ -127,7 +131,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 
 	auto res = hfs.http_client->Get(
 	    path.c_str(), *headers,
-	    [&](const httplib::Response &response) {
+	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
 			    throw std::runtime_error("HTTP GET error on '" + url + "' (HTTP " + std::to_string(response.status) +
 			                             ")");
@@ -146,7 +150,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 		    out_offset += data_length;
 		    return true;
 	    });
-	if (res.error() != httplib::Error::Success) {
+	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
 		                         ")");
 	}
@@ -313,7 +317,7 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 	return res;
 }
 
-ResponseWrapper::ResponseWrapper(httplib::Response &res) {
+ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res) {
 	code = res.status;
 	error = res.reason;
 	for (auto &h : res.headers) {
@@ -321,7 +325,7 @@ ResponseWrapper::ResponseWrapper(httplib::Response &res) {
 	}
 }
 
-void ClientDeleter::operator()(httplib::Client *client) {
+void ClientDeleter::operator()(duckdb_httplib_openssl::Client *client) {
 	delete client;
 }
 } // namespace duckdb

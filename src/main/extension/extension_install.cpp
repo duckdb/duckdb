@@ -2,8 +2,7 @@
 #include "duckdb/common/gzip_file_system.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
-#define CPPHTTPLIB_OPENSSL_SUPPORT
-#include "httplib.h"
+#include "httplib.hpp"
 #endif
 #include "duckdb/common/windows_undefs.hpp"
 
@@ -88,10 +87,10 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 	auto url_local_part = no_http.substr(next);
 
 	auto url_base = "http://" + hostname_without_http;
-	httplib::Client cli(url_base.c_str());
+	duckdb_httplib::Client cli(url_base.c_str());
 
-	httplib::Headers headers = {{"User-Agent", StringUtil::Format("DuckDB %s %s %s", DuckDB::LibraryVersion(),
-	                                                              DuckDB::SourceID(), DuckDB::Platform())}};
+	duckdb_httplib::Headers headers = {{"User-Agent", StringUtil::Format("DuckDB %s %s %s", DuckDB::LibraryVersion(),
+	                                                                     DuckDB::SourceID(), DuckDB::Platform())}};
 
 	auto res = cli.Get(url_local_part.c_str(), headers);
 	if (!res || res->status != 200) {

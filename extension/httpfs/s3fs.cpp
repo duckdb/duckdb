@@ -412,8 +412,8 @@ std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle
 
 			if (buffers_available >= file_handle.config_params.max_upload_threads - threads_waiting_for_memory) {
 				//				//std::cout << "avail: " << buffers_available << " total: " <<
-				//file_handle.config_params.max_upload_threads << " waiting " <<  threads_waiting_for_memory <<
-				//std::endl;
+				// file_handle.config_params.max_upload_threads << " waiting " <<  threads_waiting_for_memory <<
+				// std::endl;
 				// There exist no upload write buffers that can release more memory. We really ran out of memory here.
 				throw e;
 			} else {

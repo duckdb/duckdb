@@ -1,7 +1,9 @@
-// unmodified from: https://github.com/yhirose/cpp-httplib/blob/v0.10.2/httplib.h
+// taken from: https://github.com/yhirose/cpp-httplib/blob/v0.10.2/httplib.h
+// Note: some modifications are made to file
+
 
 //
-//  httplib.h
+//  httplib.hpp
 //
 //  Copyright (c) 2021 Yuji Hirose. All rights reserved.
 //  MIT License
@@ -13,6 +15,11 @@
 /*
  * Configuration
  */
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+#define CPPHTTPLIB_NAMESPACE duckdb_httplib_openssl
+#else
+#define CPPHTTPLIB_NAMESPACE duckdb_httplib
+#endif
 
 #ifndef CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND
 #define CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND 5
@@ -143,6 +150,9 @@ using ssize_t = int;
 #endif // NOMINMAX
 
 #include <io.h>
+#ifdef _WINSOCKAPI_
+#undef _WINSOCKAPI_
+#endif
 #include <winsock2.h>
 
 #include <wincrypt.h>
@@ -240,7 +250,7 @@ using socket_t = int;
 #include <iostream>
 #include <sstream>
 
-// Disabled version chec
+// Disabled OpenSSL version check for CI
 //#if OPENSSL_VERSION_NUMBER < 0x1010100fL
 //#error Sorry, OpenSSL versions prior to 1.1.1 are not supported
 //#endif
@@ -262,10 +272,15 @@ inline const unsigned char *ASN1_STRING_get0_data(const ASN1_STRING *asn1) {
 #include <brotli/encode.h>
 #endif
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#endif
+
 /*
  * Declaration
  */
-namespace httplib {
+namespace CPPHTTPLIB_NAMESPACE {
 
 namespace detail {
 
@@ -6132,7 +6147,7 @@ inline bool ClientImpl::write_content_with_provider(Stream &strm,
 		return detail::write_content(strm, req.content_provider_, 0,
 		                             req.content_length_, is_shutting_down, error);
 	}
-} // namespace httplib
+} // namespace CPPHTTPLIB_NAMESPACE
 
 inline bool ClientImpl::write_request(Stream &strm, Request &req,
                                       bool close_connection, Error &error) {
@@ -8171,6 +8186,10 @@ inline SSL_CTX *Client::ssl_context() const {
 
 // ----------------------------------------------------------------------------
 
-} // namespace httplib
+} // namespace CPPHTTPLIB_NAMESPACE
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #endif // CPPHTTPLIB_HTTPLIB_H
