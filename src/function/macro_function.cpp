@@ -75,7 +75,9 @@ unique_ptr<MacroFunction> MacroFunction::Copy() {
 
 	if (expression) {
 		result->expression = expression->Copy();
-	} else if (query_node) {
+	}
+
+	if (query_node) {
 		result->query_node = query_node->Copy();
 	}
 
