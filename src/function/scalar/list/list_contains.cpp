@@ -1,12 +1,7 @@
-//
-// Created by daniel on 24-01-22.
-//
-
 #include <iostream>
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-
 
 namespace duckdb {
 
@@ -42,7 +37,6 @@ static void TemplatedListContainsStringFunction(DataChunk &args, ExpressionState
 	}
 	VectorData child_data;
 	child_vector.Orrify(list_size, child_data);
-
 
 	VectorData list_data;
 	list.Orrify(count, list_data);
@@ -80,7 +74,6 @@ static void TemplatedListContainsStringFunction(DataChunk &args, ExpressionState
 	return;
 }
 
-
 template <class T>
 static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
@@ -107,7 +100,6 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 	}
 	VectorData child_data;
 	child_vector.Orrify(list_size, child_data);
-
 
 	VectorData list_data;
 	list.Orrify(count, list_data);
@@ -187,17 +179,16 @@ static void ListContainsFunction(DataChunk &args, ExpressionState &state, Vector
 	case PhysicalType::LIST:
 		throw NotImplementedException("This function has not yet been implemented for nested types");
 	default:
-		throw InvalidTypeException(args.data[1].GetType().id(), "Invalid type for List Vector Search");
+		throw InvalidTypeException(args.data[1].GetType().id(), "Invalid type for List Contains");
 	}
 }
-
 
 static unique_ptr<FunctionData> ListContainsBind(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 
-	auto &list = arguments[0]->return_type; // change to list
-	auto &value = arguments[1]->return_type;
+	const auto &list = arguments[0]->return_type; // change to list
+	const auto &value = arguments[1]->return_type;
 	if (list.id() == LogicalTypeId::SQLNULL && value.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
 		bound_function.arguments[1] = LogicalType::SQLNULL;
@@ -211,7 +202,7 @@ static unique_ptr<FunctionData> ListContainsBind(ClientContext &context, ScalarF
 	} else {
 		D_ASSERT(list.id() == LogicalTypeId::LIST);
 
-		auto child_type = ListType::GetChildType(arguments[0]->return_type);
+		auto const &child_type = ListType::GetChildType(arguments[0]->return_type);
 		auto max_child_type = LogicalType::MaxLogicalType(child_type, value);
 		ExpressionBinder::ResolveParameterType(max_child_type);
 		auto list_type = LogicalType::LIST(max_child_type);
@@ -223,14 +214,13 @@ static unique_ptr<FunctionData> ListContainsBind(ClientContext &context, ScalarF
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
-
 ScalarFunction ListContainsFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, // argument list
-	                      LogicalType::BOOLEAN,                         // return type
+	                      LogicalType::BOOLEAN,                                    // return type
 	                      ListContainsFunction, false, ListContainsBind, nullptr);
 }
 
 void ListContainsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_contains", "array_contains", "list_has", "array_has"},GetFunction());
+	set.AddFunction({"list_contains", "array_contains", "list_has", "array_has"}, GetFunction());
 }
-}
+} // namespace duckdb
