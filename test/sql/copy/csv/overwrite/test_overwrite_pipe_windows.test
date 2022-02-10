@@ -1,5 +1,6 @@
 # name: test/sql/copy/csv/overwrite/test_overwrite_pipe_windows.test
 # description: Test overwrite to pipe on windows systems
+# group: [overwrite]
 
 require windows
 

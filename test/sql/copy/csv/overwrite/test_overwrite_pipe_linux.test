@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/overwrite/test_overwrite_pipe_linux.test
 # description: Test overwrite to pipe on linux systems
-# group: [csv]
+# group: [overwrite]
 
 require notwindows
 # Write to pipe - should pass since .tmp is not added when writing to a pipe

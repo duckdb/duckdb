@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/overwrite/test_copy_overwrite.test
 # description: Test copy statement with file overwrite
-# group: [csv]
+# group: [overwrite]
 
 # create a table and insert some values
 statement ok
