@@ -165,7 +165,6 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINTER info_value_ptr,
                              SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr) {
 
-
 	// https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetinfo-function?view=sql-server-ver15
 
 	// verify numeric info value type and null value pointer
@@ -370,7 +369,7 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		duckdb::Store<SQLUINTEGER>(mask, (duckdb::data_ptr_t)info_value_ptr);
 		return SQL_SUCCESS;
 	}
-	// end conversion rules
+		// end conversion rules
 
 	case SQL_CONVERT_FUNCTIONS: {
 		duckdb::Store<SQLUINTEGER>(SQL_FN_CVT_CAST, (duckdb::data_ptr_t)info_value_ptr);
