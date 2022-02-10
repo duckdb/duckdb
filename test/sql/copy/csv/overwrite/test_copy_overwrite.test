@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/test_copy_overwrite.test
+# name: test/sql/copy/csv/overwrite/test_copy_overwrite.test
 # description: Test copy statement with file overwrite
 # group: [csv]
 
@@ -61,10 +61,6 @@ SELECT * FROM test ORDER BY 1;
 ----
 1	hello
 2	world 
-
-# Write to pipe - should pass since .tmp is not added when writing to a pipe
-statement ok 
-copy (select 42) to '/dev/stdout'
 
 # Test USE_TMP_FILE flag
 statement error
