@@ -35,13 +35,14 @@ class S3FileSystem;
 // Holds the buffered data for 1 part of an S3 Multipart upload
 class S3WriteBuffer {
 public:
-	explicit S3WriteBuffer(idx_t buffer_start, size_t buffer_size, unique_ptr<BufferHandle>& buffer) : idx(0), buffer_start(buffer_start), buffer(std::move(buffer)) {
+	explicit S3WriteBuffer(idx_t buffer_start, size_t buffer_size, unique_ptr<BufferHandle> &buffer)
+	    : idx(0), buffer_start(buffer_start), buffer(std::move(buffer)) {
 		buffer_end = buffer_start + buffer_size;
 		part_no = buffer_start / buffer_size;
 		uploading = false;
 	}
 
-	void* Ptr() {
+	void *Ptr() {
 		return buffer->Ptr();
 	}
 
@@ -56,10 +57,11 @@ public:
 };
 
 class S3FileHandle : public HTTPFileHandle {
-friend class S3FileSystem;
+	friend class S3FileSystem;
 
 public:
-	S3FileHandle(FileSystem &fs, std::string path, uint8_t flags, const S3AuthParams &auth_params_p, const S3ConfigParams &config_params)
+	S3FileHandle(FileSystem &fs, std::string path, uint8_t flags, const S3AuthParams &auth_params_p,
+	             const S3ConfigParams &config_params)
 	    : HTTPFileHandle(fs, std::move(path), flags), auth_params(auth_params_p), config_params(config_params) {
 
 		if (flags & FileFlags::FILE_FLAGS_WRITE && flags & FileFlags::FILE_FLAGS_READ) {
@@ -105,16 +107,20 @@ public:
 	std::atomic<uint16_t> buffers_available;
 	std::atomic<uint16_t> threads_waiting_for_memory = {0};
 
-	explicit S3FileSystem(BufferManager &buffer_manager): buffer_manager(buffer_manager) {
+	explicit S3FileSystem(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
 
 	BufferManager &buffer_manager;
 
 	// HTTP Requests
-	unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url,HeaderMap header_map, unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len, char* buffer_in, idx_t buffer_in_len) override;
-	unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map, char* buffer_in, idx_t buffer_in_len) override;
-	unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url,HeaderMap header_map) override;
-	unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map, idx_t file_offset, char *buffer_out, idx_t buffer_out_len) override;
+	unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url, HeaderMap header_map,
+	                                        unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len, char *buffer_in,
+	                                        idx_t buffer_in_len) override;
+	unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map, char *buffer_in,
+	                                       idx_t buffer_in_len) override;
+	unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url, HeaderMap header_map) override;
+	unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map, idx_t file_offset,
+	                                            char *buffer_out, idx_t buffer_out_len) override;
 
 	static void Verify();
 
@@ -141,8 +147,9 @@ protected:
 	void FlushBuffer(S3FileHandle &handle, std::shared_ptr<S3WriteBuffer> write_buffer);
 
 	// Helper functions
-	void S3UrlParse(FileHandle &handle, string url, string& host_out, string& http_host_out, string& path_out, string& query_param);
-	string GetPayloadHash(char* buffer, idx_t buffer_len);
+	void S3UrlParse(FileHandle &handle, string url, string &host_out, string &http_host_out, string &path_out,
+	                string &query_param);
+	string GetPayloadHash(char *buffer, idx_t buffer_len);
 
 	// Allocate an S3WriteBuffer
 	// Note: call may block if no buffers are available or if the buffer manager fails to allocate more memory.

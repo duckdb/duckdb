@@ -7,14 +7,14 @@
 namespace httplib {
 struct Response;
 struct Client;
-}
+} // namespace httplib
 namespace duckdb {
 
 using HeaderMap = unordered_map<string, string>;
 
 // avoid including httplib in header
 struct ClientDeleter {
-	void operator()(httplib::Client* client);
+	void operator()(httplib::Client *client);
 };
 
 // avoid including httplib in header
@@ -52,7 +52,8 @@ public:
 	constexpr static idx_t READ_BUFFER_LEN = 1000000;
 
 public:
-	void Close() override {}
+	void Close() override {
+	}
 };
 
 class HTTPFileSystem : public FileSystem {
@@ -70,12 +71,17 @@ public:
 	}
 
 	// HTTP Requests
-	virtual unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map, char* buffer_in, idx_t buffer_in_len);
-	virtual unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url,HeaderMap header_map);
+	virtual unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map,
+	                                               char *buffer_in, idx_t buffer_in_len);
+	virtual unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url, HeaderMap header_map);
 	// Get Request with range parameter that GETs exactly buffer_out_len bytes from the url
-	virtual unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map, idx_t file_offset, char *buffer_out, idx_t buffer_out_len);
-	// Post Request that can handle variable sized responses without a content-length header, which is necessary for S3 Multipart
-	virtual unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url,HeaderMap header_map, unique_ptr<char[]>& buffer_out, idx_t &buffer_out_len, char* buffer_in, idx_t buffer_in_len);
+	virtual unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
+	                                                    idx_t file_offset, char *buffer_out, idx_t buffer_out_len);
+	// Post Request that can handle variable sized responses without a content-length header, which is necessary for S3
+	// Multipart
+	virtual unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url, HeaderMap header_map,
+	                                                unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
+	                                                char *buffer_in, idx_t buffer_in_len);
 
 	// FS methods
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;

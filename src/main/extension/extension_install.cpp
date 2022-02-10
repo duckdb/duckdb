@@ -91,7 +91,7 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 	httplib::Client cli(url_base.c_str());
 
 	httplib::Headers headers = {{"User-Agent", StringUtil::Format("DuckDB %s %s %s", DuckDB::LibraryVersion(),
-	                                                                     DuckDB::SourceID(), DuckDB::Platform())}};
+	                                                              DuckDB::SourceID(), DuckDB::Platform())}};
 
 	auto res = cli.Get(url_local_part.c_str(), headers);
 	if (!res || res->status != 200) {

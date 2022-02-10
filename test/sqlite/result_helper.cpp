@@ -415,7 +415,7 @@ void TestResultHelper::PrintExpectedResult(vector<string> &values, idx_t columns
 }
 
 bool TestResultHelper::SkipErrorMessage(const string &message) {
-	for (auto& error_message : runner.ignore_error_messages)  {
+	for (auto &error_message : runner.ignore_error_messages) {
 		if (StringUtil::Contains(message, error_message)) {
 			return true;
 		}

@@ -344,7 +344,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail("set requires at least 1 parameter (e.g. set ignore_error_messages HTTP Error)");
 			}
 			if (token.parameters[0] == "ignore_error_messages" || token.parameters[0] == "always_fail_error_messages") {
-				unordered_set<string>* string_set;
+				unordered_set<string> *string_set;
 				if (token.parameters[0] == "ignore_error_messages") {
 					string_set = &ignore_error_messages;
 				} else {

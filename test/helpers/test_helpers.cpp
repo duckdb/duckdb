@@ -71,8 +71,8 @@ string TestCreatePath(string suffix) {
 	return fs->JoinPath(TestDirectoryPath(), suffix);
 }
 
-bool TestIsInternalError(unordered_set<string>& internal_error_messages, const string &error) {
-	for (auto& error_message : internal_error_messages)  {
+bool TestIsInternalError(unordered_set<string> &internal_error_messages, const string &error) {
+	for (auto &error_message : internal_error_messages) {
 		if (StringUtil::Contains(error, error_message)) {
 			return true;
 		}

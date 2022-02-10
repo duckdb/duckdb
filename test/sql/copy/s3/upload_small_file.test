@@ -1,4 +1,4 @@
-# name: test/sql/copy/s3/upload_small_file
+# name: test/sql/copy/s3/upload_small_file.test
 # description: Copy small csv/parquet files from and to S3.
 # group: [s3]
 

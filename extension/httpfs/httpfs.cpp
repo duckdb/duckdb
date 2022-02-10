@@ -27,12 +27,12 @@ static string parse_url(string url, string &path, string &proto_host_port) {
 	return path;
 }
 
-static string init_request(HTTPFileHandle &handle, string& url) {
+static string init_request(HTTPFileHandle &handle, string &url) {
 	string path, proto_host_port;
 	parse_url(url, path, proto_host_port);
-	auto& hfs = (HTTPFileHandle&) handle;
+	auto &hfs = (HTTPFileHandle &)handle;
 	if (!hfs.http_client) {
-		handle.http_client = unique_ptr<httplib::Client, ClientDeleter>( new httplib::Client(proto_host_port.c_str()));
+		handle.http_client = unique_ptr<httplib::Client, ClientDeleter>(new httplib::Client(proto_host_port.c_str()));
 		handle.http_client->set_follow_location(true);
 		handle.http_client->set_keep_alive(true);
 		handle.http_client->enable_server_certificate_verification(false);
@@ -49,9 +49,9 @@ static unique_ptr<httplib::Headers> initialize_http_headers(HeaderMap header_map
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
-                                                        unique_ptr<char[]>& buffer_out, idx_t &buffer_out_len, char *buffer_in,
-                                                        idx_t buffer_in_len) {
-	auto& hfs = (HTTPFileHandle&)handle;
+                                                        unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
+                                                        char *buffer_in, idx_t buffer_in_len) {
+	auto &hfs = (HTTPFileHandle &)handle;
 	auto path = init_request(hfs, url);
 	unique_ptr<httplib::Headers> headers = initialize_http_headers(header_map);
 
@@ -62,18 +62,17 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	req.path = path;
 	req.headers = *headers;
 	req.headers.emplace("Content-Type", "application/octet-stream");
-	req.content_receiver = [&](const char *data, size_t data_length,
-	                                          uint64_t /*offset*/, uint64_t /*total_length*/) {
+	req.content_receiver = [&](const char *data, size_t data_length, uint64_t /*offset*/, uint64_t /*total_length*/) {
 		if (out_offset + data_length > buffer_out_len) {
 			// Buffer too small, increase its size by at least 2x to fit the new value
-			auto new_size = MaxValue<idx_t>(out_offset + data_length, buffer_out_len*2);
-			//std::cout << "resize from " << buffer_out_len << " to " << new_size << "\n";
-			auto tmp = unique_ptr<char[]>{new char[new_size]};
+			auto new_size = MaxValue<idx_t>(out_offset + data_length, buffer_out_len * 2);
+			// std::cout << "resize from " << buffer_out_len << " to " << new_size << "\n";
+			auto tmp = unique_ptr<char[]> {new char[new_size]};
 			memcpy(tmp.get(), buffer_out.get(), buffer_out_len);
 			buffer_out = move(tmp);
 			buffer_out_len = new_size;
 		}
-		//std::cout << "Copying " << data_length << "bytes \n";
+		// std::cout << "Copying " << data_length << "bytes \n";
 		memcpy(buffer_out.get() + out_offset, data, data_length);
 		out_offset += data_length;
 		return true;
@@ -81,38 +80,41 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	req.body.assign(buffer_in, buffer_in_len);
 	auto res = hfs.http_client->send(req);
 	if (res.error() != httplib::Error::Success) {
-		throw std::runtime_error("HTTP POST error on '" + url + "' (Error code " + std::to_string((int)res.error()) + ")");
+		throw std::runtime_error("HTTP POST error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
+		                         ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                        char *buffer_in, idx_t buffer_in_len) {
-	auto& hfs = (HTTPFileHandle&)handle;
+	auto &hfs = (HTTPFileHandle &)handle;
 	auto path = init_request(hfs, url);
 	unique_ptr<httplib::Headers> headers = initialize_http_headers(header_map);
 
 	auto res = hfs.http_client->Put(path.c_str(), *headers, buffer_in, buffer_in_len, "application/octet-stream");
 	if (res.error() != httplib::Error::Success) {
-		throw std::runtime_error("HTTP PUT error on '" + url + "' (Error code " + std::to_string((int)res.error()) + ")");
+		throw std::runtime_error("HTTP PUT error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
+		                         ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	auto& hfs = (HTTPFileHandle&)handle;
+	auto &hfs = (HTTPFileHandle &)handle;
 	auto path = init_request(hfs, url);
 	unique_ptr<httplib::Headers> headers = initialize_http_headers(header_map);
 
 	auto res = hfs.http_client->Head(path.c_str(), *headers);
 	if (res.error() != httplib::Error::Success) {
-		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + std::to_string((int)res.error()) + ")");
+		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
+		                         ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                             idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
-	auto& hfs = (HTTPFileHandle&)handle;
+	auto &hfs = (HTTPFileHandle &)handle;
 	auto path = init_request(hfs, url);
 	unique_ptr<httplib::Headers> headers = initialize_http_headers(header_map);
 
@@ -127,7 +129,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 	    path.c_str(), *headers,
 	    [&](const httplib::Response &response) {
 		    if (response.status >= 400) {
-			    throw std::runtime_error("HTTP GET error on '" + url + "' (HTTP " + std::to_string(response.status) + ")");
+			    throw std::runtime_error("HTTP GET error on '" + url + "' (HTTP " + std::to_string(response.status) +
+			                             ")");
 		    }
 		    if (response.status < 300) { // done redirecting
 			    out_offset = 0;
@@ -144,7 +147,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 		    return true;
 	    });
 	if (res.error() != httplib::Error::Success) {
-		throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + std::to_string((int)res.error()) + ")");
+		throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
+		                         ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
@@ -317,7 +321,7 @@ ResponseWrapper::ResponseWrapper(httplib::Response &res) {
 	}
 }
 
-void ClientDeleter::operator()(httplib::Client* client){
+void ClientDeleter::operator()(httplib::Client *client) {
 	delete client;
 }
-}
+} // namespace duckdb
