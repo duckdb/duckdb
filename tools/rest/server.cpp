@@ -15,7 +15,7 @@
 #define CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND  0
 #define CPPHTTPLIB_THREAD_POOL_COUNT         16
 
-#include "httplib.h"
+#include "httplib.hpp"
 #include "json.hpp"
 
 #include <unordered_map>
