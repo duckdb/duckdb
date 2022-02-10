@@ -161,17 +161,22 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, con
 	return make_unique<DuckDBPyRelation>(rel->Aggregate(expr));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Sum(const string &sum_columns, const string &groups) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericAggregator(const string &sum_columns, const string &groups,
+                                                                 const string &function_name) {
 	auto input = StringUtil::Split(sum_columns, ',');
 	string expr;
 	for (idx_t i = 0; i < input.size(); i++) {
-		expr += "sum(" + input[i] + ")";
+		expr += function_name + "(" + input[i] + ")";
 		if (i < input.size() - 1) {
 			expr += ",";
 		}
 	}
 	//! Construct Aggregation Expression
 	return Aggregate(expr, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Sum(const string &sum_columns, const string &groups) {
+	return GenericAggregator(sum_columns, groups, "sum");
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(py::object df, const string &expr, const string &groups,

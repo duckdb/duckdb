@@ -79,6 +79,9 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Aggregate(const string &expr, const string &groups = "");
 
+	unique_ptr<DuckDBPyRelation> GenericAggregator(const string &sum_columns, const string &groups = "",
+	                                               const string &function_name = "");
+
 	unique_ptr<DuckDBPyRelation> Sum(const string &sum_columns, const string &groups = "");
 
 	static unique_ptr<DuckDBPyRelation> AggregateDF(py::object df, const string &expr, const string &groups = "",
