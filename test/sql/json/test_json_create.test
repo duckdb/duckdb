@@ -28,9 +28,29 @@ select json_object('nested', {duck: 42})
 {"nested":{"duck":42}}
 
 query T
+select json_object('nested', [{duck: 42}, NULL])
+----
+{"nested":[{"duck":42},null]}
+
+query T
 select json_object('nested', map(['duck'], [42]))
 ----
 {"nested":{"duck":42}}
+
+query T
+select json_object('nested', map(['duck', 'goose'], [42, 7]))
+----
+{"nested":{"duck":42,"goose":7}}
+
+query T
+select json_object('nested', map([NULL, 'goose'], [42, 7]))
+----
+{"nested":{"goose":7}}
+
+query T
+select json_object('nested', map(['duck', 'goose'], [NULL, 7]))
+----
+{"nested":{"duck":null,"goose":7}}
 
 query T
 select json_object('nested', [1, 2, 3])

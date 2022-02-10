@@ -429,6 +429,15 @@ inline size_t JSONCommon::ArrSize(yyjson_mut_val *val) {
 }
 
 template <>
+inline yyjson_val *JSONCommon::ArrGet(yyjson_val *val, idx_t index) {
+	return yyjson_arr_get(val, index);
+}
+template <>
+inline yyjson_mut_val *JSONCommon::ArrGet(yyjson_mut_val *val, idx_t index) {
+	return yyjson_mut_arr_get(val, index);
+}
+
+template <>
 inline void JSONCommon::PushBack(Vector &result, Vector &result_child, uint64_t val) {
 	ListVector::PushBack(result, Value::UBIGINT(move(val)));
 }

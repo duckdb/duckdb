@@ -100,11 +100,20 @@ SELECT json_extract(j, '$.b[#-2][#-1]') FROM t1;
 ----
 3
 
-# FIXME: also disabled until we support json_extract with a list of paths
-#query T
-#SELECT json_extract(j, ['$.b[0]', '$.b[#-1]']) FROM t1;
-#----
-#[1,4]
+query T
+SELECT j::JSON->'$.b[#-2][#-1]' FROM t1;
+----
+3
+
+query T
+SELECT json_extract(j, ['$.b[0]', '$.b[#-1]']) FROM t1;
+----
+[1, 4]
+
+query T
+SELECT j::JSON->['$.b[0]', '$.b[#-1]'] FROM t1;
+----
+[1, 4]
 
 query T
 SELECT json_extract(j, '$.a[#-1]') FROM t1;
@@ -113,6 +122,11 @@ NULL
 
 query T
 SELECT json_extract(j, '$.b[#-000001]') FROM t1;
+----
+4
+
+query T
+SELECT j::JSON->'$.b[#-000001]' FROM t1;
 ----
 4
 
@@ -175,5 +189,10 @@ INSERT INTO t12(x) VALUES(
 
 query T
 SELECT json_extract(x, '$.settings.layer2."tris.legomenon"."summary.report"') FROM t12;
+----
+false
+
+query T
+SELECT x::JSON->'$.settings.layer2."tris.legomenon"."summary.report"' FROM t12;
 ----
 false

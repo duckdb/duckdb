@@ -190,33 +190,76 @@ static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], V
 	}
 }
 
-static void StructCreateValues(const JSONCreateFunctionData &info, yyjson_mut_doc *doc, yyjson_mut_val *vals[],
+static void CreateValuesStruct(const JSONCreateFunctionData &info, yyjson_mut_doc *doc, yyjson_mut_val *vals[],
                                Vector &value_v, idx_t count) {
 	// Structs become objects, therefore we initialize vals to JSON objects
 	for (idx_t i = 0; i < count; i++) {
 		vals[i] = yyjson_mut_obj(doc);
 	}
-	// Initialize array for the nested values
+	// Initialize re-usable array for the nested values
 	auto nested_vals_ptr = unique_ptr<yyjson_mut_val *[]>(new yyjson_mut_val *[count]);
 	auto nested_vals = nested_vals_ptr.get();
-	// CreateValuePairs first fills the nested_vals array with struct values,
-	// then grabs those values to add key/value pairs to vals
+	// Add the key/value pairs to the objects
 	auto &entries = StructVector::GetEntries(value_v);
-	if (value_v.GetType().id() == LogicalTypeId::STRUCT) {
-		for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
-			auto &struct_key_v = *info.const_struct_names.at(StructType::GetChildName(value_v.GetType(), entry_i));
-			auto &struct_val_v = *entries[entry_i];
-			CreateKeyValuePairs(info, doc, vals, nested_vals, struct_key_v, struct_val_v, count);
+	for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
+		auto &struct_key_v = *info.const_struct_names.at(StructType::GetChildName(value_v.GetType(), entry_i));
+		auto &struct_val_v = *entries[entry_i];
+		CreateKeyValuePairs(info, doc, vals, nested_vals, struct_key_v, struct_val_v, count);
+	}
+	// Whole struct can be NULL
+	VectorData struct_data;
+	value_v.Orrify(count, struct_data);
+	for (idx_t i = 0; i < count; i++) {
+		idx_t idx = struct_data.sel->get_index(i);
+		if (!struct_data.validity.RowIsValid(idx)) {
+			vals[i] = yyjson_mut_null(doc);
 		}
-	} else {
-		D_ASSERT(value_v.GetType().id() == LogicalTypeId::MAP && entries.size() == 2);
-		auto &map_key_v = ListVector::GetEntry(*entries[0]);
-		auto &map_val_v = ListVector::GetEntry(*entries[1]);
-		CreateKeyValuePairs(info, doc, vals, nested_vals, map_key_v, map_val_v, count);
 	}
 }
 
-static void ListCreateValues(const JSONCreateFunctionData &info, yyjson_mut_doc *doc, yyjson_mut_val *vals[],
+static void CreateValuesMap(const JSONCreateFunctionData &info, yyjson_mut_doc *doc, yyjson_mut_val *vals[],
+                            Vector &value_v, idx_t count) {
+	auto &entries = StructVector::GetEntries(value_v);
+	// Create nested keys
+	auto &map_key_list_v = *entries[0];
+	auto &map_key_v = ListVector::GetEntry(map_key_list_v);
+	auto map_key_count = ListVector::GetListSize(map_key_list_v);
+	auto nested_keys_ptr = unique_ptr<yyjson_mut_val *[]>(new yyjson_mut_val *[map_key_count]);
+	auto nested_keys = nested_keys_ptr.get();
+	TemplatedCreateValues<string_t>(doc, nested_keys, map_key_v, map_key_count);
+	// Create nested values
+	auto &map_val_list_v = *entries[1];
+	auto &map_val_v = ListVector::GetEntry(map_val_list_v);
+	auto map_val_count = ListVector::GetListSize(map_val_list_v);
+	auto nested_vals_ptr = unique_ptr<yyjson_mut_val *[]>(new yyjson_mut_val *[map_val_count]);
+	auto nested_vals = nested_vals_ptr.get();
+	CreateValues(info, doc, nested_vals, map_val_v, map_val_count);
+	// Add the key/value pairs to the objects
+	VectorData map_data;
+	value_v.Orrify(count, map_data);
+	VectorData map_key_list_data;
+	map_key_list_v.Orrify(map_key_count, map_key_list_data);
+	auto map_key_list_entries = (list_entry_t *)map_key_list_data.data;
+	for (idx_t i = 0; i < count; i++) {
+		idx_t idx = map_data.sel->get_index(i);
+		if (!map_data.validity.RowIsValid(idx)) {
+			// Whole map can be NULL
+			vals[i] = yyjson_mut_null(doc);
+		} else {
+			vals[i] = yyjson_mut_obj(doc);
+			idx_t key_idx = map_key_list_data.sel->get_index(i);
+			const auto &key_list_entry = map_key_list_entries[key_idx];
+			for (idx_t child_i = key_list_entry.offset; child_i < key_list_entry.offset + key_list_entry.length;
+			     child_i++) {
+				if (!unsafe_yyjson_is_null(nested_keys[child_i])) {
+					yyjson_mut_obj_add(vals[i], nested_keys[child_i], nested_vals[child_i]);
+				}
+			}
+		}
+	}
+}
+
+static void CreateValuesList(const JSONCreateFunctionData &info, yyjson_mut_doc *doc, yyjson_mut_val *vals[],
                              Vector &value_v, idx_t count) {
 	// Initialize array for the nested values
 	auto &child_v = ListVector::GetEntry(value_v);
@@ -263,11 +306,13 @@ static void CreateValues(const JSONCreateFunctionData &info, yyjson_mut_doc *doc
 		TemplatedCreateValues<string_t>(doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::STRUCT:
+		CreateValuesStruct(info, doc, vals, value_v, count);
+		break;
 	case LogicalTypeId::MAP:
-		StructCreateValues(info, doc, vals, value_v, count);
+		CreateValuesMap(info, doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::LIST:
-		ListCreateValues(info, doc, vals, value_v, count);
+		CreateValuesList(info, doc, vals, value_v, count);
 		break;
 	default:
 		throw InternalException("Unsupported type arrived at JSON create function");
