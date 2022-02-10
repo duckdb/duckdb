@@ -409,12 +409,16 @@ void LocalFileSystem::MoveFile(const string &source, const string &target) {
 	}
 }
 
+std::string LocalFileSystem::GetLastErrorAsString() {
+	return string();
+}
+
 #else
 
 constexpr char PIPE_PREFIX[] = "\\\\.\\pipe\\";
 
 // Returns the last Win32 error, in string format. Returns an empty string if there is no error.
-std::string GetLastErrorAsString() {
+std::string LocalFileSystem::GetLastErrorAsString() {
 	// Get the error message, if any.
 	DWORD errorMessageID = GetLastError();
 	if (errorMessageID == 0)
