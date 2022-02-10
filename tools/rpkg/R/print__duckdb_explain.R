@@ -8,6 +8,6 @@ duckdb_explain <- setClass("duckdb_explain", contains = "data.frame", slots = li
 #' @export
 print.duckdb_explain <- function(x, ...) {
   if (!all(names(x) %in% c("explain_key", "explain_value"))) NextMethod("print")
-  for (i in 1:nrow(x)) cat(paste0(x$explain_key[i], "\n", x$explain_value[i]))
+  cat(paste0(x$explain_key, "\n", x$explain_value)
   invisible(x)
 }
