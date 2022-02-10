@@ -1040,7 +1040,7 @@ static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 		len--;
 	}
 	auto endptr = buf + len;
-	auto parse_result = fast_float::from_chars(buf, buf + len, result);
+	auto parse_result = duckdb_fast_float::from_chars(buf, buf + len, result);
 	if (!CheckDoubleValidity<T>(result)) {
 		return false;
 	}

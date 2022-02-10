@@ -1,5 +1,5 @@
-// fast_float by Daniel Lemire
-// fast_float by João Paulo Magalhaes
+// duckdb_fast_float by Daniel Lemire
+// duckdb_fast_float by João Paulo Magalhaes
 
 
 // with contributions from Eugene Golushkov
@@ -40,7 +40,7 @@
 
 #include <system_error>
 
-namespace fast_float {
+namespace duckdb_fast_float {
 enum chars_format {
     scientific = 1<<0,
     fixed = 1<<2,
@@ -67,11 +67,11 @@ struct from_chars_result {
  *
  * The implementation does not throw and does not allocate memory (e.g., with `new` or `malloc`).
  *
- * Like the C++17 standard, the `fast_float::from_chars` functions take an optional last argument of
- * the type `fast_float::chars_format`. It is a bitset value: we check whether
- * `fmt & fast_float::chars_format::fixed` and `fmt & fast_float::chars_format::scientific` are set
+ * Like the C++17 standard, the `duckdb_fast_float::from_chars` functions take an optional last argument of
+ * the type `duckdb_fast_float::chars_format`. It is a bitset value: we check whether
+ * `fmt & duckdb_fast_float::chars_format::fixed` and `fmt & duckdb_fast_float::chars_format::scientific` are set
  * to determine whether we allowe the fixed point and scientific notation respectively.
- * The default is  `fast_float::chars_format::general` which allows both `fixed` and `scientific`.
+ * The default is  `duckdb_fast_float::chars_format::general` which allows both `fixed` and `scientific`.
  */
 template<typename T>
 from_chars_result from_chars(const char *first, const char *last,
@@ -155,7 +155,7 @@ from_chars_result from_chars(const char *first, const char *last,
 #define fastfloat_really_inline inline __attribute__((always_inline))
 #endif
 
-namespace fast_float {
+namespace duckdb_fast_float {
 
 // Compares two ASCII strings in a case insensitive manner.
 inline bool fastfloat_strncasecmp(const char *input1, const char *input2,
@@ -402,11 +402,11 @@ inline constexpr int binary_format<float>::smallest_power_of_ten() {
   return -65;
 }
 
-} // namespace fast_float
+} // namespace duckdb_fast_float
 
 // for convenience:
 template<class OStream>
-inline OStream& operator<<(OStream &out, const fast_float::decimal &d) {
+inline OStream& operator<<(OStream &out, const duckdb_fast_float::decimal &d) {
   out << "0.";
   for (size_t i = 0; i < d.num_digits; i++) {
     out << int32_t(d.digits[i]);
@@ -427,7 +427,7 @@ inline OStream& operator<<(OStream &out, const fast_float::decimal &d) {
 #include <cstring>
 
 
-namespace fast_float {
+namespace duckdb_fast_float {
 
 // Next function can be micro-optimized, but compilers are entirely
 // able to optimize it well.
@@ -731,7 +731,7 @@ fastfloat_really_inline decimal parse_decimal(const char *p, const char *pend) n
 
   return answer;
 }
-} // namespace fast_float
+} // namespace duckdb_fast_float
 
 #endif
 
@@ -740,7 +740,7 @@ fastfloat_really_inline decimal parse_decimal(const char *p, const char *pend) n
 #define FASTFLOAT_FAST_TABLE_H
 #include <cstdint>
 
-namespace fast_float {
+namespace duckdb_fast_float {
 
 /**
  * When mapping numbers from decimal to binary,
@@ -1446,7 +1446,7 @@ using powers = powers_template<>;
 #include <cstdlib>
 #include <cstring>
 
-namespace fast_float {
+namespace duckdb_fast_float {
 
 // This will compute or rather approximate w * 5**q and return a pair of 64-bit words approximating
 // the result, with the "high" part corresponding to the most significant bits and the
@@ -1604,7 +1604,7 @@ adjusted_mantissa compute_float(int64_t q, uint64_t w)  noexcept  {
 }
 
 
-} // namespace fast_float
+} // namespace duckdb_fast_float
 
 #endif
 
@@ -1618,7 +1618,7 @@ adjusted_mantissa compute_float(int64_t q, uint64_t w)  noexcept  {
 #include <cstring>
 
 
-namespace fast_float {
+namespace duckdb_fast_float {
 
 // Next function can be micro-optimized, but compilers are entirely
 // able to optimize it well.
@@ -1922,7 +1922,7 @@ fastfloat_really_inline decimal parse_decimal(const char *p, const char *pend) n
 
   return answer;
 }
-} // namespace fast_float
+} // namespace duckdb_fast_float
 
 #endif
 
@@ -1944,7 +1944,7 @@ fastfloat_really_inline decimal parse_decimal(const char *p, const char *pend) n
  **/
 #include <cstdint>
 
-namespace fast_float {
+namespace duckdb_fast_float {
 
 namespace detail {
 
@@ -2283,7 +2283,7 @@ adjusted_mantissa parse_long_mantissa(const char *first, const char* last) {
     return compute_float<binary>(d);
 }
 
-} // namespace fast_float
+} // namespace duckdb_fast_float
 #endif
 
 
@@ -2296,7 +2296,7 @@ adjusted_mantissa parse_long_mantissa(const char *first, const char* last) {
 #include <limits>
 #include <system_error>
 
-namespace fast_float {
+namespace duckdb_fast_float {
 
 
 namespace detail {
@@ -2407,7 +2407,7 @@ from_chars_result from_chars(const char *first, const char *last,
   return answer;
 }
 
-} // namespace fast_float
+} // namespace duckdb_fast_float
 
 #endif
 
