@@ -2829,7 +2829,7 @@ find_content_type(const std::string &path,
 	auto it = user_data.find(ext);
 	if (it != user_data.end()) { return it->second.c_str(); }
 
-	using udl::operator""_t;
+	using udl::operator"" _t;
 
 	switch (str2tag(ext)) {
 	default: return nullptr;
