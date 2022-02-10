@@ -15,20 +15,15 @@ MacroCatalogEntry::MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	this->internal = info->internal;
 }
 
+
+
 void MacroCatalogEntry::Serialize(Serializer &main_serializer) {
 	D_ASSERT(!internal);
 	FieldWriter writer(main_serializer);
 	writer.WriteString(schema->name);
 	writer.WriteString(name);
-
-	if (function->expression != nullptr) {
-		writer.WriteSerializable(*function->expression);
-	} else {
-		// cannot serialize a nullptr so use a dummy value
-		auto pe= unique_ptr<ParsedExpression>();
-		pe=make_unique<ConstantExpression>(Value::BIGINT(10));
-		writer.WriteSerializable(*pe);
-	}
+	// either we have ->expression or ->query_node but not both
+	writer.WriteOptional( function->expression);
 	writer.WriteSerializableList(function->parameters);
 	writer.WriteField<uint32_t>((uint32_t)function->default_parameters.size());
 	auto &serializer = writer.GetSerializer();
@@ -36,20 +31,18 @@ void MacroCatalogEntry::Serialize(Serializer &main_serializer) {
 		serializer.WriteString(kv.first);
 		kv.second->Serialize(serializer);
 	}
-	if (function->query_node) {
-		function->query_node->Serialize(writer);
-	}
+	writer.WriteOptional( function->query_node);
 	writer.Finalize();
+
 
 }
 
 unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &main_source) {
 	auto info = make_unique<CreateMacroInfo>();
-
 	FieldReader reader(main_source);
 	info->schema = reader.ReadRequired<string>();
 	info->name = reader.ReadRequired<string>();
-	auto expression = reader.ReadRequiredSerializable<ParsedExpression>();
+	auto expression = reader.ReadOptional<ParsedExpression>(nullptr);
 	info->function = make_unique<MacroFunction>(move(expression));
 	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>();
 	auto default_param_count = reader.ReadRequired<uint32_t>();
@@ -59,7 +52,7 @@ unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &main_so
 		info->function->default_parameters[name] = ParsedExpression::Deserialize(source);
 	}
 
-	info->function->query_node=reader.ReadOptional<QueryNode>(nullptr);
+	info->function->query_node = reader.ReadOptional<QueryNode>(nullptr);
 	if (info->function->query_node) {
 		info->function->expression.release();
 	}
