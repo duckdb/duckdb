@@ -50,6 +50,14 @@
       │         DUMMY_SCAN        │
       └───────────────────────────┘                             
 
+# zero length input is smoothly skipped
+
+    Code
+      rs <- DBI::dbGetQuery(con, "SELECT 1;")
+      rs[FALSE, ]
+    Output
+      integer(0)
+
 # wrong type of input forwards handling to the next method
 
     Code

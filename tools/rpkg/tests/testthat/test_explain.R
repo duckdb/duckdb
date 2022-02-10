@@ -28,6 +28,15 @@ test_that("EXPLAIN ANALYZE outputs query tree", {
   expect_true(grepl("DUMMY_SCAN", rs$explain_value))
 })
 
+test_that("zero length input is smoothly skipped", {
+  con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  expect_snapshot({
+    rs <- DBI::dbGetQuery(con, "SELECT 1;")
+    rs[FALSE, ]
+  })
+})
+
 test_that("wrong type of input forwards handling to the next method", {
   con <- DBI::dbConnect(duckdb::duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
