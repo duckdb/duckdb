@@ -10,7 +10,7 @@ struct GetXUnaryOperator {
         if (text.GetSize() == 0) {
             // throw ConversionException(
 			//     "Failure in geometry get X: could not get coordinate X from geometry");
-            return NULL;
+            return 0.00;
         }
         double x_val = postgis.LWGEOM_x_point(text.GetDataUnsafe(), text.GetSize());
 		return x_val;

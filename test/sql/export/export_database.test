@@ -14,6 +14,9 @@ statement ok
 CREATE TABLE strings(v VARCHAR, d DATE, PRIMARY KEY(d))
 
 statement ok
+CREATE TABLE geometries(i INTEGER, g GEOMETRY, PRIMARY KEY(g))
+
+statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
 statement ok
@@ -24,6 +27,9 @@ INSERT INTO integers VALUES (1, 3), (4, 2), (NULL, 1)
 
 statement ok
 INSERT INTO strings VALUES ('NULL', DATE '1992-01-01'), (NULL, DATE '1993-01-01');
+
+statement ok
+INSERT INTO geometries VALUES (1, '010100000000000000000024400000000000004B40'::GEOMETRY), (2, 'POINT(30 10.2323)'::GEOMETRY)
 
 statement ok
 INSERT INTO enums VALUES ('sad'),('ok'),('sad'),('happy')
@@ -78,6 +84,12 @@ SELECT * FROM integers ORDER BY 1
 NULL	1
 1	3
 4	2
+
+query II
+SELECT * FROM geometries ORDER BY 1
+----
+1	010100000000000000000024400000000000004B40
+2	01010000000000000000003E40BBB88D06F0762440
 
 query I
 SELECT * FROM enums ORDER BY 1
@@ -189,6 +201,12 @@ NULL	1
 1	3
 4	2
 
+query II 
+SELECT * FROM geometries ORDER BY 1
+----
+1	010100000000000000000024400000000000004B40
+2	01010000000000000000003E40BBB88D06F0762440
+
 query II
 SELECT * FROM strings ORDER BY 1
 ----
@@ -273,6 +291,9 @@ SELECT * FROM s2.table01 ORDER BY i;
 # verify that constraints are still there
 statement error
 INSERT INTO integers VALUES (5, 6)
+
+statement error
+INSERT INTO geometries VALUES (3, '010100000000000000000024400000000000004B40'::GEOMETRY)
 
 statement error
 INSERT INTO strings VALUES(NULL, NULL)

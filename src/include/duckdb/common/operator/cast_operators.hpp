@@ -641,6 +641,30 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
                               bool strict);
 
 //===--------------------------------------------------------------------===//
+// Geometry
+//===--------------------------------------------------------------------===//
+struct CastFromGeometry {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		throw duckdb::NotImplementedException("Cast from geometry could not be performed!");
+	}
+};
+template <>
+duckdb::string_t CastFromGeometry::Operation(duckdb::string_t input, Vector &vector);
+
+struct TryCastToGeometry {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message,
+	                             bool strict = false) {
+		throw InternalException("Unsupported type for try cast to geometry");
+	}
+};
+
+template <>
+bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
+                              bool strict);
+
+//===--------------------------------------------------------------------===//
 // UUID
 //===--------------------------------------------------------------------===//
 struct CastFromUUID {

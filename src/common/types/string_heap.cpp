@@ -39,14 +39,6 @@ string_t StringHeap::AddBlob(const char *data, idx_t len) {
 	return insert_string;
 }
 
-string_t StringHeap::AddGeometry(const char *data, idx_t len) {
-	auto insert_string = EmptyString(len);
-	auto insert_pos = insert_string.GetDataWriteable();
-	memcpy(insert_pos, data, len);
-	insert_string.Finalize();
-	return insert_string;
-}
-
 string_t StringHeap::EmptyString(idx_t len) {
 	D_ASSERT(len >= string_t::INLINE_LENGTH);
 	if (!chunk || chunk->current_position + len >= chunk->maximum_size) {

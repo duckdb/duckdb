@@ -154,6 +154,10 @@ public:
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
 	DUCKDB_API static Value BLOB(const string &data);
 
+	DUCKDB_API static Value GEOMETRY(const string &data);
+
+	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len);
+
 	template <class T>
 	T GetValue() const {
 		throw InternalException("Unimplemented template type for Value::GetValue");

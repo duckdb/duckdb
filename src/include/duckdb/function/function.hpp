@@ -205,6 +205,8 @@ private:
 	void RegisterSequenceFunctions();
 	void RegisterTrigonometricsFunctions();
 
+	void RegisterGeometryFunctions();
+
 	// pragmas
 	void RegisterPragmaFunctions();
 };

@@ -1,0 +1,55 @@
+# name: test/sql/function/geometry/test_from_text.test
+# description: ST_GEOMFROMTEXT test
+# group: [geometry]
+
+statement ok
+PRAGMA enable_verification
+
+# test with valid text string
+query I
+SELECT ST_GEOMFROMTEXT('POINT(50.23233 -43.45454)')
+----
+010100000099F04BFDBC1D4940A75CE15D2EBA45C0
+
+#test with srid
+query I 
+SELECT ST_GEOMFROMTEXT('POINT(50.23233 -43.45454)', 4321)
+----
+0101000020E110000099F04BFDBC1D4940A75CE15D2EBA45C0
+
+# test with NULL and empty value
+query I 
+SELECT ST_GEOMFROMTEXT('')
+----
+(empty)
+
+query I 
+SELECT ST_GEOMFROMTEXT(NULL)
+----
+NULL
+
+#test with invalid string
+statement error
+SELECT ST_GEOMFROMTEXT('PAOINT(12.2323 -34.7565)')
+
+# test with string in table
+statement ok
+CREATE TABLE geometries(g VARCHAR)
+
+statement ok
+INSERT INTO geometries VALUES('POINT(50.23233 -43.45454)'), (''), (NULL), ('POINT(-71.064544 42.28787)')
+
+query I
+SELECT ST_GEOMFROMTEXT(g) FROM geometries
+----
+010100000099F04BFDBC1D4940A75CE15D2EBA45C0
+(empty)
+NULL
+0101000000CB49287D21C451C0F0BF95ECD8244540
+
+#test with invalid string
+statement ok
+INSERT INTO geometries VALUES('POAINT(50.23233 -43.45454)')
+
+statement error
+SELECT ST_GEOMFROMTEXT(g) FROM geometries

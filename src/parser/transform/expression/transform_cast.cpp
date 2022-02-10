@@ -19,6 +19,11 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 		if (c->val.type == duckdb_libpgquery::T_PGString) {
 			return make_unique<ConstantExpression>(Value::BLOB(string(c->val.val.str)));
 		}
+	} else if (!root->tryCast && target_type == LogicalType::GEOMETRY && root->arg->type == duckdb_libpgquery::T_PGAConst) {
+		auto c = reinterpret_cast<duckdb_libpgquery::PGAConst *>(root->arg);
+		if (c->val.type == duckdb_libpgquery::T_PGString) {
+			return make_unique<ConstantExpression>(Value::GEOMETRY(string(c->val.val.str)));
+		}
 	}
 	// transform the expression node
 	auto expression = TransformExpression(root->arg);

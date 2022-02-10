@@ -8,10 +8,10 @@ struct GeometryDistanceBinaryOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA geom1, TB geom2) {
         Postgis postgis;
-        if (geom1.GetSize() == 0 || geom2.GetSize() == 0) {
-            return NULL;
-        }
         double dis = 0.00;
+        if (geom1.GetSize() == 0 || geom2.GetSize() == 0) {
+            return dis;
+        }
         auto gser1 = Geometry::GetGserialized(geom1);
         auto gser2 = Geometry::GetGserialized(geom2);
         if (!gser1 || !gser2) {
@@ -29,10 +29,10 @@ struct GeometryDistanceTernaryOperator {
 	template <class TA, class TB, class TC, class TR>
 	static inline TR Operation(TA geom1, TB geom2, TC use_spheroid) {
         Postgis postgis;
-        if (geom1.GetSize() == 0 || geom2.GetSize() == 0) {
-            return NULL;
-        }
         double dis = 0.00;
+        if (geom1.GetSize() == 0 || geom2.GetSize() == 0) {
+            return dis;
+        }
         auto gser1 = Geometry::GetGserialized(geom1);
         auto gser2 = Geometry::GetGserialized(geom2);
         if (!gser1 || !gser2) {

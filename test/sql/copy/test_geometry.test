@@ -1,0 +1,25 @@
+# name: test/sql/copy/csv/test_geometry.test
+# description: Test GEOMETRY with COPY INTO
+# group: [csv]
+
+# COPY INTO
+statement ok
+CREATE TABLE geometries (g GEOMETRY);
+
+query I
+COPY geometries FROM 'test/sql/copy/csv/data/test/geometry.csv' (HEADER 0, DELIMITER '|');
+----
+2
+
+# test if the system correctly loads/stores the geometries
+query T
+SELECT g FROM geometries
+----
+010100000000000000000024400000000000004B40
+01010000000000000000003E40BBB88D06F0762440
+
+# testing copying to a file and copying them back in
+query I
+COPY geometries TO '__TEST_DIR__/geometry.csv';
+----
+2
