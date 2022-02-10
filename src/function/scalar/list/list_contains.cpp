@@ -11,7 +11,7 @@
 namespace duckdb {
 
 static void SetResultFalse(Vector &result) {
-	auto result_data = ConstantVector::GetData<bool>(result);
+	auto result_data = FlatVector::GetData<bool>(result);
 	result_data[0] = false;
 	return;
 }
@@ -20,9 +20,10 @@ template <class T>
 static void TemplatedListContainsStringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto count = args.size();
-
 	Vector &list = args.data[0];
 	Vector &value = args.data[1];
+	VectorData value_data;
+	value.Orrify(count, value_data);
 
 	if (list.GetType().id() == LogicalTypeId::SQLNULL) {
 		SetResultFalse(result);
@@ -39,34 +40,43 @@ static void TemplatedListContainsStringFunction(DataChunk &args, ExpressionState
 		SetResultFalse(result);
 		return;
 	}
-
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-
-	VectorData list_data;
-	VectorData value_data;
-
-	list.Orrify(count, list_data);
-	value.Orrify(count, value_data);
-
 	VectorData child_data;
 	child_vector.Orrify(list_size, child_data);
 
+
+	VectorData list_data;
+	list.Orrify(count, list_data);
+	auto list_entries = (list_entry_t *)list_data.data;
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_entries = FlatVector::GetData<bool>(result); // Create a vector of bool
+	auto &result_validity = FlatVector::Validity(result);
+
 	for (idx_t i = 0; i < count; i++) {
 		auto list_index = list_data.sel->get_index(i);
-		if (list_data.validity.RowIsValid(list_index)) {
-			for (idx_t j = 0; j < list_size; j++) {
-				if (child_data.validity.RowIsValid(j)) {
-					auto child_value = ((T *)child_data.data)[j];
-					if (StringComparisonOperators::EqualsOrNot<false>(child_value, ((T *)value_data.data)[0])) {
-						auto result_data = ConstantVector::GetData<bool>(result);
-						result_data[0] = true;
-						return;
-					}
-				}
+
+		if (!list_data.validity.RowIsValid(list_index)) {
+			result_validity.SetInvalid(i);
+			continue;
+		}
+		result_entries[list_index] = false;
+
+		const auto &entry = list_entries[list_index];
+		auto source_idx = child_data.sel->get_index(entry.offset);
+		auto child_value = FlatVector::GetData<T>(child_vector);
+
+		for (idx_t child_idx = 0; child_idx < entry.length; child_idx++) {
+			auto value_idx = source_idx + child_idx;
+			if (!child_data.validity.RowIsValid(value_idx)) {
+				continue;
+			}
+			auto actual_value = child_value[value_idx];
+			if (StringComparisonOperators::EqualsOrNot<false>(actual_value, ((T *)value_data.data)[0])) {
+				result_entries[list_index] = true;
+				break; // Found value in list, no need to look further
 			}
 		}
 	}
-	SetResultFalse(result);
 	return;
 }
 
@@ -75,9 +85,10 @@ template <class T>
 static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto count = args.size();
-
 	Vector &list = args.data[0];
 	Vector &value = args.data[1];
+	VectorData value_data;
+	value.Orrify(count, value_data);
 
 	if (list.GetType().id() == LogicalTypeId::SQLNULL) {
 		SetResultFalse(result);
@@ -94,33 +105,40 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 		SetResultFalse(result);
 		return;
 	}
-
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-
-	VectorData list_data;
-	VectorData value_data;
-
-	list.Orrify(count, list_data);
-	value.Orrify(count, value_data);
-
 	VectorData child_data;
 	child_vector.Orrify(list_size, child_data);
 
+
+	VectorData list_data;
+	list.Orrify(count, list_data);
+	auto list_entries = (list_entry_t *)list_data.data;
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_entries = FlatVector::GetData<bool>(result); // Create a vector of bool
+	auto &result_validity = FlatVector::Validity(result);
+
 	for (idx_t i = 0; i < count; i++) {
 		auto list_index = list_data.sel->get_index(i);
-		auto result_data = FlatVector::GetData<bool>(result);
-		result_data[list_index] = false;
+
 		if (!list_data.validity.RowIsValid(list_index)) {
+			result_validity.SetInvalid(i);
 			continue;
 		}
-		for (idx_t child_idx = 0; child_idx < list_size; child_idx++) {
-			if (!child_data.validity.RowIsValid(child_idx)) {
+		result_entries[list_index] = false;
+
+		const auto &entry = list_entries[list_index];
+		auto source_idx = child_data.sel->get_index(entry.offset);
+		auto child_value = FlatVector::GetData<T>(child_vector);
+
+		for (idx_t child_idx = 0; child_idx < entry.length; child_idx++) {
+			auto value_idx = source_idx + child_idx;
+			if (!child_data.validity.RowIsValid(value_idx)) {
 				continue;
 			}
-			auto child_value = ((T *)child_data.data)[child_idx];
-			if (child_value == ((T *)value_data.data)[0]) {
-				result_data[list_index] = true;
-				continue;
+			auto actual_value = child_value[value_idx];
+			if (actual_value == ((T *)value_data.data)[0]) {
+				result_entries[list_index] = true;
+				break; // Found value in list, no need to look further
 			}
 		}
 	}
@@ -167,7 +185,7 @@ static void ListContainsFunction(DataChunk &args, ExpressionState &state, Vector
 		TemplatedListContainsStringFunction<string_t>(args, state, result);
 		break;
 	case PhysicalType::LIST:
-		throw NotImplementedException("This function has not yet been implemented for nested types" );
+		throw NotImplementedException("This function has not yet been implemented for nested types");
 	default:
 		throw InvalidTypeException(args.data[1].GetType().id(), "Invalid type for List Vector Search");
 	}

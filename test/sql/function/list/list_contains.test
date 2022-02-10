@@ -9,14 +9,50 @@ statement ok
 create table TEST (i int[]);
 
 statement ok
-insert into TEST values ([1,2,3]), ([2,3,1]), ([3,2,4]);
+insert into TEST values ([2,1,3]), ([2,3,4]), ([1]);
 
 query TT
 SELECT i, list_contains(i,1) from TEST;
 ----
-[1, 2, 3]	1
-[2, 3, 1]	1
-[3, 2, 4]	0
+[2, 1, 3]	1
+[2, 3, 4]	0
+[1]	1
+
+query TT
+SELECT i, list_contains(i,4.0) from TEST;
+----
+[2, 1, 3]	0
+[2, 3, 4]	1
+[1]	0
+
+statement ok
+create table STR_TEST (i string[]);
+
+statement ok
+insert into STR_TEST values (['a','b','c']), (['d','a','e']), (['b']);
+
+query TT
+SELECT i, list_contains(i,'a') from STR_TEST;
+----
+[a, b, c]	1
+[d, a, e]	1
+[b]	0
+
+query TT
+SELECT i, list_contains(i,0) from STR_TEST;
+----
+[a, b, c]	0
+[d, a, e]	0
+[b]	0
+
+
+query TT
+SELECT i, list_contains(i,NULL) from STR_TEST;
+----
+[a, b, c]	NULL
+[d, a, e]	NULL
+[b]	NULL
+
 
 # basic functionality
 query T
