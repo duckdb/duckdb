@@ -162,9 +162,9 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 		}
 	});
 }
-
 SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINTER info_value_ptr,
                              SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr) {
+
 
 	// https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetinfo-function?view=sql-server-ver15
 
@@ -370,7 +370,7 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		duckdb::Store<SQLUINTEGER>(mask, (duckdb::data_ptr_t)info_value_ptr);
 		return SQL_SUCCESS;
 	}
-		// end conversion rules
+	// end conversion rules
 
 	case SQL_CONVERT_FUNCTIONS: {
 		duckdb::Store<SQLUINTEGER>(SQL_FN_CVT_CAST, (duckdb::data_ptr_t)info_value_ptr);
@@ -406,11 +406,11 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		return SQL_SUCCESS;
 	}
 	case SQL_CURSOR_COMMIT_BEHAVIOR: {
-		duckdb::Store<SQLUINTEGER>(SQL_CB_PRESERVE, (duckdb::data_ptr_t)info_value_ptr);
+		duckdb::Store<SQLUSMALLINT>(SQL_CB_PRESERVE, (duckdb::data_ptr_t)info_value_ptr);
 		return SQL_SUCCESS;
 	}
 	case SQL_CURSOR_ROLLBACK_BEHAVIOR: {
-		duckdb::Store<SQLUINTEGER>(SQL_CB_CLOSE, (duckdb::data_ptr_t)info_value_ptr);
+		duckdb::Store<SQLUSMALLINT>(SQL_CB_CLOSE, (duckdb::data_ptr_t)info_value_ptr);
 		return SQL_SUCCESS;
 	}
 	case SQL_CURSOR_SENSITIVITY: {
@@ -933,7 +933,7 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 	default:
 		return SQL_ERROR;
 	}
-}
+} // end SQLGetInfo
 
 SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT completion_type) {
 	if (handle_type != SQL_HANDLE_DBC) { // theoretically this can also be done on env but no no no
