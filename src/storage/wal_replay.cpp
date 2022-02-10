@@ -59,6 +59,10 @@ private:
 	void ReplayCreateMacro();
 	void ReplayDropMacro();
 
+	void ReplayCreateTableMacro();
+	void ReplayDropTableMacro();
+
+
 	void ReplayUseTable();
 	void ReplayInsert();
 	void ReplayDelete();
@@ -192,6 +196,12 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 		break;
 	case WALType::DROP_MACRO:
 		ReplayDropMacro();
+		break;
+	case WALType::CREATE_TABLE_MACRO:
+		ReplayCreateTableMacro();
+		break;
+	case WALType::DROP_TABLE_MACRO:
+		ReplayDropTableMacro();
 		break;
 	case WALType::USE_TABLE:
 		ReplayUseTable();
@@ -408,6 +418,34 @@ void ReplayState::ReplayDropMacro() {
 	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
+
+//===--------------------------------------------------------------------===//
+// Replay Table Macro
+//===--------------------------------------------------------------------===//
+void ReplayState::ReplayCreateTableMacro() {
+	auto entry = MacroCatalogEntry::Deserialize(source);
+	if (deserialize_only) {
+		return;
+	}
+
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateFunction(context, entry.get());
+}
+
+void ReplayState::ReplayDropTableMacro() {
+	DropInfo info;
+	info.type = CatalogType::TABLE_MACRO_ENTRY;
+	info.schema = source.Read<string>();
+	info.name = source.Read<string>();
+	if (deserialize_only) {
+		return;
+	}
+
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.DropEntry(context, &info);
+}
+
+
 
 //===--------------------------------------------------------------------===//
 // Replay Data

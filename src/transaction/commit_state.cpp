@@ -81,7 +81,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		log->WriteCreateMacro((MacroCatalogEntry *)parent);
 		break;
 	case CatalogType::TABLE_MACRO_ENTRY:
-		log->WriteCreateMacro((MacroCatalogEntry *)parent);
+		log->WriteCreateTableMacro((MacroCatalogEntry *)parent);
 		break;
 
 	case CatalogType::TYPE_ENTRY:
@@ -105,8 +105,10 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			log->WriteDropSequence((SequenceCatalogEntry *)entry);
 			break;
 		case CatalogType::MACRO_ENTRY:
-		case CatalogType::TABLE_MACRO_ENTRY:
 			log->WriteDropMacro((MacroCatalogEntry *)entry);
+			break;
+		case CatalogType::TABLE_MACRO_ENTRY:
+			log->WriteDropTableMacro((MacroCatalogEntry *)entry);
 			break;
 		case CatalogType::TYPE_ENTRY:
 			log->WriteDropType((TypeCatalogEntry *)entry);

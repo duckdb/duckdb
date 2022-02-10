@@ -141,6 +141,23 @@ void WriteAheadLog::WriteDropMacro(MacroCatalogEntry *entry) {
 	writer->WriteString(entry->name);
 }
 
+void WriteAheadLog::WriteCreateTableMacro(MacroCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
+	writer->Write<WALType>(WALType::CREATE_TABLE_MACRO);
+	entry->Serialize(*writer);
+}
+
+void WriteAheadLog::WriteDropTableMacro(MacroCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
+	writer->Write<WALType>(WALType::DROP_TABLE_MACRO);
+	writer->WriteString(entry->schema->name);
+	writer->WriteString(entry->name);
+}
+
 //===--------------------------------------------------------------------===//
 // Custom Types
 //===--------------------------------------------------------------------===//

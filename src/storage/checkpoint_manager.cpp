@@ -162,6 +162,16 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 		}
 	});
 
+	schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
+		if (entry->internal) {
+			return;
+		}
+		if (entry->type == CatalogType::TABLE_MACRO_ENTRY) {
+			macros.push_back((MacroCatalogEntry *)entry);
+		}
+	});
+
+
 	// write the custom_types
 	metadata_writer->Write<uint32_t>(custom_types.size());
 	for (auto &custom_type : custom_types) {
@@ -282,7 +292,6 @@ void CheckpointManager::WriteMacro(MacroCatalogEntry &macro) {
 
 void CheckpointManager::ReadMacro(ClientContext &context, MetaBlockReader &reader) {
 	auto info = MacroCatalogEntry::Deserialize(reader);
-
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateFunction(context, info.get());
 }

@@ -71,6 +71,9 @@ public:
 	void WriteCreateMacro(MacroCatalogEntry *entry);
 	void WriteDropMacro(MacroCatalogEntry *entry);
 
+	void WriteCreateTableMacro(MacroCatalogEntry *entry);
+	void WriteDropTableMacro(MacroCatalogEntry *entry);
+
 	void WriteCreateType(TypeCatalogEntry *entry);
 	void WriteDropType(TypeCatalogEntry *entry);
 	//! Sets the table used for subsequent insert/delete/update commands
