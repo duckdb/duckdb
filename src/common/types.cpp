@@ -132,6 +132,8 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::INVALID;
 	case LogicalTypeId::USER:
 		return PhysicalType::UNKNOWN;
+	case LogicalTypeId::AGGREGATE_STATE:
+		return PhysicalType::VARCHAR;
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
 	}
@@ -426,6 +428,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "UNKNOWN";
 	case LogicalTypeId::ENUM:
 		return "ENUM";
+	case LogicalTypeId::AGGREGATE_STATE:
+		return "AGGREGATE_STATE<?>";
 	case LogicalTypeId::USER:
 		return "USER";
 	}
@@ -482,6 +486,9 @@ string LogicalType::ToString() const {
 	}
 	case LogicalTypeId::ENUM: {
 		return EnumType::GetTypeName(*this);
+	}
+	case LogicalTypeId::AGGREGATE_STATE: {
+		return AggregateStateType::GetTypeName(*this);
 	}
 	default:
 		return LogicalTypeIdToString(id_);
@@ -738,7 +745,8 @@ enum class ExtraTypeInfoType : uint8_t {
 	LIST_TYPE_INFO = 3,
 	STRUCT_TYPE_INFO = 4,
 	ENUM_TYPE_INFO = 5,
-	USER_TYPE_INFO = 6
+	USER_TYPE_INFO = 6,
+	AGGREGATE_STATE_TYPE_INFO = 7
 };
 
 struct ExtraTypeInfo {
@@ -943,6 +951,74 @@ public:
 	}
 };
 
+struct AggregateStateTypeInfo : public ExtraTypeInfo {
+	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p)
+	    : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), state_type(move(state_type_p)) {
+	}
+
+	aggregate_state_t state_type;
+
+public:
+	bool Equals(ExtraTypeInfo *other_p) const override {
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		auto &other = (AggregateStateTypeInfo &)*other_p;
+		return state_type.function_name == other.state_type.function_name &&
+		       state_type.return_type == other.state_type.return_type &&
+		       state_type.bound_argument_types == other.state_type.bound_argument_types;
+	}
+
+	void Serialize(FieldWriter &writer) const override {
+		auto &serializer = writer.GetSerializer();
+		writer.WriteString(state_type.function_name);
+		state_type.return_type.Serialize(serializer);
+		writer.WriteField<uint32_t>(state_type.bound_argument_types.size());
+		for (idx_t i = 0; i < state_type.bound_argument_types.size(); i++) {
+			state_type.bound_argument_types[i].Serialize(serializer);
+		}
+	}
+
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
+		auto &source = reader.GetSource();
+
+		auto function_name = reader.ReadRequired<string>();
+		auto return_type = LogicalType::Deserialize(source);
+		auto bound_argument_types_size = reader.ReadRequired<uint32_t>();
+		vector<LogicalType> bound_argument_types;
+
+		for (uint32_t i = 0; i < bound_argument_types_size; i++) {
+			auto type = LogicalType::Deserialize(source);
+			bound_argument_types.push_back(move(type));
+		}
+		return make_shared<AggregateStateTypeInfo>(
+		    aggregate_state_t(move(function_name), move(return_type), move(bound_argument_types)));
+	}
+};
+
+const aggregate_state_t &AggregateStateType::GetStateType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::AGGREGATE_STATE);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((AggregateStateTypeInfo &)*info).state_type;
+}
+
+const string AggregateStateType::GetTypeName(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::AGGREGATE_STATE);
+	auto info = type.AuxInfo();
+	if (!info) {
+		return "AGGREGATE_STATE<?>";
+	}
+	auto aggr_state = ((AggregateStateTypeInfo &)*info).state_type;
+	return "AGGREGATE_STATE<" + aggr_state.function_name + "(" +
+	       StringUtil::Join(aggr_state.bound_argument_types, aggr_state.bound_argument_types.size(), ", ",
+	                        [](const LogicalType &arg_type) { return arg_type.ToString(); }) +
+	       ")" + "::" + aggr_state.return_type.ToString() + ">";
+}
+
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP);
 	auto info = type.AuxInfo();
@@ -969,6 +1045,11 @@ idx_t StructType::GetChildCount(const LogicalType &type) {
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	auto info = make_shared<StructTypeInfo>(move(children));
 	return LogicalType(LogicalTypeId::STRUCT, move(info));
+}
+
+LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) { // NOLINT
+	auto info = make_shared<AggregateStateTypeInfo>(move(state_type));
+	return LogicalType(LogicalTypeId::AGGREGATE_STATE, move(info));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1240,6 +1321,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 			throw InternalException("Invalid Physical Type for ENUMs");
 		}
 	}
+	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
+		return AggregateStateTypeInfo::Deserialize(reader);
+
 	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
 	}
