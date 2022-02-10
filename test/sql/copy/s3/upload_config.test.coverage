@@ -1,4 +1,4 @@
-# name: test/sql/copy/s3/upload_config.test
+# name: test/sql/copy/s3/upload_config.test.coverage
 # description: Various working and non-working configs for the uploader
 # group: [s3]
 
