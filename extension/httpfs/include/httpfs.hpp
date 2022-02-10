@@ -26,14 +26,22 @@ public:
 	HeaderMap headers;
 };
 
+struct HTTPParams {
+	uint64_t timeout;
+
+	static HTTPParams ReadFrom(FileOpener *opener);
+};
+
 class HTTPFileHandle : public FileHandle {
 public:
-	HTTPFileHandle(FileSystem &fs, std::string path, uint8_t flags);
+	HTTPFileHandle(FileSystem &fs, std::string path, uint8_t flags, const HTTPParams &params);
 	// This two-phase construction allows subclasses more flexible setup.
 	virtual unique_ptr<ResponseWrapper> Initialize();
 
 	// We keep an http client stored for connection reuse with keep-alive headers
 	unique_ptr<duckdb_httplib_openssl::Client, ClientDeleter> http_client = nullptr;
+
+	const HTTPParams http_params;
 
 	// File handle info
 	uint8_t flags;
@@ -58,10 +66,6 @@ public:
 
 class HTTPFileSystem : public FileSystem {
 public:
-	static constexpr int HTTP_WRITE_TIMEOUT_SEC = 60;
-	static constexpr int HTTP_READ_TIMEOUT_SEC = 60;
-	static constexpr int HTTP_CONNECTION_TIMEOUT_SEC = 60;
-
 	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
 	                                     FileCompressionType compression = DEFAULT_COMPRESSION,
 	                                     FileOpener *opener = nullptr) final;

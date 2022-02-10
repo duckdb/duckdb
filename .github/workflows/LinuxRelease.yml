@@ -481,9 +481,7 @@ jobs:
 
     - name: Check S3/HTTP server log
       if: always()
-      run: |
-        pwd
-        cat /tmp/s3rver/access_log.txt
+      run: cat /tmp/s3rver/access_log.txt
 
  amalgamation-tests:
     name: Amalgamation Tests

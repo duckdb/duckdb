@@ -24,7 +24,6 @@ struct S3AuthParams {
 struct S3ConfigParams {
 	uint64_t max_file_size;
 	uint64_t max_parts_per_file;
-	uint64_t part_upload_timeout;
 	uint64_t max_upload_threads;
 
 	static S3ConfigParams ReadFrom(FileOpener *opener);
@@ -60,9 +59,10 @@ class S3FileHandle : public HTTPFileHandle {
 	friend class S3FileSystem;
 
 public:
-	S3FileHandle(FileSystem &fs, std::string path, uint8_t flags, const S3AuthParams &auth_params_p,
-	             const S3ConfigParams &config_params)
-	    : HTTPFileHandle(fs, std::move(path), flags), auth_params(auth_params_p), config_params(config_params) {
+	S3FileHandle(FileSystem &fs, std::string path, uint8_t flags, const HTTPParams &http_params,
+	             const S3AuthParams &auth_params_p, const S3ConfigParams &config_params_p)
+	    : HTTPFileHandle(fs, std::move(path), flags, http_params), auth_params(auth_params_p),
+	      config_params(config_params_p) {
 
 		if (flags & FileFlags::FILE_FLAGS_WRITE && flags & FileFlags::FILE_FLAGS_READ) {
 			throw NotImplementedException("Cannot open an HTTP file for both reading and writing");

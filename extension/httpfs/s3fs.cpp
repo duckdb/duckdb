@@ -143,7 +143,6 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener) {
 	uint64_t uploader_max_filesize;
 	uint64_t max_parts_per_file;
-	uint64_t part_upload_timeout;
 	uint64_t max_upload_threads;
 	Value value;
 
@@ -159,19 +158,13 @@ S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener) {
 		max_parts_per_file = 10000; // AWS Default
 	}
 
-	if (opener->TryGetCurrentSetting("s3_uploader_timeout", value)) {
-		part_upload_timeout = value.GetValue<uint64_t>();
-	} else {
-		part_upload_timeout = 30000; // 30 seconds
-	}
-
 	if (opener->TryGetCurrentSetting("s3_uploader_thread_limit", value)) {
 		max_upload_threads = value.GetValue<uint64_t>();
 	} else {
 		max_upload_threads = 100;
 	}
 
-	return {uploader_max_filesize, max_parts_per_file, part_upload_timeout, max_upload_threads};
+	return {uploader_max_filesize, max_parts_per_file, max_upload_threads};
 }
 
 void S3FileHandle::Close() {
@@ -243,7 +236,7 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 		}
 
 		auto current_time = duration_cast<std::chrono::milliseconds>(system_clock::now().time_since_epoch()).count();
-		if ((uint64_t)(current_time - time_at_start) > file_handle.config_params.part_upload_timeout) {
+		if ((uint64_t)(current_time - time_at_start) > file_handle.http_params.timeout) {
 			break;
 		}
 
@@ -557,7 +550,7 @@ unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, st
 
 std::unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, uint8_t flags, FileLockType lock,
                                                            FileCompressionType compression, FileOpener *opener) {
-	return duckdb::make_unique<S3FileHandle>(*this, path, flags,
+	return duckdb::make_unique<S3FileHandle>(*this, path, flags, opener ? HTTPParams::ReadFrom(opener) : HTTPParams(),
 	                                         opener ? S3AuthParams::ReadFrom(opener) : S3AuthParams(),
 	                                         opener ? S3ConfigParams::ReadFrom(opener) : S3ConfigParams());
 }

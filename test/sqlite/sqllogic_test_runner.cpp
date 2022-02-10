@@ -358,8 +358,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				// e.g. `set ignore_error_messages This is an error message, This_is_another, and   another`
 				if (token.parameters.size() > 1) {
 					string current_string = "";
-					int token_idx = 1;
-					int substr_idx = 0;
+					unsigned int token_idx = 1;
+					unsigned int substr_idx = 0;
 					while (token_idx < token.parameters.size()) {
 						auto comma_pos = token.parameters[token_idx].find(',', substr_idx);
 						if (comma_pos == string::npos) {

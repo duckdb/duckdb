@@ -1,6 +1,8 @@
 #include "httpfs.hpp"
-#include "duckdb/function/scalar/strftime.hpp"
+
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/thread.hpp"
+#include "duckdb/function/scalar/strftime.hpp"
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
@@ -10,7 +12,8 @@
 
 namespace duckdb {
 
-static string parse_url(string url, string &path, string &proto_host_port) {
+static string init_request(HTTPFileHandle &handle, string &url) {
+	string path, proto_host_port;
 	if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0) {
 		throw std::runtime_error("URL needs to start with http:// or https://");
 	}
@@ -24,12 +27,6 @@ static string parse_url(string url, string &path, string &proto_host_port) {
 	if (path.empty()) {
 		throw std::runtime_error("URL needs to contain a path");
 	}
-	return path;
-}
-
-static string init_request(HTTPFileHandle &handle, string &url) {
-	string path, proto_host_port;
-	parse_url(url, path, proto_host_port);
 	auto &hfs = (HTTPFileHandle &)handle;
 	if (!hfs.http_client) {
 		handle.http_client = unique_ptr<duckdb_httplib_openssl::Client, ClientDeleter>(
@@ -37,19 +34,32 @@ static string init_request(HTTPFileHandle &handle, string &url) {
 		handle.http_client->set_follow_location(true);
 		handle.http_client->set_keep_alive(true);
 		handle.http_client->enable_server_certificate_verification(false);
-		handle.http_client->set_write_timeout(30);
-		handle.http_client->set_read_timeout(30);
-		handle.http_client->set_connection_timeout(30);
+		handle.http_client->set_write_timeout(handle.http_params.timeout);
+		handle.http_client->set_read_timeout(handle.http_params.timeout);
+		handle.http_client->set_connection_timeout(handle.http_params.timeout);
 	}
 	return path;
 }
 
-static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap header_map) {
+static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap &header_map) {
 	auto headers = make_unique<duckdb_httplib_openssl::Headers>();
 	for (auto &entry : header_map) {
 		headers->insert(entry);
 	}
 	return headers;
+}
+
+HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
+	uint64_t timeout;
+	Value value;
+
+	if (opener->TryGetCurrentSetting("http_timeout", value)) {
+		timeout = value.GetValue<uint64_t>();
+	} else {
+		timeout = 30000;
+	}
+
+	return {timeout};
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
@@ -157,15 +167,16 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 	return make_unique<ResponseWrapper>(res.value());
 }
 
-HTTPFileHandle::HTTPFileHandle(FileSystem &fs, std::string path, uint8_t flags)
-    : FileHandle(fs, path), flags(flags), length(0), buffer_available(0), buffer_idx(0), file_offset(0),
-      buffer_start(0), buffer_end(0) {
+HTTPFileHandle::HTTPFileHandle(FileSystem &fs, std::string path, uint8_t flags, const HTTPParams &http_params)
+    : FileHandle(fs, path), http_params(http_params), flags(flags), length(0), buffer_available(0), buffer_idx(0),
+      file_offset(0), buffer_start(0), buffer_end(0) {
 }
 
 std::unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, uint8_t flags, FileLockType lock,
                                                              FileCompressionType compression, FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
-	return duckdb::make_unique<HTTPFileHandle>(*this, path, flags);
+	return duckdb::make_unique<HTTPFileHandle>(*this, path, flags,
+	                                           opener ? HTTPParams::ReadFrom(opener) : HTTPParams());
 }
 
 std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
@@ -292,7 +303,7 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 		}
 	}
 
-	// Initialize the read buffer now that we know the file exists TODO: MAX(READ_BUFFER_LEN, filesize?)
+	// Initialize the read buffer now that we know the file exists
 	if (flags & FileFlags::FILE_FLAGS_READ) {
 		read_buffer = std::unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
 	}

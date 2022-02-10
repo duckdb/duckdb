@@ -17,6 +17,11 @@ static void LoadInternal(DatabaseInstance &instance) {
 
 	auto &config = DBConfig::GetConfig(instance);
 
+	// Global HTTP config
+	// Single timeout value is used for all 4 types of timeouts, we could split it into 4 if users need that
+	config.AddExtensionOption("httpfs_timeout", "HTTP timeout read/write/connection/retry (default 30000ms)",
+	                          LogicalType::UBIGINT);
+
 	// Global S3 config
 	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR);
 	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);
@@ -28,8 +33,6 @@ static void LoadInternal(DatabaseInstance &instance) {
 	config.AddExtensionOption("s3_uploader_max_filesize", "S3 Uploader max filesize (default 400GB)",
 	                          LogicalType::VARCHAR);
 	config.AddExtensionOption("s3_uploader_max_parts_per_file", "S3 Uploader max parts per file (default 10000)",
-	                          LogicalType::UBIGINT);
-	config.AddExtensionOption("s3_uploader_timeout", "S3 Uploader part upload timeout (default 30000ms)",
 	                          LogicalType::UBIGINT);
 	config.AddExtensionOption("s3_uploader_thread_limit", "S3 Uploader global thread limit (default 100)",
 	                          LogicalType::UBIGINT);
