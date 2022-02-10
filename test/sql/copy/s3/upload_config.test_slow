@@ -1,4 +1,4 @@
-# name: test/sql/copy/s3/upload_config.test.coverage
+# name: test/sql/copy/s3/upload_config.test_slow
 # description: Various working and non-working configs for the uploader
 # group: [s3]
 

@@ -6,7 +6,7 @@
 
 namespace duckdb_httplib_openssl {
 struct Response;
-struct Client;
+class Client;
 } // namespace duckdb_httplib_openssl
 namespace duckdb {
 
@@ -81,8 +81,7 @@ public:
 	// Get Request with range parameter that GETs exactly buffer_out_len bytes from the url
 	virtual unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
 	                                                    idx_t file_offset, char *buffer_out, idx_t buffer_out_len);
-	// Post Request that can handle variable sized responses without a content-length header, which is necessary for S3
-	// Multipart
+	// Post Request that can handle variable sized responses without a content-length header (needed for s3 multipart)
 	virtual unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url, HeaderMap header_map,
 	                                                unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
 	                                                char *buffer_in, idx_t buffer_in_len);
