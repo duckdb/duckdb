@@ -80,13 +80,11 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 		if (out_offset + data_length > buffer_out_len) {
 			// Buffer too small, increase its size by at least 2x to fit the new value
 			auto new_size = MaxValue<idx_t>(out_offset + data_length, buffer_out_len * 2);
-			// std::cout << "resize from " << buffer_out_len << " to " << new_size << "\n";
 			auto tmp = unique_ptr<char[]> {new char[new_size]};
 			memcpy(tmp.get(), buffer_out.get(), buffer_out_len);
 			buffer_out = move(tmp);
 			buffer_out_len = new_size;
 		}
-		// std::cout << "Copying " << data_length << "bytes \n";
 		memcpy(buffer_out.get() + out_offset, data, data_length);
 		out_offset += data_length;
 		return true;
