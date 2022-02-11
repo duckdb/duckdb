@@ -461,7 +461,7 @@ void S3FileSystem::S3UrlParse(FileHandle &handle, string url, string &host_out, 
 		// Endpoint is not a full url and the regular https://{bucket}.{domain} format will be used
 		// actual request
 		host_out = bucket + "." + endpoint;
-		http_host_out = "http://" + host_out;
+		http_host_out = "https://" + host_out;
 	}
 }
 
