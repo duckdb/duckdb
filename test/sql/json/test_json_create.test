@@ -124,3 +124,93 @@ query T
 select json(map(list(d), list(e))) from test
 ----
 {"[0, 1, 2, 3, 4, 5, 6, 7, 9]":33,"[]":42,"[1, 2, 3]":1111,"[4, 2]":null}
+
+# Some SQLite tests
+query T
+SELECT json_array(1,json_object('abc',2.5,'def',null,'ghi','hello'),99);
+----
+[1,{"abc":2.5,"def":null,"ghi":"hello"},99]
+
+query T
+SELECT json_object('a',1,'b',2.5,'c',null,'d','String Test');
+----
+{"a":1,"b":2.5,"c":null,"d":"String Test"}
+
+# must have even number of args
+statement error
+SELECT json_object('a',1,'b');
+
+query T
+SELECT json_array(1,2.5,null,'hello');
+----
+[1,2.5,null,"hello"]
+
+query T
+SELECT json_array(1,'{"abc":2.5,"def":null,"ghi":hello}',99);
+----
+[1,"{\"abc\":2.5,\"def\":null,\"ghi\":hello}",99]
+
+query T
+SELECT json_array(1,json('{"abc":2.5,"def":null,"ghi":"hello"}'),99);
+----
+[1,"{\"abc\":2.5,\"def\":null,\"ghi\":\"hello\"}",99]
+
+query T
+SELECT json_array(1,json_object('abc',2.5,'def',null,'ghi','hello'),99);
+----
+[1,{"abc":2.5,"def":null,"ghi":"hello"},99]
+
+query T
+SELECT json_object('ex','[52,3.14159]');
+----
+{"ex":"[52,3.14159]"}
+
+query T
+SELECT json_object('ex','[52,3.14159]'::JSON);
+----
+{"ex":[52,3.14159]}
+
+query T
+SELECT json_object('ex',json_array(52,3.14159));
+----
+{"ex":[52,3.14159]}
+
+query T
+SELECT json_object('a',2,'c',4);
+----
+{"a":2,"c":4}
+
+query T
+SELECT json_object('a',2,'c','{e:5}');
+----
+{"a":2,"c":"{e:5}"}
+
+query T
+SELECT json_object('a',2,'c',json_object('e',5));
+----
+{"a":2,"c":{"e":5}}
+
+query T
+SELECT json_array(1,2,'3',4);
+----
+[1,2,"3",4]
+
+query T
+SELECT json_array('[1,2]');
+----
+["[1,2]"]
+
+query T
+SELECT json_array(json_array(1,2));
+----
+[[1,2]]
+
+query T
+SELECT json_array(1,null,'3','[4,5]','{"six":7.7}');
+----
+[1,null,"3","[4,5]","{\"six\":7.7}"]
+
+query T
+SELECT json_array(1,null,'3','[4,5]'::JSON,'{"six":7.7}'::JSON);
+----
+[1,null,"3",[4,5],{"six":7.7}]

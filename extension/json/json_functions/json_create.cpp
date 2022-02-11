@@ -44,6 +44,7 @@ static LogicalType GetJSONType(unordered_map<string, unique_ptr<Vector>> &const_
 	case LogicalTypeId::UINTEGER:
 		return LogicalType::UBIGINT;
 	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::HUGEINT:
 		return LogicalType::DOUBLE;
 	// The nested types need to conform as well
@@ -171,6 +172,12 @@ static void CreateKeyValuePairs(const JSONCreateFunctionData &info, yyjson_mut_d
 	AddKeyValuePairs(doc, objs, key_v, vals, count);
 }
 
+static void CreateValuesNull(yyjson_mut_doc *doc, yyjson_mut_val *vals[], idx_t count) {
+	for (idx_t i = 0; i < count; i++) {
+		vals[i] = yyjson_mut_null(doc);
+	}
+}
+
 template <class T>
 static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count) {
 	VectorData value_data;
@@ -290,6 +297,9 @@ static void CreateValuesList(const JSONCreateFunctionData &info, yyjson_mut_doc 
 static void CreateValues(const JSONCreateFunctionData &info, yyjson_mut_doc *doc, yyjson_mut_val *vals[],
                          Vector &value_v, idx_t count) {
 	switch (value_v.GetType().id()) {
+	case LogicalTypeId::SQLNULL:
+		CreateValuesNull(doc, vals, count);
+		break;
 	case LogicalTypeId::BOOLEAN:
 		TemplatedCreateValues<bool>(doc, vals, value_v, count);
 		break;
