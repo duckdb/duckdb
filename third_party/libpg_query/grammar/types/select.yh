@@ -118,6 +118,8 @@
 
 %type <list>	within_group_clause
 %type <node>	filter_clause
+%type <boolean>	export_clause
+
 %type <list>	window_clause window_definition_list opt_partition_clause
 %type <windef>	window_definition over_clause window_specification
 				opt_frame_clause frame_extent frame_bound
