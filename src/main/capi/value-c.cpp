@@ -142,7 +142,11 @@ using duckdb::UnsafeFetch;
 template <class SOURCE_TYPE, class RESULT_TYPE, class OP>
 RESULT_TYPE TryCastCInternal(duckdb_result *result, idx_t col, idx_t row) {
 	RESULT_TYPE result_value;
-	if (!OP::template Operation<SOURCE_TYPE, RESULT_TYPE>(UnsafeFetch<SOURCE_TYPE>(result, col, row), result_value)) {
+	try {
+		if (!OP::template Operation<SOURCE_TYPE, RESULT_TYPE>(UnsafeFetch<SOURCE_TYPE>(result, col, row), result_value)) {
+			return FetchDefaultValue::Operation<RESULT_TYPE>();
+		}
+	} catch (...) {
 		return FetchDefaultValue::Operation<RESULT_TYPE>();
 	}
 	return result_value;

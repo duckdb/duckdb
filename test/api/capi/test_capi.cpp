@@ -541,6 +541,22 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	// various edge cases/nullptrs
 	REQUIRE(duckdb_query_arrow_schema(out_arrow, nullptr) == DuckDBSuccess);
 	REQUIRE(duckdb_query_arrow_array(out_arrow, nullptr) == DuckDBSuccess);
+
+	// default duckdb_value_date on invalid date
+	result = tester.Query("SELECT 1, true, 'a'");
+	REQUIRE_NO_FAIL(*result);
+	duckdb_date_struct d = result->Fetch<duckdb_date_struct>(0, 0);
+	REQUIRE(d.year == 1970);
+	REQUIRE(d.month == 1);
+	REQUIRE(d.day == 1);
+	d = result->Fetch<duckdb_date_struct>(1, 0);
+	REQUIRE(d.year == 1970);
+	REQUIRE(d.month == 1);
+	REQUIRE(d.day == 1);
+	d = result->Fetch<duckdb_date_struct>(2, 0);
+	REQUIRE(d.year == 1970);
+	REQUIRE(d.month == 1);
+	REQUIRE(d.day == 1);
 }
 
 TEST_CASE("Test prepared statements in C API", "[capi]") {
