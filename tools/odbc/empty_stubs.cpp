@@ -6,47 +6,9 @@
 //! when implementing the function must be moved to the proper source file
 //! Using std::cout instead of throw execptions because of MVSC's warning C4297
 
-SQLRETURN SQL_API SQLCopyDesc(SQLHDESC source_desc_handle, SQLHDESC target_desc_handle) {
-	std::cout << "***** SQLCopyDesc" << std::endl;
-	return SQL_ERROR;
-}
-
-SQLRETURN SQL_API SQLDataSources(SQLHENV environment_handle, SQLUSMALLINT direction, SQLCHAR *server_name,
-                                 SQLSMALLINT buffer_length1, SQLSMALLINT *name_length1_ptr, SQLCHAR *description,
-                                 SQLSMALLINT buffer_length2, SQLSMALLINT *name_length2_ptr) {
-	std::cout << "***** SQLDataSources" << std::endl;
-	return SQL_ERROR;
-}
-
-SQLRETURN SQL_API SQLDrivers(SQLHENV environment_handle, SQLUSMALLINT direction, SQLCHAR *driver_description,
-                             SQLSMALLINT buffer_length1, SQLSMALLINT *description_length_ptr,
-                             SQLCHAR *driver_attributes, SQLSMALLINT buffer_length2,
-                             SQLSMALLINT *attributes_length_ptr) {
-	std::cout << "***** SQLDrivers" << std::endl;
-	return SQL_ERROR;
-}
-
-SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT field_identifier,
-                                  SQLPOINTER value_ptr, SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
-	std::cout << "***** SQLGetDescField" << std::endl;
-	return SQL_ERROR;
-}
-
-SQLRETURN SQL_API SQLGetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
-                                SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
-	std::cout << "***** SQLGetEnvAttr" << std::endl;
-	return SQL_ERROR;
-}
-
 SQLRETURN SQL_API SQLNativeSql(SQLHDBC connection_handle, SQLCHAR *in_statement_text, SQLINTEGER text_length1,
                                SQLCHAR *out_statement_text, SQLINTEGER buffer_length, SQLINTEGER *text_length2_ptr) {
 	std::cout << "***** SQLNativeSql" << std::endl;
-	return SQL_ERROR;
-}
-
-SQLRETURN SQL_API SQLSetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT field_identifier,
-                                  SQLPOINTER value_ptr, SQLINTEGER buffer_length) {
-	std::cout << "***** SQLSetDescField" << std::endl;
 	return SQL_ERROR;
 }
 

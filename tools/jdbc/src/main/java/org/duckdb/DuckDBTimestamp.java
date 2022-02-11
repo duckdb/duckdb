@@ -17,6 +17,11 @@ public class DuckDBTimestamp {
 		this.timeMicros = timeMicros;
 	}
 
+	public DuckDBTimestamp(LocalDateTime localDateTime) {
+		this.timeMicros = DuckDBTimestamp.RefLocalDateTime.until(
+			localDateTime, ChronoUnit.MICROS);
+	}
+
 	public DuckDBTimestamp(Timestamp sqlTimestamp) {
 		this.timeMicros = DuckDBTimestamp.RefLocalDateTime.until(
 			sqlTimestamp.toLocalDateTime(), ChronoUnit.MICROS);
