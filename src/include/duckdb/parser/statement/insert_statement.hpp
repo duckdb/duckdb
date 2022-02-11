@@ -27,6 +27,9 @@ public:
 	//! Schema name to insert to
 	string schema;
 
+protected:
+	InsertStatement(const InsertStatement &other);
+
 public:
 	unique_ptr<SQLStatement> Copy() const override;
 };
