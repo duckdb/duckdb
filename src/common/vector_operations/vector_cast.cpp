@@ -1,15 +1,15 @@
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/common/operator/string_cast.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/vector_operations/decimal_cast.hpp"
-#include "duckdb/common/operator/numeric_cast.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/numeric_cast.hpp"
+#include "duckdb/common/operator/string_cast.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/decimal_cast.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 namespace duckdb {
 
 template <class OP>
@@ -554,6 +554,7 @@ static bool ValueStringCastSwitch(Vector &source, Vector &result, idx_t count, s
 			auto str_val = src_val.ToString();
 			result.SetValue(i, Value(str_val));
 		}
+		FlatVector::SetValidity(result, FlatVector::Validity(source));
 		return true;
 	default:
 		return TryVectorNullCast(source, result, count, error_message);

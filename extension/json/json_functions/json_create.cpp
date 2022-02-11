@@ -160,7 +160,8 @@ static void AddKeyValuePairs(yyjson_mut_doc *doc, yyjson_mut_val *objs[], Vector
 			continue;
 		}
 		auto key = CreateJSONValue<string_t>(doc, keys[key_idx]);
-		yyjson_mut_obj_add(objs[i], key, vals[i]);
+		bool r = yyjson_mut_obj_add(objs[i], key, vals[i]);
+		D_ASSERT(r);
 	}
 }
 

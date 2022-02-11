@@ -6380,6 +6380,9 @@ copy_char:
     stop_char_##i: \
     memcpy(cur, str, i); \
     cur += i; str += i; goto copy_next;
+
+	if (end - str < 16)
+		goto copy_next;
     
     repeat16_incr(expr_jump);
     memcpy(cur, str, 16);

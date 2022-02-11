@@ -1,3 +1,4 @@
+#define DUCKDB_EXTENSION_MAIN
 #include "json-extension.hpp"
 
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -24,6 +25,7 @@ std::string JSONExtension::Name() {
 } // namespace duckdb
 
 extern "C" {
+
 DUCKDB_EXTENSION_API void json_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
 	db_wrapper.LoadExtension<duckdb::JSONExtension>();
