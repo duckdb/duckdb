@@ -16,7 +16,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-
+#include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
@@ -285,6 +285,7 @@ struct DuckDBArrowArrayHolder {
 	vector<DuckDBArrowArrayChildHolder> children = {};
 	vector<ArrowArray *> children_ptrs = {};
 	array<const void *, 1> buffers = {{nullptr}};
+	vector<shared_ptr<ArrowArrayWrapper>> arrow_original_array;
 };
 
 static void ReleaseDuckDBArrowArray(ArrowArray *array) {
@@ -711,7 +712,12 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 		InitializeChild(child_holder, size());
 		auto &vector = child_holder.vector;
 		auto &child = child_holder.array;
-
+		auto vec_buffer = data[col_idx].GetBuffer();
+		if (vec_buffer->GetAuxiliaryData() &&
+		    vec_buffer->GetAuxiliaryDataType() == VectorAuxiliaryDataType::ARROW_AUXILIARY) {
+			auto arrow_aux_data = (ArrowAuxiliaryData *)vec_buffer->GetAuxiliaryData();
+			root_holder->arrow_original_array.push_back(arrow_aux_data->arrow_array);
+		}
 		//! We could, in theory, output other types of vectors here, currently only FLAT Vectors
 		SetArrowChild(child_holder, GetTypes()[col_idx], data[col_idx], size());
 		SetChildValidityMask(*vector, child);

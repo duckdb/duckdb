@@ -8,6 +8,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 
 #include <algorithm>
 
@@ -224,6 +225,19 @@ bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo *cte) {
 		return parent->CTEIsAlreadyBound(cte);
 	}
 	return false;
+}
+
+void Binder::AddBoundView(ViewCatalogEntry *view) {
+	// check if the view is already bound
+	auto current = this;
+	while (current) {
+		if (current->bound_views.find(view) != current->bound_views.end()) {
+			throw BinderException("infinite recursion detected: attempting to recursively bind view \"%s\"",
+			                      view->name);
+		}
+		current = current->parent.get();
+	}
+	bound_views.insert(view);
 }
 
 idx_t Binder::GenerateTableIndex() {

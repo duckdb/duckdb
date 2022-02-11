@@ -92,7 +92,7 @@ struct ArrowScanState : public FunctionOperatorData {
 	explicit ArrowScanState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(move(current_chunk)) {
 	}
 	unique_ptr<ArrowArrayStreamWrapper> stream;
-	unique_ptr<ArrowArrayWrapper> chunk;
+	shared_ptr<ArrowArrayWrapper> chunk;
 	idx_t chunk_offset = 0;
 	vector<column_t> column_ids;
 	//! Store child vectors for Arrow Dictionary Vectors (col-idx,vector)
