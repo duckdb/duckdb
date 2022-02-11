@@ -243,6 +243,7 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 						row++;
 					}
 				}
+				break;
 			}
 			case PhysicalType::INT32: {
 				for (auto &chunk : result->collection.Chunks()) {
