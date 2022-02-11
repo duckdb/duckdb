@@ -9,7 +9,7 @@ execute_process(
 find_path(
   R_INCLUDE_DIR R.h
   HINTS ${R_ROOT_DIR}
-  PATHS /usr/local/lib /usr/local/lib64 /usr/share
+  PATHS /usr/local/lib /usr/local/lib64 /usr/share /opt/homebrew/lib/
   PATH_SUFFIXES include R/include
   DOC "Path to file R.h")
 
@@ -21,6 +21,7 @@ find_library(
 include_directories(${R_INCLUDE_DIR})
 include_directories(../../)
 include_directories(src/include)
+include_directories(inst/include)
 
 # this is used for clang-tidy checks and IDE support
 add_library(

@@ -15,7 +15,7 @@ dbBind__duckdb_result <- function(res, params, ...) {
 
   params <- encode_values(params)
 
-  out <- .Call(duckdb_bind_R, res@stmt_lst$ref, params, res@arrow)
+  out <- .Call(`_duckdb_bind_R`, res@stmt_lst$ref, params, res@arrow)
   if (length(out) == 1) {
     out <- out[[1]]
   } else if (length(out) == 0) {

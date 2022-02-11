@@ -10,7 +10,7 @@ dbDisconnect__duckdb_connection <- function(conn, ..., shutdown = FALSE) {
   if (!dbIsValid(conn)) {
     warning("Connection already closed.", call. = FALSE)
   }
-  .Call(duckdb_disconnect_R, conn@conn_ref)
+  .Call(`_duckdb_disconnect_R`, conn@conn_ref)
   if (shutdown) {
     duckdb_shutdown(conn@driver)
   }

@@ -3,6 +3,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
@@ -54,10 +55,7 @@ static void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vec
 
 // txid_current
 static void TransactionIdCurrent(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (SystemBindData &)*func_expr.bind_info;
-
-	auto &transaction = Transaction::GetTransaction(info.context);
+	auto &transaction = Transaction::GetTransaction(SystemBindData::GetFrom(state).context);
 	auto val = Value::BIGINT(transaction.start_time);
 	result.Reference(val);
 }
@@ -80,7 +78,7 @@ void SystemFun::RegisterFunction(BuiltinFunctions &set) {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 
 	set.AddFunction(
-	    ScalarFunction("current_query", {}, LogicalType::VARCHAR, CurrentQueryFunction, false, BindSystemFunction));
+	    ScalarFunction("current_query", {}, LogicalType::VARCHAR, CurrentQueryFunction, true, BindSystemFunction));
 	set.AddFunction(
 	    ScalarFunction("current_schema", {}, LogicalType::VARCHAR, CurrentSchemaFunction, false, BindSystemFunction));
 	set.AddFunction(ScalarFunction("current_schemas", {LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction,
@@ -89,6 +87,8 @@ void SystemFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction("txid_current", {}, LogicalType::BIGINT, TransactionIdCurrent, false, BindSystemFunction));
 	set.AddFunction(ScalarFunction("version", {}, LogicalType::VARCHAR, VersionFunction));
 	set.AddFunction(ScalarFunction("zversion", {}, LogicalType::VARCHAR, ZdongVersionFunction));
+	set.AddFunction(ExportAggregateFunction::GetCombine());
+	set.AddFunction(ExportAggregateFunction::GetFinalize());
 }
 
 } // namespace duckdb

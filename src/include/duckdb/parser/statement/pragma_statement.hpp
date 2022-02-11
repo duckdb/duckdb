@@ -20,6 +20,9 @@ public:
 
 	unique_ptr<PragmaInfo> info;
 
+protected:
+	PragmaStatement(const PragmaStatement &other);
+
 public:
 	unique_ptr<SQLStatement> Copy() const override;
 };
