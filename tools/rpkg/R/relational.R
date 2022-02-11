@@ -70,7 +70,9 @@ as.data.frame.duckdb_relation <- function(x, row.names=NULL, optional=NULL, ...)
 }
 
 #' @export
-names.duckdb_relation <- rel_names_cpp
+names.duckdb_relation <- function(x) {
+    rel_names_cpp(x)
+}
 
 #' Lazily project a DuckDB relation object
 #' @param rel the DuckDB relation object
