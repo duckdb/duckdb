@@ -87,7 +87,9 @@ typedef enum DUCKDB_TYPE {
 	// const char*
 	DUCKDB_TYPE_VARCHAR,
 	// duckdb_blob
-	DUCKDB_TYPE_BLOB
+	DUCKDB_TYPE_BLOB,
+	// decimal
+	DUCKDB_TYPE_DECIMAL
 } duckdb_type;
 
 //! Days are stored as days since 1970-01-01
@@ -139,6 +141,13 @@ typedef struct {
 	uint64_t lower;
 	int64_t upper;
 } duckdb_hugeint;
+
+typedef struct {
+	uint8_t width;
+	uint8_t scale;
+
+	duckdb_hugeint value;
+} duckdb_decimal;
 
 typedef struct {
 	void *data;
@@ -475,6 +484,11 @@ DUCKDB_API int64_t duckdb_value_int64(duckdb_result *result, idx_t col, idx_t ro
 DUCKDB_API duckdb_hugeint duckdb_value_hugeint(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
+ * returns: The duckdb_decimal value at the specified location, or 0 if the value cannot be converted.
+ */
+DUCKDB_API duckdb_decimal duckdb_value_decimal(duckdb_result *result, idx_t col, idx_t row);
+
+/*!
  * returns: The uint8_t value at the specified location, or 0 if the value cannot be converted.
  */
 DUCKDB_API uint8_t duckdb_value_uint8(duckdb_result *result, idx_t col, idx_t row);
@@ -639,6 +653,17 @@ If the conversion fails because the double value is too big the result will be 0
 * returns: The converted `duckdb_hugeint` element.
 */
 DUCKDB_API duckdb_hugeint duckdb_double_to_hugeint(double val);
+
+//===--------------------------------------------------------------------===//
+// Decimal Helpers
+//===--------------------------------------------------------------------===//
+/*!
+Converts a duckdb_decimal object (as obtained from a `DUCKDB_TYPE_DECIMAL` column) into a double.
+
+* val: The decimal value.
+* returns: The converted `double` element.
+*/
+DUCKDB_API double duckdb_decimal_to_double(duckdb_decimal val);
 
 //===--------------------------------------------------------------------===//
 // Prepared Statements

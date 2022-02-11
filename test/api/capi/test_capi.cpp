@@ -135,6 +135,11 @@ double CAPIResult::Fetch(idx_t col, idx_t row) {
 }
 
 template <>
+duckdb_decimal CAPIResult::Fetch(idx_t col, idx_t row) {
+	return duckdb_value_decimal(&result, col, row);
+}
+
+template <>
 duckdb_date CAPIResult::Fetch(idx_t col, idx_t row) {
 	auto data = (duckdb_date *)duckdb_column_data(&result, col);
 	return data[row];
@@ -500,6 +505,16 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(!result->Fetch<bool>(0, 1));
 	REQUIRE(result->Fetch<bool>(0, 2));
 	REQUIRE(result->Fetch<string>(0, 2) == "true");
+
+	// decimal columns
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE decimals(dec DECIMAL(18, 4) NULL)"));
+	REQUIRE_NO_FAIL(tester.Query("INSERT INTO decimals VALUES (NULL), (12.3)"));
+
+	result = tester.Query("SELECT * FROM decimals ORDER BY dec");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->IsNull(0, 0));
+	duckdb_decimal decimal = result->Fetch<duckdb_decimal>(0, 1);
+	REQUIRE(duckdb_decimal_to_double(decimal) == 12.3);
 }
 
 TEST_CASE("Test errors in C API", "[capi]") {
