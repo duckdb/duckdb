@@ -85,12 +85,29 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return res;
 }
 
-[[cpp11::register]] SEXP rel_filter_cpp(duckdb::rel_extptr rel, duckdb::expr_extptr expr) {
-	auto res = std::make_shared<FilterRelation>(rel->rel, expr->Copy());
+[[cpp11::register]] SEXP rel_filter_cpp(duckdb::rel_extptr rel, list exprs) {
+	unique_ptr<ParsedExpression> filter_expr;
+	if (exprs.size() == 0) { // nop
+		warning("rel_filter without filter expressions has no effect");
+		return rel;
+	} else if (exprs.size() == 1) {
+		filter_expr = ((expr_extptr)exprs[0])->Copy();
+	} else {
+		vector<unique_ptr<ParsedExpression>> filters;
+		for (expr_extptr expr : exprs) {
+			filters.push_back(expr->Copy());
+		}
+		filter_expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(filters));
+	}
+	auto res = std::make_shared<FilterRelation>(rel->rel, move(filter_expr));
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
 [[cpp11::register]] SEXP rel_project_cpp(duckdb::rel_extptr rel, list exprs) {
+	if (exprs.size() == 0) {
+		warning("rel_project without projection expressions has no effect");
+		return rel;
+	}
 	vector<unique_ptr<ParsedExpression>> projections;
 	vector<string> aliases;
 
@@ -182,4 +199,12 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 		stop(res->error);
 	}
 	return result_to_df(move(res));
+}
+
+[[cpp11::register]] SEXP rel_names_cpp(duckdb::rel_extptr rel) {
+	auto ret = writable::strings();
+	for (auto &col : rel->rel->Columns()) {
+		ret.push_back(col.name);
+	}
+	return (ret);
 }

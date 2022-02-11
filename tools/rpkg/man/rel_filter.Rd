@@ -4,12 +4,12 @@
 \alias{rel_filter}
 \title{Lazily filter a DuckDB relation object}
 \usage{
-rel_filter(rel, expr)
+rel_filter(rel, exprs)
 }
 \arguments{
 \item{rel}{the DuckDB relation object}
 
-\item{expr}{a filter condition expression}
+\item{exprs}{a list of DuckDB expressions to filter by}
 }
 \value{
 the now filtered \code{duckdb_relation} object
@@ -20,5 +20,5 @@ Lazily filter a DuckDB relation object
 \examples{
 con <- DBI::dbConnect(duckdb::duckdb())
 rel <- rel_from_df(con, mtcars)
-rel2 <- rel_filter(rel, expr_function(">", list(expr_reference("cyl"), expr_constant("6"))))
+rel2 <- rel_filter(rel, list(expr_function(">", list(expr_reference("cyl"), expr_constant("6")))))
 }

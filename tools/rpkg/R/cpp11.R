@@ -80,8 +80,8 @@ rel_from_df_cpp <- function(con, df) {
   .Call(`_duckdb_rel_from_df_cpp`, con, df)
 }
 
-rel_filter_cpp <- function(rel, expr) {
-  .Call(`_duckdb_rel_filter_cpp`, rel, expr)
+rel_filter_cpp <- function(rel, exprs) {
+  .Call(`_duckdb_rel_filter_cpp`, rel, exprs)
 }
 
 rel_project_cpp <- function(rel, exprs) {
@@ -110,4 +110,8 @@ rel_explain_cpp <- function(rel) {
 
 rel_sql_cpp <- function(rel, sql) {
   .Call(`_duckdb_rel_sql_cpp`, rel, sql)
+}
+
+rel_names_cpp <- function(rel) {
+  .Call(`_duckdb_rel_names_cpp`, rel)
 }

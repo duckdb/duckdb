@@ -152,10 +152,10 @@ extern "C" SEXP _duckdb_rel_from_df_cpp(SEXP con, SEXP df) {
   END_CPP11
 }
 // relational.cpp
-SEXP rel_filter_cpp(duckdb::rel_extptr rel, duckdb::expr_extptr expr);
-extern "C" SEXP _duckdb_rel_filter_cpp(SEXP rel, SEXP expr) {
+SEXP rel_filter_cpp(duckdb::rel_extptr rel, list exprs);
+extern "C" SEXP _duckdb_rel_filter_cpp(SEXP rel, SEXP exprs) {
   BEGIN_CPP11
-    return cpp11::as_sexp(rel_filter_cpp(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr>>(rel), cpp11::as_cpp<cpp11::decay_t<duckdb::expr_extptr>>(expr)));
+    return cpp11::as_sexp(rel_filter_cpp(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr>>(rel), cpp11::as_cpp<cpp11::decay_t<list>>(exprs)));
   END_CPP11
 }
 // relational.cpp
@@ -207,6 +207,13 @@ extern "C" SEXP _duckdb_rel_sql_cpp(SEXP rel, SEXP sql) {
     return cpp11::as_sexp(rel_sql_cpp(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr>>(rel), cpp11::as_cpp<cpp11::decay_t<std::string>>(sql)));
   END_CPP11
 }
+// relational.cpp
+SEXP rel_names_cpp(duckdb::rel_extptr rel);
+extern "C" SEXP _duckdb_rel_names_cpp(SEXP rel) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rel_names_cpp(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr>>(rel)));
+  END_CPP11
+}
 
 extern "C" {
 static const R_CallMethodDef CallEntries[] = {
@@ -228,6 +235,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rel_explain_cpp",      (DL_FUNC) &_duckdb_rel_explain_cpp,      1},
     {"_duckdb_rel_filter_cpp",       (DL_FUNC) &_duckdb_rel_filter_cpp,       2},
     {"_duckdb_rel_from_df_cpp",      (DL_FUNC) &_duckdb_rel_from_df_cpp,      2},
+    {"_duckdb_rel_names_cpp",        (DL_FUNC) &_duckdb_rel_names_cpp,        1},
     {"_duckdb_rel_order_cpp",        (DL_FUNC) &_duckdb_rel_order_cpp,        2},
     {"_duckdb_rel_project_cpp",      (DL_FUNC) &_duckdb_rel_project_cpp,      2},
     {"_duckdb_rel_sql_cpp",          (DL_FUNC) &_duckdb_rel_sql_cpp,          2},

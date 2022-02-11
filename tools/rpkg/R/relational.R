@@ -69,6 +69,9 @@ as.data.frame.duckdb_relation <- function(x, row.names=NULL, optional=NULL, ...)
     rel_to_df_cpp(x)
 }
 
+#' @export
+names.duckdb_relation <- rel_names_cpp
+
 #' Lazily project a DuckDB relation object
 #' @param rel the DuckDB relation object
 #' @param exprs a list of DuckDB expressions to project
@@ -82,13 +85,13 @@ rel_project <- rel_project_cpp
 
 #' Lazily filter a DuckDB relation object
 #' @param rel the DuckDB relation object
-#' @param expr a filter condition expression
+#' @param exprs a list of DuckDB expressions to filter by
 #' @return the now filtered `duckdb_relation` object
 #' @export
 #' @examples
 #' con <- DBI::dbConnect(duckdb::duckdb())
 #' rel <- rel_from_df(con, mtcars)
-#' rel2 <- rel_filter(rel, expr_function(">", list(expr_reference("cyl"), expr_constant("6"))))
+#' rel2 <- rel_filter(rel, list(expr_function(">", list(expr_reference("cyl"), expr_constant("6")))))
 rel_filter <- rel_filter_cpp
 
 #' Lazily aggregate a DuckDB relation object
