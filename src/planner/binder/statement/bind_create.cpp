@@ -74,7 +74,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = (CreateMacroInfo &)info;
 
 	/* different types */
-	bool is_query = base.function->isQuery();
+	bool is_query = (base.function->query_node != nullptr);
 
 	if (!is_query && base.function->expression->HasParameter()) {
 		throw BinderException("Parameter expressions within macro's are not supported!");

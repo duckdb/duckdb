@@ -16,10 +16,6 @@ MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expressi
 MacroFunction::MacroFunction(void) {
 }
 
-bool MacroFunction::isQuery() {
-	return (query_node != nullptr);
-}
-
 string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionExpression &function_expr,
                                         vector<unique_ptr<ParsedExpression>> &positionals,
                                         unordered_map<string, unique_ptr<ParsedExpression>> &defaults) {

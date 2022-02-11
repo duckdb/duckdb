@@ -24,8 +24,6 @@ public:
 	explicit MacroFunction(unique_ptr<ParsedExpression> expression);
 	MacroFunction(void);
 
-	bool isQuery(void);
-
 	//! Check whether the supplied arguments are valid
 	static string ValidateArguments(MacroCatalogEntry &macro_func, FunctionExpression &function_expr,
 	                                vector<unique_ptr<ParsedExpression>> &positionals,
@@ -36,9 +34,6 @@ public:
 	vector<unique_ptr<ParsedExpression>> parameters;
 	//! The default parameters and their associated values
 	unordered_map<string, unique_ptr<ParsedExpression>> default_parameters;
-
-	// if true then we have a query_node and not a regular expression
-	// bool isQuery;
 	//! The main query node
 	unique_ptr<QueryNode> query_node;
 
