@@ -80,7 +80,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
 	auto fexpr = (FunctionExpression *)ref.function.get();
 
-	TableFunctionCatalogEntry *function = NULL;
+	TableFunctionCatalogEntry *function = nullptr;
 
 	// fetch the function from the catalog
 	auto &catalog = Catalog::GetCatalog(context);
