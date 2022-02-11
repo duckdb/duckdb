@@ -376,3 +376,7 @@ DUCKDB_EXTENSION_API const char *icu_version() { // NOLINT
 	return duckdb::DuckDB::LibraryVersion();
 }
 }
+
+#ifndef DUCKDB_EXTENSION_MAIN
+#error DUCKDB_EXTENSION_MAIN not defined
+#endif
