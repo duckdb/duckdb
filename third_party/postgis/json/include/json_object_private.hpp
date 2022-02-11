@@ -63,7 +63,7 @@ struct json_object_int
 struct json_object_string
 {
 	struct json_object base;
-	ssize_t len; // Signed b/c negative lengths indicate data is a pointer
+	std::ptrdiff_t len; // Signed b/c negative lengths indicate data is a pointer
 	// Consider adding an "alloc" field here, if json_object_set_string calls
 	// to expand the length of a string are common operations to perform.
 	union
