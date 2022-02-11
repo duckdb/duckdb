@@ -37,10 +37,14 @@
 #include "json-extension.hpp"
 #endif
 
+#ifdef BUILD_EXCEL_EXTENSION
+#include "excel-extension.hpp"
+#endif
+
 namespace duckdb {
 
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
-	unordered_set<string> extensions {"parquet", "icu", "tpch", "tpcds", "fts", "httpfs", "visualizer", "json"};
+	unordered_set<string> extensions {"parquet", "icu", "tpch", "tpcds", "fts", "httpfs", "visualizer", "json", "excel"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -124,6 +128,13 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		db.LoadExtension<JSONExtension>();
 #else
 		// json extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
+	} else if (extension == "excel") {
+#ifdef BUILD_EXCEL_EXTENSION
+		db.LoadExtension<EXCELExtension>();
+#else
+		// excel extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else {

@@ -1,0 +1,554 @@
+# name: test/sql/excel/test_excel_numformat.test
+# description: Test number format
+# group: [excel]
+
+require excel
+
+statement ok
+PRAGMA enable_verification
+
+# Hours, minutes, seconds
+query T
+SELECT text(1234567.897, 'h')
+----
+21
+
+query T
+SELECT text(1234567.897, 'hh')
+----
+21
+
+query T
+SELECT text(1234567.897, 's')
+----
+41
+
+query T
+SELECT text(1234567.897, 'ss')
+----
+41
+
+query T
+SELECT text(12345.678, '[h]')
+----
+296296
+
+query T
+SELECT text(12345.678, '[m]')
+----
+17777776
+
+query T
+SELECT text(12345.678, '[s]')
+----
+1066666579
+
+query T
+SELECT text(12345.678, '[hh]')
+----
+296296
+
+query T
+SELECT text(12345.678, '[mm]')
+----
+17777776
+
+query T
+SELECT text(12345.678, '[ss]')
+----
+1066666579
+
+# composed time formats
+query T
+SELECT text(1234567.897, 'h AM/PM')
+----
+9 PM
+
+query T
+SELECT text(1234567.897, 'h:mm AM/PM')
+----
+9:31 PM
+
+query T
+SELECT text(1234567.897, 'h:mm:ss A/P')
+----
+9:31:41 p
+
+query T
+SELECT text(1234567.897, 'h:mm:ss.00')
+----
+21:31:40.80
+
+query T
+SELECT text(12345.678, '[h]:mm')
+----
+296296:16
+
+query T
+SELECT text(1234567.897, 'h m')
+----
+21 31
+
+query T
+SELECT text(1234567.897, 'm')
+----
+2
+
+query T
+SELECT text(1234567.897, 'mm')
+----
+02
+
+query T
+SELECT text(1234567.897, 'h m')
+----
+21 31
+
+query T
+SELECT text(1234567.897, 'm s')
+----
+31 41
+
+query T
+SELECT text(12345.678, '[mm]:ss')
+----
+17777776:19
+
+query T
+SELECT text(12345.678, '[m]:ss')
+----
+17777776:19
+
+query T
+SELECT text(12345.678, '[s].00')
+----
+1066666579.20
+
+query T
+SELECT text(12345.678, '[ss].00')
+----
+1066666579.20
+
+# Date & Time
+query T
+SELECT text(1234567.897, 'dd')
+----
+15
+
+query T
+SELECT text(1234567.897, 'd')
+----
+15
+
+query T
+SELECT text(1234567.897, 'dd.mm')
+----
+15.02
+
+query T
+SELECT text(1234567.897, 'dd/mm')
+----
+15/02
+
+query T
+SELECT text(1234567.897, 'mm/dd/yyyy')
+----
+02/15/5280
+
+query T
+SELECT text(1234567.897, 'm/d/yyyy h:mm AM/PM')
+----
+2/15/5280 9:31 PM
+
+query T
+SELECT text(1234567.897, 'dddd, dd of MMMM of YYYY')
+----
+Thursday, 15 of February of 5280
+
+query T
+SELECT text(1234567.897, 'aaa')
+----
+Thu
+
+query T
+SELECT text(1234567.897, 'AaaA')
+----
+Thursday
+
+query T
+SELECT text(1234567.897, 'dddD')
+----
+Thursday
+
+query T
+SELECT text(1234567.897, 'dDd, dd of MMMM')
+----
+Thu, 15 of February
+
+query T
+SELECT text(1234567.897, 'mmmm')
+----
+February
+
+query T
+SELECT text(1234567.897, 'mmM')
+----
+Feb
+
+# Percentage
+query T
+SELECT text(1234567.897, '.00_0%')
+----
+123456789.70 %
+
+query T
+SELECT text(1234567.897, '0.0%')
+----
+123456789.7%
+
+query T
+SELECT text(1234567.897, '0.00%')
+----
+123456789.70%
+
+query T
+SELECT text(1234567.897, '0.00%')
+----
+123456789.70%
+
+# Fraction
+query T
+SELECT text(1234567.897, '# ?/?')
+----
+1234567 8/9
+
+query T
+SELECT text(1234567.897, '# ??/??')
+----
+1234567 61/68
+
+query T
+SELECT text(1234567.897, '# ???/???')
+----
+1234567 688/767
+
+query T
+SELECT text(1234567.897, '# ?/2')
+----
+1234568   
+
+query T
+SELECT text(1234567.897, '# ?/4')
+----
+1234568   
+
+query T
+SELECT text(1234567.897, '# ??/16')
+----
+1234567 14/16
+
+query T
+SELECT text(1234567.897, '# ??/10')
+----
+1234567  9/10
+
+query T
+SELECT text(1234567.897, '# ??/100')
+----
+1234567 90/100
+
+query T
+SELECT text(1234567.897, '### #/0')
+----
+1234567 8/9
+
+query T
+SELECT text(1234567.897, '#,### ??/123')
+----
+1,234,567 110/123
+
+query T
+SELECT text(1234567.897, '0/0')
+----
+11111111/9
+
+query T
+SELECT text(1234567.897, '00/0')
+----
+11111111/9
+
+query T
+SELECT text(258.9876, '0/57')
+----
+14762/57
+
+# Scientific notation
+query T
+SELECT text(1234567.897, '0.00E+00')
+----
+1.23E+06
+
+query T
+SELECT text(1234567.897, '0.00E+0')
+----
+1.23E+6
+
+query T
+SELECT text(1234567.897, '0.0E+0')
+----
+1.2E+6
+
+query T
+SELECT text(1234567.897, '#.##E+000')
+----
+1.23E+006
+
+query T
+SELECT text(1234567.897, '#.##E-000')
+----
+1.23E006
+
+query T
+SELECT text(1234567.897, '#.#_#E+00x0')
+----
+1.2 E+00x6
+
+query T
+SELECT text(1234567.897, '0.E+00')
+----
+1.E+06
+
+query T
+SELECT text(1234567.897, '#.00E+0')
+----
+1.23E+6
+
+# Special
+query T
+SELECT text(1234567.897, '00000')
+----
+1234568
+
+query T
+SELECT text(1234567.897,   '000-00-0000')
+----
+001-23-4568
+
+query T
+SELECT text(12345678912, '(###) ###-####')
+----
+(1234) 567-8912
+
+query T
+SELECT text(1234567.897, '##-#00')
+----
+1234-568
+
+query T
+SELECT text(123456789712, '(000)000-00-0000')
+----
+(123)456-78-9712
+
+# separators
+query T
+SELECT text(1234567.897, '#,###')
+----
+1,234,568
+
+query T
+SELECT text(1234567.897, '0,000.00')
+----
+1,234,567.90
+
+query T
+SELECT text(1234567.897, '#,')
+----
+1235
+
+query T
+SELECT text(1234567.897, '#,000.0')
+----
+1,234,567.9
+
+query T
+SELECT text(1234567.897, '0.0,,')
+----
+1.2
+
+query T
+SELECT text(1234567.897, '#,')
+----
+1235
+
+query T
+SELECT text(1234567.897, '$#,###.00')
+----
+$1,234,567.90
+
+query T
+SELECT text(1234567.897, '0,0,0,0')
+----
+1,234,568
+
+# Number, currency, accounting
+query T
+SELECT text(1234567.897, '$#,##0')
+----
+$1,234,568
+
+query T
+SELECT text(1234567.897, '$,##0.00_')
+----
+$,1234567.90 
+
+query T
+SELECT text(1234567.897, '$#,##0.00')
+----
+$1,234,567.90
+
+query T
+SELECT text(1234567.897, '$*#,##0')
+----
+$,1234568
+
+query T
+SELECT text(1234567.897, '$*#,##0.00')
+----
+$,1234567.90
+
+query T
+SELECT text(1234567.897, '$ 0.##')
+----
+$ 1234567.9
+
+# Others
+query T
+SELECT text(1234567.897, '####')
+----
+1234568
+
+query T
+SELECT text(1234567.897, '##.###')
+----
+1234567.897
+
+query T
+SELECT text(1234567.897, '0.00')
+----
+1234567.90
+
+query T
+SELECT text(1234567.897, '#.')
+----
+1234568.
+
+query T
+SELECT text(1234567.897, '#')
+----
+1234568
+
+query T
+SELECT text(1234567.897, '#;#')
+----
+1234568
+
+query T
+SELECT text(1234567.897, '#.')
+----
+1234568.
+
+query T
+SELECT text(1234567.897, '.##000#')
+----
+1234567.89700
+
+query T
+SELECT text(1234567.897, '#.#')
+----
+1234567.9
+
+query T
+SELECT text(1234567.897, '##.00##')
+----
+1234567.897
+
+query T
+SELECT text(1234567.897, '#_x#')
+----
+123456 8
+
+query T
+SELECT text(1234567.897, '[>1]##')
+----
+1234568
+
+query T
+SELECT text(1234567.897, '[<=0]##;[>0]##.0')
+----
+1234567.9
+
+query T
+SELECT text(1234567.897, '[<>3.90e2]##')
+----
+1234568
+
+query T
+SELECT text(1234567.897, '0')
+----
+1234568
+
+query T
+SELECT excel_text(123456789123, '[<=9999999]##-####;[>9999999](###) ###-####')
+----
+(12345) 678-9123
+
+query T
+SELECT excel_text(1234567, '[<=9999999]##-####;[>9999999](###) ###-####')
+----
+123-4567
+
+query T
+SELECT excel_text(1234567.897, '$$$$$$$0')
+----
+$$$$$$$1234568
+
+query T
+SELECT text(1234567.897, '_ $* #,##0_ ;_ $* -#,##0_ ;_ $*  - _ ;_ @_ ')
+----
+ $1,234,568 
+
+query T
+SELECT excel_text(-1234567.897, '_ $* #,##0_ ;_ $* -#,##0_ ;_ $*  - _ ;_ @_ ')
+----
+ $-1,234,568 
+
+query T
+SELECT text(0.0, '_ $* #,##0_ ;_ $* -#,##0_ ;_ $*  - _ ;_ @_ ')
+----
+ $ -  
+
+query T
+SELECT text(1234567.897, '_ $* #,##0.00_ ;_ $* -#,##0.00_ ;_ $*  - ??_ ;_ @_ ')
+----
+ $1,234,567.90 
+
+query T
+SELECT excel_text(-1234567.897, '_ $* #,##0.00_ ;_ $* -#,##0.00_ ;_ $*  - ??_ ;_ @_ ')
+----
+ $-1,234,567.90 
+
+query T
+SELECT excel_text(0.0, '_ $* #,##0.00_ ;_ $* -#,##0.00_ ;_ $*  - ??_ ;_ @_ ')
+----
+ $ -    
+
+query T
+SELECT text(1.0, 3.5)
+----
+3.5
+
+statement error
+SELECT text('hello', 1.0)
+
+statement error
+SELECT text('hello', '@')
