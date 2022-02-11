@@ -18,6 +18,10 @@ struct AliasFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct HashFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct LeastFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

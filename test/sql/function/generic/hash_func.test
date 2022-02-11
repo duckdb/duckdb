@@ -1,0 +1,182 @@
+# name: test/sql/function/generic/hash_func.test
+# description: Test HASH function
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+# Unsupported types
+
+foreach datatype ANY HASH POINTER
+
+statement error
+SELECT HASH(NULL::${datatype});
+
+endloop
+
+# NULLS of all scalar types
+foreach datatype <integral> BOOLEAN
+query I
+SELECT HASH(NULL::${datatype});
+----
+8124827062563054464
+
+endloop
+
+foreach datatype TIME TIMETZ TIMESTAMP TIMESTAMPTZ INTERVAL DECIMAL(16,4) HUGEINT UUID
+query I
+SELECT HASH(NULL::${datatype});
+----
+9223372036854775808
+
+endloop
+
+foreach datatype VARCHAR CHAR BLOB
+
+query I
+SELECT HASH(NULL::${datatype});
+----
+4653556894752988463
+
+endloop
+
+query I
+SELECT HASH(NULL::FLOAT);
+----
+2143289344
+
+query I
+SELECT HASH(NULL::DOUBLE);
+----
+9221120237041090560
+
+query I
+SELECT HASH(NULL::DATE);
+----
+10264392792096636928
+
+#
+# Nested types
+#
+
+# Structs
+statement ok
+CREATE TABLE structs AS
+	SELECT * FROM (VALUES
+		({'i': 5, 's': 'string'}),
+		({'i': -2, 's': NULL}),
+		({'i': NULL, 's': 'not null'}),
+		({'i': NULL, 's': NULL}),
+		(NULL)
+) tbl(s);
+
+query II
+SELECT s, HASH(s) FROM structs
+----
+{'i': 5, 's': string}	1413884233195669864
+{'i': -2, 's': NULL}	1333777556716215729
+{'i': NULL, 's': not null}	17227632972512520901
+{'i': NULL, 's': NULL}	8881941307775409455
+NULL	8881941307775409455
+
+# Lists
+statement ok
+CREATE TABLE lists AS
+	SELECT * FROM (VALUES
+		([1], ['TGTA']),
+		([1, 2], ['CGGT']),
+		([], ['CCTC']),
+		([1, 2, 3], ['TCTA']),
+		([1, 2, 3, 4, 5], ['AGGG']),
+		(NULL, NULL)
+) tbl(li, lg);
+
+query II
+SELECT li, HASH(li) FROM lists
+----
+[1]	13787848793156543929
+[1, 2]	9128953512603536242
+[]	0
+[1, 2, 3]	4470058232050528555
+[1, 2, 3, 4, 5]	13599011744654064797
+NULL	0
+
+query II
+SELECT lg, HASH(lg) FROM lists
+----
+[TGTA]	13787848793156543929
+[CGGT]	13787848793156543929
+[CCTC]	13787848793156543929
+[TCTA]	13787848793156543929
+[AGGG]	13787848793156543929
+NULL	0
+
+# Maps
+statement ok
+CREATE TABLE maps AS
+	SELECT * FROM (VALUES
+		(MAP([1], ['TGTA'])),
+		(MAP([1, 2], ['CGGT', 'CCTC'])),
+		(MAP([], [])),
+		(MAP([1, 2, 3], ['TCTA', NULL, 'CGGT'])),
+		(MAP([1, 2, 3, 4, 5], ['TGTA', 'CGGT', 'CCTC', 'TCTA', 'AGGG'])),
+		(NULL)
+) tbl(m);
+
+query II
+SELECT m, HASH(m) FROM maps
+----
+{1=TGTA}	13787848793156543929
+{1=CGGT, 2=CCTC}	9128953512603536242
+{}	0
+{1=TCTA, 2=NULL, 3=CGGT}	4470058232050528555
+{1=TGTA, 2=CGGT, 3=CCTC, 4=TCTA, 5=AGGG}	13599011744654064797
+NULL	0
+
+# Enums
+statement ok
+CREATE TYPE resistor AS ENUM (
+	'black',
+	'brown',
+	'red',
+	'orange',
+	'yellow',
+	'green',
+	'blue',
+	'violet',
+	'grey',
+	'white'
+);
+
+statement ok
+CREATE TABLE enums (r resistor);
+
+statement ok
+INSERT INTO enums VALUES
+	('black'),
+	('brown'),
+	('red'),
+	('orange'),
+	('yellow'),
+	('green'),
+	('blue'),
+	('violet'),
+	('grey'),
+	('white'),
+	(NULL)
+;
+
+query II
+SELECT r, HASH(r) FROM enums;
+----
+black	0
+brown	13787848793156543929
+red	9128953512603536242
+orange	4470058232050528555
+yellow	18257907025207072484
+green	13599011744654064797
+blue	8940116464101057110
+violet	4281221183548049423
+grey	18069069976704593352
+white	13410174696151585665
+NULL	0
