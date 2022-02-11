@@ -9,13 +9,12 @@ namespace duckdb {
 //  if function->query_node iniatialized then macro is  a Table Macro
 //  and is stored in the TABLE_FUNCTION catalog
 MacroCatalogEntry::MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
-    : StandardEntry(  (info->function->expression ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY),
-                    schema, catalog, info->name), function(move(info->function)) {
+    : StandardEntry((info->function->expression ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY), schema,
+                    catalog, info->name),
+      function(move(info->function)) {
 	this->temporary = info->temporary;
 	this->internal = info->internal;
 }
-
-
 
 void MacroCatalogEntry::Serialize(Serializer &main_serializer) {
 	D_ASSERT(!internal);
@@ -23,7 +22,7 @@ void MacroCatalogEntry::Serialize(Serializer &main_serializer) {
 	writer.WriteString(schema->name);
 	writer.WriteString(name);
 	// either we have ->expression or ->query_node but not both
-	writer.WriteOptional( function->expression);
+	writer.WriteOptional(function->expression);
 	writer.WriteSerializableList(function->parameters);
 	writer.WriteField<uint32_t>((uint32_t)function->default_parameters.size());
 	auto &serializer = writer.GetSerializer();
@@ -31,10 +30,8 @@ void MacroCatalogEntry::Serialize(Serializer &main_serializer) {
 		serializer.WriteString(kv.first);
 		kv.second->Serialize(serializer);
 	}
-	writer.WriteOptional( function->query_node);
+	writer.WriteOptional(function->query_node);
 	writer.Finalize();
-
-
 }
 
 unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &main_source) {
@@ -58,9 +55,8 @@ unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &main_so
 	}
 
 	// either expression or query_node but not both
-	D_ASSERT ( ( info->function->expression && !info->function->query_node )  ||
-	             (!info->function->expression && info->function->query_node ));
-
+	D_ASSERT((info->function->expression && !info->function->query_node) ||
+	         (!info->function->expression && info->function->query_node));
 
 	reader.Finalize();
 
@@ -68,6 +64,3 @@ unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &main_so
 }
 
 } // namespace duckdb
-
-
-

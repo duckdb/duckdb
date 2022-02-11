@@ -62,7 +62,6 @@ private:
 	void ReplayCreateTableMacro();
 	void ReplayDropTableMacro();
 
-
 	void ReplayUseTable();
 	void ReplayInsert();
 	void ReplayDelete();
@@ -444,8 +443,6 @@ void ReplayState::ReplayDropTableMacro() {
 	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
-
-
 
 //===--------------------------------------------------------------------===//
 // Replay Data

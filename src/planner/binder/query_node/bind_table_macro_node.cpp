@@ -25,14 +25,11 @@
 
 namespace duckdb {
 
-
-unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, MacroCatalogEntry *macro_func,
-                                              idx_t depth) {
+unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, MacroCatalogEntry *macro_func, idx_t depth) {
 
 	auto node = macro_func->function->query_node->Copy();
 
 	auto &macro_def = *macro_func->function;
-
 
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positionals;
@@ -64,7 +61,7 @@ unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, Macro
 	new_macro_binding->arguments = move(positionals);
 
 	// We need an EXpressionBinder So that we can call ExpressionBinder::ReplaceMacroParametersRecursive()
-	auto eb = ExpressionBinder(*this,this->context);
+	auto eb = ExpressionBinder(*this, this->context);
 
 	eb.macro_binding = new_macro_binding.get();
 
@@ -75,21 +72,18 @@ unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, Macro
 	/* from clause
 	switch ( select_node.from_table->type ) {
 
-		case TableReferenceType::EXPRESSION_LIST:
+	    case TableReferenceType::EXPRESSION_LIST:
 	    case TableReferenceType::SUBQUERY:
-		        ParsedExpressionIterator::EnumerateTableRefChildren(
-		           *select_node.from_table, [&](unique_ptr<ParsedExpression> &child) { eb.ReplaceMacroParametersRecursive(child); });
-		        break;
+	            ParsedExpressionIterator::EnumerateTableRefChildren(
+	               *select_node.from_table, [&](unique_ptr<ParsedExpression> &child) {
+	eb.ReplaceMacroParametersRecursive(child); }); break;
 
 	    default:
-		   break;
+	       break;
 	  }
-      */
-
+	  */
 
 	return node;
-
 }
-
 
 } // namespace duckdb

@@ -148,7 +148,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		break;
 	case TableReferenceType::TABLE_FUNCTION:
 		result = Bind((TableFunctionRef &)ref);
-        break;
+		break;
 	case TableReferenceType::EXPRESSION_LIST:
 		result = Bind((ExpressionListRef &)ref);
 		break;

@@ -171,7 +171,6 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 		}
 	});
 
-
 	// write the custom_types
 	metadata_writer->Write<uint32_t>(custom_types.size());
 	for (auto &custom_type : custom_types) {

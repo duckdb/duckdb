@@ -134,7 +134,6 @@ protected:
 	virtual BindResult BindMacro(FunctionExpression &expr, MacroCatalogEntry *macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> *expr_ptr);
 
-
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();
 
