@@ -10,6 +10,6 @@ void BuiltinFunctions::RegisterGeometryFunctions() {
     Register<GeometryGetX>();
     Register<GeometryCentroid>();
     Register<GeometryDistance>();
-};
+}
 
 }

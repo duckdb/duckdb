@@ -1317,10 +1317,9 @@ string_t CastFromGeometry::Operation(string_t input, Vector &vector) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
-                              bool strict) {
+                              		bool strict) {
 	duckdb_postgis::GSERIALIZED *gser;
-	try
-	{
+	try {
 		if (input.GetSize() == 0) {
 			result = StringVector::EmptyString(result_vector, input.GetSize());
 			result.Finalize();
@@ -1338,9 +1337,7 @@ bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &resu
 		Geometry::ToGeometry(gser, (data_ptr_t)result.GetDataWriteable());
 		Geometry::DestroyGeometry(gser);
 		result.Finalize();
-	}
-	catch(const std::exception& e)
-	{
+	} catch(const std::exception& e) {
 		if (gser) {
 			Geometry::DestroyGeometry(gser);
 		}

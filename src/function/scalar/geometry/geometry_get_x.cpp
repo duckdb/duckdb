@@ -1,7 +1,7 @@
 #include "duckdb/function/scalar/geometry_functions.hpp"
 #include "postgis.hpp"
 
-namespace duckdb{
+namespace duckdb {
 
 struct GetXUnaryOperator {
 	template <class TA, class TR>

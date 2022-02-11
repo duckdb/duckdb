@@ -2,7 +2,7 @@
 #include "duckdb/common/types/geometry.hpp"
 #include "postgis.hpp"
 
-namespace duckdb{
+namespace duckdb {
 
 struct GeometryDistanceBinaryOperator {
 	template <class TA, class TB, class TR>

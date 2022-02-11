@@ -319,7 +319,7 @@ static bool StringCastSwitch(Vector &source, Vector &result, idx_t count, bool s
 		return TryVectorNullCast(source, result, count, error_message);
 	case LogicalTypeId::GEOMETRY:
 		return VectorTryCastStringLoop<string_t, string_t, duckdb::TryCastToGeometry>(source, result, count, strict,
-																					error_message);
+																						error_message);
 	default:
 		return VectorStringCastNumericSwitch(source, result, count, strict, error_message);
 	}

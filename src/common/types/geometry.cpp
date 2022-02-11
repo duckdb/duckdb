@@ -8,15 +8,14 @@
 #include "postgis/lwgeom_inout.hpp"
 #include "postgis.hpp"
 
-namespace duckdb{
+namespace duckdb {
 
 string Geometry::GetString(string_t geometry, DataFormatType ftype) {
 	auto data = (const_data_ptr_t)geometry.GetDataUnsafe();
 	auto len = geometry.GetSize();
 	Postgis postgis;
 	string text = "";
-	switch (ftype)
-	{
+	switch (ftype) {
 	case DataFormatType::FORMAT_VALUE_TYPE_WKB:
 		text = postgis.LWGEOM_asBinary(data, len);
 		break;
@@ -28,7 +27,7 @@ string Geometry::GetString(string_t geometry, DataFormatType ftype) {
 	case DataFormatType::FORMAT_VALUE_TYPE_GEOJSON:
 		text = postgis.LWGEOM_asGeoJson(data, len);
 		break;
-	
+
 	default:
 		break;
 	}
@@ -49,14 +48,14 @@ string Geometry::ToString(string_t geometry, DataFormatType ftype) {
 	return string(buffer.get(), str_len);
 }
 
-void Geometry::ToGeometry(duckdb_postgis::GSERIALIZED* gser, data_ptr_t output) {
+void Geometry::ToGeometry(duckdb_postgis::GSERIALIZED *gser, data_ptr_t output) {
 	Postgis postgis;
 	data_ptr_t base = (data_ptr_t)postgis.LWGEOM_base(gser);
 	auto geometry_len = Geometry::GetGeometrySize(gser);
 	memcpy(output, base, geometry_len);
 }
 
-string Geometry::ToGeometry(duckdb_postgis::GSERIALIZED* gser) {
+string Geometry::ToGeometry(duckdb_postgis::GSERIALIZED *gser) {
 	auto geometry_len = Geometry::GetGeometrySize(gser);
 	auto buffer = std::unique_ptr<char[]>(new char[geometry_len]);
 	Geometry::ToGeometry(gser, (data_ptr_t)buffer.get());
@@ -70,14 +69,14 @@ string Geometry::ToGeometry(string_t text) {
 	return str;
 }
 
-duckdb_postgis::GSERIALIZED* Geometry::GetGserialized(string_t geom) {
+duckdb_postgis::GSERIALIZED *Geometry::GetGserialized(string_t geom) {
 	Postgis postgis;
 	auto data = (const_data_ptr_t)geom.GetDataUnsafe();
 	auto size = geom.GetSize();
 	return postgis.LWGEOM_getGserialized(data, size);
 }
 
-duckdb_postgis::GSERIALIZED* Geometry::ToGserialized(string_t str) {
+duckdb_postgis::GSERIALIZED *Geometry::ToGserialized(string_t str) {
 	Postgis postgis;
 	auto ger = postgis.LWGEOM_in(&str.GetString()[0]);
 	return ger;
@@ -94,4 +93,4 @@ void Geometry::DestroyGeometry(duckdb_postgis::GSERIALIZED *gser) {
 	postgis.LWGEOM_free(gser);
 }
 
-}
+} // namespace duckdb
