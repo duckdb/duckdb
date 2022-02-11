@@ -29,14 +29,12 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 			}
 			return SQL_SUCCESS;
 		}
-		case SQL_ATTR_PARAMS_PROCESSED_PTR:
-			stmt->param_desc->SetParamProcessedPtr(value_ptr);
+		case SQL_ATTR_PARAMS_PROCESSED_PTR: {
+			stmt->param_desc->SetParamProcessedPtr((SQLULEN *)value_ptr);
 			return SQL_SUCCESS;
-		case SQL_ATTR_PARAM_STATUS_PTR:
-			stmt->param_desc->ipd->header.sql_desc_array_status_ptr = (SQLUSMALLINT *)value_ptr;
-			return SQL_SUCCESS;
-		case SQL_ATTR_QUERY_TIMEOUT: {
-			// this should be 0
+		}
+		case SQL_ATTR_PARAM_STATUS_PTR: {
+			stmt->param_desc->SetArrayStatusPtr((SQLUSMALLINT *)value_ptr);
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_ROW_ARRAY_SIZE: {
@@ -46,33 +44,32 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 				if (new_size < 1) {
 					return SQL_ERROR;
 				}
-				stmt->odbc_fetcher->rowset_size = new_size;
+				// This field in the ARD can also be set by calling SQLSetStmtAttr with the SQL_ATTR_ROW_ARRAY_SIZE
+				// attribute.
+				stmt->row_desc->ard->header.sql_desc_array_size = new_size;
 			}
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_ROWS_FETCHED_PTR: {
 			stmt->rows_fetched_ptr = (SQLULEN *)value_ptr;
+			stmt->row_desc->ird->header.sql_desc_rows_processed_ptr = (SQLULEN *)value_ptr;
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_ROW_BIND_TYPE: {
-			if (value_ptr && (SQLULEN)value_ptr != SQL_BIND_BY_COLUMN) {
-				//! it's a row-wise binding orientation (SQLFetch should support it)
-				stmt->odbc_fetcher->row_length = (SQLULEN *)value_ptr;
-				stmt->odbc_fetcher->bind_orientation = duckdb::FetchBindingOrientation::ROW;
+			if (value_ptr == nullptr) {
+				return SQL_ERROR;
 			}
+			stmt->row_desc->ard->header.sql_desc_bind_type = *(SQLULEN *)value_ptr;
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_ROW_STATUS_PTR: {
-			stmt->odbc_fetcher->row_status_buff = (SQLUSMALLINT *)value_ptr;
+			stmt->row_desc->ird->header.sql_desc_array_status_ptr = (SQLUSMALLINT *)value_ptr;
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_CURSOR_TYPE: {
 			stmt->odbc_fetcher->cursor_type = (SQLULEN)value_ptr;
 			return SQL_SUCCESS;
 		}
-		case SQL_ATTR_CONCURRENCY:
-			// needs to be implemented
-			return SQL_SUCCESS;
 		case SQL_ATTR_APP_ROW_DESC: {
 			stmt->SetARD((duckdb::OdbcHandleDesc *)value_ptr);
 			return SQL_SUCCESS;
@@ -81,10 +78,18 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 			stmt->SetAPD((duckdb::OdbcHandleDesc *)value_ptr);
 			return SQL_SUCCESS;
 		}
+		case SQL_ATTR_IMP_PARAM_DESC:
+		case SQL_ATTR_IMP_ROW_DESC: {
+			stmt->error_messages.emplace_back("Invalid use of an automatically allocated descriptor handle.");
+			return SQL_ERROR;
+		}
 		case SQL_ATTR_PARAM_BIND_OFFSET_PTR: {
-			stmt->param_desc->apd->header.sql_desc_bind_offset_ptr = (SQLLEN *)value_ptr;
+			stmt->param_desc->SetBindOffesetPtr((SQLLEN *)value_ptr);
 			return SQL_SUCCESS;
 		}
+		case SQL_ATTR_CONCURRENCY:
+			// needs to be implemented
+			return SQL_SUCCESS;
 		default:
 			stmt->error_messages.emplace_back("Unsupported attribute type.");
 			return SQL_ERROR;
@@ -117,72 +122,101 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 			}
 			return SQL_SUCCESS;
 		}
-		case SQL_ATTR_ASYNC_ENABLE:
-			break;
-		// case SQL_ATTR_ASYNC_STMT_EVENT:
-		//	break;
-		case SQL_ATTR_CONCURRENCY:
-			break;
-		case SQL_ATTR_CURSOR_SCROLLABLE:
-			break;
-		case SQL_ATTR_CURSOR_SENSITIVITY:
-			break;
-		case SQL_ATTR_CURSOR_TYPE:
-			break;
-		case SQL_ATTR_ENABLE_AUTO_IPD:
-			break;
-		case SQL_ATTR_FETCH_BOOKMARK_PTR:
-			break;
-		case SQL_ATTR_KEYSET_SIZE:
-			break;
-		case SQL_ATTR_MAX_LENGTH:
-			break;
-		case SQL_ATTR_MAX_ROWS:
-			break;
-		case SQL_ATTR_METADATA_ID:
-			break;
-		case SQL_ATTR_NOSCAN:
-			break;
 		case SQL_ATTR_PARAM_BIND_OFFSET_PTR: {
-			*((SQLLEN *)value_ptr) = *stmt->param_desc->apd->header.sql_desc_bind_offset_ptr;
+			if (value_ptr == nullptr) {
+				return SQL_ERROR;
+			}
+			*((SQLLEN **)value_ptr) = stmt->param_desc->GetBindOffesetPtr();
 			return SQL_SUCCESS;
 		}
-		case SQL_ATTR_PARAM_BIND_TYPE:
-			break;
-		case SQL_ATTR_PARAM_OPERATION_PTR:
-			break;
-		case SQL_ATTR_PARAM_STATUS_PTR:
-			break;
-		case SQL_ATTR_PARAMS_PROCESSED_PTR:
-			break;
-		case SQL_ATTR_PARAMSET_SIZE:
-			break;
-		case SQL_ATTR_QUERY_TIMEOUT:
-			break;
-		case SQL_ATTR_RETRIEVE_DATA:
-			break;
-		case SQL_ATTR_ROW_ARRAY_SIZE:
-			break;
-		case SQL_ATTR_ROW_BIND_OFFSET_PTR:
-			break;
-		case SQL_ATTR_ROW_BIND_TYPE:
-			break;
-		case SQL_ATTR_ROW_NUMBER:
-			break;
-		case SQL_ATTR_ROW_OPERATION_PTR:
-			break;
-		case SQL_ATTR_ROW_STATUS_PTR:
-			break;
-		case SQL_ATTR_ROWS_FETCHED_PTR:
-			break;
-		case SQL_ATTR_SIMULATE_CURSOR:
-			break;
-		case SQL_ATTR_USE_BOOKMARKS:
-			break;
-		default:
-			break;
+		case SQL_ATTR_PARAM_BIND_TYPE: {
+			if (value_ptr == nullptr) {
+				return SQL_ERROR;
+			}
+			*((SQLINTEGER *)value_ptr) = stmt->param_desc->apd->header.sql_desc_bind_type;
+			return SQL_SUCCESS;
 		}
-		return SQL_ERROR;
+		case SQL_ATTR_PARAMS_PROCESSED_PTR: {
+			if (value_ptr == nullptr) {
+				return SQL_ERROR;
+			}
+			*(SQLULEN **)value_ptr = stmt->param_desc->GetParamProcessedPtr();
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_PARAMSET_SIZE: {
+			if (value_ptr == nullptr) {
+				return SQL_ERROR;
+			}
+			*(SQLULEN *)value_ptr = stmt->param_desc->apd->header.sql_desc_array_size;
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_ROW_ARRAY_SIZE: {
+			if (value_ptr == nullptr) {
+				return SQL_ERROR;
+			}
+			*(SQLULEN *)value_ptr = stmt->row_desc->ard->header.sql_desc_array_size;
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_ROWS_FETCHED_PTR: {
+			if (value_ptr == nullptr) {
+				return SQL_ERROR;
+			}
+			*(SQLULEN **)value_ptr = stmt->rows_fetched_ptr;
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_ROW_BIND_TYPE: {
+			if (value_ptr == nullptr) {
+				return SQL_ERROR;
+			}
+			if ((SQLULEN)value_ptr != SQL_BIND_BY_COLUMN) {
+				//! it's a row-wise binding orientation
+				*(SQLULEN *)value_ptr = stmt->row_desc->ard->header.sql_desc_bind_type;
+				return SQL_SUCCESS;
+			}
+			*(SQLULEN *)value_ptr = SQL_BIND_BY_COLUMN;
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_ROW_STATUS_PTR: {
+			if (value_ptr == nullptr) {
+				return SQL_ERROR;
+			}
+			*(SQLUSMALLINT **)value_ptr = stmt->row_desc->ird->header.sql_desc_array_status_ptr;
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_CURSOR_TYPE: {
+			if (value_ptr == nullptr) {
+				return SQL_ERROR;
+			}
+			*(SQLULEN *)value_ptr = stmt->odbc_fetcher->cursor_type;
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_ASYNC_ENABLE:
+#ifdef SQL_ATTR_ASYNC_STMT_EVENT
+		case SQL_ATTR_ASYNC_STMT_EVENT:
+#endif
+		case SQL_ATTR_CONCURRENCY:
+		case SQL_ATTR_CURSOR_SCROLLABLE:
+		case SQL_ATTR_CURSOR_SENSITIVITY:
+		case SQL_ATTR_ENABLE_AUTO_IPD:
+		case SQL_ATTR_FETCH_BOOKMARK_PTR:
+		case SQL_ATTR_KEYSET_SIZE:
+		case SQL_ATTR_MAX_LENGTH:
+		case SQL_ATTR_MAX_ROWS:
+		case SQL_ATTR_METADATA_ID:
+		case SQL_ATTR_NOSCAN:
+		case SQL_ATTR_PARAM_OPERATION_PTR:
+		case SQL_ATTR_PARAM_STATUS_PTR:
+		case SQL_ATTR_QUERY_TIMEOUT:
+		case SQL_ATTR_RETRIEVE_DATA:
+		case SQL_ATTR_ROW_BIND_OFFSET_PTR:
+		case SQL_ATTR_ROW_NUMBER:
+		case SQL_ATTR_ROW_OPERATION_PTR:
+		case SQL_ATTR_SIMULATE_CURSOR:
+		case SQL_ATTR_USE_BOOKMARKS:
+		default:
+			stmt->error_messages.emplace_back("Unsupported attribute type.");
+			return SQL_ERROR;
+		}
 	});
 }
 
