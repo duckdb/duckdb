@@ -30,11 +30,11 @@ static void LoadInternal(DatabaseInstance &instance) {
 	config.AddExtensionOption("s3_endpoint", "S3 Endpoint (default s3.amazonaws.com)", LogicalType::VARCHAR);
 
 	// S3 Uploader config
-	config.AddExtensionOption("s3_uploader_max_filesize", "S3 Uploader max filesize (default 400GB)",
+	config.AddExtensionOption("s3_uploader_max_filesize", "S3 Uploader max filesize (between 50GB and 5TB, default 800GB)",
 	                          LogicalType::VARCHAR);
-	config.AddExtensionOption("s3_uploader_max_parts_per_file", "S3 Uploader max parts per file (default 10000)",
+	config.AddExtensionOption("s3_uploader_max_parts_per_file", "S3 Uploader max parts per file (between 1 and 10000, default 10000)",
 	                          LogicalType::UBIGINT);
-	config.AddExtensionOption("s3_uploader_thread_limit", "S3 Uploader global thread limit (default 100)",
+	config.AddExtensionOption("s3_uploader_thread_limit", "S3 Uploader global thread limit (default 50)",
 	                          LogicalType::UBIGINT);
 }
 

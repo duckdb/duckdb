@@ -149,7 +149,7 @@ S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener) {
 	if (opener->TryGetCurrentSetting("s3_uploader_max_filesize", value)) {
 		uploader_max_filesize = DBConfig::ParseMemoryLimit(value.GetValue<string>());
 	} else {
-		uploader_max_filesize = 400000000000; // 400GB
+		uploader_max_filesize = 800000000000; // 800GB
 	}
 
 	if (opener->TryGetCurrentSetting("s3_uploader_max_parts_per_file", value)) {
@@ -161,7 +161,7 @@ S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener) {
 	if (opener->TryGetCurrentSetting("s3_uploader_thread_limit", value)) {
 		max_upload_threads = value.GetValue<uint64_t>();
 	} else {
-		max_upload_threads = 100;
+		max_upload_threads = 50;
 	}
 
 	return {uploader_max_filesize, max_parts_per_file, max_upload_threads};
@@ -293,8 +293,8 @@ void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, std::shared_ptr<S3Writ
 }
 
 // Note that FlushAll currently does not allow to continue writing afterwards. Therefore, FinalizeMultipartUpload should
-// be called right after it! TODO: we can fix this be keeping the last partially written buffer in memory and allow
-//  "restarting" it we continueing
+// be called right after it!
+// TODO: we can fix this by keeping the last partially written buffer in memory and allow reuploading it with new data.
 void S3FileSystem::FlushAllBuffers(S3FileHandle &file_handle) {
 	//  Collect references to all buffers to check
 	std::vector<std::shared_ptr<S3WriteBuffer>> to_flush;
