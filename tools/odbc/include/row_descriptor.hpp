@@ -6,7 +6,7 @@
 namespace duckdb {
 class RowDescriptor {
 public:
-	RowDescriptor(OdbcHandleStmt *stmt_ptr);
+	explicit RowDescriptor(OdbcHandleStmt *stmt_ptr);
 	~RowDescriptor() {
 	}
 	OdbcHandleDesc *GetIRD();

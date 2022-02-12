@@ -9,7 +9,12 @@ dbFetch__duckdb_result <- function(res, n = -1, ...) {
   if (is.null(res@env$resultset)) {
     stop("Need to call `dbBind()` before `dbFetch()`")
   }
-
+  if (res@stmt_lst$type == "EXPLAIN") {
+    df <- res@env$resultset
+    attr(df, "query") <- res@stmt_lst$str
+    class(df) <- c("duckdb_explain", class(df))
+    return(df)
+  }
   if (length(n) != 1) {
     stop("need exactly one value in n")
   }
