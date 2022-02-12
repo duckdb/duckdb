@@ -5,40 +5,36 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/string_util.hpp"
 
-#ifndef DISABLE_BUILTIN_EXTENSIONS
-
-#ifdef BUILD_ICU_EXTENSION
+#if defined(BUILD_ICU_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "icu-extension.hpp"
 #endif
 
-#ifdef BUILD_PARQUET_EXTENSION
+#if defined(BUILD_PARQUET_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "parquet-extension.hpp"
 #endif
 
-#ifdef BUILD_TPCH_EXTENSION
+#if defined(BUILD_TPCH_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "tpch-extension.hpp"
 #endif
 
-#ifdef BUILD_TPCDS_EXTENSION
+#if defined(BUILD_TPCDS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "tpcds-extension.hpp"
 #endif
 
-#ifdef BUILD_FTS_EXTENSION
+#if defined(BUILD_FTS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "fts-extension.hpp"
 #endif
 
-#ifdef BUILD_HTTPFS_EXTENSION
+#if defined(BUILD_HTTPFS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "httpfs-extension.hpp"
 #endif
 
-#ifdef BUILD_VISUALIZER_EXTENSION
+#if defined(BUILD_VISUALIZER_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "visualizer-extension.hpp"
 #endif
 
-#ifdef BUILD_EXCEL_EXTENSION
+#if defined(BUILD_EXCEL_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "excel-extension.hpp"
-#endif
-
 #endif
 
 namespace duckdb {
