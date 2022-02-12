@@ -543,19 +543,27 @@ static bool BlobCastSwitch(Vector &source, Vector &result, idx_t count, string *
 static bool ValueStringCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::JSON:
+	case LogicalTypeId::JSON: {
+		ValidityMask *result_validity;
 		if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(source.GetVectorType());
+			result_validity = &ConstantVector::Validity(result);
 		} else {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
+			result_validity = &FlatVector::Validity(result);
 		}
+		VectorData source_data;
+		source.Orrify(count, source_data);
 		for (idx_t i = 0; i < count; i++) {
+			if (!source_data.validity.RowIsValid(source_data.sel->get_index(i))) {
+				result_validity->SetInvalid(i);
+			}
 			auto src_val = source.GetValue(i);
 			auto str_val = src_val.ToString();
 			result.SetValue(i, Value(str_val));
 		}
-		FlatVector::SetValidity(result, FlatVector::Validity(source));
 		return true;
+	}
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}
