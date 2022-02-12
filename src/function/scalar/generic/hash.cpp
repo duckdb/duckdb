@@ -7,7 +7,9 @@ static void HashFunction(DataChunk &args, ExpressionState &state, Vector &result
 }
 
 void HashFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("hash", {LogicalType::ANY}, LogicalType::HASH, HashFunction));
+	auto hash_fun = ScalarFunction("hash", {LogicalType::ANY}, LogicalType::HASH, HashFunction);
+	hash_fun.varargs = LogicalType::ANY;
+	set.AddFunction(hash_fun);
 }
 
 } // namespace duckdb
