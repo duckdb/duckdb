@@ -12,9 +12,11 @@
 namespace duckdb {
 
 struct HashOp {
+	static const hash_t NULL_HASH = 0xbf58476d1ce4e5b9;
+
 	template <class T>
 	static inline hash_t Operation(T input, bool is_null) {
-		return duckdb::Hash<T>(is_null ? duckdb::NullValue<T>() : input);
+		return is_null ? NULL_HASH : duckdb::Hash<T>(input);
 	}
 };
 
@@ -114,7 +116,7 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 			unprocessed.set_index(remaining++, ridx);
 			cursor.set_index(ridx, entry.offset);
 		} else if (FIRST_HASH) {
-			hdata[ridx] = 0;
+			hdata[ridx] = HashOp::NULL_HASH;
 		}
 		// Empty or NULL non-first elements have no effect.
 	}
