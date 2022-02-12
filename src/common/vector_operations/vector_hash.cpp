@@ -18,6 +18,10 @@ struct HashOp {
 	}
 };
 
+static inline hash_t CombineHashScalar(hash_t a, hash_t b) {
+	return (a * UINT64_C(0xbf58476d1ce4e5b9)) ^ b;
+}
+
 template <bool HAS_RSEL, class T>
 static inline void TightLoopHash(T *__restrict ldata, hash_t *__restrict result_data, const SelectionVector *rsel,
                                  idx_t count, const SelectionVector *__restrict sel_vector, ValidityMask &mask) {
@@ -59,7 +63,7 @@ template <bool HAS_RSEL, bool FIRST_HASH>
 static inline void StructLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
 	auto &children = StructVector::GetEntries(input);
 
-	D_ASSERT(children.size() > 0);
+	D_ASSERT(!children.empty());
 	idx_t col_no = 0;
 	if (HAS_RSEL) {
 		if (FIRST_HASH) {
@@ -89,14 +93,81 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 	VectorData idata;
 	input.Orrify(count, idata);
 	const auto ldata = (const list_entry_t *)idata.data;
-	for (idx_t i = 0; i < count; i++) {
+
+	// Hash the children into a temporary
+	auto &child = ListVector::GetEntry(input);
+	const auto child_count = ListVector::GetListSize(input);
+
+	Vector child_hashes(LogicalType::HASH, child_count);
+	VectorOperations::Hash(child, child_hashes, child_count);
+	auto chdata = FlatVector::GetData<hash_t>(child_hashes);
+
+	// Reduce the number of entries to check to the non-empty ones
+	SelectionVector unprocessed(count);
+	SelectionVector cursor(HAS_RSEL ? STANDARD_VECTOR_SIZE : count);
+	idx_t remaining = 0;
+	for (idx_t i = 0; i < count; ++i) {
 		const idx_t ridx = HAS_RSEL ? rsel->get_index(i) : i;
 		const auto lidx = idata.sel->get_index(ridx);
 		const auto &entry = ldata[lidx];
-		if (idata.validity.RowIsValid(lidx)) {
-			hdata[ridx] = duckdb::Hash(entry.length);
-		} else {
+		if (idata.validity.RowIsValid(lidx) && entry.length > 0) {
+			unprocessed.set_index(remaining++, ridx);
+			cursor.set_index(ridx, entry.offset);
+		} else if (FIRST_HASH) {
 			hdata[ridx] = 0;
+		}
+		// Empty or NULL non-first elements have no effect.
+	}
+
+	count = remaining;
+	if (count == 0) {
+		return;
+	}
+
+	// Merge the first position hash into the main hash
+	idx_t position = 1;
+	if (FIRST_HASH) {
+		remaining = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			const auto ridx = unprocessed.get_index(i);
+			const auto cidx = cursor.get_index(ridx);
+			hdata[ridx] = chdata[cidx];
+
+			const auto lidx = idata.sel->get_index(ridx);
+			const auto &entry = ldata[lidx];
+			if (entry.length > position) {
+				// Entry still has values to hash
+				unprocessed.set_index(remaining++, ridx);
+				cursor.set_index(ridx, cidx + 1);
+			}
+		}
+		count = remaining;
+		if (count == 0) {
+			return;
+		}
+		++position;
+	}
+
+	// Combine the hashes for the remaining positions until there are none left
+	for (;; ++position) {
+		remaining = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			const auto ridx = unprocessed.get_index(i);
+			const auto cidx = cursor.get_index(ridx);
+			hdata[ridx] = CombineHashScalar(hdata[ridx], chdata[cidx]);
+
+			const auto lidx = idata.sel->get_index(ridx);
+			const auto &entry = ldata[lidx];
+			if (entry.length > position) {
+				// Entry still has values to hash
+				unprocessed.set_index(remaining++, ridx);
+				cursor.set_index(ridx, cidx + 1);
+			}
+		}
+
+		count = remaining;
+		if (count == 0) {
+			break;
 		}
 	}
 }
@@ -163,10 +234,6 @@ void VectorOperations::Hash(Vector &input, Vector &result, idx_t count) {
 
 void VectorOperations::Hash(Vector &input, Vector &result, const SelectionVector &sel, idx_t count) {
 	HashTypeSwitch<true>(input, result, &sel, count);
-}
-
-static inline hash_t CombineHashScalar(hash_t a, hash_t b) {
-	return (a * UINT64_C(0xbf58476d1ce4e5b9)) ^ b;
 }
 
 template <bool HAS_RSEL, class T>
