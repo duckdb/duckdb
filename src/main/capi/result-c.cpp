@@ -1,5 +1,4 @@
 #include "duckdb/main/capi_internal.hpp"
-#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
@@ -325,7 +324,7 @@ static void DuckdbDestroyColumn(duckdb_column column, idx_t count) {
 		duckdb_free(column.__deprecated_name);
 	}
 	if (column.duckdb_logical_type) {
-		LogicalType *type = (LogicalType *)column.duckdb_logical_type;
+		duckdb::LogicalType *type = (duckdb::LogicalType *)column.duckdb_logical_type;
 		delete type;
 	}
 }
