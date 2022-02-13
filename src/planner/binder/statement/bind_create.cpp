@@ -102,17 +102,9 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto this_macro_binding = make_unique<MacroBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
 
+	/* cannot bind Table Macro at this point as it may reference non existing tables */
 	if (!is_query) {
 		ExpressionBinder::QualifyColumnNames(*this, base.function->expression);
-	}
-
-	if (is_query) {
-		// nb use a Copy as node can be modified
-		unique_ptr<QueryNode> node = base.function->query_node->Copy();
-		// not interested in the result just wish to know if can bind
-		auto result = BindNode(*node);
-	} else {
-
 		auto expression = base.function->expression->Copy();
 		// bind it to verify the function was defined correctly
 		string error;
