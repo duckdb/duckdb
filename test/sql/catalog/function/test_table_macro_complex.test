@@ -1,4 +1,4 @@
-# name: test/sql/catalog/function/test_select_macro_complex.test
+# name: test/sql/catalog/function/test_table_macro_complex.test
 # description: Test SELECT Macro
 # group: [function]
 
