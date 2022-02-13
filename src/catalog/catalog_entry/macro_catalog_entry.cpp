@@ -51,7 +51,8 @@ unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &main_so
 
 	info->function->query_node = reader.ReadOptional<QueryNode>(nullptr);
 	if (info->function->query_node) {
-		info->function->expression.release();
+		(void)info->function->expression.release();
+		info->function->expression= nullptr;
 	}
 
 	// either expression or query_node but not both
