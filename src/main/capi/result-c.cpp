@@ -58,8 +58,8 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 		BufferedSerializer serializer;
 		result->types[i].Serialize(serializer);
 		BufferedDeserializer deserializer(serializer);
-		auto clonedType = new LogicalType(LogicalType::Deserialize(deserializer));
-		out->__deprecated_columns[i].duckdb_logical_type = (void *)clonedType;
+		auto cloned_type = new LogicalType(LogicalType::Deserialize(deserializer));
+		out->__deprecated_columns[i].duckdb_logical_type = (void *)cloned_type;
 		out->__deprecated_columns[i].__deprecated_type = ConvertCPPTypeToC(result->types[i]);
 		out->__deprecated_columns[i].__deprecated_name = strdup(result->names[i].c_str());
 		out->__deprecated_columns[i].__deprecated_nullmask =
