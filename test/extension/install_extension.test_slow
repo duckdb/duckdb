@@ -111,7 +111,6 @@ SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubuse
 10	Emily	Stewart	estewart9@opensource.org
 
 statement ok
-<<<<<<< HEAD
 INSTALL 'json';
 
 statement ok
@@ -124,6 +123,7 @@ select json_extract_int('{"myint": 42}', 'myint')
 ----
 42
 
+statement ok
 INSTALL 'excel';
 
 statement ok
