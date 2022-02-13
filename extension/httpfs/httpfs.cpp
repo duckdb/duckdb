@@ -1,5 +1,6 @@
 #include "httpfs.hpp"
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
@@ -7,7 +8,6 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
 
-#include <atomic>
 #include <map>
 
 namespace duckdb {
@@ -29,8 +29,8 @@ static string init_request(HTTPFileHandle &handle, string &url) {
 	}
 	auto &hfs = (HTTPFileHandle &)handle;
 	if (!hfs.http_client) {
-		handle.http_client = unique_ptr<duckdb_httplib_openssl::Client, ClientDeleter>(
-		    new duckdb_httplib_openssl::Client(proto_host_port.c_str()));
+		handle.http_client =
+		    unique_ptr<duckdb_httplib_openssl::Client>(new duckdb_httplib_openssl::Client(proto_host_port.c_str()));
 		handle.http_client->set_follow_location(true);
 		handle.http_client->set_keep_alive(true);
 		handle.http_client->enable_server_certificate_verification(false);
@@ -67,7 +67,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
                                                         char *buffer_in, idx_t buffer_in_len) {
 	auto &hfs = (HTTPFileHandle &)handle;
 	auto path = init_request(hfs, url);
-	unique_ptr<duckdb_httplib_openssl::Headers> headers = initialize_http_headers(header_map);
+	auto headers = initialize_http_headers(header_map);
 
 	// We use a custom Request method here, because there is no Post call with a contentreceiver in httplib
 	idx_t out_offset = 0;
@@ -102,7 +102,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
                                                        char *buffer_in, idx_t buffer_in_len) {
 	auto &hfs = (HTTPFileHandle &)handle;
 	auto path = init_request(hfs, url);
-	unique_ptr<duckdb_httplib_openssl::Headers> headers = initialize_http_headers(header_map);
+	auto headers = initialize_http_headers(header_map);
 
 	auto res = hfs.http_client->Put(path.c_str(), *headers, buffer_in, buffer_in_len, "application/octet-stream");
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
@@ -115,7 +115,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, string url, HeaderMap header_map) {
 	auto &hfs = (HTTPFileHandle &)handle;
 	auto path = init_request(hfs, url);
-	unique_ptr<duckdb_httplib_openssl::Headers> headers = initialize_http_headers(header_map);
+	auto headers = initialize_http_headers(header_map);
 
 	auto res = hfs.http_client->Head(path.c_str(), *headers);
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
@@ -128,7 +128,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
                                                             idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
 	auto &hfs = (HTTPFileHandle &)handle;
 	auto path = init_request(hfs, url);
-	unique_ptr<duckdb_httplib_openssl::Headers> headers = initialize_http_headers(header_map);
+	auto headers = initialize_http_headers(header_map);
 
 	// send the Range header to read only subset of file
 	std::string range_expr =
@@ -334,7 +334,5 @@ ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res) {
 	}
 }
 
-void ClientDeleter::operator()(duckdb_httplib_openssl::Client *client) {
-	delete client;
-}
+HTTPFileHandle::~HTTPFileHandle() = default;
 } // namespace duckdb

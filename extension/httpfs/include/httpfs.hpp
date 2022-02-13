@@ -8,14 +8,10 @@ namespace duckdb_httplib_openssl {
 struct Response;
 class Client;
 } // namespace duckdb_httplib_openssl
+
 namespace duckdb {
 
 using HeaderMap = unordered_map<string, string>;
-
-// avoid including httplib in header
-struct ClientDeleter {
-	void operator()(duckdb_httplib_openssl::Client *client);
-};
 
 // avoid including httplib in header
 struct ResponseWrapper {
@@ -35,11 +31,12 @@ struct HTTPParams {
 class HTTPFileHandle : public FileHandle {
 public:
 	HTTPFileHandle(FileSystem &fs, std::string path, uint8_t flags, const HTTPParams &params);
+	~HTTPFileHandle() override;
 	// This two-phase construction allows subclasses more flexible setup.
 	virtual unique_ptr<ResponseWrapper> Initialize();
 
 	// We keep an http client stored for connection reuse with keep-alive headers
-	unique_ptr<duckdb_httplib_openssl::Client, ClientDeleter> http_client = nullptr;
+	unique_ptr<duckdb_httplib_openssl::Client> http_client;
 
 	const HTTPParams http_params;
 

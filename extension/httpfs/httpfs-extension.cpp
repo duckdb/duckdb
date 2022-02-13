@@ -2,7 +2,6 @@
 
 #include "duckdb.hpp"
 #include "httpfs-extension.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 
 #include "s3fs.hpp"
 
@@ -13,7 +12,7 @@ static void LoadInternal(DatabaseInstance &instance) {
 	auto &fs = instance.GetFileSystem();
 
 	fs.RegisterSubSystem(make_unique<HTTPFileSystem>());
-	fs.RegisterSubSystem(make_unique<S3FileSystem>(*instance.GetStorageManager().buffer_manager));
+	fs.RegisterSubSystem(make_unique<S3FileSystem>(BufferManager::GetBufferManager(instance)));
 
 	auto &config = DBConfig::GetConfig(instance);
 

@@ -4,8 +4,8 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/atomic.hpp"
 
-#include <atomic>
 #include <condition_variable>
 #include <iostream>
 
@@ -22,6 +22,10 @@ struct S3AuthParams {
 };
 
 struct S3ConfigParams {
+	static constexpr uint64_t DEFAULT_MAX_FILESIZE = 800000000000; // 800GB
+	static constexpr uint64_t DEFAULT_MAX_PARTS_PER_FILE = 10000;  // AWS DEFAULT
+	static constexpr uint64_t DEFAULT_MAX_UPLOAD_THREADS = 50;
+
 	uint64_t max_file_size;
 	uint64_t max_parts_per_file;
 	uint64_t max_upload_threads;
