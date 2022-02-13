@@ -1,5 +1,8 @@
 #include "duckdb/main/capi_internal.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/common/serializer/buffered_deserializer.hpp"
 
 namespace duckdb {
 
@@ -53,18 +56,17 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 	// zero initialize the columns (so we can cleanly delete it in case a malloc fails)
 	memset(out->__deprecated_columns, 0, sizeof(duckdb_column) * out->__deprecated_column_count);
 	for (idx_t i = 0; i < out->__deprecated_column_count; i++) {
+		BufferedSerializer serializer;
+		result->types[i].Serialize(serializer);
+		BufferedDeserializer deserializer(serializer);
+		auto clonedType = new LogicalType(LogicalType::Deserialize(deserializer));
+		out->__deprecated_columns[i].duckdb_logical_type = (void *)clonedType;
 		out->__deprecated_columns[i].__deprecated_type = ConvertCPPTypeToC(result->types[i]);
 		out->__deprecated_columns[i].__deprecated_name = strdup(result->names[i].c_str());
 		out->__deprecated_columns[i].__deprecated_nullmask =
 		    (bool *)duckdb_malloc(sizeof(bool) * out->__deprecated_row_count);
-		if (result->types[i].id() == LogicalTypeId::DECIMAL) {
-			// allocate extra row for store type information
-			out->__deprecated_columns[i].__deprecated_data = duckdb_malloc(
-			    GetCTypeSize(out->__deprecated_columns[i].__deprecated_type) * (out->__deprecated_row_count + 1));
-		} else {
-			out->__deprecated_columns[i].__deprecated_data = duckdb_malloc(
-			    GetCTypeSize(out->__deprecated_columns[i].__deprecated_type) * out->__deprecated_row_count);
-		}
+		out->__deprecated_columns[i].__deprecated_data =
+		    duckdb_malloc(GetCTypeSize(out->__deprecated_columns[i].__deprecated_type) * out->__deprecated_row_count);
 		if (!out->__deprecated_columns[i].__deprecated_nullmask || !out->__deprecated_columns[i].__deprecated_name ||
 		    !out->__deprecated_columns[i].__deprecated_data) { // LCOV_EXCL_START
 			// malloc failure
@@ -222,16 +224,10 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 			break;
 		}
 		case LogicalTypeId::DECIMAL: {
-			auto type = result->types[col];
-			// set type info to the last row
-			uint8_t width, scale;
-			type.GetDecimalProperties(width, scale);
-			auto target = (hugeint_t *)out->__deprecated_columns[col].__deprecated_data;
-			target[out->__deprecated_row_count].lower = width;
-			target[out->__deprecated_row_count].upper = scale;
 			// get data
 			idx_t row = 0;
-			switch (type.InternalType()) {
+			auto target = (hugeint_t *)out->__deprecated_columns[col].__deprecated_data;
+			switch (result->types[col].InternalType()) {
 			case PhysicalType::INT16: {
 				for (auto &chunk : result->collection.Chunks()) {
 					auto source = FlatVector::GetData<int16_t>(chunk->data[col]);
@@ -285,7 +281,8 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 				break;
 			}
 			default:
-				throw std::runtime_error("Unsupported physical type for Decimal" + TypeIdToString(type.InternalType()));
+				throw std::runtime_error("Unsupported physical type for Decimal" +
+				                         TypeIdToString(result->types[col].InternalType()));
 			}
 			break;
 		}
@@ -326,6 +323,10 @@ static void DuckdbDestroyColumn(duckdb_column column, idx_t count) {
 	}
 	if (column.__deprecated_name) {
 		duckdb_free(column.__deprecated_name);
+	}
+	if (column.duckdb_logical_type) {
+		LogicalType *type = (LogicalType *)column.duckdb_logical_type;
+		delete type;
 	}
 }
 

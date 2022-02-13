@@ -515,6 +515,15 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(result->IsNull(0, 0));
 	duckdb_decimal decimal = result->Fetch<duckdb_decimal>(0, 1);
 	REQUIRE(duckdb_decimal_to_double(decimal) == 12.3);
+	// test more decimal physical types
+	result = tester.Query("SELECT 1.2::DECIMAL(4,1), 100.3::DECIMAL(9,1), 320938.4298::DECIMAL(18,4), "
+	                      "49082094824.904820482094::DECIMAL(30,12), NULL::DECIMAL");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(0, 0)) == 1.2);
+	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(1, 0)) == 100.3);
+	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(2, 0)) == 320938.4298);
+	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(3, 0)) == 49082094824.904820482094);
+	REQUIRE(result->IsNull(4, 0));
 }
 
 TEST_CASE("Test errors in C API", "[capi]") {

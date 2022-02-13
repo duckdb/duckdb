@@ -171,6 +171,7 @@ typedef struct {
 	char *__deprecated_name;
 #endif
 	void *internal_data;
+	void *duckdb_logical_type;
 } duckdb_column;
 
 typedef struct {
