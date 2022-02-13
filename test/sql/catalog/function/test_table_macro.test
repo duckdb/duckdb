@@ -80,3 +80,37 @@ CREATE TABLE MACRO   gm(m) as SELECT * FROM  greek_tbl WHERE cmp(name,m);
 statement ok
 SELECT * FROM  gm('^m');
 
+# create a scalar macro with same name as table macro
+statement ok
+CREATE MACRO xt(a,b) as a+b;
+
+# drop table macro
+statement ok  
+DROP TABLE MACRO xt;
+
+# use column identifer as a macro parameter
+statement ok
+CREATE TABLE MACRO xt(id, imax) as SELECT id,name FROM test_tbl WHERE id<=imax;
+
+query II
+SELECT * FROM xt(id,1);
+----
+1	tom
+
+# try to create table macro with pre-existing table name "range"
+statement error
+CREATE TABLE MACRO range(a,b) as  select a,b from test_tbl;
+
+# use table macro as a scalar macro
+query II
+SELECT * FROM test_tbl where id>=(SELECT max(id) FROM xt(id,30));
+----
+24	evan
+
+# use table macro as a scalar macro
+query II
+SELECT * FROM greek_tbl where id<=(SELECT min(id) FROM xt(id,30));
+----
+1	alpha
+
+
