@@ -56,7 +56,7 @@ public:
 public:
 	template <class T, class BASE>
 	static string ToString(const T &entry, const string &schema, const string &function_name, bool is_operator = false,
-	                       bool distinct = false, BASE *filter = nullptr, OrderModifier *order_bys = nullptr) {
+	                       bool distinct = false, BASE *filter = nullptr, OrderModifier *order_bys = nullptr, bool export_state = false) {
 		if (is_operator) {
 			// built-in operator
 			D_ASSERT(!distinct);
@@ -98,6 +98,10 @@ public:
 		// filtered aggregate
 		if (filter) {
 			result += " FILTER (WHERE " + filter->ToString() + ")";
+		}
+
+		if (export_state) {
+			result += " EXPORT_STATE";
 		}
 
 		return result;
