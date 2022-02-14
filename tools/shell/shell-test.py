@@ -68,6 +68,9 @@ CREATE TABLE a (i INTEGER);
 SELECT SUM(i) FROM a;
 ''' % datafile, out='126')
 
+# system functions
+test('SELECT 1, current_query() as my_column', out='SELECT 1, current_query() as my_column')
+
 # nested types
 test('select LIST_VALUE(1, 2);', out='[1, 2]')
 test("select STRUCT_PACK(x := 3, y := 3);", out="{'x': 3, 'y': 3}")

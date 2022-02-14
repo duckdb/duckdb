@@ -7,7 +7,7 @@ SetStatement::SetStatement(std::string name_p, Value value_p, SetScope scope_p)
 }
 
 unique_ptr<SQLStatement> SetStatement::Copy() const {
-	return make_unique<SetStatement>(name, value, scope);
+	return unique_ptr<SetStatement>(new SetStatement(*this));
 }
 
 } // namespace duckdb

@@ -5,10 +5,11 @@ namespace duckdb {
 ShowStatement::ShowStatement() : SQLStatement(StatementType::SHOW_STATEMENT), info(make_unique<ShowSelectInfo>()) {
 }
 
+ShowStatement::ShowStatement(const ShowStatement &other) : SQLStatement(other), info(other.info->Copy()) {
+}
+
 unique_ptr<SQLStatement> ShowStatement::Copy() const {
-	auto result = make_unique<ShowStatement>();
-	result->info = info->Copy();
-	return move(result);
+	return unique_ptr<ShowStatement>(new ShowStatement(*this));
 }
 
 } // namespace duckdb
