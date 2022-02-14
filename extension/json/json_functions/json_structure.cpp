@@ -46,6 +46,25 @@ static inline yyjson_mut_val *GetConsistentArrayStructureObject(const vector<yyj
 	return result;
 }
 
+static inline bool GetMaxTypeString(const char *type_string, const char *elem_type_string, const char **result) {
+	if (strcmp(type_string, elem_type_string) == 0) {
+		*result = type_string;
+		return true;
+	}
+	// FIXME: if people ask for explicit casting from e.g. real to string we can implement that
+	if (strcmp(type_string, JSONCommon::TYPE_STRING_INTEGER) == 0 &&
+	    strcmp(elem_type_string, JSONCommon::TYPE_STRING_REAL) == 0) {
+		*result = JSONCommon::TYPE_STRING_REAL;
+		return true;
+	}
+	if (strcmp(type_string, JSONCommon::TYPE_STRING_REAL) == 0 &&
+	    strcmp(elem_type_string, JSONCommon::TYPE_STRING_INTEGER) == 0) {
+		*result = JSONCommon::TYPE_STRING_REAL;
+		return true;
+	}
+	return false;
+}
+
 static inline yyjson_mut_val *GetConsistentArrayStructure(const vector<yyjson_mut_val *> &elem_structures,
                                                           yyjson_mut_doc *structure_doc) {
 	if (elem_structures.empty()) {
@@ -55,22 +74,24 @@ static inline yyjson_mut_val *GetConsistentArrayStructure(const vector<yyjson_mu
 	auto type_string = yyjson_mut_get_str(elem_structures[0]);
 	for (idx_t i = 1; i < elem_structures.size(); i++) {
 		auto elem_type = yyjson_mut_get_type(elem_structures[i]);
-		auto elem_type_string = yyjson_mut_get_str(elem_structures[0]);
-		if (type_string == JSONCommon::TYPE_STRING_NULL) {
+		auto elem_type_string = yyjson_mut_get_str(elem_structures[i]);
+		if (type_string && strcmp(type_string, JSONCommon::TYPE_STRING_NULL) == 0) {
 			// Iterate until we find non-null
 			type = elem_type;
 			type_string = elem_type_string;
 			continue;
 		}
-		if (elem_type_string == JSONCommon::TYPE_STRING_NULL) {
+		if (elem_type_string && strcmp(elem_type_string, JSONCommon::TYPE_STRING_NULL) == 0) {
 			// Skip over encountered nulls after we found one
 			continue;
 		}
-		if (type != elem_type || type_string != elem_type_string) {
+		if (type != elem_type) {
+			throw Exception("Inconsistent JSON structure");
+		}
+		if (type == YYJSON_TYPE_STR && !GetMaxTypeString(type_string, elem_type_string, &type_string)) {
 			throw Exception("Inconsistent JSON structure");
 		}
 	}
-	vector<yyjson_mut_val *> nested_elem_structures;
 	switch (type) {
 	case YYJSON_TYPE_ARR:
 		return GetConsistentArrayStructureArray(elem_structures, structure_doc);

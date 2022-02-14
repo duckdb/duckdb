@@ -20,6 +20,7 @@ public:
 		functions.push_back(GetJSONFunction());
 		functions.push_back(GetTypeFunction());
 		functions.push_back(GetStructureFunction());
+		functions.push_back(GetTransformFunction());
 		functions.push_back(GetValidFunction());
 		return functions;
 	}
@@ -32,6 +33,7 @@ private:
 	static CreateScalarFunctionInfo GetJSONFunction();
 	static CreateScalarFunctionInfo GetTypeFunction();
 	static CreateScalarFunctionInfo GetStructureFunction();
+	static CreateScalarFunctionInfo GetTransformFunction();
 	static CreateScalarFunctionInfo GetValidFunction();
 };
 

@@ -102,3 +102,13 @@ query T
 select json_structure('[{"a": [{"b": 42}, {"b": null}]}, {"a": [{"c": 7}]}]')
 ----
 [{"a":[{"c":"integer","b":"integer"}]}]
+
+# real is supertype of integer
+query T
+select json_structure('[42, 4.2]')
+----
+["real"]
+
+# inconsistent types
+statement error
+select json_structure('[42, "4.2"]')

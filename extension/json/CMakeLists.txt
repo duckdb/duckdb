@@ -13,6 +13,7 @@ set(JSON_EXTENSION_FILES
     json_functions/json_array_length.cpp
     json_functions/json_extract.cpp
     json_functions/json_structure.cpp
+    json_functions/json_transform.cpp
     json_functions/json_create.cpp
     json_functions/json_type.cpp
     json_functions/json_valid.cpp
