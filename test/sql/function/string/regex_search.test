@@ -112,6 +112,17 @@ SELECT regexp_matches('asdf', '.*SD.*', 'c')
 ----
 0
 
+# literal match
+query T
+SELECT regexp_matches('as^/$df', '^/$', 'l')
+----
+1
+
+query T
+SELECT regexp_matches('as^/$df', '^/$')
+----
+0
+
 # dot matches newline
 query T
 SELECT regexp_matches('hello
