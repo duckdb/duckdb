@@ -152,6 +152,14 @@ integer
 integer
 NULL
 
+# query multiple paths
+query T
+select json_type(json, ['str', '/nested/val']) from test
+----
+[string, integer]
+[string, integer]
+[null, NULL]
+
 # test with columnref input and columnref query
 query T
 select json_type(json, query) from test

@@ -1,0 +1,104 @@
+# name: test/sql/json/test_json_structure.test
+# description: Test json_structure() function
+# group: [json]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# singletons
+query T
+select json_structure('42')
+----
+"integer"
+
+query T
+select json_structure('4.2')
+----
+"real"
+
+query T
+select json_structure('null')
+----
+"null"
+
+query T
+select json_structure('true')
+----
+"boolean"
+
+query T
+select json_structure('"a"')
+----
+"string"
+
+# simple objects
+query T
+select json_structure('{"a": 42}')
+----
+{"a":"integer"}
+
+query T
+select json_structure('{"a": 4.2}')
+----
+{"a":"real"}
+
+query T
+select json_structure('{"a": "42"}')
+----
+{"a":"string"}
+
+query T
+select json_structure('{"a": null}')
+----
+{"a":"null"}
+
+query T
+select json_structure('{"a": true}')
+----
+{"a":"boolean"}
+
+query T
+select json_structure('{"a": []}')
+----
+{"a":["null"]}
+
+query T
+select json_structure('{"a": [42]}')
+----
+{"a":["integer"]}
+
+query T
+select json_structure('{"a": {"b": 42}}')
+----
+{"a":{"b":"integer"}}
+
+# now the hard part: JSON arrays
+# we derive some kind of consistent structure from arrays, while not being too strict
+# i.e., objects in arrays can have a different set of keys, null is a wildcard
+# Same keys, however, must have the same type!
+query T
+select json_structure('[{"a": 42}, {"a": null}]')
+----
+[{"a":"integer"}]
+
+query T
+select json_structure('[{"a": 42}, {"b": 4.2}]')
+----
+[{"b":"real","a":"integer"}]
+
+query T
+select json_structure('[{"a": [42, null]}, {"a": [7]}]')
+----
+[{"a":["integer"]}]
+
+query T
+select json_structure('[{"a": [{"b": 42}, {"b": null}]}, {"a": [{"b": 7}]}]')
+----
+[{"a":[{"b":"integer"}]}]
+
+query T
+select json_structure('[{"a": [{"b": 42}, {"b": null}]}, {"a": [{"c": 7}]}]')
+----
+[{"a":[{"c":"integer","b":"integer"}]}]

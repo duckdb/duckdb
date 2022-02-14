@@ -52,6 +52,16 @@ private:
 	static constexpr auto IDX_T_MAX = ((idx_t)(~(idx_t)0));
 
 public:
+	//! Constant JSON type strings
+	static constexpr auto TYPE_STRING_NULL = "null";
+	static constexpr auto TYPE_STRING_BOOLEAN = "boolean";
+	static constexpr auto TYPE_STRING_INTEGER = "integer";
+	static constexpr auto TYPE_STRING_REAL = "real";
+	static constexpr auto TYPE_STRING_STRING = "string";
+	static constexpr auto TYPE_STRING_ARRAY = "array";
+	static constexpr auto TYPE_STRING_OBJECT = "object";
+
+public:
 	//! Read JSON document (returns nullptr if invalid JSON)
 	static inline yyjson_doc *ReadDocumentUnsafe(const string_t &input) {
 		return yyjson_read(input.GetDataUnsafe(), input.GetSize(), READ_FLAG);
@@ -79,6 +89,34 @@ public:
 		auto result = WriteVal(mut_doc);
 		yyjson_mut_doc_free(mut_doc);
 		return result;
+	}
+
+	//! Get type string corresponding to yyjson type
+	static inline const char *const ValTypeToString(yyjson_val *val) {
+		switch (yyjson_get_type(val)) {
+		case YYJSON_TYPE_NULL:
+			return JSONCommon::TYPE_STRING_NULL;
+		case YYJSON_TYPE_BOOL:
+			return JSONCommon::TYPE_STRING_BOOLEAN;
+		case YYJSON_TYPE_NUM:
+			switch (unsafe_yyjson_get_subtype(val)) {
+			case YYJSON_SUBTYPE_UINT:
+			case YYJSON_SUBTYPE_SINT:
+				return JSONCommon::TYPE_STRING_INTEGER;
+			case YYJSON_SUBTYPE_REAL:
+				return JSONCommon::TYPE_STRING_REAL;
+			default:
+				return nullptr;
+			}
+		case YYJSON_TYPE_STR:
+			return JSONCommon::TYPE_STRING_STRING;
+		case YYJSON_TYPE_ARR:
+			return JSONCommon::TYPE_STRING_ARRAY;
+		case YYJSON_TYPE_OBJ:
+			return JSONCommon::TYPE_STRING_OBJECT;
+		default:
+			return nullptr;
+		}
 	}
 
 public:

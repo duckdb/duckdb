@@ -7,11 +7,8 @@ require json
 statement ok
 pragma enable_verification
 
-# had to fix infinity handling (bug in yyjson)
-# -infinity was being parsed fine (because the '-' lead it to handle numerical values)
-# however, positive infinity ('inf' or 'infinity' - case does not matter, i.e. 'Infinity')
-# lead to the document not being parsed, returning nullptr
-# these tests verify that the bugfix works
+# there was a bug with infinity handling in yyjson, therefore we have these tests
+# it has since been fixed
 query T
 select json_valid('{"bla": inf}')
 ----
