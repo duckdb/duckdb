@@ -264,22 +264,21 @@ static std::string type_to_jduckdb_type(LogicalType logical_type) {
 		case PhysicalType::INT16: {
 			string res = std::string("DECIMAL16;") + width_scale;
 			return res;
-		} break;
+		}
 		case PhysicalType::INT32: {
 			string res = std::string("DECIMAL32;") + width_scale;
 			return res;
-		} break;
+		}
 		case PhysicalType::INT64: {
 			string res = std::string("DECIMAL64;") + width_scale;
 			return res;
-		} break;
+		}
 		case PhysicalType::INT128: {
 			string res = std::string("DECIMAL128;") + width_scale;
 			return res;
-		} break;
+		}
 		default:
 			return std::string("no physical type found");
-			break;
 		}
 	} break;
 	}
@@ -297,7 +296,6 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 	jclass meta = env->FindClass("org/duckdb/DuckDBResultSetMetaData");
 	jmethodID meta_construct =
 	    env->GetMethodID(meta, "<init>", "(II[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)V");
-	/* jmethodID meta_construct = env->GetMethodID(meta, "<init>", "(II[Ljava/lang/String;[Ljava/lang/String;)V"); */
 
 	auto column_count = stmt_ref->stmt->ColumnCount();
 	auto &names = stmt_ref->stmt->GetNames();
@@ -405,10 +403,6 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 				break;
 			}
 			break;
-			/* Vector double_vec(LogicalType::DOUBLE); */
-			/* VectorOperations::Cast(vec, double_vec, row_count); */
-			/* vec.ReferenceAndSetType(double_vec); */
-			// fall through on purpose
 		}
 		case LogicalTypeId::DOUBLE:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
