@@ -223,16 +223,16 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		child.format = "tsu:";
+		child.format = "tsu:utc";
 		break;
 	case LogicalTypeId::TIMESTAMP_SEC:
-		child.format = "tss:";
+		child.format = "tss:utc";
 		break;
 	case LogicalTypeId::TIMESTAMP_NS:
-		child.format = "tsn:";
+		child.format = "tsn:utc";
 		break;
 	case LogicalTypeId::TIMESTAMP_MS:
-		child.format = "tsm:";
+		child.format = "tsm:utc";
 		break;
 	case LogicalTypeId::INTERVAL:
 		child.format = "tDm";
