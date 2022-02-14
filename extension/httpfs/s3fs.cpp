@@ -7,6 +7,9 @@
 #include "duckdb/function/scalar/strftime.hpp"
 #endif
 
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+#include "httplib.hpp"
+
 #include <chrono>
 #include <duckdb/storage/buffer_manager.hpp>
 #include <iostream>
@@ -173,6 +176,14 @@ void S3FileHandle::Close() {
 		s3fs.FlushAllBuffers(*this);
 		s3fs.FinalizeMultipartUpload(*this);
 	}
+}
+
+void S3FileHandle::InitializeClient() {
+	string host, http_proto, path_parsed, query_param;
+	S3FileSystem::S3UrlParse(*this, path, host, http_proto, path_parsed, query_param);
+
+	string proto_host_port = http_proto + host;
+	http_client = HTTPFileSystem::GetClient(*this, proto_host_port.c_str());
 }
 
 // Opens the multipart upload and returns the ID
@@ -422,8 +433,8 @@ std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle
 	return new_write_buffer;
 }
 
-void S3FileSystem::S3UrlParse(FileHandle &handle, string url, string &host_out, string &http_host_out, string &path_out,
-                              string &query_param) {
+void S3FileSystem::S3UrlParse(FileHandle &handle, string url, string &host_out, string &http_proto_out,
+                              string &path_out, string &query_param) {
 	// some URI parsing woo
 	if (url.rfind("s3://", 0) != 0) {
 		throw std::runtime_error("URL needs to start with s3://");
@@ -454,14 +465,16 @@ void S3FileSystem::S3UrlParse(FileHandle &handle, string url, string &host_out, 
 	// Endpoint can be speficied as full url in which case we switch to: {endpoint}/{bucket} for host
 	// This is mostly usefull in testing to specify a localhost address
 	if (endpoint.rfind("http://", 0) == 0 || endpoint.rfind("https://", 0) == 0) {
-		http_host_out = endpoint + "/" + bucket;
-		auto url_start = http_host_out.rfind("://") + 3;
-		host_out = http_host_out.substr(url_start);
+		string http_host = endpoint;
+		auto url_start = http_host.rfind("://") + 3;
+		host_out = http_host.substr(url_start);
+		http_proto_out = http_host.substr(0, url_start);
+		path_out = "/" + bucket + path_out;
 	} else {
 		// Endpoint is not a full url and the regular https://{bucket}.{domain} format will be used
 		// actual request
 		host_out = bucket + "." + endpoint;
-		http_host_out = "https://" + host_out;
+		http_proto_out = "https://";
 	}
 }
 
@@ -480,9 +493,9 @@ string S3FileSystem::GetPayloadHash(char *buffer, idx_t buffer_len) {
 unique_ptr<ResponseWrapper> S3FileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                       unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
                                                       char *buffer_in, idx_t buffer_in_len) {
-	string host, http_host, path, query_param;
-	S3UrlParse(handle, url, host, http_host, path, query_param);
-	string full_url = http_host + path + "?" + query_param;
+	string host, http_proto, path, query_param;
+	S3UrlParse(handle, url, host, http_proto, path, query_param);
+	string full_url = http_proto + host + path + "?" + query_param;
 
 	auto payload_hash = GetPayloadHash(buffer_in, buffer_in_len);
 
@@ -495,8 +508,8 @@ unique_ptr<ResponseWrapper> S3FileSystem::PostRequest(FileHandle &handle, string
 
 unique_ptr<ResponseWrapper> S3FileSystem::PutRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                      char *buffer_in, idx_t buffer_in_len) {
-	string host, http_host, path, query_param;
-	S3UrlParse(handle, url, host, http_host, path, query_param);
+	string host, http_proto, path, query_param;
+	S3UrlParse(handle, url, host, http_proto, path, query_param);
 
 	auto content_type = "application/octet-stream";
 	string query_append = "?" + query_param;
@@ -505,24 +518,26 @@ unique_ptr<ResponseWrapper> S3FileSystem::PutRequest(FileHandle &handle, string 
 	auto headers =
 	    create_s3_get_header(path, query_param, host, "s3", "PUT", static_cast<S3FileHandle &>(handle).auth_params, "",
 	                         "", payload_hash, content_type);
-	return HTTPFileSystem::PutRequest(handle, http_host + path + query_append, headers, buffer_in, buffer_in_len);
+	return HTTPFileSystem::PutRequest(handle, http_proto + host + path + query_append, headers, buffer_in,
+	                                  buffer_in_len);
 }
 
 unique_ptr<ResponseWrapper> S3FileSystem::HeadRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	string host, http_host, path, query_param;
-	S3UrlParse(handle, url, host, http_host, path, query_param);
+	string host, http_proto, path, query_param;
+	S3UrlParse(handle, url, host, http_proto, path, query_param);
 	auto headers = create_s3_get_header(path, query_param, host, "s3", "HEAD",
 	                                    static_cast<S3FileHandle &>(handle).auth_params, "", "", "", "");
-	return HTTPFileSystem::HeadRequest(handle, http_host + path, headers);
+	return HTTPFileSystem::HeadRequest(handle, http_proto + host + path, headers);
 }
 
 unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                           idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
-	string host, http_host, path, query_param;
-	S3UrlParse(handle, url, host, http_host, path, query_param);
+	string host, http_proto, path, query_param;
+	S3UrlParse(handle, url, host, http_proto, path, query_param);
 	auto headers = create_s3_get_header(path, query_param, host, "s3", "GET",
 	                                    static_cast<S3FileHandle &>(handle).auth_params, "", "", "", "");
-	return HTTPFileSystem::GetRangeRequest(handle, http_host + path, headers, file_offset, buffer_out, buffer_out_len);
+	return HTTPFileSystem::GetRangeRequest(handle, http_proto + host + path, headers, file_offset, buffer_out,
+	                                       buffer_out_len);
 }
 
 std::unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, uint8_t flags, FileLockType lock,

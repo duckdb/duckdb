@@ -99,6 +99,8 @@ protected:
 
 	std::atomic<uint16_t> parts_uploaded;
 	bool upload_finalized;
+
+	void InitializeClient() override;
 };
 
 class S3FileSystem : public HTTPFileSystem {
@@ -140,6 +142,9 @@ public:
 
 	void FlushAllBuffers(S3FileHandle &handle);
 
+	static void S3UrlParse(FileHandle &handle, string url, string &host_out, string &http_proto_out, string &path_out,
+	                       string &query_param);
+
 	// Uploads the contents of write_buffer to S3.
 	// Note: caller is responsible to not call this method twice on the same buffer
 	static void UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer);
@@ -149,10 +154,6 @@ protected:
 	                                             FileCompressionType compression, FileOpener *opener) override;
 
 	void FlushBuffer(S3FileHandle &handle, std::shared_ptr<S3WriteBuffer> write_buffer);
-
-	// Helper functions
-	void S3UrlParse(FileHandle &handle, string url, string &host_out, string &http_host_out, string &path_out,
-	                string &query_param);
 	string GetPayloadHash(char *buffer, idx_t buffer_len);
 
 	// Allocate an S3WriteBuffer

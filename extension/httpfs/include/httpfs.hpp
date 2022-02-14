@@ -23,6 +23,8 @@ public:
 };
 
 struct HTTPParams {
+	static constexpr uint64_t DEFAULT_TIMEOUT = 30000; // 30 sec
+
 	uint64_t timeout;
 
 	static HTTPParams ReadFrom(FileOpener *opener);
@@ -59,10 +61,15 @@ public:
 public:
 	void Close() override {
 	}
+
+protected:
+	virtual void InitializeClient();
 };
 
 class HTTPFileSystem : public FileSystem {
 public:
+	static unique_ptr<duckdb_httplib_openssl::Client> GetClient(HTTPFileHandle &handle, const char *proto_host_port);
+	static void ParseUrl(string &url, string &path_out, string &proto_host_port_out);
 	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
 	                                     FileCompressionType compression = DEFAULT_COMPRESSION,
 	                                     FileOpener *opener = nullptr) final;
