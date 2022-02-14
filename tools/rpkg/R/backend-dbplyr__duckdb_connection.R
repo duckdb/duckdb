@@ -144,10 +144,11 @@ sql_translation.duckdb_connection <- function(con) {
       # is.infinite() TRUE 	TRUE 	FALSE FALSE
       # is.nan() 	    FALSE FALSE TRUE 	FALSE
       # is.na() 	    FALSE FALSE TRUE 	TRUE
-      is.na = function(a) build_sql("(", a, " IS NULL OR PRINTF('%f',", a, ") = 'nan')"),
-      is.nan = function(a) build_sql("(", a, " IS NOT NULL AND PRINTF('%f',", a, ") = 'nan')"),
-      is.infinite = function(a) build_sql("(", a, " IS NOT NULL AND REGEXP_MATCHES(PRINTF('%f',", a, "),'inf'))"),
-      is.finite = function(a) build_sql("(NOT (", a, " IS NULL OR REGEXP_MATCHES(PRINTF('%f',", a, "),'inf|nan')))"),
+      # https://github.com/duckdb/duckdb/issues/3019
+      is.na = function(a) build_sql("(", a, " IS NULL OR PRINTF('%f', ", a, ") = 'nan')"),
+      is.nan = function(a) build_sql("(", a, " IS NOT NULL AND PRINTF('%f', ", a, ") = 'nan')"),
+      is.infinite = function(a) build_sql("(", a, " IS NOT NULL AND REGEXP_MATCHES(PRINTF('%f', ", a, "), 'inf'))"),
+      is.finite = function(a) build_sql("(NOT (", a, " IS NULL OR REGEXP_MATCHES(PRINTF('%f', ", a, "), 'inf|nan')))"),
       grepl = duckdb_grepl,
 
       # Return index where the first match starts,-1 if no match
