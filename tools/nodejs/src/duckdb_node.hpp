@@ -80,9 +80,7 @@ private:
 struct JSArgs;
 void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, nullptr_t *, JSArgs *data);
 
-
-typedef Napi::TypedThreadSafeFunction<nullptr_t , JSArgs, DuckDBNodeUDFLauncher> DuckDBNodeUDFFUnction;
-
+typedef Napi::TypedThreadSafeFunction<nullptr_t, JSArgs, DuckDBNodeUDFLauncher> DuckDBNodeUDFFUnction;
 
 class Connection : public Napi::ObjectWrap<Connection> {
 public:

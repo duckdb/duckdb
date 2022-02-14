@@ -1,5 +1,5 @@
 include_directories(src)
-include_directories( /opt/homebrew/lib/node_modules/node-addon-api )
+include_directories(/opt/homebrew/lib/node_modules/node-addon-api)
 include_directories(/opt/homebrew/Cellar/node/17.4.0/include/node)
 
 set(CMAKE_SHARED_LINKER_FLAGS "-bundle" "-undefined dynamic_lookup")

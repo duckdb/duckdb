@@ -30,9 +30,9 @@ struct OpenTask : public Task {
 		try {
 			duckdb::DBConfig config;
 			config.maximum_threads = 1;
-			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename,  &config);
-//			duckdb::ParquetExtension extension;
-//			extension.Load(*Get<Database>().database);
+			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename, &config);
+			//			duckdb::ParquetExtension extension;
+			//			extension.Load(*Get<Database>().database);
 			success = true;
 
 		} catch (std::exception &ex) {
