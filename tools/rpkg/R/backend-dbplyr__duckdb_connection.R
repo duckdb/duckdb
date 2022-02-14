@@ -202,7 +202,7 @@ sql_translation.duckdb_connection <- function(con) {
         )
       },
       qday = function(x) {
-        build_sql("DATE_DIFF('DAYS',DATE_TRUNC('QUARTER',CAST((", x, ") AS DATE)),(CAST((", x, ") AS DATE) + INTERVAL '1 DAY'))")
+        build_sql("DATE_DIFF('DAYS', DATE_TRUNC('QUARTER',CAST((", x, ") AS DATE)), (CAST((", x, ") AS DATE) + INTERVAL '1 DAY'))")
       },
       wday = function(x, label = FALSE, abbr = TRUE, week_start = NULL) {
         if (!label) {
