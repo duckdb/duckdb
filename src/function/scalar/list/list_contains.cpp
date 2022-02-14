@@ -26,9 +26,8 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 	D_ASSERT(args.ColumnCount() == 2);
 	auto count = args.size();
 	Vector &list = args.data[0];
-	Vector &value = args.data[1];
-	VectorData value_data;
-	value.Orrify(count, value_data);
+	Vector &value_vector = args.data[1];
+
 
 	if (list.GetType().id() == LogicalTypeId::SQLNULL) {
 		SetResultFalse(result);
@@ -52,30 +51,40 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 	list.Orrify(count, list_data);
 	auto list_entries = (list_entry_t *)list_data.data;
 
+	VectorData value_data;
+	value_vector.Orrify(count, value_data);
+
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_entries = FlatVector::GetData<bool>(result); // Create a vector of bool
 	auto &result_validity = FlatVector::Validity(result);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto list_index = list_data.sel->get_index(i);
+		auto value_index = value_data.sel->get_index(i);
 
 		if (!list_data.validity.RowIsValid(list_index)) {
 			result_validity.SetInvalid(i);
 			continue;
 		}
-		result_entries[list_index] = false;
 
-		const auto &entry = list_entries[list_index];
-		auto source_idx = child_data.sel->get_index(entry.offset);
+		if (!value_data.validity.RowIsValid(value_index)) {
+			result_validity.SetInvalid(i);
+			continue;
+		}
+
+		const auto &list_entry = list_entries[list_index];
+		auto source_idx = child_data.sel->get_index(list_entry.offset);
 		auto child_value = FlatVector::GetData<T>(child_vector);
 
-		for (idx_t child_idx = 0; child_idx < entry.length; child_idx++) {
-			auto value_idx = source_idx + child_idx;
-			if (!child_data.validity.RowIsValid(value_idx)) {
+		auto values = FlatVector::GetData<T>(value_vector);
+		result_entries[list_index] = false;
+		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
+			auto child_value_idx = source_idx + child_idx;
+
+			if (!child_data.validity.RowIsValid(child_value_idx)) {
 				continue;
 			}
-			auto actual_value = child_value[value_idx];
-			if (ValueCompare(actual_value, ((T *)value_data.data)[0])) {
+			if (ValueCompare(child_value[child_value_idx], values[value_index])) {
 				result_entries[list_index] = true;
 				break; // Found value in list, no need to look further
 			}
@@ -83,6 +92,7 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 	}
 	return;
 }
+
 
 static void ListContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	switch (args.data[1].GetType().InternalType()) {
@@ -123,10 +133,9 @@ static void ListContainsFunction(DataChunk &args, ExpressionState &state, Vector
 	case PhysicalType::VARCHAR:
 		TemplatedListContainsFunction<string_t>(args, state, result);
 		break;
-	case PhysicalType::LIST:
-		throw NotImplementedException("This function has not yet been implemented for nested types");
+
 	default:
-		throw InvalidTypeException(args.data[1].GetType().id(), "Invalid type for List Contains");
+		throw NotImplementedException("This function has not been implemented for this type");
 	}
 }
 
@@ -150,6 +159,9 @@ static unique_ptr<FunctionData> ListContainsBind(ClientContext &context, ScalarF
 		D_ASSERT(list.id() == LogicalTypeId::LIST);
 
 		auto const &child_type = ListType::GetChildType(arguments[0]->return_type);
+		if (child_type.id() == LogicalTypeId::LIST or value.id() == LogicalTypeId::LIST) {
+			throw NotImplementedException("This function has not yet been implemented for nested types");
+		}
 		auto max_child_type = LogicalType::MaxLogicalType(child_type, value);
 		ExpressionBinder::ResolveParameterType(max_child_type);
 		auto list_type = LogicalType::LIST(max_child_type);
