@@ -28,7 +28,9 @@ struct OpenTask : public Task {
 
 	void DoWork() override {
 		try {
-			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename);
+			duckdb::DBConfig config;
+			config.maximum_threads = 1;
+			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename,  &config);
 //			duckdb::ParquetExtension extension;
 //			extension.Load(*Get<Database>().database);
 			success = true;

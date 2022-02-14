@@ -23,53 +23,46 @@ Connection.prototype.each = function(sql) {
     return statement.each.apply(statement, arguments);
 }
 
-Database.prototype.prepare = function() {
-    if (this.default_connection == undefined) {
-        this.default_connection = new duckdb.Connection(this);
+default_connection = function(o) {
+    if (o.default_connection == undefined) {
+        o.default_connection = new duckdb.Connection(o);
     }
+    return(o.default_connection);
+}
+
+Database.prototype.prepare = function() {
     return this.default_connection.prepare.apply(this.default_connection, arguments);
 }
 
 Database.prototype.run = function() {
-    if (this.default_connection == undefined) {
-        this.default_connection = new Connection(this);
-    }
-    this.default_connection.run.apply(this.default_connection, arguments);
+    default_connection(this).run.apply(this.default_connection, arguments);
     return this;
 }
 
 Database.prototype.each = function() {
-    if (this.default_connection == undefined) {
-        this.default_connection = new Connection(this);
-    }
-    this.default_connection.each.apply(this.default_connection, arguments);
+    default_connection(this).each.apply(this.default_connection, arguments);
     return this;
 }
 
 Database.prototype.all = function() {
-    if (this.default_connection == undefined) {
-        this.default_connection = new Connection(this);
-    }
-    this.default_connection.all.apply(this.default_connection, arguments);
+    default_connection(this).all.apply(this.default_connection, arguments);
     return this;
 }
 
 Database.prototype.exec = function() {
-    if (this.default_connection == undefined) {
-        this.default_connection = new Connection(this);
-    }
-    this.default_connection.exec.apply(this.default_connection, arguments);
+    default_connection(this).exec.apply(this.default_connection, arguments);
     return this;
 }
 
 Database.prototype.register = function() {
-    if (this.default_connection == undefined) {
-        this.default_connection = new Connection(this);
-    }
-    this.default_connection.register.apply(this.default_connection, arguments);
+    default_connection(this).register.apply(this.default_connection, arguments);
     return this;
 }
 
+Database.prototype.unregister = function() {
+    default_connection(this).unregister.apply(this.default_connection, arguments);
+    return this;
+}
 
 Database.prototype.get = function() {
     throw "get() is not implemented because it's evil";

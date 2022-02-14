@@ -10,7 +10,7 @@ Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 
 	Napi::Function t =
 	    DefineClass(env, "Connection",
-	                {InstanceMethod("prepare", &Connection::Prepare), InstanceMethod("exec", &Connection::Exec), InstanceMethod("register", &Connection::Register)});
+	                {InstanceMethod("prepare", &Connection::Prepare), InstanceMethod("exec", &Connection::Exec), InstanceMethod("register", &Connection::Register), InstanceMethod("unregister", &Connection::Unregister)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -52,9 +52,6 @@ Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connec
 Connection::~Connection() {
 	database_ref->Unref();
 	database_ref = nullptr;
-	for (auto& fun : udfs) {
-		fun.Release();
-	}
 }
 
 Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
@@ -71,46 +68,47 @@ Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
 }
 
 
-static Napi::ThreadSafeFunction fun;
-
 struct JSArgs {
-	JSArgs(duckdb::DataChunk& args_p, duckdb::Vector& result_p) : args(args_p), result(result_p) {}
-
-	duckdb::DataChunk &args;
-	duckdb::Vector &result;
+	duckdb::idx_t rows;
+	duckdb::Vector* first_arg_vec;
+	duckdb::Vector* result;
+	bool done;
 };
+
+void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, nullptr_t *, JSArgs *data) {
+	auto first_arg_buf = Napi::Buffer<uint8_t>::New(env, duckdb::FlatVector::GetData<uint8_t>(*data->first_arg_vec), data->rows * sizeof(int32_t));
+	auto ret_buf = Napi::Buffer<uint8_t>::New(env, duckdb::FlatVector::GetData<uint8_t>(*data->result), data->rows* sizeof(int32_t));
+
+	jsudf.Call({first_arg_buf, ret_buf});
+	data->done = true;
+}
+
 
 
 struct RegisterTask : public Task {
 	RegisterTask(Connection &connection_, std::string name_, Napi::Function callback_)
-	    : Task(connection_, callback_), name(name_)  {
+	    : Task(connection_, callback_), name(name_){
+
 	}
 
 	void DoWork() override {
 		auto &connection = Get<Connection>();
-		duckdb::scalar_function_t udf_function = [&](duckdb::DataChunk &args, duckdb::ExpressionState &state, duckdb::Vector &result) -> void {
-			auto jsargs = new JSArgs(args, result);
-			bool done = false;
+		auto& udf_ptr = connection.udfs[name];
+		duckdb::scalar_function_t udf_function = [&udf_ptr](duckdb::DataChunk &args, duckdb::ExpressionState &state, duckdb::Vector &result) -> void {
+			// here we can do only DuckDB stuff because we do not have a functioning env
+			auto& first_arg_vec = args.data[0];
+			first_arg_vec.Normalify(args.size());
 
-			auto arg_data = jsargs->args.Orrify();
+			JSArgs jsargs;
+			jsargs.rows = args.size();
+			jsargs.first_arg_vec = &first_arg_vec;
+			jsargs.result = &result;
+			jsargs.done = false;
 
-			auto callback = [&](Napi::Env env, Napi::Function jsCallback, void* data = nullptr) -> void {
-				auto jsargs = (JSArgs*) data;
-				for (idx_t i = 0; i < jsargs->args.size(); i++) {
-					auto real_i = arg_data[0].sel->get_index(i);
-					auto val = ((int*) arg_data[0].data)[real_i];
-					auto call_res = jsCallback.Call({Napi::Number::New(env, val)});
-					result.SetValue(i, duckdb::Value::INTEGER(call_res.ToNumber().Int32Value())) ;
-				}
-				done = true;
-			};
-
-			fun.BlockingCall(jsargs, callback);
-			while (!done) {
+			udf_ptr.BlockingCall(&jsargs);
+			while (!jsargs.done) {
 				std::this_thread::yield();
 			}
-			// TODO this is wrong
-			//fun.Release();
 		};
 
 		duckdb::ScalarFunction function({duckdb::LogicalType::INTEGER}, duckdb::LogicalType::INTEGER, udf_function);
@@ -126,8 +124,8 @@ struct RegisterTask : public Task {
 
 	}
 	std::string name;
-	bool success;
 };
+
 
 
 Napi::Value Connection::Register(const Napi::CallbackInfo &info) {
@@ -138,9 +136,67 @@ Napi::Value Connection::Register(const Napi::CallbackInfo &info) {
 	}
 
 	std::string name = info[0].As<Napi::String>();
-	Napi::Function udf = info[1].As<Napi::Function>();
-	fun = Napi::ThreadSafeFunction::New(env, udf, name, 0, 1);
-	database_ref->Schedule(info.Env(), duckdb::make_unique<RegisterTask>(*this, name, udf));
+	Napi::Function udf_callback = info[1].As<Napi::Function>();
+	Napi::Function dummy;
+
+	auto udf2 = DuckDBNodeUDFFUnction::New(
+	    env,
+	    udf_callback, // JavaScript function called asynchronously
+	    "duckdb_node_udf" + name,        // Name
+	    0,                      // Unlimited queue
+	    1,                      // Only one thread will use this initially
+	    nullptr,
+
+	    [](Napi::Env, void *,
+	       nullptr_t *ctx) { // Finalizer used to clean threads up
+	    });
+
+	udfs[name] = udf2;
+	// TODO check if the entry is already there?
+
+	database_ref->Schedule(info.Env(), duckdb::make_unique<RegisterTask>(*this, name, dummy));
+
+	return Value();
+}
+
+
+struct UnregisterTask : public Task {
+	UnregisterTask(Connection &connection_, std::string name_, Napi::Function callback_)
+	    : Task(connection_, callback_), name(name_) {
+
+	}
+
+	void DoWork() override {
+		auto &connection = Get<Connection>();
+		// TODO check if the entry is there to begin with?
+		connection.udfs[name].Release();
+		connection.udfs.erase(name);
+		auto &con = *connection.connection;
+		con.BeginTransaction();
+		auto &context = *con.context;
+		auto &catalog = duckdb::Catalog::GetCatalog(context);
+		duckdb::DropInfo info;
+		info.type = duckdb::CatalogType::SCALAR_FUNCTION_ENTRY;
+		info.name = name;
+		catalog.DropEntry(context, &info);
+	}
+	std::string name;
+};
+
+
+
+Napi::Value Connection::Unregister(const Napi::CallbackInfo &info) {
+	auto env = info.Env();
+	if (info.Length() != 1 || !info[0].IsString()) {
+		Napi::TypeError::New(env, "Holding it wrong").ThrowAsJavaScriptException();
+		return env.Null();
+	}
+	std::string name = info[0].As<Napi::String>();
+	Napi::Function dummy;
+
+
+	database_ref->Schedule(info.Env(), duckdb::make_unique<UnregisterTask>(*this, name, dummy));
+
 
 	return Value();
 }
