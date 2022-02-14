@@ -102,7 +102,7 @@ private:
 		switch (filter.filter_type) {
 		case TableFilterType::CONSTANT_COMPARISON: {
 			auto constant_filter = (ConstantFilter &)filter;
-			auto constant_sexp = r.Protect(RApiTypes::ValueToSexp(constant_filter.constant));
+			auto constant_sexp = r.Protect(RApiTypes::ValueToSexp(constant_filter.constant, true));
 			auto constant_expr = r.Protect(CreateScalar(functions, constant_sexp));
 			switch (constant_filter.comparison_type) {
 			case ExpressionType::COMPARE_EQUAL: {

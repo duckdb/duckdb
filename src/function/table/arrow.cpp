@@ -22,29 +22,6 @@
 
 namespace duckdb {
 
-LogicalType ConvertTimestamp(string &format) {
-	idx_t separator_pos = format.find(':');
-	if (separator_pos == string::npos) {
-		throw InternalException("Timestones from arrow are dirty (i.e., missing ':')");
-	}
-	string timestamp = format.substr(0, separator_pos);
-	string timezone = format.substr(separator_pos, format.length());
-	if (timezone != "utc") {
-		throw NotImplementedException("We only support utc timezones currently");
-	}
-	if (format == "tsn:") {
-		return LogicalTypeId::TIMESTAMP_NS;
-	} else if (format == "tsu:") {
-		return LogicalTypeId::TIMESTAMP;
-	} else if (format == "tsm:") {
-		return LogicalTypeId::TIMESTAMP_MS;
-	} else if (format == "tss:") {
-		return LogicalTypeId::TIMESTAMP_SEC;
-	}
-	else {
-		throw NotImplementedException("Timestamp: ("+ format +") format not supported yet ");
-	}
-}
 LogicalType GetArrowLogicalType(ArrowSchema &schema,
                                 std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
                                 idx_t col_idx) {
@@ -90,8 +67,15 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 	} else if (format == "U") {
 		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
 		return LogicalType::VARCHAR;
-	}
-	else if (format == "tdD") {
+	} else if (format == "tsn:") {
+		return LogicalTypeId::TIMESTAMP_NS;
+	} else if (format == "tsu:") {
+		return LogicalTypeId::TIMESTAMP;
+	} else if (format == "tsm:") {
+		return LogicalTypeId::TIMESTAMP_MS;
+	} else if (format == "tss:") {
+		return LogicalTypeId::TIMESTAMP_SEC;
+	} else if (format == "tdD") {
 		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::DAYS);
 		return LogicalType::DATE;
 	} else if (format == "tdm") {
@@ -172,10 +156,7 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 		idx_t fixed_size = std::stoi(parameters);
 		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
 		return LogicalType::BLOB;
-	} else if (format.find("ts")!= string::npos){
-		return ConvertTimestamp(format);
-	}
-	else {
+	} else {
 		throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
 	}
 }
