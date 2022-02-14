@@ -153,7 +153,7 @@ sql_translation.duckdb_connection <- function(con) {
 
       # Return index where the first match starts,-1 if no match
       regexpr = function(p, x) {
-        build_sql("(CASE WHEN REGEXP_MATCHES(", x," ,", p, ") THEN (LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX(", x, ", ", p,"),0))+1) ELSE -1 END)")
+        build_sql("(CASE WHEN REGEXP_MATCHES(", x,", ", p, ") THEN (LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX(", x, ", ", p,"), 0))+1) ELSE -1 END)")
       },
       round = function(x, digits) sql_expr(ROUND(!!x, CAST(ROUND((!!digits), 0L) %AS% INTEGER))),
       as.Date = sql_cast("DATE"),
@@ -197,13 +197,13 @@ sql_translation.duckdb_connection <- function(con) {
             sql_expr((CAST(DATE_TRUNC("QUARTER", !!x) %AS% DATE)))
           },
           date_last = {
-            build_sql("(CAST((DATE_TRUNC('QUARTER',", x, ") + INTERVAL '1 QUARTER' - INTERVAL '1 DAY') AS DATE))")
+            sql_expr((CAST((DATE_TRUNC("QUARTER", !!x) + !!sql("INTERVAL '1 QUARTER'") - !!sql("INTERVAL '1 DAY'")) %AS% DATE)))
           },
           stop(paste("Unsupported type", type), call. = FALSE)
         )
       },
       qday = function(x) {
-        build_sql("DATE_DIFF('DAYS', DATE_TRUNC('QUARTER',CAST((", x, ") AS DATE)), (CAST((", x, ") AS DATE) + INTERVAL '1 DAY'))")
+        build_sql("DATE_DIFF('DAYS', DATE_TRUNC('QUARTER', CAST((", x, ") AS DATE)), (CAST((", x, ") AS DATE) + INTERVAL '1 DAY'))")
       },
       wday = function(x, label = FALSE, abbr = TRUE, week_start = NULL) {
         if (!label) {

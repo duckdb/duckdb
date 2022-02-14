@@ -138,19 +138,19 @@
     Code
       translate(is.na(var1))
     Output
-      <SQL> ("var1" IS NULL OR PRINTF('%f',"var1") = 'nan')
+      <SQL> ("var1" IS NULL OR PRINTF('%f', "var1") = 'nan')
     Code
       translate(is.nan(var1))
     Output
-      <SQL> ("var1" IS NOT NULL AND PRINTF('%f',"var1") = 'nan')
+      <SQL> ("var1" IS NOT NULL AND PRINTF('%f', "var1") = 'nan')
     Code
       translate(is.infinite(var1))
     Output
-      <SQL> ("var1" IS NOT NULL AND REGEXP_MATCHES(PRINTF('%f',"var1"),'inf'))
+      <SQL> ("var1" IS NOT NULL AND REGEXP_MATCHES(PRINTF('%f', "var1"), 'inf'))
     Code
       translate(is.finite(var1))
     Output
-      <SQL> (NOT ("var1" IS NULL OR REGEXP_MATCHES(PRINTF('%f',"var1"),'inf|nan')))
+      <SQL> (NOT ("var1" IS NULL OR REGEXP_MATCHES(PRINTF('%f', "var1"), 'inf|nan')))
     Code
       translate(grepl("pattern", text))
     Output
@@ -162,7 +162,7 @@
     Code
       translate(regexpr("pattern", text))
     Output
-      <SQL> (CASE WHEN REGEXP_MATCHES("text" ,'pattern') THEN (LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX("text", 'pattern'),0))+1) ELSE -1 END)
+      <SQL> (CASE WHEN REGEXP_MATCHES("text", 'pattern') THEN (LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX("text", 'pattern'), 0))+1) ELSE -1 END)
     Code
       translate(round(x, digits = 1.1))
     Output
@@ -236,7 +236,7 @@
     Code
       translate(quarter(x, type = "date_last"))
     Output
-      <SQL> (CAST((DATE_TRUNC('QUARTER',"x") + INTERVAL '1 QUARTER' - INTERVAL '1 DAY') AS DATE))
+      <SQL> (CAST((DATE_TRUNC('QUARTER', "x") + INTERVAL '1 QUARTER' - INTERVAL '1 DAY') AS DATE))
     Code
       translate(month(x, label = FALSE))
     Output
@@ -252,7 +252,7 @@
     Code
       translate(qday(x))
     Output
-      <SQL> DATE_DIFF('DAYS',DATE_TRUNC('QUARTER',CAST(("x") AS DATE)),(CAST(("x") AS DATE) + INTERVAL '1 DAY'))
+      <SQL> DATE_DIFF('DAYS', DATE_TRUNC('QUARTER', CAST(("x") AS DATE)), (CAST(("x") AS DATE) + INTERVAL '1 DAY'))
     Code
       translate(wday(x))
     Output
