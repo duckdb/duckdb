@@ -1,4 +1,6 @@
-# From: https://github.com/r-lib/vctrs/blob/main/R/register-s3.R
+# nocov start
+
+# From: https://github.com/r-lib/rlang/blob/d5df93251d055721abb4a576433fb867ca40d527/R/compat-s3-register.R#L53-L122
 s3_register <- function(generic, class, method = NULL) {
   stopifnot(is.character(generic), length(generic) == 1)
   stopifnot(is.character(class), length(class) == 1)
@@ -18,7 +20,7 @@ s3_register <- function(generic, class, method = NULL) {
       caller
     }
   }
-  get_method <- function(method, env) {
+  get_method <- function(method) {
     if (is.null(method)) {
       get(paste0(generic, ".", class), envir = get_method_env())
     } else {
@@ -48,10 +50,12 @@ s3_register <- function(generic, class, method = NULL) {
   }
 
   # Always register hook in case package is later unloaded & reloaded
-  setHook(packageEvent(package, "onLoad"), register)
+  setHook(packageEvent(package, "onLoad"), function(...) {
+    register()
+  })
 
   # Avoid registration failures during loading (pkgload or regular)
-  if (isNamespaceLoaded(package)) {
+  if (isNamespaceLoaded(package) && environmentIsLocked(asNamespace(package))) {
     register()
   }
 
@@ -69,3 +73,5 @@ pkg_method <- function(fun, pkg) {
   fun_name <- utils::getFromNamespace(fun, pkg)
   return(fun_name)
 }
+
+# nocov end
