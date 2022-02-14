@@ -44,7 +44,8 @@
 namespace duckdb {
 
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
-	unordered_set<string> extensions {"parquet", "icu", "tpch", "tpcds", "fts", "httpfs", "substrait", "visualizer", "excel"};
+	unordered_set<string> extensions {"parquet", "icu",       "tpch",       "tpcds", "fts",
+	                                  "httpfs",  "substrait", "visualizer", "excel"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
