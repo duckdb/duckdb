@@ -23,53 +23,29 @@ Connection.prototype.each = function(sql) {
     return statement.each.apply(statement, arguments);
 }
 
-
-
-function type_size(ptype) {
+function ptr_to_arr(buffer, ptype, n) {
+    // TODO can we create those on the C++ side of things already?
     switch(ptype) {
         case 'UINT8':
-        case 'INT8':
-            return 1;
-        case 'INT32':
-        case 'FLOAT':
-            return 4;
-        case 'INT64':
-        case 'UINT64':
-        case 'DOUBLE':
-            return 8;
-        default:
-            return 0;
-    }
-}
-
-function ptr_to_arr(buffer, ptype, n) {
-
-    switch(ptype) {
-        case 'UINT8': {
             return new Uint8Array(buffer.buffer, 0, n);
-        }
-        case 'INT8': {
+        case 'INT8':
             return new Int8Array(buffer.buffer, 0, n);
-        }
-        case 'INT32': {
+        case 'INT32':
             return new Int32Array(buffer.buffer, 0, n);
-        }
-        case 'INT64': {
+        case 'INT64':
             return new Float64Array(buffer.buffer, 0, n);
-        }
-        case 'FLOAT': {
+        case 'FLOAT':
             return new Float32Array(buffer.buffer, 0, n);
-        }
-        case 'DOUBLE': {
+        case 'DOUBLE':
             return new Float64Array(buffer.buffer, 0, n);
-        }
+        case 'VARCHAR':  // we already have created a string array on the C++ side for this
+            return buffer;
         default:
             return new Array<string>(0); // cough
     }
 }
 
-
-// this follows the wasm udfs somewhat
+// this follows the wasm udfs somewhat but is simpler because we can pass data much more cleanly
 Connection.prototype.register = function(name, return_type, fun) {
     // TODO what if this throws an error somewhere? do we need a try/catch?
     return this.register_bulk(name, return_type, function(descr, data_buffers) {
@@ -78,32 +54,11 @@ Connection.prototype.register = function(name, return_type, fun) {
 
         for (const idx in descr.args) {
             const arg = descr.args[idx];
-            const validity = data_buffers[arg.validity_buffer];
-            validity_arr.push(validity);
-            if (arg.physical_type == 'VARCHAR') {
-                const string_data_arr = [];
-                const decoder = new TextDecoder();
-                const string_buffer_arr = data_buffers[arg.data_buffer];
-                for (let i = 0; i < descr.rows; ++i) {
-                    if (!validity[i]) {
-                        string_data_arr.push(undefined);
-                    } else {
-                        string_data_arr.push(decoder.decode(string_buffer_arr[i]));
-                    }
-                }
-                data_arr.push(string_data_arr);
-            } else {
-                data_arr.push(ptr_to_arr(data_buffers[arg.data_buffer], arg.physical_type, descr.rows));
-            }
+            validity_arr.push(data_buffers[arg.validity_buffer]);
+            data_arr.push(ptr_to_arr(data_buffers[arg.data_buffer], arg.physical_type, descr.rows));
         }
 
-        let out_data = [];
-        if (descr.ret.physical_type == 'VARCHAR') {
-            out_data = data_buffers[descr.ret.data_buffer];
-
-        } else {
-            out_data = ptr_to_arr(data_buffers[descr.ret.data_buffer], descr.ret.physical_type, descr.rows);
-        }
+        const out_data = ptr_to_arr(data_buffers[descr.ret.data_buffer], descr.ret.physical_type, descr.rows);
         const out_validity = data_buffers[descr.ret.validity_buffer];
 
         switch (descr.args.length) {

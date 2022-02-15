@@ -78,15 +78,6 @@ struct JSArgs {
 
 typedef std::vector<duckdb::unique_ptr<duckdb::data_t[]>> additional_buffers_t;
 
-static duckdb::data_ptr_t create_additional_buffer(std::vector<double> &data_ptrs,
-                                                   additional_buffers_t &additional_buffers, idx_t size,
-                                                   int64_t &buffer_idx) {
-	additional_buffers.emplace_back(duckdb::unique_ptr<duckdb::data_t[]>(new duckdb::data_t[size]));
-	auto res_ptr = additional_buffers.back().get();
-	buffer_idx = data_ptrs.size() - 1;
-	return res_ptr;
-}
-
 static Napi::Object transform_vector(Napi::Env env, duckdb::Vector &vec, duckdb::idx_t rows,
                                      additional_buffers_t &additional_buffers, Napi::Array &data_buffers, bool copy) {
 	auto data_buffer_index = -1;
@@ -102,13 +93,15 @@ static Napi::Object transform_vector(Napi::Env env, duckdb::Vector &vec, duckdb:
 	data_buffers.Set(data_buffers.Length(), Napi::Buffer<uint8_t>::New(env, additional_buffers.back().get(), rows));
 	validity_buffer_index = data_buffers.Length() - 1;
 
+	auto &vec_type = vec.GetType();
+
 	// TODO handle bigint and hugeint through cast to double
-	if (vec.GetType().IsIntegral()) {
+	if (vec_type.IsIntegral()) {
 		data_buffers.Set(data_buffers.Length(),
 		                 Napi::Buffer<uint8_t>::New(env, duckdb::FlatVector::GetData<uint8_t>(vec),
-		                                            rows * duckdb::GetTypeIdSize(vec.GetType().InternalType())));
+		                                            rows * duckdb::GetTypeIdSize(vec_type.InternalType())));
 		data_buffer_index = data_buffers.Length() - 1;
-	} else if (vec.GetType().id() == duckdb::LogicalTypeId::VARCHAR) { // special snowflake strings
+	} else if (vec_type.id() == duckdb::LogicalTypeId::VARCHAR) { // special snowflake strings
 		Napi::Array string_buffers(Napi::Array::New(env, rows));
 
 		if (copy) {
@@ -117,9 +110,8 @@ static Napi::Object transform_vector(Napi::Env env, duckdb::Vector &vec, duckdb:
 				if (!validity_ptr[row_idx]) {
 					string_buffers.Set(row_idx, Napi::Value());
 				} else {
-					string_buffers.Set(
-					    row_idx, Napi::Buffer<uint8_t>::New(env, (uint8_t *)string_vec_ptr[row_idx].GetDataUnsafe(),
-					                                        string_vec_ptr[row_idx].GetSize()));
+					string_buffers.Set(row_idx, Napi::String::New(env, string_vec_ptr[row_idx].GetDataUnsafe(),
+					                                              string_vec_ptr[row_idx].GetSize()));
 				}
 			}
 		}
@@ -127,12 +119,12 @@ static Napi::Object transform_vector(Napi::Env env, duckdb::Vector &vec, duckdb:
 		data_buffer_index = data_buffers.Length() - 1;
 
 	} else {
-		throw duckdb::NotImplementedException(vec.GetType().ToString());
+		throw duckdb::NotImplementedException(vec_type.ToString());
 	}
 
 	Napi::Object desc(Napi::Object::New(env));
-	desc.Set("logical_type", vec.GetType().ToString());
-	desc.Set("physical_type", TypeIdToString(vec.GetType().InternalType()));
+	desc.Set("logical_type", vec_type.ToString());
+	desc.Set("physical_type", TypeIdToString(vec_type.InternalType()));
 	desc.Set("validity_buffer", validity_buffer_index);
 	desc.Set("data_buffer", data_buffer_index);
 	desc.Set("length_buffer", length_buffer_index);
