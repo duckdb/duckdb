@@ -531,8 +531,8 @@ struct BlockMergeInfo {
 	}
 };
 
-static void SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const idx_t result_count, const idx_t vcount,
-                               const idx_t left_cols = 0) {
+static idx_t SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const idx_t result_count,
+                                const idx_t left_cols = 0) {
 	// There should only be one sorted block if they have been sorted
 	D_ASSERT(info.state.sorted_blocks.size() == 1);
 	SBScanState read_state(info.state.buffer_manager, info.state);
@@ -541,33 +541,50 @@ static void SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const i
 
 	// We have to create pointers for the entire block
 	// because unswizzle works on ranges not selections.
-	read_state.SetIndices(info.block_idx, info.base_idx);
+	const auto first_idx = info.result.get_index(0);
+	read_state.SetIndices(info.block_idx, info.base_idx + first_idx);
 	read_state.PinData(sorted_data);
 	const auto data_ptr = read_state.DataPtr(sorted_data);
-	const auto next = vcount - info.base_idx;
 
 	// Set up a batch of pointers to scan data from
-	Vector addresses(LogicalType::POINTER, next);
+	Vector addresses(LogicalType::POINTER, result_count);
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
-	// Set up the data pointers
+	// Set up the data pointers for the values that are actually referenced
+	// and normalise the selection vector to zero
 	data_ptr_t row_ptr = data_ptr;
 	const idx_t &row_width = sorted_data.layout.GetRowWidth();
-	for (idx_t i = 0; i < next; ++i) {
-		data_pointers[i] = row_ptr;
-		row_ptr += row_width;
+
+	auto prev_idx = first_idx;
+	info.result.set_index(0, 0);
+	idx_t addr_count = 0;
+	data_pointers[addr_count++] = row_ptr;
+	for (idx_t i = 1; i < result_count; ++i) {
+		const auto row_idx = info.result.get_index(i);
+		info.result.set_index(i, row_idx - first_idx);
+		if (row_idx == prev_idx) {
+			continue;
+		}
+		row_ptr += (row_idx - prev_idx) * row_width;
+		data_pointers[addr_count++] = row_ptr;
+		prev_idx = row_idx;
 	}
 	// Unswizzle the offsets back to pointers (if needed)
 	if (!sorted_data.layout.AllConstant() && info.state.external) {
+		const auto next = prev_idx + 1;
 		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(), next);
 	}
 
 	// Deserialize the payload data
+	auto sel = FlatVector::IncrementalSelectionVector();
 	for (idx_t col_idx = 0; col_idx < sorted_data.layout.ColumnCount(); col_idx++) {
 		const auto col_offset = sorted_data.layout.GetOffsets()[col_idx];
-		RowOperations::Gather(addresses, info.result, payload.data[left_cols + col_idx],
-		                      *FlatVector::IncrementalSelectionVector(), result_count, col_offset, col_idx);
+		auto &col = payload.data[left_cols + col_idx];
+		RowOperations::Gather(addresses, *sel, col, *sel, addr_count, col_offset, col_idx);
+		col.Slice(info.result, result_count);
 	}
+
+	return first_idx;
 }
 
 static void MergeJoinPinSortingBlock(SBScanState &scan, const idx_t block_idx) {
@@ -864,7 +881,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			for (idx_t c = 0; c < state.lhs_payload.ColumnCount(); ++c) {
 				chunk.data[c].Slice(state.lhs_payload.data[c], left_info.result, result_count);
 			}
-			SliceSortedPayload(chunk, right_info, result_count, right_info.entry_idx + 1, left_cols);
+			const auto first_idx = SliceSortedPayload(chunk, right_info, result_count, left_cols);
 			chunk.SetCardinality(result_count);
 
 			auto sel = FlatVector::IncrementalSelectionVector();
@@ -908,7 +925,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			}
 			if (gstate.rhs_found_match) {
 				//	Absolute position of the block + start position inside that block
-				const idx_t base_index = state.right_base + right_info.base_idx;
+				const idx_t base_index = state.right_base + first_idx;
 				for (idx_t i = 0; i < result_count; i++) {
 					gstate.rhs_found_match[base_index + right_info.result[sel->get_index(i)]] = true;
 				}
