@@ -118,3 +118,60 @@ class TestRAPIAggregations(object):
         rel = initialize(duckdb_cursor)
         aggregation_generic(rel.unique,[[(1,), (2,), (None,)], [(1, Decimal('2.10')), (2, Decimal('3.20')), (None, None)],[('a',), ('b',), (None,)]])
 
+    def test_mad(self, duckdb_cursor):
+        rel = initialize(duckdb_cursor)
+        aggregation_generic(rel.mad,[[(0.5,)], [(0.5, Decimal('0.55'))]])
+
+    def test_mode(self, duckdb_cursor):
+        rel = initialize(duckdb_cursor)
+        aggregation_generic(rel.mode,[[(1,)], [(1, Decimal('2.10'))],[('a',)]])
+
+    def test_abs(self, duckdb_cursor):
+        rel = initialize(duckdb_cursor)
+        aggregation_generic(rel.abs,[[(1,), (2,), (None,)], [(1, Decimal('2.10')), (2, Decimal('3.20')), (None, None)]])
+
+    def test_prod(self, duckdb_cursor):
+        rel = initialize(duckdb_cursor)
+        aggregation_generic(rel.prod,[[(2.0,)], [(2.0, 6.720000000000001)]])
+
+
+    def test_skew(self, duckdb_cursor):
+        rel = initialize(duckdb_cursor)
+        aggregation_generic(rel.skew,[[(None,)], [(None, None)]])
+        duckdb_cursor.execute("create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));")
+        duckdb_cursor.execute("""insert into aggr values
+                (1, 10, null),
+                (2, 10, 11),
+                (2, 10, 15),
+                (2, 10, 18),
+                (2, 20, 22),
+                (2, 20, 25),
+                (2, 25, null),
+                (2, 30, 35),
+                (2, 30, 40),
+                (2, 30, 50),
+                (2, 30, 51);""")
+        rel = duckdb_cursor.table('aggr')
+        assert rel.skew('k,v,v2').execute().fetchall() == [(-3.316624790355393, -0.16344366935199223, 0.3654008511025841)]
+
+    def test_kurt(self, duckdb_cursor):
+        rel = initialize(duckdb_cursor)
+        aggregation_generic(rel.kurt,[[(None,)], [(None, None)]])
+
+        duckdb_cursor.execute("create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));")
+        duckdb_cursor.execute("""insert into aggr values
+                (1, 10, null),
+                (2, 10, 11),
+                (2, 10, 15),
+                (2, 10, 18),
+                (2, 20, 22),
+                (2, 20, 25),
+                (2, 25, null),
+                (2, 30, 35),
+                (2, 30, 40),
+                (2, 30, 50),
+                (2, 30, 51);""")
+        rel = duckdb_cursor.table('aggr')
+        assert rel.kurt('k,v,v2').execute().fetchall() == [(10.99999999999836, -1.9614277138467147, -1.445119691585509)]
+
+

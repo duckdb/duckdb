@@ -62,6 +62,22 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         py::arg("std_aggr"), py::arg("group_expr") = "")
 	    .def("value_counts", &DuckDBPyRelation::ValueCounts, "Count number of rows with each unique value of variable",
 	         py::arg("value_counts_aggr"), py::arg("group_expr") = "")
+	    .def("mad", &DuckDBPyRelation::MAD,
+	         "Returns the median absolute deviation for the  aggregate columns. NULL values are ignored. Temporal "
+	         "types return a positive INTERVAL.",
+	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
+	    .def("mode", &DuckDBPyRelation::Mode,
+	         "Returns the most frequent value for the aggregate columns. NULL values are ignored.",
+	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
+	    .def("abs", &DuckDBPyRelation::Abs,
+	         "Returns the most absolute value for the  aggregate columns. NULL values are ignored.",
+	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
+	    .def("prod", &DuckDBPyRelation::Prod, "Calculates the product of the aggregate column.",
+	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
+	    .def("skew", &DuckDBPyRelation::Skew, "Returns the skewness of the aggregate column.",
+	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
+	    .def("kurt", &DuckDBPyRelation::Kurt, "Returns the excess kurtosis of the aggregate column.",
+	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
 	    .def("unique", &DuckDBPyRelation::Unique, "Number of distinct values in a column.", py::arg("unique_aggr"))
 	    .def("union", &DuckDBPyRelation::Union,
 	         "Create the set union of this relation object with another relation object in other_rel")
@@ -104,6 +120,23 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("__repr__", &DuckDBPyRelation::Print);
 }
 
+//! These require window functions?
+// cumsum()
+// Cumulative sum
+// cumprod()
+// Cumulative product
+// cummax()
+// Cumulative maximum
+// cummin()
+// Cumulative minimum
+
+//! Do we have column statistics?
+// describe()
+// Basic descriptive and statistics for each column.
+
+//! Missing function
+// sem()
+// Standard error of the mean
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
 }
 
@@ -263,6 +296,29 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ValueCounts(const string &count_c
 		throw std::runtime_error("Only one column is accepted in Value_Counts method");
 	}
 	return GenericAggregator("count", count_column, groups, "", count_column);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::MAD(const string &aggr_columns, const string &groups) {
+	return GenericAggregator("mad", aggr_columns, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Mode(const string &aggr_columns, const string &groups) {
+	return GenericAggregator("mode", aggr_columns, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Abs(const string &aggr_columns, const string &groups) {
+	return GenericAggregator("abs", aggr_columns, groups);
+}
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Prod(const string &aggr_columns, const string &groups) {
+	return GenericAggregator("product", aggr_columns, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Skew(const string &aggr_columns, const string &groups) {
+	return GenericAggregator("skewness", aggr_columns, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Kurt(const string &aggr_columns, const string &groups) {
+	return GenericAggregator("kurtosis", aggr_columns, groups);
 }
 
 idx_t DuckDBPyRelation::Length() {

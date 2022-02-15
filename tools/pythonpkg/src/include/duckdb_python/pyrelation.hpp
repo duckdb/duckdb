@@ -103,6 +103,17 @@ public:
 
 	unique_ptr<DuckDBPyRelation> ValueCounts(const string &std_columns, const string &groups = "");
 
+	unique_ptr<DuckDBPyRelation> MAD(const string &aggr_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Mode(const string &aggr_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Abs(const string &aggr_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Prod(const string &aggr_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Skew(const string &aggr_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Kurt(const string &aggr_columns, const string &groups = "");
+
 	idx_t Length();
 
 	py::tuple Shape();
