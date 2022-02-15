@@ -22,5 +22,3 @@ endif()
 if(BUILD_R OR CONFIGURE_R)
   add_subdirectory(rpkg)
 endif()
-
-add_subdirectory(nodejs)
