@@ -1073,11 +1073,10 @@ public static void test_duckdb_timestamp() throws Exception {
 		assertEquals(rs.getLong("hi2"), -42L);
 		assertEquals(rs.getObject("hi3"), new BigInteger("454564646545646546545646545"));
 		assertEquals(rs.getObject("hi4"), new BigInteger("-454564646545646546545646545"));
-		assertEquals(rs.getBigDecimal("hi1"), new BigDecimal("42"));
-		assertEquals(rs.getBigDecimal("hi2"), new BigDecimal("-42"));
-		assertEquals(rs.getBigDecimal("hi3"), new BigDecimal("454564646545646546545646545"));
-		assertEquals(rs.getBigDecimal("hi4"), new BigDecimal("-454564646545646546545646545"));
-
+		assertTrue(rs.getBigDecimal("hi1").compareTo(new BigDecimal("42")) == 0);
+		assertTrue(rs.getBigDecimal("hi2").compareTo(new BigDecimal("-42")) == 0);
+		assertTrue(rs.getBigDecimal("hi3").compareTo(new BigDecimal("454564646545646546545646545")) == 0);
+		assertTrue(rs.getBigDecimal("hi4").compareTo(new BigDecimal("-454564646545646546545646545")) == 0);
 		assertFalse(rs.next());
 		rs.close();
 		stmt.close();

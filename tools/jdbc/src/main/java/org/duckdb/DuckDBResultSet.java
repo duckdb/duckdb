@@ -672,7 +672,8 @@ public class DuckDBResultSet implements ResultSet {
 					.scaleByPowerOfTen(meta.column_types_meta[columnIndex -1].scale * -1);
 			}
 		}
-		throw new SQLException("No decimal type");
+		Object o = getObject(columnIndex);
+		return new BigDecimal(o.toString());
 	}
 
 	public BigDecimal getBigDecimal(String columnLabel) throws SQLException {
