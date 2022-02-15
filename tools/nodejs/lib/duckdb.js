@@ -117,7 +117,7 @@ default_connection = function(o) {
 }
 
 Database.prototype.prepare = function() {
-    return this.default_connection.prepare.apply(this.default_connection, arguments);
+    return default_connection(this).prepare.apply(this.default_connection, arguments);
 }
 
 Database.prototype.run = function() {
