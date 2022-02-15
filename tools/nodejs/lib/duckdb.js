@@ -54,13 +54,13 @@ function ptr_to_arr(buffer, ptype, n) {
         case 'INT32': {
             return new Int32Array(buffer.buffer, 0, n);
         }
+        case 'INT64': {
+            return new Float64Array(buffer.buffer, 0, n);
+        }
         case 'FLOAT': {
             return new Float32Array(buffer.buffer, 0, n);
         }
         case 'DOUBLE': {
-            return new Float64Array(buffer.buffer, 0, n);
-        }
-        case 'VARCHAR': {
             return new Float64Array(buffer.buffer, 0, n);
         }
         default:
@@ -70,19 +70,40 @@ function ptr_to_arr(buffer, ptype, n) {
 
 
 // this follows the wasm udfs somewhat
-Connection.prototype.register = function(name, fun) {
-    return this.register_bulk(name, function(descr, data_buffers) {
-       // console.log(descr);
-
+Connection.prototype.register = function(name, return_type, fun) {
+    // TODO what if this throws an error somewhere? do we need a try/catch?
+    return this.register_bulk(name, return_type, function(descr, data_buffers) {
         const data_arr = [];
         const validity_arr = [];
 
         for (const idx in descr.args) {
             const arg = descr.args[idx];
-            data_arr.push(ptr_to_arr(data_buffers[arg.data_buffer], arg.physical_type, descr.rows));
-            validity_arr.push(data_buffers[arg.validity_buffer]);
+            const validity = data_buffers[arg.validity_buffer];
+            validity_arr.push(validity);
+            if (arg.physical_type == 'VARCHAR') {
+                const string_data_arr = [];
+                const decoder = new TextDecoder();
+                const string_buffer_arr = data_buffers[arg.data_buffer];
+                for (let i = 0; i < descr.rows; ++i) {
+                    if (!validity[i]) {
+                        string_data_arr.push(undefined);
+                    } else {
+                        string_data_arr.push(decoder.decode(string_buffer_arr[i]));
+                    }
+                }
+                data_arr.push(string_data_arr);
+            } else {
+                data_arr.push(ptr_to_arr(data_buffers[arg.data_buffer], arg.physical_type, descr.rows));
+            }
         }
-        const out_data = ptr_to_arr(data_buffers[descr.ret.data_buffer], descr.ret.physical_type, descr.rows);
+
+        let out_data = [];
+        if (descr.ret.physical_type == 'VARCHAR') {
+            out_data = data_buffers[descr.ret.data_buffer];
+
+        } else {
+            out_data = ptr_to_arr(data_buffers[descr.ret.data_buffer], descr.ret.physical_type, descr.rows);
+        }
         const out_validity = data_buffers[descr.ret.validity_buffer];
 
         switch (descr.args.length) {
@@ -103,6 +124,13 @@ Connection.prototype.register = function(name, fun) {
             case 2:
                 for (let i = 0; i < descr.rows; ++i) {
                     const res = fun(validity_arr[0][i] ? data_arr[0][i] : undefined, validity_arr[1][i] ? data_arr[1][i] : undefined);
+                    out_data[i] = res;
+                    out_validity[i] = res == undefined ? 0 : 1;
+                }
+                break;
+            case 3:
+                for (let i = 0; i < descr.rows; ++i) {
+                    const res = fun(validity_arr[0][i] ? data_arr[0][i] : undefined, validity_arr[1][i] ? data_arr[1][i] : undefined, validity_arr[2][i] ? data_arr[2][i] : undefined);
                     out_data[i] = res;
                     out_validity[i] = res == undefined ? 0 : 1;
                 }
