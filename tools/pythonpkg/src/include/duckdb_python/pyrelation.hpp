@@ -79,9 +79,10 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Aggregate(const string &expr, const string &groups = "");
 
-	unique_ptr<DuckDBPyRelation> GenericAggregator(const string &function_name, const string &sum_columns,
+	unique_ptr<DuckDBPyRelation> GenericAggregator(const string &function_name, const string &aggregated_columns,
 	                                               const string &groups = "", const string &function_parameter = "",
-	                                               const string &projected_columns = "");
+	                                               const string &projected_columns = "",
+	                                               const string &window_function = "");
 
 	unique_ptr<DuckDBPyRelation> Sum(const string &sum_columns, const string &groups = "");
 
@@ -118,7 +119,11 @@ public:
 
 	py::tuple Shape();
 
-	unique_ptr<DuckDBPyRelation> Unique(const string &std_columns);
+	unique_ptr<DuckDBPyRelation> Unique(const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> CumSum(const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> CumProd(const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> CumMax(const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> CumMin(const string &aggr_columns);
 
 	static unique_ptr<DuckDBPyRelation> AggregateDF(py::object df, const string &expr, const string &groups = "",
 	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());

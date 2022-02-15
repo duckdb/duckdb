@@ -42,7 +42,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("apply", &DuckDBPyRelation::GenericAggregator,
 	         "Compute the function of a single column or a list of columns  by the optional groups on the relation",
 	         py::arg("function_name"), py::arg("function_aggr"), py::arg("group_expr") = "",
-	         py::arg("function_parameter") = "", py::arg("projected_columns") = "")
+	         py::arg("function_parameter") = "", py::arg("projected_columns") = "", py::arg("window_function") = "")
 	    .def("min", &DuckDBPyRelation::Min,
 	         "Compute the aggregate min of a single column or a list of columns by the optional groups on the relation",
 	         py::arg("min_aggr"), py::arg("group_expr") = "")
@@ -79,6 +79,14 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("kurt", &DuckDBPyRelation::Kurt, "Returns the excess kurtosis of the aggregate column.",
 	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
 	    .def("unique", &DuckDBPyRelation::Unique, "Number of distinct values in a column.", py::arg("unique_aggr"))
+	    .def("cumsum", &DuckDBPyRelation::CumSum, "Returns the cumulative sum of the aggregate column.",
+	         py::arg("aggregation_columns"))
+	    .def("cumprod", &DuckDBPyRelation::CumProd, "Returns the cumulative product of the aggregate column.",
+	         py::arg("aggregation_columns"))
+	    .def("cummax", &DuckDBPyRelation::CumMax, "Returns the cumulative maximum of the aggregate column.",
+	         py::arg("aggregation_columns"))
+	    .def("cummin", &DuckDBPyRelation::CumMin, "Returns the cumulative minimum of the aggregate column.",
+	         py::arg("aggregation_columns"))
 	    .def("union", &DuckDBPyRelation::Union,
 	         "Create the set union of this relation object with another relation object in other_rel")
 	    .def("except_", &DuckDBPyRelation::Except,
@@ -119,16 +127,6 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("__str__", &DuckDBPyRelation::Print)
 	    .def("__repr__", &DuckDBPyRelation::Print);
 }
-
-//! These require window functions?
-// cumsum()
-// Cumulative sum
-// cumprod()
-// Cumulative product
-// cummax()
-// Cumulative maximum
-// cummin()
-// Cumulative minimum
 
 //! Do we have column statistics?
 // describe()
@@ -231,19 +229,21 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, con
 	return make_unique<DuckDBPyRelation>(rel->Aggregate(expr));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericAggregator(const string &function_name, const string &sum_columns,
-                                                                 const string &groups, const string &function_parameter,
-                                                                 const string &projected_columns) {
-	auto input = StringUtil::Split(sum_columns, ',');
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericAggregator(const string &function_name,
+                                                                 const string &aggregated_columns, const string &groups,
+                                                                 const string &function_parameter,
+                                                                 const string &projected_columns,
+                                                                 const string &window_function) {
+	auto input = StringUtil::Split(aggregated_columns, ',');
 	string expr;
 	if (!projected_columns.empty()) {
 		expr = projected_columns + ", ";
 	}
 	for (idx_t i = 0; i < input.size(); i++) {
 		if (function_parameter.empty()) {
-			expr += function_name + "(" + input[i] + ")";
+			expr += function_name + "(" + input[i] + ") " + window_function;
 		} else {
-			expr += function_name + "(" + input[i] + "," + function_parameter + ")";
+			expr += function_name + "(" + input[i] + "," + function_parameter + ")" + window_function;
 		}
 
 		if (i < input.size() - 1) {
@@ -333,6 +333,20 @@ py::tuple DuckDBPyRelation::Shape() {
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Unique(const string &std_columns) {
 	return make_unique<DuckDBPyRelation>(rel->Project(std_columns)->Distinct());
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumSum(const string &aggr_columns) {
+	return GenericAggregator("sum", aggr_columns, "", "", "",
+	                         "over (rows between unbounded preceding and current row) ");
+}
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumProd(const string &aggr_columns) {
+	return GenericAggregator("product", aggr_columns, "over (rows between unbounded preceding and current row) ");
+}
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMax(const string &aggr_columns) {
+	return GenericAggregator("max", aggr_columns, "over (rows between unbounded preceding and current row) ");
+}
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMin(const string &aggr_columns) {
+	return GenericAggregator("min", aggr_columns, "over (rows between unbounded preceding and current row) ");
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(py::object df, const string &expr, const string &groups,

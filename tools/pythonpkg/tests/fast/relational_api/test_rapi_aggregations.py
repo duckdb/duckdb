@@ -134,7 +134,6 @@ class TestRAPIAggregations(object):
         rel = initialize(duckdb_cursor)
         aggregation_generic(rel.prod,[[(2.0,)], [(2.0, 6.720000000000001)]])
 
-
     def test_skew(self, duckdb_cursor):
         rel = initialize(duckdb_cursor)
         aggregation_generic(rel.skew,[[(None,)], [(None, None)]])
@@ -174,4 +173,11 @@ class TestRAPIAggregations(object):
         rel = duckdb_cursor.table('aggr')
         assert rel.kurt('k,v,v2').execute().fetchall() == [(10.99999999999836, -1.9614277138467147, -1.445119691585509)]
 
+    def test_cum_sum(self, duckdb_cursor):
+        rel = initialize(duckdb_cursor)
+        aggregation_generic(rel.cumsum,[[(None,)], [(None, None)], [None]])
+
+con = duckdb.connect()
+rel = initialize(con)
+rel.cumsum('i').execute()
 
