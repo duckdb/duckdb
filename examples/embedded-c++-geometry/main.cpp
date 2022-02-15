@@ -7,6 +7,7 @@ int main() {
 	Connection con(db);
 
 	auto create_rv = con.Query("CREATE TABLE test (blob_col BLOB NOT NULL, id INTEGER NOT NULL, geom GEOMETRY)");
+	create_rv->Print();
 	auto insert_rv = con.Query("INSERT INTO test VALUES ('AB'::BLOB, 1, 'POINT(0 0)'::GEOMETRY)");
 	auto result = con.Query("SELECT * FROM test");
 	result->Print();
