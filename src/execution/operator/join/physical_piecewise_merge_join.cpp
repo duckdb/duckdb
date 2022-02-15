@@ -478,6 +478,7 @@ public:
 		D_ASSERT(lhs_global_state->sorted_blocks.size() == 1);
 
 		PayloadScanner scanner(*lhs_global_state->sorted_blocks[0]->payload_data, *lhs_global_state);
+		lhs_payload.Reset();
 		scanner.Scan(lhs_payload);
 
 		// Recompute the sorted keys from the sorted input
@@ -847,7 +848,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			if (IsLeftOuterJoin(join_type)) {
 				// left join: before we move to the next chunk, see if we need to output any vectors that didn't
 				// have a match found
-				PhysicalJoin::ConstructLeftJoinResult(input, chunk, state.lhs_found_match.get());
+				PhysicalJoin::ConstructLeftJoinResult(state.lhs_payload, chunk, state.lhs_found_match.get());
 				memset(state.lhs_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 			}
 			state.first_fetch = true;
