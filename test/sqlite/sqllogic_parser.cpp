@@ -24,6 +24,14 @@ bool SQLLogicParser::EmptyOrComment(const string &line) {
 	return line.empty() || StringUtil::StartsWith(line, "#");
 }
 
+bool SQLLogicParser::NextLineEmptyOrComment() {
+	if (current_line + 1 >= lines.size()) {
+		return true;
+	} else {
+		return EmptyOrComment(lines[current_line + 1]);
+	}
+}
+
 bool SQLLogicParser::NextStatement() {
 	if (seen_statement) {
 		// skip the current statement
@@ -116,6 +124,42 @@ SQLLogicToken SQLLogicParser::Tokenize() {
 		result.parameters.push_back(move(argument_list[i]));
 	}
 	return result;
+}
+
+// Single line statements should throw a parser error if the next line is not a comment or a newline
+bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
+	switch (token.type) {
+	case SQLLogicTokenType::SQLLOGIC_INVALID:
+		return false;
+	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
+		return true;
+	case SQLLogicTokenType::SQLLOGIC_ONLY_IF:
+		return true;
+	case SQLLogicTokenType::SQLLOGIC_STATEMENT:
+		return false;
+	case SQLLogicTokenType::SQLLOGIC_QUERY:
+		return false;
+	case SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD:
+		return true;
+	case SQLLogicTokenType::SQLLOGIC_HALT:
+		return true;
+	case SQLLogicTokenType::SQLLOGIC_MODE:
+		return true;
+	case SQLLogicTokenType::SQLLOGIC_LOOP:
+		return true;
+	case SQLLogicTokenType::SQLLOGIC_FOREACH:
+		return true;
+	case SQLLogicTokenType::SQLLOGIC_ENDLOOP:
+		return true;
+	case SQLLogicTokenType::SQLLOGIC_REQUIRE:
+		return true;
+	case SQLLogicTokenType::SQLLOGIC_LOAD:
+		return true;
+	case SQLLogicTokenType::SQLLOGIC_RESTART:
+		return true;
+	default:
+		throw std::runtime_error("Unknown SQLLogic token found!");
+	}
 }
 
 SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
