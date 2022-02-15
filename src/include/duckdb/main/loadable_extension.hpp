@@ -8,7 +8,7 @@
 
 #pragma once
 
-#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
+#if defined(DUCKDB_BUILD_LOADABLE_EXTENSION) && defined(DUCKDB_EXTENSION_MAIN)
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX

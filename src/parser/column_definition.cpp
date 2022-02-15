@@ -1,5 +1,5 @@
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -19,15 +19,20 @@ ColumnDefinition ColumnDefinition::Copy() const {
 }
 
 void ColumnDefinition::Serialize(Serializer &serializer) const {
-	serializer.WriteString(name);
-	type.Serialize(serializer);
-	serializer.WriteOptional(default_value);
+	FieldWriter writer(serializer);
+	writer.WriteString(name);
+	writer.WriteSerializable(type);
+	writer.WriteOptional(default_value);
+	writer.Finalize();
 }
 
 ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
-	auto column_name = source.Read<string>();
-	auto column_type = LogicalType::Deserialize(source);
-	auto default_value = source.ReadOptional<ParsedExpression>();
+	FieldReader reader(source);
+	auto column_name = reader.ReadRequired<string>();
+	auto column_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto default_value = reader.ReadOptional<ParsedExpression>(nullptr);
+	reader.Finalize();
+
 	return ColumnDefinition(column_name, column_type, move(default_value));
 }
 

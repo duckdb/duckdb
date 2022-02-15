@@ -49,33 +49,38 @@ def run_h2oai_query(duckdb_conn,query_number,queries_list):
 def run_all_queries(duckdb_conn,duckdb_current_conn,benchmark_name,repetitions,num_queries,threshold,query_fun,queries,skip_queries=set([])):
     print ("######## Status " + benchmark_name + " Benchmark Regression #######", flush=True)
     regression_status = True
-    for i in range (1,num_queries):      
-        if i not in skip_queries:    
-            j = 0
-            query_faster = True
-            query_ok = False
-            master_time = 0
-            current_time = 0
-            # We only repeat the query (up to repetitions), if its not the same result.
-            while (j < repetitions and (query_ok is False or query_faster is True)):
-                j+=1
+    for i in range (1,num_queries):
+        if i in skip_queries:
+            continue
+        j = 0
+        query_faster = True
+        query_ok = False
+        master_time = 0
+        current_time = 0
+        # We only repeat the query (up to repetitions), if its not the same result.
+        while (j < repetitions and (query_ok is False or query_faster is True)):
+            j+=1
+            if j % 2 == 0:
                 master_time = query_fun(duckdb_conn,i,queries)
                 current_time = query_fun(duckdb_current_conn,i,queries)
-                if current_time <= master_time * (1+threshold):
-                    query_ok = True
-                if current_time > master_time * (1-threshold):
-                    query_faster = False
-            if query_ok is False:
-                regression_status = False
-                print("Q"+ str(i) + " slow ("+ str(truncate(current_time,2)) + " vs " + str(truncate(master_time,2)) + "). ", flush=True)
-            if query_faster:
-                print("Q"+ str(i) + " fast ("+ str(truncate(current_time,2)) + " vs " + str(truncate(master_time,2)) + "). ", flush=True)
-            if query_ok and not query_faster:
-                print("Q"+ str(i) + " same ("+ str(truncate(current_time,2)) + " vs " + str(truncate(master_time,2)) + "). ", flush=True)
+            else:
+                current_time = query_fun(duckdb_current_conn,i,queries)
+                master_time = query_fun(duckdb_conn,i,queries)
+            if current_time <= master_time * (1+threshold) + 0.01:
+                query_ok = True
+            if current_time > master_time * (1-threshold):
+                query_faster = False
+        if query_ok is False:
+            regression_status = False
+            print(">>> Q"+ str(i) + " slow ("+ str(truncate(current_time,2)) + " vs " + str(truncate(master_time,2)) + "). ", flush=True)
+        if query_faster:
+            print("Q"+ str(i) + " fast ("+ str(truncate(current_time,2)) + " vs " + str(truncate(master_time,2)) + "). ", flush=True)
+        if query_ok and not query_faster:
+            print("Q"+ str(i) + " same ("+ str(truncate(current_time,2)) + " vs " + str(truncate(master_time,2)) + "). ", flush=True)
     print ("######## End " + benchmark_name + " Benchmark Regression #######", flush=True)
     return regression_status
 
-def run_tpc(benchmark_name,repetitions,load_data_call,num_queries,get_query_sql,threshold,skip_queries=set([])): 
+def run_tpc(benchmark_name,repetitions,load_data_call,num_queries,get_query_sql,threshold,skip_queries=set([])):
     # Master Branch
     duckdb_conn = duckdb.connect()
     duckdb_conn.execute(load_data_call)
@@ -107,7 +112,7 @@ def load_h2oai(duck_conn,duckdb_current_conn):
     duckdb_current_conn.execute("CREATE TABLE big as SELECT * FROM 'J1_1e7_1e7_0_0.csv.gz'")
 
 def run_h2oai_group(duckdb_conn,duckdb_current_conn,repetitions,threshold):
-    queries = ['CREATE TABLE ans AS SELECT id1, sum(v1) AS v1 FROM x_group GROUP BY id1', 
+    queries = ['CREATE TABLE ans AS SELECT id1, sum(v1) AS v1 FROM x_group GROUP BY id1',
     'CREATE TABLE ans AS SELECT id1, id2, sum(v1) AS v1 FROM x_group GROUP BY id1, id2;',
     'CREATE TABLE ans AS SELECT id3, sum(v1) AS v1, avg(v3) AS v3 FROM x_group GROUP BY id3;',
     'CREATE TABLE ans AS SELECT id4, avg(v1) AS v1, avg(v2) AS v2, avg(v3) AS v3 FROM x_group GROUP BY id4;',
@@ -117,19 +122,19 @@ def run_h2oai_group(duckdb_conn,duckdb_current_conn,repetitions,threshold):
     'CREATE TABLE ans AS SELECT id6, v3 AS largest2_v3 FROM (SELECT id6, v3, row_number() OVER (PARTITION BY id6 ORDER BY v3 DESC) AS order_v3 FROM x_group WHERE v3 IS NOT NULL) sub_query WHERE order_v3 <= 2',
     'CREATE TABLE ans AS SELECT id2, id4, pow(corr(v1, v2), 2) AS r2 FROM x_group GROUP BY id2, id4;',
     'CREATE TABLE ans AS SELECT id1, id2, id3, id4, id5, id6, sum(v3) AS v3, count(*) AS count FROM x_group GROUP BY id1, id2, id3, id4, id5, id6;']
-    
+
     return run_all_queries(duckdb_conn,duckdb_current_conn,'H2OAI-Group BY', repetitions,10,threshold,run_h2oai_query,queries)
 
 def run_h2oai_join(duckdb_conn,duckdb_current_conn,repetitions,threshold):
-    queries = ['CREATE TABLE ans AS SELECT x.*, small.id4 AS small_id4, v2 FROM x JOIN small USING (id1);', 
+    queries = ['CREATE TABLE ans AS SELECT x.*, small.id4 AS small_id4, v2 FROM x JOIN small USING (id1);',
     'CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id4 AS medium_id4, medium.id5 AS medium_id5, v2 FROM x JOIN medium USING (id2);',
     'CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id4 AS medium_id4, medium.id5 AS medium_id5, v2 FROM x LEFT JOIN medium USING (id2);',
     'CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id2 AS medium_id2, medium.id4 AS medium_id4, v2 FROM x JOIN medium USING (id5);',
     'CREATE TABLE ans AS SELECT x.*, big.id1 AS big_id1, big.id2 AS big_id2, big.id4 AS big_id4, big.id5 AS big_id5, big.id6 AS big_id6, v2 FROM x JOIN big USING (id3);']
-    
+
     return run_all_queries(duckdb_conn,duckdb_current_conn,'H2OAI-Join', repetitions,5,threshold,run_h2oai_query,queries)
 
-def run_h2oai(repetitions, threshold):    
+def run_h2oai(repetitions, threshold):
     # Master Branch
     duckdb_conn = duckdb.connect()
     duckdb_conn.execute('PRAGMA threads=2')
@@ -140,7 +145,7 @@ def run_h2oai(repetitions, threshold):
     # Download H2OAI data
     download_h2oai()
 
-    # Load the data 
+    # Load the data
     load_h2oai(duckdb_conn,duckdb_current_conn)
 
     # Run H2OAI Group
@@ -152,7 +157,7 @@ def run_h2oai(repetitions, threshold):
     return regression_status
 
 def regression_test(threshold,benchmark):
-    repetitions = 50 
+    repetitions = 50
     regression_status = False
     if benchmark == 'tpch':
         regression_status = run_tpc('TPC-H', repetitions,"CALL dbgen(sf=1);",22,"tpch_queries",threshold)

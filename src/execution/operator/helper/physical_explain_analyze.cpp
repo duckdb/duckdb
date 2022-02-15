@@ -20,7 +20,8 @@ SinkResultType PhysicalExplainAnalyze::Sink(ExecutionContext &context, GlobalSin
 SinkFinalizeType PhysicalExplainAnalyze::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                   GlobalSinkState &gstate_p) const {
 	auto &gstate = (ExplainAnalyzeStateGlobalState &)gstate_p;
-	gstate.analyzed_plan = context.profiler->ToString();
+	auto &profiler = QueryProfiler::Get(context);
+	gstate.analyzed_plan = profiler.ToString();
 	return SinkFinalizeType::READY;
 }
 

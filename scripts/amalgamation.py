@@ -79,7 +79,8 @@ if '--extended' in sys.argv:
         "duckdb/execution/operator/persistent/buffered_csv_reader.hpp",
         "duckdb/common/types/vector_cache.hpp",
         "duckdb/planner/filter/null_filter.hpp",
-        "duckdb/common/arrow_wrapper.hpp"]]
+        "duckdb/common/arrow_wrapper.hpp",
+        "duckdb/common/compressed_file_system.hpp"]]
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/expression'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/parsed_data'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/tableref'))
@@ -238,7 +239,7 @@ def git_commit_hash():
 def git_dev_version():
     version = subprocess.check_output(['git','describe','--tags','--abbrev=0']).strip().decode('utf8')
     long_version = subprocess.check_output(['git','describe','--tags','--long']).strip().decode('utf8')
-    version_splits = version.lstrip('v').split('.')
+    version_splits = version.split('.')
     dev_version = long_version.split('-')[1]
     if int(dev_version) == 0:
         # directly on a tag: emit the regular version

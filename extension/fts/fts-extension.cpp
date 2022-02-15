@@ -1,3 +1,4 @@
+#define DUCKDB_EXTENSION_MAIN
 #include "fts-extension.hpp"
 #include "fts_indexing.hpp"
 #include "libstemmer.h"

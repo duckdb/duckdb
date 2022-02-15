@@ -66,7 +66,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		}
 		auto &nstats = (NumericStatistics &)*stats;
 
-		if (nstats.min.is_null || nstats.max.is_null) {
+		if (nstats.min.IsNull() || nstats.max.IsNull()) {
 			return false;
 		}
 		// we have a min and a max value for the stats: use that to figure out how many bits we have

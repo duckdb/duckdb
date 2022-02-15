@@ -31,7 +31,7 @@
 #' dbDisconnect(con)
 duckdb_read_csv <- function(conn, name, files, header = TRUE, na.strings = "", nrow.check = 500,
                             delim = ",", quote = "\"", col.names = NULL, lower.case.names = FALSE, sep = delim, transaction = TRUE, ...) {
-
+  #
   if (length(na.strings) > 1) stop("na.strings must be of length 1")
   if (!missing(sep)) delim <- sep
 
@@ -94,7 +94,8 @@ duckdb_read_csv <- function(conn, name, files, header = TRUE, na.strings = "", n
 #' @keywords internal
 read_csv_duckdb <- function(conn, files, tablename, ...) {
   .Deprecated(
-    "duckdb_read_csv", old = "read_csv_duckdb",
+    "duckdb_read_csv",
+    old = "read_csv_duckdb",
     msg = "Use 'duckdb_read_csv' instead, with changed order of arguments."
   )
   # Different order of arguments!

@@ -43,7 +43,7 @@ bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value) {
 		}
 		index = length + index;
 	} else if (index > length) {
-		return false;
+		index = length;
 	}
 	return true;
 }
@@ -141,17 +141,11 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(args.data.size() == 3);
 	auto count = args.size();
 
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-		}
-	}
-
 	Vector &s = args.data[0];
 	Vector &b = args.data[1];
 	Vector &e = args.data[2];
 
+	s.Normalify(count);
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST:
 		// Share the value dictionary as we are just going to slice it
@@ -163,6 +157,14 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented");
+	}
+
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	for (idx_t i = 0; i < args.ColumnCount(); i++) {
+		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::FLAT_VECTOR);
+			break;
+		}
 	}
 }
 
@@ -189,10 +191,10 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 
 void ArraySliceFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("array_slice", {LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
+	ScalarFunction fun({LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
 	                   ArraySliceFunction, false, ArraySliceBind);
 	fun.varargs = LogicalType::ANY;
-	set.AddFunction(fun);
+	set.AddFunction({"array_slice", "list_slice"}, fun);
 }
 
 } // namespace duckdb

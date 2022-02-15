@@ -6,6 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "duckdb/common/winapi.hpp"
+
 #pragma once
 
 #if (defined(DUCKDB_USE_STANDARD_ASSERT) || !defined(DEBUG)) && !defined(DUCKDB_FORCE_ASSERT)
@@ -14,7 +16,7 @@
 #define D_ASSERT assert
 #else
 namespace duckdb {
-void DuckDBAssertInternal(bool condition, const char *condition_name, const char *file, int linenr);
+DUCKDB_API void DuckDBAssertInternal(bool condition, const char *condition_name, const char *file, int linenr);
 }
 
 #define D_ASSERT(condition) duckdb::DuckDBAssertInternal(bool(condition), #condition, __FILE__, __LINE__)

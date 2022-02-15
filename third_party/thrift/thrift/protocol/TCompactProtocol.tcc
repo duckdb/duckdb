@@ -21,8 +21,6 @@
 
 #include <limits>
 
-#include "thrift/config.h"
-
 /*
  * TCompactProtocol::i*ToZigzag depend on the fact that the right shift
  * operator on a signed integer is an arithmetic (sign-extending) shift.

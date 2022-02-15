@@ -11,6 +11,10 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 	// only handle numerics for now
 	switch (left.type.InternalType()) {
 	case PhysicalType::BOOL:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:
@@ -24,7 +28,7 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 	}
 	auto &lstats = (NumericStatistics &)left;
 	auto &rstats = (NumericStatistics &)right;
-	if (lstats.min.is_null || lstats.max.is_null || rstats.min.is_null || rstats.max.is_null) {
+	if (lstats.min.IsNull() || lstats.max.IsNull() || rstats.min.IsNull() || rstats.max.IsNull()) {
 		// no stats available: nothing to prune
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

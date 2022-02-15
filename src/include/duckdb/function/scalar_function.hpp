@@ -52,7 +52,7 @@ public:
 	bind_scalar_function_t bind;
 	//! Init thread local state for the function (if any)
 	init_local_state_t init_local_state;
-	// The dependency function (if any)
+	//! The dependency function (if any)
 	dependency_function_t dependency;
 	//! The statistics propagation function (if any)
 	function_statistics_t statistics;

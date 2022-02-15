@@ -92,7 +92,7 @@ struct ArrowScanState : public FunctionOperatorData {
 	explicit ArrowScanState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(move(current_chunk)) {
 	}
 	unique_ptr<ArrowArrayStreamWrapper> stream;
-	unique_ptr<ArrowArrayWrapper> chunk;
+	shared_ptr<ArrowArrayWrapper> chunk;
 	idx_t chunk_offset = 0;
 	vector<column_t> column_ids;
 	//! Store child vectors for Arrow Dictionary Vectors (col-idx,vector)
@@ -115,7 +115,7 @@ public:
 private:
 	//! Binds an arrow table
 	static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, vector<Value> &inputs,
-	                                              unordered_map<string, Value> &named_parameters,
+	                                              named_parameter_map_t &named_parameters,
 	                                              vector<LogicalType> &input_table_types,
 	                                              vector<string> &input_table_names, vector<LogicalType> &return_types,
 	                                              vector<string> &names);
@@ -158,7 +158,7 @@ private:
 	//! Gets Arrow Table's Cardinality
 	static unique_ptr<NodeStatistics> ArrowScanCardinality(ClientContext &context, const FunctionData *bind_data);
 	//! Gets the progress on the table scan, used for Progress Bars
-	static int ArrowProgress(ClientContext &context, const FunctionData *bind_data_p);
+	static double ArrowProgress(ClientContext &context, const FunctionData *bind_data_p);
 };
 
 } // namespace duckdb

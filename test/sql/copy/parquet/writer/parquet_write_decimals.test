@@ -1,0 +1,87 @@
+# name: test/sql/copy/parquet/writer/parquet_write_decimals.test
+# description: Parquet decimal types round trip
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE decimals(
+	dec4 DECIMAL(4,1),
+	dec9 DECIMAL(9,2),
+	dec18 DECIMAL(18,3),
+	dec38 DECIMAL(38,4)
+);
+
+statement ok
+INSERT INTO decimals VALUES (
+	-999.9,
+	-9999999.99,
+	-999999999999999.999,
+	-999999999999999999999999999999999.9999
+), (
+	NULL, NULL, NULL, NULL
+), (
+ 	42, 42, 42, 42
+), (
+ 	-42, -42, -42, -42
+), (
+  	0, 0, 0, 0
+ ), (
+  	999.9,
+  	9999999.99,
+  	999999999999999.999,
+  	999999999999999999999999999999999.9999
+);
+
+statement ok
+COPY decimals TO '__TEST_DIR__/decimals.parquet';
+
+query IIII nosort decimal_scan
+SELECT * FROM decimals;
+
+query IIII nosort decimal_scan
+SELECT * FROM '__TEST_DIR__/decimals.parquet';
+
+query IIII
+SELECT stats_min, stats_max, stats_min_value, stats_max_value FROM parquet_metadata('__TEST_DIR__/decimals.parquet');
+----
+-999.9	999.9	-999.9	999.9
+-9999999.99	9999999.99	-9999999.99	9999999.99
+-999999999999999.999	999999999999999.999	-999999999999999.999	999999999999999.999
+-999999999999999999999999999999999.9999	999999999999999999999999999999999.9999	-999999999999999999999999999999999.9999	999999999999999999999999999999999.9999
+
+# filter pushdown
+statement ok
+DELETE FROM decimals WHERE dec4<-42 OR dec4>42
+
+statement ok
+COPY decimals TO '__TEST_DIR__/decimals.parquet';
+
+foreach dec_column dec4 dec9 dec18 dec38
+
+query IIII
+SELECT * FROM '__TEST_DIR__/decimals.parquet' WHERE ${dec_column}=42
+----
+42	42	42	42
+
+query IIII
+SELECT * FROM '__TEST_DIR__/decimals.parquet' WHERE ${dec_column}=-43
+----
+
+query IIII
+SELECT * FROM '__TEST_DIR__/decimals.parquet' WHERE ${dec_column}=43
+----
+
+endloop
+
+# check statistics
+statement ok
+PRAGMA disable_verification
+
+query IIII
+SELECT stats(dec4), stats(dec9), stats(dec18), stats(dec38) FROM '__TEST_DIR__/decimals.parquet' LIMIT 1
+----
+[Min: -42.0, Max: 42.0][Has Null: true]	[Min: -42.00, Max: 42.00][Has Null: true]	[Min: -42.000, Max: 42.000][Has Null: true]	[Min: -42.0000, Max: 42.0000][Has Null: true]

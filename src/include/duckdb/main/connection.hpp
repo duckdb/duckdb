@@ -13,6 +13,7 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/function/udf_function.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/relation.hpp"
@@ -27,6 +28,7 @@ class ClientContext;
 class DatabaseInstance;
 class DuckDB;
 class LogicalOperator;
+class SelectStatement;
 
 typedef void (*warning_callback)(std::string);
 
@@ -78,6 +80,12 @@ public:
 		return QueryParamsRecursive(query, values, args...);
 	}
 
+	//! Issues a query to the database and returns a Pending Query Result. Note that "query" may only contain
+	//! a single statement.
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query);
+	//! Issues a query to the database and returns a Pending Query Result
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement);
+
 	//! Prepare the specified query, returning a prepared statement object
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
 	//! Prepare the specified statement, returning a prepared statement object
@@ -107,7 +115,7 @@ public:
 	//! Returns a relation that calls a specified table function
 	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname);
 	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname, const vector<Value> &values,
-	                                              const unordered_map<string, Value> &named_parameters);
+	                                              const named_parameter_map_t &named_parameters);
 	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname, const vector<Value> &values);
 	//! Returns a relation that produces values
 	DUCKDB_API shared_ptr<Relation> Values(const vector<vector<Value>> &values);
@@ -120,13 +128,19 @@ public:
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file);
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, const vector<string> &columns);
 	//! Returns a relation from a query
-	DUCKDB_API shared_ptr<Relation> RelationFromQuery(const string &query, const string &alias = "queryrelation");
+	DUCKDB_API shared_ptr<Relation> RelationFromQuery(const string &query, string alias = "queryrelation",
+	                                                  const string &error = "Expected a single SELECT statement");
+	DUCKDB_API shared_ptr<Relation> RelationFromQuery(unique_ptr<SelectStatement> select_stmt,
+	                                                  string alias = "queryrelation");
 
 	DUCKDB_API void BeginTransaction();
 	DUCKDB_API void Commit();
 	DUCKDB_API void Rollback();
 	DUCKDB_API void SetAutoCommit(bool auto_commit);
 	DUCKDB_API bool IsAutoCommit();
+
+	//! Fetch a list of table names that are required for a given query
+	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
 
 	template <typename TR, typename... Args>
 	void CreateScalarFunction(const string &name, TR (*udf_func)(Args...)) {

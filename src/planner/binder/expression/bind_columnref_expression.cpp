@@ -12,6 +12,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 
@@ -175,6 +176,9 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 }
 
 BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t depth) {
+	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+		return BindResult(make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
+	}
 	string error_message;
 	auto expr = QualifyColumnName(colref_p, error_message);
 	if (!expr) {

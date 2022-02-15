@@ -38,8 +38,8 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_co
 		throw runtime_error(result->error);
 	}
 	for (size_t i = 0; i < result->collection.Count(); i++) {
-		auto type = result->collection.GetValue(0, i).str_value;
-		auto name = result->collection.GetValue(2, i).str_value;
+		auto type = StringValue::Get(result->collection.GetValue(0, i));
+		auto name = StringValue::Get(result->collection.GetValue(2, i));
 		bool view = type == "view";
 		table tab(name, "main", !view, !view);
 		tables.push_back(tab);
@@ -58,8 +58,8 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_co
 			throw runtime_error(result->error);
 		}
 		for (size_t i = 0; i < result->collection.Count(); i++) {
-			auto name = result->collection.GetValue(1, i).str_value;
-			auto type = result->collection.GetValue(2, i).str_value;
+			auto name = StringValue::Get(result->collection.GetValue(1, i));
+			auto type = StringValue::Get(result->collection.GetValue(2, i));
 			column c(name, sqltype::get(type));
 			t->columns().push_back(c);
 		}

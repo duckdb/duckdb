@@ -9,13 +9,14 @@ void FillResult(Value &values, Vector &result, idx_t row) {
 	//! First Initialize List Vector
 	idx_t current_offset = ListVector::GetListSize(result);
 	//! Push Values to List Vector
-	for (idx_t i = 0; i < values.list_value.size(); i++) {
-		ListVector::PushBack(result, values.list_value[i]);
+	auto &list_values = ListValue::GetChildren(values);
+	for (idx_t i = 0; i < list_values.size(); i++) {
+		ListVector::PushBack(result, list_values[i]);
 	}
 
 	//! now set the pointer
 	auto &entry = ((list_entry_t *)result.GetData())[row];
-	entry.length = values.list_value.size();
+	entry.length = list_values.size();
 	entry.offset = current_offset;
 }
 

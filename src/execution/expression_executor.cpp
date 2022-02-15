@@ -255,8 +255,10 @@ idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState 
 
 	VectorData idata;
 	intermediate.Orrify(count, idata);
+
+	SelectionVector owned_sel;
 	if (!sel) {
-		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+		sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
 	}
 	if (!idata.validity.AllValid()) {
 		return DefaultSelectSwitch<false>(idata, sel, count, true_sel, false_sel);

@@ -556,7 +556,6 @@ AggregateFunction GetDiscreteQuantileAggregateFunction(const LogicalType &type) 
 		break;
 
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ:
 		return GetTypedDiscreteQuantileAggregateFunction<int32_t, int32_t>(type);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -748,7 +747,6 @@ AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &ty
 		break;
 
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::DATE_TZ:
 		return GetTypedDiscreteQuantileListAggregateFunction<date_t, date_t>(type);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -1119,7 +1117,7 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(ClientContext &conte
 static double CheckQuantile(const Value &quantile_val) {
 	auto quantile = quantile_val.GetValue<double>();
 
-	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
+	if (quantile_val.IsNull() || quantile < 0 || quantile > 1) {
 		throw BinderException("QUANTILE can only take parameters in the range [0, 1]");
 	}
 
@@ -1136,7 +1134,7 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 	if (quantile_val.type().id() != LogicalTypeId::LIST) {
 		quantiles.push_back(CheckQuantile(quantile_val));
 	} else {
-		for (const auto &element_val : quantile_val.list_value) {
+		for (const auto &element_val : ListValue::GetChildren(quantile_val)) {
 			quantiles.push_back(CheckQuantile(element_val));
 		}
 	}
@@ -1179,8 +1177,6 @@ unique_ptr<FunctionData> BindContinuousQuantileDecimalList(ClientContext &contex
 
 static bool CanInterpolate(const LogicalType &type) {
 	switch (type.id()) {
-	case LogicalTypeId::DATE_TZ:
-		// DATE_TZ cannot be interpolated without a time zone
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::VARCHAR:
 		return false;
@@ -1231,11 +1227,11 @@ AggregateFunction GetContinuousQuantileListAggregate(const LogicalType &type) {
 }
 
 void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
-	const vector<LogicalType> QUANTILES = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
-	                                       LogicalType::BIGINT,  LogicalType::HUGEINT,  LogicalType::FLOAT,
-	                                       LogicalType::DOUBLE,  LogicalType::DATE,     LogicalType::TIMESTAMP,
-	                                       LogicalType::TIME,    LogicalType::DATE_TZ,  LogicalType::TIMESTAMP_TZ,
-	                                       LogicalType::TIME_TZ, LogicalType::INTERVAL, LogicalType::VARCHAR};
+	const vector<LogicalType> QUANTILES = {LogicalType::TINYINT,  LogicalType::SMALLINT,     LogicalType::INTEGER,
+	                                       LogicalType::BIGINT,   LogicalType::HUGEINT,      LogicalType::FLOAT,
+	                                       LogicalType::DOUBLE,   LogicalType::DATE,         LogicalType::TIMESTAMP,
+	                                       LogicalType::TIME,     LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
+	                                       LogicalType::INTERVAL, LogicalType::VARCHAR};
 
 	AggregateFunctionSet median("median");
 	median.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,

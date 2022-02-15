@@ -23,10 +23,10 @@ public:
 	atomic<bool> correct;
 
 	void CheckProgressThread() {
-		int prev_percentage = -1;
+		double prev_percentage = -1;
 		while (!stop) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
-			int new_percentage = context->GetProgress();
+			double new_percentage = context->GetProgress();
 			if (!(new_percentage >= prev_percentage || new_percentage == -1)) {
 				correct = false;
 			}

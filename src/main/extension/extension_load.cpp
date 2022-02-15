@@ -13,7 +13,7 @@ template <class T>
 static T LoadFunctionFromDLL(void *dll, const string &function_name, const string &filename) {
 	auto function = dlsym(dll, function_name.c_str());
 	if (!function) {
-		throw IOException("File \"%s\" did not contain function \"%s\"", filename, function_name);
+		throw IOException("File \"%s\" did not contain function \"%s\": %s", filename, function_name, GetDLError());
 	}
 	return (T)function;
 }
@@ -21,7 +21,7 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &extension) {
 	auto &config = DBConfig::GetConfig(db);
 	if (!config.enable_external_access) {
-		throw Exception("Loading external extensions is disabled");
+		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto filename = fs.ConvertSeparators(extension);
@@ -29,7 +29,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &
 	// shorthand case
 	if (!StringUtil::Contains(extension, ".") && !StringUtil::Contains(extension, fs.PathSeparator())) {
 		string local_path = fs.GetHomeDirectory();
-		for (auto &path_ele : PATH_COMPONENTS) {
+		auto path_components = PathComponents();
+		for (auto &path_ele : path_components) {
 			local_path = fs.JoinPath(local_path, path_ele);
 		}
 		filename = fs.JoinPath(local_path, extension + ".duckdb_extension");
@@ -40,7 +41,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &
 	}
 	auto lib_hdl = dlopen(filename.c_str(), RTLD_LAZY | RTLD_LOCAL);
 	if (!lib_hdl) {
-		throw IOException("File \"%s\" could not be loaded", filename);
+		throw IOException("File \"%s\" could not be loaded: %s", filename, GetDLError());
 	}
 
 	auto basename = fs.ExtractBaseName(filename);

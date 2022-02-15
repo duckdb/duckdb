@@ -12,17 +12,32 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/profiler_format.hpp"
 
 namespace duckdb {
 class ClientContext;
 
 struct ClientConfig {
+	//! If the query profiler is enabled or not.
+	bool enable_profiler = false;
+	//! If detailed query profiling is enabled
+	bool enable_detailed_profiling = false;
+	//! The format to automatically print query profiling information in (default: disabled)
+	ProfilerPrintFormat profiler_print_format = ProfilerPrintFormat::NONE;
+	//! The file to save query profiling information to, instead of printing it to the console
+	//! (empty = print to console)
+	string profiler_save_location;
+
 	//! If the progress bar is enabled or not.
 	bool enable_progress_bar = false;
 	//! If the print of the progress bar is enabled
 	bool print_progress_bar = true;
 	//! The wait time before showing the progress bar
 	int wait_time = 2000;
+
+	//! Preserve identifier case while parsing.
+	//! If false, all unquoted identifiers are lower-cased (e.g. "MyTable" -> "mytable").
+	bool preserve_identifier_case = true;
 
 	// Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;

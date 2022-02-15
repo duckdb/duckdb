@@ -118,10 +118,10 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 	if (arguments[0]->IsFoldable()) {
 		// parameter to nextval function is a foldable constant
 		// evaluate the constant and perform the catalog lookup already
-		Value seqname = ExpressionExecutor::EvaluateScalar(*arguments[0]);
-		if (!seqname.is_null) {
+		auto seqname = ExpressionExecutor::EvaluateScalar(*arguments[0]);
+		if (!seqname.IsNull()) {
 			D_ASSERT(seqname.type().id() == LogicalTypeId::VARCHAR);
-			auto qname = QualifiedName::Parse(seqname.str_value);
+			auto qname = QualifiedName::Parse(StringValue::Get(seqname));
 			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, qname.schema, qname.name);
 		}
 	}

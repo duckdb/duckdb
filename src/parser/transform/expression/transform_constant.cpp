@@ -45,7 +45,9 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 				return make_unique<ConstantExpression>(Value::HUGEINT(hugeint_value));
 			}
 		}
-		if (try_cast_as_decimal && decimal_position >= 0 && str_val.GetSize() < Decimal::MAX_WIDTH_DECIMAL + 2) {
+		idx_t decimal_offset = val.val.str[0] == '-' ? 3 : 2;
+		if (try_cast_as_decimal && decimal_position >= 0 &&
+		    str_val.GetSize() < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
 			// figure out the width/scale based on the decimal position
 			auto width = uint8_t(str_val.GetSize() - 1);
 			auto scale = uint8_t(width - decimal_position);

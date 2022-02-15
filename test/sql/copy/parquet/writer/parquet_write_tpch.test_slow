@@ -1,0 +1,41 @@
+# name: test/sql/copy/parquet/writer/parquet_write_tpch.test_slow
+# description: Parquet TPC-H tests
+# group: [writer]
+
+require parquet
+
+require tpch
+
+statement ok
+CREATE SCHEMA tpch;
+
+statement ok
+CALL dbgen(sf=1, schema='tpch');
+
+foreach tbl lineitem nation orders supplier part partsupp region customer
+
+statement ok
+COPY tpch.${tbl} TO '__TEST_DIR__/${tbl}.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
+
+statement ok
+CREATE VIEW ${tbl} AS SELECT * FROM parquet_scan('__TEST_DIR__/${tbl}.parquet');
+
+endloop
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop

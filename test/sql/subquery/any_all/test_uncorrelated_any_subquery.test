@@ -20,7 +20,7 @@ SELECT i FROM integers WHERE i <= ANY(SELECT i FROM integers)
 3
 
 query I
-SELECT i FROM integers WHERE i > ANY(SELECT i FROM integers)
+SELECT i FROM integers WHERE i > ANY(SELECT i FROM integers) ORDER BY 1
 ----
 2
 3

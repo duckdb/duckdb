@@ -155,8 +155,9 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 
 void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
 	auto &state = (HashJoinLocalState &)lstate;
+	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &state.build_executor, "build_executor", 1);
-	context.client.profiler->Flush(context.thread.profiler);
+	client_profiler.Flush(context.thread.profiler);
 }
 
 //===--------------------------------------------------------------------===//

@@ -29,7 +29,7 @@ connect
 
 query T
 SELECT stem('an', 'porter')
---
+----
 an
 
 query T

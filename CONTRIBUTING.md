@@ -12,7 +12,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 ## **Did you write a patch that fixes a bug?**
 * Great!
 * If possible, add a unit test case to make sure the issue does not occur again.
-* Make sure you run the code formatter (`make format`).
+* Make sure you run the code formatter (`make format-fix`).
 * Open a new GitHub pull request with the patch.
 * Ensure the PR description clearly describes the problem and solution. Include the relevant issue number if applicable.
 
@@ -31,7 +31,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 ## Testing
 * Unit tests can be written either using the sqllogictest framework (`.test` files) or in C++ directly. We **strongly** prefer tests to be written using the sqllogictest framework. Only write tests in C++ if you absolutely need to (e.g. when testing concurrent connections or other exotic behavior).
-* Documentation for the testing framework can be found [here](https://duckdb.org/docs/dev/testing).
+* Documentation for the testing framework can be found [here](https://duckdb.org/dev/testing).
 * Write many tests.
 * Test with different types, especially numerics, strings and complex nested types.
 * Try to test unexpected/incorrect usage as well, instead of only the happy path.

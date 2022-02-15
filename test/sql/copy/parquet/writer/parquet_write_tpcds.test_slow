@@ -1,0 +1,67 @@
+# name: test/sql/copy/parquet/writer/parquet_write_tpcds.test_slow
+# description: Parquet TPC-DS tests
+# group: [writer]
+
+require parquet
+
+require tpcds
+
+# answers are generated from postgres
+# hence check with NULLS LAST flag
+statement ok
+PRAGMA default_null_order='NULLS LAST'
+
+statement ok
+CREATE SCHEMA tpcds;
+
+statement ok
+CALL dsdgen(sf=1, schema='tpcds');
+
+foreach tbl call_center catalog_page catalog_returns catalog_sales customer customer_demographics customer_address date_dim household_demographics inventory income_band item promotion reason ship_mode store store_returns store_sales time_dim warehouse web_page web_returns web_sales web_site
+
+statement ok
+COPY tpcds.${tbl} TO '__TEST_DIR__/${tbl}.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
+
+statement ok
+CREATE VIEW ${tbl} AS SELECT * FROM parquet_scan('__TEST_DIR__/${tbl}.parquet');
+
+endloop
+
+# too slow queries:
+# 64, 85
+
+loop i 1 9
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/0${i}.csv
+
+endloop
+
+loop i 10 64
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop
+
+loop i 65 85
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop
+
+loop i 86 99
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop

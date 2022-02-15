@@ -30,7 +30,7 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -213,10 +213,16 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 
 void SchemaCatalogEntry::Alter(ClientContext &context, AlterInfo *info) {
 	CatalogType type = info->GetCatalogType();
-	string name = info->name;
 	auto &set = GetCatalogSet(type);
-	if (!set.AlterEntry(context, name, info)) {
-		throw CatalogException("Entry with name \"%s\" does not exist!", name);
+	if (info->type == AlterType::CHANGE_OWNERSHIP) {
+		if (!set.AlterOwnership(context, (ChangeOwnershipInfo *)info)) {
+			throw CatalogException("Couldn't change ownership!");
+		}
+	} else {
+		string name = info->name;
+		if (!set.AlterEntry(context, name, info)) {
+			throw CatalogException("Entry with name \"%s\" does not exist!", name);
+		}
 	}
 }
 
@@ -232,12 +238,18 @@ void SchemaCatalogEntry::Scan(CatalogType type, const std::function<void(Catalog
 }
 
 void SchemaCatalogEntry::Serialize(Serializer &serializer) {
-	serializer.WriteString(name);
+	FieldWriter writer(serializer);
+	writer.WriteString(name);
+	writer.Finalize();
 }
 
 unique_ptr<CreateSchemaInfo> SchemaCatalogEntry::Deserialize(Deserializer &source) {
 	auto info = make_unique<CreateSchemaInfo>();
-	info->schema = source.Read<string>();
+
+	FieldReader reader(source);
+	info->schema = reader.ReadRequired<string>();
+	reader.Finalize();
+
 	return info;
 }
 

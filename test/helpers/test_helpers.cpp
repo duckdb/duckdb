@@ -157,7 +157,7 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 		}
 		for (size_t j = 0; j < chunk.size(); j++) {
 			// NULL <> NULL, hence special handling
-			if (vector.GetValue(j).is_null && values[i + j].is_null) {
+			if (vector.GetValue(j).IsNull() && values[i + j].IsNull()) {
 				continue;
 			}
 

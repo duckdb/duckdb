@@ -220,7 +220,7 @@ void WriteAheadLog::WriteDelete(DataChunk &chunk) {
 		return;
 	}
 	D_ASSERT(chunk.size() > 0);
-	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LOGICAL_ROW_TYPE);
+	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
 	chunk.Verify();
 
 	writer->Write<WALType>(WALType::DELETE_TUPLE);
@@ -233,7 +233,7 @@ void WriteAheadLog::WriteUpdate(DataChunk &chunk, const vector<column_t> &column
 	}
 	D_ASSERT(chunk.size() > 0);
 	D_ASSERT(chunk.ColumnCount() == 2);
-	D_ASSERT(chunk.data[1].GetType().id() == LOGICAL_ROW_TYPE.id());
+	D_ASSERT(chunk.data[1].GetType().id() == LogicalType::ROW_TYPE);
 	chunk.Verify();
 
 	writer->Write<WALType>(WALType::UPDATE_TUPLE);

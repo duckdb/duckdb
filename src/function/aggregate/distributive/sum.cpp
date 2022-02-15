@@ -79,7 +79,7 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
                                              NodeStatistics *node_stats) {
 	if (child_stats[0] && node_stats && node_stats->has_max_cardinality) {
 		auto &numeric_stats = (NumericStatistics &)*child_stats[0];
-		if (numeric_stats.min.is_null || numeric_stats.max.is_null) {
+		if (numeric_stats.min.IsNull() || numeric_stats.max.IsNull()) {
 			return nullptr;
 		}
 		auto internal_type = numeric_stats.min.type().InternalType();

@@ -30,7 +30,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 	D_ASSERT(root->children.size() == 2);
 	(void)root;
 	// any arithmetic operator involving NULL is always NULL
-	if (constant->value.is_null) {
+	if (constant->value.IsNull()) {
 		return make_unique<BoundConstantExpression>(Value(root->return_type));
 	}
 	auto &func_name = root->function.name;

@@ -20,6 +20,9 @@ public:
 
 	unique_ptr<CopyInfo> info;
 
+protected:
+	ExportStatement(const ExportStatement &other);
+
 public:
 	unique_ptr<SQLStatement> Copy() const override;
 };

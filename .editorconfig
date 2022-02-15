@@ -14,7 +14,7 @@ x-soft-wrap-limit = 120
 x-show-invisibles = false
 x-show-spaces = false
 
-[*.{test,test_slow,test_coverage}]
+[*.{test,test_slow,test_coverage,benchmark}]
 end_of_line = lf
 insert_final_newline = true
 indent_style = tab

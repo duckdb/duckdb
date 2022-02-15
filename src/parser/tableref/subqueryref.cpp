@@ -1,7 +1,7 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -25,19 +25,15 @@ unique_ptr<TableRef> SubqueryRef::Copy() {
 	return move(copy);
 }
 
-void SubqueryRef::Serialize(Serializer &serializer) {
-	TableRef::Serialize(serializer);
-	subquery->Serialize(serializer);
-	serializer.WriteStringVector(column_name_alias);
+void SubqueryRef::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializable(*subquery);
+	writer.WriteList<string>(column_name_alias);
 }
 
-unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &source) {
-	auto subquery = SelectStatement::Deserialize(source);
-	if (!subquery) {
-		return nullptr;
-	}
+unique_ptr<TableRef> SubqueryRef::Deserialize(FieldReader &reader) {
+	auto subquery = reader.ReadRequiredSerializable<SelectStatement>();
 	auto result = make_unique<SubqueryRef>(move(subquery));
-	source.ReadStringVector(result->column_name_alias);
+	result->column_name_alias = reader.ReadRequiredList<string>();
 	return move(result);
 }
 

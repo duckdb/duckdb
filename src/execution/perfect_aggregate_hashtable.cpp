@@ -147,7 +147,7 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 	data_ptr_t target_ptr = data;
 	idx_t combine_count = 0;
 	idx_t reinit_count = 0;
-	const auto &reinit_sel = FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	const auto &reinit_sel = *FlatVector::IncrementalSelectionVector();
 	for (idx_t i = 0; i < total_groups; i++) {
 		auto has_entry_source = other.group_is_set[i];
 		// we only have any work to do if the source has an entry for this group

@@ -1,0 +1,20 @@
+# name: test/sql/subquery/any_all/subquery_in.test
+# description: Test subquery in IN clause
+# group: [any_all]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0 (c0 TIME,c1 DOUBLE PRECISION);
+
+statement ok
+CREATE TABLE t1 (c0 INT);
+
+statement ok
+INSERT INTO t1 VALUES (1),(10),(7),(9),(NULL),(1),(7),(7),(0),(8),(0),(9),(NULL),(5),(3),(8),(0);
+
+query I
+SELECT (FALSE) IN (TRUE, (SELECT TIME '13:35:07' FROM t1) BETWEEN t0.c0 AND t0.c0) FROM t0;
+----
+

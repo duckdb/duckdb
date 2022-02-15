@@ -1,6 +1,10 @@
 name: LinuxRelease
 on: [push, pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}
+  cancel-in-progress: true
+
 defaults:
   run:
     shell: bash
@@ -25,6 +29,7 @@ jobs:
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
+      BUILD_EXCEL: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
 
@@ -33,10 +38,20 @@ jobs:
       run: |
         apt-get update -y -qq
         apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:deadsnakes/ppa
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3.7 zip python3-pip maven
+        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev
+
+    - name: Install Python 3.7
+      run: |
+        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
+        tar xvf Python-3.7.12.tgz
+        cd Python-3.7.12
+        mkdir -p pythonbin
+        ./configure --with-ensurepip=install
+        make -j
+        make install
+        python3.7 --version
         python3.7 -m pip install pip
         python3.7 -m pip install requests
 
@@ -57,7 +72,7 @@ jobs:
         ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
     - name: Build
-      run: STATIC_LIBCPP=1 make
+      run: STATIC_LIBCPP=1 BUILD_ODBC=1 make
 
     - name: Test
       run: make allunit
@@ -74,6 +89,7 @@ jobs:
         (cd examples/embedded-c++; make)
         (cd examples/jdbc; make; make maven)
         build/release/benchmark/benchmark_runner benchmark/tpch/sf1/q01.benchmark
+        build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
     - name: Deploy
       run: |
@@ -82,7 +98,8 @@ jobs:
         zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
         zip -j duckdb_rest-linux-amd64.zip build/release/tools/rest/duckdb_rest_server
-        python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_rest-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so
+        python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_rest-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar duckdb_odbc-linux-amd64.zip
 
     - uses: actions/upload-artifact@v2
       with:
@@ -97,6 +114,7 @@ jobs:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
+    needs: linux-release-64
     env:
       GEN: ninja
       BUILD_VISUALIZER: 1
@@ -104,7 +122,7 @@ jobs:
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_HTTPFS: 1
+      BUILD_EXCEL: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
       AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
@@ -116,10 +134,20 @@ jobs:
       run: |
         apt-get update -y -qq
         apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:deadsnakes/ppa
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3.7 zip python3-pip maven
+        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev
+
+    - name: Install Python 3.7
+      run: |
+        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
+        tar xvf Python-3.7.12.tgz
+        cd Python-3.7.12
+        mkdir -p pythonbin
+        ./configure --with-ensurepip=install
+        make -j
+        make install
+        python3.7 --version
         python3.7 -m pip install pip
         python3.7 -m pip install requests awscli
 
@@ -142,14 +170,15 @@ jobs:
     - name: Build
       run: make
 
-    - name: Test
-      run: make allunit
-
     - name: Deploy
       run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
-          ./scripts/extension-upload.sh linux-amd64
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          ./scripts/extension-upload.sh linux_amd64
+          ./scripts/extension-upload-test.sh
+        else
+          ./scripts/extension-upload-test.sh local
         fi
+
 
 
  linux-release-32:
@@ -165,10 +194,22 @@ jobs:
       run: |
         apt-get update -y -qq
         apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:deadsnakes/ppa
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk python3.7 zip
+        apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk zip
+
+    - name: Install Python 3.7
+      run: |
+        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
+        tar xvf Python-3.7.12.tgz
+        cd Python-3.7.12
+        mkdir -p pythonbin
+        ./configure --with-ensurepip=install
+        make -j
+        make install
+        python3.7 --version
+        python3.7 -m pip install pip
+        python3.7 -m pip install requests
 
     - uses: actions/checkout@v2
       with:
@@ -189,7 +230,7 @@ jobs:
     - name: Build
       run: |
         mkdir -p build/release
-        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
     - name: Test
       run: build/release/test/unittest "*"
@@ -312,6 +353,7 @@ jobs:
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
+      BUILD_EXCEL: 1
       BUILD_VISUALIZER: 1
       DISABLE_SANITIZER: 1
 
@@ -428,3 +470,30 @@ jobs:
 
     - name: Test
       run: make allunit
+
+ amalgamation-tests:
+    name: Amalgamation Tests
+    runs-on: ubuntu-20.04
+    env:
+      CC: clang
+      CXX: clang++
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "10.0"
+
+    - name: Generate Amalgamation
+      run:  |
+          python scripts/amalgamation.py --extended
+          python scripts/parquet_amalgamation.py
+          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/parquet-amalgamation.cpp src/amalgamation/duckdb.cpp -emit-llvm -S -O0

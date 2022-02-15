@@ -287,6 +287,7 @@ typedef struct PGFuncCall {
 	PGList *args;             /* the arguments (list of exprs) */
 	PGList *agg_order;        /* ORDER BY (list of PGSortBy) */
 	PGNode *agg_filter;       /* FILTER clause, if any */
+	bool export_state;        /* EXPORT_STATE clause, if any */
 	bool agg_within_group;    /* ORDER BY appeared in WITHIN GROUP */
 	bool agg_star;            /* argument was really '*' */
 	bool agg_distinct;        /* arguments were labeled DISTINCT */
@@ -945,7 +946,8 @@ typedef enum {
 	GROUPING_SET_SIMPLE,
 	GROUPING_SET_ROLLUP,
 	GROUPING_SET_CUBE,
-	GROUPING_SET_SETS
+	GROUPING_SET_SETS,
+	GROUPING_SET_ALL
 } GroupingSetKind;
 
 typedef struct PGGroupingSet {
@@ -1177,6 +1179,7 @@ typedef struct PGSelectStmt {
 	PGList *groupClause;      /* GROUP BY clauses */
 	PGNode *havingClause;     /* HAVING conditional-expression */
 	PGList *windowClause;     /* WINDOW window_name AS (...), ... */
+	PGNode *qualifyClause;    /* QUALIFY conditional-expression */
 
 	/*
 	 * In a "leaf" node representing a VALUES list, the above fields are all

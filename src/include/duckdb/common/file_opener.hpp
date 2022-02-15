@@ -14,7 +14,7 @@ namespace duckdb {
 
 class Value;
 
-//! Abstact type that provide client-spcific context to FileSystem.
+//! Abstract type that provide client-specific context to FileSystem.
 class FileOpener {
 public:
 	virtual ~FileOpener() {};

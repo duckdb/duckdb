@@ -122,7 +122,7 @@ static void HeapGatherListVector(Vector &v, const idx_t vcount, const SelectionV
 			}
 
 			// now deserialize and add to listvector
-			RowOperations::HeapGather(list_vec_to_append, next, FlatVector::INCREMENTAL_SELECTION_VECTOR, 0,
+			RowOperations::HeapGather(list_vec_to_append, next, *FlatVector::IncrementalSelectionVector(), 0,
 			                          list_entry_locations, nullptr);
 			ListVector::Append(v, list_vec_to_append, next);
 

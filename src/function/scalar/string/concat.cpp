@@ -198,7 +198,7 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 		}
 	}
 	switch (separator.GetVectorType()) {
-	case VectorType::CONSTANT_VECTOR:
+	case VectorType::CONSTANT_VECTOR: {
 		if (ConstantVector::IsNull(separator)) {
 			// constant NULL as separator: return constant NULL vector
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -206,9 +206,11 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 			return;
 		}
 		// no null values
-		TemplatedConcatWS(args, (string_t *)vdata.data, *vdata.sel, FlatVector::INCREMENTAL_SELECTION_VECTOR,
-		                  args.size(), result);
+		SelectionVector owned_sel;
+		auto sel = FlatVector::IncrementalSelectionVector(args.size(), owned_sel);
+		TemplatedConcatWS(args, (string_t *)vdata.data, *vdata.sel, *sel, args.size(), result);
 		return;
+	}
 	default: {
 		// default case: loop over nullmask and create a non-null selection vector
 		idx_t not_null_count = 0;

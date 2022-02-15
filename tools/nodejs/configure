@@ -6,12 +6,9 @@ set -x
 cd `dirname $0`
 
 if [ ! -f "../../scripts/amalgamation.py" ]; then
-	echo "Could find neither the amalgamation build script"
+	echo "Could not find the amalgamation build script"
 	exit 1
 fi
 
-(cd ../.. && python scripts/amalgamation.py --source=tools/nodejs/src/duckdb.cpp --header=tools/nodejs/src/duckdb.hpp)
-# (cd ../.. && python extension/parquet/parquet_amalgamation.py --source=tools/rpkg/src/parquet-extension.cpp --header=tools/rpkg/src/parquet-extension.h)
-# cp src/parquet-extension.h src/parquet-extension.h.tmp
-# sed 's/duckdb[.]hpp/duckdb.h/g' src/parquet-extension.h.tmp > src/parquet-extension.h
-# rm src/parquet-extension.h.tmp
+(cd ../.. && python scripts/amalgamation.py --extended --source=tools/nodejs/src/duckdb.cpp --header=tools/nodejs/src/duckdb.hpp)
+(cd ../.. && python scripts/parquet_amalgamation.py && cp src/amalgamation/parquet-amalgamation* tools/nodejs/src/)

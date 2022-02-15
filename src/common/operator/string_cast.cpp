@@ -152,31 +152,6 @@ duckdb::string_t StringCast::Operation(duckdb::string_t input, Vector &result) {
 }
 
 template <>
-string_t StringCastTZ::Operation(date_t input, Vector &vector) {
-	int32_t date[3];
-	Date::Convert(input, date[0], date[1], date[2]);
-
-	// format for datetz is DATE+00
-	idx_t year_length;
-	bool add_bc;
-	const idx_t date_length = DateToStringCast::Length(date, year_length, add_bc);
-	const idx_t length = date_length + 3;
-
-	string_t result = StringVector::EmptyString(vector, length);
-	auto data = result.GetDataWriteable();
-
-	idx_t pos = 0;
-	DateToStringCast::Format(data + pos, date, year_length, add_bc);
-	pos += date_length;
-	data[pos++] = '+';
-	data[pos++] = '0';
-	data[pos++] = '0';
-
-	result.Finalize();
-	return result;
-}
-
-template <>
 string_t StringCastTZ::Operation(dtime_t input, Vector &vector) {
 	int32_t time[4];
 	Time::Convert(input, time[0], time[1], time[2], time[3]);

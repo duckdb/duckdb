@@ -8,8 +8,6 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-
-statement ok
 CREATE TABLE t1(a REAL, b INTEGER);
 
 statement ok

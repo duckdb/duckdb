@@ -129,7 +129,7 @@ DistinctSelectGenericLoopSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restr
                                 const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
                                 const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
                                 ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
-	if (!lmask.AllValid() || rmask.AllValid()) {
+	if (!lmask.AllValid() || !rmask.AllValid()) {
 		return DistinctSelectGenericLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, DENSE, false>(
 		    ldata, rdata, lsel, rsel, result_sel, count, lmask, rmask, true_sel, false_sel);
 	} else {
@@ -259,8 +259,9 @@ static idx_t DistinctSelectConstant(Vector &left, Vector &right, const Selection
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool DENSE>
 static idx_t DistinctSelect(Vector &left, Vector &right, idx_t vcount, const SelectionVector *sel, idx_t count,
                             SelectionVector *true_sel, SelectionVector *false_sel) {
+	SelectionVector owned_sel;
 	if (!sel) {
-		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+		sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
 	}
 	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return DistinctSelectConstant<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
@@ -596,8 +597,9 @@ template <class OP, bool DENSE, class OPNESTED>
 static idx_t DistinctSelectNested(Vector &left, Vector &right, idx_t vcount, const SelectionVector *sel, idx_t count,
                                   SelectionVector *true_sel, SelectionVector *false_sel) {
 	// We need multiple, real selections
+	SelectionVector owned_sel;
 	if (!sel) {
-		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+		sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
 	}
 
 	SelectionVector true_vec;

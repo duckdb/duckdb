@@ -132,7 +132,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 		// wait for a signal with a timeout; the timeout allows us to periodically check
 		queue->semaphore.wait(TASK_TIMEOUT_USECS);
 		if (queue->q.try_dequeue(task)) {
-			task->Execute();
+			task->Execute(TaskExecutionMode::PROCESS_ALL);
 			task.reset();
 		}
 	}

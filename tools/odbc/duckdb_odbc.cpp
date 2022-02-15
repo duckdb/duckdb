@@ -3,10 +3,39 @@
 #include "odbc_interval.hpp"
 #include "descriptor.hpp"
 #include "parameter_descriptor.hpp"
+#include "row_descriptor.hpp"
 
+using duckdb::OdbcHandle;
 using duckdb::OdbcHandleDbc;
 using duckdb::OdbcHandleDesc;
 using duckdb::OdbcHandleStmt;
+using duckdb::OdbcHandleType;
+
+std::string duckdb::OdbcHandleTypeToString(OdbcHandleType type) {
+	switch (type) {
+	case OdbcHandleType::ENV:
+		return "ENV";
+	case OdbcHandleType::DBC:
+		return "DBC";
+	case OdbcHandleType::STMT:
+		return "STMT";
+	case OdbcHandleType::DESC:
+		return "DESC";
+	}
+	return "INVALID";
+}
+
+//! OdbcHandle functions ***************************************************
+OdbcHandle::OdbcHandle(const OdbcHandle &other) {
+	// calling copy assigment opetator;
+	*this = other;
+}
+
+OdbcHandle &OdbcHandle::operator=(const OdbcHandle &other) {
+	type = other.type;
+	std::copy(other.error_messages.begin(), other.error_messages.end(), std::back_inserter(error_messages));
+	return *this;
+}
 
 //! OdbcHandleDbc functions ***************************************************
 OdbcHandleDbc::~OdbcHandleDbc() {
@@ -34,19 +63,39 @@ SQLRETURN OdbcHandleDbc::MaterializeResult() {
 	return vec_stmt_ref.back()->MaterializeResult();
 }
 
+void OdbcHandleDbc::ResetStmtDescriptors(OdbcHandleDesc *old_desc) {
+	for (auto stmt : vec_stmt_ref) {
+		if (stmt->param_desc->GetAPD() == old_desc) {
+			stmt->param_desc->ResetCurrentAPD();
+		}
+		if (stmt->row_desc->GetARD() == old_desc) {
+			stmt->row_desc->ResetCurrentARD();
+		}
+	}
+}
+
+void OdbcHandleDbc::SetDatabaseName(const string &db_name) {
+	if (!db_name.empty()) {
+		sql_attr_current_catalog = db_name;
+	}
+}
+
+std::string OdbcHandleDbc::GetDatabaseName() {
+	return sql_attr_current_catalog;
+}
+
 //! OdbcHandleStmt functions **************************************************
 OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
     : OdbcHandle(OdbcHandleType::STMT), dbc(dbc_p), rows_fetched_ptr(nullptr) {
 	D_ASSERT(dbc_p);
 	D_ASSERT(dbc_p->conn);
 
-	odbc_fetcher = make_unique<OdbcFetch>();
+	odbc_fetcher = make_unique<OdbcFetch>(this);
 	dbc->vec_stmt_ref.emplace_back(this);
 
+	// Implicit parameter and row descriptor associated with this ODBC handle statement
 	param_desc = make_unique<ParameterDescriptor>(this);
-
-	ard = make_unique<OdbcHandleDesc>(DescType::ARD, this);
-	ird = make_unique<OdbcHandleDesc>(DescType::IRD, this);
+	row_desc = make_unique<RowDescriptor>(this);
 }
 
 OdbcHandleStmt::~OdbcHandleStmt() {
@@ -71,4 +120,12 @@ SQLRETURN OdbcHandleStmt::MaterializeResult() {
 		return SQL_SUCCESS;
 	}
 	return odbc_fetcher->Materialize(this);
+}
+
+void OdbcHandleStmt::SetARD(OdbcHandleDesc *new_ard) {
+	row_desc->SetCurrentARD(new_ard);
+}
+
+void OdbcHandleStmt::SetAPD(OdbcHandleDesc *new_apd) {
+	param_desc->SetCurrentAPD(new_apd);
 }

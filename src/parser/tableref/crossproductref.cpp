@@ -1,6 +1,6 @@
 #include "duckdb/parser/tableref/crossproductref.hpp"
 
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -20,22 +20,18 @@ unique_ptr<TableRef> CrossProductRef::Copy() {
 	return move(copy);
 }
 
-void CrossProductRef::Serialize(Serializer &serializer) {
-	TableRef::Serialize(serializer);
-
-	left->Serialize(serializer);
-	right->Serialize(serializer);
+void CrossProductRef::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializable(*left);
+	writer.WriteSerializable(*right);
 }
 
-unique_ptr<TableRef> CrossProductRef::Deserialize(Deserializer &source) {
+unique_ptr<TableRef> CrossProductRef::Deserialize(FieldReader &reader) {
 	auto result = make_unique<CrossProductRef>();
 
-	result->left = TableRef::Deserialize(source);
-	result->right = TableRef::Deserialize(source);
-
-	if (!result->left || !result->right) {
-		return nullptr;
-	}
+	result->left = reader.ReadRequiredSerializable<TableRef>();
+	result->right = reader.ReadRequiredSerializable<TableRef>();
+	D_ASSERT(result->left);
+	D_ASSERT(result->right);
 
 	return move(result);
 }

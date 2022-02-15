@@ -1,0 +1,18 @@
+# name: test/sql/join/inner/list_join.test
+# description: Join on large lists
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (id INTEGER, l VARCHAR[]);
+
+statement ok
+INSERT INTO test SELECT i, case when (i/1000)%2=0 then ARRAY[1::VARCHAR, 1::VARCHAR, 1::VARCHAR] else ARRAY[2::VARCHAR, 2::VARCHAR] end FROM generate_series(0, 1999, 1) tbl(i);
+
+query IIII
+SELECT * FROM test AS t1 LEFT JOIN test AS t2 ON t1.id=t2.id WHERE t1.l!=t2.l or t1.id!=t2.id;
+----
+
+

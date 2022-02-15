@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
@@ -17,7 +18,9 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
+
 namespace duckdb {
+
 class ReplayState {
 public:
 	ReplayState(DatabaseInstance &db, ClientContext &context, Deserializer &source)
@@ -313,18 +316,13 @@ void ReplayState::ReplayDropSchema() {
 // Replay Custom Type
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateType() {
-	CreateTypeInfo info;
-
-	info.schema = source.Read<string>();
-	info.name = source.Read<string>();
-	info.type = make_unique<LogicalType>(LogicalType::Deserialize(source));
-
+	auto info = TypeCatalogEntry::Deserialize(source);
 	if (deserialize_only) {
 		return;
 	}
 
 	auto &catalog = Catalog::GetCatalog(context);
-	catalog.CreateType(context, &info);
+	catalog.CreateType(context, info.get());
 }
 
 void ReplayState::ReplayDropType() {
@@ -448,9 +446,9 @@ void ReplayState::ReplayDelete() {
 		throw InternalException("Corrupt WAL: delete without table");
 	}
 
-	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LOGICAL_ROW_TYPE);
+	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
 	row_t row_ids[1];
-	Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t)row_ids);
+	Vector row_identifiers(LogicalType::ROW_TYPE, (data_ptr_t)row_ids);
 
 	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
 	// delete the tuples from the current table

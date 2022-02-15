@@ -108,14 +108,14 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 	                                                  state.column_ids);
 }
 
-int TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) {
+double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
 	idx_t total_rows = bind_data.table->storage->GetTotalRows();
 	if (total_rows == 0 || total_rows < STANDARD_VECTOR_SIZE) {
 		//! Table is either empty or smaller than a vector size, so it is finished
 		return 100;
 	}
-	auto percentage = (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100) / total_rows;
+	auto percentage = double(bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0) / total_rows;
 	if (percentage > 100) {
 		//! In case the last chunk has less elements than STANDARD_VECTOR_SIZE, if our percentage is over 100
 		//! It means we finished this table.
@@ -141,7 +141,7 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 // Index Scan
 //===--------------------------------------------------------------------===//
 struct IndexScanOperatorData : public FunctionOperatorData {
-	explicit IndexScanOperatorData(data_ptr_t row_id_data) : row_ids(LOGICAL_ROW_TYPE, row_id_data) {
+	explicit IndexScanOperatorData(data_ptr_t row_id_data) : row_ids(LogicalType::ROW_TYPE, row_id_data) {
 	}
 
 	Vector row_ids;
@@ -300,23 +300,23 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				break;
 			}
 		}
-		if (!equal_value.is_null || !low_value.is_null || !high_value.is_null) {
+		if (!equal_value.IsNull() || !low_value.IsNull() || !high_value.IsNull()) {
 			// we can scan this index using this predicate: try a scan
 			auto &transaction = Transaction::GetTransaction(context);
 			unique_ptr<IndexScanState> index_state;
-			if (!equal_value.is_null) {
+			if (!equal_value.IsNull()) {
 				// equality predicate
 				index_state =
 				    index.InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
-			} else if (!low_value.is_null && !high_value.is_null) {
+			} else if (!low_value.IsNull() && !high_value.IsNull()) {
 				// two-sided predicate
 				index_state = index.InitializeScanTwoPredicates(transaction, low_value, low_comparison_type, high_value,
 				                                                high_comparison_type);
-			} else if (!low_value.is_null) {
+			} else if (!low_value.IsNull()) {
 				// less than predicate
 				index_state = index.InitializeScanSinglePredicate(transaction, low_value, low_comparison_type);
 			} else {
-				D_ASSERT(!high_value.is_null);
+				D_ASSERT(!high_value.IsNull());
 				index_state = index.InitializeScanSinglePredicate(transaction, high_value, high_comparison_type);
 			}
 			if (index.Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {

@@ -1,13 +1,32 @@
+#include "duckdb/execution/operator/aggregate/physical_streaming_window.hpp"
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 
 #include <numeric>
 
 namespace duckdb {
+
+static bool IsStreamingWindow(unique_ptr<Expression> &expr) {
+	auto wexpr = reinterpret_cast<BoundWindowExpression *>(expr.get());
+	if (!wexpr->partitions.empty() || !wexpr->orders.empty() || wexpr->ignore_nulls) {
+		return false;
+	}
+	switch (wexpr->type) {
+	// TODO: add more expression types here?
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_RANK_DENSE:
+	case ExpressionType::WINDOW_ROW_NUMBER:
+		return true;
+	default:
+		return false;
+	}
+}
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	D_ASSERT(op.children.size() == 1);
@@ -24,11 +43,23 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 	const auto output_idx = types.size() - op.expressions.size();
 	types.resize(output_idx);
 
+	// Identify streaming windows
+	vector<idx_t> blocking_windows;
+	vector<idx_t> streaming_windows;
+	for (idx_t expr_idx = 0; expr_idx < op.expressions.size(); expr_idx++) {
+		if (IsStreamingWindow(op.expressions[expr_idx])) {
+			streaming_windows.push_back(expr_idx);
+		} else {
+			blocking_windows.push_back(expr_idx);
+		}
+	}
+
 	// Process the window functions by sharing the partition/order definitions
 	vector<idx_t> evaluation_order;
-	vector<idx_t> remaining(op.expressions.size());
-	std::iota(remaining.begin(), remaining.end(), 0);
-	while (!remaining.empty()) {
+	while (!blocking_windows.empty() || !streaming_windows.empty()) {
+		const bool process_streaming = blocking_windows.empty();
+		auto &remaining = process_streaming ? streaming_windows : blocking_windows;
+
 		// Find all functions that share the partitioning of the first remaining expression
 		const auto over_idx = remaining[0];
 		auto over_expr = reinterpret_cast<BoundWindowExpression *>(op.expressions[over_idx].get());
@@ -54,7 +85,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 		}
 
 		// Chain the new window operator on top of the plan
-		auto window = make_unique<PhysicalWindow>(types, move(select_list), op.estimated_cardinality);
+		unique_ptr<PhysicalOperator> window;
+		if (process_streaming) {
+			window = make_unique<PhysicalStreamingWindow>(types, move(select_list), op.estimated_cardinality);
+		} else {
+			window = make_unique<PhysicalWindow>(types, move(select_list), op.estimated_cardinality);
+		}
 		window->children.push_back(move(plan));
 		plan = move(window);
 

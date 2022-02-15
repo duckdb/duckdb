@@ -7,8 +7,6 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
@@ -31,7 +29,7 @@ struct TableFilterCollection {
 };
 
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, vector<Value> &inputs,
-                                                          unordered_map<string, Value> &named_parameters,
+                                                          named_parameter_map_t &named_parameters,
                                                           vector<LogicalType> &input_table_types,
                                                           vector<string> &input_table_names,
                                                           vector<LogicalType> &return_types, vector<string> &names);
@@ -61,7 +59,7 @@ typedef unique_ptr<FunctionOperatorData> (*table_function_init_parallel_t)(Clien
                                                                            TableFilterCollection *filters);
 typedef bool (*table_function_parallel_state_next_t)(ClientContext &context, const FunctionData *bind_data,
                                                      FunctionOperatorData *state, ParallelState *parallel_state);
-typedef int (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data);
+typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data);
 typedef void (*table_function_dependency_t)(unordered_set<CatalogEntry *> &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);

@@ -3,32 +3,31 @@
 # group: [parquet]
 
 require parquet
-require vector_size 512
 
 statement ok
 PRAGMA enable_verification
 
 statement ok
 CREATE VIEW tbl AS SELECT * FROM PARQUET_SCAN('data/parquet-testing/filter_bug1391.parquet');
-#
-#query I
-#SELECT ORGUNITID FROM tbl LIMIT 10
-#----
-#98
-#13
-#175
-#200
-#262
-#206
-#204
-#131
-#181
-#269
-#
-#query I
-#SELECT COUNT(*) FROM tbl;
-#----
-#9789
+
+query I
+SELECT ORGUNITID FROM tbl LIMIT 10
+----
+98
+13
+175
+200
+262
+206
+204
+131
+181
+269
+
+query I
+SELECT COUNT(*) FROM tbl;
+----
+9789
 
 query I
 SELECT COUNT(*) FROM tbl

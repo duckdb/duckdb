@@ -1,0 +1,285 @@
+# name: test/sql/copy/parquet/parquet2.test
+# description: Issue #2261: TPC-H Q6 fails on Parquet input
+# group: [parquet]
+
+# Here's how we generate this
+# from pyspark.sql import SparkSession
+# from pyspark.sql.types import *
+# 
+# spark = SparkSession.builder.master("local").config("spark.hadoop.parquet.writer.version", "v2").getOrCreate()
+# sc = spark.sparkContext
+# 
+# ref = spark.range(42, 10000, 2).toDF("id").orderBy(rand())
+# ref.show(10)
+# 
+# ref.write.parquet("p2.parquet")
+
+require parquet
+
+
+query I
+SELECT id FROM 'data/parquet-testing/p2.parquet' offset 4968;
+----
+1436
+2596
+4774
+4402
+5378
+5372
+8658
+808
+5876
+7214
+9816
+
+
+query I
+SELECT id FROM 'data/parquet-testing/p2.parquet' limit 10;
+----
+2644
+8534
+3276
+5264
+5766
+6018
+2080
+576
+1350
+9312
+
+
+
+query I
+SELECT id FROM 'data/parquet-testing/p2.parquet' limit 100;
+----
+2644
+8534
+3276
+5264
+5766
+6018
+2080
+576
+1350
+9312
+8898
+1126
+6704
+2836
+390
+4440
+7582
+4386
+4482
+6866
+7814
+7246
+8998
+8454
+2004
+7770
+7590
+9092
+7586
+4762
+5672
+6782
+3968
+8102
+726
+3384
+3232
+9628
+4460
+556
+1368
+560
+4116
+4294
+988
+1404
+8380
+862
+9172
+3964
+5728
+8018
+8052
+8786
+8828
+8140
+4044
+324
+7102
+5898
+6848
+174
+5240
+4834
+1354
+5080
+2386
+7402
+8508
+2006
+1270
+4936
+4682
+436
+6056
+7772
+2792
+982
+7028
+8964
+6632
+4062
+8260
+9494
+6260
+8850
+9238
+7968
+9430
+8156
+9388
+478
+4478
+3400
+370
+130
+552
+7614
+1234
+5302
+
+
+
+query I
+SELECT id_with_null FROM 'data/parquet-testing/p2.parquet' limit 100;
+----
+2644
+8534
+3276
+5264
+5766
+6018
+NULL
+576
+NULL
+9312
+8898
+1126
+6704
+2836
+NULL
+NULL
+7582
+4386
+4482
+6866
+7814
+7246
+8998
+8454
+2004
+NULL
+NULL
+9092
+7586
+4762
+5672
+6782
+3968
+8102
+726
+3384
+3232
+9628
+NULL
+556
+1368
+NULL
+4116
+4294
+988
+1404
+NULL
+862
+9172
+3964
+5728
+8018
+8052
+8786
+8828
+NULL
+4044
+324
+7102
+5898
+6848
+174
+NULL
+4834
+1354
+NULL
+2386
+7402
+8508
+2006
+NULL
+4936
+4682
+436
+6056
+7772
+2792
+982
+7028
+8964
+6632
+4062
+NULL
+9494
+NULL
+NULL
+9238
+7968
+NULL
+8156
+9388
+478
+4478
+NULL
+NULL
+NULL
+552
+7614
+1234
+5302
+
+
+query IIIIIIII
+select min(id), max(id), sum(id), count(id), min(id_with_null), max(id_with_null), sum(id_with_null), count(id_with_null) from 'data/parquet-testing/p2.parquet'
+----
+42	9998	24994580	4979	42	9998	19999680	3984
+
+
+query IIII
+select min(id_int), max(id_int), sum(id_int), count(id_int) from 'data/parquet-testing/p2.parquet'
+----
+42	9998	19999680	3984
+
+
+# from bug 2882
+query I
+select * from 'data/parquet-testing/7-set.snappy.arrow2.parquet';
+----
+0
+1
+2
+3
+4
+5
+6

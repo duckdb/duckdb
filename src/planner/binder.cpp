@@ -8,6 +8,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 
 #include <algorithm>
 
@@ -226,6 +227,19 @@ bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo *cte) {
 	return false;
 }
 
+void Binder::AddBoundView(ViewCatalogEntry *view) {
+	// check if the view is already bound
+	auto current = this;
+	while (current) {
+		if (current->bound_views.find(view) != current->bound_views.end()) {
+			throw BinderException("infinite recursion detected: attempting to recursively bind view \"%s\"",
+			                      view->name);
+		}
+		current = current->parent.get();
+	}
+	bound_views.insert(view);
+}
+
 idx_t Binder::GenerateTableIndex() {
 	if (parent) {
 		return parent->GenerateTableIndex();
@@ -318,6 +332,35 @@ bool Binder::HasMatchingBinding(const string &schema_name, const string &table_n
 		return false;
 	}
 	return true;
+}
+
+void Binder::SetBindingMode(BindingMode mode) {
+	if (parent) {
+		parent->SetBindingMode(mode);
+	}
+	this->mode = mode;
+}
+
+BindingMode Binder::GetBindingMode() {
+	if (parent) {
+		return parent->GetBindingMode();
+	}
+	return mode;
+}
+
+void Binder::AddTableName(string table_name) {
+	if (parent) {
+		parent->AddTableName(move(table_name));
+		return;
+	}
+	table_names.insert(move(table_name));
+}
+
+const unordered_set<string> &Binder::GetTableNames() {
+	if (parent) {
+		return parent->GetTableNames();
+	}
+	return table_names;
 }
 
 string Binder::FormatError(ParsedExpression &expr_context, const string &message) {

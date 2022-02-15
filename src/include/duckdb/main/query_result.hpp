@@ -16,22 +16,18 @@ struct ArrowSchema;
 
 namespace duckdb {
 
-enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT };
+enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDING_RESULT };
 
-//! The QueryResult object holds the result of a query. It can either be a MaterializedQueryResult, in which case the
-//! result contains the entire result set, or a StreamQueryResult in which case the Fetch method can be called to
-//! incrementally fetch data from the database.
-class QueryResult {
+class BaseQueryResult {
 public:
-	//! Creates an successful empty query result
-	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type);
+	//! Creates a successful empty query result
+	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
-	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
-	                       vector<string> names);
+	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
+	                           vector<string> names);
 	//! Creates an unsuccessful query result with error condition
-	DUCKDB_API QueryResult(QueryResultType type, string error);
-	DUCKDB_API virtual ~QueryResult() {
-	}
+	DUCKDB_API BaseQueryResult(QueryResultType type, string error);
+	DUCKDB_API virtual ~BaseQueryResult();
 
 	//! The type of the result (MATERIALIZED or STREAMING)
 	QueryResultType type;
@@ -45,6 +41,27 @@ public:
 	bool success;
 	//! The error string (in case execution was not successful)
 	string error;
+
+public:
+	DUCKDB_API bool HasError();
+	DUCKDB_API const string &GetError();
+	DUCKDB_API idx_t ColumnCount();
+};
+
+//! The QueryResult object holds the result of a query. It can either be a MaterializedQueryResult, in which case the
+//! result contains the entire result set, or a StreamQueryResult in which case the Fetch method can be called to
+//! incrementally fetch data from the database.
+class QueryResult : public BaseQueryResult {
+public:
+	//! Creates a successful empty query result
+	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type);
+	//! Creates a successful query result with the specified names and types
+	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
+	                       vector<string> names);
+	//! Creates an unsuccessful query result with error condition
+	DUCKDB_API QueryResult(QueryResultType type, string error);
+	DUCKDB_API virtual ~QueryResult() override;
+
 	//! The next result (if any)
 	unique_ptr<QueryResult> next;
 
@@ -62,10 +79,6 @@ public:
 	//! Returns true if the two results are identical; false otherwise. Note that this method is destructive; it calls
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	DUCKDB_API bool Equals(QueryResult &other);
-
-	DUCKDB_API idx_t ColumnCount() {
-		return types.size();
-	}
 
 	DUCKDB_API bool TryFetch(unique_ptr<DataChunk> &result, string &error) {
 		try {

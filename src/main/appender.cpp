@@ -25,7 +25,7 @@ BaseAppender::~BaseAppender() {
 }
 
 void BaseAppender::Destructor() {
-	if (std::uncaught_exception()) {
+	if (Exception::UncaughtException()) {
 		return;
 	}
 	// flush any remaining chunks, but only if we are not cleaning up the appender as part of an exception stack unwind

@@ -1,0 +1,32 @@
+# name: test/sql/optimizer/expression/test_negation_limits.test
+# description: Test negation limits
+# group: [expression]
+
+statement ok
+PRAGMA enable_verification
+
+# tinyint
+foreach type,min,max tinyint,-128,127 smallint,-32768,32767 integer,-2147483648,2147483647 bigint,-9223372036854775808,9223372036854775807
+
+statement ok
+CREATE OR REPLACE TABLE vals(id INTEGER, v ${type});
+
+statement ok
+INSERT INTO vals VALUES (0, ${min}), (1, ${max}), (2, 0), (3, -2), (4, 2);
+
+# cannot negate the min value
+statement error
+SELECT -v FROM vals;
+
+# we can negate the maximum value
+statement ok
+SELECT -v FROM vals WHERE id>0
+
+query I
+SELECT -v FROM vals WHERE id>1 ORDER BY id
+----
+0
+2
+-2
+
+endloop

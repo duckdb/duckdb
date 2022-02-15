@@ -32,7 +32,7 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery:
 		return nullptr;
 	}
 
-	StackCheck();
+	auto stack_checker = StackCheck();
 
 	switch (node->type) {
 	case duckdb_libpgquery::T_PGColumnRef:
@@ -77,6 +77,8 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery:
 		return TransformPositionalReference(reinterpret_cast<duckdb_libpgquery::PGPositionalReference *>(node));
 	case duckdb_libpgquery::T_PGGroupingFunc:
 		return TransformGroupingFunction(reinterpret_cast<duckdb_libpgquery::PGGroupingFunc *>(node));
+	case duckdb_libpgquery::T_PGAStar:
+		return TransformStarExpression(node);
 	default:
 		throw NotImplementedException("Expr of type %d not implemented\n", (int)node->type);
 	}

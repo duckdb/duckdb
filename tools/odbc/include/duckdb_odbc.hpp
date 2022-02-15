@@ -19,11 +19,19 @@ namespace duckdb {
 
 class OdbcFetch;
 class ParameterDescriptor;
+class RowDescriptor;
 
 enum OdbcHandleType { ENV, DBC, STMT, DESC };
+std::string OdbcHandleTypeToString(OdbcHandleType type);
+
 struct OdbcHandle {
 	explicit OdbcHandle(OdbcHandleType type_p) : type(type_p) {};
+	OdbcHandle(const OdbcHandle &other);
+	OdbcHandle &operator=(const OdbcHandle &other);
+
 	OdbcHandleType type;
+	// appending all error messages into it
+	std::vector<std::string> error_messages;
 };
 
 struct OdbcHandleEnv : public OdbcHandle {
@@ -32,19 +40,34 @@ struct OdbcHandleEnv : public OdbcHandle {
 };
 
 struct OdbcHandleStmt;
+struct OdbcHandleDesc;
 
 struct OdbcHandleDbc : public OdbcHandle {
-	explicit OdbcHandleDbc(OdbcHandleEnv *env_p) : OdbcHandle(OdbcHandleType::DBC), env(env_p), autocommit(true) {
+public:
+	explicit OdbcHandleDbc(OdbcHandleEnv *env_p)
+	    : OdbcHandle(OdbcHandleType::DBC), env(env_p), autocommit(true), sql_attr_access_mode(SQL_MODE_READ_WRITE) {
 		D_ASSERT(env_p);
 		D_ASSERT(env_p->db);
 	};
 	~OdbcHandleDbc();
 	void EraseStmtRef(OdbcHandleStmt *stmt);
 	SQLRETURN MaterializeResult();
+	void ResetStmtDescriptors(OdbcHandleDesc *old_desc);
 
+	void SetDatabaseName(const string &db_name);
+	std::string GetDatabaseName();
+
+public:
 	OdbcHandleEnv *env;
 	unique_ptr<Connection> conn;
 	bool autocommit;
+	SQLUINTEGER sql_attr_metadata_id;
+	SQLUINTEGER sql_attr_access_mode;
+	// this is the database name, see: SQLSetConnectAttr
+	std::string sql_attr_current_catalog;
+	// this is DSN get in string connection, see: SQLConnect
+	// Ex: "DSN=DuckDB"
+	std::string dsn;
 	// reference to an open statement handled by this connection
 	std::vector<OdbcHandleStmt *> vec_stmt_ref;
 };
@@ -76,67 +99,72 @@ struct OdbcBoundCol {
 	SQLLEN *strlen_or_ind;
 };
 
-struct OdbcHandleDesc;
-
 struct OdbcHandleStmt : public OdbcHandle {
+public:
 	explicit OdbcHandleStmt(OdbcHandleDbc *dbc_p);
 	~OdbcHandleStmt();
 	void Close();
 	SQLRETURN MaterializeResult();
+	void SetARD(OdbcHandleDesc *new_ard);
+	void SetAPD(OdbcHandleDesc *new_apd);
+	bool IsPrepared() {
+		return stmt != nullptr;
+	}
 
+public:
 	OdbcHandleDbc *dbc;
 	unique_ptr<PreparedStatement> stmt;
 	unique_ptr<QueryResult> res;
 	vector<OdbcBoundCol> bound_cols;
 	bool open;
 	SQLULEN *rows_fetched_ptr;
-	// appending all statement error messages into it
-	vector<std::string> error_messages;
+
 	// fetcher
 	unique_ptr<OdbcFetch> odbc_fetcher;
 
 	unique_ptr<ParameterDescriptor> param_desc;
 
-	unique_ptr<OdbcHandleDesc> ard;
-	unique_ptr<OdbcHandleDesc> ird;
+	unique_ptr<RowDescriptor> row_desc;
 };
 
 struct OdbcHandleDesc : public OdbcHandle {
 	//! https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/descriptors?view=sql-server-ver15
 	// TODO requires full implmentation
 public:
-	explicit OdbcHandleDesc(DescType type, OdbcHandleStmt *stmt_p)
-	    : OdbcHandle(OdbcHandleType::DESC), desc_type(type), stmt(stmt_p) {
+	explicit OdbcHandleDesc(OdbcHandleDbc *dbc_ptr = nullptr, OdbcHandleStmt *stmt_ptr = nullptr,
+	                        bool explicit_desc = false)
+	    : OdbcHandle(OdbcHandleType::DESC), dbc(dbc_ptr), stmt(stmt_ptr) {
+		header.sql_desc_alloc_type = SQL_DESC_ALLOC_AUTO;
+		if (explicit_desc) {
+			header.sql_desc_alloc_type = SQL_DESC_ALLOC_USER;
+		}
 	}
-	~OdbcHandleDesc() {};
+	OdbcHandleDesc(const OdbcHandleDesc &other);
+	~OdbcHandleDesc() {
+	}
+	OdbcHandleDesc &operator=(const OdbcHandleDesc &other);
+	void CopyOnlyOdbcFields(const OdbcHandleDesc &other);
+	void CopyFieldByField(const OdbcHandleDesc &other);
+
 	DescRecord *GetDescRecord(idx_t param_idx);
 	SQLRETURN SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field_identifier, SQLPOINTER value_ptr,
 	                       SQLINTEGER buffer_length);
 	void Clear();
 	void Reset();
+	void Copy(OdbcHandleDesc &other);
+
+	// verify Implementation Descriptor (ID)
+	bool IsID();
+	// verify Application Descriptor (AD)
+	bool IsAD();
+	bool IsIRD();
+	bool IsIPD();
 
 public:
 	DescHeader header;
 	std::vector<DescRecord> records;
-
-private:
-	DescType desc_type;
+	OdbcHandleDbc *dbc;
 	OdbcHandleStmt *stmt;
-};
-
-struct OdbcUtils {
-	static string ReadString(const SQLPOINTER ptr, const SQLSMALLINT len) {
-		return len == SQL_NTS ? string((const char *)ptr) : string((const char *)ptr, (size_t)len);
-	}
-
-	static void WriteString(const string &s, SQLCHAR *out_buf, SQLSMALLINT buf_len, SQLSMALLINT *out_len) {
-		if (out_buf) {
-			snprintf((char *)out_buf, buf_len, "%s", s.c_str());
-		}
-		if (out_len) {
-			*out_len = s.size();
-		}
-	}
 };
 
 template <class T>
@@ -194,6 +222,18 @@ SQLRETURN WithStatementResult(SQLHANDLE &statement_handle, T &&lambda) {
 		}
 		return lambda(stmt);
 	});
+}
+
+template <class T>
+SQLRETURN WithDescriptor(SQLHANDLE &descriptor_handle, T &&lambda) {
+	if (!descriptor_handle) {
+		return SQL_ERROR;
+	}
+	auto *hdl = (OdbcHandleDesc *)descriptor_handle;
+	if (hdl->type != OdbcHandleType::DESC) {
+		return SQL_ERROR;
+	}
+	return lambda(hdl);
 }
 
 } // namespace duckdb

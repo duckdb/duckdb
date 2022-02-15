@@ -429,6 +429,7 @@ CompressionFunction GetBitpackingFunction(PhysicalType data_type) {
 
 CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 	switch (type) {
+	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return GetBitpackingFunction<int8_t>(type);
 	case PhysicalType::INT16:
@@ -437,7 +438,6 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 		return GetBitpackingFunction<int32_t>(type);
 	case PhysicalType::INT64:
 		return GetBitpackingFunction<int64_t>(type);
-	case PhysicalType::BOOL:
 	case PhysicalType::UINT8:
 		return GetBitpackingFunction<uint8_t>(type);
 	case PhysicalType::UINT16:

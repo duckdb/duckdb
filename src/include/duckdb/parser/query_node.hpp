@@ -43,12 +43,13 @@ public:
 	virtual bool Equals(const QueryNode *other) const;
 
 	//! Create a copy of this QueryNode
-	virtual unique_ptr<QueryNode> Copy() = 0;
+	virtual unique_ptr<QueryNode> Copy() const = 0;
 	//! Serializes a QueryNode to a stand-alone binary blob
-	virtual void Serialize(Serializer &serializer);
-	//! Deserializes a blob back into a QueryNode, returns nullptr if
-	//! deserialization is not possible
-	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
+	DUCKDB_API void Serialize(Serializer &serializer) const;
+	//! Serializes a QueryNode to a stand-alone binary blob
+	DUCKDB_API virtual void Serialize(FieldWriter &writer) const = 0;
+	//! Deserializes a blob back into a QueryNode
+	DUCKDB_API static unique_ptr<QueryNode> Deserialize(Deserializer &source);
 
 protected:
 	//! Copy base QueryNode properties from another expression to this one,

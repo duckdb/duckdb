@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -20,7 +20,7 @@ class BoundSelectNode;
 
 struct BoundGroupInformation {
 	expression_map_t<idx_t> map;
-	unordered_map<string, idx_t> alias_map;
+	case_insensitive_map_t<idx_t> alias_map;
 };
 
 //! The SELECT binder is responsible for binding an expression within the SELECT clause of a SQL statement

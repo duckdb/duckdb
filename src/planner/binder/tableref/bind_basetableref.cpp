@@ -12,6 +12,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/tableref/bound_dummytableref.hpp"
 
 namespace duckdb {
 
@@ -75,6 +76,19 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				return Bind(*replacement_function);
 			}
 		}
+		// we still didn't find the table
+		if (GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+			// if we are in EXTRACT_NAMES, we create a dummy table ref
+			AddTableName(ref.table_name);
+
+			// add a bind context entry
+			auto table_index = GenerateTableIndex();
+			auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
+			vector<LogicalType> types {LogicalType::INTEGER};
+			vector<string> names {"__dummy_col" + to_string(table_index)};
+			bind_context.AddGenericBinding(table_index, alias, names, types);
+			return make_unique_base<BoundTableRef, BoundEmptyTableRef>(table_index);
+		}
 		// could not find an alternative: bind again to get the error
 		table_or_view = Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name,
 		                                                      ref.table_name, false, error_context);
@@ -115,7 +129,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		subquery.column_name_alias =
 		    BindContext::AliasColumnNames(subquery.alias, view_catalog_entry->aliases, ref.column_name_alias);
 		// bind the child subquery
+		view_binder->AddBoundView(view_catalog_entry);
 		auto bound_child = view_binder->Bind(subquery);
+
 		D_ASSERT(bound_child->type == TableReferenceType::SUBQUERY);
 		// verify that the types and names match up with the expected types and names
 		auto &bound_subquery = (BoundSubqueryRef &)*bound_child;

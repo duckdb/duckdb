@@ -5,14 +5,14 @@
 require icu
 
 statement ok
-CREATE TABLE strings(s VARCHAR)
+CREATE TABLE strings(s VARCHAR);
 
 statement ok
-INSERT INTO strings VALUES ('Gabel'), ('Göbel'), ('Goethe'), ('Goldmann'), ('Göthe'), ('Götz')
+INSERT INTO strings VALUES ('Gabel'), ('Göbel'), ('Goethe'), ('Goldmann'), ('Göthe'), ('Götz');
 
 # ordering
 query T
-SELECT * FROM strings ORDER BY s COLLATE de
+SELECT * FROM strings ORDER BY s COLLATE de;
 ----
 Gabel
 Göbel

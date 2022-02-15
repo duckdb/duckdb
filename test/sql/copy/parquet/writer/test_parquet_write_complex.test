@@ -4,8 +4,7 @@
 
 require parquet
 
-# writer requires vector_size >= 64
-require vector_size 64
+require vector_size 512
 
 # alltypes_dictionary: scan as parquet
 query I nosort alltypes_dictionary

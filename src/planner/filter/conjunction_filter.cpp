@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-ConjunctionOrFilter::ConjunctionOrFilter() : TableFilter(TableFilterType::CONJUNCTION_OR) {
+ConjunctionOrFilter::ConjunctionOrFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_OR) {
 }
 
 FilterPropagateResult ConjunctionOrFilter::CheckStatistics(BaseStatistics &stats) {
@@ -31,7 +31,7 @@ string ConjunctionOrFilter::ToString(const string &column_name) {
 }
 
 bool ConjunctionOrFilter::Equals(const TableFilter &other_p) const {
-	if (!TableFilter::Equals(other_p)) {
+	if (!ConjunctionFilter::Equals(other_p)) {
 		return false;
 	}
 	auto &other = (ConjunctionOrFilter &)other_p;
@@ -46,11 +46,11 @@ bool ConjunctionOrFilter::Equals(const TableFilter &other_p) const {
 	return true;
 }
 
-ConjunctionAndFilter::ConjunctionAndFilter() : TableFilter(TableFilterType::CONJUNCTION_AND) {
+ConjunctionAndFilter::ConjunctionAndFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_AND) {
 }
 
 FilterPropagateResult ConjunctionAndFilter::CheckStatistics(BaseStatistics &stats) {
-	// the OR filter is true if ALL of the children is true
+	// the AND filter is true if ALL of the children is true
 	D_ASSERT(!child_filters.empty());
 	auto result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	for (auto &filter : child_filters) {
@@ -76,7 +76,7 @@ string ConjunctionAndFilter::ToString(const string &column_name) {
 }
 
 bool ConjunctionAndFilter::Equals(const TableFilter &other_p) const {
-	if (!TableFilter::Equals(other_p)) {
+	if (!ConjunctionFilter::Equals(other_p)) {
 		return false;
 	}
 	auto &other = (ConjunctionAndFilter &)other_p;

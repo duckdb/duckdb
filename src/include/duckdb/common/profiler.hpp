@@ -15,7 +15,7 @@ namespace duckdb {
 
 //! The profiler can be used to measure elapsed time
 template <typename T>
-class Profiler {
+class BaseProfiler {
 public:
 	//! Starts the timer
 	void Start() {
@@ -44,5 +44,7 @@ private:
 	time_point<T> end;
 	bool finished = false;
 };
+
+using Profiler = BaseProfiler<system_clock>;
 
 } // namespace duckdb

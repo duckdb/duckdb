@@ -10,12 +10,11 @@ using duckdb::Value;
 bool OdbcInterval::GetInterval(Value &value, interval_t &interval, duckdb::OdbcHandleStmt *stmt) {
 	switch (value.type().id()) {
 	case LogicalTypeId::INTERVAL:
-		// interval = value.GetValue<interval_t>(); // we don't have a get to retrieve interval
-		interval = value.value_.interval;
+		interval = IntervalValue::Get(value);
 		return true;
 	case LogicalTypeId::VARCHAR: {
 		string error_message;
-		string val_str = value.GetValue<string>();
+		auto &val_str = StringValue::Get(value);
 		if (!TryCastErrorMessage::Operation<string_t, interval_t>(string_t(val_str), interval, &error_message)) {
 			if (error_message.empty()) {
 				error_message = CastExceptionText<string_t, interval_t>(string_t(val_str));

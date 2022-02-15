@@ -21,13 +21,15 @@ Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context))
 }
 
 void Planner::CreatePlan(SQLStatement &statement) {
+	auto &profiler = QueryProfiler::Get(context);
+
 	vector<BoundParameterExpression *> bound_parameters;
 
 	// first bind the tables and columns to the catalog
-	context.profiler->StartPhase("binder");
+	profiler.StartPhase("binder");
 	binder->parameters = &bound_parameters;
 	auto bound_statement = binder->Bind(statement);
-	context.profiler->EndPhase();
+	profiler.EndPhase();
 
 	this->read_only = binder->read_only;
 	this->requires_valid_transaction = binder->requires_valid_transaction;
@@ -101,7 +103,9 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 	vector<Value> bind_values;
 	for (idx_t i = 0; i < stmt.values.size(); i++) {
 		ConstantBinder cbinder(*binder, context, "EXECUTE statement");
-		cbinder.target_type = prepared->GetType(i + 1);
+		if (prepared->value_map.count(i + 1)) {
+			cbinder.target_type = prepared->GetType(i + 1);
+		}
 		auto bound_expr = cbinder.Bind(stmt.values[i]);
 
 		Value value = ExpressionExecutor::EvaluateScalar(*bound_expr);

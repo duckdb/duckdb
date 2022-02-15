@@ -40,8 +40,10 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 		lower.expr = PushCollation(context, move(lower.expr), collation, false);
 		upper.expr = PushCollation(context, move(upper.expr), collation, false);
 	}
-	if (!input.expr->HasSideEffects() && !input.expr->HasParameter()) {
-		// the expression does not have side effects: create two comparisons
+	if (!input.expr->HasSideEffects() && !input.expr->HasParameter() && !input.expr->HasSubquery()) {
+		// the expression does not have side effects and can be copied: create two comparisons
+		// the reason we do this is that individual comparisons are easier to handle in optimizers
+		// if both comparisons remain they will be folded together again into a single BETWEEN in the optimizer
 		auto left_compare = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 		                                                           input.expr->Copy(), move(lower.expr));
 		auto right_compare = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,

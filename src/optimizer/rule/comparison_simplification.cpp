@@ -28,8 +28,8 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	if (!ExpressionExecutor::TryEvaluateScalar(*constant_expr, constant_value)) {
 		return nullptr;
 	}
-	if (constant_value.is_null && !(expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
-	                                expr->type == ExpressionType::COMPARE_DISTINCT_FROM)) {
+	if (constant_value.IsNull() && !(expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
+	                                 expr->type == ExpressionType::COMPARE_DISTINCT_FROM)) {
 		// comparison with constant NULL, return NULL
 		return make_unique<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}

@@ -22,7 +22,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.enable_external_access) {
-		throw Exception("COPY TO is disabled by configuration");
+		throw PermissionException("COPY TO is disabled by configuration");
 	}
 	BoundStatement result;
 	result.types = {LogicalType::BIGINT};
@@ -52,7 +52,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.enable_external_access) {
-		throw Exception("COPY FROM is disabled by configuration");
+		throw PermissionException("COPY FROM is disabled by configuration");
 	}
 	BoundStatement result;
 	result.types = {LogicalType::BIGINT};

@@ -6,7 +6,10 @@ import pytest
 class TestMap(object):
     def test_map(self, duckdb_cursor):
         testrel = duckdb.values([1, 2])
-        
+        conn = duckdb.connect()
+        conn.execute('CREATE TABLE t (a integer)')
+        empty_rel = conn.table('t')
+
         newdf1 = testrel.map(lambda df : df['col0'].add(42).to_frame())
         newdf2 = testrel.map(lambda df : df['col0'].astype('string').to_frame())
         newdf3 = testrel.map(lambda df : df)
@@ -38,6 +41,18 @@ class TestMap(object):
         def evil5(df):
             this_makes_no_sense()
 
+        def return_dataframe(df):
+            return pd.DataFrame({'A' : [1]})
+
+        def return_big_dataframe(df):
+            return pd.DataFrame({'A' : [1]*5000})
+
+        def return_none(df):
+            return None
+
+        def return_empty_df(df):
+            return pd.DataFrame()
+
         with pytest.raises(RuntimeError):
             print(testrel.map(evil1).df())
 
@@ -60,3 +75,16 @@ class TestMap(object):
         # nothing passed to map
         with pytest.raises(TypeError):
             print(testrel.map().df())
+
+        testrel.map(return_dataframe).df().equals(pd.DataFrame({'A' : [1]}))
+        
+        with pytest.raises(Exception):
+            testrel.map(return_big_dataframe).df()
+
+        empty_rel.map(return_dataframe).df().equals(pd.DataFrame({'A' : []}))
+
+        with pytest.raises(Exception):
+            testrel.map(return_none).df()
+
+        with pytest.raises(Exception):
+            testrel.map(return_empty_df).df()

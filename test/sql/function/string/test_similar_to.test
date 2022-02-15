@@ -105,9 +105,6 @@ CREATE TABLE strings (s STRING, p STRING);
 statement ok
 INSERT INTO strings VALUES('aaa', 'a[a-z]a'), ('abab', 'ab.*'), ('aaa', 'a[a-z]a'), ('aaa', '.*b.*');
 
-statement ok
-
-
 query T
 SELECT s FROM strings WHERE s SIMILAR TO 'ab.*'
 ----

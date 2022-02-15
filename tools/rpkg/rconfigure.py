@@ -10,9 +10,12 @@ extensions = ['parquet']
 if 'DUCKDB_R_EXTENSIONS' in os.environ:
     extensions = extensions + os.environ['DUCKDB_R_EXTENSIONS'].split(",")
 
-unity_build = 0
+unity_build = 20
 if 'DUCKDB_BUILD_UNITY' in os.environ:
-    unity_build = 16
+    try:
+        unity_build = int(DUCKDB_BUILD_UNITY)
+    except:
+        pass
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts'))
 import package_build
@@ -87,6 +90,7 @@ object_list = ' '.join([x.rsplit('.', 1)[0] + '.o' for x in duckdb_sources])
 
 # include list
 include_list = ' '.join(['-I' + 'duckdb/' + x for x in include_list])
+include_list += ' -I' + os.path.join('..', 'inst', 'include')
 include_list += ' -Iduckdb'
 include_list += extension_list
 

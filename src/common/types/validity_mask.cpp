@@ -76,13 +76,14 @@ void ValidityMask::Slice(const ValidityMask &other, idx_t offset) {
 		Initialize(other);
 		return;
 	}
-	Initialize(STANDARD_VECTOR_SIZE);
+	ValidityMask new_mask(STANDARD_VECTOR_SIZE);
 
 // FIXME THIS NEEDS FIXING!
 #if 1
 	for (idx_t i = offset; i < STANDARD_VECTOR_SIZE; i++) {
-		Set(i - offset, other.RowIsValid(i));
+		new_mask.Set(i - offset, other.RowIsValid(i));
 	}
+	Initialize(new_mask);
 #else
 	// first shift the "whole" units
 	idx_t entire_units = offset / BITS_PER_VALUE;
@@ -90,7 +91,7 @@ void ValidityMask::Slice(const ValidityMask &other, idx_t offset) {
 	if (entire_units > 0) {
 		idx_t validity_idx;
 		for (validity_idx = 0; validity_idx + entire_units < STANDARD_ENTRY_COUNT; validity_idx++) {
-			validity_mask[validity_idx] = other.validity_mask[validity_idx + entire_units];
+			new_mask.validity_mask[validity_idx] = other.validity_mask[validity_idx + entire_units];
 		}
 	}
 	// now we shift the remaining sub units
@@ -105,15 +106,17 @@ void ValidityMask::Slice(const ValidityMask &other, idx_t offset) {
 	if (sub_units > 0) {
 		idx_t validity_idx;
 		for (validity_idx = 0; validity_idx + 1 < STANDARD_ENTRY_COUNT; validity_idx++) {
-			validity_mask[validity_idx] = (other.validity_mask[validity_idx] >> sub_units) |
-			                              (other.validity_mask[validity_idx + 1] << (BITS_PER_VALUE - sub_units));
+			new_mask.validity_mask[validity_idx] =
+			    (other.validity_mask[validity_idx] >> sub_units) |
+			    (other.validity_mask[validity_idx + 1] << (BITS_PER_VALUE - sub_units));
 		}
-		validity_mask[validity_idx] >>= sub_units;
+		new_mask.validity_mask[validity_idx] >>= sub_units;
 	}
 #ifdef DEBUG
 	for (idx_t i = offset; i < STANDARD_VECTOR_SIZE; i++) {
-		D_ASSERT(RowIsValid(i - offset) == other.RowIsValid(i));
+		D_ASSERT(new_mask.RowIsValid(i - offset) == other.RowIsValid(i));
 	}
+	Initialize(new_mask);
 #endif
 #endif
 }

@@ -34,7 +34,7 @@ static bool ParseBoolean(vector<Value> &set) {
 	    set[0].type().id() == LogicalTypeId::DECIMAL) {
 		throw BinderException("Expected a boolean value (e.g. TRUE or 1)");
 	}
-	return set[0].CastAs(LogicalType::BOOLEAN).value_.boolean;
+	return BooleanValue::Get(set[0].CastAs(LogicalType::BOOLEAN));
 }
 
 static string ParseString(vector<Value> &set) {
@@ -82,6 +82,8 @@ static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, 
 		options.compression = FileCompressionTypeFromString(ParseString(set));
 	} else if (loption == "skip") {
 		options.skip_rows = ParseInteger(set);
+	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
+		options.maximum_line_size = ParseInteger(set);
 	} else {
 		// unrecognized option in base CSV
 		return false;

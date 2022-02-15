@@ -1,8 +1,8 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -53,13 +53,24 @@ string ColumnRefExpression::ToString() const {
 }
 
 bool ColumnRefExpression::Equals(const ColumnRefExpression *a, const ColumnRefExpression *b) {
-	return a->column_names == b->column_names;
+	if (a->column_names.size() != b->column_names.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < a->column_names.size(); i++) {
+		auto lcase_a = StringUtil::Lower(a->column_names[i]);
+		auto lcase_b = StringUtil::Lower(b->column_names[i]);
+		if (lcase_a != lcase_b) {
+			return false;
+		}
+	}
+	return true;
 }
 
 hash_t ColumnRefExpression::Hash() const {
 	hash_t result = ParsedExpression::Hash();
 	for (auto &column_name : column_names) {
-		result = CombineHash(result, duckdb::Hash<const char *>(column_name.c_str()));
+		auto lcase = StringUtil::Lower(column_name);
+		result = CombineHash(result, duckdb::Hash<const char *>(lcase.c_str()));
 	}
 	return result;
 }
@@ -70,20 +81,12 @@ unique_ptr<ParsedExpression> ColumnRefExpression::Copy() const {
 	return move(copy);
 }
 
-void ColumnRefExpression::Serialize(Serializer &serializer) {
-	ParsedExpression::Serialize(serializer);
-	serializer.Write<idx_t>(column_names.size());
-	for (auto &column_name : column_names) {
-		serializer.WriteString(column_name);
-	}
+void ColumnRefExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteList<string>(column_names);
 }
 
-unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType type, Deserializer &source) {
-	auto column_count = source.Read<idx_t>();
-	vector<string> column_names;
-	for (idx_t i = 0; i < column_count; i++) {
-		column_names.push_back(source.Read<string>());
-	}
+unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	auto column_names = reader.ReadRequiredList<string>();
 	auto expression = make_unique<ColumnRefExpression>(move(column_names));
 	return move(expression);
 }

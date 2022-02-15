@@ -170,7 +170,12 @@ timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
 
 void Timestamp::Convert(timestamp_t timestamp, date_t &out_date, dtime_t &out_time) {
 	out_date = GetDate(timestamp);
-	out_time = dtime_t(timestamp.value - (int64_t(out_date.days) * int64_t(Interval::MICROS_PER_DAY)));
+	int64_t days_micros;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(out_date.days, Interval::MICROS_PER_DAY,
+	                                                               days_micros)) {
+		throw ConversionException("Date out of range in timestamp conversion");
+	}
+	out_time = dtime_t(timestamp.value - days_micros);
 	D_ASSERT(timestamp == Timestamp::FromDatetime(out_date, out_time));
 }
 

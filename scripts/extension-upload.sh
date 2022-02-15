@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 FILES="build/release/extension/*/*.duckdb_extension"
 for f in $FILES
 do

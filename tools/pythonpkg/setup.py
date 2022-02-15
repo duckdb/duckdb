@@ -10,10 +10,10 @@ from setuptools import setup, Extension
 
 lib_name = 'duckdb'
 
-extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer']
+extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer', 'excel']
 
 if platform.system() == 'Windows':
-    extensions = ['parquet', 'icu', 'fts','tpch']
+    extensions = ['parquet', 'icu', 'fts','tpch', 'excel']
 
 unity_build = 0
 if 'DUCKDB_BUILD_UNITY' in os.environ:
@@ -87,6 +87,10 @@ if platform.system() == 'Darwin':
 if platform.system() == 'Windows':
     toolchain_args.extend(['-DDUCKDB_BUILD_LIBRARY','-DWIN32'])
 
+if 'BUILD_HTTPFS' in os.environ:
+    libraries += ['crypto', 'ssl']
+    extensions += ['httpfs']
+
 for ext in extensions:
     toolchain_args.extend(['-DBUILD_{}_EXTENSION'.format(ext.upper())])
 
@@ -103,10 +107,6 @@ class get_numpy_include(object):
         import numpy
         return numpy.get_include()
 
-
-if 'BUILD_HTTPFS' in os.environ:
-    libraries += ['crypto', 'ssl']
-    extensions += ['httpfs']
 
 extra_files = []
 header_files = []

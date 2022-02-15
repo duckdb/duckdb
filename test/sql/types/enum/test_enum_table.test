@@ -266,3 +266,25 @@ CREATE TABLE midenum_t2 (
 
 statement ok
 INSERT INTO midenum_t2 VALUES ('0')
+
+
+# Test Large Enums
+statement ok
+CREATE TYPE large_enum AS ENUM ('Floccinaucinihilipilification', 'Antidisestablishmentarianism', 'Honorificabilitudinitatibus');
+
+statement ok
+CREATE TABLE large_enum_tbl (
+    big_word large_enum
+);
+
+statement ok
+INSERT INTO large_enum_tbl values ('Floccinaucinihilipilification'), ('Floccinaucinihilipilification'), ('Honorificabilitudinitatibus'), ('Floccinaucinihilipilification'),  ('Antidisestablishmentarianism')
+
+query I
+select * from large_enum_tbl
+----
+Floccinaucinihilipilification
+Floccinaucinihilipilification
+Honorificabilitudinitatibus
+Floccinaucinihilipilification
+Antidisestablishmentarianism

@@ -25,12 +25,12 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	auto &constant_expr = (BoundConstantExpression &)*bindings[1];
 	auto &constant = constant_expr.value;
 
-	if (constant.is_null) {
+	if (constant.IsNull()) {
 		// NULL specifier: return constant NULL
 		return make_unique<BoundConstantExpression>(Value(date_part.return_type));
 	}
 	// otherwise check the specifier
-	auto specifier = GetDatePartSpecifier(constant.str_value);
+	auto specifier = GetDatePartSpecifier(StringValue::Get(constant));
 	string new_function_name;
 	switch (specifier) {
 	case DatePartSpecifier::YEAR:

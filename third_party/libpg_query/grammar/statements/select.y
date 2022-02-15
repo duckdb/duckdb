@@ -154,7 +154,7 @@ select_clause:
 simple_select:
 			SELECT opt_all_clause opt_target_list
 			into_clause from_clause where_clause
-			group_clause having_clause window_clause sample_clause
+			group_clause having_clause window_clause qualify_clause sample_clause
 				{
 					PGSelectStmt *n = makeNode(PGSelectStmt);
 					n->targetList = $3;
@@ -164,12 +164,13 @@ simple_select:
 					n->groupClause = $7;
 					n->havingClause = $8;
 					n->windowClause = $9;
-					n->sampleOptions = $10;
+					n->qualifyClause = $10;
+					n->sampleOptions = $11;
 					$$ = (PGNode *)n;
 				}
 			| SELECT distinct_clause target_list
 			into_clause from_clause where_clause
-			group_clause having_clause window_clause sample_clause
+			group_clause having_clause window_clause qualify_clause sample_clause
 				{
 					PGSelectStmt *n = makeNode(PGSelectStmt);
 					n->distinctClause = $2;
@@ -180,7 +181,8 @@ simple_select:
 					n->groupClause = $7;
 					n->havingClause = $8;
 					n->windowClause = $9;
-					n->sampleOptions = $10;
+					n->qualifyClause = $10;
+					n->sampleOptions = $11;
 					$$ = (PGNode *)n;
 				}
 			| values_clause							{ $$ = $1; }
@@ -376,6 +378,26 @@ opt_sort_clause:
 
 sort_clause:
 			ORDER BY sortby_list					{ $$ = $3; }
+			| ORDER BY ALL opt_asc_desc opt_nulls_order
+				{
+					PGSortBy *sort = makeNode(PGSortBy);
+					sort->node = (PGNode *) makeNode(PGAStar);
+					sort->sortby_dir = $4;
+					sort->sortby_nulls = $5;
+					sort->useOp = NIL;
+					sort->location = -1;		/* no operator */
+					$$ = list_make1(sort);
+				}
+			| ORDER BY '*' opt_asc_desc opt_nulls_order
+				{
+					PGSortBy *sort = makeNode(PGSortBy);
+					sort->node = (PGNode *) makeNode(PGAStar);
+					sort->sortby_dir = $4;
+					sort->sortby_nulls = $5;
+					sort->useOp = NIL;
+					sort->location = -1;		/* no operator */
+					$$ = list_make1(sort);
+				}
 		;
 
 sortby_list:
@@ -622,6 +644,16 @@ first_or_next: FIRST_P								{ $$ = 0; }
  */
 group_clause:
 			GROUP_P BY group_by_list				{ $$ = $3; }
+			| GROUP_P BY ALL
+				{
+					PGNode *node = (PGNode *) makeGroupingSet(GROUPING_SET_ALL, NIL, @3);
+					$$ = list_make1(node);
+				}
+			| GROUP_P BY '*'
+				{
+					PGNode *node = (PGNode *) makeGroupingSet(GROUPING_SET_ALL, NIL, @3);
+					$$ = list_make1(node);
+				}
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
 
@@ -679,6 +711,11 @@ grouping_or_grouping_id:
 
 having_clause:
 			HAVING a_expr							{ $$ = $2; }
+			| /*EMPTY*/								{ $$ = NULL; }
+		;
+
+qualify_clause:
+			QUALIFY a_expr							{ $$ = $2; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
@@ -2357,7 +2394,7 @@ func_application: func_name '(' ')'
  * (Note that many of the special SQL functions wouldn't actually make any
  * sense as functional index entries, but we ignore that consideration here.)
  */
-func_expr: func_application within_group_clause filter_clause over_clause
+func_expr: func_application within_group_clause filter_clause export_clause over_clause
 				{
 					PGFuncCall *n = (PGFuncCall *) $1;
 					/*
@@ -2389,7 +2426,8 @@ func_expr: func_application within_group_clause filter_clause over_clause
 						n->agg_within_group = true;
 					}
 					n->agg_filter = $3;
-					n->over = $4;
+					n->export_state = $4;
+					n->over = $5;
 					$$ = (PGNode *) n;
 				}
 			| func_expr_common_subexpr
@@ -2567,6 +2605,10 @@ filter_clause:
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
+export_clause:
+			EXPORT_STATE            				{ $$ = true; }
+			| /*EMPTY*/								{ $$ = false; }
+		;
 
 /*
  * Window Definitions

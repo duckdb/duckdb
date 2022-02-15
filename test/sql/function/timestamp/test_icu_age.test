@@ -1,0 +1,144 @@
+# name: test/sql/function/timestamp/test_icu_age.test
+# description: Test ICU age functionality
+# group: [timestamp]
+
+require icu
+
+statement ok
+SET TimeZone = 'America/Los_Angeles';
+
+# age without second timestamp compares to NOW()
+statement ok
+SELECT AGE(TIMESTAMPTZ '1957-06-13') t;
+
+query T
+SELECT AGE(TIMESTAMP '2001-04-10 00:00:00-07', TIMESTAMP '1957-06-13 00:00:00-07');
+----
+43 years 9 months 27 days
+
+query T
+SELECT age(TIMESTAMP '2014-04-25 00:00:00-07', TIMESTAMP '2014-04-17 00:00:00-07');
+----
+8 days
+
+# Daylight savings time
+query T
+SELECT age(TIMESTAMPTZ '2014-04-25', TIMESTAMPTZ '2014-01-01');
+----
+3 months 24 days 01:00:00
+
+query T
+SELECT age(TIMESTAMPTZ '2019-06-11', TIMESTAMPTZ '2019-06-11');
+----
+00:00:00
+
+query T
+SELECT age(TIMESTAMPTZ '2019-06-11', TIMESTAMPTZ '2019-06-11')::VARCHAR;
+----
+00:00:00
+
+query T
+SELECT age(TIMESTAMPTZ '2019-06-11 12:00:00-07', TIMESTAMPTZ '2019-07-11 11:00:00-07');
+----
+-29 days -23:00:00
+
+statement ok
+CREATE TABLE timestamps(t1 TIMESTAMPTZ, t2 TIMESTAMPTZ);
+
+statement ok
+INSERT INTO timestamps VALUES
+	('2001-04-10', '1957-06-13'),
+	('2014-04-25', '2014-04-17'),
+	('2014-04-25','2014-01-01'),
+	('2019-06-11', '2019-06-11'),
+	(NULL, '2019-06-11'),
+	('2019-06-11', NULL),
+	(NULL, NULL)
+
+# Differences from the built in AGE function are due to ICU
+# computing month lengths from the originating month
+# instead of assuming a constant month size of 30 days
+query T
+SELECT AGE(t1, TIMESTAMPTZ '1957-06-13') FROM timestamps;
+----
+43 years 9 months 28 days
+56 years 10 months 12 days
+56 years 10 months 12 days
+61 years 11 months 29 days
+NULL
+61 years 11 months 29 days
+NULL
+
+# Time fields caused by DST
+query T
+SELECT AGE(TIMESTAMPTZ '2001-04-10', t2) FROM timestamps;
+----
+43 years 9 months 28 days
+-13 years -7 days
+-12 years -8 months -21 days -23:00:00
+-18 years -2 months -1 days
+-18 years -2 months -1 days
+NULL
+NULL
+
+query T
+SELECT AGE(t1, t2) FROM timestamps;
+----
+43 years 9 months 28 days
+8 days
+3 months 24 days 01:00:00
+00:00:00
+NULL
+NULL
+NULL
+
+query T
+SELECT t1 - t2 FROM timestamps;
+----
+16007 days
+8 days
+114 days 01:00:00
+00:00:00
+NULL
+NULL
+NULL
+
+query T
+SELECT AGE(t1, t2) FROM timestamps WHERE t1 > '2001-12-12';
+----
+8 days
+3 months 24 days 01:00:00
+00:00:00
+NULL
+
+query T
+SELECT AGE(NULL, NULL);
+----
+NULL
+
+query T
+SELECT AGE(TIMESTAMPTZ '1957-06-13', NULL);
+----
+NULL
+
+query T
+SELECT AGE(NULL, TIMESTAMPTZ '1957-06-13');
+----
+NULL
+
+# Subsecond tests
+query I
+SELECT AGE(TIMESTAMPTZ '1992-01-01 01:01:02.400', TIMESTAMPTZ '1992-01-01 01:01:02.200');
+----
+00:00:00.2
+
+query I
+SELECT AGE(TIMESTAMPTZ '1992-01-01 01:01:02.200', TIMESTAMPTZ '1992-01-01 01:01:02.400');
+----
+-00:00:00.2
+
+query I
+SELECT AGE(TIMESTAMPTZ '1992-01-01 01:01:01.400', TIMESTAMPTZ '1992-01-01 01:01:02.200');
+----
+-00:00:00.8
+

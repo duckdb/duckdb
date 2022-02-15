@@ -32,6 +32,9 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 
 namespace duckdb {
 
+FileSystem::~FileSystem() {
+}
+
 FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 	return *context.db->config.file_system;
 }
@@ -254,6 +257,12 @@ bool FileSystem::OnDiskFile(FileHandle &handle) {
 	throw NotImplementedException("%s: OnDiskFile is not implemented!", GetName());
 }
 // LCOV_EXCL_STOP
+
+FileHandle::FileHandle(FileSystem &file_system, string path_p) : file_system(file_system), path(move(path_p)) {
+}
+
+FileHandle::~FileHandle() {
+}
 
 int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 	return file_system.Read(*this, buffer, nr_bytes);

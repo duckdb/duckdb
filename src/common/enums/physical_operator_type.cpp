@@ -27,6 +27,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "TOP_N";
 	case PhysicalOperatorType::WINDOW:
 		return "WINDOW";
+	case PhysicalOperatorType::STREAMING_WINDOW:
+		return "STREAMING_WINDOW";
 	case PhysicalOperatorType::UNNEST:
 		return "UNNEST";
 	case PhysicalOperatorType::SIMPLE_AGGREGATE:

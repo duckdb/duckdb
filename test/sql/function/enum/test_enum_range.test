@@ -1,0 +1,53 @@
+# name: test/sql/function/enum/test_enum_range.test
+# description: Enum Range Function
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE rainbow AS ENUM ('red', 'orange', 'yellow', 'green', 'blue', 'purple');
+
+statement ok
+CREATE TYPE currency AS ENUM ('usd', 'brl', 'eur');
+
+query I
+SELECT enum_range(null::rainbow)
+----
+[red, orange, yellow, green, blue, purple]
+
+query I
+SELECT enum_range_boundary('orange'::rainbow, 'green'::rainbow)
+----
+[orange, yellow, green]
+
+
+query I
+SELECT enum_range_boundary('green'::rainbow, 'orange'::rainbow)
+----
+[]
+
+query I
+SELECT enum_range_boundary(NULL, 'green'::rainbow)
+----
+[red, orange, yellow, green]
+
+query I
+SELECT enum_range_boundary('orange'::rainbow, NULL)
+----
+[orange, yellow, green, blue, purple]
+
+statement error
+SELECT enum_range_boundary('orange'::rainbow, 'brl'::currency)
+
+statement error
+SELECT enum_range_boundary(NULL, NULL)
+
+statement error
+SELECT enum_last('bla')
+
+statement error
+SELECT enum_range_boundary('orange'::rainbow, 1)
+
+statement error
+SELECT enum_range_boundary(1, 'orange'::rainbow)
