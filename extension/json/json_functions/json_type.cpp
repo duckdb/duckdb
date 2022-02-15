@@ -6,7 +6,9 @@ namespace duckdb {
 
 static inline bool GetType(yyjson_val *val, string_t &result) {
 	auto type_string = JSONCommon::ValTypeToString(val);
-	result = string_t(type_string);
+	if (type_string) {
+		result = string_t(type_string);
+	}
 	return type_string;
 }
 

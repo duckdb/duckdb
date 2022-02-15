@@ -1,0 +1,96 @@
+# name: test/sql/json/test_json_transform.test
+# description: Test json_transform function
+# group: [json]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# singletons
+query T
+select json_transform('42', '"UBIGINT"')
+----
+42
+
+query T
+select json_transform('4.2', '"DOUBLE"')
+----
+4.2
+
+query T
+select json_transform('null', '"NULL"')
+----
+NULL
+
+query T
+select json_transform('true', '"BOOLEAN"')
+----
+True
+
+query T
+select json_transform('"duck"', '"VARCHAR"')
+----
+duck
+
+query T
+select json_transform('"duuuuuuuuuuuuuuuuck"', '"VARCHAR"')
+----
+duuuuuuuuuuuuuuuuck
+
+# simple structs
+query T
+select json_transform('{"a": 42}', '{"a":"UBIGINT"}')
+----
+{'a': 42}
+
+query T
+select json_transform('{"a": null}', '{"a":"UBIGINT"}')
+----
+{'a': NULL}
+
+query T
+select json_transform('{"a": 42}', '{"a":"NULL"}')
+----
+{'a': NULL}
+
+statement error
+select json_transform('{"a": 42}', '{"a":"ARRAY"}')
+
+# arrays
+query T
+select json_transform('[1,2,3]', '["UBIGINT"]')
+----
+[1, 2, 3]
+
+query T
+select json_transform('[1,2,3]', '["NULL"]')
+----
+[NULL, NULL, NULL]
+
+query T
+select json_transform('[{"a": 42}, {"a": null}, {"a": 7}]', '[{"a": "UBIGINT"}]')
+----
+[{'a': 42}, {'a': NULL}, {'a': 7}]
+
+# we can have missing keys, these become NULL
+query T
+select json_transform('[{"a": 42}, {"a": null, "b": 33}, {"b": 7}]', '[{"a": "UBIGINT", "b": "UBIGINT"}]')
+----
+[{'a': 42, 'b': NULL}, {'a': NULL, 'b': 33}, {'a': NULL, 'b': 7}]
+
+statement ok
+create table test (j json);
+
+statement ok
+insert into test values
+    ('{"family": "anatidae", "species": ["duck", "goose", "swan", null], "coolness": 1000}'),
+    ('{"family": "canidae", "species": ["labrador", null, "bulldog", "shepherd"], "hair": true, "coolness": 999}'),
+    ('{"family": "felidae", "species": ["tiger", "lion", null, "british shorthair"], "hair": true, "coolness": 999}')
+
+query T
+select json_transform(j, '{"family": "VARCHAR", "coolness": "UBIGINT", "species": ["VARCHAR"]}') from test
+----
+{'family': anatidae, 'coolness': 1000, 'species': [duck, goose, swan, NULL]}
+{'family': canidae, 'coolness': 999, 'species': [labrador, NULL, bulldog, shepherd]}
+{'family': felidae, 'coolness': 999, 'species': [tiger, lion, NULL, british shorthair]}

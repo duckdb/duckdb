@@ -44,7 +44,7 @@ public:
 struct JSONCommon {
 private:
 	//! Read/Write flag that make sense for us
-	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_STOP_WHEN_DONE;
+	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN;
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
 
 	//! Some defines copied from yyjson.cpp
@@ -53,13 +53,14 @@ private:
 
 public:
 	//! Constant JSON type strings
-	static constexpr auto TYPE_STRING_NULL = "null";
-	static constexpr auto TYPE_STRING_BOOLEAN = "boolean";
-	static constexpr auto TYPE_STRING_INTEGER = "integer";
-	static constexpr auto TYPE_STRING_REAL = "real";
-	static constexpr auto TYPE_STRING_STRING = "string";
-	static constexpr auto TYPE_STRING_ARRAY = "array";
-	static constexpr auto TYPE_STRING_OBJECT = "object";
+	static constexpr auto TYPE_STRING_NULL = "NULL";
+	static constexpr auto TYPE_STRING_BOOLEAN = "BOOLEAN";
+	static constexpr auto TYPE_STRING_BIGINT = "BIGINT";
+	static constexpr auto TYPE_STRING_UBIGINT = "UBIGINT";
+	static constexpr auto TYPE_STRING_DOUBLE = "DOUBLE";
+	static constexpr auto TYPE_STRING_VARCHAR = "VARCHAR";
+	static constexpr auto TYPE_STRING_ARRAY = "ARRAY";
+	static constexpr auto TYPE_STRING_OBJECT = "OBJECT";
 
 public:
 	//! Read JSON document (returns nullptr if invalid JSON)
@@ -70,7 +71,7 @@ public:
 	static inline yyjson_doc *ReadDocument(const string_t &input) {
 		auto result = ReadDocumentUnsafe(input);
 		if (!result) {
-			throw Exception("malformed JSON");
+			throw InvalidInputException("malformed JSON");
 		}
 		return result;
 	}
@@ -101,15 +102,16 @@ public:
 		case YYJSON_TYPE_NUM:
 			switch (unsafe_yyjson_get_subtype(val)) {
 			case YYJSON_SUBTYPE_UINT:
+				return JSONCommon::TYPE_STRING_UBIGINT;
 			case YYJSON_SUBTYPE_SINT:
-				return JSONCommon::TYPE_STRING_INTEGER;
+				return JSONCommon::TYPE_STRING_BIGINT;
 			case YYJSON_SUBTYPE_REAL:
-				return JSONCommon::TYPE_STRING_REAL;
+				return JSONCommon::TYPE_STRING_DOUBLE;
 			default:
 				return nullptr;
 			}
 		case YYJSON_TYPE_STR:
-			return JSONCommon::TYPE_STRING_STRING;
+			return JSONCommon::TYPE_STRING_VARCHAR;
 		case YYJSON_TYPE_ARR:
 			return JSONCommon::TYPE_STRING_ARRAY;
 		case YYJSON_TYPE_OBJ:
@@ -117,6 +119,11 @@ public:
 		default:
 			return nullptr;
 		}
+	}
+
+	template <class T>
+	static inline bool TemplatedGetValue(yyjson_val *val, T &result) {
+		throw NotImplementedException("Cannot extract JSON of this type");
 	}
 
 public:
@@ -139,7 +146,7 @@ public:
 		}
 		case '$':
 			if (!ValidPathDollar(ptr, len)) {
-				throw Exception("JSON path error");
+				throw InvalidInputException("JSON path error");
 			}
 			return GetPointerUnsafe<yyjson_t>(root, ptr, len);
 		default:
@@ -274,6 +281,31 @@ public:
 		}
 	}
 
+public:
+	static inline idx_t ReadIndex(const char *ptr, const char *const end, idx_t &idx) {
+		const char *const before = ptr;
+		idx = 0;
+		for (idx_t i = 0; i < IDX_T_SAFE_DIG; i++) {
+			if (ptr == end) {
+				// No closing ']'
+				return 0;
+			}
+			if (*ptr == ']') {
+				break;
+			}
+			uint8_t add = (uint8_t)(*ptr - '0');
+			if (add <= 9) {
+				idx = add + idx * 10;
+			} else {
+				// Not a digit
+				return 0;
+			}
+			ptr++;
+		}
+		// Invalid if overflow
+		return idx >= (idx_t)IDX_T_MAX ? 0 : ptr - before;
+	}
+
 private:
 	//! Get JSON pointer using /field/index/... notation
 	template <class yyjson_t>
@@ -366,30 +398,6 @@ private:
 		}
 	}
 
-	static inline idx_t ReadIndex(const char *ptr, const char *const end, idx_t &idx) {
-		const char *const before = ptr;
-		idx = 0;
-		for (idx_t i = 0; i < IDX_T_SAFE_DIG; i++) {
-			if (ptr == end) {
-				// No closing ']'
-				return 0;
-			}
-			if (*ptr == ']') {
-				break;
-			}
-			uint8_t add = (uint8_t)(*ptr - '0');
-			if (add <= 9) {
-				idx = add + idx * 10;
-			} else {
-				// Not a digit
-				return 0;
-			}
-			ptr++;
-		}
-		// Invalid if overflow
-		return idx >= (idx_t)IDX_T_MAX ? 0 : ptr - before;
-	}
-
 	template <class yyjson_t>
 	static inline bool IsObj(yyjson_t *val) {
 		throw InternalException("Unknown yyjson type");
@@ -415,11 +423,68 @@ private:
 		throw InternalException("Unknown yyjson type");
 	}
 
+	// FIXME: we don't need to pushback because we know the list size
+	//  We should do ListVector::Reserve instead
 	template <class T>
 	static inline void PushBack(Vector &result, Vector &result_child, T val) {
 		throw NotImplementedException("Cannot insert Value with this type into JSON result list");
 	}
 };
+
+template <>
+inline bool JSONCommon::TemplatedGetValue(yyjson_val *val, bool &result) {
+	auto valid = yyjson_is_bool(val);
+	if (valid) {
+		result = unsafe_yyjson_get_bool(val);
+	}
+	return valid;
+}
+
+template <>
+inline bool JSONCommon::TemplatedGetValue(yyjson_val *val, int32_t &result) {
+	auto valid = yyjson_is_int(val);
+	if (valid) {
+		result = unsafe_yyjson_get_int(val);
+	}
+	return valid;
+}
+
+template <>
+inline bool JSONCommon::TemplatedGetValue(yyjson_val *val, int64_t &result) {
+	// Needs to check whether it is int first, otherwise we get NULL for small values
+	auto valid = yyjson_is_int(val) || yyjson_is_sint(val);
+	if (valid) {
+		result = unsafe_yyjson_get_sint(val);
+	}
+	return valid;
+}
+
+template <>
+inline bool JSONCommon::TemplatedGetValue(yyjson_val *val, uint64_t &result) {
+	auto valid = yyjson_is_uint(val);
+	if (valid) {
+		result = unsafe_yyjson_get_uint(val);
+	}
+	return valid;
+}
+
+template <>
+inline bool JSONCommon::TemplatedGetValue(yyjson_val *val, double &result) {
+	auto valid = yyjson_is_real(val);
+	if (valid) {
+		result = unsafe_yyjson_get_real(val);
+	}
+	return valid;
+}
+
+template <>
+inline bool JSONCommon::TemplatedGetValue(yyjson_val *val, string_t &result) {
+	auto valid = yyjson_is_str(val);
+	if (valid) {
+		result = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
+	}
+	return valid;
+}
 
 template <>
 inline yyjson_val *JSONCommon::TemplatedGetPointer(yyjson_val *root, const char *ptr, const idx_t &len) {

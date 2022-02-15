@@ -10,10 +10,10 @@ static inline yyjson_mut_val *GetConsistentArrayStructure(const vector<yyjson_mu
 
 static inline yyjson_mut_val *GetConsistentArrayStructureArray(const vector<yyjson_mut_val *> &elem_structures,
                                                                yyjson_mut_doc *structure_doc) {
+	yyjson_mut_val *val;
+	yyjson_mut_arr_iter iter;
 	vector<yyjson_mut_val *> nested_elem_structures;
 	for (const auto &elem_structure : elem_structures) {
-		yyjson_mut_val *val;
-		yyjson_mut_arr_iter iter;
 		yyjson_mut_arr_iter_init(elem_structure, &iter);
 		while ((val = yyjson_mut_arr_iter_next(&iter))) {
 			nested_elem_structures.push_back(val);
@@ -26,43 +26,59 @@ static inline yyjson_mut_val *GetConsistentArrayStructureArray(const vector<yyjs
 
 static inline yyjson_mut_val *GetConsistentArrayStructureObject(const vector<yyjson_mut_val *> &elem_structures,
                                                                 yyjson_mut_doc *structure_doc) {
+	yyjson_mut_val *key, *val;
+	yyjson_mut_obj_iter iter;
+	vector<string> key_insert_order;
 	unordered_map<string, vector<yyjson_mut_val *>> key_values;
 	for (const auto &elem_structure : elem_structures) {
-		yyjson_mut_val *key, *val;
-		yyjson_mut_obj_iter iter;
 		yyjson_mut_obj_iter_init(elem_structure, &iter);
 		while ((key = yyjson_mut_obj_iter_next(&iter))) {
 			auto key_string = yyjson_mut_get_str(key);
 			val = yyjson_mut_obj_iter_get_val(key);
+			if (key_values.find(key_string) == key_values.end()) {
+				key_insert_order.push_back(key_string);
+			}
 			key_values[key_string].push_back(val);
 		}
 	}
 	auto result = yyjson_mut_obj(structure_doc);
-	for (const auto &kvs : key_values) {
-		auto key = yyjson_mut_strncpy(structure_doc, kvs.first.c_str(), kvs.first.size());
-		auto val = GetConsistentArrayStructure(kvs.second, structure_doc);
+	for (const auto &key_string : key_insert_order) {
+		key = yyjson_mut_strncpy(structure_doc, key_string.c_str(), key_string.size());
+		val = GetConsistentArrayStructure(key_values.at(key_string), structure_doc);
 		yyjson_mut_obj_add(result, key, val);
 	}
 	return result;
 }
 
+static inline bool StringEquals(const char *lhs, const char *rhs) {
+	return strcmp(lhs, rhs) == 0;
+}
+
+static inline bool IsNumerical(const char *type_string) {
+	return StringEquals(type_string, JSONCommon::TYPE_STRING_BIGINT) ||
+	       StringEquals(type_string, JSONCommon::TYPE_STRING_UBIGINT) ||
+	       StringEquals(type_string, JSONCommon::TYPE_STRING_DOUBLE);
+}
+
 static inline bool GetMaxTypeString(const char *type_string, const char *elem_type_string, const char **result) {
-	if (strcmp(type_string, elem_type_string) == 0) {
+	if (StringEquals(type_string, elem_type_string)) {
 		*result = type_string;
 		return true;
 	}
-	// FIXME: if people ask for explicit casting from e.g. real to string we can implement that
-	if (strcmp(type_string, JSONCommon::TYPE_STRING_INTEGER) == 0 &&
-	    strcmp(elem_type_string, JSONCommon::TYPE_STRING_REAL) == 0) {
-		*result = JSONCommon::TYPE_STRING_REAL;
-		return true;
+	if (!IsNumerical(type_string) || !IsNumerical(elem_type_string)) {
+		// We only consider a mix of numerical types to be consistent with each other
+		return false;
 	}
-	if (strcmp(type_string, JSONCommon::TYPE_STRING_REAL) == 0 &&
-	    strcmp(elem_type_string, JSONCommon::TYPE_STRING_INTEGER) == 0) {
-		*result = JSONCommon::TYPE_STRING_REAL;
-		return true;
+	if (StringEquals(type_string, JSONCommon::TYPE_STRING_DOUBLE) ||
+	    StringEquals(elem_type_string, JSONCommon::TYPE_STRING_DOUBLE)) {
+		// If either is DOUBLE, the max type is DOUBLE
+		*result = JSONCommon::TYPE_STRING_DOUBLE;
+	} else if (StringEquals(type_string, JSONCommon::TYPE_STRING_BIGINT) ||
+	           StringEquals(elem_type_string, JSONCommon::TYPE_STRING_BIGINT)) {
+		// If either is BIGINT, the max type is BIGINT
+		*result = JSONCommon::TYPE_STRING_BIGINT;
 	}
-	return false;
+	return true;
 }
 
 static inline yyjson_mut_val *GetConsistentArrayStructure(const vector<yyjson_mut_val *> &elem_structures,
@@ -86,10 +102,10 @@ static inline yyjson_mut_val *GetConsistentArrayStructure(const vector<yyjson_mu
 			continue;
 		}
 		if (type != elem_type) {
-			throw Exception("Inconsistent JSON structure");
+			throw InvalidInputException("Inconsistent JSON structure");
 		}
 		if (type == YYJSON_TYPE_STR && !GetMaxTypeString(type_string, elem_type_string, &type_string)) {
-			throw Exception("Inconsistent JSON structure");
+			throw InvalidInputException("Inconsistent JSON structure");
 		}
 	}
 	switch (type) {

@@ -562,6 +562,8 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		return LogicalTypeId::TIME_TZ;
 	} else if (lower_str == "json") {
 		return LogicalTypeId::JSON;
+	} else if (lower_str == "null") {
+		return LogicalTypeId::SQLNULL;
 	} else {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder
