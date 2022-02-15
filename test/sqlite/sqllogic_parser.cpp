@@ -129,34 +129,24 @@ SQLLogicToken SQLLogicParser::Tokenize() {
 // Single line statements should throw a parser error if the next line is not a comment or a newline
 bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	switch (token.type) {
-	case SQLLogicTokenType::SQLLOGIC_INVALID:
-		return false;
 	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
-		return true;
 	case SQLLogicTokenType::SQLLOGIC_ONLY_IF:
-		return true;
-	case SQLLogicTokenType::SQLLOGIC_STATEMENT:
-		return false;
-	case SQLLogicTokenType::SQLLOGIC_QUERY:
-		return false;
 	case SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD:
-		return true;
 	case SQLLogicTokenType::SQLLOGIC_HALT:
-		return true;
 	case SQLLogicTokenType::SQLLOGIC_MODE:
-		return true;
 	case SQLLogicTokenType::SQLLOGIC_LOOP:
-		return true;
 	case SQLLogicTokenType::SQLLOGIC_FOREACH:
-		return true;
 	case SQLLogicTokenType::SQLLOGIC_ENDLOOP:
-		return true;
 	case SQLLogicTokenType::SQLLOGIC_REQUIRE:
-		return true;
 	case SQLLogicTokenType::SQLLOGIC_LOAD:
-		return true;
 	case SQLLogicTokenType::SQLLOGIC_RESTART:
 		return true;
+
+	case SQLLogicTokenType::SQLLOGIC_INVALID:
+	case SQLLogicTokenType::SQLLOGIC_STATEMENT:
+	case SQLLogicTokenType::SQLLOGIC_QUERY:
+		return false;
+
 	default:
 		throw std::runtime_error("Unknown SQLLogic token found!");
 	}
