@@ -25,7 +25,6 @@
 #include "substrait-extension.hpp"
 #endif
 
-
 #if defined(BUILD_FTS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "fts-extension.hpp"
 #endif
