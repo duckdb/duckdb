@@ -45,7 +45,7 @@ statement ok
 create table STR_TEST (i string[]);
 
 statement ok
-insert into STR_TEST values (['a','b','c']), (['d','a','e']), (['b']);
+insert into STR_TEST values (['a','b','c']), (['d','a','e']), (['b']), (['aaaaaaaaaaaaaaaaaaaaaaaa']);
 
 query TT
 SELECT i, list_contains(i,'a') from STR_TEST;
@@ -53,6 +53,15 @@ SELECT i, list_contains(i,'a') from STR_TEST;
 [a, b, c]	1
 [d, a, e]	1
 [b]	0
+[aaaaaaaaaaaaaaaaaaaaaaaa]	0
+
+query TT
+SELECT i, list_contains(i,'aaaaaaaaaaaaaaaaaaaaaaaa') from STR_TEST;
+----
+[a, b, c]	0
+[d, a, e]	0
+[b]	0
+[aaaaaaaaaaaaaaaaaaaaaaaa]	1
 
 query TT
 SELECT i, list_contains(i,0) from STR_TEST;
@@ -60,6 +69,7 @@ SELECT i, list_contains(i,0) from STR_TEST;
 [a, b, c]	0
 [d, a, e]	0
 [b]	0
+[aaaaaaaaaaaaaaaaaaaaaaaa]	0
 
 
 query TT
@@ -68,6 +78,7 @@ SELECT i, list_contains(i,NULL) from STR_TEST;
 [a, b, c]	NULL
 [d, a, e]	NULL
 [b]	NULL
+[aaaaaaaaaaaaaaaaaaaaaaaa]	NULL
 
 statement ok
 DROP table STR_TEST;

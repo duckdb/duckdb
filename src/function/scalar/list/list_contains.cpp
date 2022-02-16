@@ -70,7 +70,7 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 			if (!child_data.validity.RowIsValid(child_value_idx)) {
 				continue;
 			}
-			if (ValueCompare(child_value[child_value_idx], values[value_index])) {
+			if (ValueCompare<T>(child_value[child_value_idx], values[value_index])) {
 				result_entries[list_index] = true;
 				break; // Found value in list, no need to look further
 			}
@@ -79,8 +79,7 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 	return;
 }
 
-template <class T>
-static void NestedTemplatedListContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static void NestedListContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto count = args.size();
 	Vector &list = args.data[0];
@@ -126,7 +125,7 @@ static void NestedTemplatedListContainsFunction(DataChunk &args, ExpressionState
 			if (!child_data.validity.RowIsValid(child_value_idx)) {
 				continue;
 			}
-			if (ValueCompare(child_vector.GetValue(child_value_idx), value_vector.GetValue(value_index))) {
+			if (ValueCompare<Value>(child_vector.GetValue(child_value_idx), value_vector.GetValue(value_index))) {
 				result_entries[list_index] = true;
 				break; // Found value in list, no need to look further
 			}
@@ -177,7 +176,7 @@ static void ListContainsFunction(DataChunk &args, ExpressionState &state, Vector
 	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
-		NestedTemplatedListContainsFunction<list_entry_t>(args, state, result);
+		NestedListContainsFunction(args, state, result);
 		break;
 	default:
 		throw NotImplementedException("This function has not been implemented for this type");
