@@ -21,7 +21,7 @@ struct CaseCheck {
 //! The CaseExpression represents a CASE expression in the query
 class CaseExpression : public ParsedExpression {
 public:
-	CaseExpression();
+	DUCKDB_API CaseExpression();
 
 	vector<CaseCheck> case_checks;
 	unique_ptr<ParsedExpression> else_expr;
