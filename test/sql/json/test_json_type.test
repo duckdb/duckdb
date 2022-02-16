@@ -11,33 +11,33 @@ pragma enable_verification
 query T
 select json_type('{"str": 42}')
 ----
-object
+OBJECT
 
 query T
 select json_type('[1, 2, 3]')
 ----
-array
+ARRAY
 
 # invalid JSON but we can still get the type of the singleton
 query T
 select json_type('"other"')
 ----
-string
+VARCHAR
 
 query T
 select json_type('42')
 ----
-integer
+UBIGINT
 
 query T
 select json_type('NaN')
 ----
-real
+DOUBLE
 
 query T
 select json_type('null')
 ----
-null
+NULL
 
 query T
 select json_type(NULL)
@@ -49,12 +49,12 @@ NULL
 query T
 select json_type('{"str": 42}', 'str')
 ----
-integer
+UBIGINT
 
 query T
 select json_type('{"str": "quack"}', 'str')
 ----
-string
+VARCHAR
 
 query T
 select json_type('{"str": "quack"}', 'str2')
@@ -71,26 +71,26 @@ select json_type(NULL, 'str')
 ----
 NULL
 
-# NaN and Infinity should become real
+# NaN and Infinity should become DOUBLE
 query T
 select json_type('{"null": NaN}', 'null')
 ----
-real
+DOUBLE
 
 query T
 select json_type('{"null": nan}', 'null')
 ----
-real
+DOUBLE
 
 query T
 select json_type('{"null": Infinity}', 'null')
 ----
-real
+DOUBLE
 
 query T
 select json_type('{"null": -Infinity}', 'null')
 ----
-real
+DOUBLE
 
 statement ok
 create table test(json varchar, query varchar)
@@ -105,106 +105,114 @@ insert into test values
 query T
 select json_type(json, 'str') from test
 ----
-string
-string
-null
+VARCHAR
+VARCHAR
+NULL
 
 query T
 select json_type(json, 'int') from test
 ----
-integer
-integer
-null
+UBIGINT
+BIGINT
+NULL
 
 query T
 select json_type(json, 'double') from test
 ----
-real
-real
-null
+DOUBLE
+DOUBLE
+NULL
 
 query T
 select json_type(json, 'bool') from test
 ----
-boolean
-boolean
-null
+BOOLEAN
+BOOLEAN
+NULL
 
 query T
 select json_type(json, 'arr') from test
 ----
-array
-array
-null
+ARRAY
+ARRAY
+NULL
 
 # json path queries
 query T
 select json_type(json, '/arr/0') from test
 ----
 NULL
-integer
+UBIGINT
 NULL
 
 query T
 select json_type(json, '/nested/val') from test
 ----
-integer
-integer
+UBIGINT
+UBIGINT
 NULL
+
+# query multiple paths
+query T
+select json_type(json, ['str', '/nested/val']) from test
+----
+[VARCHAR, UBIGINT]
+[VARCHAR, UBIGINT]
+[NULL, NULL]
 
 # test with columnref input and columnref query
 query T
 select json_type(json, query) from test
 ----
-integer
-integer
-null
+UBIGINT
+UBIGINT
+NULL
 
 # some SQLite json_type tests
 query T
 SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}');
 ----
-object
+OBJECT
 
 query T
 SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$');
 ----
-object
+OBJECT
 
 query T
 SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a');
 ----
-array
+ARRAY
 
 query T
 SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[0]');
 ----
-integer
+UBIGINT
 
 query T
 SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[1]');
 ----
-real
+DOUBLE
 
 query T
 SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[2]');
 ----
-boolean
+BOOLEAN
 
 query T
 SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[3]');
 ----
-boolean
+BOOLEAN
 
 query T
 SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[4]');
 ----
-null
+NULL
 
 query T
 SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[5]');
 ----
-string
+VARCHAR
 
 query T
 SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[6]');
