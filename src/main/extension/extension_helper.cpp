@@ -5,47 +5,51 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/string_util.hpp"
 
-#ifdef BUILD_ICU_EXTENSION
+#if defined(BUILD_ICU_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "icu-extension.hpp"
 #endif
 
-#ifdef BUILD_PARQUET_EXTENSION
+#if defined(BUILD_PARQUET_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "parquet-extension.hpp"
 #endif
 
-#ifdef BUILD_TPCH_EXTENSION
+#if defined(BUILD_TPCH_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "tpch-extension.hpp"
 #endif
 
-#ifdef BUILD_TPCDS_EXTENSION
+#if defined(BUILD_TPCDS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "tpcds-extension.hpp"
 #endif
 
-#ifdef BUILD_FTS_EXTENSION
+#if defined(BUILD_SUBSTRAIT_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+#include "substrait-extension.hpp"
+#endif
+
+#if defined(BUILD_FTS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "fts-extension.hpp"
 #endif
 
-#ifdef BUILD_HTTPFS_EXTENSION
+#if defined(BUILD_HTTPFS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "httpfs-extension.hpp"
 #endif
 
-#ifdef BUILD_VISUALIZER_EXTENSION
+#if defined(BUILD_VISUALIZER_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "visualizer-extension.hpp"
 #endif
 
-#ifdef BUILD_JSON_EXTENSION
+#if defined(BUILD_JSON_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "json-extension.hpp"
 #endif
 
-#ifdef BUILD_EXCEL_EXTENSION
+#if defined(BUILD_EXCEL_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "excel-extension.hpp"
 #endif
 
 namespace duckdb {
 
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
-	unordered_set<string> extensions {"parquet", "icu",        "tpch", "tpcds", "fts",
-	                                  "httpfs",  "visualizer", "json", "excel"};
+	unordered_set<string> extensions {"parquet", "icu",       "tpch",       "tpcds", "fts",
+	                                  "httpfs",  "substrait", "visualizer", "json",  "excel"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -77,48 +81,56 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	}
 #endif
 	if (extension == "parquet") {
-#ifdef BUILD_PARQUET_EXTENSION
+#if defined(BUILD_PARQUET_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 		db.LoadExtension<ParquetExtension>();
 #else
 		// parquet extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "icu") {
-#ifdef BUILD_ICU_EXTENSION
+#if defined(BUILD_ICU_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 		db.LoadExtension<ICUExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "tpch") {
-#ifdef BUILD_TPCH_EXTENSION
+#if defined(BUILD_TPCH_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 		db.LoadExtension<TPCHExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
+	} else if (extension == "substrait") {
+#if defined(BUILD_SUBSTRAIT_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+
+		db.LoadExtension<SubstraitExtension>();
+#else
+		// substrait extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
 	} else if (extension == "tpcds") {
-#ifdef BUILD_TPCDS_EXTENSION
+#if defined(BUILD_TPCDS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 		db.LoadExtension<TPCDSExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "fts") {
-#ifdef BUILD_FTS_EXTENSION
+#if defined(BUILD_FTS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 		db.LoadExtension<FTSExtension>();
 #else
 		// fts extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "httpfs") {
-#ifdef BUILD_HTTPFS_EXTENSION
+#if defined(BUILD_HTTPFS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 		db.LoadExtension<HTTPFsExtension>();
 #else
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "visualizer") {
-#ifdef BUILD_VISUALIZER_EXTENSION
+#if defined(BUILD_VISUALIZER_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 		db.LoadExtension<VisualizerExtension>();
 #else
 		// visualizer extension required but not build: skip this test
@@ -132,7 +144,7 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "excel") {
-#ifdef BUILD_EXCEL_EXTENSION
+#if defined(BUILD_EXCEL_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 		db.LoadExtension<EXCELExtension>();
 #else
 		// excel extension required but not build: skip this test

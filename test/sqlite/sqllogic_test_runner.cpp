@@ -193,6 +193,12 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	while (parser.NextStatement()) {
 		// tokenize the current line
 		auto token = parser.Tokenize();
+
+		// throw explicit error on single line statements that are not separated by a comment or newline
+		if (parser.IsSingleLineStatement(token) && !parser.NextLineEmptyOrComment()) {
+			parser.Fail("all test statements need to be separated by an empty line");
+		}
+
 		bool skip_statement = false;
 		while (token.type == SQLLogicTokenType::SQLLOGIC_SKIP_IF || token.type == SQLLogicTokenType::SQLLOGIC_ONLY_IF) {
 			// skipif/onlyif

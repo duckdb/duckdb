@@ -31,7 +31,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 ## Testing
 * Unit tests can be written either using the sqllogictest framework (`.test` files) or in C++ directly. We **strongly** prefer tests to be written using the sqllogictest framework. Only write tests in C++ if you absolutely need to (e.g. when testing concurrent connections or other exotic behavior).
-* Documentation for the testing framework can be found [here](https://duckdb.org/docs/dev/testing).
+* Documentation for the testing framework can be found [here](https://duckdb.org/dev/testing).
 * Write many tests.
 * Test with different types, especially numerics, strings and complex nested types.
 * Try to test unexpected/incorrect usage as well, instead of only the happy path.
