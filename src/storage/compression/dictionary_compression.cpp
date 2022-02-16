@@ -88,6 +88,7 @@ struct DictionaryCompressionStorage : UncompressedStringStorage { // TODO REFACT
 	static void FinalizeCompress(CompressionState &state_p);
 
 	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
+	template<bool ALLOW_DICT_VECTORS>
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                              idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
@@ -399,7 +400,7 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 	state->current_width = (bitpacking_width_t)(Load<uint32_t>(baseptr + 4 * sizeof(uint32_t)));
 	auto index_buffer_ptr = (int32_t *)(baseptr + index_buffer_offset);
 
-	state->dictionary = make_buffer<Vector>(LogicalType::VARCHAR, index_buffer_count);
+	state->dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
 	auto dict_child_data = FlatVector::GetData<string_t>(*(state->dictionary));
 
 	// TODO the first value in the index buffer is always 0, do we care?
@@ -416,6 +417,7 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
+template<bool ALLOW_DICT_VECTORS>
 void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
                                                      Vector &result, idx_t result_offset) {
 	// clear any previously locked buffers and get the primary buffer handle
@@ -432,7 +434,7 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	// TODO: maybe we can do non-bitpacking-algorithm-group-aligned dict vector emitting? It might not be very common though
-	if (scan_count != STANDARD_VECTOR_SIZE || start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0) {
+	if (!ALLOW_DICT_VECTORS || scan_count != STANDARD_VECTOR_SIZE || start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0) {
 		// Emit regular vector
 
 		// Handling non-bitpacking-group-aligned start values;
@@ -482,7 +484,7 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 
 void DictionaryCompressionStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
                                               Vector &result) {
-	StringScanPartial(segment, state, scan_count, result, 0);
+	StringScanPartial<true>(segment, state, scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//
@@ -587,7 +589,7 @@ CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type
 	    DictionaryCompressionStorage::StringAnalyze, DictionaryCompressionStorage::StringFinalAnalyze,
 	    DictionaryCompressionStorage::InitCompression, DictionaryCompressionStorage::Compress,
 	    DictionaryCompressionStorage::FinalizeCompress, DictionaryCompressionStorage::StringInitScan,
-	    DictionaryCompressionStorage::StringScan, DictionaryCompressionStorage::StringScanPartial,
+	    DictionaryCompressionStorage::StringScan, DictionaryCompressionStorage::StringScanPartial<false>,
 	    DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
 }
 
