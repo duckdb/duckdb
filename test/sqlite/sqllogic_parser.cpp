@@ -129,8 +129,6 @@ SQLLogicToken SQLLogicParser::Tokenize() {
 // Single line statements should throw a parser error if the next line is not a comment or a newline
 bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	switch (token.type) {
-	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
-	case SQLLogicTokenType::SQLLOGIC_ONLY_IF:
 	case SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD:
 	case SQLLogicTokenType::SQLLOGIC_HALT:
 	case SQLLogicTokenType::SQLLOGIC_MODE:
@@ -142,6 +140,8 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_RESTART:
 		return true;
 
+	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
+	case SQLLogicTokenType::SQLLOGIC_ONLY_IF:
 	case SQLLogicTokenType::SQLLOGIC_INVALID:
 	case SQLLogicTokenType::SQLLOGIC_STATEMENT:
 	case SQLLogicTokenType::SQLLOGIC_QUERY:
