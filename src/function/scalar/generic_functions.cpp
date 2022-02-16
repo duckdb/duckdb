@@ -4,6 +4,7 @@ namespace duckdb {
 
 void BuiltinFunctions::RegisterGenericFunctions() {
 	Register<AliasFun>();
+	Register<HashFun>();
 	Register<LeastFun>();
 	Register<GreatestFun>();
 	Register<StatsFun>();

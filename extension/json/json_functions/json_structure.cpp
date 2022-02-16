@@ -54,31 +54,30 @@ static inline bool StringEquals(const char *lhs, const char *rhs) {
 	return strcmp(lhs, rhs) == 0;
 }
 
-static inline bool IsNumerical(const char *type_string) {
-	return StringEquals(type_string, JSONCommon::TYPE_STRING_BIGINT) ||
-	       StringEquals(type_string, JSONCommon::TYPE_STRING_UBIGINT) ||
-	       StringEquals(type_string, JSONCommon::TYPE_STRING_DOUBLE);
+static inline bool EitherEquals(const char *s1, const char *s2, const char *target) {
+	return StringEquals(s1, target) || StringEquals(s2, target);
 }
 
-static inline bool GetMaxTypeString(const char *type_string, const char *elem_type_string, const char **result) {
-	if (StringEquals(type_string, elem_type_string)) {
+static inline void GetMaxTypeString(const char *type_string, const char *elem_type_string, const char **result) {
+	if (!type_string) {
+		*result = elem_type_string;
+	} else if (!elem_type_string) {
 		*result = type_string;
-		return true;
-	}
-	if (!IsNumerical(type_string) || !IsNumerical(elem_type_string)) {
-		// We only consider a mix of numerical types to be consistent with each other
-		return false;
-	}
-	if (StringEquals(type_string, JSONCommon::TYPE_STRING_DOUBLE) ||
-	    StringEquals(elem_type_string, JSONCommon::TYPE_STRING_DOUBLE)) {
-		// If either is DOUBLE, the max type is DOUBLE
+	} else if (StringEquals(type_string, elem_type_string)) {
+		*result = type_string;
+	} else if (EitherEquals(type_string, elem_type_string, JSONCommon::TYPE_STRING_VARCHAR)) {
+		*result = JSONCommon::TYPE_STRING_VARCHAR;
+	} else if (EitherEquals(type_string, elem_type_string, JSONCommon::TYPE_STRING_DOUBLE)) {
 		*result = JSONCommon::TYPE_STRING_DOUBLE;
-	} else if (StringEquals(type_string, JSONCommon::TYPE_STRING_BIGINT) ||
-	           StringEquals(elem_type_string, JSONCommon::TYPE_STRING_BIGINT)) {
-		// If either is BIGINT, the max type is BIGINT
+	} else if (EitherEquals(type_string, elem_type_string, JSONCommon::TYPE_STRING_BIGINT)) {
 		*result = JSONCommon::TYPE_STRING_BIGINT;
+	} else if (EitherEquals(type_string, elem_type_string, JSONCommon::TYPE_STRING_UBIGINT)) {
+		*result = JSONCommon::TYPE_STRING_UBIGINT;
+	} else {
+		D_ASSERT(StringEquals(type_string, JSONCommon::TYPE_STRING_BOOLEAN) &&
+		         StringEquals(elem_type_string, JSONCommon::TYPE_STRING_BOOLEAN));
+		*result = JSONCommon::TYPE_STRING_BOOLEAN;
 	}
-	return true;
 }
 
 static inline yyjson_mut_val *GetConsistentArrayStructure(const vector<yyjson_mut_val *> &elem_structures,
@@ -104,9 +103,7 @@ static inline yyjson_mut_val *GetConsistentArrayStructure(const vector<yyjson_mu
 		if (type != elem_type) {
 			throw InvalidInputException("Inconsistent JSON structure");
 		}
-		if (type == YYJSON_TYPE_STR && !GetMaxTypeString(type_string, elem_type_string, &type_string)) {
-			throw InvalidInputException("Inconsistent JSON structure");
-		}
+		GetMaxTypeString(type_string, elem_type_string, &type_string);
 	}
 	switch (type) {
 	case YYJSON_TYPE_ARR:

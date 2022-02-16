@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
+#include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "yyjson.hpp"
@@ -119,11 +122,6 @@ public:
 		default:
 			return nullptr;
 		}
-	}
-
-	template <class T>
-	static inline bool TemplatedGetValue(yyjson_val *val, T &result) {
-		throw NotImplementedException("Cannot extract JSON of this type");
 	}
 
 public:
@@ -423,68 +421,246 @@ private:
 		throw InternalException("Unknown yyjson type");
 	}
 
-	// FIXME: we don't need to pushback because we know the list size
+	// FIXME: we don't need to pushback because we know the list size beforehand
 	//  We should do ListVector::Reserve instead
 	template <class T>
 	static inline void PushBack(Vector &result, Vector &result_child, T val) {
 		throw NotImplementedException("Cannot insert Value with this type into JSON result list");
 	}
+
+public:
+	template <class T>
+	static inline bool TemplatedGetValue(yyjson_val *val, T &result, bool strict) {
+		auto type = yyjson_get_type(val);
+		switch (type) {
+		case YYJSON_TYPE_NULL:
+		case YYJSON_TYPE_NONE:
+			return false;
+		case YYJSON_TYPE_ARR:
+		case YYJSON_TYPE_OBJ:
+			break;
+		default:
+			if (TemplatedGetValue<T>(val, result, type, strict)) {
+				return true;
+			}
+			break;
+		}
+		if (strict) {
+			auto json_val = JSONCommon::WriteVal(val);
+			throw InvalidInputException("Failed to cast value: %s", json_val.GetString());
+		}
+		return false;
+	}
+
+	static inline bool GetValueString(yyjson_val *val, string_t &result, Vector &vector) {
+		switch (yyjson_get_type(val)) {
+		case YYJSON_TYPE_NULL:
+		case YYJSON_TYPE_NONE:
+			return false;
+		case YYJSON_TYPE_BOOL:
+			result = StringCast::Operation<bool>(unsafe_yyjson_get_bool(val), vector);
+			break;
+		case YYJSON_TYPE_STR:
+			result = StringVector::AddString(vector, unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
+			break;
+		case YYJSON_TYPE_NUM:
+			switch (unsafe_yyjson_get_subtype(val)) {
+			case YYJSON_SUBTYPE_UINT:
+				result = StringCast::Operation<uint64_t>(unsafe_yyjson_get_uint(val), vector);
+				break;
+			case YYJSON_SUBTYPE_SINT:
+				result = StringCast::Operation<int64_t>(unsafe_yyjson_get_sint(val), vector);
+				break;
+			case YYJSON_SUBTYPE_REAL:
+				result = StringCast::Operation<double>(unsafe_yyjson_get_real(val), vector);
+				break;
+			default:
+				throw InternalException("Unexpected yyjson subtype in GetValueString");
+			}
+			break;
+		default:
+			// Convert JSON object/arrays to strings because we can
+			result = StringVector::AddString(vector, JSONCommon::WriteVal(val));
+		}
+		// Casting to string should always work (if not NULL)
+		return true;
+	}
+
+	template <class T>
+	static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t width, uint8_t scale, bool strict) {
+		switch (yyjson_get_type(val)) {
+		case YYJSON_TYPE_NULL:
+		case YYJSON_TYPE_NONE:
+			return false;
+		case YYJSON_TYPE_ARR:
+		case YYJSON_TYPE_OBJ:
+			break;
+		default:
+			string error_message;
+			if (GetValueDecimal<T>(val, result, &error_message, width, scale)) {
+				return true;
+			}
+			break;
+		}
+		if (strict) {
+			auto json_val = JSONCommon::WriteVal(val);
+			throw InvalidInputException("Failed to cast value to DECIMAL: %s", json_val.GetString());
+		}
+		return false;
+	}
+
+	static inline bool GetValueUUID(yyjson_val *val, hugeint_t &result, Vector &vector, bool strict) {
+		switch (yyjson_get_type(val)) {
+		case YYJSON_TYPE_NULL:
+		case YYJSON_TYPE_NONE:
+			return false;
+		case YYJSON_TYPE_STR: {
+			string error_message;
+			if (TryCastToUUID::Operation(GetStringFromVal(val), result, vector, &error_message, strict)) {
+				return true;
+			}
+			break;
+		}
+		case YYJSON_TYPE_NUM:
+		case YYJSON_TYPE_BOOL:
+		case YYJSON_TYPE_ARR:
+		case YYJSON_TYPE_OBJ:
+			break;
+		default:
+			throw InternalException("Unexpected yyjson type in GetValueUUID");
+		}
+		if (strict) {
+			auto json_val = JSONCommon::WriteVal(val);
+			throw InvalidInputException("Failed to cast value to UUID: %s", json_val.GetString());
+		}
+		return false;
+	}
+
+	template <class T, class OP>
+	static inline bool GetValueDateTime(yyjson_val *val, T &result, bool strict) {
+		switch (yyjson_get_type(val)) {
+		case YYJSON_TYPE_NULL:
+		case YYJSON_TYPE_NONE:
+			return false;
+		case YYJSON_TYPE_STR: {
+			string error_message;
+			if (OP::template Operation<string_t, T>(GetStringFromVal(val), result, &error_message, strict)) {
+				return true;
+			}
+			break;
+		}
+		case YYJSON_TYPE_NUM:
+		case YYJSON_TYPE_BOOL:
+		case YYJSON_TYPE_ARR:
+		case YYJSON_TYPE_OBJ:
+			break;
+		default:
+			throw InternalException("Unexpected yyjson type in GetValueDateTime");
+		}
+		if (strict) {
+			auto json_val = JSONCommon::WriteVal(val);
+			throw InvalidInputException("Failed to cast value to DateTime: %s", json_val.GetString());
+		}
+		return false;
+	}
+
+	template <class OP>
+	static inline bool GetValueTimestamp(yyjson_val *val, timestamp_t &result, bool strict) {
+		switch (yyjson_get_type(val)) {
+		case YYJSON_TYPE_NULL:
+		case YYJSON_TYPE_NONE:
+			return false;
+		case YYJSON_TYPE_STR:
+			if (OP::template Operation<string_t>(GetStringFromVal(val), result, strict)) {
+				return true;
+			}
+			break;
+		case YYJSON_TYPE_NUM:
+		case YYJSON_TYPE_BOOL:
+		case YYJSON_TYPE_ARR:
+		case YYJSON_TYPE_OBJ:
+			break;
+		default:
+			throw InternalException("Unexpected yyjson type in GetValueTimestamp");
+		}
+		if (strict) {
+			auto json_val = JSONCommon::WriteVal(val);
+			throw InvalidInputException("Failed to cast value to Timestamp: %s", json_val.GetString());
+		}
+		return false;
+	}
+
+private:
+	static inline string_t GetStringFromVal(yyjson_val *val) {
+		return string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
+	}
+
+	template <class T>
+	static inline bool TemplatedGetValue(yyjson_val *val, T &result, yyjson_type type, bool strict) {
+		bool success;
+		switch (type) {
+		case YYJSON_TYPE_BOOL:
+			success = TryCast::Operation<bool, T>(unsafe_yyjson_get_bool(val), result, strict);
+			break;
+		case YYJSON_TYPE_STR:
+			success = TryCast::Operation<string_t, T>(GetStringFromVal(val), result, strict);
+			break;
+		case YYJSON_TYPE_NUM:
+			switch (unsafe_yyjson_get_subtype(val)) {
+			case YYJSON_SUBTYPE_UINT:
+				success = TryCast::Operation<uint64_t, T>(unsafe_yyjson_get_uint(val), result, strict);
+				break;
+			case YYJSON_SUBTYPE_SINT:
+				success = TryCast::Operation<int64_t, T>(unsafe_yyjson_get_sint(val), result, strict);
+				break;
+			case YYJSON_SUBTYPE_REAL:
+				success = TryCast::Operation<double, T>(unsafe_yyjson_get_real(val), result, strict);
+				break;
+			default:
+				throw InternalException("Unexpected yyjson subtype in TemplatedGetValue");
+			}
+			break;
+		default:
+			throw InternalException("Unexpected yyjson type in TemplatedGetValue");
+		}
+		if (success) {
+			return true;
+		}
+		if (strict) {
+			auto json_val = JSONCommon::WriteVal(val);
+			throw InvalidInputException("Failed to cast value: %s", json_val.GetString());
+		}
+		return false;
+	}
+
+	template <class T>
+	static inline bool GetValueDecimal(yyjson_val *val, T &result, string *error_message, uint8_t width,
+	                                   uint8_t scale) {
+		switch (yyjson_get_type(val)) {
+		case YYJSON_TYPE_BOOL:
+			return TryCastToDecimal::Operation<bool, T>(unsafe_yyjson_get_bool(val), result, error_message, width,
+			                                            scale);
+		case YYJSON_TYPE_STR:
+			return TryCastToDecimal::Operation<string_t, T>(GetStringFromVal(val), result, error_message, width, scale);
+		case YYJSON_TYPE_NUM:
+			switch (unsafe_yyjson_get_subtype(val)) {
+			case YYJSON_SUBTYPE_UINT:
+				return TryCastToDecimal::Operation<uint64_t, T>(unsafe_yyjson_get_uint(val), result, error_message,
+				                                                width, scale);
+			case YYJSON_SUBTYPE_SINT:
+				return TryCastToDecimal::Operation<int64_t, T>(unsafe_yyjson_get_sint(val), result, error_message,
+				                                               width, scale);
+			case YYJSON_SUBTYPE_REAL:
+				return TryCastToDecimal::Operation<double, T>(unsafe_yyjson_get_real(val), result, error_message, width,
+				                                              scale);
+			default:
+				throw InternalException("Unexpected yyjson subtype in GetValueDecimal");
+			}
+		default:
+			throw InternalException("Unexpected yyjson type in GetValueDecimal");
+		}
+	}
 };
-
-template <>
-inline bool JSONCommon::TemplatedGetValue(yyjson_val *val, bool &result) {
-	auto valid = yyjson_is_bool(val);
-	if (valid) {
-		result = unsafe_yyjson_get_bool(val);
-	}
-	return valid;
-}
-
-template <>
-inline bool JSONCommon::TemplatedGetValue(yyjson_val *val, int32_t &result) {
-	auto valid = yyjson_is_int(val);
-	if (valid) {
-		result = unsafe_yyjson_get_int(val);
-	}
-	return valid;
-}
-
-template <>
-inline bool JSONCommon::TemplatedGetValue(yyjson_val *val, int64_t &result) {
-	// Needs to check whether it is int first, otherwise we get NULL for small values
-	auto valid = yyjson_is_int(val) || yyjson_is_sint(val);
-	if (valid) {
-		result = unsafe_yyjson_get_sint(val);
-	}
-	return valid;
-}
-
-template <>
-inline bool JSONCommon::TemplatedGetValue(yyjson_val *val, uint64_t &result) {
-	auto valid = yyjson_is_uint(val);
-	if (valid) {
-		result = unsafe_yyjson_get_uint(val);
-	}
-	return valid;
-}
-
-template <>
-inline bool JSONCommon::TemplatedGetValue(yyjson_val *val, double &result) {
-	auto valid = yyjson_is_real(val);
-	if (valid) {
-		result = unsafe_yyjson_get_real(val);
-	}
-	return valid;
-}
-
-template <>
-inline bool JSONCommon::TemplatedGetValue(yyjson_val *val, string_t &result) {
-	auto valid = yyjson_is_str(val);
-	if (valid) {
-		result = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
-	}
-	return valid;
-}
 
 template <>
 inline yyjson_val *JSONCommon::TemplatedGetPointer(yyjson_val *root, const char *ptr, const idx_t &len) {

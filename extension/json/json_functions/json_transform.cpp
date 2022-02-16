@@ -33,7 +33,7 @@ static LogicalType StructureToTypeVal(yyjson_val *val) {
 	if ((StringUtil::StartsWith(type_string, "decimal(") || StringUtil::StartsWith(type_string, "dec(") ||
 	     StringUtil::StartsWith(type_string, "numeric(")) &&
 	    StringUtil::EndsWith(type_string, ")")) {
-		// cut out string
+		// Parse the DECIMAL width and scale
 		auto start = type_string.find('(') + 1;
 		auto end = type_string.size() - 1;
 		auto ws_string = string(type_string.c_str() + start, end - start);
@@ -41,8 +41,9 @@ static LogicalType StructureToTypeVal(yyjson_val *val) {
 		if (split.size() == 1 || split.size() == 2) {
 			vector<idx_t> ws;
 			for (auto &s : split) {
-				idx_t digit;
-				if (!JSONCommon::ReadIndex(s.c_str(), s.c_str() + s.size(), digit)) {
+				char *p_end = nullptr;
+				idx_t digit = strtoull(s.c_str(), &p_end, 10);
+				if (!p_end) {
 					throw InvalidInputException("unable to parse decimal type \"%s\"", type_string);
 				}
 				ws.push_back(digit);
@@ -65,6 +66,7 @@ static LogicalType StructureToTypeVal(yyjson_val *val) {
 			// This is our default
 			result = LogicalType::DECIMAL(18, 3);
 			break;
+		case LogicalTypeId::ENUM:
 		case LogicalTypeId::USER:
 		case LogicalTypeId::STRUCT:
 		case LogicalTypeId::MAP:
@@ -113,15 +115,39 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 }
 
 //! Forward declaration for recursion
-static void Transform(yyjson_val *vals[], Vector &result, const idx_t count);
+static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, bool strict);
 
 template <class T>
-static void TemplatedTransform(yyjson_val *vals[], Vector &result, const idx_t count) {
+static void TemplatedTransform(yyjson_val *vals[], Vector &result, const idx_t count, const bool strict) {
 	auto data = (T *)FlatVector::GetData(result);
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
-		if (!val || yyjson_is_null(val) || !JSONCommon::TemplatedGetValue<T>(val, data[i])) {
+		if (!val || yyjson_is_null(val) || !JSONCommon::TemplatedGetValue<T>(val, data[i], strict)) {
+			validity.SetInvalid(i);
+		}
+	}
+}
+
+template <class T>
+static void TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t count, uint8_t width, uint8_t scale,
+                             const bool strict) {
+	auto data = (T *)FlatVector::GetData(result);
+	auto &validity = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		const auto &val = vals[i];
+		if (!val || yyjson_is_null(val) || !JSONCommon::GetValueDecimal<T>(val, data[i], width, scale, strict)) {
+			validity.SetInvalid(i);
+		}
+	}
+}
+
+static void TransformUUID(yyjson_val *vals[], Vector &result, const idx_t count, const bool strict) {
+	auto data = (hugeint_t *)FlatVector::GetData(result);
+	auto &validity = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		const auto &val = vals[i];
+		if (!val || yyjson_is_null(val) || !JSONCommon::GetValueUUID(val, data[i], result, strict)) {
 			validity.SetInvalid(i);
 		}
 	}
@@ -132,16 +158,38 @@ static void TransformString(yyjson_val *vals[], Vector &result, const idx_t coun
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
-		string_t result_val {};
-		if (!val || yyjson_is_null(val) || !JSONCommon::TemplatedGetValue<string_t>(val, result_val)) {
+		if (!val || yyjson_is_null(val) || !JSONCommon::GetValueString(val, data[i], result)) {
 			validity.SetInvalid(i);
-		} else {
-			data[i] = StringVector::AddString(result, result_val);
 		}
 	}
 }
 
-static void TransformObject(yyjson_val *vals[], Vector &result, const idx_t count, const LogicalType &type) {
+template <class T, class OP>
+static void TransformDateTime(yyjson_val *vals[], Vector &result, const idx_t count, const bool strict) {
+	auto data = (T *)FlatVector::GetData(result);
+	auto &validity = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		const auto &val = vals[i];
+		if (!val || yyjson_is_null(val) || !JSONCommon::GetValueDateTime<T, OP>(val, data[i], strict)) {
+			validity.SetInvalid(i);
+		}
+	}
+}
+
+template <class OP>
+static void TransformTimestamp(yyjson_val *vals[], Vector &result, const idx_t count, const bool strict) {
+	auto data = (timestamp_t *)FlatVector::GetData(result);
+	auto &validity = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		const auto &val = vals[i];
+		if (!val || yyjson_is_null(val) || !JSONCommon::GetValueTimestamp<OP>(val, data[i], strict)) {
+			validity.SetInvalid(i);
+		}
+	}
+}
+
+static void TransformObject(yyjson_val *vals[], Vector &result, const idx_t count, const LogicalType &type,
+                            bool strict) {
 	// Initialize array for the nested values
 	auto nested_vals_ptr = unique_ptr<yyjson_val *[]>(new yyjson_val *[count]);
 	auto nested_vals = nested_vals_ptr.get();
@@ -155,11 +203,11 @@ static void TransformObject(yyjson_val *vals[], Vector &result, const idx_t coun
 			nested_vals[i] = yyjson_obj_getn(vals[i], name_ptr, name_len);
 		}
 		// Transform child values
-		Transform(nested_vals, *child_vs[child_i], count);
+		Transform(nested_vals, *child_vs[child_i], count, strict);
 	}
 }
 
-static void TransformArray(yyjson_val *vals[], Vector &result, const idx_t count) {
+static void TransformArray(yyjson_val *vals[], Vector &result, const idx_t count, bool strict) {
 	// Initialize list vector
 	auto list_entries = FlatVector::GetData<list_entry_t>(result);
 	auto &list_validity = FlatVector::Validity(result);
@@ -195,33 +243,86 @@ static void TransformArray(yyjson_val *vals[], Vector &result, const idx_t count
 	}
 	D_ASSERT(list_i == offset);
 	// Transform array values
-	Transform(nested_vals, ListVector::GetEntry(result), offset);
+	Transform(nested_vals, ListVector::GetEntry(result), offset, strict);
 }
 
-static void Transform(yyjson_val *vals[], Vector &result, const idx_t count) {
-	auto result_type = result.GetType().id();
-	switch (result_type) {
+static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, bool strict) {
+	auto result_type = result.GetType();
+	switch (result_type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return TemplatedTransform<bool>(vals, result, count, strict);
+	case LogicalTypeId::TINYINT:
+		return TemplatedTransform<int8_t>(vals, result, count, strict);
+	case LogicalTypeId::SMALLINT:
+		return TemplatedTransform<int16_t>(vals, result, count, strict);
+	case LogicalTypeId::INTEGER:
+		return TemplatedTransform<int32_t>(vals, result, count, strict);
+	case LogicalTypeId::BIGINT:
+		return TemplatedTransform<int64_t>(vals, result, count, strict);
+	case LogicalTypeId::UTINYINT:
+		return TemplatedTransform<uint8_t>(vals, result, count, strict);
+	case LogicalTypeId::USMALLINT:
+		return TemplatedTransform<uint16_t>(vals, result, count, strict);
+	case LogicalTypeId::UINTEGER:
+		return TemplatedTransform<uint32_t>(vals, result, count, strict);
+	case LogicalTypeId::UBIGINT:
+		return TemplatedTransform<uint64_t>(vals, result, count, strict);
+	case LogicalTypeId::HUGEINT:
+		return TemplatedTransform<hugeint_t>(vals, result, count, strict);
+	case LogicalTypeId::UUID:
+		return TransformUUID(vals, result, count, strict);
+	case LogicalTypeId::DECIMAL: {
+		auto width = DecimalType::GetWidth(result_type);
+		auto scale = DecimalType::GetScale(result_type);
+		switch (result_type.InternalType()) {
+		case PhysicalType::INT16:
+			return TransformDecimal<int16_t>(vals, result, count, width, scale, strict);
+		case PhysicalType::INT32:
+			return TransformDecimal<int32_t>(vals, result, count, width, scale, strict);
+		case PhysicalType::INT64:
+			return TransformDecimal<int64_t>(vals, result, count, width, scale, strict);
+		case PhysicalType::INT128:
+			return TransformDecimal<hugeint_t>(vals, result, count, width, scale, strict);
+		default:
+			throw InternalException("Unimplemented internal type for decimal");
+		}
+	}
+	case LogicalTypeId::FLOAT:
+		return TemplatedTransform<float>(vals, result, count, strict);
+	case LogicalTypeId::DOUBLE:
+		return TemplatedTransform<double>(vals, result, count, strict);
+	case LogicalTypeId::DATE:
+		return TransformDateTime<date_t, TryCastErrorMessage>(vals, result, count, strict);
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
+		return TransformDateTime<dtime_t, TryCastErrorMessage>(vals, result, count, strict);
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return TransformTimestamp<TryCast>(vals, result, count, strict);
+	case LogicalTypeId::TIMESTAMP_NS:
+		return TransformTimestamp<TryCastToTimestampNS>(vals, result, count, strict);
+	case LogicalTypeId::TIMESTAMP_MS:
+		return TransformTimestamp<TryCastToTimestampMS>(vals, result, count, strict);
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return TransformTimestamp<TryCastToTimestampSec>(vals, result, count, strict);
+	case LogicalTypeId::INTERVAL:
+		return TransformDateTime<interval_t, TryCastErrorMessage>(vals, result, count, strict);
+	case LogicalTypeId::JSON:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+		return TransformString(vals, result, count);
 	case LogicalTypeId::SQLNULL:
 		return;
-	case LogicalTypeId::BOOLEAN:
-		return TemplatedTransform<bool>(vals, result, count);
-	case LogicalTypeId::BIGINT:
-		return TemplatedTransform<int64_t>(vals, result, count);
-	case LogicalTypeId::UBIGINT:
-		return TemplatedTransform<uint64_t>(vals, result, count);
-	case LogicalTypeId::DOUBLE:
-		return TemplatedTransform<double>(vals, result, count);
-	case LogicalTypeId::VARCHAR:
-		return TransformString(vals, result, count);
 	case LogicalTypeId::STRUCT:
-		return TransformObject(vals, result, count, result.GetType());
+		return TransformObject(vals, result, count, result_type, strict);
 	case LogicalTypeId::LIST:
-		return TransformArray(vals, result, count);
+		return TransformArray(vals, result, count, strict);
 	default:
 		throw InternalException("Unexpected type arrived at Transform");
 	}
 }
 
+template <bool strict>
 static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto count = args.size();
 	auto &input = args.data[0];
@@ -244,7 +345,7 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 		}
 	}
 	// Transform
-	Transform(vals, result, count);
+	Transform(vals, result, count, strict);
 	// Free documents again
 	for (idx_t i = 0; i < count; i++) {
 		yyjson_doc_free(docs[i]);
@@ -254,7 +355,13 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 CreateScalarFunctionInfo JSONFunctions::GetTransformFunction() {
 	return CreateScalarFunctionInfo(ScalarFunction("json_transform", {LogicalType::JSON, LogicalType::JSON},
-	                                               LogicalType::ANY, TransformFunction, false, JSONTransformBind,
+	                                               LogicalType::ANY, TransformFunction<false>, false, JSONTransformBind,
+	                                               nullptr, nullptr));
+}
+
+CreateScalarFunctionInfo JSONFunctions::GetTransformStrictFunction() {
+	return CreateScalarFunctionInfo(ScalarFunction("json_transform_strict", {LogicalType::JSON, LogicalType::JSON},
+	                                               LogicalType::ANY, TransformFunction<true>, false, JSONTransformBind,
 	                                               nullptr, nullptr));
 }
 
