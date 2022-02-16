@@ -24,6 +24,8 @@
 #include <string>
 
 #ifdef __MINGW32__
+#include <sys/stat.h>
+
 // need to manually define this for mingw
 extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
 #endif
@@ -224,15 +226,7 @@ void FileSystem::RemoveFile(const string &filename) {
 
 bool FileSystem::IsFile(const string &filename) {
 	if (!filename.empty()) {
-#ifdef __MINGW32__
-		if (_access(filename.c_str(), 0) == 0) {
-			struct _stat32 status;
-			stat(filename.c_str(), &status);
-			if (S_ISREG(status.st_mode)) {
-				return true;
-			}
-		}
-#elifdef _WIN32
+#if defined(_WIN32) && defined(__MINGW32__)
 		if (_access(filename.c_str(), 0) == 0) {
 			struct stat status;
 			stat(filename.c_str(), &status);
@@ -240,7 +234,6 @@ bool FileSystem::IsFile(const string &filename) {
 				return true;
 			}
 		}
-
 #else
 		if (access(filename.c_str(), 0) == 0) {
 			struct stat status;
