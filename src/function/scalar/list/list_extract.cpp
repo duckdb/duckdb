@@ -71,59 +71,48 @@ void ListExtractTemplate(idx_t count, VectorData &list_data, VectorData &offsets
 static void ExecuteListExtractInternal(const idx_t count, VectorData &list, VectorData &offsets, Vector &child_vector,
                                        idx_t list_size, Vector &result) {
 	D_ASSERT(child_vector.GetType() == result.GetType());
-	switch (result.GetType().id()) {
-	case LogicalTypeId::UTINYINT:
-		ListExtractTemplate<uint8_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case LogicalTypeId::TINYINT:
+	switch (result.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		ListExtractTemplate<int8_t>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::USMALLINT:
-		ListExtractTemplate<uint16_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case LogicalTypeId::SMALLINT:
+	case PhysicalType::INT16:
 		ListExtractTemplate<int16_t>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::UINTEGER:
-		ListExtractTemplate<uint32_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case LogicalTypeId::INTEGER:
+	case PhysicalType::INT32:
 		ListExtractTemplate<int32_t>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::UBIGINT:
-		ListExtractTemplate<uint64_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case LogicalTypeId::BIGINT:
+	case PhysicalType::INT64:
 		ListExtractTemplate<int64_t>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::HUGEINT:
+	case PhysicalType::INT128:
 		ListExtractTemplate<hugeint_t>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::FLOAT:
+	case PhysicalType::UINT8:
+		ListExtractTemplate<uint8_t>(count, list, offsets, child_vector, list_size, result);
+		break;
+	case PhysicalType::UINT16:
+		ListExtractTemplate<uint16_t>(count, list, offsets, child_vector, list_size, result);
+		break;
+	case PhysicalType::UINT32:
+		ListExtractTemplate<uint32_t>(count, list, offsets, child_vector, list_size, result);
+		break;
+	case PhysicalType::UINT64:
+		ListExtractTemplate<uint64_t>(count, list, offsets, child_vector, list_size, result);
+		break;
+	case PhysicalType::FLOAT:
 		ListExtractTemplate<float>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		ListExtractTemplate<double>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::DATE:
-		ListExtractTemplate<date_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
-		ListExtractTemplate<dtime_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
-		ListExtractTemplate<timestamp_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		ListExtractTemplate<string_t, true>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::SQLNULL:
-		result.Reference(Value());
+	case PhysicalType::INTERVAL:
+		ListExtractTemplate<interval_t>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::STRUCT: {
+	case PhysicalType::STRUCT: {
 		auto &entries = StructVector::GetEntries(child_vector);
 		auto &result_entries = StructVector::GetEntries(result);
 		D_ASSERT(entries.size() == result_entries.size());
@@ -135,7 +124,7 @@ static void ExecuteListExtractInternal(const idx_t count, VectorData &list, Vect
 		ListExtractTemplate<bool, false, true>(count, list, offsets, child_vector, list_size, result);
 		break;
 	}
-	case LogicalTypeId::LIST: {
+	case PhysicalType::LIST: {
 		// nested list: we have to reference the child
 		auto &child_child_list = ListVector::GetEntry(child_vector);
 

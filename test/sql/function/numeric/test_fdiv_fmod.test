@@ -1,0 +1,88 @@
+# name: test/sql/function/numeric/test_fdiv_fmod.test
+# description: Test floored division and modulus
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE rs(x DOUBLE, y INTEGER)
+
+statement ok
+INSERT INTO rs VALUES (10, 3),(10,-3),(-10,3),(-10,-3),(0,1),(1,1),(NULL,10),(10,NULL),(NULL,NULL)
+
+query I
+SELECT fmod(x, y) FROM rs
+----
+1
+-2
+2
+-1
+0
+0
+NULL
+NULL
+NULL
+
+query I
+SELECT fdiv(x, y) FROM rs
+----
+3
+-4
+-4
+3
+0
+1
+NULL
+NULL
+NULL
+
+# fmod by 0 results in NULL: should be NaN (if supported)
+query I
+SELECT fmod(42, 0)
+----
+NULL
+
+# fmod 0 by 0 results in NULL: should be NaN (if supported)
+query I
+SELECT fmod(0, 0)
+----
+NULL
+
+# fdiv by 0 results in NULL: should be Inf (if supported)
+query I
+SELECT fdiv(42, 0)
+----
+NULL
+
+# fdiv by 0 results in NULL: should be -Inf (if supported)
+query I
+SELECT fdiv(-42, 0)
+----
+NULL
+
+# fdiv 0 by 0 results in NULL: should be NaN (if supported)
+query I
+SELECT fdiv(0, 0)
+----
+NULL
+
+query R
+SELECT fmod(12.3456789, 5)
+----
+2.345679
+
+query I
+SELECT fdiv(12.3456789, 5)
+----
+2
+
+query R
+SELECT fmod(3, 2.1)
+----
+0.900000
+
+query I
+SELECT fdiv(3, 2.1)
+----
+1

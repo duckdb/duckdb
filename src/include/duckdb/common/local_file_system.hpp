@@ -81,6 +81,10 @@ public:
 		return "LocalFileSystem";
 	}
 
+	//! Returns the last Win32 error, in string format. Returns an empty string if there is no error, or on non-Windows
+	//! systems.
+	static std::string GetLastErrorAsString();
+
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);

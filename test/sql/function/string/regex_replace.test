@@ -33,6 +33,17 @@ SELECT regexp_replace('ANA', 'ana', 'banana', 'i')
 ----
 banana
 
+# literal match
+query T
+SELECT regexp_replace('as^/$df', '^/$', '', 'l')
+----
+asdf
+
+query T
+SELECT regexp_replace('as^/$df', '^/$', '')
+----
+as^/$df
+
 # dot matches newline
 query T
 SELECT regexp_replace('hello

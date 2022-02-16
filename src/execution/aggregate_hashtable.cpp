@@ -82,7 +82,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 			vector<LogicalType> distinct_group_types(layout.GetTypes());
 			(void)distinct_group_types.pop_back();
 			for (idx_t child_idx = 0; child_idx < aggr.child_count; child_idx++) {
-				distinct_group_types.push_back(payload_types[payload_idx]);
+				distinct_group_types.push_back(payload_types[payload_idx + child_idx]);
 			}
 			distinct_hashes[i] = make_unique<GroupedAggregateHashTable>(buffer_manager, distinct_group_types);
 		}
@@ -288,7 +288,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 			// construct chunk for secondary hash table probing
 			vector<LogicalType> probe_types(groups.GetTypes());
 			for (idx_t i = 0; i < aggr.child_count; i++) {
-				probe_types.push_back(payload_types[payload_idx]);
+				probe_types.push_back(payload_types[payload_idx + i]);
 			}
 			DataChunk probe_chunk;
 			probe_chunk.Initialize(probe_types);

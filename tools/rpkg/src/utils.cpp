@@ -219,7 +219,7 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 		// TODO bit of duplication here with statement.cpp, fix this
 		// some dresssup for R
 		SET_CLASS(res, RStrings::get().POSIXct_POSIXt_str);
-		Rf_setAttrib(res, RStrings::get().tzone_sym, RStrings::get().UTC_str);
+		Rf_setAttrib(res, RStrings::get().tzone_sym, R_NilValue);
 		return res;
 	}
 	case LogicalTypeId::TIME: {

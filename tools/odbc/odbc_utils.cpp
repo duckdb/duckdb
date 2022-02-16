@@ -12,15 +12,6 @@ string OdbcUtils::ReadString(const SQLPOINTER ptr, const SQLSMALLINT len) {
 	return len == SQL_NTS ? string((const char *)ptr) : string((const char *)ptr, (size_t)len);
 }
 
-void OdbcUtils::WriteString(const string &s, SQLCHAR *out_buf, SQLSMALLINT buf_len, SQLSMALLINT *out_len) {
-	if (out_buf) {
-		snprintf((char *)out_buf, buf_len, "%s", s.c_str());
-	}
-	if (out_len) {
-		*out_len = s.size();
-	}
-}
-
 SQLRETURN OdbcUtils::SetStringValueLength(const string &val_str, SQLLEN *str_len_or_ind_ptr) {
 	if (str_len_or_ind_ptr) {
 		// it fills the required lenght from string value
@@ -188,4 +179,30 @@ string OdbcUtils::GetQueryDuckdbTables(const string &schema_filter, const string
 	sql_duckdb_tables += "ORDER BY TABLE_TYPE, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME";
 
 	return sql_duckdb_tables;
+}
+
+void OdbcUtils::SetValueFromConnStr(const string &conn_str, const char *key, string &value) {
+	auto pos_key = conn_str.find(key);
+	if (pos_key != string::npos) {
+		auto pos_start_value = conn_str.find('=', pos_key);
+		if (pos_start_value == string::npos) {
+			// an equal '=' char must be present (syntax error)
+			return;
+		}
+		++pos_start_value;
+		auto pos_end_value = conn_str.find(';', pos_start_value);
+		if (pos_end_value == string::npos) {
+			// there is no ';', reached the end of the string
+			pos_end_value = conn_str.size();
+		}
+		value = conn_str.substr(pos_start_value, pos_end_value - pos_start_value);
+	}
+}
+
+void OdbcUtils::SetValueFromConnStr(SQLCHAR *conn_c_str, const char *key, string &value) {
+	if (conn_c_str == nullptr || key == nullptr) {
+		return;
+	}
+	string conn_str((char *)conn_c_str);
+	SetValueFromConnStr(conn_str, key, value);
 }
