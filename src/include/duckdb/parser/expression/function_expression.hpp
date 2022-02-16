@@ -16,12 +16,15 @@ namespace duckdb {
 //! Represents a function call
 class FunctionExpression : public ParsedExpression {
 public:
-	FunctionExpression(string schema_name, const string &function_name, vector<unique_ptr<ParsedExpression>> children,
-	                   unique_ptr<ParsedExpression> filter = nullptr, unique_ptr<OrderModifier> order_bys = nullptr,
-	                   bool distinct = false, bool is_operator = false, bool export_state = false);
-	FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children,
-	                   unique_ptr<ParsedExpression> filter = nullptr, unique_ptr<OrderModifier> order_bys = nullptr,
-	                   bool distinct = false, bool is_operator = false, bool export_state = false);
+	DUCKDB_API FunctionExpression(string schema_name, const string &function_name,
+	                              vector<unique_ptr<ParsedExpression>> children,
+	                              unique_ptr<ParsedExpression> filter = nullptr,
+	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
+	                              bool is_operator = false, bool export_state = false);
+	DUCKDB_API FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children,
+	                              unique_ptr<ParsedExpression> filter = nullptr,
+	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
+	                              bool is_operator = false, bool export_state = false);
 
 	//! Schema of the function
 	string schema;

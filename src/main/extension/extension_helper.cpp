@@ -21,6 +21,10 @@
 #include "tpcds-extension.hpp"
 #endif
 
+#if defined(BUILD_SUBSTRAIT_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+#include "substrait-extension.hpp"
+#endif
+
 #if defined(BUILD_FTS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "fts-extension.hpp"
 #endif
@@ -40,7 +44,8 @@
 namespace duckdb {
 
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
-	unordered_set<string> extensions {"parquet", "icu", "tpch", "tpcds", "fts", "httpfs", "visualizer", "excel"};
+	unordered_set<string> extensions {"parquet", "icu",       "tpch",       "tpcds", "fts",
+	                                  "httpfs",  "substrait", "visualizer", "excel"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -90,6 +95,14 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		db.LoadExtension<TPCHExtension>();
 #else
 		// icu extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
+	} else if (extension == "substrait") {
+#if defined(BUILD_SUBSTRAIT_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+
+		db.LoadExtension<SubstraitExtension>();
+#else
+		// substrait extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "tpcds") {
