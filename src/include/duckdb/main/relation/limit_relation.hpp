@@ -14,7 +14,7 @@ namespace duckdb {
 
 class LimitRelation : public Relation {
 public:
-	LimitRelation(shared_ptr<Relation> child, int64_t limit, int64_t offset);
+	DUCKDB_API LimitRelation(shared_ptr<Relation> child, int64_t limit, int64_t offset);
 
 	int64_t limit;
 	int64_t offset;

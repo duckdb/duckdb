@@ -13,7 +13,7 @@
 namespace duckdb {
 class PositionalReferenceExpression : public ParsedExpression {
 public:
-	PositionalReferenceExpression(idx_t index);
+	DUCKDB_API PositionalReferenceExpression(idx_t index);
 
 	idx_t index;
 
