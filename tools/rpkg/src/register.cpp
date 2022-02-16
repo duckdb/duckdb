@@ -12,26 +12,26 @@ using namespace duckdb;
 
 [[cpp11::register]] void rapi_register_df(duckdb::conn_eptr_t conn, std::string name, cpp11::data_frame value) {
 	if (!conn || !conn->conn) {
-		cpp11::stop("duckdb_register_R: Invalid connection");
+		cpp11::stop("rapi_register_df: Invalid connection");
 	}
 	if (name.empty()) {
-		cpp11::stop("duckdb_register_R: Name cannot be empty");
+		cpp11::stop("rapi_register_df: Name cannot be empty");
 	}
 	if (value.ncol() < 1) {
-		cpp11::stop("duckdb_register_R: Data frame with at least one column required");
+		cpp11::stop("rapi_register_df: Data frame with at least one column required");
 	}
 	try {
 		conn->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)value.data())})
 		    ->CreateView(name, true, true);
 		static_cast<cpp11::sexp>(conn).attr("_registered_df_" + name) = value;
 	} catch (std::exception &e) {
-		cpp11::stop("duckdb_register_R: Failed to register data frame: %s", e.what());
+		cpp11::stop("rapi_register_df: Failed to register data frame: %s", e.what());
 	}
 }
 
 [[cpp11::register]] void rapi_unregister_df(duckdb::conn_eptr_t conn, std::string name) {
 	if (!conn || !conn->conn) {
-		cpp11::stop("duckdb_unregister_R: Invalid connection");
+		cpp11::stop("rapi_unregister_df: Invalid connection");
 	}
 	static_cast<cpp11::sexp>(conn).attr("_registered_df_" + name) = R_NilValue;
 	auto res = conn->conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
@@ -205,10 +205,10 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(const string &table_na
 [[cpp11::register]] void rapi_register_arrow(duckdb::conn_eptr_t conn, std::string name, cpp11::list export_funs,
                                              cpp11::sexp valuesexp) {
 	if (!conn || !conn->conn) {
-		cpp11::stop("duckdb_register_R: Invalid connection");
+		cpp11::stop("rapi_register_arrow: Invalid connection");
 	}
 	if (name.empty()) {
-		cpp11::stop("duckdb_register_R: name parameter cannot be empty");
+		cpp11::stop("rapi_register_arrow: Name cannot be empty");
 	}
 
 	auto stream_factory = new RArrowTabularStreamFactory(export_funs, valuesexp);
@@ -227,7 +227,7 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(const string &table_na
 
 [[cpp11::register]] void rapi_unregister_arrow(duckdb::conn_eptr_t conn, std::string name) {
 	if (!conn || !conn->conn) {
-		cpp11::stop("duckdb_unregister_R: Invalid connection");
+		cpp11::stop("rapi_unregister_arrow: Invalid connection");
 	}
 
 	{

@@ -9,7 +9,7 @@ void duckdb::ConnDeleter(ConnWrapper *conn) {
 
 [[cpp11::register]] duckdb::conn_eptr_t rapi_connect(duckdb::db_eptr_t db) {
 	if (!db || !db->db) {
-		cpp11::stop("duckdb_connect_R: Invalid database reference");
+		cpp11::stop("rapi_connect: Invalid database reference");
 	}
 
 	auto conn_wrapper = new ConnWrapper();

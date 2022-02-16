@@ -30,12 +30,12 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 
 [[cpp11::register]] cpp11::list rapi_prepare(duckdb::conn_eptr_t conn, std::string query) {
 	if (!conn || !conn->conn) {
-		cpp11::stop("duckdb_prepare_R: Invalid connection");
+		cpp11::stop("rapi_prepare: Invalid connection");
 	}
 
 	auto stmt = conn->conn->Prepare(query.c_str());
 	if (!stmt->success) {
-		cpp11::stop("duckdb_prepare_R: Failed to prepare query %s\nError: %s", query.c_str(), stmt->error.c_str());
+		cpp11::stop("rapi_prepare: Failed to prepare query %s\nError: %s", query.c_str(), stmt->error.c_str());
 	}
 
 	cpp11::writable::list retlist;
@@ -95,7 +95,7 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 			rtype = "factor";
 			break;
 		default:
-			cpp11::stop("duckdb_prepare_R: Unknown column type for prepare: %s", stype.ToString().c_str());
+			cpp11::stop("rapi_prepare: Unknown column type for prepare: %s", stype.ToString().c_str());
 			break;
 		}
 		rtypes.push_back(rtype);
@@ -109,30 +109,30 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 
 [[cpp11::register]] cpp11::list rapi_bind(duckdb::stmt_eptr_t stmt, cpp11::list params, bool arrow) {
 	if (!stmt || !stmt->stmt) {
-		cpp11::stop("duckdb_bind_R: Invalid statement");
+		cpp11::stop("rapi_bind: Invalid statement");
 	}
 
 	stmt->parameters.clear();
 	stmt->parameters.resize(stmt->stmt->n_param);
 
 	if (stmt->stmt->n_param == 0) {
-		cpp11::stop("duckdb_bind_R: dbBind called but query takes no parameters");
+		cpp11::stop("rapi_bind: dbBind called but query takes no parameters");
 	}
 
 	if (params.size() != stmt->stmt->n_param) {
-		cpp11::stop("duckdb_bind_R: bind parameters need to be a list of length %i", stmt->stmt->n_param);
+		cpp11::stop("rapi_bind: Bind parameters need to be a list of length %i", stmt->stmt->n_param);
 	}
 
 	R_len_t n_rows = Rf_length(params[0]);
 
 	for (auto param = std::next(params.begin()); param != params.end(); ++param) {
 		if (Rf_length(*param) != n_rows) {
-			cpp11::stop("duckdb_bind_R: bind parameter values need to have the same length");
+			cpp11::stop("rapi_bind: Bind parameter values need to have the same length");
 		}
 	}
 
 	if (n_rows != 1 && arrow) {
-		cpp11::stop("duckdb_bind_R: bind parameter values need to have length one for arrow queries");
+		cpp11::stop("rapi_bind: Bind parameter values need to have length one for arrow queries");
 	}
 
 	cpp11::writable::list out;
@@ -196,7 +196,7 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 		varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
 		break;
 	default:
-		cpp11::stop("duckdb_execute_R: Unknown column type for execute: %s", type.ToString().c_str());
+		cpp11::stop("rapi_execute: Unknown column type for execute: %s", type.ToString().c_str());
 	}
 	if (!varvalue) {
 		throw std::bad_alloc();
@@ -384,7 +384,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 			break;
 
 		default:
-			cpp11::stop("duckdb_execute_R: Unknown enum type for convert: %s", TypeIdToString(physical_type).c_str());
+			cpp11::stop("rapi_execute: Unknown enum type for convert: %s", TypeIdToString(physical_type).c_str());
 		}
 		// increment by one cause R factor offsets start at 1
 		auto dest_ptr = ((int32_t *)INTEGER_POINTER(dest)) + dest_offset;
@@ -407,7 +407,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 		break;
 	}
 	default:
-		cpp11::stop("duckdb_execute_R: Unknown column type for convert: %s", src_vec.GetType().ToString().c_str());
+		cpp11::stop("rapi_execute: Unknown column type for convert: %s", src_vec.GetType().ToString().c_str());
 		break;
 	}
 }
@@ -562,12 +562,12 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 
 [[cpp11::register]] SEXP rapi_execute(duckdb::stmt_eptr_t stmt, bool arrow) {
 	if (!stmt || !stmt->stmt) {
-		cpp11::stop("duckdb_execute_R: Invalid statement");
+		cpp11::stop("rapi_execute: Invalid statement");
 	}
 
 	auto generic_result = stmt->stmt->Execute(stmt->parameters, arrow);
 	if (!generic_result->success) {
-		cpp11::stop("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
+		cpp11::stop("rapi_execute: Failed to run query\nError: %s", generic_result->error.c_str());
 	}
 
 	if (arrow) {

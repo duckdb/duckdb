@@ -11,7 +11,7 @@ SEXP duckdb::ToUtf8(SEXP string_sexp) {
 
 [[cpp11::register]] cpp11::r_string rapi_ptr_to_str(SEXP extptr) {
 	if (TYPEOF(extptr) != EXTPTRSXP) {
-		cpp11::stop("duckdb_ptr_to_str: Need external pointer parameter");
+		cpp11::stop("rapi_ptr_to_str: Need external pointer parameter");
 	}
 
 	void *ptr = R_ExternalPtrAddr(extptr);

@@ -33,12 +33,12 @@ void duckdb::DBDeleter(DBWrapper *db) {
 		std::string val = cpp11::as_cpp<std::string>(configsexp[key]);
 		auto config_property = DBConfig::GetOptionByName(key);
 		if (!config_property) {
-			cpp11::stop("Unrecognized configuration property '%s'", key.c_str());
+			cpp11::stop("rapi_startup: Unrecognized configuration property '%s'", key.c_str());
 		}
 		try {
 			config.SetOption(*config_property, Value(val));
 		} catch (std::exception &e) {
-			cpp11::stop("duckdb_startup_R: Failed to set configuration option: %s", e.what());
+			cpp11::stop("rapi_startup: Failed to set configuration option: %s", e.what());
 		}
 	}
 
@@ -49,7 +49,7 @@ void duckdb::DBDeleter(DBWrapper *db) {
 		config.replacement_scans.emplace_back(ArrowScanReplacement, wrapper);
 		wrapper->db = make_unique<DuckDB>(dbdirchar, &config);
 	} catch (std::exception &e) {
-		cpp11::stop("duckdb_startup_R: Failed to open database: %s", e.what());
+		cpp11::stop("rapi_startup: Failed to open database: %s", e.what());
 	}
 	D_ASSERT(wrapper->db);
 
