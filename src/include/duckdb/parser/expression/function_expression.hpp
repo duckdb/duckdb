@@ -74,7 +74,7 @@ public:
 			}
 		}
 		// standard function call
-		string result = schema.empty() || schema == DEFAULT_SCHEMA ? function_name : schema + "." + function_name;
+		string result = schema.empty() ? function_name : schema + "." + function_name;
 		result += "(";
 		if (distinct) {
 			result += "DISTINCT ";
