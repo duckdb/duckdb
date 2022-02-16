@@ -70,7 +70,7 @@ db_connection_describe.duckdb_connection <- function(con) {
 duckdb_grepl <- function(pattern, x, ignore.case = FALSE, perl = FALSE, fixed = FALSE, useBytes = FALSE) {
   # https://duckdb.org/docs/sql/functions/patternmatching
   if (any(c(perl, fixed, useBytes))) {
-    stop("Parameters `perl`, `fixed` and `useBytes` in grepl are not currently supported in DuckDB backend", .call = FALSE)
+    stop("Parameters `perl`, `fixed` and `useBytes` in grepl are not currently supported in DuckDB backend", call. = FALSE)
   }
 
   sql_expr <- pkg_method("sql_expr", "dbplyr")
@@ -112,8 +112,8 @@ sql_translation.duckdb_connection <- function(con) {
     sql_translator(
       .parent = base_scalar,
       as.raw = sql_cast("VARBINARY"),
-      `%%` = function(a, b) sql_expr((!!a-!!b*FLOOR(!!a/!!b))),
-      `%/%` = function(a, b) sql_expr(FLOOR(!!a/!!b)),
+      `%%` = function(a, b) sql_expr(FMOD(!!a,!!b)),
+      `%/%` = function(a, b) sql_expr(FDIV(!!a,!!b)),
       `^` = sql_prefix("POW", 2),
       bitwOr = function(a, b) sql_expr((CAST((!!a) %AS% INTEGER)) | (CAST((!!b) %AS% INTEGER))),
       bitwAnd = function(a, b) sql_expr((CAST((!!a) %AS% INTEGER)) & (CAST((!!b) %AS% INTEGER))),
@@ -286,7 +286,10 @@ sql_translation.duckdb_connection <- function(con) {
       str_remove_all = function(string, pattern) {
         sql_expr(REGEXP_REPLACE(!!string, !!pattern, "", "g"))
       },
-      str_to_sentence = function(string, pattern) {
+#      str_to_title = function(string) {
+#        sql_expr(INITCAP(!!string))
+#      },
+      str_to_sentence = function(string) {
         build_sql("(UPPER(", string, "[0]) || ", string, "[1:NULL])")
       },
       # Respect OR (|) operator: https://github.com/tidyverse/stringr/pull/340
@@ -296,7 +299,7 @@ sql_translation.duckdb_connection <- function(con) {
       str_ends = function(string, pattern) {
         build_sql("REGEXP_MATCHES((?:", string, ",", pattern, "||')$')")
       },
-      # NOTE: GREATEST need because DuckDB PAD-functions truncate the string if width < length of string
+      # NOTE: GREATEST needed because DuckDB PAD-functions truncate the string if width < length of string
       str_pad = function(string, width, side = "left", pad = " ", use_length = FALSE) {
         if (side %in% c("left")) {
           sql_expr(LPAD(!!string, CAST(GREATEST(!!as.integer(width), LENGTH(!!string)) %AS% INTEGER), !!pad))

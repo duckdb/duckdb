@@ -78,11 +78,11 @@
     Code
       translate(13 %% 5)
     Output
-      <SQL> (13.0 - 5.0 * FLOOR(13.0 / 5.0))
+      <SQL> FMOD(13.0, 5.0)
     Code
       translate(35.8 %/% 4)
     Output
-      <SQL> FLOOR(35.8 / 4.0)
+      <SQL> FDIV(35.8, 4.0)
     Code
       translate(35.8^2.51)
     Output
@@ -419,12 +419,7 @@
     Code
       translate(grepl("dummy", txt, perl = TRUE))
     Error <simpleError>
-      Parameters `perl`, `fixed` and `useBytes` in grepl are not currently supported in DuckDB backendFALSE
-    Code
-      translate(paste0(x, collapse = ""), window = FALSE)
-    Error <simpleError>
-      `collapse` not supported in DB translation of `paste()`.
-      Please use str_flatten() instead
+      Parameters `perl`, `fixed` and `useBytes` in grepl are not currently supported in DuckDB backend
     Code
       translate(quarter(x, type = "other"))
     Error <simpleError>
@@ -433,11 +428,6 @@
       translate(quarter(x, fiscal_start = 2))
     Error <simpleError>
       `fiscal_start` is not yet supported in DuckDB translation. Must be 1.
-    Code
-      translate(str_c(x, collapse = ""))
-    Error <simpleError>
-      `collapse` not supported in DB translation of `paste()`.
-      Please use str_flatten() instead
     Code
       translate(str_pad(x, width = 10, side = "other"))
     Error <simpleError>

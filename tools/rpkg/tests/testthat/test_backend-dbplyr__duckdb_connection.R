@@ -37,8 +37,8 @@ test_that("duckdb custom scalars translated correctly", {
 
   #  expect_equal(translate(as(1,"CHARACTER")), sql(r"{CAST(1.0 AS TEXT}"))        # Not implemented
   expect_equal(translate(as.raw(10)), sql(r"{CAST(10.0 AS VARBINARY)}"))
-  expect_equal(translate(13 %% 5), sql(r"{(13.0 - 5.0 * FLOOR(13.0 / 5.0))}"))
-  expect_equal(translate(35.8 %/% 4), sql(r"{FLOOR(35.8 / 4.0)}"))
+  expect_equal(translate(13 %% 5), sql(r"{FMOD(13.0, 5.0)}"))
+  expect_equal(translate(35.8 %/% 4), sql(r"{FDIV(35.8, 4.0)}"))
   expect_equal(translate(35.8^2.51), sql(r"{POW(35.8, 2.51)}"))
   expect_equal(translate(bitwOr(x, 128L)), sql(r"{(CAST("x" AS INTEGER)) | (CAST(128 AS INTEGER))}"))
   expect_equal(translate(bitwAnd(x, 128)), sql(r"{(CAST("x" AS INTEGER)) & (CAST(128.0 AS INTEGER))}"))
@@ -384,10 +384,10 @@ test_that("these should give errors", {
 
   expect_snapshot(error = TRUE, {
     translate(grepl("dummy", txt, perl = TRUE)) # Expected error
-    translate(paste0(x, collapse = ""), window = FALSE) # Expected error
+#    translate(paste0(x, collapse = ""), window = FALSE) # Skip because of changing rlang_error (sql_paste())
     translate(quarter(x, type = "other")) # Not supported - error
     translate(quarter(x, fiscal_start = 2)) # Not supported - error
-    translate(str_c(x, collapse = "")) # Error
+#    translate(str_c(x, collapse = "")) # Skip because of changing rlang_error (sql_paste())
     translate(str_pad(x, width = 10, side = "other")) # Error
   })
 })
