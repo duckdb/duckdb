@@ -99,8 +99,7 @@ struct DictionaryCompressionStorage : UncompressedStringStorage { // TODO REFACT
 	static idx_t RequiredSpace(idx_t current_count, idx_t index_count, idx_t dict_size,
 	                           bitpacking_width_t packing_width);
 
-	static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
-	                                    data_ptr_t baseptr, int32_t dict_offset, uint16_t string_len);
+	static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, data_ptr_t baseptr, int32_t dict_offset, uint16_t string_len);
 
 	static uint16_t GetStringLength(int32_t *index_buffer_ptr, int32_t string_number);
 };
@@ -210,9 +209,10 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		current_segment->count++;
 	}
 
-	// TODO deduplicate?
+	// TODO rename
+	// TODO: these index buffers are 1 too high? the maximum index in the index buffer is not size, but size-1
 	bool HasEnoughSpace(bool new_string, size_t string_size) override {
-		auto new_width = BitpackingPrimitives::MinimumBitWidth(index_buffer->size() + new_string);
+		auto new_width = BitpackingPrimitives::MinimumBitWidth(index_buffer->size() - 1 + new_string);
 		if (new_string){
 			return DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load()+1, index_buffer->size()+1, current_dictionary.size + string_size, new_width);
 		} else {
@@ -237,29 +237,30 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		auto handle = buffer_manager.Pin(current_segment->block);
 		D_ASSERT(current_dictionary.end == Storage::BLOCK_SIZE);
 
-		// compute the total size required to store this segment
-		auto index_buffer_size = index_buffer->size() * sizeof(int32_t); // TODO: is this really the required size?
-		auto offset_size =
-		    DictionaryCompressionStorage::DICTIONARY_HEADER_SIZE + BitpackingPrimitives::GetRequiredSize<sel_t>(current_segment->count, min_width);
-		auto total_size = offset_size + current_dictionary.size + index_buffer_size;
+		// calculate sizes
+		auto compressed_selection_buffer_size = BitpackingPrimitives::GetRequiredSize<sel_t>(current_segment->count, min_width);
+		auto index_buffer_size = index_buffer->size() * sizeof(int32_t);
+		auto total_size = DictionaryCompressionStorage::DICTIONARY_HEADER_SIZE + compressed_selection_buffer_size + index_buffer_size + current_dictionary.size;
 
-		auto baseptr = handle->node->buffer + current_segment->GetBlockOffset();
+		// calculate ptr and offsets
+		auto base_ptr = handle->node->buffer + current_segment->GetBlockOffset();
+		auto compressed_selection_buffer_offset = DictionaryCompressionStorage::DICTIONARY_HEADER_SIZE;
+		auto index_buffer_offset = compressed_selection_buffer_offset + compressed_selection_buffer_size;
 
-		// Write the index buffer next to the index buffer offsets and store its offset in the header
-		memcpy(baseptr + offset_size, index_buffer->data(), index_buffer_size);
-		Store<uint32_t>(offset_size, baseptr + 2 * sizeof(uint32_t)); // TODO segment offset?
-		Store<uint32_t>(index_buffer->size(), baseptr + 3 * sizeof(uint32_t)); // TODO segment offset?
-		Store<uint32_t>((uint32_t)min_width, baseptr + 4 * sizeof(uint32_t));
+		// Write compressed selection buffer
+		BitpackingPrimitives::PackBuffer<sel_t, false>(base_ptr + compressed_selection_buffer_offset, (sel_t *)(selection_buffer->data()), current_segment->count, min_width);
 
+		// Write the index buffer
+		memcpy(base_ptr + index_buffer_offset, index_buffer->data(), index_buffer_size);
+
+		// Store sizes and offsets in segment header
+		Store<uint32_t>(index_buffer_offset, base_ptr + 2 * sizeof(uint32_t));
+		Store<uint32_t>(index_buffer->size(), base_ptr + 3 * sizeof(uint32_t));
+		Store<uint32_t>((uint32_t)min_width, base_ptr + 4 * sizeof(uint32_t));
+
+		D_ASSERT(min_width == BitpackingPrimitives::MinimumBitWidth(index_buffer->size() - 1));
 		D_ASSERT(DictionaryCompressionStorage::HasEnoughSpace(current_segment->count, index_buffer->size(), current_dictionary.size, min_width));
-		D_ASSERT((uint64_t)*max_element(std::begin(*selection_buffer), std::end(*selection_buffer)) < index_buffer->size());
-
-		data_ptr_t dst = baseptr + DictionaryCompressionStorage::DICTIONARY_HEADER_SIZE;
-		sel_t *src = (sel_t *)(selection_buffer->data());
-
-		// Note: PackBuffer may write beyond dst+count*width, however BitpackingPrimitives::GetRequiredSize, has made sure
-		// we have enough space in dst
-		BitpackingPrimitives::PackBuffer<sel_t, false>(dst, src, current_segment->count, min_width);
+		D_ASSERT((uint64_t)*max_element(std::begin(*selection_buffer), std::end(*selection_buffer)) == index_buffer->size()-1);
 
 		// TODO: deduplicate with uncompressed_string?
 		if (total_size >= Storage::BLOCK_SIZE / 5 * 4) {
@@ -269,7 +270,8 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		// the block has space left: figure out how much space we can save
 		auto move_amount = Storage::BLOCK_SIZE - total_size;
 		// move the dictionary so it lines up exactly with the offsets
-		memmove(baseptr + offset_size + index_buffer_size, baseptr + current_dictionary.end - current_dictionary.size,
+		auto new_dictionary_offset = index_buffer_offset + index_buffer_size;
+		memmove(base_ptr + new_dictionary_offset, base_ptr + current_dictionary.end - current_dictionary.size,
 		        current_dictionary.size);
 		current_dictionary.end -= move_amount;
 		D_ASSERT(current_dictionary.end == total_size);
@@ -405,7 +407,7 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
 		uint16_t str_len = GetStringLength(index_buffer_ptr, i);
 		dict_child_data[i] =
-		    FetchStringFromDict(segment, dict, *(state->dictionary), baseptr, index_buffer_ptr[i], str_len);
+		    FetchStringFromDict(segment, dict, baseptr, index_buffer_ptr[i], str_len);
 	}
 
 	return move(state);
@@ -456,7 +458,7 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 			auto string_number = scan_state.sel_vec->get_index(i + start_offset);
 			auto dict_offset = index_buffer_ptr[string_number];
 			uint16_t str_len = GetStringLength(index_buffer_ptr, string_number);
-			result_data[result_offset + i] = FetchStringFromDict(segment, dict, result, baseptr, dict_offset, str_len);
+			result_data[result_offset + i] = FetchStringFromDict(segment, dict, baseptr, dict_offset, str_len);
 		}
 
 	} else {
@@ -530,7 +532,7 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	auto dict_offset = index_buffer_ptr[string_number];
 	uint16_t str_len = GetStringLength(index_buffer_ptr, string_number);
 
-	result_data[result_idx] = FetchStringFromDict(segment, dict, result, baseptr, dict_offset, str_len);
+	result_data[result_idx] = FetchStringFromDict(segment, dict, baseptr, dict_offset, str_len);
 }
 
 //===--------------------------------------------------------------------===//
@@ -553,8 +555,7 @@ idx_t DictionaryCompressionStorage::RequiredSpace(idx_t current_count, idx_t ind
 	return used_space;
 }
 
-string_t DictionaryCompressionStorage::FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict,
-                                                           Vector &result, data_ptr_t baseptr, int32_t dict_offset,
+string_t DictionaryCompressionStorage::FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, data_ptr_t baseptr, int32_t dict_offset,
                                                            uint16_t string_len) {
 	D_ASSERT(dict_offset >= 0 && dict_offset <= Storage::BLOCK_SIZE);
 
