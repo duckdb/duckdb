@@ -2,21 +2,40 @@ import duckdb
 from decimal import Decimal
 import pytest
 
+
 def initialize(con):
     con.execute("Create Table bla (i integer, j decimal(5,2), k varchar)")
     con.execute("insert into bla values (1,2.1,'a'), (2,3.2,'b'), (NULL, NULL, NULL)")
     return con.table('bla')
+
+def munge(cell):
+    try:
+        cell = round(float(cell), 2)
+    except (ValueError, TypeError):
+        cell = str(cell)
+    return cell
+
+def munge_compare(left_list, right_list):
+    assert len(left_list) == len(right_list)
+    for i in range (len(left_list)):
+        tpl_left = left_list[i]
+        tpl_right = right_list[i]
+        assert len(tpl_left) == len(tpl_right)
+        for j in range (len(tpl_left)):
+            left_cell = munge(tpl_left[j])
+            right_cell = munge(tpl_right[j])
+            assert left_cell == right_cell
 
 
 def aggregation_generic(aggregation_function,assertion_answers):
     assert len(assertion_answers) >=2
      # Check single column
     print(aggregation_function('i').execute().fetchall())
-    assert aggregation_function('i').execute().fetchall() == assertion_answers[0]
+    munge_compare(aggregation_function('i').execute().fetchall(), assertion_answers[0])
 
     # Check multi column
     print(aggregation_function('i,j').execute().fetchall() )
-    assert aggregation_function('i,j').execute().fetchall() == assertion_answers[1]
+    munge_compare(aggregation_function('i,j').execute().fetchall(), assertion_answers[1])
 
     if len(assertion_answers) < 3:
         # Shouldn't be able to aggregate on string
@@ -24,7 +43,7 @@ def aggregation_generic(aggregation_function,assertion_answers):
             aggregation_function('k').execute().fetchall()
     else:
         print (aggregation_function('k').execute().fetchall())
-        assert  aggregation_function('k').execute().fetchall() == assertion_answers[2]
+        munge_compare( aggregation_function('k').execute().fetchall(), assertion_answers[2])
     # Check empty
     with pytest.raises(Exception, match='incompatible function arguments'):
         aggregation_function().execute().fetchall()
@@ -101,7 +120,7 @@ class TestRAPIAggregations(object):
         con = duckdb.connect()
         rel = initialize(con)
         con.execute("insert into bla values (1,2.1,'a'), (NULL, NULL, NULL)")
-        assert rel.value_counts('i').execute().fetchall() == [(None, 0), (1, 2), (2, 1)]
+        munge_compare(rel.value_counts('i').execute().fetchall(),[(None, 0), (1, 2), (2, 1)])
         with pytest.raises(Exception, match='Only one column is accepted'):
             rel.value_counts('i,j').execute().fetchall()
 
