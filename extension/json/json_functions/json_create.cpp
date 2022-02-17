@@ -415,8 +415,8 @@ CreateScalarFunctionInfo JSONFunctions::GetArrayFunction() {
 	return CreateScalarFunctionInfo(fun);
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetJSONFunction() {
-	auto fun = ScalarFunction("json", {}, LogicalType::JSON, JSONFunction, false, JSONBind, nullptr, nullptr);
+CreateScalarFunctionInfo JSONFunctions::GetQuoteFunction() {
+	auto fun = ScalarFunction("json_quote", {}, LogicalType::JSON, JSONFunction, false, JSONBind, nullptr, nullptr);
 	fun.varargs = LogicalType::ANY;
 	return CreateScalarFunctionInfo(fun);
 }

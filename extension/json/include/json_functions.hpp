@@ -17,8 +17,10 @@ public:
 		functions.push_back(GetArrayFunction());
 		functions.push_back(GetArrayLengthFunction());
 		functions.push_back(GetExtractFunction());
-		functions.push_back(GetJSONFunction());
+		functions.push_back(GetExtractStringFunction());
+		functions.push_back(GetExtractStringOperator());
 		functions.push_back(GetObjectFunction());
+		functions.push_back(GetQuoteFunction());
 		functions.push_back(GetStructureFunction());
 		functions.push_back(GetTypeFunction());
 		functions.push_back(GetTransformFunction());
@@ -31,8 +33,10 @@ private:
 	static CreateScalarFunctionInfo GetArrayFunction();
 	static CreateScalarFunctionInfo GetArrayLengthFunction();
 	static CreateScalarFunctionInfo GetExtractFunction();
-	static CreateScalarFunctionInfo GetJSONFunction();
+	static CreateScalarFunctionInfo GetExtractStringFunction();
+	static CreateScalarFunctionInfo GetExtractStringOperator();
 	static CreateScalarFunctionInfo GetObjectFunction();
+	static CreateScalarFunctionInfo GetQuoteFunction();
 	static CreateScalarFunctionInfo GetStructureFunction();
 	static CreateScalarFunctionInfo GetTypeFunction();
 	static CreateScalarFunctionInfo GetTransformFunction();

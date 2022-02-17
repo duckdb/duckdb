@@ -8,17 +8,17 @@ statement ok
 pragma enable_verification
 
 query T
-select json_extract_string('{"my_field": "duck"}', '$.my_field')
+select json_extract('{"my_field": "duck"}', '$.my_field')
 ----
-duck
+"duck"
 
 query T
-select json_extract_int('[0, 1, 2]', '$[1]')
+select json_extract('[0, 1, 2]', '$[1]')
 ----
 1
 
 query T
-select json_extract_int('[[1]]', '$[0][0]')
+select json_extract('[[1]]', '$[0][0]')
 ----
 1
 
@@ -29,70 +29,70 @@ statement ok
 insert into test values ('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '$.my_field.my_nested_field[0]')
 
 query T
-select json_extract_string(j, '$.my_field.my_nested_field[0]') from test
+select json_extract(j, '$.my_field.my_nested_field[0]') from test
 ----
-goose
+"goose"
 
 query T
-select json_extract_string(j, '$.my_field.my_nested_field[#-1]') from test
+select json_extract(j, '$.my_field.my_nested_field[#-1]') from test
 ----
-duck
+"duck"
 
 query T
-select json_extract_string(j, '$.my_field.my_nested_field[#-2]') from test
+select json_extract(j, '$.my_field.my_nested_field[#-2]') from test
 ----
-goose
+"goose"
 
 query T
-select json_extract_string(j, '$.my_field.my_nested_field[#-3]') from test
+select json_extract(j, '$.my_field.my_nested_field[#-3]') from test
 ----
 NULL
 
 query T
-select json_extract_string(j, '$.my_field.my_nested_field[#]') from test
+select json_extract(j, '$.my_field.my_nested_field[#]') from test
 ----
 NULL
 
 query T
-select json_extract_string(j, q) from test
+select json_extract(j, q) from test
 ----
-goose
+"goose"
 
 query T
-select json_extract_string('{"my_field": [{"my_nested_field": ["duck", "goose"]}]}', '$.my_field[0].my_nested_field[0]')
+select json_extract('{"my_field": [{"my_nested_field": ["duck", "goose"]}]}', '$.my_field[0].my_nested_field[0]')
 ----
-duck
+"duck"
 
 query T
-select json_extract_string('{"my_field": [{"my_nested_field": ["duck", "goose"]}]}', '$.my_field[#-1].my_nested_field[#-1]')
+select json_extract('{"my_field": [{"my_nested_field": ["duck", "goose"]}]}', '$.my_field[#-1].my_nested_field[#-1]')
 ----
-goose
+"goose"
 
 # some NULLs
 
 query T
-select json_extract_string(j, '$.my_field.my_nested_field.3') from test
+select json_extract(j, '$.my_field.my_nested_field.3') from test
 ----
 NULL
 
 # path error
 statement error
-select json_extract_int('{"a": {"b": "c"}}', '$[]');
+select json_extract('{"a": {"b": "c"}}', '$[]');
 
 statement error
-select json_extract_string(j, '$.my_field[my_nested_field[#-3]') from test
+select json_extract(j, '$.my_field[my_nested_field[#-3]') from test
 
 statement error
-select json_extract_string(j, '$.my_field.my_nested_field[!]') from test
+select json_extract(j, '$.my_field.my_nested_field[!]') from test
 
 statement error
-select json_extract_int('{"a": {"b": "c"}}', '$.a..');
+select json_extract('{"a": {"b": "c"}}', '$.a..');
 
 statement error
-select json_extract_int('{"a": {"b": "c"}}', '$[[');
+select json_extract('{"a": {"b": "c"}}', '$[[');
 
 statement error
-select json_extract_int('{"a": {"b": "c"}}', '$[.');
+select json_extract('{"a": {"b": "c"}}', '$[.');
 
 statement error
-select json_extract_int('{"a": {"b": "c"}}', '$]');
+select json_extract('{"a": {"b": "c"}}', '$]');

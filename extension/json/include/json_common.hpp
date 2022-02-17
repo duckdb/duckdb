@@ -94,6 +94,19 @@ public:
 		yyjson_mut_doc_free(mut_doc);
 		return result;
 	}
+	static inline string_t WriteStringVal(yyjson_val *val) {
+		// Create mutable copy of the read val
+		auto *mut_doc = yyjson_mut_doc_new(nullptr);
+		auto *mut_val = yyjson_val_mut_copy(mut_doc, val);
+		yyjson_mut_doc_set_root(mut_doc, mut_val);
+		// Write mutable copy to string
+		idx_t len;
+		char *json = yyjson_mut_write(mut_doc, WRITE_FLAG, (size_t *)&len);
+		// Remove quotes if necessary
+		auto result = yyjson_is_str(val) ? string_t(json + 1, len - 2) : string_t(json, len);
+		yyjson_mut_doc_free(mut_doc);
+		return result;
+	}
 
 	//! Get type string corresponding to yyjson type
 	static inline const char *const ValTypeToString(yyjson_val *val) {

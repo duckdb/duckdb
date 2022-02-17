@@ -15,6 +15,10 @@ void JSONExtension::Load(DuckDB &db) {
 		catalog.CreateFunction(*con.context, &fun);
 	}
 
+	con.Query("CREATE MACRO json_group_array(x) AS json_quote(list(x));");
+	con.Query("CREATE MACRO json_group_object(name, value) AS json_quote(map(list(name), list(value)));");
+	con.Query("CREATE MACRO json(x) as json_extract(x, '$');");
+
 	con.Commit();
 }
 

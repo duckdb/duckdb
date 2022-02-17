@@ -1,5 +1,5 @@
 # name: test/sql/json/test_json_create.test
-# description: Test JSON create functions {json_object(), json_array(), json()}
+# description: Test JSON create functions {json_object(), json_array(), json_quote()}
 # group: [json]
 
 require json
@@ -8,7 +8,7 @@ statement ok
 pragma enable_verification
 
 query T
-select json({n: 42})
+select json_quote({n: 42})
 ----
 {"n":42}
 
@@ -79,7 +79,7 @@ insert into test values
     (-777, 4.2, 'goose', [4, 2], NULL)
 
 query T
-select json(row(a, b, c, d, e)) from test
+select json_quote(row(a, b, c, d, e)) from test
 ----
 {"a":null,"b":0.5,"c":"short","d":[0,1,2,3,4,5,6,7,9],"e":33}
 {"a":42,"b":null,"c":"looooooooooooooong","d":[],"e":42}
@@ -106,22 +106,22 @@ select json_object(a, a, b, b, c, c, d, d, e, e) from test
 {"-777":-777,"4.2":4.2,"goose":"goose","[4, 2]":[4,2]}
 
 query T
-select json(map(list(a), list(b))) from test
+select json_quote(map(list(a), list(b))) from test
 ----
 {"42":null,"-42":0.42,"777":19.96,"-777":4.2}
 
 query T
-select json(map(list(b), list(c))) from test
+select json_quote(map(list(b), list(c))) from test
 ----
 {"0.5":"short","0.42":null,"19.96":"duck","4.2":"goose"}
 
 query T
-select json(map(list(c), list(d))) from test
+select json_quote(map(list(c), list(d))) from test
 ----
 {"short":[0,1,2,3,4,5,6,7,9],"looooooooooooooong":[],"duck":null,"goose":[4,2]}
 
 query T
-select json(map(list(d), list(e))) from test
+select json_quote(map(list(d), list(e))) from test
 ----
 {"[0, 1, 2, 3, 4, 5, 6, 7, 9]":33,"[]":42,"[1, 2, 3]":1111,"[4, 2]":null}
 
@@ -151,7 +151,7 @@ SELECT json_array(1,'{"abc":2.5,"def":null,"ghi":hello}',99);
 [1,"{\"abc\":2.5,\"def\":null,\"ghi\":hello}",99]
 
 query T
-SELECT json_array(1,json('{"abc":2.5,"def":null,"ghi":"hello"}'),99);
+SELECT json_array(1,json_quote('{"abc":2.5,"def":null,"ghi":"hello"}'),99);
 ----
 [1,"{\"abc\":2.5,\"def\":null,\"ghi\":\"hello\"}",99]
 

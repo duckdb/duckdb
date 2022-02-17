@@ -13,12 +13,47 @@ select json_extract('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my
 "duck"
 
 query T
+select '{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON->'/my_field/my_nested_field/1'
+----
+"duck"
+
+query T
+select json_extract_string('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
+----
+duck
+
+query T
+select '{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON->>'/my_field/my_nested_field/1'
+----
+duck
+
+query T
 select json_extract('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}', '/my_field/my_nested_field/1')
 ----
 "duckduckduckduck"
 
 query T
+select '{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}'::JSON->'/my_field/my_nested_field/1'
+----
+"duckduckduckduck"
+
+query T
+select json_extract_string('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}', '/my_field/my_nested_field/1')
+----
+duckduckduckduck
+
+query T
+select '{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}'::JSON->>'/my_field/my_nested_field/1'
+----
+duckduckduckduck
+
+query T
 select json_extract('[1, 2, 42]', 2)
+----
+42
+
+query T
+select json_extract_string('[1, 2, 42]', 2)
 ----
 42
 
