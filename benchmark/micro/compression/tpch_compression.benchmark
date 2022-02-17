@@ -1,0 +1,17 @@
+# name: benchmark/micro/compression/tpch_compression.benchmark
+# description: Storing tpc-h sf1 database
+# group: [compression]
+
+name Bitpacking Insert
+group aggregate
+storage persistent
+require tpch
+require_reinit
+
+load
+PRAGMA force_compression='none';
+
+run
+call dbgen(sf=0.1);
+checkpoint;
+
