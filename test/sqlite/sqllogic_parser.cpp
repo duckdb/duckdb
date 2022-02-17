@@ -132,10 +132,12 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD:
 	case SQLLogicTokenType::SQLLOGIC_HALT:
 	case SQLLogicTokenType::SQLLOGIC_MODE:
+	case SQLLogicTokenType::SQLLOGIC_SET:
 	case SQLLogicTokenType::SQLLOGIC_LOOP:
 	case SQLLogicTokenType::SQLLOGIC_FOREACH:
 	case SQLLogicTokenType::SQLLOGIC_ENDLOOP:
 	case SQLLogicTokenType::SQLLOGIC_REQUIRE:
+	case SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV:
 	case SQLLogicTokenType::SQLLOGIC_LOAD:
 	case SQLLogicTokenType::SQLLOGIC_RESTART:
 		return true;
