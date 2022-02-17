@@ -8,9 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/assert.hpp"
-
 #include "bitpackinghelpers.h"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 

@@ -68,24 +68,20 @@ protected:
 	// Check if we have enough space to add a string
 	virtual bool HasEnoughSpace(bool new_string, size_t string_size) = 0;
 	// Flush the segment to disk if compressing or reset the counters if analyzing
-	virtual void Flush() = 0;
+	virtual void Flush(bool final = false) = 0;
 };
 
 typedef struct {
-	uint32_t dict_end;
 	uint32_t dict_size;
+	uint32_t dict_end;
 	uint32_t index_buffer_offset;
 	uint32_t index_buffer_count;
 	uint32_t bitpacking_width;
 } dictionary_compression_header_t;
 
-struct DictionaryCompressionCompressState;
-struct DictionaryCompressionStorage : UncompressedStringStorage { // TODO REFACTOR? is this inheritance sensible still?
-
-	// HEADER: dict_end, dict_size, buffer_index_start, buffer_index_count, bitpacking_width;
+struct DictionaryCompressionStorage {
 	static constexpr uint16_t DICTIONARY_HEADER_SIZE = sizeof(dictionary_compression_header_t);
-//	static constexpr uint16_t DICTIONARY_HEADER_SIZE =
-//	    sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+	static constexpr size_t COMPACTION_FLUSH_LIMIT = (size_t)Storage::BLOCK_SIZE / 5 * 4;
 
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
@@ -109,9 +105,10 @@ struct DictionaryCompressionStorage : UncompressedStringStorage { // TODO REFACT
 	static idx_t RequiredSpace(idx_t current_count, idx_t index_count, idx_t dict_size,
 	                           bitpacking_width_t packing_width);
 
+	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
+	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);
 	static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, data_ptr_t baseptr,
 	                                    int32_t dict_offset, uint16_t string_len);
-
 	static uint16_t GetStringLength(uint32_t *index_buffer_ptr, sel_t index);
 };
 
@@ -149,8 +146,8 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		// Reset the pointers into the current segment
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		current_handle = buffer_manager.Pin(current_segment->block);
-		current_dictionary = UncompressedStringStorage::GetDictionary(*current_segment, *current_handle);
-		current_end_ptr = current_handle->node->buffer + current_segment->GetBlockOffset() + current_dictionary.end;
+		current_dictionary = DictionaryCompressionStorage::GetDictionary(*current_segment, *current_handle);
+		current_end_ptr = current_handle->node->buffer + current_dictionary.end;
 	}
 
 	ColumnDataCheckpointer &checkpointer;
@@ -206,10 +203,9 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		index_buffer->push_back(current_dictionary.size);
 		selection_buffer->push_back(index_buffer->size() - 1);
 		current_string_map->insert({str.GetString(), index_buffer->size() - 1});
-		UncompressedStringStorage::SetDictionary(*current_segment, *current_handle, current_dictionary);
+		DictionaryCompressionStorage::SetDictionary(*current_segment, *current_handle, current_dictionary);
 
-		min_width = BitpackingPrimitives::MinimumBitWidth(index_buffer->size() -
-		                                                  1); // TODO this value has been calculated already
+		min_width = BitpackingPrimitives::MinimumBitWidth(index_buffer->size() - 1);
 		current_segment->count++;
 	}
 
@@ -223,8 +219,6 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		current_segment->count++;
 	}
 
-	// TODO rename
-	// TODO: these index buffers are 1 too high? the maximum index in the index buffer is not size, but size-1
 	bool HasEnoughSpace(bool new_string, size_t string_size) override {
 		auto new_width = BitpackingPrimitives::MinimumBitWidth(index_buffer->size() - 1 + new_string);
 		if (new_string) {
@@ -237,7 +231,7 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		}
 	}
 
-	void Flush() override {
+	void Flush(bool final = false) override {
 		min_width = BitpackingPrimitives::MinimumBitWidth(index_buffer->size() - 1);
 		auto next_start = current_segment->start + current_segment->count;
 
@@ -245,8 +239,9 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		auto &state = checkpointer.GetCheckpointState();
 		state.FlushSegment(move(current_segment), segment_size);
 
-		// Todo this is not necessary if this is called from finalize?
-		CreateEmptySegment(next_start);
+		if (!final) {
+			CreateEmptySegment(next_start);
+		}
 	}
 
 	idx_t Finalize() {
@@ -262,8 +257,8 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		                  index_buffer_size + current_dictionary.size;
 
 		// calculate ptr and offsets
-		auto base_ptr = handle->node->buffer + current_segment->GetBlockOffset();
-		auto header_ptr = (dictionary_compression_header_t*) base_ptr;
+		auto base_ptr = handle->node->buffer;
+		auto header_ptr = (dictionary_compression_header_t *)base_ptr;
 		auto compressed_selection_buffer_offset = DictionaryCompressionStorage::DICTIONARY_HEADER_SIZE;
 		auto index_buffer_offset = compressed_selection_buffer_offset + compressed_selection_buffer_size;
 
@@ -286,8 +281,7 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		D_ASSERT((uint64_t)*max_element(std::begin(*selection_buffer), std::end(*selection_buffer)) ==
 		         index_buffer->size() - 1);
 
-		// TODO: deduplicate with uncompressed_string?
-		if (total_size >= Storage::BLOCK_SIZE / 5 * 4) {
+		if (total_size >= DictionaryCompressionStorage::COMPACTION_FLUSH_LIMIT) {
 			// the block is full enough, don't bother moving around the dictionary
 			return Storage::BLOCK_SIZE;
 		}
@@ -349,7 +343,7 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompre
 		}
 	}
 
-	void Flush() override {
+	void Flush(bool final = false) override {
 		segment_count++;
 		current_tuple_count = 0;
 		current_unique_count = 0;
@@ -398,7 +392,7 @@ void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &s
 
 void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 	auto &state = (DictionaryCompressionCompressState &)state_p;
-	state.Flush();
+	state.Flush(true);
 }
 
 //===--------------------------------------------------------------------===//
@@ -417,14 +411,11 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
 
-	// TODO: we should consider if emitting dictionary vectors is always a good idea, maybe not?
-	// TODO: we could use index_buffer_count to estimate the compression ratio and switch to emitting dict vectors when
-	// TODO: compression ratio is high
 	auto baseptr = state->handle->node->buffer + segment.GetBlockOffset();
 
 	// Load header values
-	auto dict = GetDictionary(segment, *(state->handle));
-	auto header_ptr = (dictionary_compression_header_t*)baseptr;
+	auto dict = DictionaryCompressionStorage::GetDictionary(segment, *(state->handle));
+	auto header_ptr = (dictionary_compression_header_t *)baseptr;
 	auto index_buffer_offset = Load<uint32_t>((data_ptr_t)&header_ptr->index_buffer_offset);
 	auto index_buffer_count = Load<uint32_t>((data_ptr_t)&header_ptr->index_buffer_count);
 	state->current_width = (bitpacking_width_t)(Load<uint32_t>((data_ptr_t)&header_ptr->bitpacking_width));
@@ -434,7 +425,6 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 	state->dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
 	auto dict_child_data = FlatVector::GetData<string_t>(*(state->dictionary));
 
-	// TODO the first value in the index buffer is always 0, do we care?
 	for (uint32_t i = 0; i < index_buffer_count; i++) {
 		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
 		uint16_t str_len = GetStringLength(index_buffer_ptr, i);
@@ -455,17 +445,15 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto baseptr = scan_state.handle->node->buffer + segment.GetBlockOffset();
-	auto dict = GetDictionary(segment, *scan_state.handle);
+	auto dict = DictionaryCompressionStorage::GetDictionary(segment, *scan_state.handle);
 
-	auto header_ptr = (dictionary_compression_header_t*)baseptr;
+	auto header_ptr = (dictionary_compression_header_t *)baseptr;
 	auto index_buffer_offset = Load<uint32_t>((data_ptr_t)&header_ptr->index_buffer_offset);
 	auto index_buffer_ptr = (uint32_t *)(baseptr + index_buffer_offset);
 
 	auto base_data = (data_ptr_t)(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
-	// TODO: maybe we can do non-bitpacking-algorithm-group-aligned dict vector emitting? It might not be very common
-	// though
 	if (!ALLOW_DICT_VECTORS || scan_count != STANDARD_VECTOR_SIZE ||
 	    start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0) {
 		// Emit regular vector
@@ -543,8 +531,8 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	}
 
 	auto baseptr = handle_ptr->node->buffer + segment.GetBlockOffset();
-	auto header_ptr = (dictionary_compression_header_t*)baseptr;
-	auto dict = GetDictionary(segment, *handle_ptr);
+	auto header_ptr = (dictionary_compression_header_t *)baseptr;
+	auto dict = DictionaryCompressionStorage::GetDictionary(segment, *handle_ptr);
 	auto index_buffer_offset = Load<uint32_t>((data_ptr_t)&header_ptr->index_buffer_offset);
 	auto width = (bitpacking_width_t)(Load<uint32_t>((data_ptr_t)&header_ptr->bitpacking_width));
 	auto index_buffer_ptr = (uint32_t *)(baseptr + index_buffer_offset);
@@ -557,29 +545,26 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	// Handling non-bitpacking-group-aligned start values;
 	idx_t start_offset = start % group_size;
 
-	// Make decompression buffer todo: should not be sel vec i guess
-	auto sel_vec = make_unique<SelectionVector>(group_size);
+	// Decompress part of selection buffer we need for this value.
+	sel_t decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
 	data_ptr_t src = (data_ptr_t)&base_data[((start - start_offset) * width) / 8];
-	sel_t *sel_vec_ptr = sel_vec->data();
+	BitpackingPrimitives::UnPackBuffer<sel_t>((data_ptr_t)decompression_buffer, src, group_size, width);
 
-	BitpackingPrimitives::UnPackBuffer<sel_t>((data_ptr_t)sel_vec_ptr, src, group_size, width);
-
-	auto string_number = sel_vec->get_index(start_offset);
-	auto dict_offset = index_buffer_ptr[string_number];
-	uint16_t str_len = GetStringLength(index_buffer_ptr, string_number);
+	auto selection_value = decompression_buffer[start_offset];
+	auto dict_offset = index_buffer_ptr[selection_value];
+	uint16_t str_len = GetStringLength(index_buffer_ptr, selection_value);
 
 	result_data[result_idx] = FetchStringFromDict(segment, dict, baseptr, dict_offset, str_len);
 }
 
 //===--------------------------------------------------------------------===//
-// Helper Functions TODO move out of DictionaryCompressionStorage
+// Helper Functions
 //===--------------------------------------------------------------------===//
 bool DictionaryCompressionStorage::HasEnoughSpace(idx_t current_count, idx_t index_count, idx_t dict_size,
                                                   bitpacking_width_t packing_width) {
 	return RequiredSpace(current_count, index_count, dict_size, packing_width) <= Storage::BLOCK_SIZE;
 }
 
-// TODO what if block has offset?
 idx_t DictionaryCompressionStorage::RequiredSpace(idx_t current_count, idx_t index_count, idx_t dict_size,
                                                   bitpacking_width_t packing_width) {
 	idx_t base_space = DICTIONARY_HEADER_SIZE + dict_size;
@@ -589,6 +574,21 @@ idx_t DictionaryCompressionStorage::RequiredSpace(idx_t current_count, idx_t ind
 	idx_t used_space = base_space + index_space + string_number_space;
 
 	return used_space;
+}
+
+StringDictionaryContainer DictionaryCompressionStorage::GetDictionary(ColumnSegment &segment, BufferHandle &handle) {
+	auto header_ptr = (dictionary_compression_header_t *)(handle.node->buffer + segment.GetBlockOffset());
+	StringDictionaryContainer container;
+	container.size = Load<uint32_t>((data_ptr_t)&header_ptr->dict_size);
+	container.end = Load<uint32_t>((data_ptr_t)&header_ptr->dict_end);
+	return container;
+}
+
+void DictionaryCompressionStorage::SetDictionary(ColumnSegment &segment, BufferHandle &handle,
+                                                 StringDictionaryContainer container) {
+	auto header_ptr = (dictionary_compression_header_t *)(handle.node->buffer + segment.GetBlockOffset());
+	Store<uint32_t>(container.size, (data_ptr_t)&header_ptr->dict_size);
+	Store<uint32_t>(container.end, (data_ptr_t)&header_ptr->dict_end);
 }
 
 string_t DictionaryCompressionStorage::FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict,
