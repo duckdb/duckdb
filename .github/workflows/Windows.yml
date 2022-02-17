@@ -149,6 +149,10 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: Install Git
+      run: |
+        choco install git -y --force
+
     - name: Build
       run: |
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
@@ -172,13 +176,12 @@ jobs:
 
     - name: Install psqlodbc
       run: |
-        curl -L https://github.com/Mytherin/psqlodbc/archive/refs/heads/main.zip -o psqlodbc-main.zip
-        unzip psqlodbc-main.zip
-        (cd psqlodbc-main && make release)
+        git clone https://github.com/Mytherin/psqlodbc.git
+        (cd psqlodbc && git checkout f11663bb9d1e6c0bbad8d4df919da1edc3c5338c && make release)
 
     - name: Test psqlodbc
       run: |
-        cd psqlodbc-main
+        cd psqlodbc
         export PSQLODBC_TEST_DSN=DuckDB
         build/release/Release/psql_odbc_test.exe -f ../tools/odbc/test/psql_supported_tests
 

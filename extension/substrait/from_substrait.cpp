@@ -80,8 +80,9 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 	if (function_name == "and") {
 		return make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(children));
 	} else if (function_name == "cast") {
-		// TODO actually unpack the constant expression here and not rely on ToString
-		auto expr = Parser::ParseExpressionList(StringUtil::Format("asdf::%s", children[1]->ToString()));
+		D_ASSERT(children[1]->type == ExpressionType::VALUE_CONSTANT);
+		auto &constant_expr = (ConstantExpression &)*children[1];
+		auto expr = Parser::ParseExpressionList(StringUtil::Format("asdf::%s", constant_expr.value.ToString()));
 		auto &cast = (CastExpression &)*expr[0];
 		return make_unique<CastExpression>(cast.cast_type, move(children[0]));
 	} else if (function_name == "or") {

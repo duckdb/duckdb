@@ -9,10 +9,10 @@ class TestCursorDescription(object):
         [
             ["SELECT * FROM integers", "i", "NUMBER", int],
             ["SELECT * FROM timestamps", "t", "DATETIME", datetime],
-            ["SELECT DATE '1992-09-20';", "CAST(1992-09-20 AS DATE)", "Date", date],
-            ["SELECT '\\xAA'::BLOB;", "\\xAA", "BINARY", bytes],
-            ["SELECT {'x': 1, 'y': 2, 'z': 3}", "struct_pack(1, 2, 3)", "dict", dict],
-            ["SELECT [1, 2, 3]", "list_value(1, 2, 3)", "list", list],
+            ["SELECT DATE '1992-09-20' AS date_col;", "date_col", "Date", date],
+            ["SELECT '\\xAA'::BLOB AS blob_col;", "blob_col", "BINARY", bytes],
+            ["SELECT {'x': 1, 'y': 2, 'z': 3}", "main.struct_pack(1, 2, 3)", "dict", dict],
+            ["SELECT [1, 2, 3]", "main.list_value(1, 2, 3)", "list", list],
         ],
     )
     def test_description(

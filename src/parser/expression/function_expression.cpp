@@ -15,6 +15,7 @@ FunctionExpression::FunctionExpression(string schema, const string &function_nam
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(std::move(schema)),
       function_name(StringUtil::Lower(function_name)), is_operator(is_operator), children(move(children_p)),
       distinct(distinct), filter(move(filter)), order_bys(move(order_bys_p)), export_state(export_state_p) {
+	D_ASSERT(!function_name.empty());
 	if (!order_bys) {
 		order_bys = make_unique<OrderModifier>();
 	}
@@ -28,35 +29,8 @@ FunctionExpression::FunctionExpression(const string &function_name, vector<uniqu
 }
 
 string FunctionExpression::ToString() const {
-	if (is_operator) {
-		// built-in operator
-		if (children.size() == 1) {
-			return function_name + children[0]->ToString();
-		} else if (children.size() == 2) {
-			return children[0]->ToString() + " " + function_name + " " + children[1]->ToString();
-		}
-	}
-	// standard function call
-	string result = function_name + "(";
-	result += StringUtil::Join(children, children.size(), ", ",
-	                           [](const unique_ptr<ParsedExpression> &child) { return child->ToString(); });
-
-	// filtered aggregate
-	if (filter) {
-		result += " FILTER " + filter->ToString();
-	}
-
-	// ordered aggregate
-	if (!order_bys->orders.empty()) {
-		result += " ORDER BY";
-		for (const auto &order : order_bys->orders) {
-			result += " " + order.ToString();
-		}
-	}
-	if (export_state) {
-		result += " EXPORT_STATE";
-	}
-	return result + ")";
+	return ToString<FunctionExpression, ParsedExpression>(*this, schema, function_name, is_operator, distinct,
+	                                                      filter.get(), order_bys.get(), export_state);
 }
 
 bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpression *b) {
@@ -139,6 +113,10 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 	                                           is_operator, export_state);
 	function->schema = schema;
 	return move(function);
+}
+
+void FunctionExpression::Verify() const {
+	D_ASSERT(!function_name.empty());
 }
 
 } // namespace duckdb
