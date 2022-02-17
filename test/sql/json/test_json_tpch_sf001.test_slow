@@ -7,7 +7,7 @@ require json
 require tpch
 
 statement ok
-call dbgen(sf=0.1)
+call dbgen(sf=0.01)
 
 query IIIIIIIIIIIII nosort q0
 select * from lineitem order by all
@@ -66,4 +66,4 @@ ORDER BY
     j.l_returnflag,
     j.l_linestatus
 ----
-<FILE>:extension/tpch/dbgen/answers/sf0.1/q01.csv
+<FILE>:extension/tpch/dbgen/answers/sf0.01/q01.csv

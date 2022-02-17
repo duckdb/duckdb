@@ -84,27 +84,32 @@ select json_structure('{"a": {"b": 42}}')
 # i.e., objects in arrays can have a different set of keys, null is a wildcard
 # If same keys have a different type, we take the 'max' logical type in terms of what we can cast
 query T
-select json_structure('[true, false]')
+select json_structure('[null,null]')
+----
+["NULL"]
+
+query T
+select json_structure('[true,null,false]')
 ----
 ["BOOLEAN"]
 
 query T
-select json_structure('[true,false,1]')
+select json_structure('[true,null,false,1]')
 ----
 ["UBIGINT"]
 
 query T
-select json_structure('[true,false,1,-1]')
+select json_structure('[true,null,false,1,-1]')
 ----
 ["BIGINT"]
 
 query T
-select json_structure('[true,false,1,-1,0.42]')
+select json_structure('[true,null,false,1,-1,0.42]')
 ----
 ["DOUBLE"]
 
 query T
-select json_structure('[true,false,1,-1,0.42,"42"]')
+select json_structure('[true,null,false,1,-1,0.42,"42"]')
 ----
 ["VARCHAR"]
 
@@ -152,7 +157,9 @@ statement ok
 insert into test values
     ('{"family": "anatidae", "species": ["duck", "goose", "swan", null], "coolness": 1000}'),
     ('{"family": "canidae", "species": ["labrador", null, "bulldog", "shepherd"], "hair": true, "coolness": 999}'),
-    ('{"family": "felidae", "species": ["tiger", "lion", null, "british shorthair"], "hair": true, "coolness": 999}')
+    ('{"family": "felidae", "species": ["tiger", "lion", null, "british shorthair"], "hair": true, "coolness": 999}'),
+    (NULL),
+    ('{"family": null, "species": null, "hair": null, "coolness": null}')
 
 query T
 select json_structure(j) from test
@@ -160,3 +167,5 @@ select json_structure(j) from test
 {"family":"VARCHAR","species":["VARCHAR"],"coolness":"UBIGINT"}
 {"family":"VARCHAR","species":["VARCHAR"],"hair":"BOOLEAN","coolness":"UBIGINT"}
 {"family":"VARCHAR","species":["VARCHAR"],"hair":"BOOLEAN","coolness":"UBIGINT"}
+NULL
+{"family":"NULL","species":"NULL","hair":"NULL","coolness":"NULL"}

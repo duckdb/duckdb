@@ -83,6 +83,7 @@ static LogicalType StructureToTypeVal(yyjson_val *val) {
 			break;
 		}
 	}
+	D_ASSERT(result != LogicalType::INVALID);
 	return result;
 }
 
@@ -331,7 +332,6 @@ static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, boo
 
 template <bool strict>
 static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	result.SetVectorType(VectorType::FLAT_VECTOR);
 	const auto count = args.size();
 	auto &input = args.data[0];
 	VectorData input_data;
@@ -358,7 +358,6 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 	for (idx_t i = 0; i < count; i++) {
 		yyjson_doc_free(docs[i]);
 	}
-	result.SetVectorType(input.GetVectorType());
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetTransformFunction() {

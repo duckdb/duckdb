@@ -20,6 +20,7 @@
 #include <limits.h>
 #include <string.h>
 #include <float.h>
+#include "duckdb/common/fast_mem.hpp"
 
 
 
@@ -2521,7 +2522,7 @@ yyjson_api_inline yyjson_val *yyjson_obj_getn(yyjson_val *obj,
         yyjson_val *key = unsafe_yyjson_get_first(obj);
         while (len-- > 0) {
             if (key->tag == tag &&
-                memcmp(key->uni.ptr, key_str, key_len) == 0) {
+                duckdb::FastMemcmp(key->uni.ptr, key_str, key_len) == 0) {
                 return key + 1;
             }
             key = unsafe_yyjson_get_next(key + 1);
@@ -2596,7 +2597,7 @@ yyjson_api_inline yyjson_val *yyjson_obj_iter_getn(yyjson_obj_iter *iter,
         while (idx++ < max) {
             yyjson_val *next = unsafe_yyjson_get_next(cur + 1);
             if (unsafe_yyjson_get_len(cur) == key_len &&
-                memcmp(cur->uni.str, key, key_len) == 0) {
+			    duckdb::FastMemcmp(cur->uni.str, key, key_len) == 0) {
                 iter->idx = idx;
                 iter->cur = next;
                 return cur + 1;
@@ -2685,7 +2686,7 @@ yyjson_api_inline char *unsafe_yyjson_mut_strncpy(yyjson_mut_doc *doc,
     
     mem = pool->cur;
     pool->cur = mem + len + 1;
-    memcpy((void *)mem, (const void *)str, len);
+	memcpy((void *)mem, (const void *)str, len);
     mem[len] = '\0';
     return mem;
 }
@@ -3639,7 +3640,7 @@ yyjson_api_inline yyjson_mut_val *yyjson_mut_obj_getn(yyjson_mut_val *obj,
         yyjson_mut_val *key = ((yyjson_mut_val *)obj->uni.ptr)->next->next;
         while (len-- > 0) {
             if (key->tag == tag &&
-                memcmp(key->uni.ptr, key_str, key_len) == 0) {
+			    duckdb::FastMemcmp(key->uni.ptr, key_str, key_len) == 0) {
                 return key->next;
             }
             key = key->next->next;
@@ -3729,7 +3730,7 @@ yyjson_api_inline yyjson_mut_val *yyjson_mut_obj_iter_getn(
             pre = cur;
             cur = cur->next->next;
             if (unsafe_yyjson_get_len(cur) == key_len &&
-                memcmp(cur->uni.str, key, key_len) == 0) {
+			    duckdb::FastMemcmp(cur->uni.str, key, key_len) == 0) {
                 iter->idx += idx;
                 if (iter->idx > max) iter->idx -= max + 1;
                 iter->pre = pre;
@@ -3857,7 +3858,7 @@ yyjson_api_inline yyjson_mut_val *unsafe_yyjson_mut_obj_remove(
         size_t i;
         for (i = 0; i < obj_len; i++) {
             if (key_tag == cur_key->tag &&
-                memcmp(key, cur_key->uni.ptr, key_len) == 0) {
+			    duckdb::FastMemcmp(key, cur_key->uni.ptr, key_len) == 0) {
                 if (!removed_item) removed_item = cur_key->next;
                 cur_key = cur_key->next->next;
                 pre_key->next->next = cur_key;
@@ -3887,16 +3888,16 @@ yyjson_api_inline bool unsafe_yyjson_mut_obj_replace(yyjson_mut_val *obj,
         size_t i;
         for (i = 0; i < obj_len; i++) {
             if (key->tag == cur_key->tag &&
-            memcmp(key->uni.str, cur_key->uni.ptr, key_len) == 0) {
+			    duckdb::FastMemcmp(key->uni.str, cur_key->uni.ptr, key_len) == 0) {
                 size_t cpy_len = sizeof(*key) - sizeof(key->next);
                 yyjson_mut_val tmp;
-                memcpy(&tmp, cur_key, cpy_len);
-                memcpy(cur_key, key, cpy_len);
-                memcpy(key, &tmp, cpy_len);
+				duckdb::FastMemcpy(&tmp, cur_key, cpy_len);
+				duckdb::FastMemcpy(cur_key, key, cpy_len);
+				duckdb::FastMemcpy(key, &tmp, cpy_len);
 
-                memcpy(&tmp, cur_key->next, cpy_len);
-                memcpy(cur_key->next, val, cpy_len);
-                memcpy(val, &tmp, cpy_len);
+				duckdb::FastMemcpy(&tmp, cur_key->next, cpy_len);
+				duckdb::FastMemcpy(cur_key->next, val, cpy_len);
+				duckdb::FastMemcpy(val, &tmp, cpy_len);
                 return true;
             } else {
                 pre_key = cur_key;
@@ -4170,7 +4171,7 @@ yyjson_api_inline yyjson_mut_val *yyjson_mut_obj_remove_strn(
         yyjson_mut_obj_iter_init(obj, &iter);
         while ((key = yyjson_mut_obj_iter_next(&iter)) != NULL) {
             if (unsafe_yyjson_get_len(key) == _len &&
-                memcmp(key->uni.str, _key, _len) == 0) {
+			    duckdb::FastMemcmp(key->uni.str, _key, _len) == 0) {
                 if (!val_removed) val_removed = key->next;
                 yyjson_mut_obj_iter_remove(&iter);
             }
