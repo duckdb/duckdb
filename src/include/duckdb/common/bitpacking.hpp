@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/assert.hpp"
+
 #include "bitpackinghelpers.h"
 
 namespace duckdb {
@@ -56,7 +58,7 @@ public:
 	                                bool skip_sign_extension = false) {
 
 		for (idx_t i = 0; i < count; i += BITPACKING_ALGORITHM_GROUP_SIZE) {
-			UnPackGroup<T>(dst + i * sizeof(T), src + (i*width)/8, width, skip_sign_extension);
+			UnPackGroup<T>(dst + i * sizeof(T), src + (i * width) / 8, width, skip_sign_extension);
 		}
 	}
 
@@ -119,7 +121,7 @@ private:
 			}
 		}
 
-		return FindMinimumBitWidth<T,round_to_next_byte>(min_value, max_value);
+		return FindMinimumBitWidth<T, round_to_next_byte>(min_value, max_value);
 	}
 
 	template <class T, bool round_to_next_byte = false>

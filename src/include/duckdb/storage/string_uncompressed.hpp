@@ -46,14 +46,14 @@ public:
 	                           idx_t result_idx);
 	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id);
 
-	static idx_t StringAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data,
-	                          idx_t offset, idx_t count) {
+	static idx_t StringAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset,
+	                          idx_t count) {
 		return StringAppendBase(segment, stats, data, offset, count);
 	}
 
 	template <bool DUPLICATE_ELIMINATE = false>
-	static idx_t StringAppendBase(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data,
-	                                              idx_t offset, idx_t count, std::unordered_map<string, int32_t> *seen_strings = nullptr) {
+	static idx_t StringAppendBase(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset,
+	                              idx_t count, std::unordered_map<string, int32_t> *seen_strings = nullptr) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		auto handle = buffer_manager.Pin(segment.block);
 

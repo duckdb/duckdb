@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/compression_null.test
+# name: test/sql/storage/compression/dictionary/dictionary_null.test
 # description: Test storage with dictionary compression and many null values
-# group: [compression]
+# group: [dictionary]
 
 # load the DB from disk
 load __TEST_DIR__/test_rle.db

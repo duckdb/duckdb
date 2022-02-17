@@ -1,6 +1,6 @@
 # name: benchmark/micro/compression/dictionary/dictionary_read.benchmark
 # description: Scanning strings at ~4.3x compression
-# group: [compression]
+# group: [dictionary]
 
 name Bitpacking Scan
 group aggregate
