@@ -410,8 +410,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 				key_set = bound_foreign_key.fk_key_set;
 			}
 			if (key_set.find(change_idx) != key_set.end()) {
-				throw BinderException(
-				    "Cannot change the type of a column that has a FOREIGN KEY constraint specified");
+				throw BinderException("Cannot change the type of a column that has a FOREIGN KEY constraint specified");
 			}
 			break;
 		}

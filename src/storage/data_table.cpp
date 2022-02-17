@@ -437,9 +437,11 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	}
 }
 
-static TableIndexList& GetForeignKeyConstraintIndicesAndChunk(const string &table_name, const vector<idx_t> &src_keys,
-                                                             const vector<idx_t> &dst_keys, ClientContext &context, DataChunk &src_chunk, DataChunk &dst_chunk) {
-	auto table_entry_ptr = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, INVALID_SCHEMA, table_name);
+static TableIndexList &GetForeignKeyConstraintIndicesAndChunk(const string &table_name, const vector<idx_t> &src_keys,
+                                                              const vector<idx_t> &dst_keys, ClientContext &context,
+                                                              DataChunk &src_chunk, DataChunk &dst_chunk) {
+	auto table_entry_ptr =
+	    Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, INVALID_SCHEMA, table_name);
 	if (table_entry_ptr == nullptr) {
 		throw ParserException("Can't find table \"%s\" in foreign key constraint", table_name);
 	}
@@ -462,9 +464,11 @@ static TableIndexList& GetForeignKeyConstraintIndicesAndChunk(const string &tabl
 	return indices;
 }
 
-static void VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &foreign_key, ClientContext &context, DataChunk &chunk) {
+static void VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &foreign_key, ClientContext &context,
+                                             DataChunk &chunk) {
 	DataChunk pk_chunk;
-	TableIndexList &indices = GetForeignKeyConstraintIndicesAndChunk(foreign_key.table, foreign_key.fk_keys, foreign_key.pk_keys, context, chunk, pk_chunk);
+	TableIndexList &indices = GetForeignKeyConstraintIndicesAndChunk(foreign_key.table, foreign_key.fk_keys,
+	                                                                 foreign_key.pk_keys, context, chunk, pk_chunk);
 
 	//! check whether or not the chunk can be inserted into the referenced table
 	indices.Scan([&](Index &index) {
@@ -473,9 +477,11 @@ static void VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &fo
 	});
 }
 
-static void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint& foreign_key, ClientContext& context, DataChunk& chunk) {
+static void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &foreign_key, ClientContext &context,
+                                             DataChunk &chunk) {
 	DataChunk fk_chunk;
-	TableIndexList &indices = GetForeignKeyConstraintIndicesAndChunk(foreign_key.table, foreign_key.pk_keys, foreign_key.fk_keys, context, chunk, fk_chunk);
+	TableIndexList &indices = GetForeignKeyConstraintIndicesAndChunk(foreign_key.table, foreign_key.pk_keys,
+	                                                                 foreign_key.fk_keys, context, chunk, fk_chunk);
 
 	//! check whether or not the chunk can be deleted from the table has foreign keys
 	indices.Scan([&](Index &index) {

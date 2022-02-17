@@ -121,7 +121,8 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			auto &foreign_key = (ForeignKeyConstraint &)*cond;
 			// have to resolve referenced table
 			auto &catalog = Catalog::GetCatalog(binder.context);
-			auto pk_table_entry_ptr = catalog.GetEntry<TableCatalogEntry>(binder.context, INVALID_SCHEMA, foreign_key.pk_table);
+			auto pk_table_entry_ptr =
+			    catalog.GetEntry<TableCatalogEntry>(binder.context, INVALID_SCHEMA, foreign_key.pk_table);
 			if (!pk_table_entry_ptr) {
 				throw ParserException("Can't find table \"%s\" in foreign key constraint", foreign_key.pk_table);
 			}
@@ -146,7 +147,8 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				idx_t pk_key = entry->second;
 				// check pk_key is primary key / unique key or not
 				if (!IsPrimaryKeyOrUniqueKey(pk_table_entry_ptr, pk_key)) {
-					throw ParserException("column \"%s\" must be primary key or unique key in table \"%s\"", keyname, foreign_key.pk_table);
+					throw ParserException("column \"%s\" must be primary key or unique key in table \"%s\"", keyname,
+					                      foreign_key.pk_table);
 				}
 				pk_keys.push_back(pk_key);
 				pk_key_set.insert(pk_key);
@@ -166,14 +168,14 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				fk_key_set.insert(entry->second);
 			}
 
-			info.bound_constraints.push_back(
-			    make_unique<BoundForeignKeyConstraint>(true, foreign_key.pk_table, pk_keys, pk_key_set, fk_keys, fk_key_set));
+			info.bound_constraints.push_back(make_unique<BoundForeignKeyConstraint>(true, foreign_key.pk_table, pk_keys,
+			                                                                        pk_key_set, fk_keys, fk_key_set));
 
 			// insert constraint in referenced table
-			pk_table_entry_ptr->constraints.push_back(
-				make_unique<ForeignKeyConstraint>(foreign_key.pk_table, foreign_key.pk_columns, foreign_key.fk_columns, false));
-			pk_table_entry_ptr->bound_constraints.push_back(
-				make_unique<BoundForeignKeyConstraint>(false, base.table, move(pk_keys), move(pk_key_set), move(fk_keys), move(fk_key_set)));
+			pk_table_entry_ptr->constraints.push_back(make_unique<ForeignKeyConstraint>(
+			    foreign_key.pk_table, foreign_key.pk_columns, foreign_key.fk_columns, false));
+			pk_table_entry_ptr->bound_constraints.push_back(make_unique<BoundForeignKeyConstraint>(
+			    false, base.table, move(pk_keys), move(pk_key_set), move(fk_keys), move(fk_key_set)));
 
 			break;
 		}

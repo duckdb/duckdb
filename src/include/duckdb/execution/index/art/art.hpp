@@ -64,8 +64,8 @@ struct ARTIndexScanState : public IndexScanState {
 
 enum VerifyExistanceType : uint8_t {
 	APPEND = 0,    // for purpose to append into table
-	APPEND_FK = 1,   // for purpose to append into table has foreign key
-	DELETE_FK = 2      // for purpose to delete from table related to foreign key
+	APPEND_FK = 1, // for purpose to append into table has foreign key
+	DELETE_FK = 2  // for purpose to delete from table related to foreign key
 };
 
 class ART : public Index {

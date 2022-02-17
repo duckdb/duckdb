@@ -3,8 +3,11 @@
 # group: [foreignkey]
 
 statement ok
-CREATE TABLE integers(i INTEGER PRIMARY KEY, j BOOLEAN)
+CREATE TABLE album(artistid INTEGER PRIMARY KEY, albumname TEXT UNIQUE, albumcover TEXT);
 
-# foreign keys are not supported yet
-statement error
-CREATE TABLE other(id INTEGER PRIMARY KEY, i INTEGER, FOREIGN KEY (i) REFERENCES integers(i));
+statement ok
+INSERT INTO album VALUES (1, 'A', 'A_cover'), (2, 'B', 'B_cover'), (3, 'C', 'C_cover'), (4, 'D', 'D_cover');
+
+statement ok
+CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, albumname));
+

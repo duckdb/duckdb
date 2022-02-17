@@ -907,17 +907,20 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistanceType verify_type) {
 			switch (verify_type) {
 			case VerifyExistanceType::APPEND: {
 				// node already exists in tree
-				throw ConstraintException("duplicate key \"%s\" violates %s constraint", key_name, is_primary ? "primary key" : "unique");
+				throw ConstraintException("duplicate key \"%s\" violates %s constraint", key_name,
+				                          is_primary ? "primary key" : "unique");
 				break;
 			}
 			case VerifyExistanceType::APPEND_FK: {
 				// found node no exists in tree
-				throw ConstraintException("violates foreign key constraint because key \"%s\" no exist in referenced table", key_name);
+				throw ConstraintException(
+				    "violates foreign key constraint because key \"%s\" no exist in referenced table", key_name);
 				break;
 			}
 			case VerifyExistanceType::DELETE_FK: {
 				// found node exists in tree
-				throw ConstraintException("violates foreign key constraint because key \"%s\" exist in table has foreign key", key_name);
+				throw ConstraintException(
+				    "violates foreign key constraint because key \"%s\" exist in table has foreign key", key_name);
 				break;
 			}
 			}

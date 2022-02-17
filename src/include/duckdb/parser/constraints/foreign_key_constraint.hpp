@@ -15,7 +15,8 @@ namespace duckdb {
 
 class ForeignKeyConstraint : public Constraint {
 public:
-	DUCKDB_API ForeignKeyConstraint(string pk_table, vector<string> pk_columns, vector<string> fk_columns, bool is_fk_table);
+	DUCKDB_API ForeignKeyConstraint(string pk_table, vector<string> pk_columns, vector<string> fk_columns,
+	                                bool is_fk_table);
 
 	//! The referenced table's name
 	string pk_table;

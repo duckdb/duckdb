@@ -6,12 +6,10 @@
 
 namespace duckdb {
 
-ForeignKeyConstraint::ForeignKeyConstraint(string pk_table, vector<string> pk_columns, vector<string> fk_columns, bool is_fk_table)
-    : Constraint(ConstraintType::FOREIGN_KEY),
-      pk_table(move(pk_table)),
-	pk_columns(move(pk_columns)),
-	fk_columns(move(fk_columns)),
-	is_fk_table(is_fk_table) {
+ForeignKeyConstraint::ForeignKeyConstraint(string pk_table, vector<string> pk_columns, vector<string> fk_columns,
+                                           bool is_fk_table)
+    : Constraint(ConstraintType::FOREIGN_KEY), pk_table(move(pk_table)), pk_columns(move(pk_columns)),
+      fk_columns(move(fk_columns)), is_fk_table(is_fk_table) {
 }
 
 string ForeignKeyConstraint::ToString() const {

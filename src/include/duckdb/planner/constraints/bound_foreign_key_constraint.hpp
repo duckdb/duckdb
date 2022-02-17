@@ -15,13 +15,10 @@ namespace duckdb {
 
 class BoundForeignKeyConstraint : public BoundConstraint {
 public:
-	BoundForeignKeyConstraint(bool is_fk_table, string table,
-		vector<idx_t> pk_keys, unordered_set<idx_t> pk_key_set,
-		vector<idx_t> fk_keys, unordered_set<idx_t> fk_key_set)
-	    : BoundConstraint(ConstraintType::FOREIGN_KEY),
-		is_fk_table(is_fk_table), table(table), 
-		pk_keys(move(pk_keys)), pk_key_set(move(pk_key_set)), 
-		fk_keys(move(fk_keys)), fk_key_set(move(fk_key_set)) {
+	BoundForeignKeyConstraint(bool is_fk_table, string table, vector<idx_t> pk_keys, unordered_set<idx_t> pk_key_set,
+	                          vector<idx_t> fk_keys, unordered_set<idx_t> fk_key_set)
+	    : BoundConstraint(ConstraintType::FOREIGN_KEY), is_fk_table(is_fk_table), table(table), pk_keys(move(pk_keys)),
+	      pk_key_set(move(pk_key_set)), fk_keys(move(fk_keys)), fk_key_set(move(fk_key_set)) {
 #ifdef DEBUG
 		D_ASSERT(pk_keys.size() == pk_key_set.size());
 		for (auto &key : pk_keys) {
