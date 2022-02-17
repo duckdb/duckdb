@@ -1966,7 +1966,9 @@ bool TryCastToDecimal::Operation(hugeint_t input, hugeint_t &result, string *err
 //===--------------------------------------------------------------------===//
 template <class SRC, class DST>
 bool DoubleToDecimalCast(SRC input, DST &result, string *error_message, uint8_t width, uint8_t scale) {
-	double value = input * NumericHelper::DOUBLE_POWERS_OF_TEN[scale] + 1e-9;
+	double value = input * NumericHelper::DOUBLE_POWERS_OF_TEN[scale];
+	// Add the sign (-1, 0, 1) times a tiny value to fix floating point issues
+	value += 1e-9 * (double(0) < value) - (value < double(0));
 	if (value <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] || value >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
 		string error = StringUtil::Format("Could not cast value %f to DECIMAL(%d,%d)", value, width, scale);
 		HandleCastError::AssignError(error, error_message);

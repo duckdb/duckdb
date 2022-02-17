@@ -36,8 +36,39 @@ select j.l_orderkey,j.l_partkey,j.l_suppkey,j.l_linenumber,j.l_quantity,j.l_exte
 from transformed order by all
 ----
 
+# run TPCH-Q1 on struct
+query IIIIIIIIII
+with transformed as (
+    select row(l_orderkey,l_partkey,l_suppkey,l_linenumber,l_quantity,l_extendedprice,l_discount,l_tax,l_returnflag,
+                               l_linestatus,l_shipdate,l_commitdate,l_receiptdate,l_shipinstruct,l_shipmode,l_comment) as j
+    from lineitem
+)
+SELECT
+    j.l_returnflag,
+    j.l_linestatus,
+    sum(j.l_quantity) AS sum_qty,
+    sum(j.l_extendedprice) AS sum_base_price,
+    sum(j.l_extendedprice * (1 - j.l_discount)) AS sum_disc_price,
+    sum(j.l_extendedprice * (1 - j.l_discount) * (1 + j.l_tax)) AS sum_charge,
+    avg(j.l_quantity) AS avg_qty,
+    avg(j.l_extendedprice) AS avg_price,
+    avg(j.l_discount) AS avg_disc,
+    count(*) AS count_order
+FROM
+    transformed
+WHERE
+    j.l_shipdate <= CAST('1998-09-02' AS date)
+GROUP BY
+    j.l_returnflag,
+    j.l_linestatus
+ORDER BY
+    j.l_returnflag,
+    j.l_linestatus
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q01.csv
+
 # run TPCH-Q1 straight on JSON
-query IIIIIIIIII nosort q1
+query IIIIIIIIII
 with transformed as (
     select json_transform(j, '{"l_orderkey":"INTEGER","l_partkey":"INTEGER","l_suppkey":"INTEGER","l_linenumber":"INTEGER","l_quantity":"INTEGER","l_extendedprice":"DECIMAL(15,2)","l_discount":"DECIMAL(15,2)","l_tax":"DECIMAL(15,2)","l_returnflag":"VARCHAR","l_linestatus":"VARCHAR","l_shipdate":"DATE","l_commitdate":"DATE","l_receiptdate":"DATE","l_shipinstruct":"VARCHAR","l_shipmode":"VARCHAR","l_comment":"VARCHAR"}') as j
     from lineitem_j
