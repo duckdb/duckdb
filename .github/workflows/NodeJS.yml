@@ -90,6 +90,14 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
+      - name: Versions
+        run: |
+          msbuild /version
+          systeminfo
+          node -v
+          npm -v
+
+
       - name: Node Version
         run: ./scripts/node_version.sh
 
