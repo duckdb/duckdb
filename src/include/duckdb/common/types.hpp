@@ -133,7 +133,7 @@ public:
 	hugeint_t &operator=(const hugeint_t &rhs) = default;
 	hugeint_t &operator=(hugeint_t &&rhs) = default;
 
-	string ToString() const;
+	DUCKDB_API string ToString() const;
 
 	// comparison operators
 	bool operator==(const hugeint_t &rhs) const;

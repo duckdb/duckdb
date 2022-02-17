@@ -149,7 +149,7 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 			duckdb_col_type = LogicalType::DATE;
 			break;
 		default:
-			stop("Unsupported column type for scan");
+			cpp11::stop("rapi_execute: Unsupported column type for scan");
 		}
 
 		return_types.push_back(duckdb_col_type);
@@ -258,8 +258,8 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 				break;
 
 			default:
-				stop("duckdb_execute_R: Unknown enum type for scan: %s",
-				     TypeIdToString(v.GetType().InternalType()).c_str());
+				cpp11::stop("rapi_execute: Unknown enum type for scan: %s",
+				            TypeIdToString(v.GetType().InternalType()).c_str());
 			}
 			break;
 		}

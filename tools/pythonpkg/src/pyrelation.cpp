@@ -12,6 +12,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def_property_readonly("columns", &DuckDBPyRelation::Columns, "Get the names of the columns of this relation.")
 	    .def_property_readonly("types", &DuckDBPyRelation::ColumnTypes, "Get the columns types of the result.")
 	    .def_property_readonly("dtypes", &DuckDBPyRelation::ColumnTypes, "Get the columns types of the result.")
+	    .def("__len__", &DuckDBPyRelation::Length, "Number of rows in relation.")
+	    .def_property_readonly("shape", &DuckDBPyRelation::Shape, " Tuple of # of rows, # of columns in relation.")
 	    .def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",
 	         py::arg("filter_expr"))
 	    .def("project", &DuckDBPyRelation::Project, "Project the relation object by the projection in project_expr",
@@ -22,6 +24,45 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("aggregate", &DuckDBPyRelation::Aggregate,
 	         "Compute the aggregate aggr_expr by the optional groups group_expr on the relation", py::arg("aggr_expr"),
 	         py::arg("group_expr") = "")
+	    .def(
+	        "sum", &DuckDBPyRelation::Sum,
+	        "Compute the aggregate sum of a single column or a list of columns  by the optional groups on the relation",
+	        py::arg("sum_aggr"), py::arg("group_expr") = "")
+	    .def("count", &DuckDBPyRelation::Count,
+	         "Compute the aggregate count of a single column or a list of columns  by the optional groups on the "
+	         "relation",
+	         py::arg("count_aggr"), py::arg("group_expr") = "")
+	    .def("median", &DuckDBPyRelation::Median,
+	         "Compute the aggregate median of a single column or a list of columns by the optional groups on the "
+	         "relation",
+	         py::arg("median_aggr"), py::arg("group_expr") = "")
+	    .def("quantile", &DuckDBPyRelation::Quantile,
+	         "Compute the quantile of a single column or a list of columns  by the optional groups on the relation",
+	         py::arg("q"), py::arg("quantile_aggr"), py::arg("group_expr") = "")
+	    .def("apply", &DuckDBPyRelation::GenericAggregator,
+	         "Compute the function of a single column or a list of columns  by the optional groups on the relation",
+	         py::arg("function_name"), py::arg("function_aggr"), py::arg("group_expr") = "",
+	         py::arg("function_parameter") = "", py::arg("projected_columns") = "")
+	    .def("min", &DuckDBPyRelation::Min,
+	         "Compute the aggregate min of a single column or a list of columns by the optional groups on the relation",
+	         py::arg("min_aggr"), py::arg("group_expr") = "")
+	    .def("max", &DuckDBPyRelation::Max,
+	         "Compute the aggregate max of a single column or a list of columns by the optional groups on the relation",
+	         py::arg("max_aggr"), py::arg("group_expr") = "")
+	    .def(
+	        "mean", &DuckDBPyRelation::Mean,
+	        "Compute the aggregate mean of a single column or a list of columns by the optional groups on the relation",
+	        py::arg("mean_aggr"), py::arg("group_expr") = "")
+	    .def("var", &DuckDBPyRelation::Var,
+	         "Compute the variance of a single column or a list of columns by the optional groups on the relation",
+	         py::arg("var_aggr"), py::arg("group_expr") = "")
+	    .def("std", &DuckDBPyRelation::STD,
+	         "Compute the standard deviation of a single column or a list of columns by the optional groups on the "
+	         "relation",
+	         py::arg("std_aggr"), py::arg("group_expr") = "")
+	    .def("value_counts", &DuckDBPyRelation::ValueCounts, "Count number of rows with each unique value of variable",
+	         py::arg("value_counts_aggr"), py::arg("group_expr") = "")
+	    .def("unique", &DuckDBPyRelation::Unique, "Number of distinct values in a column.", py::arg("unique_aggr"))
 	    .def("union", &DuckDBPyRelation::Union,
 	         "Create the set union of this relation object with another relation object in other_rel")
 	    .def("except_", &DuckDBPyRelation::Except,
@@ -155,6 +196,87 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, con
 		return make_unique<DuckDBPyRelation>(rel->Aggregate(expr, groups));
 	}
 	return make_unique<DuckDBPyRelation>(rel->Aggregate(expr));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericAggregator(const string &function_name, const string &sum_columns,
+                                                                 const string &groups, const string &function_parameter,
+                                                                 const string &projected_columns) {
+	auto input = StringUtil::Split(sum_columns, ',');
+	string expr;
+	if (!projected_columns.empty()) {
+		expr = projected_columns + ", ";
+	}
+	for (idx_t i = 0; i < input.size(); i++) {
+		if (function_parameter.empty()) {
+			expr += function_name + "(" + input[i] + ")";
+		} else {
+			expr += function_name + "(" + input[i] + "," + function_parameter + ")";
+		}
+
+		if (i < input.size() - 1) {
+			expr += ",";
+		}
+	}
+	//! Construct Aggregation Expression
+	return Aggregate(expr, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Sum(const string &sum_columns, const string &groups) {
+	return GenericAggregator("sum", sum_columns, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Count(const string &count_columns, const string &groups) {
+	return GenericAggregator("count", count_columns, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Median(const string &median_columns, const string &groups) {
+	return GenericAggregator("median", median_columns, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Quantile(const string &q, const string &quantile_columns,
+                                                        const string &groups) {
+	return GenericAggregator("quantile", quantile_columns, groups, q);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Min(const string &min_columns, const string &groups) {
+	return GenericAggregator("min", min_columns, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Max(const string &max_columns, const string &groups) {
+	return GenericAggregator("max", max_columns, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Mean(const string &mean_columns, const string &groups) {
+	return GenericAggregator("avg", mean_columns, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Var(const string &var_columns, const string &groups) {
+	return GenericAggregator("var_pop", var_columns, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::STD(const string &std_columns, const string &groups) {
+	return GenericAggregator("stddev_pop", std_columns, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ValueCounts(const string &count_column, const string &groups) {
+	if (count_column.find(',') != string::npos) {
+		throw std::runtime_error("Only one column is accepted in Value_Counts method");
+	}
+	return GenericAggregator("count", count_column, groups, "", count_column);
+}
+
+idx_t DuckDBPyRelation::Length() {
+	auto query_result = GenericAggregator("count", "*")->Execute();
+	return query_result->result->Fetch()->GetValue(0, 0).GetValue<idx_t>();
+}
+
+py::tuple DuckDBPyRelation::Shape() {
+	auto length = Length();
+	return py::make_tuple(length, rel->Columns().size());
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Unique(const string &std_columns) {
+	return make_unique<DuckDBPyRelation>(rel->Project(std_columns)->Distinct());
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(py::object df, const string &expr, const string &groups,

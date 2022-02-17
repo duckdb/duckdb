@@ -46,7 +46,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	}
 	vector<unique_ptr<ParsedExpression>> children;
 	for (auto arg : args) {
-		children.push_back(expr_extptr(arg)->Copy());
+		children.push_back(expr_extptr_t(arg)->Copy());
 	}
 	auto operator_type = OperatorToExpressionType(name);
 	if (operator_type != ExpressionType::INVALID && children.size() == 2) {
@@ -63,13 +63,13 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<FunctionExpression>("duckdb_expr", name, move(children));
 }
 
-[[cpp11::register]] std::string expr_tostring_cpp(duckdb::expr_extptr expr) {
+[[cpp11::register]] std::string expr_tostring_cpp(duckdb::expr_extptr_t expr) {
 	return expr->ToString();
 }
 
 // DuckDB Relations
 
-[[cpp11::register]] SEXP rel_from_df_cpp(duckdb::con_extptr con, data_frame df) {
+[[cpp11::register]] SEXP rel_from_df_cpp(duckdb::conn_eptr_t con, data_frame df) {
 	if (!con->conn) {
 		stop("rel_from_df: Invalid connection");
 	}
@@ -85,16 +85,16 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return res;
 }
 
-[[cpp11::register]] SEXP rel_filter_cpp(duckdb::rel_extptr rel, list exprs) {
+[[cpp11::register]] SEXP rel_filter_cpp(duckdb::rel_extptr_t rel, list exprs) {
 	unique_ptr<ParsedExpression> filter_expr;
 	if (exprs.size() == 0) { // nop
 		warning("rel_filter without filter expressions has no effect");
 		return rel;
 	} else if (exprs.size() == 1) {
-		filter_expr = ((expr_extptr)exprs[0])->Copy();
+		filter_expr = ((expr_extptr_t)exprs[0])->Copy();
 	} else {
 		vector<unique_ptr<ParsedExpression>> filters;
-		for (expr_extptr expr : exprs) {
+		for (expr_extptr_t expr : exprs) {
 			filters.push_back(expr->Copy());
 		}
 		filter_expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(filters));
@@ -103,7 +103,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rel_project_cpp(duckdb::rel_extptr rel, list exprs) {
+[[cpp11::register]] SEXP rel_project_cpp(duckdb::rel_extptr_t rel, list exprs) {
 	if (exprs.size() == 0) {
 		warning("rel_project without projection expressions has no effect");
 		return rel;
@@ -111,7 +111,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	vector<unique_ptr<ParsedExpression>> projections;
 	vector<string> aliases;
 
-	for (expr_extptr expr : exprs) {
+	for (expr_extptr_t expr : exprs) {
 		aliases.push_back((expr->ToString()));
 		projections.push_back(expr->Copy());
 	}
@@ -120,13 +120,13 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rel_aggregate_cpp(duckdb::rel_extptr rel, list groups, list aggregates) {
+[[cpp11::register]] SEXP rel_aggregate_cpp(duckdb::rel_extptr_t rel, list groups, list aggregates) {
 	vector<unique_ptr<ParsedExpression>> res_groups, res_aggregates;
 
 	// TODO deal with empty groups
 	vector<string> aliases;
 
-	for (expr_extptr expr : groups) {
+	for (expr_extptr_t expr : groups) {
 		res_groups.push_back(expr->Copy());
 		res_aggregates.push_back(expr->Copy());
 	}
@@ -134,7 +134,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	int aggr_idx = 0; // has to be int for - reasons
 	auto aggr_names = aggregates.names();
 
-	for (expr_extptr expr_p : aggregates) {
+	for (expr_extptr_t expr_p : aggregates) {
 		auto expr = expr_p->Copy();
 		if (aggr_names.size() > aggr_idx) {
 			expr->alias = aggr_names[aggr_idx];
@@ -147,10 +147,10 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rel_order_cpp(duckdb::rel_extptr rel, list orders) {
+[[cpp11::register]] SEXP rel_order_cpp(duckdb::rel_extptr_t rel, list orders) {
 	vector<OrderByNode> res_orders;
 
-	for (expr_extptr expr : orders) {
+	for (expr_extptr_t expr : orders) {
 		res_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, expr->Copy());
 	}
 
@@ -181,19 +181,19 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	return df;
 }
 
-[[cpp11::register]] SEXP rel_to_df_cpp(duckdb::rel_extptr rel) {
+[[cpp11::register]] SEXP rel_to_df_cpp(duckdb::rel_extptr_t rel) {
 	return result_to_df(rel->rel->Execute());
 }
 
-[[cpp11::register]] std::string rel_tostring_cpp(duckdb::rel_extptr rel) {
+[[cpp11::register]] std::string rel_tostring_cpp(duckdb::rel_extptr_t rel) {
 	return rel->rel->ToString();
 }
 
-[[cpp11::register]] SEXP rel_explain_cpp(duckdb::rel_extptr rel) {
+[[cpp11::register]] SEXP rel_explain_cpp(duckdb::rel_extptr_t rel) {
 	return result_to_df(rel->rel->Explain());
 }
 
-[[cpp11::register]] SEXP rel_sql_cpp(duckdb::rel_extptr rel, std::string sql) {
+[[cpp11::register]] SEXP rel_sql_cpp(duckdb::rel_extptr_t rel, std::string sql) {
 	auto res = rel->rel->Query("_", sql);
 	if (!res->success) {
 		stop(res->error);
@@ -201,7 +201,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	return result_to_df(move(res));
 }
 
-[[cpp11::register]] SEXP rel_names_cpp(duckdb::rel_extptr rel) {
+[[cpp11::register]] SEXP rel_names_cpp(duckdb::rel_extptr_t rel) {
 	auto ret = writable::strings();
 	for (auto &col : rel->rel->Columns()) {
 		ret.push_back(col.name);

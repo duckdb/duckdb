@@ -29,3 +29,7 @@ endif()
 if(${BUILD_EXCEL_EXTENSION})
   add_subdirectory(excel)
 endif()
+
+if(${BUILD_SUBSTRAIT_EXTENSION})
+  add_subdirectory(substrait)
+endif()
