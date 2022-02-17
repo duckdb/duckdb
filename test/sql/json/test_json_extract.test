@@ -13,12 +13,22 @@ select json_extract('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my
 "duck"
 
 query T
+select json_extract_path('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
+----
+"duck"
+
+query T
 select '{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON->'/my_field/my_nested_field/1'
 ----
 "duck"
 
 query T
 select json_extract_string('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
+----
+duck
+
+query T
+select json_extract_path_text('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
 ----
 duck
 

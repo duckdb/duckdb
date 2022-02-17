@@ -20,10 +20,10 @@ VALUES('true'),('false'),('null'),('123'),('-234'),('34.5e+6'),
      ('{"a":true,"b":{"c":false}}');
 
 query T
-SELECT count(*) FROM j1 WHERE json_type(x) IN ('object','array');
+SELECT count(*) FROM j1 WHERE json_type(x) IN ('OBJECT','ARRAY');
   SELECT x FROM j1
    WHERE json_extract(x,'$')<>x
-     AND json_type(x) IN ('object','array');
+     AND json_type(x) IN ('OBJECT','ARRAY');
 ----
 4
 
@@ -167,6 +167,6 @@ SELECT count(*) FROM j2;
 query TTT
 SELECT id, json_valid(json), json_type(json) FROM j2 ORDER BY id;
 ----
-1	true	object
-2	true	object
-3	true	array
+1	true	OBJECT
+2	true	OBJECT
+3	true	ARRAY

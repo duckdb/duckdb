@@ -1,4 +1,3 @@
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
 

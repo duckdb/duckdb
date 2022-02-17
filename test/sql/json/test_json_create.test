@@ -12,6 +12,12 @@ select json_quote({n: 42})
 ----
 {"n":42}
 
+# alias
+query T
+select to_json({n: 42})
+----
+{"n":42}
+
 query T
 select json_object('duck', 42)
 ----
@@ -124,6 +130,33 @@ query T
 select json_quote(map(list(d), list(e))) from test
 ----
 {"[0, 1, 2, 3, 4, 5, 6, 7, 9]":33,"[]":42,"[1, 2, 3]":1111,"[4, 2]":null}
+
+# some postgres aliases
+query T
+select row_to_json({a: 42})
+----
+{"a":42}
+
+query T
+select row_to_json(NULL)
+----
+NULL
+
+statement error
+select row_to_json([42])
+
+query T
+select array_to_json([42])
+----
+[42]
+
+query T
+select array_to_json(NULL)
+----
+NULL
+
+statement error
+select array_to_json({a: 42})
 
 # Some SQLite tests
 query T

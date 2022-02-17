@@ -1,4 +1,3 @@
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
 
@@ -46,6 +45,12 @@ CreateScalarFunctionInfo JSONFunctions::GetExtractFunction() {
 	return CreateScalarFunctionInfo(set);
 }
 
+CreateScalarFunctionInfo JSONFunctions::GetExtractPathFunction() {
+	auto result = GetExtractFunction();
+	result.name = "json_extract_path";
+	return result;
+}
+
 CreateScalarFunctionInfo JSONFunctions::GetExtractStringFunction() {
 	// String extract function
 	ScalarFunctionSet set("json_extract_string");
@@ -56,6 +61,12 @@ CreateScalarFunctionInfo JSONFunctions::GetExtractStringFunction() {
 	                               JSONReadManyFunctionData::Bind, nullptr, nullptr));
 
 	return CreateScalarFunctionInfo(set);
+}
+
+CreateScalarFunctionInfo JSONFunctions::GetExtractPathTextFunction() {
+	auto result = GetExtractStringFunction();
+	result.name = "json_extract_path_text";
+	return result;
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetExtractStringOperator() {
