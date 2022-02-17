@@ -437,7 +437,54 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	}
 }
 
-void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk) {
+static TableIndexList& GetForeignKeyConstraintIndicesAndChunk(const string &table_name, const vector<idx_t> &src_keys,
+                                                             const vector<idx_t> &dst_keys, ClientContext &context, DataChunk &src_chunk, DataChunk &dst_chunk) {
+	auto table_entry_ptr = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, INVALID_SCHEMA, table_name);
+	if (table_entry_ptr == nullptr) {
+		throw ParserException("Can't find table \"%s\" in foreign key constraint", table_name);
+	}
+	TableIndexList &indices = table_entry_ptr->storage->info->indexes;
+
+	// make the data chunk to check
+	vector<LogicalType> types;
+	for (idx_t i = 0; i < table_entry_ptr->columns.size(); i++) {
+		types.emplace_back(table_entry_ptr->columns[i].type);
+	}
+	dst_chunk.Initialize(types);
+	dst_chunk.SetCardinality(src_chunk.size());
+	for (idx_t idx = 0; idx < src_chunk.size(); idx++) {
+		for (idx_t i = 0; i < src_keys.size(); i++) {
+			Value val = src_chunk.GetValue(src_keys[i], idx);
+			dst_chunk.SetValue(dst_keys[i], idx, val);
+		}
+	}
+
+	return indices;
+}
+
+static void VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &foreign_key, ClientContext &context, DataChunk &chunk) {
+	DataChunk pk_chunk;
+	TableIndexList &indices = GetForeignKeyConstraintIndicesAndChunk(foreign_key.table, foreign_key.fk_keys, foreign_key.pk_keys, context, chunk, pk_chunk);
+
+	//! check whether or not the chunk can be inserted into the referenced table
+	indices.Scan([&](Index &index) {
+		index.VerifyAppendForeignKey(pk_chunk);
+		return false;
+	});
+}
+
+static void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint& foreign_key, ClientContext& context, DataChunk& chunk) {
+	DataChunk fk_chunk;
+	TableIndexList &indices = GetForeignKeyConstraintIndicesAndChunk(foreign_key.table, foreign_key.pk_keys, foreign_key.fk_keys, context, chunk, fk_chunk);
+
+	//! check whether or not the chunk can be deleted from the table has foreign keys
+	indices.Scan([&](Index &index) {
+		index.VerifyDeleteForeignKey(fk_chunk);
+		return false;
+	});
+}
+
+void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
 	for (auto &constraint : table.bound_constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
@@ -459,7 +506,13 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chu
 			});
 			break;
 		}
-		case ConstraintType::FOREIGN_KEY:
+		case ConstraintType::FOREIGN_KEY: {
+			auto &foreign_key = *reinterpret_cast<BoundForeignKeyConstraint *>(constraint.get());
+			if (foreign_key.is_fk_table) {
+				VerifyAppendForeignKeyConstraint(foreign_key, context, chunk);
+			}
+			break;
+		}
 		default:
 			throw NotImplementedException("Constraint type not implemented!");
 		}
@@ -480,7 +533,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	chunk.Verify();
 
 	// verify any constraints on the new chunk
-	VerifyAppendConstraints(table, chunk);
+	VerifyAppendConstraints(table, context, chunk);
 
 	// append to the transaction local data
 	auto &transaction = Transaction::GetTransaction(context);
@@ -772,6 +825,26 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	});
 }
 
+void DataTable::VerifyDeleteConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
+	for (auto &constraint : table.bound_constraints) {
+		switch (constraint->type) {
+		case ConstraintType::NOT_NULL:
+		case ConstraintType::CHECK:
+		case ConstraintType::UNIQUE:
+			break;
+		case ConstraintType::FOREIGN_KEY: {
+			auto &foreign_key = *reinterpret_cast<BoundForeignKeyConstraint *>(constraint.get());
+			if (!foreign_key.is_fk_table) {
+				VerifyDeleteForeignKeyConstraint(foreign_key, context, chunk);
+			}
+			break;
+		}
+		default:
+			throw NotImplementedException("Constraint type not implemented!");
+		}
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Delete
 //===--------------------------------------------------------------------===//
@@ -786,6 +859,19 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 	row_identifiers.Normalify(count);
 	auto ids = FlatVector::GetData<row_t>(row_identifiers);
 	auto first_id = ids[0];
+
+	// verify any constraints on the delete rows
+	DataChunk chunk;
+	ColumnFetchState fetch_state;
+	vector<column_t> col_ids;
+	vector<LogicalType> types;
+	for (idx_t i = 0; i < column_definitions.size(); i++) {
+		col_ids.push_back(column_definitions[i].oid);
+		types.emplace_back(column_definitions[i].type);
+	}
+	chunk.Initialize(types);
+	Fetch(transaction, chunk, col_ids, row_identifiers, count, fetch_state);
+	VerifyDeleteConstraints(table, context, chunk);
 
 	if (first_id >= MAX_ROW_ID) {
 		// deletion is in transaction-local storage: push delete into local chunk collection
@@ -855,7 +941,7 @@ static bool CreateMockChunk(TableCatalogEntry &table, const vector<column_t> &co
 	return true;
 }
 
-void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk,
+void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
                                         const vector<column_t> &column_ids) {
 	for (auto &constraint : table.bound_constraints) {
 		switch (constraint->type) {
@@ -881,8 +967,16 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 			break;
 		}
 		case ConstraintType::UNIQUE:
-		case ConstraintType::FOREIGN_KEY:
 			break;
+		case ConstraintType::FOREIGN_KEY: {
+			auto &foreign_key = *reinterpret_cast<BoundForeignKeyConstraint *>(constraint.get());
+			if (foreign_key.is_fk_table) {
+				VerifyAppendForeignKeyConstraint(foreign_key, context, chunk);
+			} else {
+				VerifyDeleteForeignKeyConstraint(foreign_key, context, chunk);
+			}
+			break;
+		}
 		default:
 			throw NotImplementedException("Constraint type not implemented!");
 		}
@@ -913,7 +1007,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	}
 
 	// first verify that no constraints are violated
-	VerifyUpdateConstraints(table, updates, column_ids);
+	VerifyUpdateConstraints(table, context, updates, column_ids);
 
 	// now perform the actual update
 	auto &transaction = Transaction::GetTransaction(context);

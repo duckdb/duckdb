@@ -62,6 +62,12 @@ struct ARTIndexScanState : public IndexScanState {
 	idx_t result_index = 0;
 };
 
+enum VerifyExistanceType : uint8_t {
+	APPEND = 0,    // for purpose to append into table
+	APPEND_FK = 1,   // for purpose to append into table has foreign key
+	DELETE_FK = 2      // for purpose to delete from table related to foreign key
+};
+
 class ART : public Index {
 public:
 	ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
@@ -92,6 +98,10 @@ public:
 	bool Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index
 	void VerifyAppend(DataChunk &chunk) override;
+	//! Verify that data can be appended to the index for foreign key constraint
+	void VerifyAppendForeignKey(DataChunk &chunk) override;
+	//! Verify that data can be delete from the index for foreign key constraint
+	void VerifyDeleteForeignKey(DataChunk &chunk) override;
 	//! Delete entries in the index
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert data into the index.
@@ -136,6 +146,8 @@ private:
 	                  vector<row_t> &result_ids);
 
 	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);
+
+	void VerifyExistence(DataChunk &chunk, VerifyExistanceType verify_type);
 };
 
 } // namespace duckdb

@@ -11,6 +11,7 @@
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -68,7 +69,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		}
 		storage = make_shared<DataTable>(catalog->db, schema->name, name, move(colum_def_copy), move(info->data));
 
-		// create the unique indexes for the UNIQUE and PRIMARY KEY constraints
+		// create the unique indexes for the UNIQUE and PRIMARY KEY and FOREIGN KEY constraints
 		for (idx_t i = 0; i < bound_constraints.size(); i++) {
 			auto &constraint = bound_constraints[i];
 			if (constraint->type == ConstraintType::UNIQUE) {
@@ -91,6 +92,28 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				// create an adaptive radix tree around the expressions
 				auto art = make_unique<ART>(column_ids, move(unbound_expressions), true, unique.is_primary_key);
 				storage->AddIndex(move(art), bound_expressions);
+			} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
+				// foreign key constraint: create a foreign key index
+				auto &foreign_key = (BoundForeignKeyConstraint &)*constraint;
+				if (foreign_key.is_fk_table) {
+					// fetch types and create expressions for the index from the columns
+					vector<column_t> column_ids;
+					vector<unique_ptr<Expression>> unbound_expressions;
+					vector<unique_ptr<Expression>> bound_expressions;
+					idx_t key_nr = 0;
+					for (auto &key : foreign_key.fk_keys) {
+						D_ASSERT(key < columns.size());
+
+						unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(
+						    columns[key].name, columns[key].type, ColumnBinding(0, column_ids.size())));
+
+						bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].type, key_nr++));
+						column_ids.push_back(key);
+					}
+					// create an adaptive radix tree around the expressions
+					auto art = make_unique<ART>(column_ids, move(unbound_expressions));
+					storage->AddIndex(move(art), bound_expressions);
+				}
 			}
 		}
 	}
@@ -179,6 +202,24 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 			for (idx_t i = 0; i < unique.columns.size(); i++) {
 				if (unique.columns[i] == info.old_name) {
 					unique.columns[i] = info.new_name;
+				}
+			}
+			break;
+		}
+		case ConstraintType::FOREIGN_KEY: {
+			// FOREIGN KEY constraint: possibly need to rename columns
+			auto &foreign_key = (ForeignKeyConstraint &)*copy;
+			if (foreign_key.is_fk_table) {
+				for (idx_t i = 0; i < foreign_key.fk_columns.size(); i++) {
+					if (foreign_key.fk_columns[i] == info.old_name) {
+						foreign_key.fk_columns[i] = info.new_name;
+					}
+				}
+			} else {
+				for (idx_t i = 0; i < foreign_key.pk_columns.size(); i++) {
+					if (foreign_key.pk_columns[i] == info.old_name) {
+						foreign_key.pk_columns[i] = info.new_name;
+					}
 				}
 			}
 			break;
@@ -279,6 +320,23 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 			create_info->constraints.push_back(move(copy));
 			break;
 		}
+		case ConstraintType::FOREIGN_KEY: {
+			auto copy = constraint->Copy();
+			auto &foreign_key = (ForeignKeyConstraint &)*copy;
+			vector<string> &columns = foreign_key.pk_columns;
+			if (foreign_key.is_fk_table) {
+				columns = foreign_key.fk_columns;
+			}
+			for (idx_t i = 0; i < columns.size(); i++) {
+				if (columns[i] == info.removed_column) {
+					throw CatalogException(
+					    "Cannot drop column \"%s\" because there is a FOREIGN KEY constraint that depends on it",
+					    info.removed_column);
+				}
+			}
+			create_info->constraints.push_back(move(copy));
+			break;
+		}
 		default:
 			throw InternalException("Unsupported constraint for entry!");
 		}
@@ -342,6 +400,18 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 			if (bound_unique.key_set.find(change_idx) != bound_unique.key_set.end()) {
 				throw BinderException(
 				    "Cannot change the type of a column that has a UNIQUE or PRIMARY KEY constraint specified");
+			}
+			break;
+		}
+		case ConstraintType::FOREIGN_KEY: {
+			auto &bound_foreign_key = (BoundForeignKeyConstraint &)*bound_constraints[i];
+			unordered_set<idx_t> &key_set = bound_foreign_key.pk_key_set;
+			if (bound_foreign_key.is_fk_table) {
+				key_set = bound_foreign_key.fk_key_set;
+			}
+			if (key_set.find(change_idx) != key_set.end()) {
+				throw BinderException(
+				    "Cannot change the type of a column that has a FOREIGN KEY constraint specified");
 			}
 			break;
 		}

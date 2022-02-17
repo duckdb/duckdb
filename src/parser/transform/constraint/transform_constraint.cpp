@@ -24,6 +24,17 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		}
 		return make_unique<CheckConstraint>(TransformExpression(constraint->raw_expr));
 	}
+	case duckdb_libpgquery::PG_CONSTR_FOREIGN: {
+		string pk_table = constraint->pktable->relname;
+		vector<string> fk_columns, pk_columns;
+		for (auto kc = constraint->fk_attrs->head; kc; kc = kc->next) {
+			fk_columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
+		}
+		for (auto kc = constraint->pk_attrs->head; kc; kc = kc->next) {
+			pk_columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
+		}
+		return make_unique<ForeignKeyConstraint>(pk_table, pk_columns, fk_columns, true);
+	}
 	default:
 		throw NotImplementedException("Constraint type not handled yet!");
 	}
