@@ -2,7 +2,6 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -22,21 +21,7 @@ OperatorExpression::OperatorExpression(ExpressionType type, vector<unique_ptr<Pa
 }
 
 string OperatorExpression::ToString() const {
-	auto op = ExpressionTypeToOperator(type);
-	if (!op.empty()) {
-		// use the operator string to represent the operator
-		if (children.size() == 1) {
-			return op + children[0]->ToString();
-		} else if (children.size() == 2) {
-			return children[0]->ToString() + " " + op + " " + children[1]->ToString();
-		}
-	}
-	// if there is no operator we render it as a function
-	auto result = ExpressionTypeToString(type) + "(";
-	result += StringUtil::Join(children, children.size(), ", ",
-	                           [](const unique_ptr<ParsedExpression> &child) { return child->ToString(); });
-	result += ")";
-	return result;
+	return ToString<OperatorExpression, ParsedExpression>(*this);
 }
 
 bool OperatorExpression::Equals(const OperatorExpression *a, const OperatorExpression *b) {

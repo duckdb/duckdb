@@ -8,6 +8,7 @@
 #include "duckdb/common/result_arrow_wrapper.hpp"
 
 using namespace duckdb;
+using namespace cpp11::literals;
 
 // converter for primitive types
 template <class SRC, class DEST>
@@ -20,66 +21,35 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 	}
 }
 
-SEXP RApi::Release(SEXP stmtsexp) {
-	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_release_R: Need external pointer parameter");
+[[cpp11::register]] void rapi_release(duckdb::stmt_eptr_t stmt) {
+	auto stmt_ptr = stmt.release();
+	if (stmt_ptr) {
+		delete stmt_ptr;
 	}
-	RStatement *stmtholder = (RStatement *)R_ExternalPtrAddr(stmtsexp);
-	if (stmtsexp) {
-		R_ClearExternalPtr(stmtsexp);
-		delete stmtholder;
-	}
-	return R_NilValue;
 }
 
-static SEXP duckdb_finalize_statement_R(SEXP stmtsexp) {
-	return RApi::Release(stmtsexp);
-}
-
-SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
-	RProtector r;
-	if (TYPEOF(querysexp) != STRSXP || Rf_length(querysexp) != 1) {
-		cpp11::stop("duckdb_prepare_R: Need single string parameter for query");
-	}
-	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_prepare_R: Need external pointer parameter for connections");
+[[cpp11::register]] cpp11::list rapi_prepare(duckdb::conn_eptr_t conn, std::string query) {
+	if (!conn || !conn->conn) {
+		cpp11::stop("rapi_prepare: Invalid connection");
 	}
 
-	char *query = (char *)CHAR(STRING_ELT(querysexp, 0));
-	if (!query) {
-		cpp11::stop("duckdb_prepare_R: No query");
-	}
-
-	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
-	if (!conn_wrapper || !conn_wrapper->conn) {
-		cpp11::stop("duckdb_prepare_R: Invalid connection");
-	}
-
-	auto stmt = conn_wrapper->conn->Prepare(query);
+	auto stmt = conn->conn->Prepare(query.c_str());
 	if (!stmt->success) {
-		cpp11::stop("duckdb_prepare_R: Failed to prepare query %s\nError: %s", query, stmt->error.c_str());
+		cpp11::stop("rapi_prepare: Failed to prepare query %s\nError: %s", query.c_str(), stmt->error.c_str());
 	}
+
+	cpp11::writable::list retlist;
+	retlist.reserve(6);
+	retlist.push_back({"str"_nm = query});
 
 	auto stmtholder = new RStatement();
 	stmtholder->stmt = move(stmt);
 
-	cpp11::list retlist(NEW_LIST(6));
+	retlist.push_back({"ref"_nm = stmt_eptr_t(stmtholder)});
+	retlist.push_back({"type"_nm = StatementTypeToString(stmtholder->stmt->GetStatementType())});
+	retlist.push_back({"names"_nm = cpp11::as_sexp(stmtholder->stmt->GetNames())});
 
-	SEXP stmtsexp = r.Protect(R_MakeExternalPtr(stmtholder, R_NilValue, R_NilValue));
-	R_RegisterCFinalizer(stmtsexp, (void (*)(SEXP))duckdb_finalize_statement_R);
-
-	SET_NAMES(retlist, RStrings::get().str_ref_type_names_rtypes_n_param_str);
-
-	SET_VECTOR_ELT(retlist, 0, querysexp);
-	SET_VECTOR_ELT(retlist, 1, stmtsexp);
-
-	SEXP stmt_type = RApi::StringsToSexp({StatementTypeToString(stmtholder->stmt->GetStatementType())});
-	SET_VECTOR_ELT(retlist, 2, stmt_type);
-
-	SEXP col_names = RApi::StringsToSexp(stmtholder->stmt->GetNames());
-	SET_VECTOR_ELT(retlist, 3, col_names);
-
-	vector<string> rtypes;
+	cpp11::writable::strings rtypes;
 
 	for (auto &stype : stmtholder->stmt->GetTypes()) {
 		string rtype = "";
@@ -129,71 +99,58 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 			rtype = "factor";
 			break;
 		default:
-			cpp11::stop("duckdb_prepare_R: Unknown column type for prepare: %s", stype.ToString().c_str());
+			cpp11::stop("rapi_prepare: Unknown column type for prepare: %s", stype.ToString().c_str());
 			break;
 		}
 		rtypes.push_back(rtype);
 	}
 
-	SEXP rtypessexp = StringsToSexp(rtypes);
-	SET_VECTOR_ELT(retlist, 4, rtypessexp);
-
-	SET_VECTOR_ELT(retlist, 5, Rf_ScalarInteger(stmtholder->stmt->n_param));
+	retlist.push_back({"rtypes"_nm = rtypes});
+	retlist.push_back({"n_param"_nm = stmtholder->stmt->n_param});
 
 	return retlist;
 }
 
-SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
-	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_bind_R: Need external pointer parameter");
-	}
-	RStatement *stmtholder = (RStatement *)R_ExternalPtrAddr(stmtsexp);
-	if (!stmtholder || !stmtholder->stmt) {
-		cpp11::stop("duckdb_bind_R: Invalid statement");
+[[cpp11::register]] cpp11::list rapi_bind(duckdb::stmt_eptr_t stmt, cpp11::list params, bool arrow) {
+	if (!stmt || !stmt->stmt) {
+		cpp11::stop("rapi_bind: Invalid statement");
 	}
 
-	stmtholder->parameters.clear();
-	stmtholder->parameters.resize(stmtholder->stmt->n_param);
+	stmt->parameters.clear();
+	stmt->parameters.resize(stmt->stmt->n_param);
 
-	if (stmtholder->stmt->n_param == 0) {
-		cpp11::stop("duckdb_bind_R: dbBind called but query takes no parameters");
+	if (stmt->stmt->n_param == 0) {
+		cpp11::stop("rapi_bind: dbBind called but query takes no parameters");
 	}
 
-	if (TYPEOF(paramsexp) != VECSXP || (idx_t)Rf_length(paramsexp) != stmtholder->stmt->n_param) {
-		cpp11::stop("duckdb_bind_R: bind parameters need to be a list of length %i", stmtholder->stmt->n_param);
+	if (params.size() != stmt->stmt->n_param) {
+		cpp11::stop("rapi_bind: Bind parameters need to be a list of length %i", stmt->stmt->n_param);
 	}
 
-	if (TYPEOF(arrowsexp) != LGLSXP) {
-		cpp11::stop("duckdb_bind_R: Need logical for third parameter");
-	}
+	R_len_t n_rows = Rf_length(params[0]);
 
-	bool arrow_fetch = LOGICAL_POINTER(arrowsexp)[0] != 0;
-
-	R_len_t n_rows = Rf_length(VECTOR_ELT(paramsexp, 0));
-
-	for (idx_t param_idx = 1; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
-		SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
-		if (Rf_length(valsexp) != n_rows) {
-			cpp11::stop("duckdb_bind_R: bind parameter values need to have the same length");
+	for (auto param = std::next(params.begin()); param != params.end(); ++param) {
+		if (Rf_length(*param) != n_rows) {
+			cpp11::stop("rapi_bind: Bind parameter values need to have the same length");
 		}
 	}
 
-	if (n_rows != 1 && arrow_fetch) {
-		cpp11::stop("duckdb_bind_R: bind parameter values need to have length one for arrow queries");
+	if (n_rows != 1 && arrow) {
+		cpp11::stop("rapi_bind: Bind parameter values need to have length one for arrow queries");
 	}
 
-	cpp11::list out(NEW_LIST(n_rows));
+	cpp11::writable::list out;
+	out.reserve(n_rows);
 
 	for (idx_t row_idx = 0; row_idx < (size_t)n_rows; ++row_idx) {
-		for (idx_t param_idx = 0; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
-			SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
+		for (idx_t param_idx = 0; param_idx < (idx_t)params.size(); param_idx++) {
+			SEXP valsexp = params[(size_t)param_idx];
 			auto val = RApiTypes::SexpToValue(valsexp, row_idx);
-			stmtholder->parameters[param_idx] = val;
+			stmt->parameters[param_idx] = val;
 		}
 
 		// No protection, assigned immediately
-		auto exec_result = RApi::Execute(stmtsexp, arrowsexp);
-		SET_VECTOR_ELT(out, row_idx, exec_result);
+		out.push_back(rapi_execute(stmt, arrow));
 	}
 
 	return out;
@@ -235,10 +192,8 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 		auto wrapper = new DuckDBAltrepStringWrapper();
 		wrapper->length = nrows;
 
-		auto ptr = PROTECT(R_MakeExternalPtr((void *)wrapper, R_NilValue, R_NilValue));
-		R_RegisterCFinalizer(ptr, AltrepString::Finalize);
+		cpp11::external_pointer<DuckDBAltrepStringWrapper> ptr(wrapper);
 		varvalue = r_varvalue.Protect(R_new_altrep(AltrepString::rclass, ptr, R_NilValue));
-		UNPROTECT(1);
 		break;
 	}
 
@@ -249,7 +204,7 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 		varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
 		break;
 	default:
-		cpp11::stop("duckdb_execute_R: Unknown column type for execute: %s", type.ToString().c_str());
+		cpp11::stop("rapi_execute: Unknown column type for execute: %s", type.ToString().c_str());
 	}
 	if (!varvalue) {
 		throw std::bad_alloc();
@@ -486,7 +441,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 			break;
 
 		default:
-			cpp11::stop("duckdb_execute_R: Unknown enum type for convert: %s", TypeIdToString(physical_type).c_str());
+			cpp11::stop("rapi_execute: Unknown enum type for convert: %s", TypeIdToString(physical_type).c_str());
 		}
 		// increment by one cause R factor offsets start at 1
 		auto dest_ptr = ((int32_t *)INTEGER_POINTER(dest)) + dest_offset;
@@ -504,12 +459,12 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 			str_c_vec[i] = str_vec.GetValue(i).ToString();
 		}
 
-		SET_LEVELS(dest, RApi::StringsToSexp(str_c_vec));
+		SET_LEVELS(dest, StringsToSexp(str_c_vec));
 		SET_CLASS(dest, RStrings::get().factor_str);
 		break;
 	}
 	default:
-		cpp11::stop("duckdb_execute_R: Unknown column type for convert: %s", src_vec.GetType().ToString().c_str());
+		cpp11::stop("rapi_execute: Unknown column type for convert: %s", src_vec.GetType().ToString().c_str());
 		break;
 	}
 }
@@ -523,7 +478,7 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 
 	uint64_t nrows = result->collection.Count();
 	cpp11::list retlist(NEW_LIST(ncols));
-	SET_NAMES(retlist, RApi::StringsToSexp(result->names));
+	SET_NAMES(retlist, StringsToSexp(result->names));
 
 	for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
 		// TODO move the protector to allocate?
@@ -584,10 +539,6 @@ struct AppendableRList {
 	RProtector r;
 };
 
-struct RQueryResult {
-	unique_ptr<QueryResult> result;
-};
-
 bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowArray &arrow_data,
                      ArrowSchema &arrow_schema, SEXP batch_import_from_c, SEXP arrow_namespace) {
 	if (result->type == QueryResultType::STREAM_RESULT) {
@@ -608,26 +559,13 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 }
 
 // Turn a DuckDB result set into an Arrow Table
-SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp,
-                              SEXP return_tablesexp) {
-	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
-	auto result = query_result_holder->result.get();
+[[cpp11::register]] SEXP rapi_execute_arrow(duckdb::rqry_eptr_t qry_res, bool stream, int vec_per_chunk,
+                                            bool return_table) {
+	auto result = qry_res->result.get();
 	// somewhat dark magic below
 	cpp11::function getNamespace = RStrings::get().getNamespace_sym;
 	cpp11::sexp arrow_namespace(getNamespace(RStrings::get().arrow_str));
 
-	bool stream = LOGICAL_POINTER(streamsexp)[0] != 0;
-	int num_of_vectors = NUMERIC_POINTER(vector_per_chunksexp)[0];
-	bool return_table = LOGICAL_POINTER(return_tablesexp)[0] != 0;
-	if (TYPEOF(streamsexp) != LGLSXP || LENGTH(streamsexp) != 1) {
-		cpp11::stop("stream parameter needs to be single-value logical");
-	}
-	if (TYPEOF(return_tablesexp) != LGLSXP || LENGTH(return_tablesexp) != 1) {
-		cpp11::stop("return_table parameter needs to be single-value logical");
-	}
-	if (TYPEOF(vector_per_chunksexp) != REALSXP || LENGTH(vector_per_chunksexp) != 1) {
-		cpp11::stop("vector_per_chunks parameter needs to be single-value numeric");
-	}
 	// export schema setup
 	ArrowSchema arrow_schema;
 	cpp11::doubles schema_ptr_sexp(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_schema))));
@@ -640,7 +578,7 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 	// create data batches
 	AppendableRList batches_list;
 	if (stream) {
-		for (idx_t i = 0; i < (size_t)num_of_vectors; i++) {
+		for (idx_t i = 0; i < (size_t)vec_per_chunk; i++) {
 			if (!FetchArrowChunk(result, batches_list, arrow_data, arrow_schema, batch_import_from_c,
 			                     arrow_namespace)) {
 				break;
@@ -666,58 +604,34 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 }
 
 // Turn a DuckDB result set into an RecordBatchReader
-SEXP RApi::DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp) {
-	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
-	int approx_batch_size = NUMERIC_POINTER(approx_batch_sizeexp)[0];
-	if (TYPEOF(approx_batch_sizeexp) != REALSXP || LENGTH(approx_batch_sizeexp) != 1) {
-		cpp11::stop("vector_per_chunks parameter needs to be single-value numeric");
-	}
+[[cpp11::register]] SEXP rapi_record_batch(duckdb::rqry_eptr_t qry_res, int approx_batch_size) {
 	// somewhat dark magic below
 	cpp11::function getNamespace = RStrings::get().getNamespace_sym;
 	cpp11::sexp arrow_namespace(getNamespace(RStrings::get().arrow_str));
 
 	ResultArrowArrayStreamWrapper *result_stream =
-	    new ResultArrowArrayStreamWrapper(move(query_result_holder->result), approx_batch_size);
+	    new ResultArrowArrayStreamWrapper(move(qry_res->result), approx_batch_size);
 	cpp11::sexp stream_ptr_sexp(
 	    Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&result_stream->stream))));
 	cpp11::sexp record_batch_reader(Rf_lang2(RStrings::get().ImportRecordBatchReader_sym, stream_ptr_sexp));
 	return cpp11::safe[Rf_eval](record_batch_reader, arrow_namespace);
 }
 
-static SEXP DuckDBFinalizeQueryR(SEXP query_resultsexp) {
-	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
-	if (query_resultsexp) {
-		R_ClearExternalPtr(query_resultsexp);
-		delete query_result_holder;
-	}
-	return R_NilValue;
-}
-
-SEXP RApi::Execute(SEXP stmtsexp, SEXP arrowsexp) {
-	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_execute_R: Need external pointer for first parameter");
-	}
-	if (TYPEOF(arrowsexp) != LGLSXP) {
-		cpp11::stop("duckdb_execute_R: Need logical for second parameter");
-	}
-	RStatement *stmtholder = (RStatement *)R_ExternalPtrAddr(stmtsexp);
-	if (!stmtholder || !stmtholder->stmt) {
-		cpp11::stop("duckdb_execute_R: Invalid statement");
+[[cpp11::register]] SEXP rapi_execute(duckdb::stmt_eptr_t stmt, bool arrow) {
+	if (!stmt || !stmt->stmt) {
+		cpp11::stop("rapi_execute: Invalid statement");
 	}
 
-	bool arrow_fetch = LOGICAL_POINTER(arrowsexp)[0] != 0;
-	auto generic_result = stmtholder->stmt->Execute(stmtholder->parameters, arrow_fetch);
+	auto generic_result = stmt->stmt->Execute(stmt->parameters, arrow);
 	if (!generic_result->success) {
-		cpp11::stop("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
+		cpp11::stop("rapi_execute: Failed to run query\nError: %s", generic_result->error.c_str());
 	}
 
-	if (arrow_fetch) {
-		RProtector r;
+	if (arrow) {
 		auto query_result = new RQueryResult();
 		query_result->result = move(generic_result);
-		SEXP query_resultexp = r.Protect(R_MakeExternalPtr(query_result, R_NilValue, R_NilValue));
-		R_RegisterCFinalizer(query_resultexp, (void (*)(SEXP))DuckDBFinalizeQueryR);
-		return query_resultexp;
+		rqry_eptr_t query_resultsexp(query_result);
+		return query_resultsexp;
 	} else {
 		D_ASSERT(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
 		MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();

@@ -79,6 +79,36 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Aggregate(const string &expr, const string &groups = "");
 
+	unique_ptr<DuckDBPyRelation> GenericAggregator(const string &function_name, const string &sum_columns,
+	                                               const string &groups = "", const string &function_parameter = "",
+	                                               const string &projected_columns = "");
+
+	unique_ptr<DuckDBPyRelation> Sum(const string &sum_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Count(const string &count_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Median(const string &median_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Quantile(const string &q, const string &quantile_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Min(const string &min_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Max(const string &max_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Mean(const string &mean_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Var(const string &var_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> STD(const string &std_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> ValueCounts(const string &std_columns, const string &groups = "");
+
+	idx_t Length();
+
+	py::tuple Shape();
+
+	unique_ptr<DuckDBPyRelation> Unique(const string &std_columns);
+
 	static unique_ptr<DuckDBPyRelation> AggregateDF(py::object df, const string &expr, const string &groups = "",
 	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 

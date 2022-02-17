@@ -51,6 +51,10 @@ public:
 
 public:
 	static bool EmptyOrComment(const string &line);
+	static bool IsSingleLineStatement(SQLLogicToken &token);
+
+	//! Does the next line contain a comment, empty line, or is the end of the file
+	bool NextLineEmptyOrComment();
 
 	//! Opens the file, returns whether or not reading was successful
 	bool OpenFile(const string &path);
