@@ -25,6 +25,9 @@ public:
 	vector<string> columns;
 	vector<unique_ptr<ParsedExpression>> expressions;
 
+protected:
+	UpdateStatement(const UpdateStatement &other);
+
 public:
 	unique_ptr<SQLStatement> Copy() const override;
 };

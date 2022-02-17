@@ -4,6 +4,9 @@
 #include "duckdb/common/exception.hpp"
 
 #include "duckdb/main/stream_query_result.hpp"
+
+#include "duckdb/common/result_arrow_wrapper.hpp"
+
 namespace duckdb {
 
 ArrowSchemaWrapper::~ArrowSchemaWrapper() {
@@ -54,8 +57,8 @@ void ArrowArrayStreamWrapper::GetSchema(ArrowSchemaWrapper &schema) {
 	// LCOV_EXCL_STOP
 }
 
-unique_ptr<ArrowArrayWrapper> ArrowArrayStreamWrapper::GetNextChunk() {
-	auto current_chunk = make_unique<ArrowArrayWrapper>();
+shared_ptr<ArrowArrayWrapper> ArrowArrayStreamWrapper::GetNextChunk() {
+	auto current_chunk = make_shared<ArrowArrayWrapper>();
 	if (arrow_array_stream.get_next(&arrow_array_stream, &current_chunk->arrow_array)) { // LCOV_EXCL_START
 		throw InvalidInputException("arrow_scan: get_next failed(): %s", string(GetError()));
 	} // LCOV_EXCL_STOP

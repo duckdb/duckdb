@@ -15,6 +15,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/parser/parser.hpp"
 
 #include "datetime.h" // from Python
 
@@ -70,7 +71,9 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("parameters") = py::list())
 	    .def("from_query", &DuckDBPyConnection::FromQuery, "Create a relation object from the given SQL query",
 	         py::arg("query"), py::arg("alias") = "query_relation")
-	    .def("query", &DuckDBPyConnection::FromQuery, "Create a relation object from the given SQL query",
+	    .def("query", &DuckDBPyConnection::RunQuery,
+	         "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
+	         "otherwise run the query as-is.",
 	         py::arg("query"), py::arg("alias") = "query_relation")
 	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	         py::arg("df") = py::none())
@@ -206,7 +209,28 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, 
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	return make_unique<DuckDBPyRelation>(connection->RelationFromQuery(query, alias));
+	const char *duckdb_query_error = R"(duckdb.from_query cannot be used to run arbitrary SQL queries.
+It can only be used to run individual SELECT statements, and converts the result of that SELECT
+statement into a Relation object.
+Use duckdb.query to run arbitrary SQL queries.)";
+	return make_unique<DuckDBPyRelation>(connection->RelationFromQuery(query, alias, duckdb_query_error));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, const string &alias) {
+	if (!connection) {
+		throw std::runtime_error("connection closed");
+	}
+	Parser parser(connection->context->GetParserOptions());
+	parser.ParseQuery(query);
+	if (parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT) {
+		return make_unique<DuckDBPyRelation>(connection->RelationFromQuery(
+		    unique_ptr_cast<SQLStatement, SelectStatement>(move(parser.statements[0])), alias));
+	}
+	Execute(query);
+	if (result) {
+		FetchAll();
+	}
+	return nullptr;
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
@@ -351,9 +375,9 @@ void DuckDBPyConnection::Close() {
 
 // cursor() is stupid
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
-	auto res = make_shared<DuckDBPyConnection>();
+	auto res = make_shared<DuckDBPyConnection>(thread_id);
 	res->database = database;
-	res->connection = make_unique<Connection>(*res->database);
+	res->connection = connection;
 	cursors.push_back(res);
 	return res;
 }
@@ -450,19 +474,30 @@ TryReplacement(py::dict &dict, py::str &table_name,
 static unique_ptr<TableFunctionRef> ScanReplacement(const string &table_name, void *data) {
 	py::gil_scoped_acquire acquire;
 	auto registered_objects = (unordered_map<string, unique_ptr<RegisteredObject>> *)data;
-	// look in the locals first
-	PyObject *p = PyEval_GetLocals();
 	auto py_table_name = py::str(table_name);
-	if (p) {
-		auto local_dict = py::reinterpret_borrow<py::dict>(p);
-		auto result = TryReplacement(local_dict, py_table_name, *registered_objects);
-		if (result) {
-			return result;
+	// Here we do an exhaustive search on the frame lineage
+	auto current_frame = py::module::import("inspect").attr("currentframe")();
+	while (hasattr(current_frame, "f_locals")) {
+		auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
+		// search local dictionary
+		if (local_dict) {
+			auto result = TryReplacement(local_dict, py_table_name, *registered_objects);
+			if (result) {
+				return result;
+			}
 		}
+		// search global dictionary
+		auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
+		if (global_dict) {
+			auto result = TryReplacement(global_dict, py_table_name, *registered_objects);
+			if (result) {
+				return result;
+			}
+		}
+		current_frame = current_frame.attr("f_back");
 	}
-	// otherwise look in the globals
-	auto global_dict = py::globals();
-	return TryReplacement(global_dict, py_table_name, *registered_objects);
+	// Not found :(
+	return nullptr;
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
@@ -482,7 +517,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		config.SetOption(*config_property, Value(val));
 	}
 	if (config.enable_external_access) {
-		//		ReplacementScan replacement_scan(ScanReplacement, (void *) &res->registered_objects);
 		config.replacement_scans.emplace_back(ScanReplacement, (void *)&res->registered_objects);
 	}
 

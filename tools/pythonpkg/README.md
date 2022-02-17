@@ -2,12 +2,17 @@ This is the DuckDB Python package
 
 ## Default installation
 
-You would normally install the DuckDB released version using `pip` as follows:
-    pip install duckdb
+You would normally install the DuckDB released version using pip as follows:
+
+    pip3 install duckdb
 
 ## Installing locally for development
 
-For development, you may need a DuckDB python package that is installed from source. In order to install from source, the simplest way is by cloning the git repo, and running the make command with `BUILD_PYTHON` set:
+For development, you may need a DuckDB Python package that is installed from source. Make sure you have the dependencies installed:
+
+    pip3 install -r requirements-dev.txt
+
+ In order to install from source, the simplest way is to install by cloning the git repo, and running the make command with `BUILD_PYTHON` set:
 
     BUILD_PYTHON=1 make debug
 

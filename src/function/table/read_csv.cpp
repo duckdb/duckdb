@@ -124,6 +124,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 			result->include_file_name = BooleanValue::Get(kv.second);
 		} else if (loption == "skip") {
 			options.skip_rows = kv.second.GetValue<int64_t>();
+		} else if (loption == "max_line_size" || loption == "maximum_line_size") {
+			options.maximum_line_size = kv.second.GetValue<int64_t>();
 		} else {
 			throw InternalException("Unrecognized parameter %s", kv.first);
 		}
@@ -230,6 +232,8 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["skip"] = LogicalType::BIGINT;
+	table_function.named_parameters["max_line_size"] = LogicalType::VARCHAR;
+	table_function.named_parameters["maximum_line_size"] = LogicalType::VARCHAR;
 }
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p) {

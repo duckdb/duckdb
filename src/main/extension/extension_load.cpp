@@ -13,7 +13,7 @@ template <class T>
 static T LoadFunctionFromDLL(void *dll, const string &function_name, const string &filename) {
 	auto function = dlsym(dll, function_name.c_str());
 	if (!function) {
-		throw IOException("File \"%s\" did not contain function \"%s\"", filename, function_name);
+		throw IOException("File \"%s\" did not contain function \"%s\": %s", filename, function_name, GetDLError());
 	}
 	return (T)function;
 }
@@ -41,7 +41,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &
 	}
 	auto lib_hdl = dlopen(filename.c_str(), RTLD_LAZY | RTLD_LOCAL);
 	if (!lib_hdl) {
-		throw IOException("File \"%s\" could not be loaded", filename);
+		throw IOException("File \"%s\" could not be loaded: %s", filename, GetDLError());
 	}
 
 	auto basename = fs.ExtractBaseName(filename);
