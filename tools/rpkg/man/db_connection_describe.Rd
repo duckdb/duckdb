@@ -2,7 +2,11 @@
 % Please edit documentation in R/backend-dbplyr__duckdb_connection.R
 \name{db_connection_describe}
 \alias{db_connection_describe}
+\alias{db_connection_describe.duckdb_connection}
 \title{Description of the database connection}
+\usage{
+db_connection_describe.duckdb_connection(con)
+}
 \arguments{
 \item{con}{A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}}
 }

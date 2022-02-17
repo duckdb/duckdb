@@ -2,7 +2,11 @@
 % Please edit documentation in R/backend-dbplyr__duckdb_connection.R
 \name{dbplyr_edition}
 \alias{dbplyr_edition}
+\alias{dbplyr_edition.duckdb_connection}
 \title{Declare which version of dbplyr API is being called.}
+\usage{
+dbplyr_edition.duckdb_connection(con)
+}
 \arguments{
 \item{con}{A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}}
 }

@@ -2,7 +2,11 @@
 % Please edit documentation in R/backend-dbplyr__duckdb_connection.R
 \name{sql_escape_date}
 \alias{sql_escape_date}
+\alias{sql_escape_date.duckdb_connection}
 \title{Customized escape translation for date objects}
+\usage{
+sql_escape_date.duckdb_connection(con, x)
+}
 \arguments{
 \item{con}{A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}}
 

@@ -8,7 +8,7 @@
 #' @export
 #' @examples
 #' col_ref_expr <- expr_reference("some_column_name")
-expr_reference <- expr_reference_cpp
+expr_reference <- rapi_expr_reference
 
 #' Create a constant expression
 #' @param val the constant value
@@ -17,7 +17,7 @@ expr_reference <- expr_reference_cpp
 #' @examples
 #' const_int_expr <- expr_constant(42)
 #' const_str_expr <- expr_constant("Hello, World")
-expr_constant <- expr_constant_cpp
+expr_constant <- rapi_expr_constant
 
 #' Create a function call expression
 #' @param name the function name
@@ -26,7 +26,7 @@ expr_constant <- expr_constant_cpp
 #' @export
 #' @examples
 #' call_expr <- expr_function("ABS", list(expr_constant(-42)))
-expr_function <- expr_function_cpp
+expr_function <- rapi_expr_function
 
 #' Convert an expression to a string for debugging purposes
 #' @param expr the expression
@@ -34,7 +34,7 @@ expr_function <- expr_function_cpp
 #' @export
 #' @examples
 #' expr_str <- expr_tostring(expr_constant(42))
-expr_tostring <- expr_tostring_cpp
+expr_tostring <- rapi_expr_tostring
 
 #' @export
 print.duckdb_expr <- function(x, ...) {
@@ -53,12 +53,12 @@ print.duckdb_expr <- function(x, ...) {
 #' con <- DBI::dbConnect(duckdb::duckdb())
 #' rel <- rel_from_df(con, mtcars)
 rel_from_df <- function(con, df) {
-    rel_from_df_cpp(con@conn_ref, as.data.frame(df))
+    rapi_rel_from_df(con@conn_ref, as.data.frame(df))
 }
 
 #' @export
 print.duckdb_relation <- function(x, ...) {
-    message("DuckDB Relation: \n", rel_tostring_cpp(x))
+    message("DuckDB Relation: \n", rapi_rel_tostring(x))
 }
 
 #' @export
@@ -66,12 +66,12 @@ as.data.frame.duckdb_relation <- function(x, row.names=NULL, optional=NULL, ...)
     if (!missing(row.names) || !missing(optional)) {
         stop("row.names and optional parameters not supported")
     }
-    rel_to_df_cpp(x)
+    rapi_rel_to_df(x)
 }
 
 #' @export
 names.duckdb_relation <- function(x) {
-    rel_names_cpp(x)
+    rapi_rel_names(x)
 }
 
 #' Lazily project a DuckDB relation object
@@ -83,7 +83,7 @@ names.duckdb_relation <- function(x) {
 #' con <- DBI::dbConnect(duckdb::duckdb())
 #' rel <- rel_from_df(con, mtcars)
 #' rel2 <- rel_project(rel, list(expr_reference("cyl"), expr_reference("disp")))
-rel_project <- rel_project_cpp
+rel_project <- rapi_rel_project
 
 #' Lazily filter a DuckDB relation object
 #' @param rel the DuckDB relation object
@@ -94,7 +94,7 @@ rel_project <- rel_project_cpp
 #' con <- DBI::dbConnect(duckdb::duckdb())
 #' rel <- rel_from_df(con, mtcars)
 #' rel2 <- rel_filter(rel, list(expr_function(">", list(expr_reference("cyl"), expr_constant("6")))))
-rel_filter <- rel_filter_cpp
+rel_filter <- rapi_rel_filter
 
 #' Lazily aggregate a DuckDB relation object
 #' @param rel the DuckDB relation object
@@ -107,7 +107,7 @@ rel_filter <- rel_filter_cpp
 #' rel <- rel_from_df(con, mtcars)
 #' aggrs <- list(avg_hp = expr_function("avg", list(expr_reference("hp"))))
 #' rel2 <- rel_aggregate(rel, list(expr_reference("cyl")), aggrs)
-rel_aggregate <- rel_aggregate_cpp
+rel_aggregate <- rapi_rel_aggregate
 
 #' Lazily reorder a DuckDB relation object
 #' @param rel the DuckDB relation object
@@ -118,7 +118,7 @@ rel_aggregate <- rel_aggregate_cpp
 #' con <- DBI::dbConnect(duckdb::duckdb())
 #' rel <- rel_from_df(con, mtcars)
 #' rel2 <- rel_order(rel, list(expr_reference("hp")))
-rel_order <- rel_order_cpp
+rel_order <- rapi_rel_order
 
 #' Run a SQL query on a DuckDB relation object
 #' @param rel the DuckDB relation object
@@ -129,7 +129,7 @@ rel_order <- rel_order_cpp
 #' con <- DBI::dbConnect(duckdb::duckdb())
 #' rel <- rel_from_df(con, mtcars)
 #' rel2 <- rel_sql(rel, "SELECT hp, cyl FROM _ WHERE hp > 100")
-rel_sql <- rel_sql_cpp
+rel_sql <- rapi_rel_sql
 
 #' Print the EXPLAIN output for a DuckDB relation object
 #' @param rel the DuckDB relation object
@@ -139,7 +139,7 @@ rel_sql <- rel_sql_cpp
 #' rel <- rel_from_df(con, mtcars)
 #' rel_explain(rel)
 rel_explain <- function(rel) {
-    cat(rel_explain_cpp(rel)[[2]][[1]])
+    cat(rapi_rel_explain(rel)[[2]][[1]])
     invisible(NULL)
 }
 

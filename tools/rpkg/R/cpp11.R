@@ -32,60 +32,60 @@ rapi_unregister_arrow <- function(conn, name) {
   invisible(.Call(`_duckdb_rapi_unregister_arrow`, conn, name))
 }
 
-expr_reference_cpp <- function(ref) {
-  .Call(`_duckdb_expr_reference_cpp`, ref)
+rapi_expr_reference <- function(ref) {
+  .Call(`_duckdb_rapi_expr_reference`, ref)
 }
 
-expr_constant_cpp <- function(val) {
-  .Call(`_duckdb_expr_constant_cpp`, val)
+rapi_expr_constant <- function(val) {
+  .Call(`_duckdb_rapi_expr_constant`, val)
 }
 
-expr_function_cpp <- function(name, args) {
-  .Call(`_duckdb_expr_function_cpp`, name, args)
+rapi_expr_function <- function(name, args) {
+  .Call(`_duckdb_rapi_expr_function`, name, args)
 }
 
-expr_tostring_cpp <- function(expr) {
-  .Call(`_duckdb_expr_tostring_cpp`, expr)
+rapi_expr_tostring <- function(expr) {
+  .Call(`_duckdb_rapi_expr_tostring`, expr)
 }
 
-rel_from_df_cpp <- function(con, df) {
-  .Call(`_duckdb_rel_from_df_cpp`, con, df)
+rapi_rel_from_df <- function(con, df) {
+  .Call(`_duckdb_rapi_rel_from_df`, con, df)
 }
 
-rel_filter_cpp <- function(rel, exprs) {
-  .Call(`_duckdb_rel_filter_cpp`, rel, exprs)
+rapi_rel_filter <- function(rel, exprs) {
+  .Call(`_duckdb_rapi_rel_filter`, rel, exprs)
 }
 
-rel_project_cpp <- function(rel, exprs) {
-  .Call(`_duckdb_rel_project_cpp`, rel, exprs)
+rapi_rel_project <- function(rel, exprs) {
+  .Call(`_duckdb_rapi_rel_project`, rel, exprs)
 }
 
-rel_aggregate_cpp <- function(rel, groups, aggregates) {
-  .Call(`_duckdb_rel_aggregate_cpp`, rel, groups, aggregates)
+rapi_rel_aggregate <- function(rel, groups, aggregates) {
+  .Call(`_duckdb_rapi_rel_aggregate`, rel, groups, aggregates)
 }
 
-rel_order_cpp <- function(rel, orders) {
-  .Call(`_duckdb_rel_order_cpp`, rel, orders)
+rapi_rel_order <- function(rel, orders) {
+  .Call(`_duckdb_rapi_rel_order`, rel, orders)
 }
 
-rel_to_df_cpp <- function(rel) {
-  .Call(`_duckdb_rel_to_df_cpp`, rel)
+rapi_rel_to_df <- function(rel) {
+  .Call(`_duckdb_rapi_rel_to_df`, rel)
 }
 
-rel_tostring_cpp <- function(rel) {
-  .Call(`_duckdb_rel_tostring_cpp`, rel)
+rapi_rel_tostring <- function(rel) {
+  .Call(`_duckdb_rapi_rel_tostring`, rel)
 }
 
-rel_explain_cpp <- function(rel) {
-  .Call(`_duckdb_rel_explain_cpp`, rel)
+rapi_rel_explain <- function(rel) {
+  .Call(`_duckdb_rapi_rel_explain`, rel)
 }
 
-rel_sql_cpp <- function(rel, sql) {
-  .Call(`_duckdb_rel_sql_cpp`, rel, sql)
+rapi_rel_sql <- function(rel, sql) {
+  .Call(`_duckdb_rapi_rel_sql`, rel, sql)
 }
 
-rel_names_cpp <- function(rel) {
-  .Call(`_duckdb_rel_names_cpp`, rel)
+rapi_rel_names <- function(rel) {
+  .Call(`_duckdb_rapi_rel_names`, rel)
 }
 
 rapi_release <- function(stmt) {

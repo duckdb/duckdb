@@ -2,7 +2,11 @@
 % Please edit documentation in R/backend-dbplyr__duckdb_connection.R
 \name{sql_translation}
 \alias{sql_translation}
+\alias{sql_translation.duckdb_connection}
 \title{Customized translation functions for DuckDB SQL}
+\usage{
+sql_translation.duckdb_connection(con)
+}
 \arguments{
 \item{con}{A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}}
 }

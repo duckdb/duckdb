@@ -2,7 +2,17 @@
 % Please edit documentation in R/backend-dbplyr__duckdb_connection.R
 \name{dbplyr_fill0}
 \alias{dbplyr_fill0}
+\alias{dbplyr_fill0.duckdb_connection}
 \title{Customized translation for fill function}
+\usage{
+dbplyr_fill0.duckdb_connection(
+  .con,
+  .data,
+  cols_to_fill,
+  order_by_cols,
+  .direction
+)
+}
 \arguments{
 \item{.con}{A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}}
 

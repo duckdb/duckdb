@@ -2,7 +2,11 @@
 % Please edit documentation in R/backend-dbplyr__duckdb_connection.R
 \name{sql_expr_matches}
 \alias{sql_expr_matches}
+\alias{sql_expr_matches.duckdb_connection}
 \title{Customized translation for comparing to objects in DuckDB SQL}
+\usage{
+sql_expr_matches.duckdb_connection(con, x, y)
+}
 \arguments{
 \item{con}{A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}}
 
