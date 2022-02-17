@@ -157,15 +157,15 @@ statement ok
 insert into test values
     ('{"family": "anatidae", "species": ["duck", "goose", "swan", null], "coolness": 1000}'),
     ('{"family": "canidae", "species": ["labrador", null, "bulldog", "shepherd"], "hair": true, "coolness": 999}'),
-    ('{"family": "felidae", "species": ["tiger", "lion", null, "british shorthair"], "hair": true, "coolness": 999}'),
     (NULL),
-    ('{"family": null, "species": null, "hair": null, "coolness": null}')
+    ('{"family": null, "species": null, "hair": null, "coolness": null}'),
+    ('{"family": "felidae", "species": ["tiger", "lion", null, "british shorthair"], "hair": true, "coolness": 999}')
 
 query T
 select json_structure(j) from test
 ----
 {"family":"VARCHAR","species":["VARCHAR"],"coolness":"UBIGINT"}
 {"family":"VARCHAR","species":["VARCHAR"],"hair":"BOOLEAN","coolness":"UBIGINT"}
-{"family":"VARCHAR","species":["VARCHAR"],"hair":"BOOLEAN","coolness":"UBIGINT"}
 NULL
 {"family":"NULL","species":"NULL","hair":"NULL","coolness":"NULL"}
+{"family":"VARCHAR","species":["VARCHAR"],"hair":"BOOLEAN","coolness":"UBIGINT"}

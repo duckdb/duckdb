@@ -86,22 +86,28 @@ statement ok
 insert into test values
     ('{"family": "anatidae", "species": ["duck", "goose", "swan", null], "coolness": 1000}'),
     ('{"family": "canidae", "species": ["labrador", null, "bulldog", "shepherd"], "hair": true, "coolness": 999}'),
-    ('{"family": "felidae", "species": ["tiger", "lion", null, "british shorthair"], "hair": true, "coolness": 999}'),
     (NULL),
-    ('{"family": null, "species": null, "hair": null, "coolness": null}')
+    ('{"family": null, "species": null, "hair": null, "coolness": null}'),
+    ('{"family": "felidae", "species": ["tiger", "lion", null, "british shorthair"], "hair": true, "coolness": 999}')
 
 query T
 select json_transform(j, '{"family": "VARCHAR", "coolness": "UBIGINT", "species": ["VARCHAR"]}') from test
 ----
 {'family': anatidae, 'coolness': 1000, 'species': [duck, goose, swan, NULL]}
 {'family': canidae, 'coolness': 999, 'species': [labrador, NULL, bulldog, shepherd]}
-{'family': felidae, 'coolness': 999, 'species': [tiger, lion, NULL, british shorthair]}
 NULL
 {'family': NULL, 'coolness': NULL, 'species': NULL}
+{'family': felidae, 'coolness': 999, 'species': [tiger, lion, NULL, british shorthair]}
 
 # conflicting names
 statement error
 select json_transform('{"a": 4, "a": 2}', '{"a": "UBIGINT", "a": "UBIGINT"}')
+
+# can actually get parts of the JSON back as string
+query T
+select json_transform('{"a": {"duck": 42, "goose": 7}}', '{"a": "JSON"}')
+----
+{'a': {"duck":42,"goose":7}}
 
 # loops over all types for coverage
 

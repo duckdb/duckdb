@@ -1,4 +1,4 @@
-# name: test/sql/json/test_json_tpch_sf01.test_slow
+# name: test/sql/json/test_json_tpch_sf001.test_slow
 # description: Test TPCH with JSON
 # group: [json]
 

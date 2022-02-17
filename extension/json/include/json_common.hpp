@@ -272,7 +272,7 @@ public:
 			result_entries[i].length = num_paths;
 			offset += num_paths;
 		}
-		D_ASSERT(ListVector::GetListSize(result) == offset);
+		D_ASSERT(offset = num_paths * count);
 
 		if (input_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -421,8 +421,6 @@ private:
 		throw InternalException("Unknown yyjson type");
 	}
 
-	// FIXME: we don't need to pushback because we know the list size beforehand
-	//  We should do ListVector::Reserve instead
 	template <class T>
 	static inline void PushBack(Vector &result, Vector &result_child, T val) {
 		throw NotImplementedException("Cannot insert Value with this type into JSON result list");
