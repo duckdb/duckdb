@@ -57,6 +57,10 @@ struct ListConcatFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ListFlattenFun {
+    static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct CardinalityFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

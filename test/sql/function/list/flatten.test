@@ -1,0 +1,102 @@
+# name: test/sql/function/list/flatten.test
+# description: Test flatten function
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+# basic functionality
+query T
+SELECT flatten([[1, 2], [3, 4]])
+----
+[1, 2, 3, 4]
+
+query T
+SELECT flatten([[1, 2, 3, 4]])
+----
+[1, 2, 3, 4]
+
+query T
+SELECT flatten([[1, 2], [], [3, 4]])
+----
+[1, 2, 3, 4]
+
+query T
+SELECT flatten([[1, 2], []])
+----
+[1, 2]
+
+query T
+SELECT flatten([[], [1, 2]])
+----
+[1, 2]
+
+query T
+SELECT flatten([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]);
+----
+[[1, 2], [3, 4], [5, 6], [7, 8]]
+
+query T
+SELECT flatten([[[1, 2], [3, 4]], [], [[5, 6], [7, 8]]]);
+----
+[[1, 2], [3, 4], [5, 6], [7, 8]]
+
+query T
+SELECT flatten([[[1, 2], [3, 4]], [[]], [[5, 6], [7, 8]]]);
+----
+[[1, 2], [3, 4], [], [5, 6], [7, 8]]
+
+query T
+SELECT flatten([[1, 2], [NULL], [3, 4]])
+----
+[1, 2, NULL, 3, 4]
+
+query T
+SELECT flatten([[1, 2], [NULL]])
+----
+[1, 2, NULL]
+
+query T
+SELECT flatten([[NULL], [1, 2]])
+----
+[NULL, 1, 2]
+
+query T
+SELECT flatten([[NULL], [NULL]])
+----
+[NULL, NULL]
+
+query T
+SELECT flatten([[1, 2], NULL, [3, 4]])
+----
+[1, 2, 3, 4]
+
+query T
+SELECT flatten([[1, 2], NULL])
+----
+[1, 2]
+
+query T
+SELECT flatten([NULL, [1, 2]])
+----
+[1, 2]
+
+statement error
+SELECT flatten([NULL, NULL])
+
+statement ok
+create table test as select range % 8 i, range j from range(16)
+
+statement ok
+create table lists as select i%4 i, list(j) j from test group by i
+
+statement ok
+create table list_lists as select i, list(j) j from lists group by i
+
+query II
+SELECT i, flatten(j) FROM list_lists
+----
+0	[0, 8, 4, 12]
+1	[1, 9, 5, 13]
+2	[2, 10, 6, 14]
+3	[3, 11, 7, 15]
