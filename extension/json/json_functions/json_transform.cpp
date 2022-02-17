@@ -16,13 +16,20 @@ static LogicalType StructureToTypeArray(yyjson_val *arr) {
 }
 
 static LogicalType StructureToTypeObject(yyjson_val *obj) {
+	unordered_set<string> names;
 	child_list_t<LogicalType> child_types;
 	yyjson_val *key, *val;
 	yyjson_obj_iter iter;
 	yyjson_obj_iter_init(obj, &iter);
 	while ((key = yyjson_obj_iter_next(&iter))) {
 		val = yyjson_obj_iter_get_val(key);
-		child_types.emplace_back(yyjson_get_str(key), StructureToType(val));
+		auto key_str = yyjson_get_str(key);
+		if (names.find(key_str) != names.end()) {
+			auto obj_string = JSONCommon::WriteVal(obj);
+			throw InvalidInputException("Duplicate keys in object in JSON structure: %s", obj_string.GetString());
+		}
+		names.insert(key_str);
+		child_types.emplace_back(key_str, StructureToType(val));
 	}
 	return LogicalType::STRUCT(child_types);
 }
@@ -118,12 +125,12 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, bool strict);
 
 template <class T>
-static void TemplatedTransform(yyjson_val *vals[], Vector &result, const idx_t count, const bool strict) {
+static void TransformNumerical(yyjson_val *vals[], Vector &result, const idx_t count, const bool strict) {
 	auto data = (T *)FlatVector::GetData(result);
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
-		if (!val || yyjson_is_null(val) || !JSONCommon::TemplatedGetValue<T>(val, data[i], strict)) {
+		if (!val || yyjson_is_null(val) || !JSONCommon::GetValueNumerical<T>(val, data[i], strict)) {
 			validity.SetInvalid(i);
 		}
 	}
@@ -250,25 +257,25 @@ static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, boo
 	auto result_type = result.GetType();
 	switch (result_type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return TemplatedTransform<bool>(vals, result, count, strict);
+		return TransformNumerical<bool>(vals, result, count, strict);
 	case LogicalTypeId::TINYINT:
-		return TemplatedTransform<int8_t>(vals, result, count, strict);
+		return TransformNumerical<int8_t>(vals, result, count, strict);
 	case LogicalTypeId::SMALLINT:
-		return TemplatedTransform<int16_t>(vals, result, count, strict);
+		return TransformNumerical<int16_t>(vals, result, count, strict);
 	case LogicalTypeId::INTEGER:
-		return TemplatedTransform<int32_t>(vals, result, count, strict);
+		return TransformNumerical<int32_t>(vals, result, count, strict);
 	case LogicalTypeId::BIGINT:
-		return TemplatedTransform<int64_t>(vals, result, count, strict);
+		return TransformNumerical<int64_t>(vals, result, count, strict);
 	case LogicalTypeId::UTINYINT:
-		return TemplatedTransform<uint8_t>(vals, result, count, strict);
+		return TransformNumerical<uint8_t>(vals, result, count, strict);
 	case LogicalTypeId::USMALLINT:
-		return TemplatedTransform<uint16_t>(vals, result, count, strict);
+		return TransformNumerical<uint16_t>(vals, result, count, strict);
 	case LogicalTypeId::UINTEGER:
-		return TemplatedTransform<uint32_t>(vals, result, count, strict);
+		return TransformNumerical<uint32_t>(vals, result, count, strict);
 	case LogicalTypeId::UBIGINT:
-		return TemplatedTransform<uint64_t>(vals, result, count, strict);
+		return TransformNumerical<uint64_t>(vals, result, count, strict);
 	case LogicalTypeId::HUGEINT:
-		return TemplatedTransform<hugeint_t>(vals, result, count, strict);
+		return TransformNumerical<hugeint_t>(vals, result, count, strict);
 	case LogicalTypeId::UUID:
 		return TransformUUID(vals, result, count, strict);
 	case LogicalTypeId::DECIMAL: {
@@ -288,9 +295,9 @@ static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, boo
 		}
 	}
 	case LogicalTypeId::FLOAT:
-		return TemplatedTransform<float>(vals, result, count, strict);
+		return TransformNumerical<float>(vals, result, count, strict);
 	case LogicalTypeId::DOUBLE:
-		return TemplatedTransform<double>(vals, result, count, strict);
+		return TransformNumerical<double>(vals, result, count, strict);
 	case LogicalTypeId::DATE:
 		return TransformDateTime<date_t, TryCastErrorMessage>(vals, result, count, strict);
 	case LogicalTypeId::TIME:
@@ -324,6 +331,7 @@ static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, boo
 
 template <bool strict>
 static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	result.SetVectorType(VectorType::FLAT_VECTOR);
 	const auto count = args.size();
 	auto &input = args.data[0];
 	VectorData input_data;

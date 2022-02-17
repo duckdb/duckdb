@@ -95,6 +95,10 @@ select json_transform(j, '{"family": "VARCHAR", "coolness": "UBIGINT", "species"
 {'family': canidae, 'coolness': 999, 'species': [labrador, NULL, bulldog, shepherd]}
 {'family': felidae, 'coolness': 999, 'species': [tiger, lion, NULL, british shorthair]}
 
+# conflicting names
+statement error
+select json_transform('{"a": 4, "a": 2}', '{"a": "UBIGINT", "a": "UBIGINT"}')
+
 # loops over all types for coverage
 
 # all integer types

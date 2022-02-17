@@ -430,7 +430,7 @@ private:
 
 public:
 	template <class T>
-	static inline bool TemplatedGetValue(yyjson_val *val, T &result, bool strict) {
+	static inline bool GetValueNumerical(yyjson_val *val, T &result, bool strict) {
 		auto type = yyjson_get_type(val);
 		switch (type) {
 		case YYJSON_TYPE_NULL:
@@ -440,14 +440,14 @@ public:
 		case YYJSON_TYPE_OBJ:
 			break;
 		default:
-			if (TemplatedGetValue<T>(val, result, type, strict)) {
+			if (GetValueNumerical<T>(val, result, type, strict)) {
 				return true;
 			}
 			break;
 		}
 		if (strict) {
 			auto json_val = JSONCommon::WriteVal(val);
-			throw InvalidInputException("Failed to cast value: %s", json_val.GetString());
+			throw InvalidInputException("Failed to cast value to numerical: %s", json_val.GetString());
 		}
 		return false;
 	}
@@ -596,7 +596,7 @@ private:
 	}
 
 	template <class T>
-	static inline bool TemplatedGetValue(yyjson_val *val, T &result, yyjson_type type, bool strict) {
+	static inline bool GetValueNumerical(yyjson_val *val, T &result, yyjson_type type, bool strict) {
 		bool success;
 		switch (type) {
 		case YYJSON_TYPE_BOOL:
