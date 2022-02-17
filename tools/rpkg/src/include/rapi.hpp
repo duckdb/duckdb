@@ -29,7 +29,6 @@ struct ConnWrapper {
 	db_eptr_t db_eptr;
 };
 
-
 void ConnDeleter(ConnWrapper *);
 typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
 

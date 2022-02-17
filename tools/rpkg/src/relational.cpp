@@ -33,14 +33,14 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<ColumnRefExpression>("duckdb_expr", ref);
 }
 
-[[cpp11::register]] SEXP  rapi_expr_constant(sexp val) {
+[[cpp11::register]] SEXP rapi_expr_constant(sexp val) {
 	if (LENGTH(val) != 1) {
 		stop("expr_constant: Need value of length one");
 	}
 	return make_external<ConstantExpression>("duckdb_expr", RApiTypes::SexpToValue(val, 0));
 }
 
-[[cpp11::register]] SEXP  rapi_expr_function(std::string name, list args) {
+[[cpp11::register]] SEXP rapi_expr_function(std::string name, list args) {
 	if (name.size() == 0) {
 		stop("expr_function: Zero length name");
 	}
@@ -63,13 +63,13 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<FunctionExpression>("duckdb_expr", name, move(children));
 }
 
-[[cpp11::register]] std::string  rapi_expr_tostring(duckdb::expr_extptr_t expr) {
+[[cpp11::register]] std::string rapi_expr_tostring(duckdb::expr_extptr_t expr) {
 	return expr->ToString();
 }
 
 // DuckDB Relations
 
-[[cpp11::register]] SEXP  rapi_rel_from_df(duckdb::conn_eptr_t con, data_frame df) {
+[[cpp11::register]] SEXP rapi_rel_from_df(duckdb::conn_eptr_t con, data_frame df) {
 	if (!con->conn) {
 		stop("rel_from_df: Invalid connection");
 	}
@@ -85,7 +85,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return res;
 }
 
-[[cpp11::register]] SEXP  rapi_rel_filter(duckdb::rel_extptr_t rel, list exprs) {
+[[cpp11::register]] SEXP rapi_rel_filter(duckdb::rel_extptr_t rel, list exprs) {
 	unique_ptr<ParsedExpression> filter_expr;
 	if (exprs.size() == 0) { // nop
 		warning("rel_filter without filter expressions has no effect");
@@ -103,7 +103,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP  rapi_rel_project(duckdb::rel_extptr_t rel, list exprs) {
+[[cpp11::register]] SEXP rapi_rel_project(duckdb::rel_extptr_t rel, list exprs) {
 	if (exprs.size() == 0) {
 		warning("rel_project without projection expressions has no effect");
 		return rel;
@@ -120,7 +120,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP  rapi_rel_aggregate(duckdb::rel_extptr_t rel, list groups, list aggregates) {
+[[cpp11::register]] SEXP rapi_rel_aggregate(duckdb::rel_extptr_t rel, list groups, list aggregates) {
 	vector<unique_ptr<ParsedExpression>> res_groups, res_aggregates;
 
 	// TODO deal with empty groups
@@ -181,19 +181,19 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	return df;
 }
 
-[[cpp11::register]] SEXP  rapi_rel_to_df(duckdb::rel_extptr_t rel) {
+[[cpp11::register]] SEXP rapi_rel_to_df(duckdb::rel_extptr_t rel) {
 	return result_to_df(rel->rel->Execute());
 }
 
-[[cpp11::register]] std::string  rapi_rel_tostring(duckdb::rel_extptr_t rel) {
+[[cpp11::register]] std::string rapi_rel_tostring(duckdb::rel_extptr_t rel) {
 	return rel->rel->ToString();
 }
 
-[[cpp11::register]] SEXP  rapi_rel_explain(duckdb::rel_extptr_t rel) {
+[[cpp11::register]] SEXP rapi_rel_explain(duckdb::rel_extptr_t rel) {
 	return result_to_df(rel->rel->Explain());
 }
 
-[[cpp11::register]] SEXP  rapi_rel_sql(duckdb::rel_extptr_t rel, std::string sql) {
+[[cpp11::register]] SEXP rapi_rel_sql(duckdb::rel_extptr_t rel, std::string sql) {
 	auto res = rel->rel->Query("_", sql);
 	if (!res->success) {
 		stop(res->error);
@@ -201,7 +201,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	return result_to_df(move(res));
 }
 
-[[cpp11::register]] SEXP  rapi_rel_names(duckdb::rel_extptr_t rel) {
+[[cpp11::register]] SEXP rapi_rel_names(duckdb::rel_extptr_t rel) {
 	auto ret = writable::strings();
 	for (auto &col : rel->rel->Columns()) {
 		ret.push_back(col.name);
