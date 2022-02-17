@@ -460,14 +460,7 @@ string TableCatalogEntry::ToSQL() {
 		}
 		auto &column = columns[i];
 		ss << KeywordHelper::WriteOptionallyQuoted(column.name) << " ";
-		switch (column.type.id()) {
-		case LogicalTypeId::ENUM:
-			ss << KeywordHelper::WriteOptionallyQuoted(column.type.ToString());
-			break;
-		default:
-			ss << column.type.ToString();
-			break;
-		}
+		ss << column.type.ToString();
 		bool not_null = not_null_columns.find(column.oid) != not_null_columns.end();
 		bool is_single_key_pk = pk_columns.find(column.oid) != pk_columns.end();
 		bool is_multi_key_pk = multi_key_pks.find(column.name) != multi_key_pks.end();
