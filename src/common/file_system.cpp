@@ -217,7 +217,7 @@ void FileSystem::FileSync(FileHandle &handle) {
 	throw NotImplementedException("%s: FileSync is not implemented!", GetName());
 }
 
-vector<string> FileSystem::Glob(const string &path) {
+vector<string> FileSystem::Glob(const string &path, ClientContext* context) {
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
 

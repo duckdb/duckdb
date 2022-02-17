@@ -1,9 +1,10 @@
 #include "s3fs.hpp"
+
 #include "crypto.hpp"
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/thread.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
 #endif
 
@@ -17,7 +18,7 @@
 
 namespace duckdb {
 
-static std::string uri_encode(const std::string &input, bool encode_slash = false) {
+std::string S3FileSystem::UrlEncode(const std::string &input, bool encode_slash) {
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 	static const char *hex_digit = "0123456789ABCDEF";
 	std::string result;
@@ -77,7 +78,7 @@ static HeaderMap create_s3_get_header(std::string url, std::string query, std::s
 	if (auth_params.session_token.length() > 0) {
 		signed_headers += ";x-amz-security-token";
 	}
-	auto canonical_request = method + "\n" + uri_encode(url) + "\n" + query;
+	auto canonical_request = method + "\n" + S3FileSystem::UrlEncode(url) + "\n" + query;
 	if (content_type.length() > 0) {
 		canonical_request += "\ncontent-type:" + content_type;
 	}
@@ -194,7 +195,7 @@ string S3FileSystem::InitializeMultipartUpload(S3FileHandle &file_handle) {
 	idx_t response_buffer_len = 1000;
 	auto response_buffer = unique_ptr<char[]> {new char[response_buffer_len]};
 
-	string query_param = "?" + uri_encode("uploads") + "=";
+	string query_param = "?" + UrlEncode("uploads") + "=";
 	auto res = s3fs.PostRequest(file_handle, file_handle.path + query_param, {}, response_buffer, response_buffer_len,
 	                            nullptr, 0);
 	string result(response_buffer.get(), response_buffer_len);
@@ -214,8 +215,8 @@ string S3FileSystem::InitializeMultipartUpload(S3FileHandle &file_handle) {
 void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer) {
 	auto &s3fs = (S3FileSystem &)file_handle.file_system;
 
-	string query_param = uri_encode("partNumber") + "=" + to_string(write_buffer->part_no + 1) + "&" +
-	                     uri_encode("uploadId") + "=" + uri_encode(file_handle.multipart_upload_id, true);
+	string query_param = S3FileSystem::UrlEncode("partNumber") + "=" + to_string(write_buffer->part_no + 1) + "&" +
+	                     S3FileSystem::UrlEncode("uploadId") + "=" + S3FileSystem::UrlEncode(file_handle.multipart_upload_id, true);
 	unique_ptr<ResponseWrapper> res;
 
 	bool success = false;
@@ -347,7 +348,7 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 	idx_t response_buffer_len = 1000;
 	auto response_buffer = unique_ptr<char[]> {new char[response_buffer_len]};
 
-	string query_param = "?" + uri_encode("uploadId") + "=" + file_handle.multipart_upload_id;
+	string query_param = "?" + UrlEncode("uploadId") + "=" + file_handle.multipart_upload_id;
 	auto res = s3fs.PostRequest(file_handle, file_handle.path + query_param, {}, response_buffer, response_buffer_len,
 	                            (char *)body.c_str(), body.length());
 	string result(response_buffer.get(), response_buffer_len);
@@ -530,6 +531,15 @@ unique_ptr<ResponseWrapper> S3FileSystem::HeadRequest(FileHandle &handle, string
 	return HTTPFileSystem::HeadRequest(handle, http_proto + host + path, headers);
 }
 
+unique_ptr<ResponseWrapper> S3FileSystem::GetRequest(FileHandle &handle, string url, HeaderMap header_map,
+                                                     unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len) {
+	string host, http_proto, path, query_param;
+	S3UrlParse(handle, url, host, http_proto, path, query_param);
+	auto headers = create_s3_get_header(path, query_param, host, "s3", "GET",
+	                                    static_cast<S3FileHandle &>(handle).auth_params, "", "", "", "");
+	return HTTPFileSystem::GetRequest(handle, http_proto + host + path, headers, buffer_out, buffer_out_len);
+}
+
 unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                           idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
 	string host, http_proto, path, query_param;
@@ -561,13 +571,13 @@ void S3FileSystem::Verify() {
 		throw std::runtime_error("test fail");
 	}
 
-	if (uri_encode("/category=Books/") != "/category%3DBooks/") {
+	if (UrlEncode("/category=Books/") != "/category%3DBooks/") {
 		throw std::runtime_error("test fail");
 	}
-	if (uri_encode("/?category=Books&title=Ducks Retreat/") != "/%3Fcategory%3DBooks%26title%3DDucks%20Retreat/") {
+	if (UrlEncode("/?category=Books&title=Ducks Retreat/") != "/%3Fcategory%3DBooks%26title%3DDucks%20Retreat/") {
 		throw std::runtime_error("test fail");
 	}
-	if (uri_encode("/?category=Books&title=Ducks Retreat/", true) !=
+	if (UrlEncode("/?category=Books&title=Ducks Retreat/", true) !=
 	    "%2F%3Fcategory%3DBooks%26title%3DDucks%20Retreat%2F") {
 		throw std::runtime_error("test fail");
 	}
@@ -611,13 +621,13 @@ void S3FileSystem::Verify() {
 		throw std::runtime_error("test3 fail");
 	}
 
-	if (uri_encode("/category=Books/") != "/category%3DBooks/") {
+	if (UrlEncode("/category=Books/") != "/category%3DBooks/") {
 		throw std::runtime_error("test fail");
 	}
-	if (uri_encode("/?category=Books&title=Ducks Retreat/") != "/%3Fcategory%3DBooks%26title%3DDucks%20Retreat/") {
+	if (UrlEncode("/?category=Books&title=Ducks Retreat/") != "/%3Fcategory%3DBooks%26title%3DDucks%20Retreat/") {
 		throw std::runtime_error("test fail");
 	}
-	if (uri_encode("/?category=Books&title=Ducks Retreat/", true) !=
+	if (UrlEncode("/?category=Books&title=Ducks Retreat/", true) !=
 	    "%2F%3Fcategory%3DBooks%26title%3DDucks%20Retreat%2F") {
 		throw std::runtime_error("test fail");
 	}

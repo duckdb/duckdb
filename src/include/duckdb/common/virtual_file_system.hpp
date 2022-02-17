@@ -84,8 +84,8 @@ public:
 		FindFileSystem(filename)->RemoveFile(filename);
 	}
 
-	vector<string> Glob(const string &path) override {
-		return FindFileSystem(path)->Glob(path);
+	virtual vector<string> Glob(const string &path, ClientContext* context = nullptr) override {
+		return FindFileSystem(path)->Glob(path, context);
 	}
 
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override {

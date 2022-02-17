@@ -74,7 +74,7 @@ public:
 	                                     FileCompressionType compression = DEFAULT_COMPRESSION,
 	                                     FileOpener *opener = nullptr) final;
 
-	std::vector<std::string> Glob(const std::string &path) override {
+	vector<string> Glob(const string &path, ClientContext* context = nullptr) override {
 		return {path}; // FIXME
 	}
 
@@ -82,6 +82,8 @@ public:
 	virtual unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map,
 	                                               char *buffer_in, idx_t buffer_in_len);
 	virtual unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url, HeaderMap header_map);
+	virtual unique_ptr<ResponseWrapper> GetRequest(FileHandle &handle, string url, HeaderMap header_map,
+	                                               unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len);
 	// Get Request with range parameter that GETs exactly buffer_out_len bytes from the url
 	virtual unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
 	                                                    idx_t file_offset, char *buffer_out, idx_t buffer_out_len);

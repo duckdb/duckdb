@@ -187,8 +187,8 @@ public:
 		return move(result);
 	}
 
-	static vector<string> ParquetGlob(FileSystem &fs, const string &glob) {
-		auto files = fs.Glob(glob);
+	static vector<string> ParquetGlob(FileSystem &fs, const string &glob, ClientContext* context) {
+		auto files = fs.Glob(glob, context);
 		if (files.empty()) {
 			throw IOException("No files found that match the pattern \"%s\"", glob);
 		}
@@ -212,7 +212,7 @@ public:
 			}
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
-		auto files = ParquetGlob(fs, file_name);
+		auto files = ParquetGlob(fs, file_name, &context);
 		return ParquetScanBindInternal(context, move(files), return_types, names, parquet_options);
 	}
 
@@ -228,7 +228,7 @@ public:
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		vector<string> files;
 		for (auto &val : ListValue::GetChildren(inputs[0])) {
-			auto glob_files = ParquetGlob(fs, val.ToString());
+			auto glob_files = ParquetGlob(fs, val.ToString(), &context);
 			files.insert(files.end(), glob_files.begin(), glob_files.end());
 		}
 		if (files.empty()) {

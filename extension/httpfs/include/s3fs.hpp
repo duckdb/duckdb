@@ -1,10 +1,10 @@
 #pragma once
 
-#include "httpfs.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/atomic.hpp"
+#include "httpfs.hpp"
 
 #include <condition_variable>
 #include <iostream>
@@ -116,6 +116,33 @@ public:
 	explicit S3FileSystem(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
 
+	vector<string> Glob(const string &path, ClientContext *context = nullptr) override {
+		auto first_star_pos = path.find('*');
+		string shared_path = path.substr(0, first_star_pos);
+
+		// We currently need a handle to be able to make the request, however, since we have a contect here, we dont
+		// actually need it?
+		auto file_handle = S3FileSystem::OpenFile(shared_path + "bsfile.txt", FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW, FileLockType::NO_LOCK,
+		                                          DEFAULT_COMPRESSION, FileSystem::GetFileOpener(*context));
+
+		string host_out, http_proto_out, path_out, query_param;
+		S3UrlParse((FileHandle&)file_handle, shared_path, host_out, http_proto_out, path_out, query_param);
+
+		unique_ptr<char[]> buffer_out;
+		idx_t buffer_out_len;
+		auto res = GetRequest((FileHandle&)file_handle, http_proto_out + host_out + "/?list-type=2&prefix=" + UrlEncode(path_out), {}, buffer_out, buffer_out_len);
+
+		std::cout << "Response from aws API:" << std::endl;
+		std::cout << string(buffer_out.get(), buffer_out_len) << std::endl;
+
+		// Create file handle
+		// TODO: need to call openfile, how to get opener for settings?
+		// with: FileOpener *FileSystem::GetFileOpener(ClientContext &context);
+		// TODO need client context, how to get?
+
+		return {path}; // FIXME
+	}
+
 	BufferManager &buffer_manager;
 
 	// HTTP Requests
@@ -125,6 +152,8 @@ public:
 	unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map, char *buffer_in,
 	                                       idx_t buffer_in_len) override;
 	unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url, HeaderMap header_map) override;
+	unique_ptr<ResponseWrapper> GetRequest(FileHandle &handle, string url, HeaderMap header_map,
+	                                       unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len) override;
 	unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map, idx_t file_offset,
 	                                            char *buffer_out, idx_t buffer_out_len) override;
 
@@ -144,6 +173,7 @@ public:
 
 	static void S3UrlParse(FileHandle &handle, string url, string &host_out, string &http_proto_out, string &path_out,
 	                       string &query_param);
+	static std::string UrlEncode(const std::string &input, bool encode_slash = false);
 
 	// Uploads the contents of write_buffer to S3.
 	// Note: caller is responsible to not call this method twice on the same buffer
