@@ -1,4 +1,3 @@
-#include <iostream>
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -53,7 +52,7 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 		auto list_index = list_data.sel->get_index(i);
 		auto value_index = value_data.sel->get_index(i);
 
-		if (!list_data.validity.RowIsValid(list_index) or !value_data.validity.RowIsValid(value_index)) {
+		if (!list_data.validity.RowIsValid(list_index) || !value_data.validity.RowIsValid(value_index)) {
 			result_validity.SetInvalid(i);
 			continue;
 		}
@@ -76,7 +75,6 @@ static void TemplatedListContainsFunction(DataChunk &args, ExpressionState &stat
 			}
 		}
 	}
-	return;
 }
 
 static void NestedListContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -111,7 +109,7 @@ static void NestedListContainsFunction(DataChunk &args, ExpressionState &state, 
 		auto list_index = list_data.sel->get_index(i);
 		auto value_index = value_data.sel->get_index(i);
 
-		if (!list_data.validity.RowIsValid(list_index) or !value_data.validity.RowIsValid(value_index)) {
+		if (!list_data.validity.RowIsValid(list_index) || !value_data.validity.RowIsValid(value_index)) {
 			result_validity.SetInvalid(i);
 			continue;
 		}
@@ -131,7 +129,6 @@ static void NestedListContainsFunction(DataChunk &args, ExpressionState &state, 
 			}
 		}
 	}
-	return;
 }
 
 static void ListContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
