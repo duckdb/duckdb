@@ -76,9 +76,23 @@ static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFu
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
+static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, BoundFunctionExpression &expr,
+                                                   FunctionData *bind_data,
+                                                   vector<unique_ptr<BaseStatistics>> &child_stats) {
+	if (!child_stats[0]) {
+		return nullptr;
+	}
+	auto &list_stats = (ListStatistics &)*child_stats[0];
+	if (!list_stats.child_stats) {
+		return nullptr;
+	}
+	auto child_copy = list_stats.child_stats->Copy();
+	return child_copy;
+}
+
 void ListFlattenFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun({LogicalType::LIST(LogicalType::LIST(LogicalType::ANY))}, LogicalType::LIST(LogicalType::ANY),
-	                   ListFlattenFunction, false, ListFlattenBind);
+	                   ListFlattenFunction, false, ListFlattenBind, nullptr, ListFlattenStats);
 	set.AddFunction({"flatten"}, fun);
 }
 
