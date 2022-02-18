@@ -2,13 +2,12 @@
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
-
-#include <duckdb/main/config.hpp>
-#include <duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp>
-#include <duckdb/storage/table/append_state.hpp>
 
 namespace duckdb {
 

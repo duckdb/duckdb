@@ -335,7 +335,6 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 	idx_t scanned = 0;
 
-	// TODO we can maybe speed this up and simplify it by using the new packBuffer function?
 	while (scanned < scan_count) {
 		// Exhausted this width group, move pointers to next group and load bitwidth for next group.
 		if (scan_state.position_in_group >= BITPACKING_WIDTH_GROUP_SIZE) {
