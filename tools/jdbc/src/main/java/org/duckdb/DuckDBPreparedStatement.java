@@ -579,8 +579,18 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 				throw new SQLException("Can't convert value to float " + x.getClass().toString());
 			}
 			break;
-		case Types.NUMERIC:
 		case Types.DECIMAL:
+			if (x instanceof BigDecimal) {
+				setObject(parameterIndex, x);
+			} else if (x instanceof Double) {
+				setObject(parameterIndex, new BigDecimal((Double) x));
+			} else if (x instanceof String) {
+				setObject(parameterIndex, new BigDecimal((String) x));
+			} else {
+				throw new SQLException("Can't convert value to double " + x.getClass().toString());
+			}
+			break;
+		case Types.NUMERIC:
 		case Types.DOUBLE:
 			if (x instanceof Double) {
 				setObject(parameterIndex, x);
@@ -629,7 +639,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void setBigDecimal(int parameterIndex, BigDecimal x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		setObject(parameterIndex, x);
 	}
 
 	@Override
