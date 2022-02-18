@@ -4,7 +4,5 @@
 
 require notwindows
 # Write to pipe - should pass since .tmp is not added when writing to a pipe
-query I
+statement ok
 copy (select 42) to '/dev/stdout'
-----
-1

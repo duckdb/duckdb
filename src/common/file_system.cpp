@@ -20,14 +20,25 @@
 #include <sys/types.h>
 #include <unistd.h>
 #else
+#include <io.h>
 #include <string>
 
 #ifdef __MINGW32__
+#include <sys/stat.h>
+
 // need to manually define this for mingw
 extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
 #endif
 
 #undef FILE_CREATE // woo mingw
+#endif
+
+#if !defined(S_ISREG) && defined(S_IFMT) && defined(S_IFREG)
+#define S_ISREG(m) (((m)&S_IFMT) == S_IFREG)
+#endif
+
+#ifndef S_ISREG
+#define S_ISREG(x) (((x)&_S_IFMT) == _S_IFREG)
 #endif
 
 namespace duckdb {
@@ -211,6 +222,29 @@ bool FileSystem::FileExists(const string &filename) {
 
 void FileSystem::RemoveFile(const string &filename) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
+}
+
+bool FileSystem::IsFile(const string &filename) {
+	if (!filename.empty()) {
+#if defined(_WIN32) && defined(__MINGW32__)
+		if (_access(filename.c_str(), 0) == 0) {
+			struct stat status;
+			stat(filename.c_str(), &status);
+			if (S_ISREG(status.st_mode)) {
+				return true;
+			}
+		}
+#else
+		if (access(filename.c_str(), 0) == 0) {
+			struct stat status;
+			stat(filename.c_str(), &status);
+			if (S_ISREG(status.st_mode)) {
+				return true;
+			}
+		}
+#endif
+	}
+	return false;
 }
 
 void FileSystem::FileSync(FileHandle &handle) {

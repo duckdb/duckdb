@@ -53,13 +53,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// now create the copy information
 	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, move(function_data));
 	copy->file_path = stmt.info->file_path;
-	auto &fs = FileSystem::GetFileSystem(context);
-	if (fs.FileExists(copy->file_path)) {
-		auto file = fs.OpenFile(copy->file_path, FileFlags::FILE_FLAGS_READ);
-		copy->use_tmp_file = use_tmp_file && file->GetType() == FileType::FILE_TYPE_REGULAR;
-	} else {
-		copy->use_tmp_file = false;
-	}
+	copy->use_tmp_file = use_tmp_file;
+	copy->is_file = FileSystem::IsFile(copy->file_path);
 
 	copy->AddChild(move(select_node.plan));
 
