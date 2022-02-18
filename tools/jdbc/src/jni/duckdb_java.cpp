@@ -2,6 +2,7 @@
 #include "duckdb.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -153,6 +154,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 		auto double_class = env->FindClass("java/lang/Double");
 		auto string_class = env->FindClass("java/lang/String");
 		auto timestamp_class = env->FindClass("org/duckdb/DuckDBTimestamp");
+		auto decimal_class = env->FindClass("java/math/BigDecimal");
 
 		for (idx_t i = 0; i < param_len; i++) {
 			auto param = env->GetObjectArrayElement(params, i);
@@ -191,6 +193,28 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 				duckdb_params.push_back(
 				    Value::DOUBLE(env->CallDoubleMethod(param, env->GetMethodID(double_class, "doubleValue", "()D"))));
 				continue;
+			} else if (env->IsInstanceOf(param, decimal_class)) {
+				jint precision = env->CallIntMethod(param, env->GetMethodID(decimal_class, "precision", "()I"));
+				jint scale = env->CallIntMethod(param, env->GetMethodID(decimal_class, "scale", "()I"));
+
+				if (precision <= 18) { // normal sizes -> avoid string processing
+					jobject no_point_dec = env->CallObjectMethod(
+					    param, env->GetMethodID(decimal_class, "scaleByPowerOfTen", "(I)Ljava/math/BigDecimal;"),
+					    scale);
+					jlong result =
+					    env->CallLongMethod(no_point_dec, env->GetMethodID(decimal_class, "longValue", "()J"));
+					duckdb_params.push_back(Value::DECIMAL((int64_t)result, (uint8_t)precision, (uint8_t)scale));
+				} else if (precision <= 38) { // larger than int64 -> get string and cast
+					jobject str_val = env->CallObjectMethod(
+					    param, env->GetMethodID(decimal_class, "toPlainString", "()Ljava/lang/String;"));
+					auto *str_char = env->GetStringUTFChars((jstring)str_val, 0);
+					Value val = Value(str_char);
+					val = val.CastAs(LogicalType::DECIMAL(precision, scale));
+
+					duckdb_params.push_back(val);
+					env->ReleaseStringUTFChars((jstring)str_val, str_char);
+				}
+				continue;
 			} else if (env->IsInstanceOf(param, string_class)) {
 				auto *param_string = env->GetStringUTFChars((jstring)param, 0);
 				duckdb_params.push_back(Value(param_string));
@@ -226,6 +250,41 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1free_1result(J
 	}
 }
 
+static std::string type_to_jduckdb_type(LogicalType logical_type) {
+	switch (logical_type.id()) {
+	case LogicalTypeId::DECIMAL: {
+
+		uint8_t width = 0;
+		uint8_t scale = 0;
+		logical_type.GetDecimalProperties(width, scale);
+		std::string width_scale = std::to_string(width) + std::string(";") + std::to_string(scale);
+
+		auto physical_type = logical_type.InternalType();
+		switch (physical_type) {
+		case PhysicalType::INT16: {
+			string res = std::string("DECIMAL16;") + width_scale;
+			return res;
+		}
+		case PhysicalType::INT32: {
+			string res = std::string("DECIMAL32;") + width_scale;
+			return res;
+		}
+		case PhysicalType::INT64: {
+			string res = std::string("DECIMAL64;") + width_scale;
+			return res;
+		}
+		case PhysicalType::INT128: {
+			string res = std::string("DECIMAL128;") + width_scale;
+			return res;
+		}
+		default:
+			return std::string("no physical type found");
+		}
+	} break;
+	}
+	return std::string("");
+}
+
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv *env, jclass, jobject stmt_ref_buf) {
 
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
@@ -235,7 +294,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 	}
 
 	jclass meta = env->FindClass("org/duckdb/DuckDBResultSetMetaData");
-	jmethodID meta_construct = env->GetMethodID(meta, "<init>", "(II[Ljava/lang/String;[Ljava/lang/String;)V");
+	jmethodID meta_construct =
+	    env->GetMethodID(meta, "<init>", "(II[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)V");
 
 	auto column_count = stmt_ref->stmt->ColumnCount();
 	auto &names = stmt_ref->stmt->GetNames();
@@ -243,14 +303,18 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 
 	auto name_array = env->NewObjectArray(column_count, env->FindClass("java/lang/String"), nullptr);
 	auto type_array = env->NewObjectArray(column_count, env->FindClass("java/lang/String"), nullptr);
+	auto type_detail_array = env->NewObjectArray(column_count, env->FindClass("java/lang/String"), nullptr);
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		env->SetObjectArrayElement(name_array, col_idx,
 		                           decode_charbuffer_to_jstring(env, names[col_idx].c_str(), names[col_idx].length()));
 		env->SetObjectArrayElement(type_array, col_idx, env->NewStringUTF(types[col_idx].ToString().c_str()));
+		env->SetObjectArrayElement(type_detail_array, col_idx,
+		                           env->NewStringUTF(type_to_jduckdb_type(types[col_idx]).c_str()));
 	}
 
-	return env->NewObject(meta, meta_construct, stmt_ref->stmt->n_param, column_count, name_array, type_array);
+	return env->NewObject(meta, meta_construct, stmt_ref->stmt->n_param, column_count, name_array, type_array,
+	                      type_detail_array);
 }
 
 JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(JNIEnv *env, jclass,
@@ -322,10 +386,23 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(float));
 			break;
 		case LogicalTypeId::DECIMAL: {
-			Vector double_vec(LogicalType::DOUBLE);
-			VectorOperations::Cast(vec, double_vec, row_count);
-			vec.ReferenceAndSetType(double_vec);
-			// fall through on purpose
+			auto physical_type = vec.GetType().InternalType();
+
+			switch (physical_type) {
+			case PhysicalType::INT16:
+				constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int16_t));
+				break;
+			case PhysicalType::INT32:
+				constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int32_t));
+				break;
+			case PhysicalType::INT64:
+				constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int64_t));
+				break;
+			case PhysicalType::INT128:
+				constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
+				break;
+			}
+			break;
 		}
 		case LogicalTypeId::DOUBLE:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));

@@ -118,6 +118,8 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 }
 
 BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
+	auto name = window.GetName();
+
 	QueryErrorContext error_context(binder.root_statement, window.query_location);
 	if (inside_window) {
 		throw BinderException(error_context.FormatError("window function calls cannot be nested"));
@@ -285,7 +287,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	result->end = window.end;
 
 	// create a BoundColumnRef that references this entry
-	auto colref = make_unique<BoundColumnRefExpression>(window.GetName(), result->return_type,
+	auto colref = make_unique<BoundColumnRefExpression>(move(name), result->return_type,
 	                                                    ColumnBinding(node.window_index, node.windows.size()), depth);
 	// move the WINDOW expression into the set of bound windows
 	node.windows.push_back(move(result));

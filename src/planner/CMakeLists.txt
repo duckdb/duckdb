@@ -8,6 +8,7 @@ add_subdirectory(subquery)
 add_library_unity(
   duckdb_planner
   OBJECT
+  bound_result_modifier.cpp
   expression_iterator.cpp
   expression.cpp
   table_binding.cpp

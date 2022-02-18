@@ -46,7 +46,7 @@ public:
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
-	unique_ptr<BufferHandle> Allocate(idx_t block_size);
+	DUCKDB_API unique_ptr<BufferHandle> Allocate(idx_t block_size);
 
 	//! Reallocate an in-memory buffer that is pinned.
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size);
@@ -61,7 +61,7 @@ public:
 	void SetLimit(idx_t limit = (idx_t)-1);
 
 	static BufferManager &GetBufferManager(ClientContext &context);
-	static BufferManager &GetBufferManager(DatabaseInstance &db);
+	DUCKDB_API static BufferManager &GetBufferManager(DatabaseInstance &db);
 
 	idx_t GetUsedMemory() {
 		return current_memory;

@@ -17,13 +17,13 @@ class FileBuffer;
 class BufferHandle {
 public:
 	BufferHandle(shared_ptr<BlockHandle> handle, FileBuffer *node);
-	~BufferHandle();
+	DUCKDB_API ~BufferHandle();
 
 	//! The block handle
 	shared_ptr<BlockHandle> handle;
 	//! The managed buffer node
 	FileBuffer *node;
-	data_ptr_t Ptr();
+	DUCKDB_API data_ptr_t Ptr();
 };
 
 } // namespace duckdb

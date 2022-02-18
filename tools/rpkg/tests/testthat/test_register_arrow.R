@@ -332,6 +332,7 @@ test_that("duckdb_register_arrow() under many threads", {
 
 test_that("we can unregister in finalizers yay", {
   con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
   ds <- arrow::InMemoryDataset$create(mtcars)
 
   # Creates an environment that disconnects the database when it's GC'd
@@ -359,6 +360,7 @@ test_that("we can unregister in finalizers yay", {
 
 test_that("we can list registered arrow tables", {
   con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
   ds <- arrow::InMemoryDataset$create(mtcars)
 
   expect_equal(length(duckdb::duckdb_list_arrow(con)), 0)

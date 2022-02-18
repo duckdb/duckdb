@@ -100,10 +100,9 @@ int AltrepString::NoNA(SEXP x) {
 	return 0;
 }
 
-void AltrepString::Finalize(SEXP x) {
-	auto *wrapper = (DuckDBAltrepStringWrapper *)R_ExternalPtrAddr(x);
-	if (wrapper) {
-		R_ClearExternalPtr(x);
-		delete wrapper;
-	}
+// exception required as long as r-lib/decor#6 remains
+// clang-format off
+[[cpp11::init]] void AltrepString_Initialize(DllInfo* dll) {
+	// clang-format on
+	AltrepString::Initialize(dll);
 }
