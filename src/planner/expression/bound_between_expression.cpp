@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression/bound_between_expression.hpp"
+#include "duckdb/parser/expression/between_expression.hpp"
 
 namespace duckdb {
 
@@ -10,7 +11,7 @@ BoundBetweenExpression::BoundBetweenExpression(unique_ptr<Expression> input, uni
 }
 
 string BoundBetweenExpression::ToString() const {
-	return input->ToString() + " BETWEEN " + lower->ToString() + " AND " + upper->ToString();
+	return BetweenExpression::ToString<BoundBetweenExpression, Expression>(*this);
 }
 
 bool BoundBetweenExpression::Equals(const BaseExpression *other_p) const {
