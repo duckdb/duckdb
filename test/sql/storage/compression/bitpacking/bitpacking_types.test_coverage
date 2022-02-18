@@ -9,11 +9,9 @@ statement ok
 PRAGMA force_compression = 'bitpacking'
 
 foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
-statement ok
-CREATE TABLE test (a ${type});
 
 statement ok
-CREATE TABLE a AS SELECT MOD(i,3) i FROM range(10000) tbl(i)
+CREATE TABLE a AS SELECT MOD(i,3)::${type} i FROM range(10000) tbl(i)
 
 query IIIII
 SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM a

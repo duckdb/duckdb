@@ -11,6 +11,7 @@
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -68,7 +69,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		}
 		storage = make_shared<DataTable>(catalog->db, schema->name, name, move(colum_def_copy), move(info->data));
 
-		// create the unique indexes for the UNIQUE and PRIMARY KEY constraints
+		// create the unique indexes for the UNIQUE and PRIMARY KEY and FOREIGN KEY constraints
 		for (idx_t i = 0; i < bound_constraints.size(); i++) {
 			auto &constraint = bound_constraints[i];
 			if (constraint->type == ConstraintType::UNIQUE) {
@@ -91,6 +92,28 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				// create an adaptive radix tree around the expressions
 				auto art = make_unique<ART>(column_ids, move(unbound_expressions), true, unique.is_primary_key);
 				storage->AddIndex(move(art), bound_expressions);
+			} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
+				// foreign key constraint: create a foreign key index
+				auto &foreign_key = (BoundForeignKeyConstraint &)*constraint;
+				if (foreign_key.is_fk_table) {
+					// fetch types and create expressions for the index from the columns
+					vector<column_t> column_ids;
+					vector<unique_ptr<Expression>> unbound_expressions;
+					vector<unique_ptr<Expression>> bound_expressions;
+					idx_t key_nr = 0;
+					for (auto &key : foreign_key.fk_keys) {
+						D_ASSERT(key < columns.size());
+
+						unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(
+						    columns[key].name, columns[key].type, ColumnBinding(0, column_ids.size())));
+
+						bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].type, key_nr++));
+						column_ids.push_back(key);
+					}
+					// create an adaptive radix tree around the expressions
+					auto art = make_unique<ART>(column_ids, move(unbound_expressions));
+					storage->AddIndex(move(art), bound_expressions);
+				}
 			}
 		}
 	}
@@ -104,6 +127,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	D_ASSERT(!internal);
 	if (info->type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
+	}
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		if (constraints[i]->type == ConstraintType::FOREIGN_KEY) {
+			throw ConstraintException("Can't alter table has FOREIGN KEY constraint");
+		}
 	}
 	auto table_info = (AlterTableInfo *)info;
 	switch (table_info->alter_table_type) {
@@ -460,14 +488,7 @@ string TableCatalogEntry::ToSQL() {
 		}
 		auto &column = columns[i];
 		ss << KeywordHelper::WriteOptionallyQuoted(column.name) << " ";
-		switch (column.type.id()) {
-		case LogicalTypeId::ENUM:
-			ss << KeywordHelper::WriteOptionallyQuoted(column.type.ToString());
-			break;
-		default:
-			ss << column.type.ToString();
-			break;
-		}
+		ss << column.type.ToString();
 		bool not_null = not_null_columns.find(column.oid) != not_null_columns.end();
 		bool is_single_key_pk = pk_columns.find(column.oid) != pk_columns.end();
 		bool is_multi_key_pk = multi_key_pks.find(column.name) != multi_key_pks.end();

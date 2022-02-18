@@ -25,6 +25,8 @@ jobs:
       CC: ccache gcc-10
       CXX: ccache g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
+      BUILD_SUBSTRAIT_EXTENSION: 1
+      BUILD_TPCH: 1
       GEN: ninja
 
     steps:
@@ -234,7 +236,7 @@ jobs:
       - name: Run Tests
         run: |
           mkdir -p build/coverage
-          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PYTHON=1 -DBUILD_PARQUET_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_SUBSTRAIT_EXTENSION=1 -DBUILD_PYTHON=1 -DBUILD_PARQUET_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
           (cd tools/pythonpkg/tests/fast && python3 -m pytest)
           (cd tools/pythonpkg/tests/coverage && python3 -m pytest)
           build/coverage/test/unittest
@@ -439,7 +441,7 @@ jobs:
     - name: Install psqlodbc
       run: |
         git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && make debug)
+        (cd psqlodbc && git checkout f11663bb9d1e6c0bbad8d4df919da1edc3c5338c && make debug)
 
     - name: Build
       run: DISABLE_SANITIZER=1 make debug

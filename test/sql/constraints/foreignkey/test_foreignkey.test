@@ -3,8 +3,105 @@
 # group: [foreignkey]
 
 statement ok
-CREATE TABLE integers(i INTEGER PRIMARY KEY, j BOOLEAN)
+CREATE TABLE album(artistid INTEGER PRIMARY KEY, albumname TEXT UNIQUE, albumcover TEXT);
 
-# foreign keys are not supported yet
+statement ok
+INSERT INTO album VALUES (1, 'A', 'A_cover'), (2, 'B', 'B_cover'), (3, 'C', 'C_cover'), (4, 'D', 'D_cover');
+
+# The count of columns are primary keys must be equal with the count of columns are foreign keys
 statement error
-CREATE TABLE other(id INTEGER PRIMARY KEY, i INTEGER, FOREIGN KEY (i) REFERENCES integers(i));
+CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid));
+
+statement error
+CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songalbum) REFERENCES album(artistid, albumname));
+
+# The column corresponding with foreign key must be primary key or unique key
+statement error
+CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songalbum) REFERENCES album(albumcover));
+
+statement ok
+CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, albumname));
+
+# Any row that is inserted into the table with the foreign key must exist in the table with the primary key (constraint)
+statement error
+INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 2, 'E', 'B_song'), (13, 3, 'C', 'C_song');
+
+statement error
+INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 5, 'D', 'B_song'), (13, 3, 'C', 'C_song');
+
+statement ok
+INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 2, 'B', 'B_song'), (13, 3, 'C', 'C_song');
+
+# Any row that is deleted from the table with the primary key must not exist in the table with the foreign key (constraint)
+statement error
+DELETE FROM album WHERE albumname='C';
+
+statement ok
+DELETE FROM album WHERE albumname='D';
+
+query ITT
+SELECT * FROM album;
+----
+1	A	A_cover	
+2	B	B_cover	
+3	C	C_cover	
+
+# Any row that is updated from the table has foreign key must exist in the table with the primary key (constraint)
+statement error
+UPDATE song SET songartist=5, songalbum='A' WHERE songname='B_song';
+
+statement ok
+UPDATE song SET songartist=1, songalbum='A' WHERE songname='B_song';
+
+query IITT
+SELECT * FROM song;
+----
+11	1	A	A_song	
+13	3	C	C_song	
+12	1	A	B_song	
+
+# Any row that is updated from the table with primary key must not exist in the table has foreign key (constraint)
+statement error
+UPDATE album SET albumname='B' WHERE albumcover='C_cover';
+
+statement error
+UPDATE album SET albumname='B' WHERE albumcover='C_cover';
+
+statement ok
+UPDATE album SET artistid=5, albumname='D' WHERE albumcover='B_cover';
+
+query ITT
+SELECT * FROM album;
+----
+1	A	A_cover
+3	C	C_cover
+5	D	B_cover
+
+# Cannot alter the table has a FOREIGN KEY constraint
+statement error
+ALTER TABLE album RENAME COLUMN albumname TO albumname_new;
+
+statement error
+ALTER TABLE song RENAME COLUMN songalbum TO songalbum_new;
+
+statement error
+ALTER TABLE song ALTER COLUMN songartist TYPE TEXT;
+
+statement error
+ALTER TABLE album ALTER COLUMN artistid TYPE TEXT;
+
+statement error
+ALTER TABLE album DROP COLUMN artistid;
+
+statement error
+ALTER TABLE song DROP COLUMN songartist;
+
+# Can't drop the table with primary key corresponding with foreign key until exists the table has foreign key
+statement error
+DROP TABLE album;
+
+statement ok
+DROP TABLE song;
+
+statement ok
+DROP TABLE album;
