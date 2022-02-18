@@ -33,6 +33,10 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		for (auto kc = constraint->pk_attrs->head; kc; kc = kc->next) {
 			pk_columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
 		}
+		if (pk_columns.size() != fk_columns.size()) {
+			throw ParserException(
+			    "The count of columns are primary keys must be equal with the count of columns are foreign keys");
+		}
 		return make_unique<ForeignKeyConstraint>(pk_table, pk_columns, fk_columns, true);
 	}
 	default:

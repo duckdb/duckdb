@@ -128,6 +128,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	if (info->type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
 	}
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		if (constraints[i]->type == ConstraintType::FOREIGN_KEY) {
+			throw ConstraintException("Can't alter table has FOREIGN KEY constraint");
+		}
+	}
 	auto table_info = (AlterTableInfo *)info;
 	switch (table_info->alter_table_type) {
 	case AlterTableType::RENAME_COLUMN: {
@@ -202,24 +207,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 			for (idx_t i = 0; i < unique.columns.size(); i++) {
 				if (unique.columns[i] == info.old_name) {
 					unique.columns[i] = info.new_name;
-				}
-			}
-			break;
-		}
-		case ConstraintType::FOREIGN_KEY: {
-			// FOREIGN KEY constraint: possibly need to rename columns
-			auto &foreign_key = (ForeignKeyConstraint &)*copy;
-			if (foreign_key.is_fk_table) {
-				for (idx_t i = 0; i < foreign_key.fk_columns.size(); i++) {
-					if (foreign_key.fk_columns[i] == info.old_name) {
-						foreign_key.fk_columns[i] = info.new_name;
-					}
-				}
-			} else {
-				for (idx_t i = 0; i < foreign_key.pk_columns.size(); i++) {
-					if (foreign_key.pk_columns[i] == info.old_name) {
-						foreign_key.pk_columns[i] = info.new_name;
-					}
 				}
 			}
 			break;
@@ -320,23 +307,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 			create_info->constraints.push_back(move(copy));
 			break;
 		}
-		case ConstraintType::FOREIGN_KEY: {
-			auto copy = constraint->Copy();
-			auto &foreign_key = (ForeignKeyConstraint &)*copy;
-			vector<string> &columns = foreign_key.pk_columns;
-			if (foreign_key.is_fk_table) {
-				columns = foreign_key.fk_columns;
-			}
-			for (idx_t i = 0; i < columns.size(); i++) {
-				if (columns[i] == info.removed_column) {
-					throw CatalogException(
-					    "Cannot drop column \"%s\" because there is a FOREIGN KEY constraint that depends on it",
-					    info.removed_column);
-				}
-			}
-			create_info->constraints.push_back(move(copy));
-			break;
-		}
 		default:
 			throw InternalException("Unsupported constraint for entry!");
 		}
@@ -400,17 +370,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 			if (bound_unique.key_set.find(change_idx) != bound_unique.key_set.end()) {
 				throw BinderException(
 				    "Cannot change the type of a column that has a UNIQUE or PRIMARY KEY constraint specified");
-			}
-			break;
-		}
-		case ConstraintType::FOREIGN_KEY: {
-			auto &bound_foreign_key = (BoundForeignKeyConstraint &)*bound_constraints[i];
-			unordered_set<idx_t> &key_set = bound_foreign_key.pk_key_set;
-			if (bound_foreign_key.is_fk_table) {
-				key_set = bound_foreign_key.fk_key_set;
-			}
-			if (key_set.find(change_idx) != key_set.end()) {
-				throw BinderException("Cannot change the type of a column that has a FOREIGN KEY constraint specified");
 			}
 			break;
 		}

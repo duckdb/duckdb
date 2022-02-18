@@ -866,23 +866,23 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 	auto ids = FlatVector::GetData<row_t>(row_identifiers);
 	auto first_id = ids[0];
 
-	// verify any constraints on the delete rows
-	DataChunk chunk;
-	ColumnFetchState fetch_state;
-	vector<column_t> col_ids;
-	vector<LogicalType> types;
-	for (idx_t i = 0; i < column_definitions.size(); i++) {
-		col_ids.push_back(column_definitions[i].oid);
-		types.emplace_back(column_definitions[i].type);
-	}
-	chunk.Initialize(types);
-	Fetch(transaction, chunk, col_ids, row_identifiers, count, fetch_state);
-	VerifyDeleteConstraints(table, context, chunk);
-
 	if (first_id >= MAX_ROW_ID) {
 		// deletion is in transaction-local storage: push delete into local chunk collection
 		return transaction.storage.Delete(this, row_identifiers, count);
 	} else {
+		// verify any constraints on the delete rows
+		DataChunk chunk;
+		ColumnFetchState fetch_state;
+		vector<column_t> col_ids;
+		vector<LogicalType> types;
+		for (idx_t i = 0; i < column_definitions.size(); i++) {
+			col_ids.push_back(column_definitions[i].oid);
+			types.emplace_back(column_definitions[i].type);
+		}
+		chunk.Initialize(types);
+		Fetch(transaction, chunk, col_ids, row_identifiers, count, fetch_state);
+		VerifyDeleteConstraints(table, context, chunk);
+
 		idx_t delete_count = 0;
 		// delete is in the row groups
 		// we need to figure out for each id to which row group it belongs
