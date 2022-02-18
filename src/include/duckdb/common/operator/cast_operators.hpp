@@ -29,7 +29,7 @@ struct TryCast {
 
 struct TryCastErrorMessage {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, string *error_message, bool strict = false) {
+	DUCKDB_API static inline bool Operation(SRC input, DST &result, string *error_message, bool strict = false) {
 		throw NotImplementedException("Unimplemented type for cast (%s -> %s)", GetTypeId<SRC>(), GetTypeId<DST>());
 	}
 };
