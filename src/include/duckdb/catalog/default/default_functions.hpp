@@ -9,10 +9,10 @@
 #pragma once
 
 #include "duckdb/catalog/default/default_generator.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
 
 namespace duckdb {
 class SchemaCatalogEntry;
-struct CreateMacroInfo;
 
 struct DefaultMacro {
 	const char *schema;

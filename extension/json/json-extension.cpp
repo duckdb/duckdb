@@ -3,7 +3,6 @@
 
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/default/default_functions.hpp"
-#include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "json_functions.hpp"
 
 namespace duckdb {

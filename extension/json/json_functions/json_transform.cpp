@@ -1,3 +1,4 @@
+#include "duckdb/common/types.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
