@@ -13,6 +13,8 @@
 #include "duckdb/main/relation/projection_relation.hpp"
 #include "duckdb/main/relation/aggregate_relation.hpp"
 #include "duckdb/main/relation/order_relation.hpp"
+#include "duckdb/main/relation/join_relation.hpp"
+#include "duckdb/main/relation/limit_relation.hpp"
 
 using namespace duckdb;
 using namespace cpp11;
@@ -26,11 +28,17 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 
 // DuckDB Expressions
 
-[[cpp11::register]] SEXP rapi_expr_reference(std::string ref) {
-	if (ref.size() == 0) {
+[[cpp11::register]] SEXP rapi_expr_reference(std::string name, std::string table) {
+	if (name.size() == 0) {
 		stop("expr_reference: Zero length name");
 	}
-	return make_external<ColumnRefExpression>("duckdb_expr", ref);
+	if (!table.empty()) {
+		auto res = make_external<ColumnRefExpression>("duckdb_expr", name, table);
+		res->alias = name; // TODO does this really make sense here?
+		return res;
+	} else {
+		return make_external<ColumnRefExpression>("duckdb_expr", name);
+	}
 }
 
 [[cpp11::register]] SEXP rapi_expr_constant(sexp val) {
@@ -63,6 +71,10 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<FunctionExpression>("duckdb_expr", name, move(children));
 }
 
+[[cpp11::register]] void rapi_expr_set_alias(duckdb::expr_extptr_t expr, std::string alias) {
+	expr->alias = alias;
+}
+
 [[cpp11::register]] std::string rapi_expr_tostring(duckdb::expr_extptr_t expr) {
 	return expr->ToString();
 }
@@ -79,7 +91,8 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 
 	named_parameter_map_t other_params;
 	other_params["experimental"] = Value::BOOLEAN(true);
-	auto rel = con->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)(SEXP)df)}, other_params);
+	auto rel = con->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)(SEXP)df)}, other_params)
+	               ->Alias("dataframe_" + to_string(rand()));
 	auto res = sexp(make_external<RelationWrapper>("duckdb_relation", move(rel)));
 	res.attr("df") = df;
 	return res;
@@ -112,7 +125,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	vector<string> aliases;
 
 	for (expr_extptr_t expr : exprs) {
-		aliases.push_back((expr->ToString()));
+		aliases.push_back(expr->alias.empty() ? expr->ToString() : expr->alias);
 		projections.push_back(expr->Copy());
 	}
 
@@ -158,6 +171,29 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
+[[cpp11::register]] SEXP rapi_rel_inner_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds) {
+	unique_ptr<ParsedExpression> cond;
+
+	if (conds.size() == 0) { // nop
+		stop("rel_inner_join needs conditions");
+	} else if (conds.size() == 1) {
+		cond = ((expr_extptr_t)conds[0])->Copy();
+	} else {
+		vector<unique_ptr<ParsedExpression>> cond_args;
+		for (expr_extptr_t expr : conds) {
+			cond_args.push_back(expr->Copy());
+		}
+		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(cond_args));
+	}
+
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, move(cond), JoinType::INNER);
+	return make_external<RelationWrapper>("duckdb_relation", res);
+}
+
+[[cpp11::register]] SEXP rapi_rel_limit(duckdb::rel_extptr_t rel, int64_t n) {
+	return make_external<RelationWrapper>("duckdb_relation", std::make_shared<LimitRelation>(rel->rel, n, 0));
+}
+
 static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	if (res->type == QueryResultType::STREAM_RESULT) {
 		res = ((StreamQueryResult &)*res).Materialize();
@@ -191,6 +227,14 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 
 [[cpp11::register]] SEXP rapi_rel_explain(duckdb::rel_extptr_t rel) {
 	return result_to_df(rel->rel->Explain());
+}
+
+[[cpp11::register]] std::string rapi_rel_alias(duckdb::rel_extptr_t rel) {
+	return rel->rel->GetAlias();
+}
+
+[[cpp11::register]] SEXP rapi_rel_set_alias(duckdb::rel_extptr_t rel, std::string alias) {
+	return make_external<RelationWrapper>("duckdb_relation", rel->rel->Alias(alias));
 }
 
 [[cpp11::register]] SEXP rapi_rel_sql(duckdb::rel_extptr_t rel, std::string sql) {

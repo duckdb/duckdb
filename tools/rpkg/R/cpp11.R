@@ -32,8 +32,8 @@ rapi_unregister_arrow <- function(conn, name) {
   invisible(.Call(`_duckdb_rapi_unregister_arrow`, conn, name))
 }
 
-rapi_expr_reference <- function(ref) {
-  .Call(`_duckdb_rapi_expr_reference`, ref)
+rapi_expr_reference <- function(name, table) {
+  .Call(`_duckdb_rapi_expr_reference`, name, table)
 }
 
 rapi_expr_constant <- function(val) {
@@ -42,6 +42,10 @@ rapi_expr_constant <- function(val) {
 
 rapi_expr_function <- function(name, args) {
   .Call(`_duckdb_rapi_expr_function`, name, args)
+}
+
+rapi_expr_set_alias <- function(expr, alias) {
+  invisible(.Call(`_duckdb_rapi_expr_set_alias`, expr, alias))
 }
 
 rapi_expr_tostring <- function(expr) {
@@ -68,6 +72,14 @@ rapi_rel_order <- function(rel, orders) {
   .Call(`_duckdb_rapi_rel_order`, rel, orders)
 }
 
+rapi_rel_inner_join <- function(left, right, conds) {
+  .Call(`_duckdb_rapi_rel_inner_join`, left, right, conds)
+}
+
+rapi_rel_limit <- function(rel, n) {
+  .Call(`_duckdb_rapi_rel_limit`, rel, n)
+}
+
 rapi_rel_to_df <- function(rel) {
   .Call(`_duckdb_rapi_rel_to_df`, rel)
 }
@@ -78,6 +90,14 @@ rapi_rel_tostring <- function(rel) {
 
 rapi_rel_explain <- function(rel) {
   .Call(`_duckdb_rapi_rel_explain`, rel)
+}
+
+rapi_rel_alias <- function(rel) {
+  .Call(`_duckdb_rapi_rel_alias`, rel)
+}
+
+rapi_rel_set_alias <- function(rel, alias) {
+  .Call(`_duckdb_rapi_rel_set_alias`, rel, alias)
 }
 
 rapi_rel_sql <- function(rel, sql) {

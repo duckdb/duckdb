@@ -4,10 +4,12 @@
 \alias{expr_reference}
 \title{Create a column reference expression}
 \usage{
-expr_reference(ref)
+expr_reference(name, table = "")
 }
 \arguments{
-\item{ref}{the column name to be referenced}
+\item{name}{the column name to be referenced}
+
+\item{table}{the optional table name or a relation object to be referenced}
 }
 \value{
 a column reference expression
@@ -17,4 +19,5 @@ Create a column reference expression
 }
 \examples{
 col_ref_expr <- expr_reference("some_column_name")
+col_ref_expr2 <- expr_reference("some_column_name", "some_table_name")
 }

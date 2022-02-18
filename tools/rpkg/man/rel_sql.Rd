@@ -18,7 +18,7 @@ the now aggregated \code{duckdb_relation} object
 Run a SQL query on a DuckDB relation object
 }
 \examples{
-con <- DBI::dbConnect(duckdb::duckdb())
+con <- DBI::dbConnect(duckdb())
 rel <- rel_from_df(con, mtcars)
 rel2 <- rel_sql(rel, "SELECT hp, cyl FROM _ WHERE hp > 100")
 }

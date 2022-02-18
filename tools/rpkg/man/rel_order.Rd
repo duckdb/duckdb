@@ -18,7 +18,7 @@ the now aggregated \code{duckdb_relation} object
 Lazily reorder a DuckDB relation object
 }
 \examples{
-con <- DBI::dbConnect(duckdb::duckdb())
+con <- DBI::dbConnect(duckdb())
 rel <- rel_from_df(con, mtcars)
 rel2 <- rel_order(rel, list(expr_reference("hp")))
 }

@@ -20,7 +20,7 @@ the now aggregated \code{duckdb_relation} object
 Lazily aggregate a DuckDB relation object
 }
 \examples{
-con <- DBI::dbConnect(duckdb::duckdb())
+con <- DBI::dbConnect(duckdb())
 rel <- rel_from_df(con, mtcars)
 aggrs <- list(avg_hp = expr_function("avg", list(expr_reference("hp"))))
 rel2 <- rel_aggregate(rel, list(expr_reference("cyl")), aggrs)

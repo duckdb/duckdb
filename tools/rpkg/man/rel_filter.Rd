@@ -18,7 +18,7 @@ the now filtered \code{duckdb_relation} object
 Lazily filter a DuckDB relation object
 }
 \examples{
-con <- DBI::dbConnect(duckdb::duckdb())
+con <- DBI::dbConnect(duckdb())
 rel <- rel_from_df(con, mtcars)
 rel2 <- rel_filter(rel, list(expr_function(">", list(expr_reference("cyl"), expr_constant("6")))))
 }

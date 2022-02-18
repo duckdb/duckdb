@@ -18,7 +18,7 @@ the now projected \code{duckdb_relation} object
 Lazily project a DuckDB relation object
 }
 \examples{
-con <- DBI::dbConnect(duckdb::duckdb())
+con <- DBI::dbConnect(duckdb())
 rel <- rel_from_df(con, mtcars)
 rel2 <- rel_project(rel, list(expr_reference("cyl"), expr_reference("disp")))
 }
