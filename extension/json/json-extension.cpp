@@ -11,7 +11,9 @@ namespace duckdb {
 static DefaultMacro json_macros[] = {
     {DEFAULT_SCHEMA, "json_group_array", {"x", nullptr}, "to_json(list(x))"},
     {DEFAULT_SCHEMA, "json_group_object", {"name", "value", nullptr}, "to_json(map(list(name), list(value)))"},
-    {DEFAULT_SCHEMA, "json", {"x", nullptr}, "json_extract(x, '$')"}};
+    {DEFAULT_SCHEMA, "json_group_structure", {"x", nullptr}, "json_extract(json_structure(list(x)), '$[0]')"},
+    {DEFAULT_SCHEMA, "json", {"x", nullptr}, "json_extract(x, '$')"},
+    {nullptr, nullptr, {nullptr}, nullptr}};
 
 void JSONExtension::Load(DuckDB &db) {
 	Connection con(db);
@@ -22,8 +24,8 @@ void JSONExtension::Load(DuckDB &db) {
 		catalog.CreateFunction(*con.context, &fun);
 	}
 
-	for (idx_t i = 0; i < 3; i++) {
-		auto macro_info = DefaultFunctionGenerator::CreateInternalMacroInfo(json_macros[i]);
+	for (idx_t index = 0; json_macros[index].name != nullptr; index++) {
+		auto macro_info = DefaultFunctionGenerator::CreateInternalMacroInfo(json_macros[index]);
 		catalog.CreateFunction(*con.context, (CreateFunctionInfo *)macro_info.get());
 	}
 

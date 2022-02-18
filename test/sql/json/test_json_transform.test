@@ -7,6 +7,20 @@ require json
 statement ok
 pragma enable_verification
 
+# aliases
+query T
+select from_json('42', '"UBIGINT"')
+----
+42
+
+query T
+select from_json_strict('42', '"UBIGINT"')
+----
+42
+
+statement error
+select from_json_strict('42', '"DATE"')
+
 # singletons
 query T
 select json_transform('42', '"UBIGINT"')

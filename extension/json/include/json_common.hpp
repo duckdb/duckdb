@@ -292,31 +292,6 @@ public:
 		}
 	}
 
-public:
-	static inline idx_t ReadIndex(const char *ptr, const char *const end, idx_t &idx) {
-		const char *const before = ptr;
-		idx = 0;
-		for (idx_t i = 0; i < IDX_T_SAFE_DIG; i++) {
-			if (ptr == end) {
-				// No closing ']'
-				return 0;
-			}
-			if (*ptr == ']') {
-				break;
-			}
-			uint8_t add = (uint8_t)(*ptr - '0');
-			if (add <= 9) {
-				idx = add + idx * 10;
-			} else {
-				// Not a digit
-				return 0;
-			}
-			ptr++;
-		}
-		// Invalid if overflow
-		return idx >= (idx_t)IDX_T_MAX ? 0 : ptr - before;
-	}
-
 private:
 	//! Get JSON pointer using /field/index/... notation
 	template <class yyjson_t>
@@ -407,6 +382,30 @@ private:
 			}
 			return ptr - before;
 		}
+	}
+
+	static inline idx_t ReadIndex(const char *ptr, const char *const end, idx_t &idx) {
+		const char *const before = ptr;
+		idx = 0;
+		for (idx_t i = 0; i < IDX_T_SAFE_DIG; i++) {
+			if (ptr == end) {
+				// No closing ']'
+				return 0;
+			}
+			if (*ptr == ']') {
+				break;
+			}
+			uint8_t add = (uint8_t)(*ptr - '0');
+			if (add <= 9) {
+				idx = add + idx * 10;
+			} else {
+				// Not a digit
+				return 0;
+			}
+			ptr++;
+		}
+		// Invalid if overflow
+		return idx >= (idx_t)IDX_T_MAX ? 0 : ptr - before;
 	}
 
 	template <class yyjson_t>

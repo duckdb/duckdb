@@ -452,12 +452,6 @@ CreateScalarFunctionInfo JSONFunctions::GetToJSONFunction() {
 	return CreateScalarFunctionInfo(fun);
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetQuoteFunction() {
-	auto result = GetToJSONFunction();
-	result.name = "json_quote";
-	return result;
-}
-
 CreateScalarFunctionInfo JSONFunctions::GetArrayToJSONFunction() {
 	auto fun = ScalarFunction("array_to_json", {}, LogicalType::JSON, ToJSONFunction, false, ArrayToJSONBind, nullptr,
 	                          nullptr);
