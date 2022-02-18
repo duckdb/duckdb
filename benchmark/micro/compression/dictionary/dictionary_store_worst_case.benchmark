@@ -1,5 +1,5 @@
 # name: benchmark/micro/compression/dictionary/dictionary_store_worst_case.benchmark
-# description: Storing strings compressed at ~4.3x compression
+# description: Storing a column containing only unique strings.
 # group: [dictionary]
 
 name Bitpacking Insert

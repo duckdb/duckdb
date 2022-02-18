@@ -1,0 +1,17 @@
+# name: benchmark/micro/compression/dictionary/dictionary_tpch_large_write.benchmark
+# description: Storing strings compressed at ~4.3x compression
+# group: [dictionary]
+
+name Bitpacking Insert
+group aggregate
+storage persistent
+require_reinit
+
+require tpch
+
+load
+PRAGMA force_compression='uncompressed';
+
+run
+CALL DBGEN(sf=1);
+checkpoint;
