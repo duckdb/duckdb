@@ -14,8 +14,6 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 
-#include <duckdb.h>
-
 namespace duckdb {
 struct StringDictionaryContainer {
 	//! The size of the dictionary
