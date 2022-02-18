@@ -79,6 +79,8 @@ private:
 	//! Transforms DuckDB Sort Order to Substrait Sort Order
 	void TransformOrder(duckdb::BoundOrderByNode &dordf, substrait::SortField &sordf);
 
+	string GetDecimalInternalString(duckdb::Value &value);
+
 	//! Creates a Conjuction
 	template <typename T, typename FUNC>
 	substrait::Expression *CreateConjunction(T &source, FUNC f) {

@@ -29,6 +29,7 @@ jobs:
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
+      BUILD_EXCEL: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
 
@@ -121,6 +122,8 @@ jobs:
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
+      BUILD_EXCEL: 1
+      BUILD_SUBSTRAIT_EXTENSION: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
       AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
@@ -228,7 +231,7 @@ jobs:
     - name: Build
       run: |
         mkdir -p build/release
-        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
     - name: Test
       run: build/release/test/unittest "*"
@@ -351,6 +354,7 @@ jobs:
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
+      BUILD_EXCEL: 1
       BUILD_VISUALIZER: 1
       DISABLE_SANITIZER: 1
 
@@ -452,6 +456,7 @@ jobs:
     env:
       BUILD_VISUALIZER: 1
       BUILD_HTTPFS: 1
+      S3_TEST_SERVER_AVAILABLE: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -462,11 +467,25 @@ jobs:
       with:
         python-version: '3.7'
 
+    - uses: actions/setup-node@v2
+      with:
+        node-version: '17'
+
     - name: Build
       run: make
 
+    - name: Start S3/HTTP test server
+      run: |
+        npm install -g s3rver
+        mkdir -p /tmp/s3rver
+        s3rver -d "/tmp/s3rver" -p "4923" -a "localhost" --configure-bucket "test-bucket" &> /tmp/s3rver/access_log.txt &
+
     - name: Test
       run: make allunit
+
+    - name: Check S3/HTTP server log
+      if: always()
+      run: cat /tmp/s3rver/access_log.txt
 
  amalgamation-tests:
     name: Amalgamation Tests

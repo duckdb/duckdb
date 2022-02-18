@@ -9,6 +9,7 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 
 #include "substrait/plan.pb.h"
 #include "substrait/algebra.pb.h"
@@ -23,7 +24,7 @@ string DuckDBToSubstrait::SerializeToString() {
 	return serialized;
 }
 
-string GetDecimalInternalString(Value &value) {
+string DuckDBToSubstrait::GetDecimalInternalString(Value &value) {
 	switch (value.type().InternalType()) {
 	case PhysicalType::INT8:
 		return to_string(value.GetValueUnsafe<int8_t>());

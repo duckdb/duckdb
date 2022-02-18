@@ -1,3 +1,4 @@
+#define DUCKDB_EXTENSION_MAIN
 
 #include "substrait-extension.hpp"
 #include "to_substrait.hpp"

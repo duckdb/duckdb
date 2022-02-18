@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 2.8.12)
 
-set(CMAKE_CXX_STANDARD 11)
 project(SubstraitExtension)
 
 include_directories(include ../../third_party/substrait)
@@ -66,12 +65,12 @@ set(SUBSTRAIT_SOURCES
     ../../third_party/substrait/substrait/type_expressions.pb.cc
     ../../third_party/substrait/substrait/extensions/extensions.pb.cc)
 
-add_library(
-  substrait_extension STATIC
-  to_substrait.cpp from_substrait.cpp substrait-extension.cpp
-  ${SUBSTRAIT_SOURCES} ${PROTOBUF_SOURCES})
+set(ALL_SOURCES to_substrait.cpp from_substrait.cpp substrait-extension.cpp
+                ${SUBSTRAIT_SOURCES} ${PROTOBUF_SOURCES})
 
-build_loadable_extension(substrait substrait-extension.cpp)
+add_library(substrait_extension STATIC ${ALL_SOURCES})
+
+build_loadable_extension(substrait ${ALL_SOURCES})
 
 install(
   TARGETS substrait_extension

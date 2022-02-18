@@ -409,12 +409,16 @@ void LocalFileSystem::MoveFile(const string &source, const string &target) {
 	}
 }
 
+std::string LocalFileSystem::GetLastErrorAsString() {
+	return string();
+}
+
 #else
 
 constexpr char PIPE_PREFIX[] = "\\\\.\\pipe\\";
 
 // Returns the last Win32 error, in string format. Returns an empty string if there is no error.
-std::string GetLastErrorAsString() {
+std::string LocalFileSystem::GetLastErrorAsString() {
 	// Get the error message, if any.
 	DWORD errorMessageID = GetLastError();
 	if (errorMessageID == 0)
@@ -490,7 +494,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 	HANDLE hFile = CreateFileW(unicode_path.c_str(), desired_access, share_mode, NULL, creation_disposition,
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
-		auto error = GetLastErrorAsString();
+		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
 	}
 	auto handle = make_unique<WindowsFileHandle>(*this, path.c_str(), hFile);
@@ -519,7 +523,7 @@ static DWORD FSInternalRead(FileHandle &handle, HANDLE hFile, void *buffer, int6
 	ov.hEvent = 0;
 	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, &ov);
 	if (!rc) {
-		auto error = GetLastErrorAsString();
+		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Could not read file \"%s\" (error in ReadFile): %s", handle.path, error);
 	}
 	return bytes_read;
@@ -553,7 +557,7 @@ static DWORD FSInternalWrite(FileHandle &handle, HANDLE hFile, void *buffer, int
 	ov.hEvent = 0;
 	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, &bytes_written, &ov);
 	if (!rc) {
-		auto error = GetLastErrorAsString();
+		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Could not write file \"%s\" (error in WriteFile): %s", handle.path, error);
 	}
 	return bytes_written;
@@ -617,7 +621,7 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	SetFilePointer(handle, new_size);
 	// now set the end of file position
 	if (!SetEndOfFile(hFile)) {
-		auto error = GetLastErrorAsString();
+		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Failure in SetEndOfFile call on file \"%s\": %s", handle.path, error);
 	}
 }
