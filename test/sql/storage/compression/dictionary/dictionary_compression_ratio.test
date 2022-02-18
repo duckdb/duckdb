@@ -5,6 +5,8 @@
 # load the DB from disk
 load __TEST_DIR__/test_bitpacking.db
 
+require vector_size 512
+
 # First test: detailed compression ratio
 statement ok
 PRAGMA force_compression='dictionary'
@@ -25,6 +27,16 @@ CREATE TABLE test_uncompressed AS SELECT concat('BEEPBOOP-', (i%3)::VARCHAR) AS 
 
 statement ok
 checkpoint
+
+
+#mode output_result
+
+statement ok
+select (uncompressed::FLOAT / dictionary::FLOAT) as compression_ratio  FROM (
+    select
+        (select count(distinct block_id) from pragma_storage_info('test_dictionary') where segment_type in('VARCHAR')) as dictionary,
+        (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type in('VARCHAR')) as uncompressed
+)
 
 # This query keeps a pretty wide margin in compression ratio un purpose to account for possible changes that
 # influence compression ratio.
