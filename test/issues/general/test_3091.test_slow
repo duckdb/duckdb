@@ -2,6 +2,26 @@
 # description: Issue 3091: Double to Decimal rounding error
 # group: [general]
 
+query T
+select 39981.70::DOUBLE::DECIMAL(15,2)
+----
+39981.70
+
+query T
+select (-39981.70)::DOUBLE::DECIMAL(15,2)
+----
+-39981.70
+
+query T
+select 100::DOUBLE::DECIMAL(3,0);
+----
+100
+
+query T
+select (-100)::DOUBLE::DECIMAL(3,0);
+----
+-100
+
 require tpch
 
 statement ok
