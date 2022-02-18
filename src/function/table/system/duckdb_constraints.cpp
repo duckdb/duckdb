@@ -177,6 +177,7 @@ void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_
 				for (auto &col_idx : bound_foreign_key.fk_keys) {
 					column_index_list.push_back(column_t(col_idx));
 				}
+				break;
 			}
 			default:
 				throw NotImplementedException("Unimplemented constraint for duckdb_constraints");
