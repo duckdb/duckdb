@@ -17,7 +17,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 struct TryCastToDecimal {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, string *error_message, uint8_t width, uint8_t scale) {
+	DUCKDB_API static inline bool Operation(SRC input, DST &result, string *error_message, uint8_t width,
+	                                        uint8_t scale) {
 		throw NotImplementedException("Unimplemented type for TryCastToDecimal!");
 	}
 };

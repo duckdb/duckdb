@@ -22,7 +22,7 @@ class Vector;
 
 struct TryCast {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, bool strict = false) {
+	DUCKDB_API static inline bool Operation(SRC input, DST &result, bool strict = false) {
 		throw NotImplementedException("Unimplemented type for cast (%s -> %s)", GetTypeId<SRC>(), GetTypeId<DST>());
 	}
 };
@@ -503,21 +503,21 @@ bool TryCastErrorMessage::Operation(string_t input, interval_t &result, string *
 //===--------------------------------------------------------------------===//
 struct TryCastToTimestampNS {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, bool strict = false) {
+	DUCKDB_API static inline bool Operation(SRC input, DST &result, bool strict = false) {
 		throw InternalException("Unsupported type for try cast to timestamp (ns)");
 	}
 };
 
 struct TryCastToTimestampMS {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, bool strict = false) {
+	DUCKDB_API static inline bool Operation(SRC input, DST &result, bool strict = false) {
 		throw InternalException("Unsupported type for try cast to timestamp (ms)");
 	}
 };
 
 struct TryCastToTimestampSec {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, bool strict = false) {
+	DUCKDB_API static inline bool Operation(SRC input, DST &result, bool strict = false) {
 		throw InternalException("Unsupported type for try cast to timestamp (s)");
 	}
 };
@@ -654,8 +654,8 @@ duckdb::string_t CastFromUUID::Operation(duckdb::hugeint_t input, Vector &vector
 
 struct TryCastToUUID {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message,
-	                             bool strict = false) {
+	DUCKDB_API static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message,
+	                                        bool strict = false) {
 		throw InternalException("Unsupported type for try cast to uuid");
 	}
 };
