@@ -54,7 +54,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, move(function_data));
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
-	copy->is_file = FileSystem::IsFile(copy->file_path);
+	copy->is_file_and_exists = FileSystem::IsFileAndExists(copy->file_path);
 
 	copy->AddChild(move(select_node.plan));
 

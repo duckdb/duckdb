@@ -33,14 +33,6 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #undef FILE_CREATE // woo mingw
 #endif
 
-#if !defined(S_ISREG) && defined(S_IFMT) && defined(S_IFREG)
-#define S_ISREG(m) (((m)&S_IFMT) == S_IFREG)
-#endif
-
-#ifndef S_ISREG
-#define S_ISREG(x) (((x)&_S_IFMT) == _S_IFREG)
-#endif
-
 namespace duckdb {
 
 FileSystem::~FileSystem() {
@@ -224,13 +216,13 @@ void FileSystem::RemoveFile(const string &filename) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
 }
 
-bool FileSystem::IsFile(const string &filename) {
+bool FileSystem::IsFileAndExists(const string &filename) {
 	if (!filename.empty()) {
 #if defined(_WIN32) && defined(__MINGW32__)
 		if (_access(filename.c_str(), 0) == 0) {
 			struct stat status;
 			stat(filename.c_str(), &status);
-			if (S_ISREG(status.st_mode)) {
+			if (status.st_size > 0) {
 				return true;
 			}
 		}
@@ -238,7 +230,7 @@ bool FileSystem::IsFile(const string &filename) {
 		if (access(filename.c_str(), 0) == 0) {
 			struct stat status;
 			stat(filename.c_str(), &status);
-			if (S_ISREG(status.st_mode)) {
+			if (status.st_size > 0) {
 				return true;
 			}
 		}

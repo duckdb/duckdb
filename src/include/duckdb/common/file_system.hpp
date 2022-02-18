@@ -150,7 +150,7 @@ public:
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
 	//! Checks if path is a file
-	DUCKDB_API static bool IsFile(const string &filename);
+	DUCKDB_API static bool IsFileAndExists(const string &filename);
 
 	//! Sets the working directory
 	DUCKDB_API static void SetWorkingDirectory(const string &path);
