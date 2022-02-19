@@ -47,7 +47,7 @@ jobs:
 
       - name: Windows Build Tools
         run: |
-          npm install --g --production windows-build-tools
+          npm install --global --production windows-build-tools --vs2019
 
       - name: Node Version
         run: ./scripts/node_version.sh
