@@ -6,8 +6,13 @@
 namespace duckdb {
 
 void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 1);
 	Vector &input = args.data[0];
-	D_ASSERT(input.GetType().id() == LogicalTypeId::LIST);
+
+	if (input.GetType().id() == LogicalTypeId::SQLNULL) {
+		result.Reference(input);
+		return;
+	}
 	auto &child_vector = ListVector::GetEntry(input);
 
 	idx_t count = args.size();
@@ -23,7 +28,10 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_entries = FlatVector::GetData<list_entry_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
-	ListVector::ReferenceEntry(result, child_vector);
+
+	if (child_vector.GetType().id() != LogicalTypeId::SQLNULL) {
+		ListVector::ReferenceEntry(result, child_vector);
+	}
 
 	idx_t offset = 0;
 	for (idx_t i = 0; i < count; i++) {
@@ -34,22 +42,28 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 		}
 		auto list_entry = list_entries[list_index];
 
+		// Find first valid child list entry to get offset
+		for (idx_t j = 0; j < list_entry.length; j--) {
+			auto child_list_index = child_data.sel->get_index(list_entry.offset + j);
+			if (child_data.validity.RowIsValid(child_list_index)) {
+				offset = child_entries[child_list_index].offset;
+				break;
+			}
+		}
+
 		idx_t length = 0;
 		// Find last valid child list entry to get length
 		for (idx_t j = list_entry.length - 1; j != (idx_t)-1; j--) {
 			auto child_list_index = child_data.sel->get_index(list_entry.offset + j);
 			if (child_data.validity.RowIsValid(child_list_index)) {
-				length = child_entries[child_list_index].offset + child_entries[child_list_index].length - offset;
+				auto child_entry = child_entries[child_list_index];
+				length = child_entry.offset + child_entry.length - offset;
 				break;
 			}
 		}
-		if (length == 0) {
-			result_validity.SetInvalid(i);
-		} else {
-			result_entries[i].offset = offset;
-			result_entries[i].length = length;
-			offset += length;
-		}
+		result_entries[i].offset = offset;
+		result_entries[i].length = length;
+		offset += length;
 	}
 
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -62,19 +76,20 @@ static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFu
 	D_ASSERT(bound_function.arguments.size() == 1);
 
 	auto &input_type = arguments[0]->return_type;
-
 	D_ASSERT(input_type.id() == LogicalTypeId::LIST);
-	// D_ASSERT seems not catching if input_type.id() == SQLNULL
-	if (input_type.id() != LogicalTypeId::LIST) {
-		throw BinderException("FLATTEN can only operate on LIST(LIST)");
-	}
 	bound_function.arguments[0] = input_type;
 
-	auto child_type = ListType::GetChildType(input_type);
-	if (child_type.id() != LogicalTypeId::LIST) {
-		throw BinderException("FLATTEN can only operate on LIST(LIST)");
+	if (input_type.id() != LogicalTypeId::LIST) {
+		// input.id() == SQLNULL
+		bound_function.return_type = LogicalType(LogicalTypeId::SQLNULL);
+		return make_unique<VariableReturnBindData>(bound_function.return_type);
 	}
-	bound_function.return_type = child_type;
+
+	// input.id() == LIST
+	auto child_type = ListType::GetChildType(input_type);
+	D_ASSERT(child_type.id() == LogicalTypeId::LIST);
+	bound_function.return_type = (child_type.id() == LogicalTypeId::SQLNULL) ? input_type : child_type;
+
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
