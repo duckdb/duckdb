@@ -43,7 +43,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 		auto list_entry = list_entries[list_index];
 
 		// Find first valid child list entry to get offset
-		for (idx_t j = 0; j < list_entry.length; j--) {
+		for (idx_t j = 0; j < list_entry.length; j++) {
 			auto child_list_index = child_data.sel->get_index(list_entry.offset + j);
 			if (child_data.validity.RowIsValid(child_list_index)) {
 				offset = child_entries[child_list_index].offset;
