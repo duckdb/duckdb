@@ -41,6 +41,9 @@ jobs:
           node -v
           npm -v
 
+      - name: Windows Build Tools
+        run: |
+          npm install --g --production windows-build-tools
 
       - name: Node Version
         run: ./scripts/node_version.sh
