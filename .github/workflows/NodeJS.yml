@@ -37,7 +37,6 @@ jobs:
 
       - name: Versions
         run: |
-          msbuild /version
           systeminfo
           node -v
           npm -v
