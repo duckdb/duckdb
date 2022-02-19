@@ -47,7 +47,8 @@ jobs:
 
       - name: Windows Build Tools
         run: |
-          npm install --global windows-build-tools@4.0.0
+          choco install python visualstudio2017-workload-vctools -y
+          npm config set msvs_version 2017
 
       - name: Node Version
         run: ./scripts/node_version.sh
