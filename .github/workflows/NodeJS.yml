@@ -25,6 +25,10 @@ jobs:
         matrix:
           node: [ '10', '12', '14', '15' ]
 
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+
       steps:
       - uses: actions/checkout@v2
         with:
