@@ -1,12 +1,9 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 
@@ -16,17 +13,12 @@ BoundAggregateExpression::BoundAggregateExpression(AggregateFunction function, v
     : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.return_type),
       function(move(function)), children(move(children)), bind_info(move(bind_info)), distinct(distinct),
       filter(move(filter)) {
+	D_ASSERT(!function.name.empty());
 }
 
 string BoundAggregateExpression::ToString() const {
-	string result = function.name + "(";
-	if (distinct) {
-		result += "DISTINCT ";
-	}
-	result += StringUtil::Join(children, children.size(), ", ",
-	                           [](const unique_ptr<Expression> &child) { return child->ToString(); });
-	result += ")";
-	return result;
+	return FunctionExpression::ToString<BoundAggregateExpression, Expression>(*this, string(), function.name, false,
+	                                                                          distinct, filter.get());
 }
 
 hash_t BoundAggregateExpression::Hash() const {

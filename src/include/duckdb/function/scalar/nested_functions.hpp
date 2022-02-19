@@ -57,6 +57,11 @@ struct ListConcatFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ListContainsFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct ListFlattenFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
