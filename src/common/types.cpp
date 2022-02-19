@@ -15,6 +15,7 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
@@ -380,11 +381,11 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 	case LogicalTypeId::TIMESTAMP:
 		return "TIMESTAMP";
 	case LogicalTypeId::TIMESTAMP_MS:
-		return "TIMESTAMP (MS)";
+		return "TIMESTAMP_MS";
 	case LogicalTypeId::TIMESTAMP_NS:
-		return "TIMESTAMP (NS)";
+		return "TIMESTAMP_NS";
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return "TIMESTAMP (SEC)";
+		return "TIMESTAMP_S";
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return "TIMESTAMP WITH TIME ZONE";
 	case LogicalTypeId::TIME_TZ:
@@ -442,21 +443,21 @@ string LogicalType::ToString() const {
 			return "STRUCT";
 		}
 		auto &child_types = StructType::GetChildTypes(*this);
-		string ret = "STRUCT<";
+		string ret = "STRUCT(";
 		for (size_t i = 0; i < child_types.size(); i++) {
-			ret += child_types[i].first + ": " + child_types[i].second.ToString();
+			ret += child_types[i].first + " " + child_types[i].second.ToString();
 			if (i < child_types.size() - 1) {
 				ret += ", ";
 			}
 		}
-		ret += ">";
+		ret += ")";
 		return ret;
 	}
 	case LogicalTypeId::LIST: {
 		if (!type_info_) {
 			return "LIST";
 		}
-		return "LIST<" + ListType::GetChildType(*this).ToString() + ">";
+		return ListType::GetChildType(*this).ToString() + "[]";
 	}
 	case LogicalTypeId::MAP: {
 		if (!type_info_) {
@@ -484,7 +485,10 @@ string LogicalType::ToString() const {
 		return StringUtil::Format("DECIMAL(%d,%d)", width, scale);
 	}
 	case LogicalTypeId::ENUM: {
-		return EnumType::GetTypeName(*this);
+		return KeywordHelper::WriteOptionallyQuoted(EnumType::GetTypeName(*this));
+	}
+	case LogicalTypeId::USER: {
+		return KeywordHelper::WriteOptionallyQuoted(UserType::GetTypeName(*this));
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);

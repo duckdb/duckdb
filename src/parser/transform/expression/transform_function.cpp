@@ -103,7 +103,6 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		function_name = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->next->data.ptr_value)->val.str;
 	} else {
 		// unqualified name
-		//		schema = DEFAULT_SCHEMA;
 		schema = INVALID_SCHEMA;
 		function_name = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->data.ptr_value)->val.str;
 	}

@@ -10,6 +10,8 @@
 
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -19,7 +21,7 @@ struct QualifiedName {
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to INVALID_SCHEMA
-	static QualifiedName Parse(string input) {
+	static QualifiedName Parse(const string &input) {
 		string schema;
 		string name;
 		idx_t idx = 0;

@@ -12,7 +12,7 @@ CollateExpression::CollateExpression(string collation_p, unique_ptr<ParsedExpres
 }
 
 string CollateExpression::ToString() const {
-	return "COLLATE(" + child->ToString() + ")";
+	return child->ToString() + " COLLATE " + collation;
 }
 
 bool CollateExpression::Equals(const CollateExpression *a, const CollateExpression *b) {
