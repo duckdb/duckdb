@@ -3,7 +3,7 @@
 # group: [string]
 
 statement ok
-PRAGMA disable_optimizer
+PRAGMA enable_verification
 
 # scalar ilike
 query T
