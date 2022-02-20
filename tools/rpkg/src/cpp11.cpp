@@ -153,6 +153,13 @@ extern "C" SEXP _duckdb_rapi_rel_limit(SEXP rel, SEXP n) {
   END_CPP11
 }
 // relational.cpp
+SEXP rapi_rel_distinct(duckdb::rel_extptr_t rel);
+extern "C" SEXP _duckdb_rapi_rel_distinct(SEXP rel) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_rel_distinct(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel)));
+  END_CPP11
+}
+// relational.cpp
 SEXP rapi_rel_to_df(duckdb::rel_extptr_t rel);
 extern "C" SEXP _duckdb_rapi_rel_to_df(SEXP rel) {
   BEGIN_CPP11
@@ -271,6 +278,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_register_df",      (DL_FUNC) &_duckdb_rapi_register_df,      3},
     {"_duckdb_rapi_rel_aggregate",    (DL_FUNC) &_duckdb_rapi_rel_aggregate,    3},
     {"_duckdb_rapi_rel_alias",        (DL_FUNC) &_duckdb_rapi_rel_alias,        1},
+    {"_duckdb_rapi_rel_distinct",     (DL_FUNC) &_duckdb_rapi_rel_distinct,     1},
     {"_duckdb_rapi_rel_explain",      (DL_FUNC) &_duckdb_rapi_rel_explain,      1},
     {"_duckdb_rapi_rel_filter",       (DL_FUNC) &_duckdb_rapi_rel_filter,       2},
     {"_duckdb_rapi_rel_from_df",      (DL_FUNC) &_duckdb_rapi_rel_from_df,      2},

@@ -8,6 +8,9 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 
 #include "duckdb/main/relation/filter_relation.hpp"
 #include "duckdb/main/relation/projection_relation.hpp"
@@ -15,6 +18,7 @@
 #include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/relation/join_relation.hpp"
 #include "duckdb/main/relation/limit_relation.hpp"
+#include "duckdb/main/relation/distinct_relation.hpp"
 
 using namespace duckdb;
 using namespace cpp11;
@@ -48,6 +52,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<ConstantExpression>("duckdb_expr", RApiTypes::SexpToValue(val, 0));
 }
 
+// TODO how do we create the different expression types from the API? different functions?
 [[cpp11::register]] SEXP rapi_expr_function(std::string name, list args) {
 	if (name.size() == 0) {
 		stop("expr_function: Zero length name");
@@ -56,11 +61,35 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	for (auto arg : args) {
 		children.push_back(expr_extptr_t(arg)->Copy());
 	}
+	if (name == "as.integer") {
+		return make_external<CastExpression>("duckdb_expr", LogicalType::INTEGER, move(children[0]));
+	} else if (name == "ifelse") {
+		auto res = make_external<CaseExpression>("duckdb_expr");
+		CaseCheck check;
+		check.when_expr = move(children[0]);
+		check.then_expr = move(children[1]);
+		res->case_checks.push_back(move(check));
+		res->else_expr = move(children[2]);
+		return res;
+	} else if (name == "grepl") {
+		// TODO check argument types, quite ghetto this
+		// TODO maybe we can support r-style regexes directly with RE2
+		auto like_str = StringValue::Get(((ConstantExpression *)children[0].get())->value);
+		like_str = StringUtil::Replace(like_str, ".*", "%");
+		like_str = StringUtil::Replace(like_str, "$", "");
+
+		children[0] = move(children[1]);
+		children[1] = make_unique<ConstantExpression>(like_str);
+		return make_external<FunctionExpression>("duckdb_expr", "~~", move(children));
+	}
 	auto operator_type = OperatorToExpressionType(name);
 	if (operator_type != ExpressionType::INVALID && children.size() == 2) {
 		return make_external<ComparisonExpression>("duckdb_expr", operator_type, move(children[0]), move(children[1]));
-	} else if (name == "||") {
+	} else if (name == "||" || name == "|") {
 		return make_external<ConjunctionExpression>("duckdb_expr", ExpressionType::CONJUNCTION_OR, move(children[0]),
+		                                            move(children[1]));
+	} else if (name == "&&" || name == "&") {
+		return make_external<ConjunctionExpression>("duckdb_expr", ExpressionType::CONJUNCTION_AND, move(children[0]),
 		                                            move(children[1]));
 	}
 	if (name == "mean") {
@@ -90,7 +119,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	}
 
 	named_parameter_map_t other_params;
-	other_params["experimental"] = Value::BOOLEAN(true);
+	// other_params["experimental"] = Value::BOOLEAN(true);
 	auto rel = con->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)(SEXP)df)}, other_params)
 	               ->Alias("dataframe_" + to_string(rand()));
 	auto res = sexp(make_external<RelationWrapper>("duckdb_relation", move(rel)));
@@ -125,8 +154,9 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	vector<string> aliases;
 
 	for (expr_extptr_t expr : exprs) {
-		aliases.push_back(expr->alias.empty() ? expr->ToString() : expr->alias);
-		projections.push_back(expr->Copy());
+		auto dexpr = expr->Copy();
+		aliases.push_back(dexpr->alias.empty() ? dexpr->ToString() : dexpr->alias);
+		projections.push_back(move(dexpr));
 	}
 
 	auto res = std::make_shared<ProjectionRelation>(rel->rel, move(projections), move(aliases));
@@ -194,7 +224,14 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", std::make_shared<LimitRelation>(rel->rel, n, 0));
 }
 
+[[cpp11::register]] SEXP rapi_rel_distinct(duckdb::rel_extptr_t rel) {
+	return make_external<RelationWrapper>("duckdb_relation", std::make_shared<DistinctRelation>(rel->rel));
+}
+
 static SEXP result_to_df(unique_ptr<QueryResult> res) {
+	if (!res->success) {
+		stop(res->error);
+	}
 	if (res->type == QueryResultType::STREAM_RESULT) {
 		res = ((StreamQueryResult &)*res).Materialize();
 	}

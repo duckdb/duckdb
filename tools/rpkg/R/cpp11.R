@@ -80,6 +80,10 @@ rapi_rel_limit <- function(rel, n) {
   .Call(`_duckdb_rapi_rel_limit`, rel, n)
 }
 
+rapi_rel_distinct <- function(rel) {
+  .Call(`_duckdb_rapi_rel_distinct`, rel)
+}
+
 rapi_rel_to_df <- function(rel) {
   .Call(`_duckdb_rapi_rel_to_df`, rel)
 }

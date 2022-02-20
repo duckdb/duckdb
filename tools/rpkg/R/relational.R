@@ -155,6 +155,16 @@ rel_order <- rapi_rel_order
 #' rel2 <- rel_inner_join(left, right, cond)
 rel_inner_join <- rapi_rel_inner_join
 
+#' Lazily compute a distinct result on a DuckDB relation object
+#' @param rel the input DuckDB relation object
+#' @return a new `duckdb_relation` object with distinct rows
+#' @export
+#' @examples
+#' con <- DBI::dbConnect(duckdb())
+#' rel <- rel_from_df(con, mtcars)
+#' rel2 <- rel_distinct(rel)
+rel_distinct <- rapi_rel_distinct
+
 #' Run a SQL query on a DuckDB relation object
 #' @param rel the DuckDB relation object
 #' @param sql a SQL query to run, use `_` to refer back to the relation
