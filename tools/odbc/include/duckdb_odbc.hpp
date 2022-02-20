@@ -6,6 +6,7 @@
 
 #include "duckdb/common/windows.hpp"
 #include "descriptor.hpp"
+#include "odbc_utils.hpp"
 
 #include <sqltypes.h>
 #include <sqlext.h>
@@ -72,13 +73,6 @@ public:
 	std::vector<OdbcHandleStmt *> vec_stmt_ref;
 };
 
-inline bool IsSQLVariableLengthType(SQLSMALLINT type) {
-	if (type == SQL_CHAR || type == SQL_VARCHAR || type == SQL_WVARCHAR || type == SQL_BINARY) {
-		return true;
-	}
-	return false;
-}
-
 struct OdbcBoundCol {
 	OdbcBoundCol() : type(SQL_UNKNOWN_TYPE), ptr(nullptr), len(0), strlen_or_ind(nullptr) {};
 
@@ -87,7 +81,7 @@ struct OdbcBoundCol {
 	}
 
 	bool IsVarcharBound() {
-		if (IsSQLVariableLengthType(type)) {
+		if (OdbcUtils::IsCharType(type)) {
 			return strlen_or_ind != nullptr;
 		}
 		return false;
@@ -159,6 +153,8 @@ public:
 	bool IsAD();
 	bool IsIRD();
 	bool IsIPD();
+
+	void AddMoreRecords(SQLSMALLINT new_size);
 
 public:
 	DescHeader header;
