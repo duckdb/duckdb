@@ -12,7 +12,7 @@ select 'a%c' ilike 'a$%C' escape '$';
 true
 
 query T
-select 'a%c' ilike 'a$%C' escape '$';
+select 'A%C' ilike 'a$%c' escape '$';
 ----
 true
 
