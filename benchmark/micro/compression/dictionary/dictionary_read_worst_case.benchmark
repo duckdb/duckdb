@@ -2,7 +2,7 @@
 # description: Scanning data that is uncompressible with dictionary encoding
 # group: [dictionary]
 
-name Bitpacking Scan
+name Dictionary Compression Scan
 group aggregate
 storage persistent
 

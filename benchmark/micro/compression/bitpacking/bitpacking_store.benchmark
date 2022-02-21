@@ -3,7 +3,7 @@
 # group: [bitpacking]
 
 name Bitpacking Insert
-group aggregate
+group bitpacking
 storage persistent
 require_reinit
 

@@ -2,8 +2,8 @@
 # description: Scanning strings at best case compression of only 2 unique values
 # group: [dictionary]
 
-name Bitpacking Scan
-group aggregate
+name Dictionary Compression Scan
+group dictionary
 storage persistent
 
 load

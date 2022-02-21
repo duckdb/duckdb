@@ -2,8 +2,8 @@
 # description: Scanning strings at ~4.3x compression
 # group: [dictionary]
 
-name Bitpacking Scan
-group aggregate
+name Dictionary Compression Scan
+group dictionary
 storage persistent
 
 load

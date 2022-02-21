@@ -1,9 +1,9 @@
 # name: benchmark/micro/compression/tpch_compression.benchmark
-# description: Storing tpc-h sf1 database
+# description: Storing tpc-h sf1 database with default compression
 # group: [compression]
 
-name Bitpacking Insert
-group aggregate
+name TPC-H SF1 Write with default compression
+group compression
 storage persistent
 require tpch
 require_reinit

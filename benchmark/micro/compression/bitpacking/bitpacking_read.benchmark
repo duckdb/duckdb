@@ -3,7 +3,7 @@
 # group: [bitpacking]
 
 name Bitpacking Scan
-group aggregate
+group bitpacking
 storage persistent
 
 load
