@@ -185,7 +185,9 @@ static idx_t PiecewiseMergeNulls(DataChunk &keys, const vector<JoinCondition> &c
 
 	size_t all_constant = 0;
 	for (auto &v : keys.data) {
-		all_constant += int(v.GetVectorType() == VectorType::CONSTANT_VECTOR);
+		if (v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			++all_constant;
+		}
 	}
 
 	auto &primary = keys.data[0];
@@ -216,13 +218,32 @@ static idx_t PiecewiseMergeNulls(DataChunk &keys, const vector<JoinCondition> &c
 				continue;
 			}
 			pvalidity.EnsureWritable();
-			auto pmask = pvalidity.GetData();
-			if (v.GetVectorType() == VectorType::FLAT_VECTOR) {
-				//	Merge entire entries
+			switch (v.GetVectorType()) {
+			case VectorType::FLAT_VECTOR: {
+				// Merge entire entries
+				auto pmask = pvalidity.GetData();
 				const auto entry_count = pvalidity.EntryCount(count);
 				for (idx_t entry_idx = 0; entry_idx < entry_count; ++entry_idx) {
 					pmask[entry_idx] &= vvalidity.GetValidityEntry(entry_idx);
 				}
+				break;
+			}
+			case VectorType::CONSTANT_VECTOR:
+				// All or nothing
+				if (ConstantVector::IsNull(v)) {
+					pvalidity.SetAllInvalid(count);
+					return count;
+				}
+				break;
+			default:
+				// One by one
+				for (idx_t i = 0; i < count; ++i) {
+					const auto idx = vdata.sel->get_index(i);
+					if (!vvalidity.RowIsValidUnsafe(idx)) {
+						pvalidity.SetInvalidUnsafe(i);
+					}
+				}
+				break;
 			}
 		}
 		return count - pvalidity.CountValid(count);
