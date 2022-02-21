@@ -7,6 +7,7 @@
 #include "duckdb/common/windows.hpp"
 #include "descriptor.hpp"
 #include "odbc_utils.hpp"
+#include "odbc_diagnostic.hpp"
 
 #include <sqltypes.h>
 #include <sqlext.h>
@@ -21,18 +22,23 @@ namespace duckdb {
 class OdbcFetch;
 class ParameterDescriptor;
 class RowDescriptor;
+class OdbcDiagnostic;
 
 enum OdbcHandleType { ENV, DBC, STMT, DESC };
 std::string OdbcHandleTypeToString(OdbcHandleType type);
 
 struct OdbcHandle {
-	explicit OdbcHandle(OdbcHandleType type_p) : type(type_p) {};
+	explicit OdbcHandle(OdbcHandleType type_p) : type(type_p) {
+		odbc_diagnostic = make_unique<OdbcDiagnostic>();
+	};
 	OdbcHandle(const OdbcHandle &other);
 	OdbcHandle &operator=(const OdbcHandle &other);
 
 	OdbcHandleType type;
 	// appending all error messages into it
 	std::vector<std::string> error_messages;
+
+	unique_ptr<OdbcDiagnostic> odbc_diagnostic;
 };
 
 struct OdbcHandleEnv : public OdbcHandle {
@@ -162,6 +168,35 @@ public:
 	OdbcHandleDbc *dbc;
 	OdbcHandleStmt *stmt;
 };
+
+template <class T>
+SQLRETURN WithHandle(SQLHANDLE &handle, T &&lambda) {
+	if (!handle) {
+		return SQL_ERROR;
+	}
+	auto *hdl = (OdbcHandle *)handle;
+	if (!hdl->odbc_diagnostic) {
+		return SQL_ERROR;
+	}
+
+	return lambda(hdl);
+}
+
+template <class T>
+SQLRETURN WithEnvironment(SQLHANDLE &enviroment_handle, T &&lambda) {
+	if (!enviroment_handle) {
+		return SQL_ERROR;
+	}
+	auto *env = (OdbcHandleEnv *)enviroment_handle;
+	if (env->type != OdbcHandleType::ENV) {
+		return SQL_ERROR;
+	}
+	if (!env->db) {
+		return SQL_ERROR;
+	}
+
+	return lambda(env);
+}
 
 template <class T>
 SQLRETURN WithConnection(SQLHANDLE &connection_handle, T &&lambda) {
