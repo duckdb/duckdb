@@ -52,7 +52,7 @@ public:
 	//! properties
 	void MoveFile(const string &source, const string &target) override;
 	//! Check if a file exists
-	bool FileExists(const string &filename) override;
+	bool FileExists(const string &filename, bool empty_is_valid = true) override;
 	//! Remove a file from disk
 	void RemoveFile(const string &filename) override;
 	//! Sync a file handle to disk

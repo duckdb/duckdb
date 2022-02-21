@@ -20,12 +20,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 #else
-#include <io.h>
 #include <string>
 
 #ifdef __MINGW32__
-#include <sys/stat.h>
-
 // need to manually define this for mingw
 extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
 #endif
@@ -208,35 +205,12 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 	throw NotImplementedException("%s: MoveFile is not implemented!", GetName());
 }
 
-bool FileSystem::FileExists(const string &filename) {
+bool FileSystem::FileExists(const string &filename, bool empty_is_valid) {
 	throw NotImplementedException("%s: FileExists is not implemented!", GetName());
 }
 
 void FileSystem::RemoveFile(const string &filename) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
-}
-
-bool FileSystem::IsFileAndExists(const string &filename) {
-	if (!filename.empty()) {
-#if defined(_WIN32) && defined(__MINGW32__)
-		if (_access(filename.c_str(), 0) == 0) {
-			struct stat status;
-			stat(filename.c_str(), &status);
-			if (status.st_size > 0) {
-				return true;
-			}
-		}
-#else
-		if (access(filename.c_str(), 0) == 0) {
-			struct stat status;
-			stat(filename.c_str(), &status);
-			if (status.st_size > 0) {
-				return true;
-			}
-		}
-#endif
-	}
-	return false;
 }
 
 void FileSystem::FileSync(FileHandle &handle) {

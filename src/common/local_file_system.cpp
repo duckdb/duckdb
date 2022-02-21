@@ -24,6 +24,7 @@
 #include <string>
 
 #ifdef __MINGW32__
+#include <sys/stat.h>
 // need to manually define this for mingw
 extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
 #endif
@@ -284,17 +285,26 @@ bool LocalFileSystem::DirectoryExists(const string &directory) {
 	return false;
 }
 
-bool LocalFileSystem::FileExists(const string &filename) {
+bool LocalFileSystem::FileExists(const string &filename, bool empty_is_valid) {
 	if (!filename.empty()) {
-		if (access(filename.c_str(), 0) == 0) {
+#if defined(_WIN32) && defined(__MINGW32__)
+		if (_access(filename.c_str(), 0) == 0) {
 			struct stat status;
 			stat(filename.c_str(), &status);
-			if (!(status.st_mode & S_IFDIR)) {
+			if ((status.st_size > 0 || empty_is_valid) && !(status.st_mode & S_IFDIR)) {
 				return true;
 			}
 		}
+#else
+		if (access(filename.c_str(), 0) == 0) {
+			struct stat status;
+			stat(filename.c_str(), &status);
+			if ((status.st_size > 0 || empty_is_valid) && !(status.st_mode & S_IFDIR)) {
+				return true;
+			}
+		}
+#endif
 	}
-	// if any condition fails
 	return false;
 }
 
