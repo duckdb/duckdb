@@ -947,7 +947,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			}
 			if (gstate.rhs_found_match) {
 				//	Absolute position of the block + start position inside that block
-				const idx_t base_index = state.right_base + first_idx;
+				const idx_t base_index = right_info.base_idx + first_idx;
 				for (idx_t i = 0; i < result_count; i++) {
 					gstate.rhs_found_match[base_index + right_info.result[sel->get_index(i)]] = true;
 				}
