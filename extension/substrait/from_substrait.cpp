@@ -298,14 +298,14 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformReadOp(const substrait::Rel &so
 	return scan;
 }
 
-shared_ptr<Relation> SubstraitToDuckDB::TransformSortOp(const substrait::Rel &sop) {
+shared_ptr<Relation> SubstraitToDuckDB::TransformSortOp(const substrait::Rel &sop, vector<string> *aliases) {
 	vector<OrderByNode> order_nodes;
 	for (auto &sordf : sop.sort().sorts()) {
 		order_nodes.push_back(TransformOrder(sordf));
 	}
-	return make_shared<OrderRelation>(TransformOp(sop.sort().input()), move(order_nodes));
+	return make_shared<OrderRelation>(TransformOp(sop.sort().input(), aliases), move(order_nodes));
 }
-shared_ptr<Relation> SubstraitToDuckDB::TransformOp(const substrait::Rel &sop) {
+shared_ptr<Relation> SubstraitToDuckDB::TransformOp(const substrait::Rel &sop, vector<string> *aliases) {
 	switch (sop.rel_type_case()) {
 	case substrait::Rel::RelTypeCase::kJoin:
 		return TransformJoinOp(sop);
@@ -316,13 +316,13 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformOp(const substrait::Rel &sop) {
 	case substrait::Rel::RelTypeCase::kFilter:
 		return TransformFilterOp(sop);
 	case substrait::Rel::RelTypeCase::kProject:
-		return TransformProjectOp(sop);
+		return TransformProjectOp(sop, aliases);
 	case substrait::Rel::RelTypeCase::kAggregate:
 		return TransformAggregateOp(sop);
 	case substrait::Rel::RelTypeCase::kRead:
 		return TransformReadOp(sop);
 	case substrait::Rel::RelTypeCase::kSort:
-		return TransformSortOp(sop);
+		return TransformSortOp(sop, aliases);
 	default:
 		throw InternalException("Unsupported relation type " + to_string(sop.rel_type_case()));
 	}
@@ -331,13 +331,14 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformOp(const substrait::Rel &sop) {
 shared_ptr<Relation> SubstraitToDuckDB::TransformRootOp(const substrait::RelRoot &sop) {
 	const auto &rel = sop.input();
 	switch (sop.input().rel_type_case()) {
-	case substrait::Rel::RelTypeCase::kProject: {
+	case substrait::Rel::RelTypeCase::kProject:
+	case substrait::Rel::RelTypeCase::kSort: {
 		vector<string> aliases;
 		auto column_names = sop.names();
 		for (auto &column_name : column_names) {
 			aliases.push_back(column_name);
 		}
-		return TransformProjectOp(rel, &aliases);
+		return TransformOp(rel, &aliases);
 	}
 	default:
 		throw InternalException("Unsupported relation type as root " + to_string(rel.rel_type_case()));

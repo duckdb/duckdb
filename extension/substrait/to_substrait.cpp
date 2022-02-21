@@ -664,8 +664,21 @@ substrait::RelRoot *DuckDBToSubstrait::TransformRootOp(LogicalOperator &dop) {
 		}
 		return root_rel;
 	}
+	case LogicalOperatorType::LOGICAL_ORDER_BY: {
+		root_rel->set_allocated_input(TransformOp(dop));
+		auto &order_by = (LogicalOrder &)dop;
+		if (order_by.children.size() == 1 && order_by.children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			auto &dproj = (LogicalProjection &)*order_by.children[0];
+			for (auto &expression : dproj.expressions) {
+				root_rel->add_names(expression->GetName());
+			}
+		} else {
+			throw InternalException("Only accept Order By Nodes as root if it only has one projection child.");
+		}
+		return root_rel;
+	}
 	default:
-		throw InternalException("Operator not implemented as plan root" + LogicalOperatorToString(dop.type));
+		throw InternalException("Operator not implemented as plan root " + LogicalOperatorToString(dop.type));
 	}
 }
 
