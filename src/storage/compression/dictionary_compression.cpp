@@ -3,7 +3,6 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/append_state.hpp"
@@ -14,7 +13,7 @@ namespace duckdb {
 // Abstract class for keeping compression state either for compression or size analysis
 class DictionaryCompressionState : public CompressionState {
 public:
-	void UpdateState(Vector &scan_vector, idx_t count) {
+	bool UpdateState(Vector &scan_vector, idx_t count) {
 		VectorData vdata;
 		scan_vector.Orrify(count, vdata);
 		auto data = (string_t *)vdata.data;
@@ -29,7 +28,8 @@ public:
 			if (row_is_valid) {
 				string_size = data[idx].GetSize();
 				if (string_size >= StringUncompressed::STRING_BLOCK_LIMIT) {
-					throw NotImplementedException("Big strings not implemented for dictionary compression");
+					// Big strings not implemented for dictionary compression
+					return false;
 				}
 				new_string = !LookupString(data[idx].GetString());
 			}
@@ -51,6 +51,8 @@ public:
 
 			Verify();
 		}
+
+		return true;
 	}
 
 protected:
@@ -137,10 +139,10 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		current_segment->function = function;
 
 		// Reset the buffers and string map
-		current_string_map = make_unique<std::unordered_map<string, uint32_t>>();
-		index_buffer = make_unique<std::vector<uint32_t>>();
-		index_buffer->push_back(0); // Reserve index 0 for null strings
-		selection_buffer = make_unique<std::vector<sel_t>>();
+		current_string_map.clear();
+		index_buffer.clear();
+		index_buffer.push_back(0); // Reserve index 0 for null strings
+		selection_buffer.clear();
 
 		// Reset the pointers into the current segment
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
@@ -159,9 +161,9 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 	data_ptr_t current_end_ptr;
 
 	// Buffers and map for current segment
-	unique_ptr<std::unordered_map<string, uint32_t>> current_string_map;
-	unique_ptr<std::vector<uint32_t>> index_buffer;
-	unique_ptr<std::vector<uint32_t>> selection_buffer;
+	std::unordered_map<string, uint32_t> current_string_map;
+	std::vector<uint32_t> index_buffer;
+	std::vector<uint32_t> selection_buffer;
 
 	// The minimal bitpacking width that can be used for the selection buffer
 	bitpacking_width_t min_width = sizeof(sel_t) * 8;
@@ -171,16 +173,16 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 
 	void Verify() override {
 		current_dictionary.Verify();
-		D_ASSERT(current_segment->count == selection_buffer->size());
-		D_ASSERT(DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load(), index_buffer->size(),
+		D_ASSERT(current_segment->count == selection_buffer.size());
+		D_ASSERT(DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load(), index_buffer.size(),
 		                                                      current_dictionary.size, min_width));
 		D_ASSERT(current_dictionary.end == Storage::BLOCK_SIZE);
-		D_ASSERT(index_buffer->size() == current_string_map->size() + 1); // +1 is for null value
+		D_ASSERT(index_buffer.size() == current_string_map.size() + 1); // +1 is for null value
 	}
 
 	bool LookupString(string str) override {
-		auto search = current_string_map->find(str);
-		auto has_result = search != current_string_map->end();
+		auto search = current_string_map.find(str);
+		auto has_result = search != current_string_map.end();
 
 		if (has_result) {
 			latest_lookup_result = search->second;
@@ -199,39 +201,39 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		D_ASSERT(current_dictionary.end == Storage::BLOCK_SIZE);
 
 		// Update buffers and map
-		index_buffer->push_back(current_dictionary.size);
-		selection_buffer->push_back(index_buffer->size() - 1);
-		current_string_map->insert({str.GetString(), index_buffer->size() - 1});
+		index_buffer.push_back(current_dictionary.size);
+		selection_buffer.push_back(index_buffer.size() - 1);
+		current_string_map.insert({str.GetString(), index_buffer.size() - 1});
 		DictionaryCompressionStorage::SetDictionary(*current_segment, *current_handle, current_dictionary);
 
-		min_width = BitpackingPrimitives::MinimumBitWidth(index_buffer->size() - 1);
+		min_width = BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1);
 		current_segment->count++;
 	}
 
 	void AddNull() override {
-		selection_buffer->push_back(0);
+		selection_buffer.push_back(0);
 		current_segment->count++;
 	}
 
 	void AddLastLookup() override {
-		selection_buffer->push_back(latest_lookup_result);
+		selection_buffer.push_back(latest_lookup_result);
 		current_segment->count++;
 	}
 
 	bool HasEnoughSpace(bool new_string, size_t string_size) override {
-		auto new_width = BitpackingPrimitives::MinimumBitWidth(index_buffer->size() - 1 + new_string);
+		auto new_width = BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1 + new_string);
 		if (new_string) {
 			return DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load() + 1,
-			                                                    index_buffer->size() + 1,
+			                                                    index_buffer.size() + 1,
 			                                                    current_dictionary.size + string_size, new_width);
 		} else {
-			return DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load() + 1, index_buffer->size(),
+			return DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load() + 1, index_buffer.size(),
 			                                                    current_dictionary.size, new_width);
 		}
 	}
 
 	void Flush(bool final = false) override {
-		min_width = BitpackingPrimitives::MinimumBitWidth(index_buffer->size() - 1);
+		min_width = BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1);
 		auto next_start = current_segment->start + current_segment->count;
 
 		auto segment_size = Finalize();
@@ -251,7 +253,7 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		// calculate sizes
 		auto compressed_selection_buffer_size =
 		    BitpackingPrimitives::GetRequiredSize<sel_t>(current_segment->count, min_width);
-		auto index_buffer_size = index_buffer->size() * sizeof(uint32_t);
+		auto index_buffer_size = index_buffer.size() * sizeof(uint32_t);
 		auto total_size = DictionaryCompressionStorage::DICTIONARY_HEADER_SIZE + compressed_selection_buffer_size +
 		                  index_buffer_size + current_dictionary.size;
 
@@ -263,22 +265,22 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 
 		// Write compressed selection buffer
 		BitpackingPrimitives::PackBuffer<sel_t, false>(base_ptr + compressed_selection_buffer_offset,
-		                                               (sel_t *)(selection_buffer->data()), current_segment->count,
+		                                               (sel_t *)(selection_buffer.data()), current_segment->count,
 		                                               min_width);
 
 		// Write the index buffer
-		memcpy(base_ptr + index_buffer_offset, index_buffer->data(), index_buffer_size);
+		memcpy(base_ptr + index_buffer_offset, index_buffer.data(), index_buffer_size);
 
 		// Store sizes and offsets in segment header
 		Store<uint32_t>(index_buffer_offset, (data_ptr_t)&header_ptr->index_buffer_offset);
-		Store<uint32_t>(index_buffer->size(), (data_ptr_t)&header_ptr->index_buffer_count);
+		Store<uint32_t>(index_buffer.size(), (data_ptr_t)&header_ptr->index_buffer_count);
 		Store<uint32_t>((uint32_t)min_width, (data_ptr_t)&header_ptr->bitpacking_width);
 
-		D_ASSERT(min_width == BitpackingPrimitives::MinimumBitWidth(index_buffer->size() - 1));
-		D_ASSERT(DictionaryCompressionStorage::HasEnoughSpace(current_segment->count, index_buffer->size(),
+		D_ASSERT(min_width == BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1));
+		D_ASSERT(DictionaryCompressionStorage::HasEnoughSpace(current_segment->count, index_buffer.size(),
 		                                                      current_dictionary.size, min_width));
-		D_ASSERT((uint64_t)*max_element(std::begin(*selection_buffer), std::end(*selection_buffer)) ==
-		         index_buffer->size() - 1);
+		D_ASSERT((uint64_t)*max_element(std::begin(selection_buffer), std::end(selection_buffer)) ==
+		         index_buffer.size() - 1);
 
 		if (total_size >= DictionaryCompressionStorage::COMPACTION_FLUSH_LIMIT) {
 			// the block is full enough, don't bother moving around the dictionary
@@ -304,23 +306,22 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompressionState {
 	DictionaryCompressionAnalyzeState()
 	    : segment_count(0), current_tuple_count(0), current_unique_count(0), current_dict_size(0) {
-		current_set = make_unique<std::unordered_set<string>>();
 	}
 
 	size_t segment_count;
 	idx_t current_tuple_count;
 	idx_t current_unique_count;
 	size_t current_dict_size;
-	unique_ptr<std::unordered_set<string>> current_set;
+	std::unordered_set<string> current_set;
 
 	bool LookupString(string str) override {
-		return current_set->count(str) == 0;
+		return current_set.count(str) == 0;
 	}
 
 	void AddNewString(string_t str) override {
 		current_unique_count++;
-		current_dict_size += str.GetString().size();
-		current_set->insert(str.GetString());
+		current_dict_size += str.GetSize();
+		current_set.insert(str.GetString());
 	}
 
 	void AddLastLookup() override {
@@ -347,7 +348,7 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompre
 		current_tuple_count = 0;
 		current_unique_count = 0;
 		current_dict_size = 0;
-		current_set = make_unique<std::unordered_set<string>>();
+		current_set.clear();
 	}
 	void Verify() override {};
 };
