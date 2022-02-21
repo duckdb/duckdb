@@ -67,6 +67,12 @@ select json_extract_string('[1, 2, 42]', 2)
 ----
 42
 
+# chained
+query T
+select '{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON->'my_field'->'my_nested_field'->>1
+----
+duck
+
 # some sqlite tests
 query T
 SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$');

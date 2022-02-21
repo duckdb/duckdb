@@ -1919,7 +1919,7 @@ a_expr:		c_expr									{ $$ = $1; }
 				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
 				$$ = (PGNode *) n;
 			}
-			| a_expr LAMBDA_ARROW a_expr
+			| a_expr LAMBDA_ARROW a_expr %prec Op
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
 				n->lhs = $1;
