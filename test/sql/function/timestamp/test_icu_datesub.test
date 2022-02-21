@@ -130,6 +130,7 @@ select DATESUB('${datepart}', '2004-01-31 13:00:00-08'::TIMESTAMPTZ, '2004-02-28
 3
 
 endloop
+
 query I
 select DATESUB('hour', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-01 13:05:00-08'::TIMESTAMPTZ);
 ----
