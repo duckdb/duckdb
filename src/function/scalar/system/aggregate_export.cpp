@@ -179,7 +179,8 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 		throw BinderException("Can only FINALIZE aggregate state, not %s", arg_return_type.ToString());
 	}
 	// combine
-	if (arguments.size() == 2 && arguments[0]->return_type != arguments[1]->return_type) {
+	if (arguments.size() == 2 && arguments[0]->return_type != arguments[1]->return_type &&
+	    arguments[1]->return_type.id() != LogicalTypeId::BLOB) {
 		throw BinderException("Cannot COMBINE aggregate states from different functions, %s <> %s",
 		                      arguments[0]->return_type.ToString(), arguments[1]->return_type.ToString());
 	}
@@ -285,7 +286,7 @@ ScalarFunction ExportAggregateFunction::GetFinalize() {
 }
 
 ScalarFunction ExportAggregateFunction::GetCombine() {
-	return ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::AGGREGATE_STATE},
+	return ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::ANY},
 	                      LogicalTypeId::AGGREGATE_STATE, AggregateStateCombine, false, BindAggregateState, nullptr,
 	                      nullptr, InitCombineState);
 }
