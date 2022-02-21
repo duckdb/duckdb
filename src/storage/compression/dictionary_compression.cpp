@@ -537,18 +537,16 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	auto width = (bitpacking_width_t)(Load<uint32_t>((data_ptr_t)&header_ptr->bitpacking_width));
 	auto index_buffer_ptr = (uint32_t *)(baseptr + index_buffer_offset);
 	auto base_data = (data_ptr_t)(baseptr + DICTIONARY_HEADER_SIZE);
-	auto start = segment.GetRelativeIndex(row_id);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
-	auto group_size = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-
 	// Handling non-bitpacking-group-aligned start values;
-	idx_t start_offset = start % group_size;
+	idx_t start_offset = row_id % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 
 	// Decompress part of selection buffer we need for this value.
 	sel_t decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
-	data_ptr_t src = (data_ptr_t)&base_data[((start - start_offset) * width) / 8];
-	BitpackingPrimitives::UnPackBuffer<sel_t>((data_ptr_t)decompression_buffer, src, group_size, width);
+	data_ptr_t src = (data_ptr_t)&base_data[((row_id - start_offset) * width) / 8];
+	BitpackingPrimitives::UnPackBuffer<sel_t>((data_ptr_t)decompression_buffer, src,
+	                                          BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, width);
 
 	auto selection_value = decompression_buffer[start_offset];
 	auto dict_offset = index_buffer_ptr[selection_value];
