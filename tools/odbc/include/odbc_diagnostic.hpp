@@ -1,9 +1,8 @@
 #ifndef ODBC_DIAGNOSTIC_HPP
 #define ODBC_DIAGNOSTIC_HPP
 
-#include "duckdb.hpp"
+#include "duckdb_odbc.hpp"
 
-#include <sqltypes.h>
 #include <string>
 #include <vector>
 
@@ -37,6 +36,7 @@ public:
 	std::vector<DiagRecord> diag_records;
 
 	DiagRecord &GetDiagRecord(SQLINTEGER rec_idx);
+	bool IsDiagRecordField(SQLSMALLINT diag_identifier);
 	// WriteLog
 };
 } // namespace duckdb
