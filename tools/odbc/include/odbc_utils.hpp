@@ -20,11 +20,12 @@ public:
 	// static void WriteString(const std::string &s, SQLCHAR *out_buf, SQLSMALLINT buf_len, SQLSMALLINT *out_len);
 	template <typename INT_TYPE>
 	static void WriteString(const string &s, SQLCHAR *out_buf, SQLSMALLINT buf_len, INT_TYPE *out_len) {
+		INT_TYPE written_chars = 0;
 		if (out_buf) {
-			snprintf((char *)out_buf, buf_len, "%s", s.c_str());
+			written_chars = (INT_TYPE)snprintf((char *)out_buf, buf_len, "%s", s.c_str());
 		}
 		if (out_len) {
-			*out_len = s.size();
+			*out_len = written_chars;
 		}
 	}
 
