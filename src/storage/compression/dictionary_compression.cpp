@@ -359,12 +359,7 @@ unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnD
 
 bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
 	auto &state = (DictionaryCompressionAnalyzeState &)state_p;
-	try {
-		state.UpdateState(input, count);
-	} catch (NotImplementedException &e) {
-		return false;
-	}
-	return true;
+	return state.UpdateState(input, count);
 }
 
 idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
