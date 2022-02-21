@@ -2,6 +2,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -32,9 +33,10 @@ string PragmaFunctionsQuery(ClientContext &context, const FunctionParameters &pa
 
 string PragmaShow(ClientContext &context, const FunctionParameters &parameters) {
 	// PRAGMA table_info but with some aliases
+	Printer::Print("PragmaShow");
 	return StringUtil::Format(
-	    "SELECT name AS \"Field\", type as \"Type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' END AS \"Null\", "
-	    "NULL AS \"Key\", dflt_value AS \"Default\", NULL AS \"Extra\" FROM pragma_table_info('%s')",
+	    "SELECT name AS \"colomn_name\", type as \"column_type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' "
+	    "END AS \"null\", NULL AS \"key\", dflt_value AS \"default\", NULL AS \"extra\" FROM pragma_table_info('%s')",
 	    parameters.values[0].ToString());
 }
 
