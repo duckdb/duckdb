@@ -18,6 +18,7 @@ public:
 	DescRecord() {};
 	DescRecord(const DescRecord &other);
 	SQLRETURN SetValueType(SQLSMALLINT value_type);
+	SQLRETURN SetSqlDescType(SQLSMALLINT type);
 
 public:
 	SQLINTEGER sql_desc_auto_unique_value;

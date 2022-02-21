@@ -1807,11 +1807,10 @@ a_expr:		c_expr									{ $$ = $1; }
 				}
 			| a_expr ILIKE a_expr ESCAPE a_expr					%prec ILIKE
 				{
-					PGFuncCall *n = makeFuncCall(SystemFuncName("like_escape"),
-											   list_make2($3, $5),
+					PGFuncCall *n = makeFuncCall(SystemFuncName("ilike_escape"),
+											   list_make3($1, $3, $5),
 											   @2);
-					$$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_ILIKE, "~~*",
-												   $1, (PGNode *) n, @2);
+					$$ = (PGNode *) n;
 				}
 			| a_expr NOT_LA ILIKE a_expr						%prec NOT_LA
 				{
@@ -1820,11 +1819,10 @@ a_expr:		c_expr									{ $$ = $1; }
 				}
 			| a_expr NOT_LA ILIKE a_expr ESCAPE a_expr			%prec NOT_LA
 				{
-					PGFuncCall *n = makeFuncCall(SystemFuncName("not_like_escape"),
-											   list_make2($4, $6),
+					PGFuncCall *n = makeFuncCall(SystemFuncName("not_ilike_escape"),
+											   list_make3($1, $4, $6),
 											   @2);
-					$$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_ILIKE, "!~~*",
-												   $1, (PGNode *) n, @2);
+					$$ = (PGNode *) n;
 				}
 
 			| a_expr SIMILAR TO a_expr							%prec SIMILAR
