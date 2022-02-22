@@ -124,7 +124,7 @@ public:
 			case YYJSON_SUBTYPE_REAL:
 				return JSONCommon::TYPE_STRING_DOUBLE;
 			default:
-				return nullptr;
+				throw InternalException("Unexpected yyjson subtype in ValTypeToString");
 			}
 		case YYJSON_TYPE_STR:
 			return JSONCommon::TYPE_STRING_VARCHAR;
@@ -133,13 +133,13 @@ public:
 		case YYJSON_TYPE_OBJ:
 			return JSONCommon::TYPE_STRING_OBJECT;
 		default:
-			return nullptr;
+			throw InternalException("Unexpected yyjson type in ValTypeToString");
 		}
 	}
 
 public:
 	//! Validate path with $ syntax
-	static bool ValidPathDollar(const char *ptr, const idx_t &len);
+	static void ValidatePathDollar(const char *ptr, const idx_t &len);
 
 	//! Get JSON value using JSON path query (safe, checks the path query)
 	template <class yyjson_t>
@@ -155,11 +155,10 @@ public:
 			auto str = string(ptr, len);
 			return GetPointerUnsafe<yyjson_t>(root, str.c_str(), len);
 		}
-		case '$':
-			if (!ValidPathDollar(ptr, len)) {
-				throw InvalidInputException("JSON path error");
-			}
+		case '$': {
+			ValidatePathDollar(ptr, len);
 			return GetPointerUnsafe<yyjson_t>(root, ptr, len);
+		}
 		default:
 			auto str = "/" + string(ptr, len);
 			return GetPointerUnsafe<yyjson_t>(root, str.c_str(), len);

@@ -12,8 +12,11 @@ static void CheckPath(const Value &path_val, string &path, size_t &len) {
 	len = path_str.GetSize();
 	auto ptr = path_str.GetDataUnsafe();
 	// Empty strings and invalid $ paths yield an error
-	if (len == 0 || (*ptr == '$' && !JSONCommon::ValidPathDollar(ptr, len))) {
-		throw Exception("JSON path error");
+	if (len == 0) {
+		throw InvalidInputException("Empty JSON path");
+	}
+	if (*ptr == '$') {
+		JSONCommon::ValidatePathDollar(ptr, len);
 	}
 	// Copy over string to the bind data
 	if (*ptr == '/' || *ptr == '$') {
@@ -71,7 +74,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	vector<size_t> lens;
 	auto paths_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	for (auto &path_val : ListValue::GetChildren(paths_val)) {
-		paths.push_back("");
+		paths.emplace_back("");
 		lens.push_back(0);
 		CheckPath(path_val, paths.back(), lens.back());
 	}
@@ -79,7 +82,12 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	return make_unique<JSONReadManyFunctionData>(move(paths), move(lens));
 }
 
-bool JSONCommon::ValidPathDollar(const char *ptr, const idx_t &len) {
+string ThrowPathError(const char *ptr, const char *end) {
+	ptr--;
+	throw InvalidInputException("JSON path error near '%s'", string(ptr, end - ptr));
+}
+
+void JSONCommon::ValidatePathDollar(const char *ptr, const idx_t &len) {
 	const char *const end = ptr + len;
 	// Skip past '$'
 	ptr++;
@@ -95,7 +103,7 @@ bool JSONCommon::ValidPathDollar(const char *ptr, const idx_t &len) {
 			}
 			auto key_len = ReadString(ptr, end, escaped);
 			if (key_len == 0) {
-				return false;
+				ThrowPathError(ptr, end);
 			}
 			ptr += key_len;
 			if (escaped) {
@@ -112,7 +120,7 @@ bool JSONCommon::ValidPathDollar(const char *ptr, const idx_t &len) {
 					continue;
 				}
 				if (*ptr != '-') {
-					return false;
+					ThrowPathError(ptr, end);
 				}
 				// Skip past '-'
 				ptr++;
@@ -120,16 +128,15 @@ bool JSONCommon::ValidPathDollar(const char *ptr, const idx_t &len) {
 			idx_t idx;
 			auto idx_len = ReadIndex(ptr, end, idx);
 			if (idx_len == 0) {
-				return false;
+				ThrowPathError(ptr, end);
 			}
 			ptr += idx_len;
 			// Skip past closing ']'
 			ptr++;
 		} else {
-			return false;
+			ThrowPathError(ptr, end);
 		}
 	}
-	return true;
 }
 
 } // namespace duckdb
