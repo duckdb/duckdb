@@ -216,6 +216,14 @@ SELECT FINALIZE(COMBINE(SUM(42) EXPORT_STATE, (SUM(42) EXPORT_STATE)::BLOB));
 statement error
 SELECT (SUM(42) EXPORT_STATE)::INTEGER;
 
+statement error
+SELECT COMBINE(SUM(42) EXPORT_STATE, 42);
+
+statement error
+SELECT COMBINE(SUM(42) EXPORT_STATE, 'ASDF'::BLOB);
+
+statement error
+SELECT COMBINE((SUM(42) EXPORT_STATE)::BLOB, SUM(42) EXPORT_STATE);
 
 # simulate round tripping
 require parquet

@@ -118,8 +118,12 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 
 	D_ASSERT(input.data.size() == 2);
 	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
-	D_ASSERT(input.data[0].GetType() == input.data[1].GetType());
 	D_ASSERT(input.data[0].GetType() == result.GetType());
+
+	if (input.data[0].GetType().InternalType() != input.data[1].GetType().InternalType()) {
+		throw IOException("Aggregate state combine type mismatch, expect %s, got %s",
+		                  input.data[0].GetType().ToString(), input.data[1].GetType().ToString());
+	}
 
 	VectorData state0_data, state1_data;
 	input.data[0].Orrify(input.size(), state0_data);
@@ -151,8 +155,10 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		}
 
 		// we actually have to combine
-		D_ASSERT(state0.GetSize() == bind_data.state_size);
-		D_ASSERT(state1.GetSize() == bind_data.state_size);
+		if (state0.GetSize() != bind_data.state_size || state1.GetSize() != bind_data.state_size) {
+			throw IOException("Aggregate state size mismatch, expect %llu, got %llu and %llu", bind_data.state_size,
+			                  state0.GetSize(), state1.GetSize());
+		}
 
 		memcpy(local_state.state_buffer0.get(), state0.GetDataUnsafe(), bind_data.state_size);
 		memcpy(local_state.state_buffer1.get(), state1.GetDataUnsafe(), bind_data.state_size);
