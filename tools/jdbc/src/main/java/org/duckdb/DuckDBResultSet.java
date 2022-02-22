@@ -32,6 +32,9 @@ import java.time.OffsetDateTime;
 
 public class DuckDBResultSet implements ResultSet {
 
+	// Constant to construct BigDecimals from hugeint_t 
+	private final static BigDecimal ULONG_MULTIPLIER = new BigDecimal("18446744073709551616");
+
 	private DuckDBPreparedStatement stmt;
 	private DuckDBResultSetMetaData meta;
 
@@ -141,8 +144,9 @@ public class DuckDBResultSet implements ResultSet {
 		case FLOAT:
 			return getFloat(columnIndex);
 		case DOUBLE:
+			return getDouble(columnIndex); 
 		case DECIMAL:
-			return getDouble(columnIndex);
+			return getBigDecimal(columnIndex);
 		case VARCHAR:
 			return getString(columnIndex);
 		case TIME:
@@ -369,7 +373,7 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return Double.NaN;
 		}
-		if (isType(columnIndex, DuckDBColumnType.DOUBLE) || isType(columnIndex, DuckDBColumnType.DECIMAL)) {
+		if (isType(columnIndex, DuckDBColumnType.DOUBLE)) {
 			return getbuf(columnIndex, 8).getDouble();
 		}
 		Object o = getObject(columnIndex);
@@ -646,7 +650,30 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public BigDecimal getBigDecimal(int columnIndex) throws SQLException {
-		return new BigDecimal(getHugeint(columnIndex));
+		if (check_and_null(columnIndex)) {
+			return null;
+		}
+		if (isType(columnIndex, DuckDBColumnType.DECIMAL)) {
+			switch(meta.column_types_meta[columnIndex -1].type_size){
+			case 16:
+				return new BigDecimal((int)getbuf(columnIndex, 2).getShort())
+					.scaleByPowerOfTen(meta.column_types_meta[columnIndex -1].scale * -1);
+			case 32:
+				return new BigDecimal(getbuf(columnIndex, 4).getInt())
+					.scaleByPowerOfTen(meta.column_types_meta[columnIndex -1].scale * -1);
+			case 64:
+				return new BigDecimal(getbuf(columnIndex, 8).getLong())
+					.scaleByPowerOfTen(meta.column_types_meta[columnIndex -1].scale * -1);
+			case 128:
+				ByteBuffer buf = getbuf(columnIndex, 16);
+				long lower = buf.getLong(); 
+				long upper = buf.getLong();
+				return new BigDecimal(upper).multiply(ULONG_MULTIPLIER).add(new BigDecimal(Long.toUnsignedString(lower)))
+					.scaleByPowerOfTen(meta.column_types_meta[columnIndex -1].scale * -1);
+			}
+		}
+		Object o = getObject(columnIndex);
+		return new BigDecimal(o.toString());
 	}
 
 	public BigDecimal getBigDecimal(String columnLabel) throws SQLException {

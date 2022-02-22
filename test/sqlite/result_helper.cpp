@@ -5,6 +5,7 @@
 #include "catch.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "duckdb/common/crypto/md5.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "test_helpers.hpp"
 
 #include <thread>
@@ -330,7 +331,7 @@ void TestResultHelper::CheckStatementResult() {
 		// even in the case of "statement error", we do not accept ALL errors
 		// internal errors are never expected
 		// neither are "unoptimized result differs from original result" errors
-		bool internal_error = TestIsInternalError(result.error);
+		bool internal_error = TestIsInternalError(runner.always_fail_error_messages, result.error);
 		if (!internal_error) {
 			error = !error;
 		} else {
@@ -365,7 +366,7 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 		if (i > 0) {
 			struct_definition += ", ";
 		}
-		struct_definition += "\"" + names[i] + "\" := 'VARCHAR'";
+		struct_definition += KeywordHelper::WriteOptionallyQuoted(names[i]) + " := 'VARCHAR'";
 	}
 	struct_definition += ")";
 
@@ -415,11 +416,10 @@ void TestResultHelper::PrintExpectedResult(vector<string> &values, idx_t columns
 }
 
 bool TestResultHelper::SkipErrorMessage(const string &message) {
-	if (StringUtil::Contains(message, "HTTP")) {
-		return true;
-	}
-	if (StringUtil::Contains(message, "Unable to connect")) {
-		return true;
+	for (auto &error_message : runner.ignore_error_messages) {
+		if (StringUtil::Contains(message, error_message)) {
+			return true;
+		}
 	}
 	return false;
 }

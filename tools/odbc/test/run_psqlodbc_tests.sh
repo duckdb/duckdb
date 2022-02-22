@@ -10,6 +10,8 @@ cd psqlodbc
 export PSQLODBC_DIR=$(pwd)
 
 # creating contrib_regression database used by some tests
+rm -f contrib_regression
+rm -f contrib_regression.wal
 ./build/debug/reset-db < sampletables.sql
 if [[ $? != 0 ]]; then
     cat /tmp/odbctrace

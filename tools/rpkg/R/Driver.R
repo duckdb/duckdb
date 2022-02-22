@@ -7,7 +7,7 @@ check_flag <- function(x) {
 }
 
 extptr_str <- function(e, n = 5) {
-  x <- .Call(`_duckdb_ptr_to_str`, e)
+  x <- rapi_ptr_to_str(e)
   substr(x, nchar(x) - n + 1, nchar(x))
 }
 
@@ -29,7 +29,7 @@ duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE, config = list()) {
   check_flag(read_only)
   new(
     "duckdb_driver",
-    database_ref = startup_R(dbdir, read_only, config),
+    database_ref = rapi_startup(dbdir, read_only, config),
     dbdir = dbdir,
     read_only = read_only
   )
@@ -50,7 +50,7 @@ duckdb_shutdown <- function(drv) {
     warning("invalid driver object, already closed?")
     invisible(FALSE)
   }
-  .Call(`_duckdb_shutdown_R`, drv@database_ref)
+  rapi_shutdown(drv@database_ref)
   invisible(TRUE)
 }
 

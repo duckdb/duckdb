@@ -5,10 +5,10 @@
 
 namespace duckdb {
 
-BoundColumnRefExpression::BoundColumnRefExpression(string alias, LogicalType type, ColumnBinding binding, idx_t depth)
+BoundColumnRefExpression::BoundColumnRefExpression(string alias_p, LogicalType type, ColumnBinding binding, idx_t depth)
     : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, move(type)), binding(binding),
       depth(depth) {
-	this->alias = move(alias);
+	this->alias = move(alias_p);
 }
 
 BoundColumnRefExpression::BoundColumnRefExpression(LogicalType type, ColumnBinding binding, idx_t depth)
@@ -35,6 +35,9 @@ bool BoundColumnRefExpression::Equals(const BaseExpression *other_p) const {
 }
 
 string BoundColumnRefExpression::ToString() const {
+	if (!alias.empty()) {
+		return alias;
+	}
 	return "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "]";
 }
 
