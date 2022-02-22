@@ -42,7 +42,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("apply", &DuckDBPyRelation::GenericAggregator,
 	         "Compute the function of a single column or a list of columns  by the optional groups on the relation",
 	         py::arg("function_name"), py::arg("function_aggr"), py::arg("group_expr") = "",
-	         py::arg("function_parameter") = "", py::arg("projected_columns") = "", py::arg("window_function") = "")
+	         py::arg("function_parameter") = "", py::arg("projected_columns") = "")
 	    .def("min", &DuckDBPyRelation::Min,
 	         "Compute the aggregate min of a single column or a list of columns by the optional groups on the relation",
 	         py::arg("min_aggr"), py::arg("group_expr") = "")
@@ -229,11 +229,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, con
 	return make_unique<DuckDBPyRelation>(rel->Aggregate(expr));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericAggregator(const string &function_name,
-                                                                 const string &aggregated_columns, const string &groups,
-                                                                 const string &function_parameter,
-                                                                 const string &projected_columns,
-                                                                 const string &window_function) {
+string GenerateExpressionList(const string &function_name, const string &aggregated_columns, const string &groups,
+                              const string &function_parameter, const string &projected_columns,
+                              const string &window_function = "") {
 	auto input = StringUtil::Split(aggregated_columns, ',');
 	string expr;
 	if (!projected_columns.empty()) {
@@ -250,7 +248,17 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericAggregator(const string &f
 			expr += ",";
 		}
 	}
+	return expr;
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericAggregator(const string &function_name,
+                                                                 const string &aggregated_columns, const string &groups,
+                                                                 const string &function_parameter,
+                                                                 const string &projected_columns) {
+
 	//! Construct Aggregation Expression
+	auto expr =
+	    GenerateExpressionList(function_name, aggregated_columns, groups, function_parameter, projected_columns);
 	return Aggregate(expr, groups);
 }
 
@@ -335,18 +343,27 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Unique(const string &std_columns)
 	return make_unique<DuckDBPyRelation>(rel->Project(std_columns)->Distinct());
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericWindowFunction(const string &function_name,
+                                                                     const string &aggr_columns) {
+	auto expr = GenerateExpressionList(function_name, aggr_columns, "", "", "",
+	                                   "over (rows between unbounded preceding and current row) ");
+	return make_unique<DuckDBPyRelation>(rel->Project(expr));
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumSum(const string &aggr_columns) {
-	return GenericAggregator("sum", aggr_columns, "", "", "",
-	                         "over (rows between unbounded preceding and current row) ");
+	return GenericWindowFunction("sum", aggr_columns);
 }
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumProd(const string &aggr_columns) {
-	return GenericAggregator("product", aggr_columns, "over (rows between unbounded preceding and current row) ");
+	return GenericWindowFunction("product", aggr_columns);
 }
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMax(const string &aggr_columns) {
-	return GenericAggregator("max", aggr_columns, "over (rows between unbounded preceding and current row) ");
+	return GenericWindowFunction("max", aggr_columns);
 }
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMin(const string &aggr_columns) {
-	return GenericAggregator("min", aggr_columns, "over (rows between unbounded preceding and current row) ");
+	return GenericWindowFunction("min", aggr_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(py::object df, const string &expr, const string &groups,

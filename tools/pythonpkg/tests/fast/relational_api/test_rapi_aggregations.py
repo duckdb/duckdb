@@ -193,10 +193,11 @@ class TestRAPIAggregations(object):
         assert rel.kurt('k,v,v2').execute().fetchall() == [(10.99999999999836, -1.9614277138467147, -1.445119691585509)]
 
     def test_cum_sum(self, duckdb_cursor):
-        rel = initialize(duckdb_cursor)
-        aggregation_generic(rel.cumsum,[[(None,)], [(None, None)], [None]])
+        rel = initialize(con)
+        aggregation_generic(rel.cumsum,[[(1,), (3,), (3,)], [(1, Decimal('2.10')), (3, Decimal('5.30')), (3, Decimal('5.30'))]])
 
 con = duckdb.connect()
 rel = initialize(con)
-rel.cumsum('i').execute()
+aggregation_generic(rel.cumprod,[[(1,), (3,), (3,)], [(1, Decimal('2.10')), (3, Decimal('5.30')), (3, Decimal('5.30'))]])
+# print(rel.cumsum('i').execute().fetchall())
 
