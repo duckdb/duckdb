@@ -55,7 +55,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
 	LocalFileSystem fs;
-	copy->is_file_and_exists = fs.FileExists(copy->file_path, false);
+	copy->is_file_and_exists = fs.FileExists(copy->file_path);
 
 	copy->AddChild(move(select_node.plan));
 

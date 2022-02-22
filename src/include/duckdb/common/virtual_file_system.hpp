@@ -76,8 +76,8 @@ public:
 		FindFileSystem(source)->MoveFile(source, target);
 	}
 
-	bool FileExists(const string &filename, bool empty_is_valid = true) override {
-		return FindFileSystem(filename)->FileExists(filename, empty_is_valid);
+	bool FileExists(const string &filename) override {
+		return FindFileSystem(filename)->FileExists(filename);
 	}
 
 	virtual void RemoveFile(const string &filename) override {

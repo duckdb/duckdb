@@ -22,6 +22,7 @@
 #else
 #include "duckdb/common/windows_util.hpp"
 #include <string>
+#include <io.h>
 
 #ifdef __MINGW32__
 #include <sys/stat.h>
@@ -48,6 +49,50 @@ static void AssertValidFileFlags(uint8_t flags) {
 	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 #endif
 }
+
+#ifdef __MINGW32__
+bool LocalFileSystem::FileExists(const string &filename) {
+	if (_access(filename.c_str(), 0) == 0) {
+		struct stat status;
+		stat(filename.c_str(), &status);
+		if (status.st_size > 0) {
+			return true;
+		}
+	}
+	return false;
+}
+}
+#else
+#ifndef _WIN32
+bool LocalFileSystem::FileExists(const string &filename) {
+	if (!filename.empty()) {
+		if (access(filename.c_str(), 0) == 0) {
+			struct stat status;
+			stat(filename.c_str(), &status);
+			if (S_ISREG(status.st_mode)) {
+				return true;
+			}
+		}
+	}
+	// if any condition fails
+	return false;
+}
+#else
+bool LocalFileSystem::FileExists(const string &filename) {
+	int wchars_num = MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, NULL, 0);
+	wchar_t *wpath = new wchar_t[wchars_num];
+	MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, wpath, wchars_num);
+	if (_waccess(wpath, 0) == 0) {
+		struct _stat64i32 status;
+		_wstat(wpath, &status);
+		if (status.st_mode & S_IFREG) {
+			return true;
+		}
+	}
+	return false;
+}
+#endif
+#endif
 
 #ifndef _WIN32
 // somehow sometimes this is missing
@@ -282,29 +327,6 @@ bool LocalFileSystem::DirectoryExists(const string &directory) {
 		}
 	}
 	// if any condition fails
-	return false;
-}
-
-bool LocalFileSystem::FileExists(const string &filename, bool empty_is_valid) {
-	if (!filename.empty()) {
-#if defined(_WIN32) && defined(__MINGW32__)
-		if (_access(filename.c_str(), 0) == 0) {
-			struct stat status;
-			stat(filename.c_str(), &status);
-			if ((status.st_size > 0 || empty_is_valid) && !(status.st_mode & S_IFDIR)) {
-				return true;
-			}
-		}
-#else
-		if (access(filename.c_str(), 0) == 0) {
-			struct stat status;
-			stat(filename.c_str(), &status);
-			if ((status.st_size > 0 || empty_is_valid) && !(status.st_mode & S_IFDIR)) {
-				return true;
-			}
-		}
-#endif
-	}
 	return false;
 }
 
@@ -640,11 +662,6 @@ static DWORD WindowsGetFileAttributes(const string &filename) {
 bool LocalFileSystem::DirectoryExists(const string &directory) {
 	DWORD attrs = WindowsGetFileAttributes(directory);
 	return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
-}
-
-bool LocalFileSystem::FileExists(const string &filename) {
-	DWORD attrs = WindowsGetFileAttributes(filename);
-	return (attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY));
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory) {

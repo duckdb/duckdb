@@ -144,7 +144,7 @@ public:
 	//! properties
 	DUCKDB_API virtual void MoveFile(const string &source, const string &target);
 	//! Check if a file exists
-	DUCKDB_API virtual bool FileExists(const string &filename, bool empty_is_valid = true);
+	DUCKDB_API virtual bool FileExists(const string &filename);
 	//! Remove a file from disk
 	DUCKDB_API virtual void RemoveFile(const string &filename);
 	//! Sync a file handle to disk
