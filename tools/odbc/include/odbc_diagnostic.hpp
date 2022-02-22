@@ -27,7 +27,7 @@ struct DiagHeader {
 public:
 	SQLLEN sql_diag_cursor_row_count;
 	// std::string sql_diag_dynamic_function; // this field is extract from map_dynamic_function
-	SQLINTEGER sql_diag_dynamic_function_code;
+	SQLINTEGER sql_diag_dynamic_function_code = SQL_DIAG_UNKNOWN_STATEMENT;
 	SQLINTEGER sql_diag_number;
 	SQLRETURN sql_diag_return_code;
 	SQLLEN sql_diag_row_count;
@@ -37,8 +37,9 @@ class OdbcDiagnostic {
 public:
 	DiagHeader header;
 	std::vector<DiagRecord> diag_records;
-	static const std::unordered_map<SQLINTEGER, std::string> map_dynamic_function;
-	static const std::set<std::string> set_odbc3_subclass_origin;
+	static const std::unordered_map<SQLINTEGER, std::string> MAP_DYNAMIC_FUNCTION;
+	static const std::set<std::string> SET_ODBC3_SUBCLASS_ORIGIN;
+	static const std::unordered_map<std::string, std::string> MAP_ODBC_SQL_STATES;
 
 public:
 	static bool IsDiagRecordField(SQLSMALLINT diag_identifier);
@@ -48,7 +49,8 @@ public:
 	const DiagRecord &GetDiagRecord(SQLINTEGER rec_idx);
 	std::string GetDiagClassOrigin(SQLINTEGER rec_idx);
 	std::string GetDiagSubclassOrigin(SQLINTEGER rec_idx);
-	// WriteLog
+	// WriteDiagnostic
+	// newODBCError(const char *SQLState, const char *msg, int nativeCode)
 };
 } // namespace duckdb
 #endif
