@@ -1,0 +1,20 @@
+# name: test/sql/types/enum/test_alter_enum.test
+# description: Alter column type from String to ENUM
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE person (
+    name text
+);
+
+statement ok
+insert into person values ('Pedro'), ('Mark'), ('Hannes'), ('Pedro'), ('Pedro'), ('Mark')
+
+statement ok
+CREATE TYPE name AS ENUM ('Pedro', 'Mark', 'Hannes');
+
+statement ok
+ALTER TABLE person ALTER name TYPE name
