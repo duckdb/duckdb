@@ -18,24 +18,19 @@
 
 namespace duckdb {
 
-class MacroCatalogEntry;
-
-class ScalarMacroFunction {
+class ScalarMacroFunction : public MacroFunction {
 public:
-	ScalarMacroFunction(unique_ptr<ParsedExpression> expression) :   MacroFunction()  {}
-	ScalarMacroFunction(void);
 
+	ScalarMacroFunction(unique_ptr<ParsedExpression> expression);
+
+	ScalarMacroFunction(void);
 	//! The macro expression
 	unique_ptr<ParsedExpression> expression;
-	//! The positional parameters
+
+	~ScalarMacroFunction() override;
 
 public:
-
-	virtual  unique_ptr<ScalarMacroFunction> Copy() {
-         auto result= make_unique<ScalarMacroFunction>();
-         result->expression=expression->Copy();
-
-	}
+	  unique_ptr<MacroFunction> Copy() override;
 
 
 };

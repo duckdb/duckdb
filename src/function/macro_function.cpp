@@ -1,3 +1,4 @@
+#include <iostream>
 #include "duckdb/function/macro_function.hpp"
 
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
@@ -7,14 +8,21 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/function/table_macro_function.hpp"
 
 namespace duckdb {
 
-MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(move(expression)) {
+//MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(move(expression)) {}
+
+MacroFunction::MacroFunction(MacroType type) : type(type){
 }
 
+/*
 MacroFunction::MacroFunction(void) {
+	this->type=MacroType::VOID_MACRO;
 }
+ */
 
 string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionExpression &function_expr,
                                         vector<unique_ptr<ParsedExpression>> &positionals,
@@ -66,8 +74,21 @@ string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionE
 	return error;
 }
 
+void MacroFunction::CopyProperties( MacroFunction &other) {
+	other.type=type;
+	for (auto &param : parameters) {
+		other.parameters.push_back(param->Copy());
+	}
+	for (auto &kv : default_parameters) {
+		other.default_parameters[kv.first] = kv.second->Copy();
+	}
+}
+
+
+/*
 unique_ptr<MacroFunction> MacroFunction::Copy() {
-	auto result = make_unique<MacroFunction>();
+	auto result = make_unique<MacroFunction>(this->type);
+
 
 	if (expression) {
 		result->expression = expression->Copy();
@@ -77,6 +98,7 @@ unique_ptr<MacroFunction> MacroFunction::Copy() {
 		result->query_node = query_node->Copy();
 	}
 
+
 	for (auto &param : parameters) {
 		result->parameters.push_back(param->Copy());
 	}
@@ -85,5 +107,6 @@ unique_ptr<MacroFunction> MacroFunction::Copy() {
 	}
 	return result;
 }
+*/
 
 } // namespace duckdb

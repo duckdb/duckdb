@@ -17,28 +17,45 @@
 
 namespace duckdb {
 
+
+enum class MacroType : uint8_t {
+	VOID_MACRO  = 0,
+	TABLE_MACRO = 1,
+	SCALAR_MACRO = 2
+};
+
+
 class MacroCatalogEntry;
 
 class MacroFunction {
 public:
-	explicit MacroFunction(unique_ptr<ParsedExpression> expression);
-	MacroFunction(void);
+	//explicit MacroFunction(unique_ptr<ParsedExpression> expression);
+	MacroFunction(MacroType type);
 
+	//MacroFunction(void);
 	//! Check whether the supplied arguments are valid
 	static string ValidateArguments(MacroCatalogEntry &macro_func, FunctionExpression &function_expr,
 	                                vector<unique_ptr<ParsedExpression>> &positionals,
 	                                unordered_map<string, unique_ptr<ParsedExpression>> &defaults);
-	//! The macro expression
-	unique_ptr<ParsedExpression> expression;
+
+	virtual ~MacroFunction() {};
+
+	// The type
+ 	MacroType  type;
 	//! The positional parameters
 	vector<unique_ptr<ParsedExpression>> parameters;
 	//! The default parameters and their associated values
 	unordered_map<string, unique_ptr<ParsedExpression>> default_parameters;
-	//! The main query node
+
 	unique_ptr<QueryNode> query_node;
 
+
 public:
-	unique_ptr<MacroFunction> Copy();
+	void CopyProperties( MacroFunction &other);
+
+	virtual unique_ptr<MacroFunction> Copy()=0;
+
+
 };
 
 } // namespace duckdb
