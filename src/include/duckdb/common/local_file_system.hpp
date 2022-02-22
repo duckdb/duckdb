@@ -53,6 +53,9 @@ public:
 	void MoveFile(const string &source, const string &target) override;
 	//! Check if a file exists
 	bool FileExists(const string &filename) override;
+
+	//! Check if path is a pipe
+	bool IsPipe(const string &filename) override;
 	//! Remove a file from disk
 	void RemoveFile(const string &filename) override;
 	//! Sync a file handle to disk

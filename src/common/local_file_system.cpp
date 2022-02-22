@@ -61,6 +61,16 @@ bool LocalFileSystem::FileExists(const string &filename) {
 	}
 	return false;
 }
+
+bool LocalFileSystem::IsPipe(const string &filename) {
+	if (_access(filename.c_str(), 0) == 0) {
+		struct stat status;
+		stat(filename.c_str(), &status);
+		if (status.st_size == 0) {
+			return true;
+		}
+	}
+	return false;
 }
 #else
 #ifndef _WIN32
@@ -77,6 +87,21 @@ bool LocalFileSystem::FileExists(const string &filename) {
 	// if any condition fails
 	return false;
 }
+
+bool LocalFileSystem::IsPipe(const string &filename) {
+	if (!filename.empty()) {
+		if (access(filename.c_str(), 0) == 0) {
+			struct stat status;
+			stat(filename.c_str(), &status);
+			if (S_ISFIFO(status.st_mode)) {
+				return true;
+			}
+		}
+	}
+	// if any condition fails
+	return false;
+}
+
 #else
 bool LocalFileSystem::FileExists(const string &filename) {
 	int wchars_num = MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, NULL, 0);
@@ -86,6 +111,19 @@ bool LocalFileSystem::FileExists(const string &filename) {
 		struct _stat64i32 status;
 		_wstat(wpath, &status);
 		if (status.st_mode & S_IFREG) {
+			return true;
+		}
+	}
+	return false;
+}
+bool LocalFileSystem::IsPipe(const string &filename) {
+	int wchars_num = MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, NULL, 0);
+	wchar_t *wpath = new wchar_t[wchars_num];
+	MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, wpath, wchars_num);
+	if (_waccess(wpath, 0) == 0) {
+		struct _stat64i32 status;
+		_wstat(wpath, &status);
+		if (status.st_mode & _S_IFCHR) {
 			return true;
 		}
 	}
@@ -822,9 +860,9 @@ vector<string> LocalFileSystem::Glob(const string &path) {
 	}
 	// first check if the path has a glob at all
 	if (!HasGlob(path)) {
-		// no glob: return only the file (if it exists)
+		// no glob: return only the file (if it exists or is a pipe)
 		vector<string> result;
-		if (FileExists(path)) {
+		if (FileExists(path) || IsPipe(path)) {
 			result.push_back(path);
 		}
 		return result;

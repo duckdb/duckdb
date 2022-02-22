@@ -209,6 +209,10 @@ bool FileSystem::FileExists(const string &filename) {
 	throw NotImplementedException("%s: FileExists is not implemented!", GetName());
 }
 
+bool FileSystem::IsPipe(const string &filename) {
+	throw NotImplementedException("%s: IsPipe is not implemented!", GetName());
+}
+
 void FileSystem::RemoveFile(const string &filename) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
 }
