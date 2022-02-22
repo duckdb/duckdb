@@ -1,5 +1,6 @@
 #include "duckdb_odbc.hpp"
 #include "driver.hpp"
+#include "odbc_diagnostic.hpp"
 #include "odbc_fetch.hpp"
 #include "odbc_utils.hpp"
 
@@ -8,6 +9,7 @@
 #include <odbcinst.h>
 #include <locale>
 
+using duckdb::OdbcDiagnostic;
 using duckdb::OdbcUtils;
 using std::string;
 
@@ -302,8 +304,8 @@ SQLRETURN SQL_API SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQL
 	case SQL_HANDLE_STMT:
 	case SQL_HANDLE_DESC: {
 		return duckdb::WithHandle(handle, [&](duckdb::OdbcHandle *hdl) {
-			switch (diag_identifier) {
 			// diag header fields
+			switch (diag_identifier) {
 			case SQL_DIAG_CURSOR_ROW_COUNT: {
 				// this field is available only for statement handles
 				if (hdl->type != duckdb::OdbcHandleType::STMT) {
@@ -318,8 +320,8 @@ SQLRETURN SQL_API SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQL
 				if (hdl->type != duckdb::OdbcHandleType::STMT) {
 					return SQL_ERROR;
 				}
-				duckdb::OdbcUtils::WriteString(hdl->odbc_diagnostic->header.sql_diag_dynamic_function,
-				                               (SQLCHAR *)diag_info_ptr, buffer_length, string_length_ptr);
+				duckdb::OdbcUtils::WriteString(hdl->odbc_diagnostic->GetDiagDynamicFunction(), (SQLCHAR *)diag_info_ptr,
+				                               buffer_length, string_length_ptr);
 				return SQL_SUCCESS;
 			}
 			case SQL_DIAG_DYNAMIC_FUNCTION_CODE: {
@@ -348,6 +350,76 @@ SQLRETURN SQL_API SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQL
 				}
 				duckdb::Store<SQLLEN>(hdl->odbc_diagnostic->header.sql_diag_return_code,
 				                      (duckdb::data_ptr_t)diag_info_ptr);
+				return SQL_SUCCESS;
+			}
+			default:
+				break;
+			}
+
+			// verify identifier and record index
+			if (!OdbcDiagnostic::IsDiagRecordField(diag_identifier)) {
+				return SQL_ERROR;
+			}
+			if (rec_number <= 0) {
+				return SQL_ERROR;
+			}
+			auto rec_idx = rec_number - 1;
+			if (!hdl->odbc_diagnostic->VerifyRecordIndex(rec_idx)) {
+				return SQL_ERROR;
+			}
+
+			const auto diag_record = hdl->odbc_diagnostic->GetDiagRecord(rec_idx);
+
+			// diag record fields
+			switch (diag_identifier) {
+			case SQL_DIAG_CLASS_ORIGIN: {
+				duckdb::OdbcUtils::WriteString(hdl->odbc_diagnostic->GetDiagClassOrigin(rec_idx),
+				                               (SQLCHAR *)diag_info_ptr, buffer_length, string_length_ptr);
+				return SQL_SUCCESS;
+			}
+			case SQL_DIAG_COLUMN_NUMBER: {
+				// this field is available only for statement handles
+				if (hdl->type != duckdb::OdbcHandleType::STMT) {
+					return SQL_ERROR;
+				}
+				duckdb::Store<SQLINTEGER>(diag_record.sql_diag_column_number, (duckdb::data_ptr_t)diag_info_ptr);
+				return SQL_SUCCESS;
+			}
+			case SQL_DIAG_CONNECTION_NAME: {
+				// we do not support connection names
+				duckdb::OdbcUtils::WriteString("", (SQLCHAR *)diag_info_ptr, buffer_length, string_length_ptr);
+				return SQL_SUCCESS;
+			}
+			case SQL_DIAG_MESSAGE_TEXT: {
+				duckdb::OdbcUtils::WriteString(diag_record.sql_diag_message_text, (SQLCHAR *)diag_info_ptr,
+				                               buffer_length, string_length_ptr);
+				return SQL_SUCCESS;
+			}
+			case SQL_DIAG_NATIVE: {
+				duckdb::Store<SQLINTEGER>(diag_record.sql_diag_native, (duckdb::data_ptr_t)diag_info_ptr);
+				return SQL_SUCCESS;
+			}
+			case SQL_DIAG_ROW_NUMBER: {
+				// this field is available only for statement handles
+				if (hdl->type != duckdb::OdbcHandleType::STMT) {
+					return SQL_ERROR;
+				}
+				duckdb::Store<SQLLEN>(diag_record.sql_diag_row_number, (duckdb::data_ptr_t)diag_info_ptr);
+				return SQL_SUCCESS;
+			}
+			case SQL_DIAG_SERVER_NAME: {
+				duckdb::OdbcUtils::WriteString(diag_record.sql_diag_server_name, (SQLCHAR *)diag_info_ptr,
+				                               buffer_length, string_length_ptr);
+				return SQL_SUCCESS;
+			}
+			case SQL_DIAG_SQLSTATE: {
+				duckdb::OdbcUtils::WriteString(diag_record.sql_diag_sqlstate, (SQLCHAR *)diag_info_ptr, buffer_length,
+				                               string_length_ptr);
+				return SQL_SUCCESS;
+			}
+			case SQL_DIAG_SUBCLASS_ORIGIN: {
+				duckdb::OdbcUtils::WriteString(hdl->odbc_diagnostic->GetDiagSubclassOrigin(rec_idx),
+				                               (SQLCHAR *)diag_info_ptr, buffer_length, string_length_ptr);
 				return SQL_SUCCESS;
 			}
 			default:

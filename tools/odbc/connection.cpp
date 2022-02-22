@@ -418,7 +418,8 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 	}
 	case SQL_DATA_SOURCE_NAME: {
 		return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) -> SQLRETURN {
-			duckdb::OdbcUtils::WriteString(dbc->dsn, (SQLCHAR *)info_value_ptr, buffer_length, string_length_ptr);
+			duckdb::OdbcUtils::WriteString(dbc->GetDataSourceName(), (SQLCHAR *)info_value_ptr, buffer_length,
+			                               string_length_ptr);
 			return SQL_SUCCESS;
 		});
 	}

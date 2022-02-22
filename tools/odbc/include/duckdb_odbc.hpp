@@ -6,8 +6,8 @@
 
 #include "duckdb/common/windows.hpp"
 #include "descriptor.hpp"
-#include "odbc_utils.hpp"
 #include "odbc_diagnostic.hpp"
+#include "odbc_utils.hpp"
 
 #include <sqltypes.h>
 #include <sqlext.h>
@@ -28,9 +28,7 @@ enum OdbcHandleType { ENV, DBC, STMT, DESC };
 std::string OdbcHandleTypeToString(OdbcHandleType type);
 
 struct OdbcHandle {
-	explicit OdbcHandle(OdbcHandleType type_p) : type(type_p) {
-		odbc_diagnostic = make_unique<OdbcDiagnostic>();
-	};
+	explicit OdbcHandle(OdbcHandleType type_p);
 	OdbcHandle(const OdbcHandle &other);
 	OdbcHandle &operator=(const OdbcHandle &other);
 
@@ -63,6 +61,7 @@ public:
 
 	void SetDatabaseName(const string &db_name);
 	std::string GetDatabaseName();
+	std::string GetDataSourceName();
 
 public:
 	OdbcHandleEnv *env;
