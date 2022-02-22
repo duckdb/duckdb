@@ -217,9 +217,9 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformCrossProductOp(const substrait:
 	                                         TransformOp(sub_cross.right())->Alias("right"));
 }
 
-shared_ptr<Relation> SubstraitToDuckDB::TransformFetchOp(const substrait::Rel &sop) {
+shared_ptr<Relation> SubstraitToDuckDB::TransformFetchOp(const substrait::Rel &sop, vector<string> *aliases) {
 	auto &slimit = sop.fetch();
-	return make_shared<LimitRelation>(TransformOp(slimit.input()), slimit.count(), slimit.offset());
+	return make_shared<LimitRelation>(TransformOp(slimit.input(), aliases), slimit.count(), slimit.offset());
 }
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformFilterOp(const substrait::Rel &sop) {
@@ -312,7 +312,7 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformOp(const substrait::Rel &sop, v
 	case substrait::Rel::RelTypeCase::kCross:
 		return TransformCrossProductOp(sop);
 	case substrait::Rel::RelTypeCase::kFetch:
-		return TransformFetchOp(sop);
+		return TransformFetchOp(sop, aliases);
 	case substrait::Rel::RelTypeCase::kFilter:
 		return TransformFilterOp(sop);
 	case substrait::Rel::RelTypeCase::kProject:
@@ -330,19 +330,12 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformOp(const substrait::Rel &sop, v
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformRootOp(const substrait::RelRoot &sop) {
 	const auto &rel = sop.input();
-	switch (sop.input().rel_type_case()) {
-	case substrait::Rel::RelTypeCase::kProject:
-	case substrait::Rel::RelTypeCase::kSort: {
-		vector<string> aliases;
-		auto column_names = sop.names();
-		for (auto &column_name : column_names) {
-			aliases.push_back(column_name);
-		}
-		return TransformOp(rel, &aliases);
+	vector<string> aliases;
+	auto column_names = sop.names();
+	for (auto &column_name : column_names) {
+		aliases.push_back(column_name);
 	}
-	default:
-		throw InternalException("Unsupported relation type as root " + to_string(rel.rel_type_case()));
-	}
+	return TransformOp(rel, &aliases);
 }
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformPlan() {

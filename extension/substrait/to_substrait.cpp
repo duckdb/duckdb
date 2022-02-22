@@ -655,31 +655,20 @@ substrait::Rel *DuckDBToSubstrait::TransformOp(LogicalOperator &dop) {
 
 substrait::RelRoot *DuckDBToSubstrait::TransformRootOp(LogicalOperator &dop) {
 	auto root_rel = new substrait::RelRoot();
-	switch (dop.type) {
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		root_rel->set_allocated_input(TransformProjection(dop));
-		auto &dproj = (LogicalProjection &)dop;
-		for (auto &expression : dproj.expressions) {
-			root_rel->add_names(expression->GetName());
+	LogicalOperator *current_op = &dop;
+	// If the root operator is not a projection, we must go down until we find the first projection to get the aliases
+	while (current_op->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+		if (current_op->children.size() != 1) {
+			throw InternalException("Root node has more than 1, or 0 children up to reaching a projection node");
 		}
-		return root_rel;
+		current_op = current_op->children[0].get();
 	}
-	case LogicalOperatorType::LOGICAL_ORDER_BY: {
-		root_rel->set_allocated_input(TransformOp(dop));
-		auto &order_by = (LogicalOrder &)dop;
-		if (order_by.children.size() == 1 && order_by.children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			auto &dproj = (LogicalProjection &)*order_by.children[0];
-			for (auto &expression : dproj.expressions) {
-				root_rel->add_names(expression->GetName());
-			}
-		} else {
-			throw InternalException("Only accept Order By Nodes as root if it only has one projection child.");
-		}
-		return root_rel;
+	root_rel->set_allocated_input(TransformOp(dop));
+	auto &dproj = (LogicalProjection &)*current_op;
+	for (auto &expression : dproj.expressions) {
+		root_rel->add_names(expression->GetName());
 	}
-	default:
-		throw InternalException("Operator not implemented as plan root " + LogicalOperatorToString(dop.type));
-	}
+	return root_rel;
 }
 
 void DuckDBToSubstrait::TransformPlan(LogicalOperator &dop) {

@@ -20,7 +20,7 @@ private:
 	shared_ptr<Relation> TransformOp(const substrait::Rel &sop, vector<string> *aliases = nullptr);
 	shared_ptr<Relation> TransformJoinOp(const substrait::Rel &sop);
 	shared_ptr<Relation> TransformCrossProductOp(const substrait::Rel &sop);
-	shared_ptr<Relation> TransformFetchOp(const substrait::Rel &sop);
+	shared_ptr<Relation> TransformFetchOp(const substrait::Rel &sop, vector<string> *aliases = nullptr);
 	shared_ptr<Relation> TransformFilterOp(const substrait::Rel &sop);
 	shared_ptr<Relation> TransformProjectOp(const substrait::Rel &sop, vector<string> *aliases = nullptr);
 	shared_ptr<Relation> TransformAggregateOp(const substrait::Rel &sop);
