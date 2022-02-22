@@ -3,24 +3,23 @@
 
 namespace duckdb {
 
-static inline bool GetType(yyjson_val *val, string_t &result) {
-	auto type_string = JSONCommon::ValTypeToString(val);
-	if (type_string) {
-		result = string_t(type_string);
+static inline bool GetType(yyjson_val *val, string_t &result_val, Vector &result) {
+	if (val) {
+		result_val = string_t(JSONCommon::ValTypeToString(val));
 	}
-	return type_string;
+	return val;
 }
 
 static void UnaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::UnaryJSONReadFunction<string_t>(args, state, result, GetType);
+	JSONCommon::UnaryExecute<string_t>(args, state, result, GetType);
 }
 
 static void BinaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::BinaryJSONReadFunction<string_t>(args, state, result, GetType);
+	JSONCommon::BinaryExecute<string_t>(args, state, result, GetType);
 }
 
 static void ManyTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::JSONReadManyFunction<string_t>(args, state, result, GetType);
+	JSONCommon::ExecuteMany<string_t>(args, state, result, GetType);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetTypeFunction() {

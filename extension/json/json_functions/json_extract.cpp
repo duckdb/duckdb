@@ -3,34 +3,34 @@
 
 namespace duckdb {
 
-static inline bool ExtractFromVal(yyjson_val *val, string_t &result) {
+static inline bool ExtractFromVal(yyjson_val *val, string_t &result_val, Vector &result) {
 	if (val) {
-		result = JSONCommon::WriteVal(val);
+		result_val = JSONCommon::WriteVal(val, result);
 	}
 	return val;
 }
 
-static inline bool ExtractStringFromVal(yyjson_val *val, string_t &result) {
+static inline bool ExtractStringFromVal(yyjson_val *val, string_t &result_val, Vector &result) {
 	if (val) {
-		result = JSONCommon::WriteStringVal(val);
+		result_val = JSONCommon::WriteStringVal(val, result);
 	}
 	return val;
 }
 
 static void ExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::BinaryJSONReadFunction<string_t>(args, state, result, ExtractFromVal);
+	JSONCommon::BinaryExecute<string_t>(args, state, result, ExtractFromVal);
 }
 
 static void ExtractManyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::JSONReadManyFunction<string_t>(args, state, result, ExtractFromVal);
+	JSONCommon::ExecuteMany<string_t>(args, state, result, ExtractFromVal);
 }
 
 static void ExtractStringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::BinaryJSONReadFunction<string_t>(args, state, result, ExtractStringFromVal);
+	JSONCommon::BinaryExecute<string_t>(args, state, result, ExtractStringFromVal);
 }
 
 static void ExtractStringManyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::JSONReadManyFunction<string_t>(args, state, result, ExtractStringFromVal);
+	JSONCommon::ExecuteMany<string_t>(args, state, result, ExtractStringFromVal);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetExtractFunction() {

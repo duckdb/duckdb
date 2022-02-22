@@ -1,0 +1,63 @@
+# name: test/sql/create/create_as.test
+# description: Test CREATE TABLE AS SELECT (CTAS) statements
+# group: [create]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl1 AS SELECT 1;
+
+query I
+SELECT * FROM tbl1;
+----
+1
+
+statement ok
+CREATE TABLE tbl2 AS SELECT 2 AS f;
+
+query I
+SELECT * FROM tbl2;
+----
+2
+
+statement ok
+CREATE OR REPLACE TABLE tbl3 AS SELECT 3;
+
+query I
+SELECT * FROM tbl3;
+----
+3
+
+statement error
+CREATE TABLE tbl1 AS SELECT 3;
+
+statement ok
+CREATE OR REPLACE TABLE tbl1 AS SELECT 4;
+
+query I
+SELECT * FROM tbl1;
+----
+4
+
+statement ok
+CREATE OR REPLACE TABLE tbl1 AS SELECT 'hello' UNION ALL SELECT 'world';
+
+query I
+SELECT * FROM tbl1;
+----
+hello
+world
+
+statement ok
+CREATE OR REPLACE TABLE tbl1 AS SELECT 5 WHERE false;
+
+query I
+SELECT * FROM tbl1;
+----
+
+statement error
+CREATE TABLE tbl4 IF NOT EXISTS AS SELECT 4;
+
+statement error
+CREATE OR REPLACE TABLE tbl4 IF NOT EXISTS AS SELECT 4;

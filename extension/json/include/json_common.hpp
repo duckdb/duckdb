@@ -79,31 +79,39 @@ public:
 		return result;
 	}
 	//! Write JSON value to string_t
-	static inline string_t WriteVal(yyjson_mut_doc *doc) {
+	static inline string_t WriteVal(yyjson_mut_doc *doc, Vector &vector) {
 		idx_t len;
-		char *json = yyjson_mut_write(doc, WRITE_FLAG, (size_t *)&len);
-		return string_t(json, len);
+		auto data = yyjson_mut_write(doc, WRITE_FLAG, (size_t *)&len);
+		auto result = StringVector::AddString(vector, data, len);
+		free(data);
+		return result;
 	}
-	static inline string_t WriteVal(yyjson_val *val) {
+	static inline string_t WriteVal(yyjson_val *val, Vector &vector) {
 		// Create mutable copy of the read val
 		auto *mut_doc = yyjson_mut_doc_new(nullptr);
 		auto *mut_val = yyjson_val_mut_copy(mut_doc, val);
 		yyjson_mut_doc_set_root(mut_doc, mut_val);
-		// Write mutable copy to string
-		auto result = WriteVal(mut_doc);
+		auto result = WriteVal(mut_doc, vector);
 		yyjson_mut_doc_free(mut_doc);
 		return result;
 	}
-	static inline string_t WriteStringVal(yyjson_val *val) {
+	//! Write the string if it's a string, else write the value
+	static inline string_t WriteStringVal(yyjson_val *val, Vector &vector) {
 		// Create mutable copy of the read val
 		auto *mut_doc = yyjson_mut_doc_new(nullptr);
 		auto *mut_val = yyjson_val_mut_copy(mut_doc, val);
 		yyjson_mut_doc_set_root(mut_doc, mut_val);
 		// Write mutable copy to string
 		idx_t len;
-		char *json = yyjson_mut_write(mut_doc, WRITE_FLAG, (size_t *)&len);
+		char *data = yyjson_mut_write(mut_doc, WRITE_FLAG, (size_t *)&len);
 		// Remove quotes if necessary
-		auto result = yyjson_is_str(val) ? string_t(json + 1, len - 2) : string_t(json, len);
+		string_t result {};
+		if (yyjson_is_str(val)) {
+			result = StringVector::AddString(vector, data + 1, len - 2);
+		} else {
+			result = StringVector::AddString(vector, data, len);
+		}
+		free(data);
 		yyjson_mut_doc_free(mut_doc);
 		return result;
 	}
@@ -184,14 +192,14 @@ public:
 public:
 	//! Single-argument JSON read function, i.e. json_type('[1, 2, 3]')
 	template <class T>
-	static void UnaryJSONReadFunction(DataChunk &args, ExpressionState &state, Vector &result,
-	                                  std::function<bool(yyjson_val *, T &)> fun) {
+	static void UnaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
+	                         std::function<bool(yyjson_val *, T &, Vector &)> fun) {
 		auto &inputs = args.data[0];
 		UnaryExecutor::ExecuteWithNulls<string_t, T>(inputs, result, args.size(),
 		                                             [&](string_t input, ValidityMask &mask, idx_t idx) {
 			                                             auto doc = JSONCommon::ReadDocument(input);
 			                                             T result_val {};
-			                                             if (!fun(doc->root, result_val)) {
+			                                             if (!fun(doc->root, result_val, result)) {
 				                                             // Cannot find path
 				                                             mask.SetInvalid(idx);
 			                                             }
@@ -202,8 +210,8 @@ public:
 
 	//! Two-argument JSON read function (with path query), i.e. json_type('[1, 2, 3]', '$[0]')
 	template <class T>
-	static void BinaryJSONReadFunction(DataChunk &args, ExpressionState &state, Vector &result,
-	                                   std::function<bool(yyjson_val *, T &)> fun) {
+	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
+	                          std::function<bool(yyjson_val *, T &, Vector &)> fun) {
 		auto &func_expr = (BoundFunctionExpression &)state.expr;
 		const auto &info = (JSONReadFunctionData &)*func_expr.bind_info;
 
@@ -214,9 +222,9 @@ public:
 			const idx_t &len = info.len;
 			UnaryExecutor::ExecuteWithNulls<string_t, T>(
 			    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
-				    auto doc = JSONCommon::ReadDocument(input);
+				    auto doc = ReadDocument(input);
 				    T result_val {};
-				    if (!fun(JSONCommon::GetPointerUnsafe<yyjson_val>(doc->root, ptr, len), result_val)) {
+				    if (!fun(GetPointerUnsafe<yyjson_val>(doc->root, ptr, len), result_val, result)) {
 					    // Cannot find path
 					    mask.SetInvalid(idx);
 				    }
@@ -228,9 +236,9 @@ public:
 			auto &paths = args.data[1];
 			BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
 			    inputs, paths, result, args.size(), [&](string_t input, string_t path, ValidityMask &mask, idx_t idx) {
-				    auto doc = JSONCommon::ReadDocument(input);
+				    auto doc = ReadDocument(input);
 				    T result_val {};
-				    if (!fun(JSONCommon::GetPointer<yyjson_val>(doc->root, path), result_val)) {
+				    if (!fun(GetPointer<yyjson_val>(doc->root, path), result_val, result)) {
 					    // Cannot find path
 					    mask.SetInvalid(idx);
 				    }
@@ -242,8 +250,8 @@ public:
 
 	//! JSON read function with list of path queries, i.e. json_type('[1, 2, 3]', ['$[0]', '$[1]'])
 	template <class T>
-	static void JSONReadManyFunction(DataChunk &args, ExpressionState &state, Vector &result,
-	                                 std::function<bool(yyjson_val *, T &)> fun) {
+	static void ExecuteMany(DataChunk &args, ExpressionState &state, Vector &result,
+	                        std::function<bool(yyjson_val *, T &, Vector &)> fun) {
 		auto &func_expr = (BoundFunctionExpression &)state.expr;
 		const auto &info = (JSONReadManyFunctionData &)*func_expr.bind_info;
 		const auto &ptrs = info.ptrs;
@@ -260,29 +268,34 @@ public:
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_entries = FlatVector::GetData<list_entry_t>(result);
 		auto &result_validity = FlatVector::Validity(result);
+
+		ListVector::Reserve(result, num_paths * count);
+		ListVector::SetListSize(result, num_paths * count);
+
 		auto &result_child = ListVector::GetEntry(result);
+		auto result_child_data = FlatVector::GetData<T>(result_child);
+		auto &result_child_validity = FlatVector::Validity(result_child);
 
 		idx_t offset = 0;
 		for (idx_t i = 0; i < count; i++) {
+			result_entries[i].offset = offset;
+			result_entries[i].length = num_paths;
+
 			auto idx = input_data.sel->get_index(i);
 			if (!input_data.validity.RowIsValid(idx)) {
 				result_validity.SetInvalid(i);
 				continue;
 			}
-			auto doc = JSONCommon::ReadDocument(inputs[idx]);
+
+			auto doc = ReadDocument(inputs[idx]);
 			for (idx_t path_i = 0; path_i < num_paths; path_i++) {
-				T result_val {};
-				if (!fun(JSONCommon::GetPointerUnsafe<yyjson_val>(doc->root, ptrs[path_i], lens[path_i]), result_val)) {
-					// Cannot find path
-					ListVector::PushBack(result, Value());
-				} else {
-					PushBack<T>(result, result_child, move(result_val));
+				if (!fun(GetPointerUnsafe<yyjson_val>(doc->root, ptrs[path_i], lens[path_i]),
+				         result_child_data[offset + path_i], result_child)) {
+					result_child_validity.SetInvalid(offset);
 				}
 			}
-			yyjson_doc_free(doc);
-			result_entries[i].offset = offset;
-			result_entries[i].length = num_paths;
 			offset += num_paths;
+			yyjson_doc_free(doc);
 		}
 		D_ASSERT(offset = num_paths * count);
 
@@ -432,12 +445,19 @@ private:
 		throw InternalException("Unknown yyjson type");
 	}
 
-	template <class T>
-	static inline void PushBack(Vector &result, Vector &result_child, T val) {
-		throw NotImplementedException("Cannot insert Value with this type into JSON result list");
+public:
+	static void ThrowValFormatError(string error_string, yyjson_val *val) {
+		auto *mut_doc = yyjson_mut_doc_new(nullptr);
+		auto *mut_val = yyjson_val_mut_copy(mut_doc, val);
+		yyjson_mut_doc_set_root(mut_doc, mut_val);
+		idx_t len;
+		auto data = yyjson_mut_write(mut_doc, WRITE_FLAG, (size_t *)&len);
+		error_string = StringUtil::Format(error_string, string(data, len));
+		free(data);
+		yyjson_mut_doc_free(mut_doc);
+		throw InvalidInputException(error_string);
 	}
 
-public:
 	template <class T>
 	static inline bool GetValueNumerical(yyjson_val *val, T &result, bool strict) {
 		auto type = yyjson_get_type(val);
@@ -455,8 +475,7 @@ public:
 			break;
 		}
 		if (strict) {
-			auto json_val = JSONCommon::WriteVal(val);
-			throw InvalidInputException("Failed to cast value to numerical: %s", json_val.GetString());
+			ThrowValFormatError("Failed to cast value to numerical: %s", val);
 		}
 		return false;
 	}
@@ -489,7 +508,7 @@ public:
 			break;
 		default:
 			// Convert JSON object/arrays to strings because we can
-			result = StringVector::AddString(vector, JSONCommon::WriteVal(val));
+			result = JSONCommon::WriteVal(val, vector);
 		}
 		// Casting to string should always work (if not NULL)
 		return true;
@@ -512,8 +531,7 @@ public:
 			break;
 		}
 		if (strict) {
-			auto json_val = JSONCommon::WriteVal(val);
-			throw InvalidInputException("Failed to cast value to DECIMAL: %s", json_val.GetString());
+			ThrowValFormatError("Failed to cast value to DECIMAL: %s", val);
 		}
 		return false;
 	}
@@ -539,8 +557,7 @@ public:
 			throw InternalException("Unexpected yyjson type in GetValueUUID");
 		}
 		if (strict) {
-			auto json_val = JSONCommon::WriteVal(val);
-			throw InvalidInputException("Failed to cast value to UUID: %s", json_val.GetString());
+			ThrowValFormatError("Failed to cast value to UUID: %s", val);
 		}
 		return false;
 	}
@@ -567,8 +584,7 @@ public:
 			throw InternalException("Unexpected yyjson type in GetValueDateTime");
 		}
 		if (strict) {
-			auto json_val = JSONCommon::WriteVal(val);
-			throw InvalidInputException("Failed to cast value to DateTime: %s", json_val.GetString());
+			ThrowValFormatError("Failed to cast value to DateTime: %s", val);
 		}
 		return false;
 	}
@@ -593,8 +609,7 @@ public:
 			throw InternalException("Unexpected yyjson type in GetValueTimestamp");
 		}
 		if (strict) {
-			auto json_val = JSONCommon::WriteVal(val);
-			throw InvalidInputException("Failed to cast value to Timestamp: %s", json_val.GetString());
+			ThrowValFormatError("Failed to cast value to Timestamp: %s", val);
 		}
 		return false;
 	}
@@ -636,8 +651,7 @@ private:
 			return true;
 		}
 		if (strict) {
-			auto json_val = JSONCommon::WriteVal(val);
-			throw InvalidInputException("Failed to cast value: %s", json_val.GetString());
+			ThrowValFormatError("Failed to cast value: %s", val);
 		}
 		return false;
 	}
@@ -723,16 +737,6 @@ inline yyjson_val *JSONCommon::ArrGet(yyjson_val *val, idx_t index) {
 template <>
 inline yyjson_mut_val *JSONCommon::ArrGet(yyjson_mut_val *val, idx_t index) {
 	return yyjson_mut_arr_get(val, index);
-}
-
-template <>
-inline void JSONCommon::PushBack(Vector &result, Vector &result_child, uint64_t val) {
-	ListVector::PushBack(result, Value::UBIGINT(move(val)));
-}
-template <>
-inline void JSONCommon::PushBack(Vector &result, Vector &result_child, string_t val) {
-	Value to_insert(StringVector::AddString(result_child, val));
-	ListVector::PushBack(result, to_insert);
 }
 
 } // namespace duckdb

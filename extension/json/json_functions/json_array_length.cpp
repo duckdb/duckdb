@@ -3,23 +3,23 @@
 
 namespace duckdb {
 
-static inline bool GetArrayLength(yyjson_val *val, uint64_t &result) {
+static inline bool GetArrayLength(yyjson_val *val, uint64_t &result_val, Vector &result) {
 	if (val) {
-		result = yyjson_arr_size(val);
+		result_val = yyjson_arr_size(val);
 	}
 	return val;
 }
 
 static void UnaryArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::UnaryJSONReadFunction<uint64_t>(args, state, result, GetArrayLength);
+	JSONCommon::UnaryExecute<uint64_t>(args, state, result, GetArrayLength);
 }
 
 static void BinaryArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::BinaryJSONReadFunction<uint64_t>(args, state, result, GetArrayLength);
+	JSONCommon::BinaryExecute<uint64_t>(args, state, result, GetArrayLength);
 }
 
 static void ManyArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::JSONReadManyFunction<uint64_t>(args, state, result, GetArrayLength);
+	JSONCommon::ExecuteMany<uint64_t>(args, state, result, GetArrayLength);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetArrayLengthFunction() {

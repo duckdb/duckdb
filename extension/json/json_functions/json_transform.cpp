@@ -25,8 +25,7 @@ static LogicalType StructureToTypeObject(yyjson_val *obj) {
 		val = yyjson_obj_iter_get_val(key);
 		auto key_str = yyjson_get_str(key);
 		if (names.find(key_str) != names.end()) {
-			auto obj_string = JSONCommon::WriteVal(obj);
-			throw InvalidInputException("Duplicate keys in object in JSON structure: %s", obj_string.GetString());
+			JSONCommon::ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
 		}
 		names.insert(key_str);
 		child_types.emplace_back(key_str, StructureToType(val));

@@ -109,6 +109,11 @@ SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', ['$.x', '$.a']);
 ----
 [NULL, 2]
 
+query T
+SELECT json_extract(NULL, ['$.x', '$.a']);
+----
+NULL
+
 statement ok
 CREATE TABLE t1(j varchar);
 

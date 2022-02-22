@@ -35,7 +35,7 @@ static inline yyjson_mut_val *GetConsistentArrayStructureObject(const vector<yyj
 			auto key_string = yyjson_mut_get_str(key);
 			val = yyjson_mut_obj_iter_get_val(key);
 			if (key_values.find(key_string) == key_values.end()) {
-				key_insert_order.push_back(key_string);
+				key_insert_order.emplace_back(key_string);
 			}
 			key_values[key_string].push_back(val);
 		}
@@ -160,22 +160,16 @@ static inline yyjson_mut_val *BuildStructure(yyjson_val *val, yyjson_mut_doc *st
 	}
 }
 
-static inline void Structure(string_t &input, string_t &result) {
-	auto input_doc = JSONCommon::ReadDocument(input);
+static inline bool Structure(yyjson_val *val, string_t &result_val, Vector &result) {
 	auto structure_doc = yyjson_mut_doc_new(nullptr);
-	yyjson_mut_doc_set_root(structure_doc, BuildStructure(input_doc->root, structure_doc));
-	result = JSONCommon::WriteVal(structure_doc);
-	yyjson_doc_free(input_doc);
+	yyjson_mut_doc_set_root(structure_doc, BuildStructure(val, structure_doc));
+	result_val = JSONCommon::WriteVal(structure_doc, result);
 	yyjson_mut_doc_free(structure_doc);
+	return true;
 }
 
 static void StructureFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &inputs = args.data[0];
-	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
-		string_t result {};
-		Structure(input, result);
-		return result;
-	});
+	JSONCommon::UnaryExecute<string_t>(args, state, result, Structure);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetStructureFunction() {
