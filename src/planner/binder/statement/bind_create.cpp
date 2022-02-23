@@ -25,6 +25,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
 
 namespace duckdb {
 
@@ -72,18 +73,15 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 
 SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = (CreateMacroInfo &)info;
+    auto &scalar_function = (ScalarMacroFunction &) *base.function;
 
-	/* different types */
-	bool is_query = (base.function->query_node != nullptr);
-
-	if (!is_query && base.function->expression->HasParameter()) {
+	if (scalar_function.expression->HasParameter()) {
 		throw BinderException("Parameter expressions within macro's are not supported!");
 	}
 
 	// create macro binding in order to bind the function
 	vector<LogicalType> dummy_types;
 	vector<string> dummy_names;
-
 	// positional parameters
 	for (idx_t i = 0; i < base.function->parameters.size(); i++) {
 		auto param = (ColumnRefExpression &)*base.function->parameters[i];
@@ -101,22 +99,22 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	}
 	auto this_macro_binding = make_unique<MacroBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
+	ExpressionBinder::QualifyColumnNames(*this, scalar_function.expression);
 
-	/* cannot bind Table Macro at this point as it may reference non existing tables */
-	if (!is_query) {
-		ExpressionBinder::QualifyColumnNames(*this, base.function->expression);
-		auto expression = base.function->expression->Copy();
-		// bind it to verify the function was defined correctly
-		string error;
-		auto sel_node = make_unique<BoundSelectNode>();
-		auto group_info = make_unique<BoundGroupInformation>();
-		SelectBinder binder(*this, context, *sel_node, *group_info);
-		error = binder.Bind(&expression, 0, false);
+	// create a copy of the expression because we do not want to alter the original
+	auto expression = scalar_function.expression->Copy();
 
-		if (!error.empty()) {
-			throw BinderException(error);
-		}
+	// bind it to verify the function was defined correctly
+	string error;
+	auto sel_node = make_unique<BoundSelectNode>();
+	auto group_info = make_unique<BoundGroupInformation>();
+	SelectBinder binder(*this, context, *sel_node, *group_info);
+	error = binder.Bind(&expression, 0, false);
+
+	if (!error.empty()) {
+		throw BinderException(error);
 	}
+
 	return BindSchema(info);
 }
 
@@ -176,7 +174,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, move(stmt.info), schema);
 		break;
 	}
-	case CatalogType::TABLE_MACRO_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY: {
+		auto schema = BindSchema(*stmt.info);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, move(stmt.info), schema);
+		break;
+	}
 	case CatalogType::MACRO_ENTRY: {
 		auto schema = BindCreateFunctionInfo(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, move(stmt.info), schema);
