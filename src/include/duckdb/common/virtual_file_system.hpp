@@ -80,6 +80,9 @@ public:
 		return FindFileSystem(filename)->FileExists(filename);
 	}
 
+	bool IsPipe(const string &filename) override {
+		return FindFileSystem(filename)->IsPipe(filename);
+	}
 	virtual void RemoveFile(const string &filename) override {
 		FindFileSystem(filename)->RemoveFile(filename);
 	}

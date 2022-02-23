@@ -22,8 +22,10 @@
 #else
 #include "duckdb/common/windows_util.hpp"
 #include <string>
+#include <io.h>
 
 #ifdef __MINGW32__
+#include <sys/stat.h>
 // need to manually define this for mingw
 extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
 #endif
@@ -47,6 +49,90 @@ static void AssertValidFileFlags(uint8_t flags) {
 	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 #endif
 }
+
+#ifdef __MINGW32__
+bool LocalFileSystem::FileExists(const string &filename) {
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	const wchar_t *wpath = unicode_path.c_str();
+	if (_waccess(wpath, 0) == 0) {
+		struct _stat64i32 status;
+		_wstat(wpath, &status);
+		if (status.st_size > 0) {
+			return true;
+		}
+	}
+	return false;
+}
+bool LocalFileSystem::IsPipe(const string &filename) {
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	const wchar_t *wpath = unicode_path.c_str();
+	if (_waccess(wpath, 0) == 0) {
+		struct _stat64i32 status;
+		_wstat(wpath, &status);
+		if (status.st_size == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+#else
+#ifndef _WIN32
+bool LocalFileSystem::FileExists(const string &filename) {
+	if (!filename.empty()) {
+		if (access(filename.c_str(), 0) == 0) {
+			struct stat status;
+			stat(filename.c_str(), &status);
+			if (S_ISREG(status.st_mode)) {
+				return true;
+			}
+		}
+	}
+	// if any condition fails
+	return false;
+}
+
+bool LocalFileSystem::IsPipe(const string &filename) {
+	if (!filename.empty()) {
+		if (access(filename.c_str(), 0) == 0) {
+			struct stat status;
+			stat(filename.c_str(), &status);
+			if (S_ISFIFO(status.st_mode)) {
+				return true;
+			}
+		}
+	}
+	// if any condition fails
+	return false;
+}
+
+#else
+bool LocalFileSystem::FileExists(const string &filename) {
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	const wchar_t *wpath = unicode_path.c_str();
+	if (_waccess(wpath, 0) == 0) {
+		struct _stat64i32 status;
+		_wstat(wpath, &status);
+		if (status.st_mode & S_IFREG) {
+			return true;
+		}
+	}
+	return false;
+}
+bool LocalFileSystem::IsPipe(const string &filename) {
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	const wchar_t *wpath = unicode_path.c_str();
+	if (_waccess(wpath, 0) == 0) {
+		struct _stat64i32 status;
+		_wstat(wpath, &status);
+		if (status.st_mode & _S_IFCHR) {
+			return true;
+		}
+	}
+	return false;
+}
+#endif
+#endif
 
 #ifndef _WIN32
 // somehow sometimes this is missing
@@ -276,20 +362,6 @@ bool LocalFileSystem::DirectoryExists(const string &directory) {
 			struct stat status;
 			stat(directory.c_str(), &status);
 			if (status.st_mode & S_IFDIR) {
-				return true;
-			}
-		}
-	}
-	// if any condition fails
-	return false;
-}
-
-bool LocalFileSystem::FileExists(const string &filename) {
-	if (!filename.empty()) {
-		if (access(filename.c_str(), 0) == 0) {
-			struct stat status;
-			stat(filename.c_str(), &status);
-			if (!(status.st_mode & S_IFDIR)) {
 				return true;
 			}
 		}
@@ -636,11 +708,6 @@ bool LocalFileSystem::DirectoryExists(const string &directory) {
 	return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-bool LocalFileSystem::FileExists(const string &filename) {
-	DWORD attrs = WindowsGetFileAttributes(filename);
-	return (attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY));
-}
-
 void LocalFileSystem::CreateDirectory(const string &directory) {
 	if (DirectoryExists(directory)) {
 		return;
@@ -799,9 +866,9 @@ vector<string> LocalFileSystem::Glob(const string &path) {
 	}
 	// first check if the path has a glob at all
 	if (!HasGlob(path)) {
-		// no glob: return only the file (if it exists)
+		// no glob: return only the file (if it exists or is a pipe)
 		vector<string> result;
-		if (FileExists(path)) {
+		if (FileExists(path) || IsPipe(path)) {
 			result.push_back(path);
 		}
 		return result;
