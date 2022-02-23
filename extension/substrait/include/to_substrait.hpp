@@ -1,10 +1,9 @@
 #pragma once
 
-#include "substrait/expression.pb.h"
+#include "substrait/algebra.pb.h"
 #include <string>
 #include <unordered_map>
 #include "substrait/plan.pb.h"
-#include "substrait/relations.pb.h"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -32,6 +31,9 @@ private:
 	uint64_t RegisterFunction(const std::string &name);
 	//! Creates a reference to a table column
 	void CreateFieldRef(substrait::Expression *expr, uint64_t col_idx);
+
+	//! Transforms Relation Root
+	substrait::RelRoot *TransformRootOp(LogicalOperator &dop);
 
 	//! Methods to Transform Logical Operators to Substrait Relations
 	substrait::Rel *TransformOp(duckdb::LogicalOperator &dop);

@@ -24,6 +24,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 
 namespace duckdb {
 
@@ -211,6 +212,33 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
+		// If there is a foreign key constraint, resolve primary key column's index from primary key column's name
+		auto &create_info = (CreateTableInfo &)*stmt.info;
+		auto &catalog = Catalog::GetCatalog(context);
+		for (idx_t i = 0; i < create_info.constraints.size(); i++) {
+			auto &cond = create_info.constraints[i];
+			if (cond->type == ConstraintType::FOREIGN_KEY) {
+				auto &foreign_key = (ForeignKeyConstraint &)*cond;
+				if (foreign_key.is_fk_table) {
+					D_ASSERT(foreign_key.pk_keys.empty() && !foreign_key.pk_columns.empty());
+					// have to resolve referenced table
+					auto pk_table_entry_ptr =
+					    catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, foreign_key.pk_table);
+					if (!pk_table_entry_ptr) {
+						throw ParserException("Can't find table \"%s\" in foreign key constraint",
+						                      foreign_key.pk_table);
+					}
+					D_ASSERT(!foreign_key.pk_columns.empty() && foreign_key.pk_keys.empty());
+					for (auto &keyname : foreign_key.pk_columns) {
+						auto entry = pk_table_entry_ptr->name_map.find(keyname);
+						if (entry == pk_table_entry_ptr->name_map.end()) {
+							throw ParserException("column \"%s\" named in key does not exist", keyname);
+						}
+						foreign_key.pk_keys.push_back(entry->second);
+					}
+				}
+			}
+		}
 		// We first check if there are any user types, if yes we check to which custom types they refer.
 		auto bound_info = BindCreateTableInfo(move(stmt.info));
 		auto root = move(bound_info->query);

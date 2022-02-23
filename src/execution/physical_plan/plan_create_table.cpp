@@ -2,10 +2,13 @@
 #include "duckdb/execution/operator/schema/physical_create_table.hpp"
 #include "duckdb/execution/operator/schema/physical_create_table_as.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 
 namespace duckdb {
 
@@ -28,9 +31,32 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTabl
 	}
 	auto &create_info = (CreateTableInfo &)*op.info->base;
 	auto &catalog = Catalog::GetCatalog(context);
+	for (idx_t i = 0; i < create_info.constraints.size(); i++) {
+		auto &cond = create_info.constraints[i];
+		if (cond->type == ConstraintType::FOREIGN_KEY) {
+			auto &foreign_key = (ForeignKeyConstraint &)*cond;
+			if (foreign_key.is_fk_table) {
+				D_ASSERT(!foreign_key.pk_keys.empty() && !foreign_key.fk_keys.empty());
+				// alter primary key table
+				unique_ptr<ForeignKeyConstraintInfo> info = make_unique<ForeignKeyConstraintInfo>(
+				    DEFAULT_SCHEMA, foreign_key.pk_table, create_info.table, foreign_key.pk_columns,
+				    foreign_key.fk_columns, foreign_key.pk_keys, foreign_key.fk_keys, true);
+				catalog.Alter(context, info.get());
+
+				// make a dependency between this table and referenced table
+				auto pk_table_entry_ptr =
+				    catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, foreign_key.pk_table);
+				if (!pk_table_entry_ptr) {
+					throw ParserException("Can't find table \"%s\" in foreign key constraint", foreign_key.pk_table);
+				}
+				op.info->dependencies.insert(pk_table_entry_ptr);
+			}
+		}
+	}
 	auto existing_entry =
 	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info.schema, create_info.table, true);
-	if (!existing_entry && !op.children.empty()) {
+	bool replace = op.info->Base().on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;
+	if ((!existing_entry || replace) && !op.children.empty()) {
 		D_ASSERT(op.children.size() == 1);
 		auto create = make_unique<PhysicalCreateTableAs>(op, op.schema, move(op.info), op.estimated_cardinality);
 		auto plan = CreatePlan(*op.children[0]);

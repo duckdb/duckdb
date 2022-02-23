@@ -101,7 +101,10 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		exported_data.schema_name = info->schema;
 		exported_data.file_path = info->file_path;
 
-		exported_tables.data[table] = exported_data;
+		ExportedTableInfo table_info;
+		table_info.entry = table;
+		table_info.table_data = exported_data;
+		exported_tables.data.push_back(table_info);
 		id++;
 
 		// generate the copy statement and bind it

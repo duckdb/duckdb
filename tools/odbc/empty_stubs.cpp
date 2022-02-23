@@ -55,14 +55,6 @@ SQLRETURN SQL_API SQLForeignKeys(SQLHSTMT statement_handle, SQLCHAR *pk_catalog_
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLGetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLCHAR *name,
-                                SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr, SQLSMALLINT *type_ptr,
-                                SQLSMALLINT *sub_type_ptr, SQLLEN *length_ptr, SQLSMALLINT *precision_ptr,
-                                SQLSMALLINT *scale_ptr, SQLSMALLINT *nullable_ptr) {
-	std::cout << "***** SQLGetDescRec" << std::endl;
-	return SQL_ERROR;
-}
-
 SQLRETURN SQL_API SQLPrimaryKeys(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1,
                                  SQLCHAR *schema_name, SQLSMALLINT name_length2, SQLCHAR *table_name,
                                  SQLSMALLINT name_length3) {
@@ -81,13 +73,6 @@ SQLRETURN SQL_API SQLProcedures(SQLHSTMT statement_handle, SQLCHAR *catalog_name
                                 SQLCHAR *schema_name, SQLSMALLINT name_length2, SQLCHAR *proc_name,
                                 SQLSMALLINT name_length3) {
 	std::cout << "***** SQLProcedures" << std::endl;
-	return SQL_ERROR;
-}
-
-SQLRETURN SQL_API SQLSetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT type,
-                                SQLSMALLINT sub_type, SQLLEN length, SQLSMALLINT precision, SQLSMALLINT scale,
-                                SQLPOINTER data_ptr, SQLLEN *string_length_ptr, SQLLEN *indicator_ptr) {
-	std::cout << "***** SQLSetDescRec" << std::endl;
 	return SQL_ERROR;
 }
 

@@ -128,11 +128,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	if (info->type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
 	}
-	for (idx_t i = 0; i < constraints.size(); i++) {
-		if (constraints[i]->type == ConstraintType::FOREIGN_KEY) {
-			throw ConstraintException("Can't alter table has FOREIGN KEY constraint");
-		}
-	}
 	auto table_info = (AlterTableInfo *)info;
 	switch (table_info->alter_table_type) {
 	case AlterTableType::RENAME_COLUMN: {
@@ -160,6 +155,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	case AlterTableType::ALTER_COLUMN_TYPE: {
 		auto change_type_info = (ChangeColumnTypeInfo *)table_info;
 		return ChangeColumnType(context, *change_type_info);
+	}
+	case AlterTableType::FOREIGN_KEY_CONSTR: {
+		auto foreign_key_constraint_info = (ForeignKeyConstraintInfo *)table_info;
+		return SetForeignKeyConstraint(context, *foreign_key_constraint_info);
 	}
 	default:
 		throw InternalException("Unrecognized alter table type!");
@@ -207,6 +206,22 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 			for (idx_t i = 0; i < unique.columns.size(); i++) {
 				if (unique.columns[i] == info.old_name) {
 					unique.columns[i] = info.new_name;
+				}
+			}
+			break;
+		}
+		case ConstraintType::FOREIGN_KEY: {
+			// FOREIGN KEY constraint: possibly need to rename columns
+			auto &foreign_key = (ForeignKeyConstraint &)*copy;
+			vector<string> &columns = foreign_key.pk_columns;
+			if (foreign_key.is_fk_table) {
+				columns = foreign_key.fk_columns;
+			}
+			for (idx_t i = 0; i < columns.size(); i++) {
+				if (columns[i] == info.old_name) {
+					throw CatalogException(
+					    "Cannot rename column \"%s\" because this is involved in the foreign key constraint",
+					    info.old_name);
 				}
 			}
 			break;
@@ -307,6 +322,23 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 			create_info->constraints.push_back(move(copy));
 			break;
 		}
+		case ConstraintType::FOREIGN_KEY: {
+			auto copy = constraint->Copy();
+			auto &foreign_key = (ForeignKeyConstraint &)*copy;
+			vector<string> &columns = foreign_key.pk_columns;
+			if (foreign_key.is_fk_table) {
+				columns = foreign_key.fk_columns;
+			}
+			for (idx_t i = 0; i < columns.size(); i++) {
+				if (columns[i] == info.removed_column) {
+					throw CatalogException(
+					    "Cannot drop column \"%s\" because there is a FOREIGN KEY constraint that depends on it",
+					    info.removed_column);
+				}
+			}
+			create_info->constraints.push_back(move(copy));
+			break;
+		}
 		default:
 			throw InternalException("Unsupported constraint for entry!");
 		}
@@ -373,6 +405,17 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 			}
 			break;
 		}
+		case ConstraintType::FOREIGN_KEY: {
+			auto &bound_foreign_key = (BoundForeignKeyConstraint &)*bound_constraints[i];
+			unordered_set<idx_t> &key_set = bound_foreign_key.pk_key_set;
+			if (bound_foreign_key.is_fk_table) {
+				key_set = bound_foreign_key.fk_key_set;
+			}
+			if (key_set.find(change_idx) != key_set.end()) {
+				throw BinderException("Cannot change the type of a column that has a FOREIGN KEY constraint specified");
+			}
+			break;
+		}
 		default:
 			throw InternalException("Unsupported constraint for entry!");
 		}
@@ -394,6 +437,34 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	    make_shared<DataTable>(context, *storage, change_idx, info.target_type, move(bound_columns), *bound_expression);
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
+}
+
+unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContext &context,
+                                                                    ForeignKeyConstraintInfo &info) {
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+
+	for (idx_t i = 0; i < columns.size(); i++) {
+		create_info->columns.push_back(columns[i].Copy());
+	}
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto constraint = constraints[i]->Copy();
+		if (constraint->type == ConstraintType::FOREIGN_KEY) {
+			ForeignKeyConstraint &fk_cond = (ForeignKeyConstraint &)*constraint;
+			if (fk_cond.is_fk_table == false && fk_cond.pk_table == info.fk_table) {
+				continue;
+			}
+		}
+		create_info->constraints.push_back(move(constraint));
+	}
+	if (info.is_fk_add) {
+		create_info->constraints.push_back(make_unique<ForeignKeyConstraint>(
+		    info.fk_table, info.pk_columns, info.pk_keys, info.fk_columns, info.fk_keys, false));
+	}
+
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
 ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
@@ -475,6 +546,11 @@ string TableCatalogEntry::ToSQL() {
 						multi_key_pks.insert(col);
 					}
 				}
+				extra_constraints.push_back(constraint->ToString());
+			}
+		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
+			auto &fk = (ForeignKeyConstraint &)*constraint;
+			if (fk.is_fk_table) {
 				extra_constraints.push_back(constraint->ToString());
 			}
 		} else {

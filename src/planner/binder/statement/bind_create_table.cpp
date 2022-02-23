@@ -36,18 +36,6 @@ static void CreateColumnMap(BoundCreateTableInfo &info, bool allow_duplicate_nam
 	}
 }
 
-bool IsPrimaryKeyOrUniqueKey(TableCatalogEntry *table_ptr, idx_t key) {
-	for (auto &constraint : table_ptr->bound_constraints) {
-		if (constraint->type == ConstraintType::UNIQUE) {
-			auto &unique = (BoundUniqueConstraint &)*constraint;
-			if (unique.key_set.find(key) != unique.key_set.end()) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
 static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	auto &base = (CreateTableInfo &)*info.base;
 
@@ -119,65 +107,27 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		}
 		case ConstraintType::FOREIGN_KEY: {
 			auto &foreign_key = (ForeignKeyConstraint &)*cond;
-			if (foreign_key.is_fk_table) {
-				// have to resolve referenced table
-				auto &catalog = Catalog::GetCatalog(binder.context);
-				auto pk_table_entry_ptr =
-				    catalog.GetEntry<TableCatalogEntry>(binder.context, INVALID_SCHEMA, foreign_key.pk_table);
-				if (!pk_table_entry_ptr) {
-					throw ParserException("Can't find table \"%s\" in foreign key constraint", foreign_key.pk_table);
-				}
-
-				// make a dependency between this table and referenced table
-				info.dependencies.insert(pk_table_entry_ptr);
-
-				// have to resolve columns of the foreign key table and referenced table
-				vector<idx_t> fk_keys, pk_keys;
-				unordered_set<idx_t> fk_key_set, pk_key_set;
-				D_ASSERT(!foreign_key.fk_columns.empty() && !foreign_key.pk_columns.empty());
-				// primary key is given by list of names
-				// have to resolve names
-				for (auto &keyname : foreign_key.pk_columns) {
-					auto entry = pk_table_entry_ptr->name_map.find(keyname);
-					if (entry == pk_table_entry_ptr->name_map.end()) {
-						throw ParserException("column \"%s\" named in key does not exist", keyname);
-					}
-					if (pk_key_set.find(entry->second) != pk_key_set.end()) {
-						throw ParserException("column \"%s\" appears twice in primary key constraint set", keyname);
-					}
-					idx_t pk_key = entry->second;
-					// check pk_key is primary key / unique key or not
-					if (!IsPrimaryKeyOrUniqueKey(pk_table_entry_ptr, pk_key)) {
-						throw ParserException("column \"%s\" must be primary key or unique key in table \"%s\"",
-						                      keyname, foreign_key.pk_table);
-					}
-					pk_keys.push_back(pk_key);
-					pk_key_set.insert(pk_key);
-				}
-
-				// foreign key is given by list of names
-				// have to resolve names
+			D_ASSERT(!foreign_key.pk_keys.empty());
+			D_ASSERT((foreign_key.is_fk_table && !foreign_key.fk_columns.empty()) || !foreign_key.fk_keys.empty());
+			if (foreign_key.fk_keys.empty()) {
 				for (auto &keyname : foreign_key.fk_columns) {
 					auto entry = info.name_map.find(keyname);
 					if (entry == info.name_map.end()) {
 						throw ParserException("column \"%s\" named in key does not exist", keyname);
 					}
-					if (fk_key_set.find(entry->second) != fk_key_set.end()) {
-						throw ParserException("column \"%s\" appears twice in foreign key constraint set", keyname);
-					}
-					fk_keys.push_back(entry->second);
-					fk_key_set.insert(entry->second);
+					foreign_key.fk_keys.push_back(entry->second);
 				}
-
-				info.bound_constraints.push_back(make_unique<BoundForeignKeyConstraint>(
-				    true, foreign_key.pk_table, pk_keys, pk_key_set, fk_keys, fk_key_set));
-
-				// insert constraint in referenced table
-				pk_table_entry_ptr->constraints.push_back(make_unique<ForeignKeyConstraint>(
-				    foreign_key.pk_table, foreign_key.pk_columns, foreign_key.fk_columns, false));
-				pk_table_entry_ptr->bound_constraints.push_back(make_unique<BoundForeignKeyConstraint>(
-				    false, base.table, move(pk_keys), move(pk_key_set), move(fk_keys), move(fk_key_set)));
 			}
+			unordered_set<idx_t> fk_key_set, pk_key_set;
+			for (idx_t i = 0; i < foreign_key.pk_keys.size(); i++) {
+				pk_key_set.insert(foreign_key.pk_keys[i]);
+			}
+			for (idx_t i = 0; i < foreign_key.fk_keys.size(); i++) {
+				fk_key_set.insert(foreign_key.fk_keys[i]);
+			}
+			info.bound_constraints.push_back(make_unique<BoundForeignKeyConstraint>(
+			    foreign_key.is_fk_table, foreign_key.pk_table, foreign_key.pk_keys, pk_key_set, foreign_key.fk_keys,
+			    fk_key_set));
 			break;
 		}
 		default:
