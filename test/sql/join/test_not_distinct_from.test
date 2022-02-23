@@ -88,30 +88,30 @@ endloop
 
 #Vector with vector
 query III
-select a.a, b.b, a.a IS NOT DISTINCT FROM b.b AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a), (VALUES (1), (2), (NULL)) AS b (b);
+select a.a, b.b, a.a IS NOT DISTINCT FROM b.b AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a), (VALUES (1), (2), (NULL)) AS b (b) ORDER BY 1, 2;
 ----
-1	1	1
-1	2	0
-1	NULL	0
-2	1	0
-2	2	1
-2	NULL	0
-NULL	1	0
-NULL	2	0
-NULL	NULL	1
+NULL	NULL	True
+NULL	1	False
+NULL	2	False
+1	NULL	False
+1	1	True
+1	2	False
+2	NULL	False
+2	1	False
+2	2	True
 
 query III
-select a.a, b.b, a.a IS DISTINCT FROM b.b AS "Is Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a), (VALUES (1), (2), (NULL)) AS b (b);
+select a.a, b.b, a.a IS DISTINCT FROM b.b AS "Is Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a), (VALUES (1), (2), (NULL)) AS b (b) ORDER BY 1, 2;
 ----
-1	1	0
-1	2	1
-1	NULL	1
-2	1	1
-2	2	0
-2	NULL	1
-NULL	1	1
-NULL	2	1
-NULL	NULL	0
+NULL	NULL	False
+NULL	1	True
+NULL	2	True
+1	NULL	True
+1	1	False
+1	2	True
+2	NULL	True
+2	1	True
+2	2	False
 
 #constant with constant
 query I
@@ -279,9 +279,9 @@ select count(*) from big inner join tbl_2 on (big.rowid IS NOT DISTINCT FROM tbl
 
 # Use in subqueries with correlated expressions
 query II
-SELECT a, (select count(*) from tbl_1 where tbl_1.a is distinct from t.b) from tbl_1 as t
+SELECT a, (select count(*) from tbl_1 where tbl_1.a is distinct from t.b) from tbl_1 as t ORDER BY 1
 ----
+NULL	2
 1	2
 2	3
-NULL	2
 

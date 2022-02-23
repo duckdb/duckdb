@@ -60,4 +60,19 @@ duckdb::string_t StringCast::Operation(dtime_t input, Vector &result);
 template <>
 duckdb::string_t StringCast::Operation(timestamp_t input, Vector &result);
 
+//! Temporary casting for Time Zone types. TODO: turn casting into functions.
+struct StringCastTZ {
+	template <typename SRC>
+	static inline string_t Operation(SRC input, Vector &vector) {
+		return StringCast::Operation(input, vector);
+	}
+};
+
+template <>
+duckdb::string_t StringCastTZ::Operation(date_t input, Vector &result);
+template <>
+duckdb::string_t StringCastTZ::Operation(dtime_t input, Vector &result);
+template <>
+duckdb::string_t StringCastTZ::Operation(timestamp_t input, Vector &result);
+
 } // namespace duckdb

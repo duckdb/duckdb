@@ -1,0 +1,63 @@
+# name: test/issues/rigger/rowid_in_clause.test
+# description: SQLancer bug that detected an error in the IN-clause simplification when different types were used
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE t0(c0 VARCHAR);
+
+statement ok
+CREATE TABLE t1(c0 VARCHAR);
+
+statement ok
+INSERT INTO t0(c0) VALUES (1);
+
+statement ok
+INSERT INTO t1(c0) VALUES (-1);
+
+query II
+SELECT * FROM t0, t1;
+----
+1	-1
+
+query II
+SELECT * FROM t0, t1 WHERE (t0.rowid IN (0.1))
+----
+
+query II
+SELECT * FROM t0, t1 WHERE (NOT (t0.rowid IN (0.1)))
+----
+1	-1
+
+query II
+SELECT * FROM t0, t1 WHERE (((t0.rowid IN (0.1))) IS NULL);
+----
+
+query II
+SELECT * FROM t0, t1 WHERE (t0.rowid IN (0.1))
+UNION ALL
+SELECT * FROM t0, t1 WHERE (NOT (t0.rowid IN (0.1)))
+UNION ALL
+SELECT * FROM t0, t1 WHERE (((t0.rowid IN (0.1))) IS NULL);
+----
+1	-1
+
+query II
+SELECT * FROM t0, t1 WHERE (t0.rowid IN (0.1::REAL))
+UNION ALL
+SELECT * FROM t0, t1 WHERE (NOT (t0.rowid IN (0.1::REAL)))
+UNION ALL
+SELECT * FROM t0, t1 WHERE (((t0.rowid IN (0.1::REAL))) IS NULL);
+----
+1	-1
+
+query II
+SELECT * FROM t0, t1 WHERE (t0.rowid IN (0.1::DOUBLE))
+UNION ALL
+SELECT * FROM t0, t1 WHERE (NOT (t0.rowid IN (0.1::DOUBLE)))
+UNION ALL
+SELECT * FROM t0, t1 WHERE (((t0.rowid IN (0.1::DOUBLE))) IS NULL);
+----
+1	-1

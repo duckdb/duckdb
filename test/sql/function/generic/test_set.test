@@ -5,100 +5,42 @@
 statement ok
 PRAGMA enable_verification
 
+# unrecognized configuration parameter
 statement error
 SELECT CURRENT_SETTING('a');
 
-statement ok
-SET a = 42;
-
-query I
-SELECT CURRENT_SETTING('a');
-----
-42
+statement error
+SELECT CURRENT_SETTING('memori_limit');
 
 statement ok
-SET a = 'asdf';
-
-query I
-SELECT CURRENT_SETTING('a');
-----
-asdf
+SELECT CURRENT_SETTING('default_null_order');
 
 statement ok
-SET b = asdf;
+SET default_null_order = 'nulls_last';
 
 query I
-SELECT CURRENT_SETTING('b');
+SELECT CURRENT_SETTING('default_null_order');
 ----
-asdf
+nulls_last
+
+query I
+SELECT CURRENT_SETTING('DEFAULT_NULL_ORDER');
+----
+nulls_last
+
+query I
+SELECT * FROM range(3) UNION ALL SELECT NULL ORDER BY 1
+----
+0
+1
+2
+NULL
 
 statement error
-SET a = NULL;
-
-statement error
-RESET a;
-
-statement error
-RESET ALL;
-
-statement error
-SELECT CURRENT_SETTING(i::VARCHAR) FROM range(1) tbl(i);
-
-statement error
-SELECT CURRENT_SETTING('')
+SELECT CURRENT_SETTING(i::VARCHAR) FROM range(1) tbl(i)
 
 statement error
 SELECT CURRENT_SETTING(NULL)
 
 statement error
-SET LOCAL l = 42;
-
-statement ok
-SET SESSION s = 43;
-
-query I
-SELECT CURRENT_SETTING('s');
-----
-43
-
-statement ok
-SET SESSION shadowed = 42;
-
-query I
-SELECT CURRENT_SETTING('shadowed');
-----
-42
-
-statement ok
-SET GLOBAL shadowed = 43;
-
-query I
-SELECT CURRENT_SETTING('shadowed');
-----
-42
-
-statement ok
-SET SESSION CASE_IS_LOWERED = 42;
-
-query I
-SELECT CURRENT_SETTING('case_is_lowered');
-----
-42
-
-query I
-SELECT CURRENT_SETTING('CASE_IS_LOWERED');
-----
-42
-
-statement ok
-SET SESSION case_is_lowered = 43;
-
-query I
-SELECT CURRENT_SETTING('case_is_lowered');
-----
-43
-
-query I
-SELECT CURRENT_SETTING('CASE_IS_LOWERED');
-----
-43
+SELECT CURRENT_SETTING('')

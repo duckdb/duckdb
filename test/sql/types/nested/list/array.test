@@ -57,7 +57,7 @@ SELECT ARRAY[1]::BIGINT[]
 
 query I
 SELECT ARRAY[1]::BIGINT ARRAY
----
+----
 [1]
 
 # multi-level array casts

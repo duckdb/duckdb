@@ -44,11 +44,13 @@ public:
 
 	py::object FetchArrowTable(bool stream = false, idx_t num_of_vectors = 1, bool return_table = true);
 
-	py::object FetchRecordBatchReader();
+	py::object FetchRecordBatchReader(idx_t vectors_per_chunk);
 
 	py::list Description();
 
 	void Close();
+
+	static py::object GetValueToPython(const Value &val, const LogicalType &type);
 
 private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);

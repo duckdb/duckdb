@@ -48,10 +48,10 @@ statement ok
 PRAGMA all_profiling_output
 
 statement error
-PRAGMA set_profiler_history_size = -1
+PRAGMA profiler_history_size = -1
 
 statement ok
-PRAGMA set_profiler_history_size = 5
+PRAGMA profiler_history_size = 5
 
 statement ok
 SELECT  min((SELECT  min((SELECT  min((SELECT  min((SELECT  min((SELECT  min((SELECT  min((SELECT  min((SELECT  min(i + i) FROM tbl) + i) FROM tbl) + i) FROM tbl) + i) FROM tbl) + i) FROM tbl) + i) FROM tbl) + i) FROM tbl) + i) FROM tbl) + i) FROM tbl

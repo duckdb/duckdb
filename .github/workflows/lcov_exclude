@@ -16,4 +16,4 @@
 */extension/tpcds/*
 */extension/tpch/*
 */extension/visualizer/*
-*/extension/extension_helper.hpp
+src/main/extension_helper.cpp

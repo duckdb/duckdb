@@ -89,59 +89,15 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 	VectorData idata;
 	input.Orrify(count, idata);
 	const auto ldata = (const list_entry_t *)idata.data;
-
-	// Slice the child into a dictionary so we can iterate through the positions
-	// We only need one entry per position in the parent, but we have to index by
-	// the rsel so we need the full vector size.
-	SelectionVector cursor(HAS_RSEL ? STANDARD_VECTOR_SIZE : count);
-
-	// Set up the cursor for the first position
-	SelectionVector unprocessed(count);
-	idx_t remaining = 0;
-	for (idx_t i = 0; i < count; ++i) {
+	for (idx_t i = 0; i < count; i++) {
 		const idx_t ridx = HAS_RSEL ? rsel->get_index(i) : i;
 		const auto lidx = idata.sel->get_index(ridx);
 		const auto &entry = ldata[lidx];
-		if (idata.validity.RowIsValid(lidx) && entry.length > 0) {
-			cursor.set_index(ridx, entry.offset);
-			unprocessed.set_index(remaining++, ridx);
+		if (idata.validity.RowIsValid(lidx)) {
+			hdata[ridx] = duckdb::Hash(entry.length);
 		} else {
 			hdata[ridx] = 0;
 		}
-	}
-	count = remaining;
-	if (count == 0) {
-		return;
-	}
-
-	// Compute the first round of hashes
-	Vector child(ListVector::GetEntry(input), cursor, count);
-
-	if (FIRST_HASH) {
-		VectorOperations::Hash(child, hashes, unprocessed, count);
-	} else {
-		VectorOperations::CombineHash(hashes, child, unprocessed, count);
-	}
-
-	// Combine the hashes for the remaining positions until there are none left
-	for (idx_t position = 1;; ++position) {
-		idx_t remaining = 0;
-		for (idx_t i = 0; i < count; ++i) {
-			const auto ridx = unprocessed.get_index(i);
-			const auto lidx = idata.sel->get_index(ridx);
-			const auto &entry = ldata[lidx];
-			if (entry.length > position) {
-				// Entry still has values to hash
-				cursor.set_index(ridx, cursor.get_index(ridx) + 1);
-				unprocessed.set_index(remaining++, ridx);
-			}
-		}
-		if (remaining == 0) {
-			break;
-		}
-
-		VectorOperations::CombineHash(hashes, child, unprocessed, remaining);
-		count = remaining;
 	}
 }
 

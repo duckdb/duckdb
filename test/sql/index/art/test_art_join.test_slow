@@ -2,7 +2,6 @@
 # description: Test Joins using art indexes
 # group: [art]
 
-
 statement ok
 PRAGMA explain_output = PHYSICAL_ONLY;
 PRAGMA force_index_join

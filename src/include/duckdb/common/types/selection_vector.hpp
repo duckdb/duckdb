@@ -76,6 +76,9 @@ public:
 	sel_t *data() {
 		return sel_vector;
 	}
+	const sel_t *data() const {
+		return sel_vector;
+	}
 	buffer_ptr<SelectionData> sel_data() {
 		return selection_data;
 	}

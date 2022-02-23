@@ -1,6 +1,7 @@
 alter-test
 bindcol-test
 boolsaschar-test
+catalogfunctions-test
 colattribute-test
 connect-test
 cte-test

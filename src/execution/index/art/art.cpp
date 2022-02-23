@@ -221,7 +221,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	// now insert the elements into the index
 	row_ids.Normalify(input.size());
 	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
-	idx_t failed_index = INVALID_INDEX;
+	idx_t failed_index = DConstants::INVALID_INDEX;
 	for (idx_t i = 0; i < input.size(); i++) {
 		if (!keys[i]) {
 			continue;
@@ -234,7 +234,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 			break;
 		}
 	}
-	if (failed_index != INVALID_INDEX) {
+	if (failed_index != DConstants::INVALID_INDEX) {
 		// failed to insert because of constraint violation: remove previously inserted entries
 		// generate keys again
 		keys.clear();
@@ -368,7 +368,7 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 
 	// Recurse
 	idx_t pos = node->GetChildPos(key[depth]);
-	if (pos != INVALID_INDEX) {
+	if (pos != DConstants::INVALID_INDEX) {
 		auto child = node->GetChild(pos);
 		return Insert(*child, move(value), depth + 1, row_id);
 	}
@@ -437,7 +437,7 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 		depth += node->prefix_length;
 	}
 	idx_t pos = node->GetChildPos(key[depth]);
-	if (pos != INVALID_INDEX) {
+	if (pos != DConstants::INVALID_INDEX) {
 		auto child = node->GetChild(pos);
 		D_ASSERT(child);
 
@@ -464,32 +464,31 @@ static unique_ptr<Key> CreateKey(ART &art, PhysicalType type, Value &value) {
 	D_ASSERT(type == value.type().InternalType());
 	switch (type) {
 	case PhysicalType::BOOL:
-		return Key::CreateKey<bool>(value.value_.boolean, art.is_little_endian);
+		return Key::CreateKey<bool>(value, art.is_little_endian);
 	case PhysicalType::INT8:
-		return Key::CreateKey<int8_t>(value.value_.tinyint, art.is_little_endian);
+		return Key::CreateKey<int8_t>(value, art.is_little_endian);
 	case PhysicalType::INT16:
-		return Key::CreateKey<int16_t>(value.value_.smallint, art.is_little_endian);
+		return Key::CreateKey<int16_t>(value, art.is_little_endian);
 	case PhysicalType::INT32:
-		return Key::CreateKey<int32_t>(value.value_.integer, art.is_little_endian);
+		return Key::CreateKey<int32_t>(value, art.is_little_endian);
 	case PhysicalType::INT64:
-		return Key::CreateKey<int64_t>(value.value_.bigint, art.is_little_endian);
+		return Key::CreateKey<int64_t>(value, art.is_little_endian);
 	case PhysicalType::UINT8:
-		return Key::CreateKey<uint8_t>(value.value_.utinyint, art.is_little_endian);
+		return Key::CreateKey<uint8_t>(value, art.is_little_endian);
 	case PhysicalType::UINT16:
-		return Key::CreateKey<uint16_t>(value.value_.usmallint, art.is_little_endian);
+		return Key::CreateKey<uint16_t>(value, art.is_little_endian);
 	case PhysicalType::UINT32:
-		return Key::CreateKey<uint32_t>(value.value_.uinteger, art.is_little_endian);
+		return Key::CreateKey<uint32_t>(value, art.is_little_endian);
 	case PhysicalType::UINT64:
-		return Key::CreateKey<uint64_t>(value.value_.ubigint, art.is_little_endian);
+		return Key::CreateKey<uint64_t>(value, art.is_little_endian);
 	case PhysicalType::INT128:
-		return Key::CreateKey<hugeint_t>(value.value_.hugeint, art.is_little_endian);
+		return Key::CreateKey<hugeint_t>(value, art.is_little_endian);
 	case PhysicalType::FLOAT:
-		return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);
+		return Key::CreateKey<float>(value, art.is_little_endian);
 	case PhysicalType::DOUBLE:
-		return Key::CreateKey<double>(value.value_.double_, art.is_little_endian);
+		return Key::CreateKey<double>(value, art.is_little_endian);
 	case PhysicalType::VARCHAR:
-		return Key::CreateKey<string_t>(string_t(value.str_value.c_str(), value.str_value.size()),
-		                                art.is_little_endian);
+		return Key::CreateKey<string_t>(value, art.is_little_endian);
 	default:
 		throw InternalException("Invalid type for index");
 	}
@@ -545,7 +544,7 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 			depth += node_val->prefix_length;
 		}
 		idx_t pos = node_val->GetChildPos(key[depth]);
-		if (pos == INVALID_INDEX) {
+		if (pos == DConstants::INVALID_INDEX) {
 			return nullptr;
 		}
 		node_val = node_val->GetChild(pos)->get();
@@ -615,9 +614,9 @@ bool ART::IteratorNext(Iterator &it) {
 
 		// Find next node
 		top.pos = node->GetNextPos(top.pos);
-		if (top.pos != INVALID_INDEX) {
+		if (top.pos != DConstants::INVALID_INDEX) {
 			// next node found: go there
-			it.SetEntry(it.depth, IteratorEntry(node->GetChild(top.pos)->get(), INVALID_INDEX));
+			it.SetEntry(it.depth, IteratorEntry(node->GetChild(top.pos)->get(), DConstants::INVALID_INDEX));
 			it.depth++;
 		} else {
 			// no node found: move up the tree
@@ -696,7 +695,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 				return IteratorNext(it);
 			} else {
 				// Greater
-				top.pos = INVALID_INDEX;
+				top.pos = DConstants::INVALID_INDEX;
 				return IteratorNext(it);
 			}
 		}
@@ -704,7 +703,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 		depth += node->prefix_length;
 
 		top.pos = node->GetChildGreaterEqual(key[depth], equal);
-		if (top.pos == INVALID_INDEX) {
+		if (top.pos == DConstants::INVALID_INDEX) {
 			// Find min leaf
 			top.pos = node->GetMin();
 		}
@@ -828,7 +827,7 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 
 	vector<row_t> row_ids;
 	bool success = true;
-	if (state->values[1].is_null) {
+	if (state->values[1].IsNull()) {
 		lock_guard<mutex> l(lock);
 		// single predicate
 		switch (state->expressions[0]) {

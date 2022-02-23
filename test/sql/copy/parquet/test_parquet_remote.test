@@ -68,19 +68,19 @@ SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com:44
 9	Jose	Foster	jfoster8@yelp.com
 10	Emily	Stewart	estewart9@opensource.org
 
-#
-#statement ok
-#SET s3_region='eu-central-1';
-#
-#statement ok
-#SET s3_access_key_id='HAHA';
-#
-#statement ok
-#SET s3_secret_access_key='NOPE';
-#
-#statement ok
-#SET s3_session_token='EI';
-#
+
+statement ok
+SET s3_region='eu-central-1';
+
+statement ok
+SET s3_access_key_id='HAHA';
+
+statement ok
+SET s3_secret_access_key='NOPE';
+
+statement ok
+SET s3_session_token='EI';
+
 #query IIII
 #SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://cost-report-hannes/userdata1.parquet') LIMIT 10;
 #----

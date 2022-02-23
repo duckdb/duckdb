@@ -1,5 +1,5 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -17,18 +17,24 @@ string SampleMethodToString(SampleMethod method) {
 }
 
 void SampleOptions::Serialize(Serializer &serializer) {
-	sample_size.Serialize(serializer);
-	serializer.Write<bool>(is_percentage);
-	serializer.Write<SampleMethod>(method);
-	serializer.Write<int64_t>(seed);
+	FieldWriter writer(serializer);
+	writer.WriteSerializable(sample_size);
+	writer.WriteField<bool>(is_percentage);
+	writer.WriteField<SampleMethod>(method);
+	writer.WriteField<int64_t>(seed);
+	writer.Finalize();
 }
 
 unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &source) {
 	auto result = make_unique<SampleOptions>();
-	result->sample_size = Value::Deserialize(source);
-	result->is_percentage = source.Read<bool>();
-	result->method = source.Read<SampleMethod>();
-	result->seed = source.Read<int64_t>();
+
+	FieldReader reader(source);
+	result->sample_size = reader.ReadRequiredSerializable<Value, Value>();
+	result->is_percentage = reader.ReadRequired<bool>();
+	result->method = reader.ReadRequired<SampleMethod>();
+	result->seed = reader.ReadRequired<int64_t>();
+	reader.Finalize();
+
 	return result;
 }
 

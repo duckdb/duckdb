@@ -6,7 +6,27 @@
 
 namespace duckdb {
 
+StackChecker::StackChecker(Transformer &transformer_p, idx_t stack_usage_p)
+    : transformer(transformer_p), stack_usage(stack_usage_p) {
+	transformer.stack_depth += stack_usage;
+}
+
+StackChecker::~StackChecker() {
+	transformer.stack_depth -= stack_usage;
+}
+
+StackChecker::StackChecker(StackChecker &&other) noexcept
+    : transformer(other.transformer), stack_usage(other.stack_usage) {
+	other.stack_usage = 0;
+}
+
+Transformer::Transformer(Transformer *parent, idx_t max_expression_depth_p)
+    : parent(parent), max_expression_depth(parent ? parent->max_expression_depth : max_expression_depth_p),
+      stack_depth(DConstants::INVALID_INDEX) {
+}
+
 bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<unique_ptr<SQLStatement>> &statements) {
+	InitializeStackCheck();
 	for (auto entry = tree->head; entry != nullptr; entry = entry->next) {
 		SetParamCount(0);
 		auto stmt = TransformStatement((duckdb_libpgquery::PGNode *)entry->data.ptr_value);
@@ -15,6 +35,22 @@ bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<uni
 		statements.push_back(move(stmt));
 	}
 	return true;
+}
+
+void Transformer::InitializeStackCheck() {
+	stack_depth = 0;
+}
+
+StackChecker Transformer::StackCheck(idx_t extra_stack) {
+	auto node = this;
+	while (node->parent) {
+		node = node->parent;
+	}
+	D_ASSERT(node->stack_depth != DConstants::INVALID_INDEX);
+	if (node->stack_depth + extra_stack >= max_expression_depth) {
+		throw ParserException("Max expression depth limit of %lld exceeded", max_expression_depth);
+	}
+	return StackChecker(*node, extra_stack);
 }
 
 unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNode *stmt) {
@@ -90,6 +126,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNo
 		return TransformLoad(stmt);
 	case duckdb_libpgquery::T_PGCreateEnumStmt:
 		return TransformCreateEnum(stmt);
+	case duckdb_libpgquery::T_PGAlterSeqStmt:
+		return TransformAlterSequence(stmt);
 	default:
 		throw NotImplementedException(NodetypeToString(stmt->type));
 	}

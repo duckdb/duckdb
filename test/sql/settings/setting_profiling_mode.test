@@ -1,0 +1,12 @@
+# name: test/sql/settings/setting_profiling_mode.test
+# description: Test profiling mode setting
+# group: [settings]
+
+statement ok
+SET profiling_mode='standard';
+
+statement ok
+SET profiling_mode='detailed';
+
+statement error
+SET profiling_mode='unknown';

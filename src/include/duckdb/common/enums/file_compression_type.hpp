@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
-enum class FileCompressionType : uint8_t { AUTO_DETECT = 0, UNCOMPRESSED = 1, GZIP = 2 };
+enum class FileCompressionType : uint8_t { AUTO_DETECT = 0, UNCOMPRESSED = 1, GZIP = 2, ZSTD = 3 };
+
+FileCompressionType FileCompressionTypeFromString(const string &input);
 
 } // namespace duckdb

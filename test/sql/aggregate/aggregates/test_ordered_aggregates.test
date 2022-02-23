@@ -52,6 +52,32 @@ SELECT "dest", percentile_disc([0.25, 0.5, 0.75]) WITHIN GROUP (ORDER BY "arr_de
 FROM "flights"
 GROUP BY "dest"
 
+# ORDER BY DESC
+
+query I
+select percentile_disc(0.25) within group(order by i desc) from generate_series(0,100) tbl(i);
+----
+75
+
+query I
+select percentile_disc([0.25, 0.5, 0.75]) within group(order by i desc) from generate_series(0,100) tbl(i);
+----
+[75, 50, 25]
+
+query I
+select percentile_cont(0.25) within group(order by i desc) from generate_series(0,100) tbl(i);
+----
+75.000000
+
+query I
+select percentile_cont([0.25, 0.5, 0.75]) within group(order by i desc) from generate_series(0,100) tbl(i);
+----
+[75.000000, 50.000000, 25.000000]
+
+#
+# Error checking
+#
+
 # Cannot use multiple ORDER BY clauses with WITHIN GROUP
 statement error
 SELECT "dest", mode() WITHIN GROUP (ORDER BY "arr_delay", "arr_time") AS "median_delay"
@@ -63,3 +89,29 @@ statement error
 SELECT "dest", duck(0.5) WITHIN GROUP (ORDER BY "arr_delay") AS "duck_delay"
 FROM "flights"
 GROUP BY "dest"
+
+# Wrong number of arguments for PERCENTILE_DISC
+statement error
+select percentile_disc() within group(order by i) from generate_series(0,100) tbl(i);
+
+statement error
+select percentile_disc(0.25, 0.5) within group(order by i) from generate_series(0,100) tbl(i);
+
+# Wrong number of arguments for PERCENTILE_CONT
+statement error
+select percentile_cont() within group(order by i) from generate_series(0,100) tbl(i);
+
+statement error
+select percentile_cont(0.25, 0.5) within group(order by i) from generate_series(0,100) tbl(i);
+
+# Wrong number of arguments for MODE
+statement error
+select mode(0.25) within group(order by i) from generate_series(0,100) tbl(i);
+
+# No function matches the given name and argument types 'quantile_disc(BIGINT, VARCHAR)'
+statement error
+select percentile_disc('duck') within group(order by i) from generate_series(0,100) tbl(i);
+
+# No function matches the given name and argument types 'quantile_cont(BIGINT, VARCHAR)'
+statement error
+select percentile_cont('duck') within group(order by i) from generate_series(0,100) tbl(i);

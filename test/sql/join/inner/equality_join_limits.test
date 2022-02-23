@@ -1,0 +1,231 @@
+# name: test/sql/join/inner/equality_join_limits.test
+# description: Test equality joins on numeric limits
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+# TINYINT limits
+statement ok
+CREATE TABLE t(t_k0 TINYINT);
+
+statement ok
+INSERT INTO t VALUES (-128), (127);
+
+statement ok
+CREATE TABLE u(u_k0 TINYINT);
+
+statement ok
+INSERT INTO u VALUES (-128), (127);
+
+query II
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0;
+----
+-128	 -128
+127	127
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE u;
+
+# SMALLINT limits
+statement ok
+CREATE TABLE t(t_k0 SMALLINT);
+
+statement ok
+INSERT INTO t VALUES (-32768), (32767);
+
+statement ok
+CREATE TABLE u(u_k0 SMALLINT);
+
+statement ok
+INSERT INTO u VALUES (-32768), (32767);
+
+query II
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0;
+----
+-32768	 -32768
+32767	32767
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE u;
+
+# INTEGER limits
+statement ok
+CREATE TABLE t(t_k0 INTEGER);
+
+statement ok
+INSERT INTO t VALUES (-2147483648), (2147483647);
+
+statement ok
+CREATE TABLE u(u_k0 INTEGER);
+
+statement ok
+INSERT INTO u VALUES (-2147483648), (2147483647);
+
+query II
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0;
+----
+-2147483648	 -2147483648
+2147483647	2147483647
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE u;
+
+# BIGINT limits
+statement ok
+CREATE TABLE t(t_k0 BIGINT);
+
+statement ok
+INSERT INTO t VALUES (-9223372036854775808), (9223372036854775807);
+
+statement ok
+CREATE TABLE u(u_k0 BIGINT);
+
+statement ok
+INSERT INTO u VALUES (-9223372036854775808), (9223372036854775807);
+
+query II
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0;
+----
+-9223372036854775808	 -9223372036854775808
+9223372036854775807	9223372036854775807
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE u;
+
+# HUGEINT limits
+statement ok
+CREATE TABLE t(t_k0 HUGEINT);
+
+statement ok
+INSERT INTO t VALUES (-170141183460469231731687303715884105727), (170141183460469231731687303715884105727);
+
+statement ok
+CREATE TABLE u(u_k0 HUGEINT);
+
+statement ok
+INSERT INTO u VALUES (-170141183460469231731687303715884105727), (170141183460469231731687303715884105727);
+
+query II
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0;
+----
+-170141183460469231731687303715884105727	 -170141183460469231731687303715884105727
+170141183460469231731687303715884105727	170141183460469231731687303715884105727
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE u;
+
+# UTINYINT limits
+statement ok
+CREATE TABLE t(t_k0 UTINYINT);
+
+statement ok
+INSERT INTO t VALUES (0), (255);
+
+statement ok
+CREATE TABLE u(u_k0 UTINYINT);
+
+statement ok
+INSERT INTO u VALUES (0), (255);
+
+query II
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0;
+----
+0	 0
+255	255
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE u;
+
+# USMALLINT limits
+statement ok
+CREATE TABLE t(t_k0 USMALLINT);
+
+statement ok
+INSERT INTO t VALUES (0), (65535);
+
+statement ok
+CREATE TABLE u(u_k0 USMALLINT);
+
+statement ok
+INSERT INTO u VALUES (0), (65535);
+
+query II
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0;
+----
+0	 0
+65535	65535
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE u;
+
+# UINTEGER limits
+statement ok
+CREATE TABLE t(t_k0 UINTEGER);
+
+statement ok
+INSERT INTO t VALUES (0), (4294967295);
+
+statement ok
+CREATE TABLE u(u_k0 UINTEGER);
+
+statement ok
+INSERT INTO u VALUES (0), (4294967295);
+
+query II
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0;
+----
+0	 0
+4294967295	4294967295
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE u;
+
+# UBIGINT limits
+statement ok
+CREATE TABLE t(t_k0 UBIGINT);
+
+statement ok
+INSERT INTO t VALUES (0), (18446744073709551615);
+
+statement ok
+CREATE TABLE u(u_k0 UBIGINT);
+
+statement ok
+INSERT INTO u VALUES (0), (18446744073709551615);
+
+query II
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0;
+----
+0	 0
+18446744073709551615	18446744073709551615
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE u;

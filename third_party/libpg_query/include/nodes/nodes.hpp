@@ -479,6 +479,7 @@ typedef enum PGNodeTag {
 	T_PGIntervalConstant,
 	T_PGSampleSize,
 	T_PGSampleOptions,
+	T_PGLimitPercent,
 	T_PGPositionalReference,
 
 	/*

@@ -14,6 +14,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 		throw NotImplementedException("Unimplemented features for CREATE TABLE as");
 	}
 	auto qname = TransformQualifiedName(stmt->into->rel);
+	if (stmt->query->type != duckdb_libpgquery::T_PGSelectStmt) {
+		throw ParserException("CREATE TABLE AS requires a SELECT clause");
+	}
 	auto query = TransformSelect(stmt->query, false);
 
 	auto result = make_unique<CreateStatement>();

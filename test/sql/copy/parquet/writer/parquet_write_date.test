@@ -1,0 +1,35 @@
+# name: test/sql/copy/parquet/writer/parquet_write_date.test
+# description: Parquet dates round trip
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE dates(d DATE)
+
+statement ok
+INSERT INTO dates VALUES (DATE '1992-01-01'), (DATE '1900-01-01'), (NULL), (DATE '2020-09-27')
+
+query I nosort date_scan
+SELECT * FROM dates
+----
+
+statement ok
+COPY dates TO '__TEST_DIR__/dates.parquet' (FORMAT 'parquet');
+
+query I nosort date_scan
+SELECT * FROM '__TEST_DIR__/dates.parquet'
+----
+
+query I
+SELECT typeof(d) FROM '__TEST_DIR__/dates.parquet' LIMIT 1
+----
+DATE
+
+query I
+SELECT * FROM '__TEST_DIR__/dates.parquet' WHERE d='1992-01-01'
+----
+1992-01-01

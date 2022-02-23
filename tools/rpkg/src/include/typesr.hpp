@@ -101,6 +101,10 @@ struct RIntegerType {
 	static int Convert(int val);
 };
 
+struct RFactorType : public RIntegerType {
+	static int Convert(int val);
+};
+
 struct RBooleanType : public RIntegerType {
 	static bool Convert(int val);
 };

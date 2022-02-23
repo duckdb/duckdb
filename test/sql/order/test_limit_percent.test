@@ -1,0 +1,245 @@
+# name: test/sql/order/test_limit_percent.test
+# description: Test LIMIT keyword {% | PERCENT}
+# group: [order]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (12, 21), (13, 22), (14, 32), (15, 52)
+
+# constant limit
+query I
+SELECT a FROM test LIMIT 20 %
+----
+11
+
+query I
+SELECT a FROM test LIMIT 40 PERCENT
+----
+11
+12
+
+# decimal limit
+query I
+SELECT a FROM test LIMIT 35%
+----
+11
+
+query I
+SELECT a FROM test LIMIT 79.9%
+----
+11
+12
+13
+
+query I
+SELECT a FROM test LIMIT 80.1%
+----
+11
+12
+13
+14
+
+query I
+SELECT a FROM test LIMIT 101.1 PERCENT
+----
+11
+12
+13
+14
+15
+
+# LIMIT with operation
+query I
+SELECT a FROM test LIMIT (30-10) %
+----
+11
+
+# LIMIT with non-scalar should fail
+statement error
+SELECT a FROM test LIMIT a %
+
+# LIMIT with non-scalar operation should also fail
+statement error
+SELECT a FROM test LIMIT (a+1) %
+
+statement error
+SELECT a FROM test LIMIT (a+b*c) %
+
+statement error
+SELECT a FROM test LIMIT (a+b*c) %
+
+# aggregate in limit percent
+statement error
+SELECT a FROM test LIMIT SUM(42) %
+
+# non-foldable expression in limit percent
+statement ok
+SELECT * FROM test LIMIT RANDOM() %;
+
+# subquery in limit percent and offset
+query I
+SELECT a FROM test LIMIT 50% OFFSET 2
+----
+13
+14
+
+query I
+SELECT * FROM range(10) LIMIT 50% OFFSET 2
+----
+2
+3
+4
+5
+6
+
+query I
+SELECT * FROM range(10000) LIMIT 0.1% OFFSET 8000
+----
+8000
+8001
+8002
+8003
+8004
+8005
+8006
+8007
+8008
+8009
+
+query I
+SELECT * FROM range(10000) LIMIT 0.1% OFFSET 9999
+----
+9999
+
+query I
+SELECT a FROM test LIMIT (SELECT COUNT(*) FROM test) % OFFSET 1
+----
+
+query I
+SELECT a FROM test LIMIT 50% OFFSET (((SELECT MIN(b) FROM test)-1)/10);
+----
+13
+14
+
+query I
+SELECT b FROM test LIMIT 70% OFFSET (((SELECT MIN(test.a) FROM test)-1)/10);
+----
+21
+22
+32
+
+# non-foldable expression in limit
+statement ok
+SELECT * FROM test LIMIT 30% OFFSET RANDOM();
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM range(1000000) LIMIT 10%) LIMIT 10%) LIMIT 10%)
+----
+1000
+
+query I
+SELECT * FROM range(10) UNION ALL SELECT * FROM range(10, 20) LIMIT 10%;
+----
+0
+1
+
+#boundary values
+# big value
+query I
+SELECT * FROM range(1000000) LIMIT 0.0001%
+----
+0
+
+statement ok
+SELECT b FROM test LIMIT 0%
+----
+
+#Subqueries that return negative values
+statement error
+SELECT * FROM range(100) LIMIT -10 %;
+
+#Subqueries that return strings that can't be converted to integers
+statement error
+SELECT * FROM test LIMIT (SELECT 'ab') %
+
+# can only limit % by integers
+statement error
+select 1 limit date '2021-11-25' %;
+
+statement error
+select * from test limit "Hello World" %;
+
+#LIMIT % with strings
+statement ok
+CREATE TABLE test2 (a STRING);
+
+statement ok
+INSERT INTO test2 VALUES ('first'), ('second'), ('third'), ('4th'), ('5th') 
+
+statement ok
+PREPARE v1 AS SELECT * FROM test2 LIMIT 40%
+
+query I
+EXECUTE v1
+----
+first
+second
+
+# LIMIT % with multiple lists
+statement ok
+CREATE VIEW v3 AS SELECT i % 5 g, LIST(CASE WHEN i=6 or i=8 then null else i end) l FROM RANGE(20) tbl(i) group by g
+
+query II
+SELECT g, 5=ANY(l) FROM v3 ORDER BY g LIMIT 80%;
+----
+0	true
+1	NULL
+2	false
+3	NULL
+
+query II
+SELECT g, 3>ANY(l) FROM v3 ORDER BY g LIMIT 50%;
+----
+0	true
+1	true
+
+# LIMIT % with struct
+statement ok
+CREATE TABLE struct_data (g INTEGER, e INTEGER)
+
+statement ok
+INSERT INTO struct_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)
+
+query T
+SELECT STRUCT_PACK(a := 42, b := 43)
+----
+{'a': 42, 'b': 43}
+
+query IT
+SELECT e, STRUCT_PACK(e) FROM struct_data ORDER BY e LIMIT 60%
+----
+NULL	{'e': NULL}
+1	{'e': 1}
+2	{'e': 2}
+3	{'e': 3}
+
+# LIMIT % of NULL
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (4), (5);
+
+query I
+SELECT * FROM integers as int LIMIT (SELECT max(integers.i) FROM integers where i > 5) %
+----
+1
+2
+3
+4
+5

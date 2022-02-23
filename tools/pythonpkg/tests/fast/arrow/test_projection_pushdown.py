@@ -17,9 +17,9 @@ class TestArrowProjectionPushdown(object):
         duckdb_conn.execute("INSERT INTO  test VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
         duck_tbl = duckdb_conn.table("test")
         arrow_table = duck_tbl.arrow()
-        duckdb_conn.register_arrow("testarrowtable",arrow_table)
+        duckdb_conn.register("testarrowtable",arrow_table)
         assert duckdb_conn.execute("SELECT sum(a) FROM  testarrowtable").fetchall() == [(111,)]
 
         arrow_dataset = ds.dataset(arrow_table)
-        duckdb_conn.register_arrow("testarrowdataset",arrow_dataset)
+        duckdb_conn.register("testarrowdataset",arrow_dataset)
         assert duckdb_conn.execute("SELECT sum(a) FROM  testarrowdataset").fetchall() == [(111,)]

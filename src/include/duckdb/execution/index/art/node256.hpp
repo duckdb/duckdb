@@ -18,12 +18,12 @@ public:
 	unique_ptr<Node> child[256];
 
 public:
-	//! Get position of a specific byte, returns INVALID_INDEX if not exists
+	//! Get position of a specific byte, returns DConstants::INVALID_INDEX if not exists
 	idx_t GetChildPos(uint8_t k) override;
-	//! Get the position of the first child that is greater or equal to the specific byte, or INVALID_INDEX if there are
-	//! no children matching the criteria
+	//! Get the position of the first child that is greater or equal to the specific byte, or DConstants::INVALID_INDEX
+	//! if there are no children matching the criteria
 	idx_t GetChildGreaterEqual(uint8_t k, bool &equal) override;
-	//! Get the next position in the node, or INVALID_INDEX if there is no next position
+	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position
 	idx_t GetNextPos(idx_t pos) override;
 	//! Get Node256 Child
 	unique_ptr<Node> *GetChild(idx_t pos) override;

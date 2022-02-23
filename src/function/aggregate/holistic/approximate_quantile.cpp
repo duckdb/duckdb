@@ -130,7 +130,7 @@ unique_ptr<FunctionData> BindApproxQuantile(ClientContext &context, AggregateFun
 	Value quantile_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	auto quantile = quantile_val.GetValue<float>();
 
-	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
+	if (quantile_val.IsNull() || quantile < 0 || quantile > 1) {
 		throw BinderException("APPROXIMATE QUANTILE can only take parameters in range [0, 1]");
 	}
 	// remove the quantile argument so we can use the unary aggregate
@@ -150,7 +150,7 @@ AggregateFunction GetApproximateQuantileAggregate(PhysicalType type) {
 	auto fun = GetApproximateQuantileAggregateFunction(type);
 	fun.bind = BindApproxQuantile;
 	// temporarily push an argument so we can bind the actual quantile
-	fun.arguments.push_back(LogicalType::FLOAT);
+	fun.arguments.emplace_back(LogicalType::FLOAT);
 	return fun;
 }
 

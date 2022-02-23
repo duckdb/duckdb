@@ -22,7 +22,7 @@ EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : R
 }
 
 unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                     bool &changes_made) {
+                                                     bool &changes_made, bool is_root) {
 	auto root = (BoundFunctionExpression *)bindings[0];
 	D_ASSERT(root->children.size() == 2);
 	(void)root;
@@ -36,12 +36,12 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 
 	auto prefix_value = ExpressionExecutor::EvaluateScalar(*prefix_expr);
 
-	if (prefix_value.is_null) {
+	if (prefix_value.IsNull()) {
 		return make_unique<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
 
 	D_ASSERT(prefix_value.type() == prefix_expr->return_type);
-	auto needle_string = prefix_value.str_value;
+	auto &needle_string = StringValue::Get(prefix_value);
 
 	// PREFIX('xyz', '') is TRUE
 	// PREFIX(NULL, '') is NULL

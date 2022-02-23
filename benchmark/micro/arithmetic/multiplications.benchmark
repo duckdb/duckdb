@@ -1,6 +1,6 @@
 # name: benchmark/micro/arithmetic/multiplications.benchmark
 # description: Integer multiplications between 10000000 values
-# group: [micro]
+# group: [arithmetic]
 
 name Integer Multiplication
 group micro

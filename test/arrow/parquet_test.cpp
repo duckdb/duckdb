@@ -32,10 +32,16 @@ std::shared_ptr<arrow::Table> ReadParquetFile(const duckdb::string &path) {
 	std::unique_ptr<parquet::arrow::FileReader> reader;
 
 	auto status = parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader);
-	REQUIRE(status.ok());
+	if (!status.ok()) {
+		fprintf(stderr, "Failed to open file \"%s\"\n", path.c_str());
+		REQUIRE(false);
+	}
 	std::shared_ptr<arrow::Table> table;
 	status = reader->ReadTable(&table);
-	REQUIRE(status.ok());
+	if (!status.ok()) {
+		fprintf(stderr, "Arrow failed to read file \"%s\"\n", path.c_str());
+		REQUIRE(false);
+	}
 	return table;
 }
 
@@ -166,6 +172,12 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 	skip.emplace_back("bug687_nulls.parquet");         //! This is just crazy slow
 	skip.emplace_back("nullbyte.parquet");             //! Null byte in file
 	skip.emplace_back("nullbyte_multiple.parquet");    //! Null byte in file
+	// arrow does not like (some of) these files
+	skip.emplace_back("7-set.snappy.arrow2.parquet");
+	skip.emplace_back("complex.parquet");
+	skip.emplace_back("p2.parquet");
+	skip.emplace_back("p2strings.parquet");
+	skip.emplace_back("simple.parquet");
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};

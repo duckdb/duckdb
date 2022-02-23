@@ -4,7 +4,7 @@ import os
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'extension', 'parquet'))
 import parquet_config
-from python_helpers import open_utf8
+from python_helpers import open_utf8, normalize_path
 
 parquet_amal_base = os.path.join(amalgamation.amal_dir, 'parquet-amalgamation')
 parquet_header_file = parquet_amal_base + '.hpp'
@@ -14,12 +14,14 @@ temp_source = parquet_source_file + '.tmp'
 compile_directories = list(set([x.rsplit(os.path.sep, 1)[0] for x in parquet_config.source_files]))
 
 amalgamation.include_paths += parquet_config.include_directories
-amalgamation.main_header_files = [
-    os.path.sep.join('extension/parquet/include/parquet-extension.hpp'.split('/')),
-    os.path.sep.join('extension/parquet/include/parquet_reader.hpp'.split('/')),
-    os.path.sep.join('extension/parquet/include/parquet_writer.hpp'.split('/'))]
+
+amalgamation.main_header_files = normalize_path([
+    'extension/parquet/include/parquet-extension.hpp',
+    'extension/parquet/include/parquet_reader.hpp',
+    'extension/parquet/include/parquet_writer.hpp'])
+
 amalgamation.skip_duckdb_includes = True
-amalgamation.always_excluded += ['extension/parquet/parquetcli.cpp']
+amalgamation.always_excluded += normalize_path(['extension/parquet/parquetcli.cpp'])
 
 if not os.path.exists(amalgamation.amal_dir):
     os.makedirs(amalgamation.amal_dir)

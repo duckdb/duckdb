@@ -28,7 +28,7 @@ void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatemen
 			if (!new_query.empty()) {
 				// this PRAGMA statement gets replaced by a new query string
 				// push the new query string through the parser again and add it to the transformer
-				Parser parser;
+				Parser parser(context.GetParserOptions());
 				parser.ParseQuery(new_query);
 				// insert the new statements and remove the old statement
 				// FIXME: off by one here maybe?
@@ -65,7 +65,7 @@ string PragmaHandler::HandlePragma(SQLStatement *statement) { // PragmaInfo &inf
 	    Catalog::GetCatalog(context).GetEntry<PragmaFunctionCatalogEntry>(context, DEFAULT_SCHEMA, info.name, false);
 	string error;
 	idx_t bound_idx = Function::BindFunction(entry->name, entry->functions, info, error);
-	if (bound_idx == INVALID_INDEX) {
+	if (bound_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(error);
 	}
 	auto &bound_function = entry->functions[bound_idx];

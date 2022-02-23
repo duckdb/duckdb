@@ -20,17 +20,17 @@ DatePartSimplificationRule::DatePartSimplificationRule(ExpressionRewriter &rewri
 }
 
 unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                         bool &changes_made) {
+                                                         bool &changes_made, bool is_root) {
 	auto &date_part = (BoundFunctionExpression &)*bindings[0];
 	auto &constant_expr = (BoundConstantExpression &)*bindings[1];
 	auto &constant = constant_expr.value;
 
-	if (constant.is_null) {
+	if (constant.IsNull()) {
 		// NULL specifier: return constant NULL
 		return make_unique<BoundConstantExpression>(Value(date_part.return_type));
 	}
 	// otherwise check the specifier
-	auto specifier = GetDatePartSpecifier(constant.str_value);
+	auto specifier = GetDatePartSpecifier(StringValue::Get(constant));
 	string new_function_name;
 	switch (specifier) {
 	case DatePartSpecifier::YEAR:
@@ -49,7 +49,7 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 		new_function_name = "century";
 		break;
 	case DatePartSpecifier::MILLENNIUM:
-		new_function_name = "millenium";
+		new_function_name = "millennium";
 		break;
 	case DatePartSpecifier::QUARTER:
 		new_function_name = "quarter";

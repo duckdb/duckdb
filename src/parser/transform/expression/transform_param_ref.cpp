@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformParamRef(duckdb_libpgquery::PGParamRef *node, idx_t depth) {
+unique_ptr<ParsedExpression> Transformer::TransformParamRef(duckdb_libpgquery::PGParamRef *node) {
 	D_ASSERT(node);
 	auto expr = make_unique<ParameterExpression>();
 	if (node->number == 0) {

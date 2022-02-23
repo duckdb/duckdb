@@ -25,6 +25,13 @@ FROM range(0,100) tbl(d)
 
 endloop
 
+# VARCHAR. Remember, this is dictionary ordering, not numeric ordering!
+query I
+SELECT quantile_disc(d::VARCHAR, [0.1, 0.5, 0.9])
+FROM range(0,100) tbl(d)
+----
+[17, 53, 9]
+
 # multiple groups
 query II
 SELECT mod(r,10) as g, quantile_disc(r, [0.1, 0.5, 0.9]) FROM quantiles GROUP BY 1 ORDER BY 1
@@ -79,6 +86,12 @@ query I
 SELECT quantile_disc(interval (r) second, [0.1, 0.5, 0.9]) FROM quantiles
 ----
 [00:16:39, 01:23:19, 02:29:59]
+
+# WITH TIME ZONE
+query I
+SELECT quantile_disc(('2021-01-01'::TIMESTAMP + interval (r) hour)::TIMESTAMPTZ, [0.1, 0.5, 0.9]) FROM quantiles
+----
+[2021-02-11 15:00:00+00, 2021-07-28 07:00:00+00, 2022-01-10 23:00:00+00]
 
 statement ok
 pragma threads=4
@@ -137,9 +150,6 @@ SELECT quantile_disc(r, [0.1, 0.5, NULL]) FROM quantiles
 
 statement error
 SELECT quantile_disc(r, ["0.1", "0.5", "0.9"]) FROM quantiles
-
-statement error
-SELECT quantile_disc(r::string, [0.1, 0.5, 0.9]) FROM quantiles
 
 statement error
 SELECT quantile_disc(r, [0.1, 0.5, 0.9], 50) FROM quantiles

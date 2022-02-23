@@ -1,19 +1,21 @@
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
-OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, unordered_map<string, idx_t> &alias_map,
+OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, case_insensitive_map_t<idx_t> &alias_map,
                          expression_map_t<idx_t> &projection_map, idx_t max_count)
     : binders(move(binders)), projection_index(projection_index), max_count(max_count), extra_list(nullptr),
       alias_map(alias_map), projection_map(projection_map) {
 }
 OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, SelectNode &node,
-                         unordered_map<string, idx_t> &alias_map, expression_map_t<idx_t> &projection_map)
+                         case_insensitive_map_t<idx_t> &alias_map, expression_map_t<idx_t> &projection_map)
     : binders(move(binders)), projection_index(projection_index), alias_map(alias_map), projection_map(projection_map) {
 	this->max_count = node.select_list.size();
 	this->extra_list = &node.select_list;
@@ -54,16 +56,20 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		// check if we can bind it to an alias in the select list
 		auto &colref = (ColumnRefExpression &)*expr;
 		// if there is an explicit table name we can't bind to an alias
-		if (!colref.table_name.empty()) {
+		if (colref.IsQualified()) {
 			break;
 		}
 		// check the alias list
-		auto entry = alias_map.find(colref.column_name);
+		auto entry = alias_map.find(colref.column_names[0]);
 		if (entry != alias_map.end()) {
 			// it does! point it to that entry
 			return CreateProjectionReference(*expr, entry->second);
 		}
 		break;
+	}
+	case ExpressionClass::POSITIONAL_REFERENCE: {
+		auto &posref = (PositionalReferenceExpression &)*expr;
+		return CreateProjectionReference(*expr, posref.index - 1);
 	}
 	default:
 		break;
@@ -71,12 +77,12 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	// general case
 	// first bind the table names of this entry
 	for (auto &binder : binders) {
-		ExpressionBinder::BindTableNames(*binder, *expr);
+		ExpressionBinder::QualifyColumnNames(*binder, expr);
 	}
 	// first check if the ORDER BY clause already points to an entry in the projection list
 	auto entry = projection_map.find(expr.get());
 	if (entry != projection_map.end()) {
-		if (entry->second == INVALID_INDEX) {
+		if (entry->second == DConstants::INVALID_INDEX) {
 			throw BinderException("Ambiguous reference to column");
 		}
 		// there is a matching entry in the projection list

@@ -16,7 +16,7 @@ class TestProgressBarArrow(object):
 
         data = (pyarrow.array(np.arange(10000000), type=pyarrow.int32()))
         duckdb_conn = duckdb.connect()
-        duckdb_conn.execute("PRAGMA set_progress_bar_time=1")
+        duckdb_conn.execute("PRAGMA progress_bar_time=1")
         duckdb_conn.execute("PRAGMA disable_print_progress_bar")
 
         tbl = pyarrow.Table.from_arrays([data],['a'])
@@ -44,7 +44,7 @@ class TestProgressBarArrow(object):
 
         data = (pyarrow.array(np.arange(0), type=pyarrow.int32()))
         duckdb_conn = duckdb.connect()
-        duckdb_conn.execute("PRAGMA set_progress_bar_time=1")
+        duckdb_conn.execute("PRAGMA progress_bar_time=1")
         duckdb_conn.execute("PRAGMA disable_print_progress_bar")
 
         tbl = pyarrow.Table.from_arrays([data],['a'])

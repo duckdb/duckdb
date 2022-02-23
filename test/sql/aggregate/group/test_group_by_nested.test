@@ -5,9 +5,11 @@
 statement ok
 PRAGMA enable_verification
 
+foreach storage_type VIEW TABLE
+
 # Key is LIST<INTEGER>
 statement ok
-CREATE VIEW intlists AS SELECT * FROM (VALUES
+CREATE ${storage_type} intlists AS SELECT * FROM (VALUES
 	(21, [1]),
 	(22, [NULL]),
 	(23, []),
@@ -31,7 +33,7 @@ SELECT k, SUM(v) FROM intlists GROUP BY k ORDER BY 2
 query III
 SELECT k, LEAST(v, 21) as c, SUM(v) FROM intlists GROUP BY k, c ORDER BY 2, 3
 ----
-[13]	NULL	NULL
+[13]	21	NULL
 [1]	21	21
 []	21	23
 [NULL]	21	54
@@ -39,7 +41,7 @@ SELECT k, LEAST(v, 21) as c, SUM(v) FROM intlists GROUP BY k, c ORDER BY 2, 3
 
 # Key is LIST<VARCHAR>
 statement ok
-CREATE VIEW strlists AS SELECT * FROM (VALUES
+CREATE ${storage_type} strlists AS SELECT * FROM (VALUES
 	(21, ['a']),
 	(22, [NULL]),
 	(23, []),
@@ -63,7 +65,7 @@ SELECT k, SUM(v) FROM strlists GROUP BY k ORDER BY 2
 query III
 SELECT k, LEAST(v, 21) as c, SUM(v) FROM strlists GROUP BY k, c ORDER BY 2, 3
 ----
-[Somateria mollissima]	NULL	NULL
+[Somateria mollissima]	21	NULL
 [a]	21	21
 []	21	23
 [NULL]	21	54
@@ -71,7 +73,7 @@ SELECT k, LEAST(v, 21) as c, SUM(v) FROM strlists GROUP BY k, c ORDER BY 2, 3
 
 # Key is STRUCT<x: INTEGER, y: VARCHAR>
 statement ok
-CREATE VIEW structs AS SELECT * FROM (VALUES
+CREATE ${storage_type} structs AS SELECT * FROM (VALUES
 	(21, {'x': 1, 'y': 'a'}),
 	(22, {'x': NULL, 'y': NULL}),
 	(23, {'x': 0, 'y': ''}),
@@ -95,7 +97,7 @@ SELECT k, SUM(v) FROM structs GROUP BY k ORDER BY 2
 query III
 SELECT k, LEAST(v, 21) as c, SUM(v) FROM structs GROUP BY k, c ORDER BY 2, 3
 ----
-{'x': 13, 'y': Somateria mollissima}	NULL	NULL
+{'x': 13, 'y': Somateria mollissima}	21	NULL
 {'x': 1, 'y': a}	21	21
 {'x': 0, 'y': }	21	23
 {'x': NULL, 'y': NULL}	21	54
@@ -103,7 +105,7 @@ SELECT k, LEAST(v, 21) as c, SUM(v) FROM structs GROUP BY k, c ORDER BY 2, 3
 
 # Key is STRUCT<x: LIST<INTEGER>, y: LIST<VARCHAR> >
 statement ok
-CREATE VIEW struct_lint_lstr AS SELECT * FROM (VALUES
+CREATE ${storage_type} struct_lint_lstr AS SELECT * FROM (VALUES
 	(21, {'x': [1], 'y': ['a']}),
 	(22, {'x': [NULL], 'y': [NULL]}),
 	(23, {'x': [], 'y': []}),
@@ -131,7 +133,7 @@ SELECT k, LEAST(v, 21) as c, SUM(v) FROM struct_lint_lstr
 GROUP BY k, c
 ORDER BY 2, 3
 ----
-{'x': [13], 'y': [Somateria mollissima]}	NULL	NULL
+{'x': [13], 'y': [Somateria mollissima]}	21	NULL
 {'x': [1], 'y': [a]}	21	21
 {'x': [], 'y': []}	21	23
 {'x': [NULL], 'y': [NULL]}	21	54
@@ -139,7 +141,7 @@ ORDER BY 2, 3
 
 # Key is STRUCT<x: LIST<STRUCT<l4: LIST<INT>, i4 INT> >, y: LIST<VARCHAR> >.
 statement ok
-CREATE VIEW r2l3r4l5i4i2l3v AS SELECT * FROM (VALUES
+CREATE ${storage_type} r2l3r4l5i4i2l3v AS SELECT * FROM (VALUES
 	(21, {'x': [{'l4': [51], 'i4': 41}], 'y': ['a']}),
 	(22, {'x': [NULL], 'y': [NULL]}),
 	(23, {'x': [], 'y': []}),
@@ -167,7 +169,7 @@ SELECT k, LEAST(v, 21) as c, SUM(v) FROM r2l3r4l5i4i2l3v
 GROUP BY k, c
 ORDER BY 2, 3
 ----
-{'x': [{'l4': [62], 'i4': 47}], 'y': [Somateria mollissima]}	NULL	NULL
+{'x': [{'l4': [62], 'i4': 47}], 'y': [Somateria mollissima]}	21	NULL
 {'x': [{'l4': [51], 'i4': 41}], 'y': [a]}	21	21
 {'x': [], 'y': []}	21	23
 {'x': [NULL], 'y': [NULL]}	21	54
@@ -175,7 +177,7 @@ ORDER BY 2, 3
 
 # Key is LIST<INTEGER[2000]>
 statement ok
-CREATE VIEW longlists AS
+CREATE ${storage_type} longlists AS
 SELECT *
 FROM ((VALUES
 	(21, [1]),
@@ -206,7 +208,7 @@ SELECT k, LEAST(v, 21) as c, SUM(v) FROM longlists
 GROUP BY k, c
 ORDER BY 2, 3
 ----
-15 values hashing to 84a00080363dc8d5f8adbf6cc769a55d
+15 values hashing to 221ccf64a566554dde15e57c459708c8
 
 # Multiple constant keys
 query II
@@ -223,3 +225,22 @@ group by a;
 ----
 {'x': 1, 'y': 2, 'z': 3}	5
 
+statement ok
+DROP ${storage_type} intlists;
+
+statement ok
+DROP ${storage_type} strlists;
+
+statement ok
+DROP ${storage_type} structs;
+
+statement ok
+DROP ${storage_type} struct_lint_lstr;
+
+statement ok
+DROP ${storage_type} r2l3r4l5i4i2l3v;
+
+statement ok
+DROP ${storage_type} longlists;
+
+endloop

@@ -25,6 +25,7 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 	} else {
 		collation = collation_p;
 	}
+	collation = StringUtil::Lower(collation);
 	// bind the collation
 	if (collation.empty() || collation == "binary" || collation == "c" || collation == "posix") {
 		// binary collation: just skip

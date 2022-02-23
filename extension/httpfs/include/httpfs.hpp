@@ -4,7 +4,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 
-namespace httplib {
+namespace duckdb_httplib_openssl {
 struct Response;
 }
 
@@ -14,7 +14,7 @@ using HeaderMap = unordered_map<string, string>;
 
 struct ResponseWrapper { /* avoid including httplib in header */
 public:
-	ResponseWrapper(httplib::Response &res);
+	ResponseWrapper(duckdb_httplib_openssl::Response &res);
 	int code;
 	string error;
 	HeaderMap headers;
@@ -26,12 +26,6 @@ public:
 	// This two-phase construction allows subclasses more flexible setup.
 	virtual void InitializeMetadata();
 
-protected:
-	void Close() override {
-	}
-
-private:
-public:
 	idx_t length;
 	time_t last_modified;
 
@@ -42,6 +36,10 @@ public:
 	idx_t file_offset;
 	idx_t buffer_start;
 	idx_t buffer_end;
+
+public:
+	void Close() override {
+	}
 };
 
 class HTTPFileSystem : public FileSystem {

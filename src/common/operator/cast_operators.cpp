@@ -871,14 +871,17 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 						return false;
 					}
 					pos++;
-					int64_t exponent = 0;
+					if (pos >= len) {
+						return false;
+					}
+					int32_t exponent = 0;
 					int negative = buf[pos] == '-';
 					if (negative) {
-						if (!IntegerCastLoop<int64_t, true, false>(buf + pos, len - pos, exponent, strict)) {
+						if (!IntegerCastLoop<int32_t, true, false>(buf + pos, len - pos, exponent, strict)) {
 							return false;
 						}
 					} else {
-						if (!IntegerCastLoop<int64_t, false, false>(buf + pos, len - pos, exponent, strict)) {
+						if (!IntegerCastLoop<int32_t, false, false>(buf + pos, len - pos, exponent, strict)) {
 							return false;
 						}
 					}

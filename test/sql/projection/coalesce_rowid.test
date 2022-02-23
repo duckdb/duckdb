@@ -1,0 +1,37 @@
+# name: test/sql/projection/coalesce_rowid.test
+# description: SELECT * REPLACE
+# group: [projection]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table tbl as select case when i%2=0 then null else i end as i from range(10) tbl(i);
+
+query II
+select i, coalesce(rowid+i, rowid) from tbl ORDER BY rowid;
+----
+NULL	0
+1	2
+NULL	2
+3	6
+NULL	4
+5	10
+NULL	6
+7	14
+NULL	8
+9	18
+
+query IIII
+select i, rowid, rowid+i, COALESCE(rowid+i, NULL) IS NULL OR rowid+3=6 from tbl ORDER BY rowid;
+----
+NULL	0	NULL	True
+1	1	2	False
+NULL	2	NULL	True
+3	3	6	True
+NULL	4	NULL	True
+5	5	10	False
+NULL	6	NULL	True
+7	7	14	False
+NULL	8	NULL	True
+9	9	18	False

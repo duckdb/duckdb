@@ -1,0 +1,43 @@
+# name: test/sql/explain/test_explain_analyze_tpch.test_slow
+# description: Test explain analyze TPC-H
+# group: [explain]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.01);
+
+statement ok
+PRAGMA enable_profiling
+
+loop i 0 2
+
+query II
+EXPLAIN ANALYZE SELECT
+    l_returnflag,
+    l_linestatus,
+    sum(l_quantity) AS sum_qty,
+    sum(l_extendedprice) AS sum_base_price,
+    sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+    sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+    avg(l_quantity) AS avg_qty,
+    avg(l_extendedprice) AS avg_price,
+    avg(l_discount) AS avg_disc,
+    count(*) AS count_order
+FROM
+    lineitem
+WHERE
+    l_shipdate <= CAST('1998-09-02' AS date)
+GROUP BY
+    l_returnflag,
+    l_linestatus
+ORDER BY
+    l_returnflag,
+    l_linestatus;
+----
+analyzed_plan	<REGEX>:.*lineitem.*
+
+statement ok
+PRAGMA disable_profiling
+
+endloop

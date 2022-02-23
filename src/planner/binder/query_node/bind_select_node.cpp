@@ -9,9 +9,11 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/column_alias_binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/group_binder.hpp"
 #include "duckdb/planner/expression_binder/having_binder.hpp"
+#include "duckdb/planner/expression_binder/qualify_binder.hpp"
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
@@ -19,10 +21,6 @@
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 
 namespace duckdb {
-unique_ptr<Expression> Binder::BindFilter(unique_ptr<ParsedExpression> condition) {
-	WhereBinder where_binder(*this, context);
-	return where_binder.Bind(condition);
-}
 
 unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr) {
 	// we treat the Distinct list as a order by
@@ -37,15 +35,14 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 }
 
 unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
-                                             int64_t &delimiter_value) {
+                                             const LogicalType &type, Value &delimiter_value) {
 	auto new_binder = Binder::CreateBinder(context, this, true);
 	ExpressionBinder expr_binder(*new_binder, context);
-	expr_binder.target_type = LogicalType::UBIGINT;
+	expr_binder.target_type = type;
 	auto expr = expr_binder.Bind(delimiter);
 	if (expr->IsFoldable()) {
 		//! this is a constant
-		Value value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(LogicalType::BIGINT);
-		delimiter_value = value.GetValue<int64_t>();
+		delimiter_value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(type);
 		return nullptr;
 	}
 	return expr;
@@ -54,10 +51,40 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, unique_ptr<
 unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 	auto result = make_unique<BoundLimitModifier>();
 	if (limit_mod.limit) {
-		result->limit = BindDelimiter(context, move(limit_mod.limit), result->limit_val);
+		Value val;
+		result->limit = BindDelimiter(context, move(limit_mod.limit), LogicalType::BIGINT, val);
+		if (!result->limit) {
+			result->limit_val = val.GetValue<int64_t>();
+		}
 	}
 	if (limit_mod.offset) {
-		result->offset = BindDelimiter(context, move(limit_mod.offset), result->offset_val);
+		Value val;
+		result->offset = BindDelimiter(context, move(limit_mod.offset), LogicalType::BIGINT, val);
+		if (!result->offset) {
+			result->offset_val = val.GetValue<int64_t>();
+		}
+	}
+	return move(result);
+}
+
+unique_ptr<BoundResultModifier> Binder::BindLimitPercent(LimitPercentModifier &limit_mod) {
+	auto result = make_unique<BoundLimitPercentModifier>();
+	if (limit_mod.limit) {
+		Value val;
+		result->limit = BindDelimiter(context, move(limit_mod.limit), LogicalType::DOUBLE, val);
+		if (!result->limit) {
+			result->limit_percent = val.GetValue<double>();
+			if (result->limit_percent < 0.0) {
+				throw Exception("Limit percentage can't be negative value");
+			}
+		}
+	}
+	if (limit_mod.offset) {
+		Value val;
+		result->offset = BindDelimiter(context, move(limit_mod.offset), LogicalType::BIGINT, val);
+		if (!result->offset) {
+			result->offset_val = val.GetValue<int64_t>();
+		}
 	}
 	return move(result);
 }
@@ -69,6 +96,11 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 		case ResultModifierType::DISTINCT_MODIFIER: {
 			auto &distinct = (DistinctModifier &)*mod;
 			auto bound_distinct = make_unique<BoundDistinctModifier>();
+			if (distinct.distinct_on_targets.empty()) {
+				for (idx_t i = 0; i < result.names.size(); i++) {
+					distinct.distinct_on_targets.push_back(make_unique<ConstantExpression>(Value::INTEGER(1 + i)));
+				}
+			}
 			for (auto &distinct_on_target : distinct.distinct_on_targets) {
 				auto expr = BindOrderExpression(order_binder, move(distinct_on_target));
 				if (!expr) {
@@ -83,6 +115,21 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			auto &order = (OrderModifier &)*mod;
 			auto bound_order = make_unique<BoundOrderModifier>();
 			auto &config = DBConfig::GetConfig(context);
+			D_ASSERT(!order.orders.empty());
+			if (order.orders[0].expression->type == ExpressionType::STAR) {
+				// ORDER BY ALL
+				// replace the order list with the maximum order by count
+				D_ASSERT(order.orders.size() == 1);
+				auto order_type = order.orders[0].type;
+				auto null_order = order.orders[0].null_order;
+
+				vector<OrderByNode> new_orders;
+				for (idx_t i = 0; i < order_binder.MaxCount(); i++) {
+					new_orders.emplace_back(order_type, null_order,
+					                        make_unique<ConstantExpression>(Value::INTEGER(i + 1)));
+				}
+				order.orders = move(new_orders);
+			}
 			for (auto &order_node : order.orders) {
 				auto order_expression = BindOrderExpression(order_binder, move(order_node.expression));
 				if (!order_expression) {
@@ -100,6 +147,9 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 		}
 		case ResultModifierType::LIMIT_MODIFIER:
 			bound_modifier = BindLimit((LimitModifier &)*mod);
+			break;
+		case ResultModifierType::LIMIT_PERCENT_MODIFIER:
+			bound_modifier = BindLimitPercent((LimitPercentModifier &)*mod);
 			break;
 		default:
 			throw Exception("Unsupported result modifier");
@@ -126,7 +176,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				for (auto &expr : distinct.target_distincts) {
 					D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
 					auto &bound_colref = (BoundColumnRefExpression &)*expr;
-					if (bound_colref.binding.column_index == INVALID_INDEX) {
+					if (bound_colref.binding.column_index == DConstants::INVALID_INDEX) {
 						throw BinderException("Ambiguous name in DISTINCT ON!");
 					}
 					D_ASSERT(bound_colref.binding.column_index < sql_types.size());
@@ -149,7 +199,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				auto &expr = order_node.expression;
 				D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
 				auto &bound_colref = (BoundColumnRefExpression &)*expr;
-				if (bound_colref.binding.column_index == INVALID_INDEX) {
+				if (bound_colref.binding.column_index == DConstants::INVALID_INDEX) {
 					throw BinderException("Ambiguous name in ORDER BY!");
 				}
 				D_ASSERT(bound_colref.binding.column_index < sql_types.size());
@@ -203,12 +253,12 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	statement.select_list = move(new_select_list);
 
 	// create a mapping of (alias -> index) and a mapping of (Expression -> index) for the SELECT list
-	unordered_map<string, idx_t> alias_map;
+	case_insensitive_map_t<idx_t> alias_map;
 	expression_map_t<idx_t> projection_map;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
 		result->names.push_back(expr->GetName());
-		ExpressionBinder::BindTableNames(*this, *expr);
+		ExpressionBinder::QualifyColumnNames(*this, expr);
 		if (!expr->alias.empty()) {
 			alias_map[expr->alias] = i;
 			result->names[i] = expr->alias;
@@ -221,7 +271,10 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// first visit the WHERE clause
 	// the WHERE clause happens before the GROUP BY, PROJECTION or HAVING clauses
 	if (statement.where_clause) {
-		result->where_clause = BindFilter(move(statement.where_clause));
+		ColumnAliasBinder alias_binder(*result, alias_map);
+		WhereBinder where_binder(*this, context, &alias_binder);
+		unique_ptr<ParsedExpression> condition = move(statement.where_clause);
+		result->where_clause = where_binder.Bind(condition);
 	}
 
 	// now bind all the result modifiers; including DISTINCT and ORDER BY targets
@@ -259,7 +312,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			// if we wouldn't do this then (SELECT test.a FROM test GROUP BY a) would not work because "test.a" <> "a"
 			// hence we convert "a" -> "test.a" in the unbound expression
 			unbound_groups[i] = move(group_binder.unbound_expression);
-			ExpressionBinder::BindTableNames(*this, *unbound_groups[i]);
+			ExpressionBinder::QualifyColumnNames(*this, unbound_groups[i]);
 			info.map[unbound_groups[i].get()] = i;
 		}
 	}
@@ -268,8 +321,15 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// bind the HAVING clause, if any
 	if (statement.having) {
 		HavingBinder having_binder(*this, context, *result, info, alias_map);
-		ExpressionBinder::BindTableNames(*this, *statement.having, &alias_map);
+		ExpressionBinder::QualifyColumnNames(*this, statement.having);
 		result->having = having_binder.Bind(statement.having);
+	}
+
+	// bind the QUALIFY clause, if any
+	if (statement.qualify) {
+		QualifyBinder qualify_binder(*this, context, *result, info, alias_map);
+		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
+		result->qualify = qualify_binder.Bind(statement.qualify);
 	}
 
 	// after that, we bind to the SELECT list
@@ -317,6 +377,12 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 				                bound_columns[0].name));
 			}
 		}
+	}
+
+	// QUALIFY clause requires at least one window function to be specified in at least one of the SELECT column list or
+	// the filter predicate of the QUALIFY clause
+	if (statement.qualify && result->windows.empty()) {
+		throw BinderException("at least one window function must appear in the SELECT column or QUALIFY clause");
 	}
 
 	// now that the SELECT list is bound, we set the types of DISTINCT/ORDER BY expressions

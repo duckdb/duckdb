@@ -20,7 +20,7 @@ CompressionType CompressionTypeFromString(const string &str) {
 	} else if (compression == "fsst") {
 		return CompressionType::COMPRESSION_FSST;
 	} else {
-		return CompressionType::COMPRESSION_INVALID;
+		return CompressionType::COMPRESSION_AUTO;
 	}
 }
 

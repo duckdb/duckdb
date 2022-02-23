@@ -31,19 +31,23 @@ unique_ptr<Expression> ConjunctionSimplificationRule::RemoveExpression(BoundConj
 }
 
 unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                            bool &changes_made) {
+                                                            bool &changes_made, bool is_root) {
 	auto conjunction = (BoundConjunctionExpression *)bindings[0];
 	auto constant_expr = bindings[1];
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
 	D_ASSERT(constant_expr->IsFoldable());
-	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr).CastAs(LogicalType::BOOLEAN);
-	if (constant_value.is_null) {
+	Value constant_value;
+	if (!ExpressionExecutor::TryEvaluateScalar(*constant_expr, constant_value)) {
+		return nullptr;
+	}
+	constant_value = constant_value.CastAs(LogicalType::BOOLEAN);
+	if (constant_value.IsNull()) {
 		// we can't simplify conjunctions with a constant NULL
 		return nullptr;
 	}
 	if (conjunction->type == ExpressionType::CONJUNCTION_AND) {
-		if (!constant_value.value_.boolean) {
+		if (!BooleanValue::Get(constant_value)) {
 			// FALSE in AND, result of expression is false
 			return make_unique<BoundConstantExpression>(Value::BOOLEAN(false));
 		} else {
@@ -52,7 +56,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 		}
 	} else {
 		D_ASSERT(conjunction->type == ExpressionType::CONJUNCTION_OR);
-		if (!constant_value.value_.boolean) {
+		if (!BooleanValue::Get(constant_value)) {
 			// FALSE in OR, remove the expression from the set
 			return RemoveExpression(*conjunction, constant_expr);
 		} else {

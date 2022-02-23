@@ -118,7 +118,7 @@ function parse_profiling_output(graph_json) {
 
 	// assign an impact factor to nodes
 	// this is used for rendering opacity
-	var root_node = graph_data["tree"];
+	var root_node = graph_data;
 	var node_list = []
 	var node_timings = {}
 	var execution_time = gather_nodes(root_node, node_list, node_timings);
@@ -216,7 +216,7 @@ function parse_profiling_output(graph_json) {
 	function convert_json(node, parameters) {
 		var node_name = node["name"];
 		var node_timing = node["timing"];
-		var node_extra_info = node["extra_info"];
+		var node_extra_info = node["extra_info"] || '';
 		var node_impact = node["impact"];
 		var node_children = node["children"];
 		parameters["total_nodes"] += 1
@@ -266,7 +266,7 @@ function parse_profiling_output(graph_json) {
 		return result
 	}
 
-	var new_json = convert_json(graph_data["tree"], parameters);
+	var new_json = convert_json(graph_data, parameters);
 	return [meta_info, new_json];
 }
 

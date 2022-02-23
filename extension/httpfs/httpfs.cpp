@@ -1,4 +1,5 @@
 #include "httpfs.hpp"
+#include "duckdb/function/scalar/strftime.hpp"
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
 
@@ -8,7 +9,7 @@ using namespace duckdb;
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::Request(FileHandle &handle, string url, string method, HeaderMap header_map,
                                                     idx_t file_offset, char *buffer_out, idx_t buffer_len) {
-	auto headers = make_unique<httplib::Headers>();
+	auto headers = make_unique<duckdb_httplib_openssl::Headers>();
 	for (auto &entry : header_map) {
 		headers->insert(entry);
 	}
@@ -26,13 +27,13 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::Request(FileHandle &handle, string u
 		throw std::runtime_error("URL needs to contain a path");
 	}
 
-	httplib::Client cli(proto_host_port.c_str());
+	duckdb_httplib_openssl::Client cli(proto_host_port.c_str());
 	cli.set_follow_location(true);
 	cli.enable_server_certificate_verification(false);
 
 	if (method == "HEAD") {
 		auto res = cli.Head(path.c_str(), *headers);
-		if (res.error() != httplib::Error::Success) {
+		if (res.error() != duckdb_httplib_openssl::Error::Success) {
 			throw std::runtime_error("HTTP HEAD error on '" + url + "' " + std::to_string(res.error()));
 		}
 		return make_unique<ResponseWrapper>(res.value());
@@ -47,7 +48,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::Request(FileHandle &handle, string u
 	idx_t out_offset = 0;
 	auto res = cli.Get(
 	    path.c_str(), *headers,
-	    [&](const httplib::Response &response) {
+	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
 			    throw std::runtime_error("HTTP error");
 		    }
@@ -65,7 +66,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::Request(FileHandle &handle, string u
 		    out_offset += data_length;
 		    return true;
 	    });
-	if (res.error() != httplib::Error::Success) {
+	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP GET error on '" + url + "' " + std::to_string(res.error()));
 	}
 	return make_unique<ResponseWrapper>(res.value());
@@ -185,12 +186,24 @@ void HTTPFileHandle::InitializeMetadata() {
 	}
 	length = std::atoll(res->headers["Content-Length"].c_str());
 
-	struct tm tm;
-	strptime(res->headers["Last-Modified"].c_str(), "%a, %d %h %Y %T %Z", &tm);
+	auto last_modified = res->headers["Last-Modified"];
+	if (last_modified.empty()) {
+		return;
+	}
+	auto result = StrpTimeFormat::Parse("%a, %d %h %Y %T %Z", last_modified);
+
+	struct tm tm {};
+	tm.tm_year = result.data[0] - 1900;
+	tm.tm_mon = result.data[1] - 1;
+	tm.tm_mday = result.data[2];
+	tm.tm_hour = result.data[3];
+	tm.tm_min = result.data[4];
+	tm.tm_sec = result.data[5];
+	tm.tm_isdst = 0;
 	last_modified = std::mktime(&tm);
 }
 
-ResponseWrapper::ResponseWrapper(httplib::Response &res) {
+ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res) {
 	code = res.status;
 	error = res.reason;
 	for (auto &h : res.headers) {

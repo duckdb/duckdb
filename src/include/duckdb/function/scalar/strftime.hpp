@@ -83,7 +83,7 @@ struct StrfTimeFormat : public StrTimeFormat {
 	void FormatString(date_t date, int32_t data[7], char *target);
 	void FormatString(date_t date, dtime_t time, char *target);
 
-	static string Format(timestamp_t timestamp, const string &format);
+	DUCKDB_API static string Format(timestamp_t timestamp, const string &format);
 
 protected:
 	//! The variable-length specifiers. To determine total string size, these need to be checked.
@@ -111,14 +111,19 @@ public:
 	struct ParseResult {
 		int32_t data[7];
 		string error_message;
-		idx_t error_position = INVALID_INDEX;
+		idx_t error_position = DConstants::INVALID_INDEX;
 
 		date_t ToDate();
 		timestamp_t ToTimestamp();
 		string FormatError(string_t input, const string &format_specifier);
 	};
+
+public:
 	//! The full format specifier, for error messages
 	string format_specifier;
+
+public:
+	DUCKDB_API static ParseResult Parse(const string &format, const string &text);
 
 	bool Parse(string_t str, ParseResult &result);
 

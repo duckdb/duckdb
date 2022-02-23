@@ -1,0 +1,30 @@
+# name: test/sql/alter/default/drop_default.test
+# description: Test ALTER TABLE DROP DEFAULT
+# group: [default]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE data(id INTEGER, x INTEGER);
+
+statement ok
+ALTER TABLE data ALTER COLUMN id DROP DEFAULT;
+
+statement ok
+INSERT INTO data VALUES (1, 0), (2, 1);
+
+statement ok
+ALTER TABLE data ALTER COLUMN id DROP DEFAULT;
+
+statement ok
+ALTER TABLE data ALTER COLUMN id DROP DEFAULT;
+
+statement ok
+ALTER TABLE data ALTER COLUMN x DROP DEFAULT;
+
+statement ok
+ALTER TABLE data ALTER COLUMN x DROP DEFAULT;
+
+statement error
+ALTER TABLE data ALTER COLUMN j DROP DEFAULT;

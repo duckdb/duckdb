@@ -29,7 +29,7 @@ public:
 	//! Sample options (if any)
 	unique_ptr<SampleOptions> sample;
 	//! The location in the query (if any)
-	idx_t query_location = INVALID_INDEX;
+	idx_t query_location = DConstants::INVALID_INDEX;
 
 public:
 	//! Convert the object to a string
@@ -41,9 +41,11 @@ public:
 	virtual unique_ptr<TableRef> Copy() = 0;
 
 	//! Serializes a TableRef to a stand-alone binary blob
-	virtual void Serialize(Serializer &serializer);
+	DUCKDB_API void Serialize(Serializer &serializer) const;
+	//! Serializes a TableRef to a stand-alone binary blob
+	DUCKDB_API virtual void Serialize(FieldWriter &writer) const = 0;
 	//! Deserializes a blob back into a TableRef
-	static unique_ptr<TableRef> Deserialize(Deserializer &source);
+	DUCKDB_API static unique_ptr<TableRef> Deserialize(Deserializer &source);
 
 	//! Copy the properties of this table ref to the target
 	void CopyProperties(TableRef &target) const;

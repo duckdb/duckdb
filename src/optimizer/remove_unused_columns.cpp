@@ -185,14 +185,14 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// for every table filter, push a column binding into the column references map to prevent the column from
 			// being projected out
 			for (auto &filter : get.table_filters.filters) {
-				idx_t index = INVALID_INDEX;
+				idx_t index = DConstants::INVALID_INDEX;
 				for (idx_t i = 0; i < get.column_ids.size(); i++) {
 					if (get.column_ids[i] == filter.first) {
 						index = i;
 						break;
 					}
 				}
-				if (index == INVALID_INDEX) {
+				if (index == DConstants::INVALID_INDEX) {
 					throw InternalException("Could not find column index for table filter");
 				}
 				ColumnBinding filter_binding(get.table_index, index);

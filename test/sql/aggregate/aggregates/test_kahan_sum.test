@@ -1,0 +1,25 @@
+# name: test/sql/aggregate/aggregates/test_kahan_sum.test
+# description: Test sums in which temporary results are not exact
+# group: [aggregates]
+
+statement ok
+CREATE TABLE doubles(n DOUBLE);
+
+statement ok
+INSERT INTO doubles (n) VALUES ('9007199254740992'::DOUBLE), (1::DOUBLE), (1::DOUBLE), (0::DOUBLE);
+
+# this would give the wrong result with a simple sum
+query I
+SELECT FSUM(n)::BIGINT FROM doubles;
+----
+9007199254740994
+
+query I
+SELECT sumKahan(n)::BIGINT FROM doubles;
+----
+9007199254740994
+
+query I
+SELECT kahan_sum(n)::BIGINT FROM doubles;
+----
+9007199254740994

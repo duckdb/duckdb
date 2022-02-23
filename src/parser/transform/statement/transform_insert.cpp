@@ -10,7 +10,7 @@ unique_ptr<TableRef> Transformer::TransformValuesList(duckdb_libpgquery::PGList 
 		auto target = (duckdb_libpgquery::PGList *)(value_list->data.ptr_value);
 
 		vector<unique_ptr<ParsedExpression>> insert_values;
-		TransformExpressionList(*target, insert_values, 0);
+		TransformExpressionList(*target, insert_values);
 		if (!result->values.empty()) {
 			if (result->values[0].size() != insert_values.size()) {
 				throw ParserException("VALUES lists must all be the same length");

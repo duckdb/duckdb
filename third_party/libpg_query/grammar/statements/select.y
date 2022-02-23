@@ -154,7 +154,7 @@ select_clause:
 simple_select:
 			SELECT opt_all_clause opt_target_list
 			into_clause from_clause where_clause
-			group_clause having_clause window_clause sample_clause
+			group_clause having_clause window_clause qualify_clause sample_clause
 				{
 					PGSelectStmt *n = makeNode(PGSelectStmt);
 					n->targetList = $3;
@@ -164,12 +164,13 @@ simple_select:
 					n->groupClause = $7;
 					n->havingClause = $8;
 					n->windowClause = $9;
-					n->sampleOptions = $10;
+					n->qualifyClause = $10;
+					n->sampleOptions = $11;
 					$$ = (PGNode *)n;
 				}
 			| SELECT distinct_clause target_list
 			into_clause from_clause where_clause
-			group_clause having_clause window_clause sample_clause
+			group_clause having_clause window_clause qualify_clause sample_clause
 				{
 					PGSelectStmt *n = makeNode(PGSelectStmt);
 					n->distinctClause = $2;
@@ -180,7 +181,8 @@ simple_select:
 					n->groupClause = $7;
 					n->havingClause = $8;
 					n->windowClause = $9;
-					n->sampleOptions = $10;
+					n->qualifyClause = $10;
+					n->sampleOptions = $11;
 					$$ = (PGNode *)n;
 				}
 			| values_clause							{ $$ = $1; }
@@ -363,6 +365,12 @@ opt_all_clause:
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
 
+opt_ignore_nulls:
+			IGNORE_P NULLS_P						{ $$ = true;}
+			| RESPECT_P NULLS_P						{ $$ = false;}
+			| /*EMPTY*/								{ $$ = false; }
+		;
+
 opt_sort_clause:
 			sort_clause								{ $$ = $1;}
 			| /*EMPTY*/								{ $$ = NIL; }
@@ -370,6 +378,26 @@ opt_sort_clause:
 
 sort_clause:
 			ORDER BY sortby_list					{ $$ = $3; }
+			| ORDER BY ALL opt_asc_desc opt_nulls_order
+				{
+					PGSortBy *sort = makeNode(PGSortBy);
+					sort->node = (PGNode *) makeNode(PGAStar);
+					sort->sortby_dir = $4;
+					sort->sortby_nulls = $5;
+					sort->useOp = NIL;
+					sort->location = -1;		/* no operator */
+					$$ = list_make1(sort);
+				}
+			| ORDER BY '*' opt_asc_desc opt_nulls_order
+				{
+					PGSortBy *sort = makeNode(PGSortBy);
+					sort->node = (PGNode *) makeNode(PGAStar);
+					sort->sortby_dir = $4;
+					sort->sortby_nulls = $5;
+					sort->useOp = NIL;
+					sort->location = -1;		/* no operator */
+					$$ = list_make1(sort);
+				}
 		;
 
 sortby_list:
@@ -543,6 +571,12 @@ select_limit_value:
 					/* LIMIT ALL is represented as a NULL constant */
 					$$ = makeNullAConst(@1);
 				}
+			| a_expr '%'
+				{ $$ = makeLimitPercent($1); }
+			| FCONST PERCENT
+				{ $$ = makeLimitPercent(makeFloatConst($1,@1)); }
+			| ICONST PERCENT
+				{ $$ = makeLimitPercent(makeIntConst($1,@1)); }
 		;
 
 select_offset_value:
@@ -610,6 +644,16 @@ first_or_next: FIRST_P								{ $$ = 0; }
  */
 group_clause:
 			GROUP_P BY group_by_list				{ $$ = $3; }
+			| GROUP_P BY ALL
+				{
+					PGNode *node = (PGNode *) makeGroupingSet(GROUPING_SET_ALL, NIL, @3);
+					$$ = list_make1(node);
+				}
+			| GROUP_P BY '*'
+				{
+					PGNode *node = (PGNode *) makeGroupingSet(GROUPING_SET_ALL, NIL, @3);
+					$$ = list_make1(node);
+				}
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
 
@@ -667,6 +711,11 @@ grouping_or_grouping_id:
 
 having_clause:
 			HAVING a_expr							{ $$ = $2; }
+			| /*EMPTY*/								{ $$ = NULL; }
+		;
+
+qualify_clause:
+			QUALIFY a_expr							{ $$ = $2; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
@@ -2275,40 +2324,45 @@ func_application: func_name '(' ')'
 				{
 					$$ = (PGNode *) makeFuncCall($1, NIL, @1);
 				}
-			| func_name '(' func_arg_list opt_sort_clause ')'
+			| func_name '(' func_arg_list opt_sort_clause opt_ignore_nulls ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, $3, @1);
 					n->agg_order = $4;
+					n->agg_ignore_nulls = $5;
 					$$ = (PGNode *)n;
 				}
-			| func_name '(' VARIADIC func_arg_expr opt_sort_clause ')'
+			| func_name '(' VARIADIC func_arg_expr opt_sort_clause opt_ignore_nulls ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, list_make1($4), @1);
 					n->func_variadic = true;
 					n->agg_order = $5;
+					n->agg_ignore_nulls = $6;
 					$$ = (PGNode *)n;
 				}
-			| func_name '(' func_arg_list ',' VARIADIC func_arg_expr opt_sort_clause ')'
+			| func_name '(' func_arg_list ',' VARIADIC func_arg_expr opt_sort_clause opt_ignore_nulls ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, lappend($3, $6), @1);
 					n->func_variadic = true;
 					n->agg_order = $7;
+					n->agg_ignore_nulls = $8;
 					$$ = (PGNode *)n;
 				}
-			| func_name '(' ALL func_arg_list opt_sort_clause ')'
+			| func_name '(' ALL func_arg_list opt_sort_clause opt_ignore_nulls ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, $4, @1);
 					n->agg_order = $5;
+					n->agg_ignore_nulls = $6;
 					/* Ideally we'd mark the PGFuncCall node to indicate
 					 * "must be an aggregate", but there's no provision
 					 * for that in PGFuncCall at the moment.
 					 */
 					$$ = (PGNode *)n;
 				}
-			| func_name '(' DISTINCT func_arg_list opt_sort_clause ')'
+			| func_name '(' DISTINCT func_arg_list opt_sort_clause opt_ignore_nulls ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, $4, @1);
 					n->agg_order = $5;
+					n->agg_ignore_nulls = $6;
 					n->agg_distinct = true;
 					$$ = (PGNode *)n;
 				}
@@ -3373,7 +3427,7 @@ AexprConst: Iconst
 					t->location = @1;
 					$$ = makeStringConstCast($2, @2, t);
 				}
-			| func_name '(' func_arg_list opt_sort_clause ')' Sconst
+			| func_name '(' func_arg_list opt_sort_clause opt_ignore_nulls ')' Sconst
 				{
 					/* generic syntax with a type modifier */
 					PGTypeName *t = makeTypeNameFromNameList($1);
@@ -3383,7 +3437,7 @@ AexprConst: Iconst
 					 * We must use func_arg_list and opt_sort_clause in the
 					 * production to avoid reduce/reduce conflicts, but we
 					 * don't actually wish to allow PGNamedArgExpr in this
-					 * context, nor ORDER BY.
+					 * context, ORDER BY, nor IGNORE NULLS.
 					 */
 					foreach(lc, $3)
 					{
@@ -3400,10 +3454,16 @@ AexprConst: Iconst
 									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("type modifier cannot have ORDER BY"),
 									 parser_errposition(@4)));
+					if ($5 != false)
+							ereport(ERROR,
+									(errcode(PG_ERRCODE_SYNTAX_ERROR),
+									 errmsg("type modifier cannot have IGNORE NULLS"),
+									 parser_errposition(@5)));
+
 
 					t->typmods = $3;
 					t->location = @1;
-					$$ = makeStringConstCast($6, @6, t);
+					$$ = makeStringConstCast($7, @7, t);
 				}
 			| ConstTypename Sconst
 				{

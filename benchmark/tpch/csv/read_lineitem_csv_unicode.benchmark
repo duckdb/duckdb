@@ -1,4 +1,4 @@
-# name: benchmark/tpch/csv/read_lineitem_csv.benchmark
+# name: benchmark/tpch/csv/read_lineitem_csv_unicode.benchmark
 # description: Read the lineitem of TPC-H SF0.1 from a CSV file with a unicode delimiter
 # group: [csv]
 

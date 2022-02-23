@@ -5,8 +5,13 @@
 statement ok
 PRAGMA enable_verification
 
+foreach type <numeric> DECIMAL(4,0) DECIMAL(9,0) DECIMAL(18,0) DECIMAL(38,0)
+
 statement ok
-CREATE TABLE test (a INTEGER, b INTEGER);
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (a ${type}, b ${type});
 
 statement ok
 INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
@@ -94,3 +99,4 @@ SELECT CASE WHEN 'false' THEN NULL ELSE b+1 END FROM test ORDER BY b
 23
 23
 
+endloop

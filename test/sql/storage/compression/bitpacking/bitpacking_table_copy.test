@@ -1,0 +1,36 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_table_copy.test
+# description: Tests a table copy on a table spanning multiple segments
+# group: [bitpacking]
+
+require tpch
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking_struct_bug.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+statement ok
+CREATE TABLE test (a integer);
+
+statement ok
+INSERT INTO test SELECT i FROM range(0,150000) tbl(i);
+
+statement ok
+checkpoint
+
+statement ok
+CREATE TABLE test_2 AS SELECT a FROM test;
+
+statement ok
+checkpoint
+
+query I
+select sum(a) from test;
+----
+11249925000
+
+query I
+select sum(a) from test_2;
+----
+11249925000

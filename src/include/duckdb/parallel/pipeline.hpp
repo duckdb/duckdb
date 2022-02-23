@@ -48,7 +48,7 @@ public:
 	void Print() const;
 
 	//! Returns query progress
-	bool GetProgress(int &current_percentage);
+	bool GetProgress(double &current_percentage);
 
 	//! Returns a list of all operators (including source and sink) involved in this pipeline
 	vector<PhysicalOperator *> GetOperators() const;
@@ -76,7 +76,7 @@ private:
 	vector<weak_ptr<Pipeline>> dependencies;
 
 private:
-	bool GetProgressInternal(ClientContext &context, PhysicalOperator *op, int &current_percentage);
+	bool GetProgressInternal(ClientContext &context, PhysicalOperator *op, double &current_percentage);
 	void ScheduleSequentialTask(shared_ptr<Event> &event);
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
 

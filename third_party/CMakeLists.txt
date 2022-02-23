@@ -8,6 +8,7 @@ if(NOT AMALGAMATION_BUILD)
   add_subdirectory(miniz)
   add_subdirectory(utf8proc)
   add_subdirectory(hyperloglog)
+  add_subdirectory(fastpforlib)
 endif()
 
 if(NOT WIN32

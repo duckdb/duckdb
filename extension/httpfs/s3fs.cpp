@@ -29,23 +29,23 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 	Value value;
 
 	if (opener->TryGetCurrentSetting("s3_region", value)) {
-		region = value.str_value;
+		region = value.ToString();
 	}
 
 	if (opener->TryGetCurrentSetting("s3_access_key_id", value)) {
-		access_key_id = value.str_value;
+		access_key_id = value.ToString();
 	}
 
 	if (opener->TryGetCurrentSetting("s3_secret_access_key", value)) {
-		secret_access_key = value.str_value;
+		secret_access_key = value.ToString();
 	}
 
 	if (opener->TryGetCurrentSetting("s3_session_token", value)) {
-		session_token = value.str_value;
+		session_token = value.ToString();
 	}
 
 	if (opener->TryGetCurrentSetting("s3_endpoint", value)) {
-		endpoint = value.str_value;
+		endpoint = value.ToString();
 	} else {
 		endpoint = "s3.amazonaws.com";
 	}

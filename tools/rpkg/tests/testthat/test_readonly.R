@@ -1,5 +1,4 @@
 test_that("read_only flag and shutdown works as expected", {
-
   dbdir <- tempfile()
 
   # 1st: create a db and write some tables
@@ -46,5 +45,5 @@ test_that("read_only flag and shutdown works as expected", {
     DBI::dbDisconnect(con)
   }, args = list(dbdir))
 
-  expect_true(T)
+  expect_true(TRUE)
 })

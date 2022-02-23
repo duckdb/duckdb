@@ -34,16 +34,27 @@ bool Binding::TryGetBindingIndex(const string &column_name, column_t &result) {
 	return false;
 }
 
+column_t Binding::GetBindingIndex(const string &column_name) {
+	column_t result;
+	if (!TryGetBindingIndex(column_name, result)) {
+		throw InternalException("Binding index for column \"%s\" not found", column_name);
+	}
+	return result;
+}
+
 bool Binding::HasMatchingBinding(const string &column_name) {
 	column_t result;
 	return TryGetBindingIndex(column_name, result);
 }
 
+string Binding::ColumnNotFoundError(const string &column_name) const {
+	return StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", alias, column_name);
+}
+
 BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	column_t column_index;
-	if (!TryGetBindingIndex(colref.column_name, column_index)) {
-		return BindResult(StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", alias.c_str(),
-		                                     colref.column_name.c_str()));
+	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
+		return BindResult(ColumnNotFoundError(colref.GetColumnName()));
 	}
 	ColumnBinding binding;
 	binding.table_index = index;
@@ -53,6 +64,10 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		colref.alias = names[column_index];
 	}
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
+}
+
+TableCatalogEntry *Binding::GetTableEntry() {
+	return nullptr;
 }
 
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, LogicalGet &get,
@@ -66,10 +81,10 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 }
 
 BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
+	auto &column_name = colref.GetColumnName();
 	column_t column_index;
-	if (!TryGetBindingIndex(colref.column_name, column_index)) {
-		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", colref.table_name,
-		                                     colref.column_name));
+	if (!TryGetBindingIndex(column_name, column_index)) {
+		return BindResult(ColumnNotFoundError(column_name));
 	}
 	// fetch the type of the column
 	LogicalType col_type;
@@ -103,15 +118,22 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }
 
+TableCatalogEntry *TableBinding::GetTableEntry() {
+	return get.GetTable();
+}
+
+string TableBinding::ColumnNotFoundError(const string &column_name) const {
+	return StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", alias, column_name);
+}
+
 MacroBinding::MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name_p)
-    : Binding("0_macro_parameters", move(types_p), move(names_p), -1), macro_name(move(macro_name_p)) {
+    : Binding(MacroBinding::MACRO_NAME, move(types_p), move(names_p), -1), macro_name(move(macro_name_p)) {
 }
 
 BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	column_t column_index;
-	if (!TryGetBindingIndex(colref.column_name, column_index)) {
-		return BindResult(
-		    StringUtil::Format("Macro \"%s\" does not have a parameter named \"%s\"", macro_name, colref.column_name));
+	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
+		throw InternalException("Column %s not found in macro", colref.GetColumnName());
 	}
 	ColumnBinding binding;
 	binding.table_index = index;
@@ -123,8 +145,8 @@ BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 
 unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colref) {
 	column_t column_index;
-	if (!TryGetBindingIndex(colref.column_name, column_index)) {
-		throw BinderException("Macro \"%s\" does not have a parameter named \"%s\"", macro_name, colref.column_name);
+	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
+		throw InternalException("Column %s not found in macro", colref.GetColumnName());
 	}
 	auto arg = arguments[column_index]->Copy();
 	arg->alias = colref.alias;

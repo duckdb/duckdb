@@ -338,3 +338,8 @@ __nvm
 *.vcxproj*
 *.cmake
 *.sln
+
+# Zig files
+zig-out/*
+zig-cache/*
+*.zig

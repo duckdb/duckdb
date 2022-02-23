@@ -85,4 +85,4 @@ NULL
 query T
 SELECT a[:5] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
 ----
-NULL
+[42, 43, 44]

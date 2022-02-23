@@ -9,13 +9,13 @@ public:
 	    : FileHandle(pipe_fs, path), child_handle(move(child_handle_p)) {
 	}
 
-	int64_t ReadChunk(void *buffer, int64_t nr_bytes);
-	int64_t WriteChunk(void *buffer, int64_t nr_bytes);
-
 	PipeFileSystem pipe_fs;
 	unique_ptr<FileHandle> child_handle;
 
-protected:
+public:
+	int64_t ReadChunk(void *buffer, int64_t nr_bytes);
+	int64_t WriteChunk(void *buffer, int64_t nr_bytes);
+
 	void Close() override {
 	}
 };
@@ -25,6 +25,10 @@ int64_t PipeFile::ReadChunk(void *buffer, int64_t nr_bytes) {
 }
 int64_t PipeFile::WriteChunk(void *buffer, int64_t nr_bytes) {
 	return child_handle->Write(buffer, nr_bytes);
+}
+
+void PipeFileSystem::Reset(FileHandle &handle) {
+	throw InternalException("Cannot reset pipe file system");
 }
 
 int64_t PipeFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
@@ -39,6 +43,9 @@ int64_t PipeFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes
 
 int64_t PipeFileSystem::GetFileSize(FileHandle &handle) {
 	return 0;
+}
+
+void PipeFileSystem::FileSync(FileHandle &handle) {
 }
 
 unique_ptr<FileHandle> PipeFileSystem::OpenPipe(unique_ptr<FileHandle> handle) {

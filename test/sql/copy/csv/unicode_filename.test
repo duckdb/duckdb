@@ -1,0 +1,38 @@
+# name: test/sql/copy/csv/unicode_filename.test
+# description: Issue #2628: CSV with Chinese name cannot copy into DuckDB in Windows
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT * FROM 'data/csv/issue2628_中文.csv'
+----
+1	1
+2	2
+3	3
+
+# unicode glob
+query II
+SELECT * FROM 'data/csv/*中文.csv'
+----
+1	1
+2	2
+3	3
+
+# unicode directory
+query II
+SELECT * FROM 'data/csv/中文/*.csv' ORDER BY 1
+----
+1	1
+2	2
+3	3
+4	4
+
+query II
+SELECT * FROM 'data/csv/中*/*.csv' ORDER BY 1
+----
+1	1
+2	2
+3	3
+4	4

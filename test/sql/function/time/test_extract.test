@@ -60,10 +60,10 @@ NULL
 query I
 SELECT EXTRACT(epoch FROM i) FROM times
 ----
-20
-10
-10
-10
+80
+72490
+72490
+72490
 NULL
 
 # time gives errors for date-only parts

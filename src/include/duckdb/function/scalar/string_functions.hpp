@@ -110,7 +110,7 @@ struct RegexpFun {
 
 struct SubstringFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-	static string_t SubstringScalarFunction(Vector &result, string_t input, int32_t offset, int32_t length);
+	static string_t SubstringScalarFunction(Vector &result, string_t input, int64_t offset, int64_t length);
 };
 
 struct PrintfFun {

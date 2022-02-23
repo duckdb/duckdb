@@ -1,0 +1,41 @@
+# name: test/sql/types/struct/struct_case_insensitivity.test
+# description: Test struct case insensitivity
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl AS SELECT ({'HELLO': 3}) col;
+
+query I
+SELECT col['HELLO'] FROM tbl
+----
+3
+
+query I
+SELECT col['hello'] FROM tbl
+----
+3
+
+query I
+SELECT col.hello FROM tbl
+----
+3
+
+query I
+SELECT "COL"."HELLO" FROM tbl
+----
+3
+
+statement error
+SELECT ({'hello': 3, 'hello': 4}) col;
+
+statement error
+SELECT ({'HELLO': 3, 'HELLO': 4}) col;
+
+statement error
+SELECT ({'HELLO': 3, 'hello': 4}) col;
+
+statement error
+SELECT col['HELL'] FROM tbl

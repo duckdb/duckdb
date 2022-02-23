@@ -4,6 +4,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -61,56 +62,41 @@ py::object GetScalar(Value &constant) {
 	py::object scalar_value;
 	switch (constant.type().id()) {
 	case LogicalTypeId::BOOLEAN:
-		scalar_value = dataset_scalar(constant.GetValue<bool>());
-		return scalar_value;
+		return dataset_scalar(constant.GetValue<bool>());
 	case LogicalTypeId::TINYINT:
-		scalar_value = dataset_scalar(constant.GetValue<int8_t>());
-		return scalar_value;
+		return dataset_scalar(constant.GetValue<int8_t>());
 	case LogicalTypeId::SMALLINT:
-		scalar_value = dataset_scalar(constant.GetValue<int16_t>());
-		return scalar_value;
+		return dataset_scalar(constant.GetValue<int16_t>());
 	case LogicalTypeId::INTEGER:
-		scalar_value = dataset_scalar(constant.GetValue<int32_t>());
-		return scalar_value;
+		return dataset_scalar(constant.GetValue<int32_t>());
 	case LogicalTypeId::BIGINT:
-		scalar_value = dataset_scalar(constant.GetValue<int64_t>());
-		return scalar_value;
+		return dataset_scalar(constant.GetValue<int64_t>());
 	case LogicalTypeId::DATE: {
 		py::object date_type = py::module_::import("pyarrow").attr("date32");
-		scalar_value = dataset_scalar(scalar(constant.GetValue<int32_t>(), date_type()));
-		return scalar_value;
+		return dataset_scalar(scalar(constant.GetValue<int32_t>(), date_type()));
 	}
 	case LogicalTypeId::TIME: {
 		py::object date_type = py::module_::import("pyarrow").attr("time64");
-		scalar_value = dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("us")));
-		return scalar_value;
+		return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("us")));
 	}
 	case LogicalTypeId::TIMESTAMP: {
 		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
-		scalar_value = dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("us")));
-		return scalar_value;
+		return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("us")));
 	}
 	case LogicalTypeId::UTINYINT:
-		scalar_value = dataset_scalar(constant.GetValue<uint8_t>());
-		return scalar_value;
+		return dataset_scalar(constant.GetValue<uint8_t>());
 	case LogicalTypeId::USMALLINT:
-		scalar_value = dataset_scalar(constant.GetValue<uint16_t>());
-		return scalar_value;
+		return dataset_scalar(constant.GetValue<uint16_t>());
 	case LogicalTypeId::UINTEGER:
-		scalar_value = dataset_scalar(constant.GetValue<uint32_t>());
-		return scalar_value;
+		return dataset_scalar(constant.GetValue<uint32_t>());
 	case LogicalTypeId::UBIGINT:
-		scalar_value = dataset_scalar(constant.GetValue<uint64_t>());
-		return scalar_value;
+		return dataset_scalar(constant.GetValue<uint64_t>());
 	case LogicalTypeId::FLOAT:
-		scalar_value = dataset_scalar(constant.GetValue<float>());
-		return scalar_value;
+		return dataset_scalar(constant.GetValue<float>());
 	case LogicalTypeId::DOUBLE:
-		scalar_value = dataset_scalar(constant.GetValue<double>());
-		return scalar_value;
+		return dataset_scalar(constant.GetValue<double>());
 	case LogicalTypeId::VARCHAR:
-		scalar_value = dataset_scalar(constant.ToString());
-		return scalar_value;
+		return dataset_scalar(constant.ToString());
 	case LogicalTypeId::DECIMAL: {
 		py::object date_type = py::module_::import("pyarrow").attr("decimal128");
 		uint8_t width;
@@ -118,17 +104,18 @@ py::object GetScalar(Value &constant) {
 		constant.type().GetDecimalProperties(width, scale);
 		switch (constant.type().InternalType()) {
 		case PhysicalType::INT16:
-			scalar_value = dataset_scalar(scalar(constant.GetValue<int16_t>(), date_type(width, scale)));
-			return scalar_value;
+			return dataset_scalar(scalar(constant.GetValue<int16_t>(), date_type(width, scale)));
 		case PhysicalType::INT32:
-			scalar_value = dataset_scalar(scalar(constant.GetValue<int32_t>(), date_type(width, scale)));
-			return scalar_value;
+			return dataset_scalar(scalar(constant.GetValue<int32_t>(), date_type(width, scale)));
 		case PhysicalType::INT64:
-			scalar_value = dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type(width, scale)));
-			return scalar_value;
-		default:
-			scalar_value = dataset_scalar(scalar(constant.GetValue<hugeint_t>(), date_type(width, scale)));
-			return scalar_value;
+			return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type(width, scale)));
+		default: {
+			auto hugeint_value = constant.GetValue<hugeint_t>();
+			auto hugeint_value_py = py::cast(hugeint_value.upper);
+			hugeint_value_py = hugeint_value_py.attr("__mul__")(NumericLimits<uint64_t>::Maximum());
+			hugeint_value_py = hugeint_value_py.attr("__add__")(hugeint_value.lower);
+			return dataset_scalar(scalar(hugeint_value_py, date_type(width, scale)));
+		}
 		}
 	}
 	default:

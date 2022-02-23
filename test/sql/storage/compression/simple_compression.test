@@ -1,0 +1,35 @@
+# name: test/sql/storage/compression/simple_compression.test
+# description: Test storage with multiple compression schemes
+# group: [compression]
+
+# load the DB from disk
+load __TEST_DIR__/test_compression_simple.db
+
+foreach compression <compression>
+
+statement ok
+PRAGMA force_compression = '${compression}'
+
+# simple compression with few values
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (11, 22), (12, 21), (NULL, NULL)
+
+query II
+SELECT SUM(a), SUM(b) FROM test
+----
+34	65
+
+restart
+
+query II
+SELECT SUM(a), SUM(b) FROM test
+----
+34	65
+
+statement ok
+DROP TABLE test
+
+endloop

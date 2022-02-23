@@ -1,3 +1,4 @@
+#define DUCKDB_EXTENSION_MAIN
 #include "fts-extension.hpp"
 #include "fts_indexing.hpp"
 #include "libstemmer.h"
@@ -74,4 +75,19 @@ void FTSExtension::Load(DuckDB &db) {
 	conn.Commit();
 }
 
+std::string FTSExtension::Name() {
+	return "fts";
+}
+
 } // namespace duckdb
+
+extern "C" {
+DUCKDB_EXTENSION_API void fts_init(duckdb::DatabaseInstance &db) {
+	duckdb::DuckDB db_wrapper(db);
+	db_wrapper.LoadExtension<duckdb::FTSExtension>();
+}
+
+DUCKDB_EXTENSION_API const char *fts_version() {
+	return duckdb::DuckDB::LibraryVersion();
+}
+}

@@ -220,3 +220,9 @@ SELECT substring(s, -2147483647, -2147483647) FROM strings
 (empty)
 (empty)
 NULL
+
+# Issue #2553 - accept BIGINT arguments
+query I
+SELECT SUBSTR('abc', INSTR('abc', 'b'));
+----
+bc

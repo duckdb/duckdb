@@ -35,11 +35,11 @@ idx_t Node16::GetChildGreaterEqual(uint8_t k, bool &equal) {
 }
 
 idx_t Node16::GetNextPos(idx_t pos) {
-	if (pos == INVALID_INDEX) {
+	if (pos == DConstants::INVALID_INDEX) {
 		return 0;
 	}
 	pos++;
-	return pos < count ? pos : INVALID_INDEX;
+	return pos < count ? pos : DConstants::INVALID_INDEX;
 }
 
 unique_ptr<Node> *Node16::GetChild(idx_t pos) {

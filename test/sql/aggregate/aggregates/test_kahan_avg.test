@@ -1,0 +1,15 @@
+# name: test/sql/aggregate/aggregates/test_kahan_avg.test
+# description: Test averages in which the intermediate sums are not exact
+# group: [aggregates]
+
+statement ok
+CREATE TABLE doubles(n DOUBLE);
+
+statement ok
+INSERT INTO doubles (n) VALUES ('9007199254740992'::DOUBLE), (1::DOUBLE), (1::DOUBLE), (0::DOUBLE);
+
+# this would give the wrong result with a simple sum-and-divide
+query R
+SELECT FAVG(n) - '2251799813685248.5'::DOUBLE FROM doubles;
+----
+0

@@ -5,6 +5,16 @@
 
 namespace duckdb {
 
+ExceptionFormatValue::ExceptionFormatValue(double dbl_val)
+    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_DOUBLE), dbl_val(dbl_val) {
+}
+ExceptionFormatValue::ExceptionFormatValue(int64_t int_val)
+    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), int_val(int_val) {
+}
+ExceptionFormatValue::ExceptionFormatValue(string str_val)
+    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(move(str_val)) {
+}
+
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value) {
 	return ExceptionFormatValue(TypeIdToString(value));

@@ -1,7 +1,7 @@
 #include "duckdb/common/types.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
@@ -12,6 +12,9 @@
 
 #include <cmath>
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
 
@@ -24,6 +27,14 @@ LogicalType::LogicalType(LogicalTypeId id) : id_(id) {
 LogicalType::LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info_p)
     : id_(id), type_info_(move(type_info_p)) {
 	physical_type_ = GetInternalType();
+}
+
+LogicalType::LogicalType(const LogicalType &other)
+    : id_(other.id_), physical_type_(other.physical_type_), type_info_(other.type_info_) {
+}
+
+LogicalType::LogicalType(LogicalType &&other) noexcept
+    : id_(other.id_), physical_type_(other.physical_type_), type_info_(move(other.type_info_)) {
 }
 
 hash_t LogicalType::Hash() const {
@@ -54,6 +65,8 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return PhysicalType::INT64;
 	case LogicalTypeId::UBIGINT:
 		return PhysicalType::UINT64;
@@ -110,16 +123,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::ENUM: {
 		D_ASSERT(type_info_);
 		auto size = EnumType::GetSize(*this);
-		if (size <= NumericLimits<uint8_t>::Maximum()) {
-			return PhysicalType::UINT8;
-		} else if (size <= NumericLimits<uint16_t>::Maximum()) {
-			return PhysicalType::UINT16;
-		} else if (size <= NumericLimits<uint32_t>::Maximum()) {
-			return PhysicalType::UINT32;
-		} else {
-			throw InternalException("Enum size must be lower than " +
-			                        std::to_string(NumericLimits<uint32_t>::Maximum()));
-		}
+		return EnumType::GetPhysicalType(size);
 	}
 	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
@@ -133,60 +137,74 @@ PhysicalType LogicalType::GetInternalType() {
 	}
 }
 
-const LogicalType LogicalType::INVALID = LogicalType(LogicalTypeId::INVALID);
-const LogicalType LogicalType::SQLNULL = LogicalType(LogicalTypeId::SQLNULL);
-const LogicalType LogicalType::BOOLEAN = LogicalType(LogicalTypeId::BOOLEAN);
-const LogicalType LogicalType::TINYINT = LogicalType(LogicalTypeId::TINYINT);
-const LogicalType LogicalType::UTINYINT = LogicalType(LogicalTypeId::UTINYINT);
-const LogicalType LogicalType::SMALLINT = LogicalType(LogicalTypeId::SMALLINT);
-const LogicalType LogicalType::USMALLINT = LogicalType(LogicalTypeId::USMALLINT);
-const LogicalType LogicalType::INTEGER = LogicalType(LogicalTypeId::INTEGER);
-const LogicalType LogicalType::UINTEGER = LogicalType(LogicalTypeId::UINTEGER);
-const LogicalType LogicalType::BIGINT = LogicalType(LogicalTypeId::BIGINT);
-const LogicalType LogicalType::UBIGINT = LogicalType(LogicalTypeId::UBIGINT);
-const LogicalType LogicalType::HUGEINT = LogicalType(LogicalTypeId::HUGEINT);
-const LogicalType LogicalType::UUID = LogicalType(LogicalTypeId::UUID);
-const LogicalType LogicalType::FLOAT = LogicalType(LogicalTypeId::FLOAT);
-const LogicalType LogicalType::DOUBLE = LogicalType(LogicalTypeId::DOUBLE);
-const LogicalType LogicalType::DATE = LogicalType(LogicalTypeId::DATE);
+constexpr const LogicalTypeId LogicalType::INVALID;
+constexpr const LogicalTypeId LogicalType::SQLNULL;
+constexpr const LogicalTypeId LogicalType::BOOLEAN;
+constexpr const LogicalTypeId LogicalType::TINYINT;
+constexpr const LogicalTypeId LogicalType::UTINYINT;
+constexpr const LogicalTypeId LogicalType::SMALLINT;
+constexpr const LogicalTypeId LogicalType::USMALLINT;
+constexpr const LogicalTypeId LogicalType::INTEGER;
+constexpr const LogicalTypeId LogicalType::UINTEGER;
+constexpr const LogicalTypeId LogicalType::BIGINT;
+constexpr const LogicalTypeId LogicalType::UBIGINT;
+constexpr const LogicalTypeId LogicalType::HUGEINT;
+constexpr const LogicalTypeId LogicalType::UUID;
+constexpr const LogicalTypeId LogicalType::FLOAT;
+constexpr const LogicalTypeId LogicalType::DOUBLE;
+constexpr const LogicalTypeId LogicalType::DATE;
 
-const LogicalType LogicalType::TIMESTAMP = LogicalType(LogicalTypeId::TIMESTAMP);
-const LogicalType LogicalType::TIMESTAMP_MS = LogicalType(LogicalTypeId::TIMESTAMP_MS);
-const LogicalType LogicalType::TIMESTAMP_NS = LogicalType(LogicalTypeId::TIMESTAMP_NS);
-const LogicalType LogicalType::TIMESTAMP_S = LogicalType(LogicalTypeId::TIMESTAMP_SEC);
+constexpr const LogicalTypeId LogicalType::TIMESTAMP;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_MS;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_NS;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_S;
 
-const LogicalType LogicalType::TIME = LogicalType(LogicalTypeId::TIME);
-const LogicalType LogicalType::HASH = LogicalType(LogicalTypeId::HASH);
-const LogicalType LogicalType::POINTER = LogicalType(LogicalTypeId::POINTER);
+constexpr const LogicalTypeId LogicalType::TIME;
 
-const LogicalType LogicalType::VARCHAR = LogicalType(LogicalTypeId::VARCHAR);
+constexpr const LogicalTypeId LogicalType::TIME_TZ;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_TZ;
 
-const LogicalType LogicalType::BLOB = LogicalType(LogicalTypeId::BLOB);
-const LogicalType LogicalType::INTERVAL = LogicalType(LogicalTypeId::INTERVAL);
+constexpr const LogicalTypeId LogicalType::HASH;
+constexpr const LogicalTypeId LogicalType::POINTER;
+
+constexpr const LogicalTypeId LogicalType::VARCHAR;
+
+constexpr const LogicalTypeId LogicalType::BLOB;
+constexpr const LogicalTypeId LogicalType::INTERVAL;
+constexpr const LogicalTypeId LogicalType::ROW_TYPE;
 
 // TODO these are incomplete and should maybe not exist as such
-const LogicalType LogicalType::TABLE = LogicalType(LogicalTypeId::TABLE);
+constexpr const LogicalTypeId LogicalType::TABLE;
 
-const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
+constexpr const LogicalTypeId LogicalType::ANY;
 
-const vector<LogicalType> LogicalType::NUMERIC = {LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
-                                                  LogicalType::BIGINT,    LogicalType::HUGEINT,   LogicalType::FLOAT,
-                                                  LogicalType::DOUBLE,    LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
-                                                  LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT};
+const vector<LogicalType> LogicalType::Numeric() {
+	vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
+	                             LogicalType::BIGINT,    LogicalType::HUGEINT,   LogicalType::FLOAT,
+	                             LogicalType::DOUBLE,    LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
+	                             LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT};
+	return types;
+}
 
-const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,
-                                                   LogicalType::BIGINT,    LogicalType::HUGEINT,  LogicalType::UTINYINT,
-                                                   LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
+const vector<LogicalType> LogicalType::Integral() {
+	vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,
+	                             LogicalType::BIGINT,    LogicalType::HUGEINT,  LogicalType::UTINYINT,
+	                             LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
+	return types;
+}
 
-const vector<LogicalType> LogicalType::ALL_TYPES = {
-    LogicalType::BOOLEAN,  LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
-    LogicalType::BIGINT,   LogicalType::DATE,      LogicalType::TIMESTAMP, LogicalType::DOUBLE,
-    LogicalType::FLOAT,    LogicalType::VARCHAR,   LogicalType::BLOB,      LogicalType::INTERVAL,
-    LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,  LogicalType::USMALLINT,
-    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,      LogicalTypeId::LIST,
-    LogicalTypeId::STRUCT, LogicalTypeId::MAP,     LogicalType::UUID};
+const vector<LogicalType> LogicalType::AllTypes() {
+	vector<LogicalType> types = {
+	    LogicalType::BOOLEAN,  LogicalType::TINYINT,   LogicalType::SMALLINT,     LogicalType::INTEGER,
+	    LogicalType::BIGINT,   LogicalType::DATE,      LogicalType::TIMESTAMP,    LogicalType::DOUBLE,
+	    LogicalType::FLOAT,    LogicalType::VARCHAR,   LogicalType::BLOB,         LogicalType::INTERVAL,
+	    LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,     LogicalType::USMALLINT,
+	    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,         LogicalTypeId::LIST,
+	    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,
+	    LogicalType::UUID};
+	return types;
+}
 
-const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
 const PhysicalType ROW_TYPE = PhysicalType::INT64;
 
 // LCOV_EXCL_START
@@ -366,6 +384,10 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "TIMESTAMP (NS)";
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return "TIMESTAMP (SEC)";
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return "TIMESTAMP WITH TIME ZONE";
+	case LogicalTypeId::TIME_TZ:
+		return "TIME WITH TIME ZONE";
 	case LogicalTypeId::FLOAT:
 		return "FLOAT";
 	case LogicalTypeId::DOUBLE:
@@ -474,7 +496,7 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 	    lower_str == "integral" || lower_str == "int32") {
 		return LogicalTypeId::INTEGER;
 	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string" ||
-	           lower_str == "char") {
+	           lower_str == "char" || lower_str == "nvarchar") {
 		return LogicalTypeId::VARCHAR;
 	} else if (lower_str == "bytea" || lower_str == "blob" || lower_str == "varbinary" || lower_str == "binary") {
 		return LogicalTypeId::BLOB;
@@ -493,11 +515,11 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		return LogicalTypeId::TIMESTAMP_SEC;
 	} else if (lower_str == "bool" || lower_str == "boolean" || lower_str == "logical") {
 		return LogicalTypeId::BOOLEAN;
-	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
-		return LogicalTypeId::FLOAT;
 	} else if (lower_str == "decimal" || lower_str == "dec" || lower_str == "numeric") {
 		return LogicalTypeId::DECIMAL;
-	} else if (lower_str == "double" || lower_str == "float8" || lower_str == "decimal") {
+	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
+		return LogicalTypeId::FLOAT;
+	} else if (lower_str == "double" || lower_str == "float8") {
 		return LogicalTypeId::DOUBLE;
 	} else if (lower_str == "tinyint" || lower_str == "int1") {
 		return LogicalTypeId::TINYINT;
@@ -523,6 +545,10 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		return LogicalTypeId::UINTEGER;
 	} else if (lower_str == "ubigint" || lower_str == "uint64") {
 		return LogicalTypeId::UBIGINT;
+	} else if (lower_str == "timestamptz") {
+		return LogicalTypeId::TIMESTAMP_TZ;
+	} else if (lower_str == "timetz") {
+		return LogicalTypeId::TIME_TZ;
 	} else {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder
@@ -639,23 +665,29 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 	} else if (right.id() < left.id()) {
 		return left;
 	} else {
-		if (left.id() == LogicalTypeId::VARCHAR) {
+		// Since both left and right are equal we get the left type as our type_id for checks
+		auto type_id = left.id();
+		if (type_id == LogicalTypeId::ENUM) {
+			// If both types are different ENUMs we do a string comparison.
+			return left == right ? left : LogicalType::VARCHAR;
+		}
+		if (type_id == LogicalTypeId::VARCHAR) {
 			// varchar: use type that has collation (if any)
 			if (StringType::GetCollation(right).empty()) {
 				return left;
 			} else {
 				return right;
 			}
-		} else if (left.id() == LogicalTypeId::DECIMAL) {
+		} else if (type_id == LogicalTypeId::DECIMAL) {
 			// use max width/scale of the two types
 			auto width = MaxValue<uint8_t>(DecimalType::GetWidth(left), DecimalType::GetWidth(right));
 			auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
 			return LogicalType::DECIMAL(width, scale);
-		} else if (left.id() == LogicalTypeId::LIST) {
+		} else if (type_id == LogicalTypeId::LIST) {
 			// list: perform max recursively on child type
 			auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
 			return LogicalType::LIST(move(new_child));
-		} else if (left.id() == LogicalTypeId::STRUCT) {
+		} else if (type_id == LogicalTypeId::STRUCT) {
 			// struct: perform recursively
 			auto &left_child_types = StructType::GetChildTypes(left);
 			auto &right_child_types = StructType::GetChildTypes(right);
@@ -718,13 +750,13 @@ struct ExtraTypeInfo {
 	ExtraTypeInfoType type;
 
 public:
-	virtual bool Equals(ExtraTypeInfo *other) = 0;
+	virtual bool Equals(ExtraTypeInfo *other) const = 0;
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
-	virtual void Serialize(Serializer &serializer) const = 0;
+	virtual void Serialize(FieldWriter &writer) const = 0;
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
-	static void Serialize(ExtraTypeInfo *info, Serializer &serializer);
+	static void Serialize(ExtraTypeInfo *info, FieldWriter &writer);
 	//! Deserializes a blob back into an ExtraTypeInfo
-	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
 };
 
 //===--------------------------------------------------------------------===//
@@ -739,7 +771,7 @@ struct DecimalTypeInfo : public ExtraTypeInfo {
 	uint8_t scale;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) override {
+	bool Equals(ExtraTypeInfo *other_p) const override {
 		if (!other_p) {
 			return false;
 		}
@@ -750,14 +782,14 @@ public:
 		return width == other.width && scale == other.scale;
 	}
 
-	void Serialize(Serializer &serializer) const override {
-		serializer.Write<uint8_t>(width);
-		serializer.Write<uint8_t>(scale);
+	void Serialize(FieldWriter &writer) const override {
+		writer.WriteField<uint8_t>(width);
+		writer.WriteField<uint8_t>(scale);
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
-		auto width = source.Read<uint8_t>();
-		auto scale = source.Read<uint8_t>();
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
+		auto width = reader.ReadRequired<uint8_t>();
+		auto scale = reader.ReadRequired<uint8_t>();
 		return make_shared<DecimalTypeInfo>(width, scale);
 	}
 };
@@ -792,17 +824,17 @@ struct StringTypeInfo : public ExtraTypeInfo {
 	string collation;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) override {
+	bool Equals(ExtraTypeInfo *other_p) const override {
 		// collation info has no impact on equality
 		return true;
 	}
 
-	void Serialize(Serializer &serializer) const override {
-		serializer.WriteString(collation);
+	void Serialize(FieldWriter &writer) const override {
+		writer.WriteString(collation);
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
-		auto collation = source.Read<string>();
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
+		auto collation = reader.ReadRequired<string>();
 		return make_shared<StringTypeInfo>(move(collation));
 	}
 };
@@ -834,7 +866,7 @@ struct ListTypeInfo : public ExtraTypeInfo {
 	LogicalType child_type;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) override {
+	bool Equals(ExtraTypeInfo *other_p) const override {
 		if (!other_p) {
 			return false;
 		}
@@ -845,12 +877,12 @@ public:
 		return child_type == other.child_type;
 	}
 
-	void Serialize(Serializer &serializer) const override {
-		child_type.Serialize(serializer);
+	void Serialize(FieldWriter &writer) const override {
+		writer.WriteSerializable(child_type);
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
-		auto child_type = LogicalType::Deserialize(source);
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
+		auto child_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 		return make_shared<ListTypeInfo>(move(child_type));
 	}
 };
@@ -878,7 +910,7 @@ struct StructTypeInfo : public ExtraTypeInfo {
 	child_list_t<LogicalType> child_types;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) override {
+	bool Equals(ExtraTypeInfo *other_p) const override {
 		if (!other_p) {
 			return false;
 		}
@@ -889,17 +921,19 @@ public:
 		return child_types == other.child_types;
 	}
 
-	void Serialize(Serializer &serializer) const override {
-		serializer.Write<uint32_t>(child_types.size());
+	void Serialize(FieldWriter &writer) const override {
+		writer.WriteField<uint32_t>(child_types.size());
+		auto &serializer = writer.GetSerializer();
 		for (idx_t i = 0; i < child_types.size(); i++) {
 			serializer.WriteString(child_types[i].first);
 			child_types[i].second.Serialize(serializer);
 		}
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		child_list_t<LogicalType> child_list;
-		auto child_types_size = source.Read<uint32_t>();
+		auto child_types_size = reader.ReadRequired<uint32_t>();
+		auto &source = reader.GetSource();
 		for (uint32_t i = 0; i < child_types_size; i++) {
 			auto name = source.Read<string>();
 			auto type = LogicalType::Deserialize(source);
@@ -937,9 +971,29 @@ LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	return LogicalType(LogicalTypeId::STRUCT, move(info));
 }
 
+//===--------------------------------------------------------------------===//
+// Map Type
+//===--------------------------------------------------------------------===//
 LogicalType LogicalType::MAP(child_list_t<LogicalType> children) {
 	auto info = make_shared<StructTypeInfo>(move(children));
 	return LogicalType(LogicalTypeId::MAP, move(info));
+}
+
+LogicalType LogicalType::MAP(LogicalType key, LogicalType value) {
+	child_list_t<LogicalType> child_types;
+	child_types.push_back({"key", LogicalType::LIST(move(key))});
+	child_types.push_back({"value", LogicalType::LIST(move(value))});
+	return LogicalType::MAP(move(child_types));
+}
+
+const LogicalType &MapType::KeyType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::MAP);
+	return StructType::GetChildTypes(type)[0].second;
+}
+
+const LogicalType &MapType::ValueType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::MAP);
+	return StructType::GetChildTypes(type)[1].second;
 }
 
 //===--------------------------------------------------------------------===//
@@ -953,7 +1007,7 @@ struct UserTypeInfo : public ExtraTypeInfo {
 	string user_type_name;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) override {
+	bool Equals(ExtraTypeInfo *other_p) const override {
 		if (!other_p) {
 			return false;
 		}
@@ -964,12 +1018,12 @@ public:
 		return other.user_type_name == user_type_name;
 	}
 
-	void Serialize(Serializer &serializer) const override {
-		serializer.WriteString(user_type_name);
+	void Serialize(FieldWriter &writer) const override {
+		writer.WriteString(user_type_name);
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
-		auto enum_name = source.Read<string>();
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
+		auto enum_name = reader.ReadRequired<string>();
 		return make_shared<UserTypeInfo>(move(enum_name));
 	}
 };
@@ -990,15 +1044,18 @@ LogicalType LogicalType::USER(const string &user_type_name) {
 // Enum Type
 //===--------------------------------------------------------------------===//
 struct EnumTypeInfo : public ExtraTypeInfo {
-	explicit EnumTypeInfo(string enum_name_p, vector<string> values_insert_order_p)
+	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t size)
 	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), enum_name(move(enum_name_p)),
-	      values_insert_order(std::move(values_insert_order_p)) {
+	      values_insert_order(values_insert_order_p), size(size) {
 	}
 	string enum_name;
-	vector<string> values_insert_order;
+	Vector values_insert_order;
+	idx_t size;
+	TypeCatalogEntry *catalog_entry = nullptr;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) override {
+	// Equalities are only used in enums with different catalog entries
+	bool Equals(ExtraTypeInfo *other_p) const override {
 		if (!other_p) {
 			return false;
 		}
@@ -1006,30 +1063,44 @@ public:
 			return false;
 		}
 		auto &other = (EnumTypeInfo &)*other_p;
-		return other.enum_name == enum_name && other.values_insert_order == values_insert_order;
+
+		// We must check if both enums have the same size
+		if (other.size != size) {
+			return false;
+		}
+		auto other_vector_ptr = FlatVector::GetData<string_t>(other.values_insert_order);
+		auto this_vector_ptr = FlatVector::GetData<string_t>(values_insert_order);
+
+		// Now we must check if all strings are the same
+		for (idx_t i = 0; i < size; i++) {
+			if (!Equals::Operation(other_vector_ptr[i], this_vector_ptr[i])) {
+				return false;
+			}
+		}
+		return true;
 	}
 
-	void Serialize(Serializer &serializer) const override {
-		serializer.Write<uint32_t>(values_insert_order.size());
-		serializer.WriteString(enum_name);
-		serializer.WriteStringVector(values_insert_order);
+	void Serialize(FieldWriter &writer) const override {
+		writer.WriteField<uint32_t>(size);
+		writer.WriteString(enum_name);
+		((Vector &)values_insert_order).Serialize(size, writer.GetSerializer());
 	}
 };
 
 template <class T>
 struct EnumTypeInfoTemplated : public EnumTypeInfo {
-	explicit EnumTypeInfoTemplated(const string &enum_name_p, const vector<string> &values_insert_order_p)
-	    : EnumTypeInfo(enum_name_p, values_insert_order_p) {
-		idx_t count = 0;
-		for (auto &value : values_insert_order) {
-			values[value] = count++;
+	explicit EnumTypeInfoTemplated(const string &enum_name_p, Vector &values_insert_order_p, idx_t size_p)
+	    : EnumTypeInfo(enum_name_p, values_insert_order_p, size_p) {
+		for (idx_t count = 0; count < size_p; count++) {
+			values[values_insert_order_p.GetValue(count).ToString()] = count;
 		}
 	}
-	static shared_ptr<EnumTypeInfoTemplated> Deserialize(Deserializer &source) {
-		auto enum_name = source.Read<string>();
-		vector<string> values_insert_order;
-		source.ReadStringVector(values_insert_order);
-		return make_shared<EnumTypeInfoTemplated>(move(enum_name), move(values_insert_order));
+
+	static shared_ptr<EnumTypeInfoTemplated> Deserialize(FieldReader &reader, uint32_t size) {
+		auto enum_name = reader.ReadRequired<string>();
+		Vector values_insert_order(LogicalType::VARCHAR, size);
+		values_insert_order.Deserialize(size, reader.GetSource());
+		return make_shared<EnumTypeInfoTemplated>(move(enum_name), values_insert_order, size);
 	}
 	unordered_map<string, T> values;
 };
@@ -1041,20 +1112,23 @@ const string &EnumType::GetTypeName(const LogicalType &type) {
 	return ((EnumTypeInfo &)*info).enum_name;
 }
 
-LogicalType LogicalType::ENUM(const string &enum_name, const vector<string> &ordered_data) {
-	auto size = ordered_data.size();
+LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx_t size) {
 	// Generate EnumTypeInfo
 	shared_ptr<ExtraTypeInfo> info;
-	if (size <= NumericLimits<uint8_t>::Maximum()) {
-		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(enum_name, ordered_data);
-	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
-		info = make_shared<EnumTypeInfoTemplated<uint16_t>>(enum_name, ordered_data);
-	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
-		info = make_shared<EnumTypeInfoTemplated<uint32_t>>(enum_name, ordered_data);
-	} else {
-		throw InternalException("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
+	auto enum_internal_type = EnumType::GetPhysicalType(size);
+	switch (enum_internal_type) {
+	case PhysicalType::UINT8:
+		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(enum_name, ordered_data, size);
+		break;
+	case PhysicalType::UINT16:
+		info = make_shared<EnumTypeInfoTemplated<uint16_t>>(enum_name, ordered_data, size);
+		break;
+	case PhysicalType::UINT32:
+		info = make_shared<EnumTypeInfoTemplated<uint32_t>>(enum_name, ordered_data, size);
+		break;
+	default:
+		throw InternalException("Invalid Physical Type for ENUMs");
 	}
-
 	// Generate Actual Enum Type
 	return LogicalType(LogicalTypeId::ENUM, info);
 }
@@ -1081,13 +1155,13 @@ int64_t EnumType::GetPos(const LogicalType &type, const string &key) {
 	}
 }
 
-const string &EnumType::GetValue(const Value &val) {
+const string EnumType::GetValue(const Value &val) {
 	auto info = val.type().AuxInfo();
-	vector<string> &values_insert_order = ((EnumTypeInfo &)*info).values_insert_order;
-	return values_insert_order[val.value_.utinyint];
+	auto &values_insert_order = ((EnumTypeInfo &)*info).values_insert_order;
+	return StringValue::Get(values_insert_order.GetValue(val.GetValue<uint32_t>()));
 }
 
-const vector<string> &EnumType::GetValuesInsertOrder(const LogicalType &type) {
+Vector &EnumType::GetValuesInsertOrder(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
@@ -1098,46 +1172,72 @@ idx_t EnumType::GetSize(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).values_insert_order.size();
+	return ((EnumTypeInfo &)*info).size;
+}
+
+void EnumType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	((EnumTypeInfo &)*info).catalog_entry = catalog_entry;
+}
+TypeCatalogEntry *EnumType::GetCatalog(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((EnumTypeInfo &)*info).catalog_entry;
+}
+
+PhysicalType EnumType::GetPhysicalType(idx_t size) {
+	if (size <= NumericLimits<uint8_t>::Maximum()) {
+		return PhysicalType::UINT8;
+	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
+		return PhysicalType::UINT16;
+	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
+		return PhysicalType::UINT32;
+	} else {
+		throw InternalException("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
+	}
 }
 
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
-void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, Serializer &serializer) {
+void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, FieldWriter &writer) {
 	if (!info) {
-		serializer.Write<ExtraTypeInfoType>(ExtraTypeInfoType::INVALID_TYPE_INFO);
+		writer.WriteField<ExtraTypeInfoType>(ExtraTypeInfoType::INVALID_TYPE_INFO);
 	} else {
-		serializer.Write<ExtraTypeInfoType>(info->type);
-		info->Serialize(serializer);
+		writer.WriteField<ExtraTypeInfoType>(info->type);
+		info->Serialize(writer);
 	}
 }
-shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &source) {
-	auto type = source.Read<ExtraTypeInfoType>();
+shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
+	auto type = reader.ReadRequired<ExtraTypeInfoType>();
 	switch (type) {
 	case ExtraTypeInfoType::INVALID_TYPE_INFO:
 		return nullptr;
 	case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
-		return DecimalTypeInfo::Deserialize(source);
+		return DecimalTypeInfo::Deserialize(reader);
 	case ExtraTypeInfoType::STRING_TYPE_INFO:
-		return StringTypeInfo::Deserialize(source);
+		return StringTypeInfo::Deserialize(reader);
 	case ExtraTypeInfoType::LIST_TYPE_INFO:
-		return ListTypeInfo::Deserialize(source);
+		return ListTypeInfo::Deserialize(reader);
 	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
-		return StructTypeInfo::Deserialize(source);
+		return StructTypeInfo::Deserialize(reader);
 	case ExtraTypeInfoType::USER_TYPE_INFO:
-		return UserTypeInfo::Deserialize(source);
+		return UserTypeInfo::Deserialize(reader);
 	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
-		auto size = source.Read<uint32_t>();
-		if (size <= NumericLimits<uint8_t>::Maximum()) {
-			return EnumTypeInfoTemplated<uint8_t>::Deserialize(source);
-		} else if (size <= NumericLimits<uint16_t>::Maximum()) {
-			return EnumTypeInfoTemplated<uint16_t>::Deserialize(source);
-		} else if (size <= NumericLimits<uint32_t>::Maximum()) {
-			return EnumTypeInfoTemplated<uint32_t>::Deserialize(source);
-		} else {
-			throw InternalException("Enum size must be lower than " +
-			                        std::to_string(NumericLimits<uint32_t>::Maximum()));
+		auto enum_size = reader.ReadRequired<uint32_t>();
+		auto enum_internal_type = EnumType::GetPhysicalType(enum_size);
+		switch (enum_internal_type) {
+		case PhysicalType::UINT8:
+			return EnumTypeInfoTemplated<uint8_t>::Deserialize(reader, enum_size);
+		case PhysicalType::UINT16:
+			return EnumTypeInfoTemplated<uint16_t>::Deserialize(reader, enum_size);
+		case PhysicalType::UINT32:
+			return EnumTypeInfoTemplated<uint32_t>::Deserialize(reader, enum_size);
+		default:
+			throw InternalException("Invalid Physical Type for ENUMs");
 		}
 	}
 	default:
@@ -1154,13 +1254,18 @@ LogicalType::~LogicalType() {
 }
 
 void LogicalType::Serialize(Serializer &serializer) const {
-	serializer.Write<LogicalTypeId>(id_);
-	ExtraTypeInfo::Serialize(type_info_.get(), serializer);
+	FieldWriter writer(serializer);
+	writer.WriteField<LogicalTypeId>(id_);
+	ExtraTypeInfo::Serialize(type_info_.get(), writer);
+	writer.Finalize();
 }
 
 LogicalType LogicalType::Deserialize(Deserializer &source) {
-	auto id = source.Read<LogicalTypeId>();
-	auto info = ExtraTypeInfo::Deserialize(source);
+	FieldReader reader(source);
+	auto id = reader.ReadRequired<LogicalTypeId>();
+	auto info = ExtraTypeInfo::Deserialize(reader);
+	reader.Finalize();
+
 	return LogicalType(id, move(info));
 }
 

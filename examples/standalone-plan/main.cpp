@@ -201,19 +201,19 @@ struct MyBindData : public FunctionData {
 // k: 1, 10, 20
 // (see MyScanNode)
 static unique_ptr<FunctionData> MyScanBind(ClientContext &context, vector<Value> &inputs,
-                                           unordered_map<string, Value> &named_parameters,
+                                           named_parameter_map_t &named_parameters,
                                            vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                            vector<LogicalType> &return_types, vector<string> &names) {
 	auto table_name = inputs[0].ToString();
 	if (table_name == "mytable") {
 		names.emplace_back("i");
-		return_types.push_back(LogicalType::INTEGER);
+		return_types.emplace_back(LogicalType::INTEGER);
 
 		names.emplace_back("j");
-		return_types.push_back(LogicalType::INTEGER);
+		return_types.emplace_back(LogicalType::INTEGER);
 	} else if (table_name == "myothertable") {
 		names.emplace_back("k");
-		return_types.push_back(LogicalType::INTEGER);
+		return_types.emplace_back(LogicalType::INTEGER);
 	} else {
 		throw std::runtime_error("Unknown table " + table_name);
 	}

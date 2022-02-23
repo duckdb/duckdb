@@ -6,10 +6,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE intervals(i INTERVAL)
+CREATE TABLE intervals(i INTERVAL);
 
 statement ok
-INSERT INTO intervals VALUES ('2 years'), ('16 months'), ('42 days'), ('2066343400 microseconds'), (NULL)
+INSERT INTO intervals VALUES ('2 years'), ('16 months'), ('42 days'), ('2066343400 microseconds'), (NULL);
 
 # extract various parts of the intervals
 query I
@@ -93,8 +93,8 @@ SELECT EXTRACT(yearweek FROM i) FROM intervals
 query I
 SELECT EXTRACT(epoch FROM i) FROM intervals
 ----
-62208000
-41472000
+63115200
+41925600
 3628800
 2066
 NULL
@@ -105,7 +105,7 @@ SELECT EXTRACT(microsecond FROM i) FROM intervals
 0
 0
 0
-2066343400
+26343400
 NULL
 
 query I
@@ -114,7 +114,7 @@ SELECT EXTRACT(millisecond FROM i) FROM intervals
 0
 0
 0
-2066343
+26343
 NULL
 
 query I
@@ -123,7 +123,7 @@ SELECT EXTRACT(second FROM i) FROM intervals
 0
 0
 0
-2066
+26
 NULL
 
 query I

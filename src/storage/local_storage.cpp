@@ -13,9 +13,10 @@ namespace duckdb {
 
 LocalTableStorage::LocalTableStorage(DataTable &table) :
     table(table), deleted_rows(0) {
-	row_groups = make_shared<RowGroupCollection>(table.info, table.types, MAX_ROW_ID, 0);
+	auto types = table.GetTypes();
+	row_groups = make_shared<RowGroupCollection>(table.info, types, MAX_ROW_ID, 0);
 	row_groups->InitializeEmpty();
-	stats.InitializeEmpty(table.types);
+	stats.InitializeEmpty(types);
 	table.info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.type == IndexType::ART);
 		auto &art = (ART &)index;
@@ -50,7 +51,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, ColumnDefinition &new_column, Expression *default_value) :
 	table(new_dt), deleted_rows(parent.deleted_rows) {
-	idx_t new_column_idx = parent.table.types.size();
+	idx_t new_column_idx = parent.table.column_definitions.size();
 	stats.InitializeAddColumn(parent.stats, new_column.type);
 	row_groups = parent.row_groups->AddColumn(new_column, default_value, stats.GetStats(new_column_idx));
 	parent.row_groups.reset();
@@ -171,12 +172,12 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column
 template <class T>
 bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun) {
 	vector<column_t> column_ids;
-	for (idx_t i = 0; i < table.types.size(); i++) {
+	for (idx_t i = 0; i < table.column_definitions.size(); i++) {
 		column_ids.push_back(i);
 	}
 
 	DataChunk chunk;
-	chunk.Initialize(table.types);
+	chunk.Initialize(table.GetTypes());
 
 	// initialize the scan
 	TableScanState state;

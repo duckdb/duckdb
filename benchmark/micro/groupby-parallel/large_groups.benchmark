@@ -1,6 +1,6 @@
-# name: benchmark/micro/groupby-parallel/tiny_groups.benchmark
+# name: benchmark/micro/groupby-parallel/large_groups.benchmark
 # description: Aggregation with large group count
-# group: [groupby]
+# group: [groupby-parallel]
 
 name Grouped Aggregate (L, 1000000 groups)
 group aggregate

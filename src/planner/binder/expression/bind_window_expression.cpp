@@ -195,7 +195,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		// bind the aggregate
 		string error;
 		auto best_function = Function::BindFunction(func->name, func->functions, types, error);
-		if (best_function == INVALID_INDEX) {
+		if (best_function == DConstants::INVALID_INDEX) {
 			throw BinderException(binder.FormatError(window, error));
 		}
 		// found a matching function! bind it as an aggregate
@@ -215,6 +215,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	for (auto &child : window.partitions) {
 		result->partitions.push_back(GetExpression(child));
 	}
+	result->ignore_nulls = window.ignore_nulls;
 
 	// Convert RANGE boundary expressions to ORDER +/- expressions.
 	// Note that PRECEEDING and FOLLOWING refer to the sequential order in the frame,
@@ -222,7 +223,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	// for ORDER BY DESC.
 	auto &config = DBConfig::GetConfig(context);
 	auto range_sense = OrderType::INVALID;
-	auto start_type = LogicalType::BIGINT;
+	LogicalType start_type = LogicalType::BIGINT;
 	if (window.start == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
 		range_sense = ResolveOrderType(config, window.orders[0].type);
@@ -235,7 +236,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		start_type = BindRangeExpression(context, name, window.start_expr, window.orders[0].expression);
 	}
 
-	auto end_type = LogicalType::BIGINT;
+	LogicalType end_type = LogicalType::BIGINT;
 	if (window.end == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
 		range_sense = ResolveOrderType(config, window.orders[0].type);

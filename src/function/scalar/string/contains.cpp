@@ -11,7 +11,7 @@ static idx_t ContainsUnaligned(const unsigned char *haystack, idx_t haystack_siz
                                idx_t base_offset) {
 	if (NEEDLE_SIZE > haystack_size) {
 		// needle is bigger than haystack: haystack cannot contain needle
-		return INVALID_INDEX;
+		return DConstants::INVALID_INDEX;
 	}
 	// contains for a small unaligned needle (3/5/6/7 bytes)
 	// we perform unsigned integer comparisons to check for equality of the entire needle in a single comparison
@@ -42,7 +42,7 @@ static idx_t ContainsUnaligned(const unsigned char *haystack, idx_t haystack_siz
 	if (haystack_entry == needle_entry) {
 		return base_offset + haystack_size - NEEDLE_SIZE;
 	}
-	return INVALID_INDEX;
+	return DConstants::INVALID_INDEX;
 }
 
 template <class UNSIGNED>
@@ -50,7 +50,7 @@ static idx_t ContainsAligned(const unsigned char *haystack, idx_t haystack_size,
                              idx_t base_offset) {
 	if (sizeof(UNSIGNED) > haystack_size) {
 		// needle is bigger than haystack: haystack cannot contain needle
-		return INVALID_INDEX;
+		return DConstants::INVALID_INDEX;
 	}
 	// contains for a small needle aligned with unsigned integer (2/4/8)
 	// similar to ContainsUnaligned, but simpler because we only need to do a reinterpret cast
@@ -62,14 +62,14 @@ static idx_t ContainsAligned(const unsigned char *haystack, idx_t haystack_size,
 			return base_offset + offset;
 		}
 	}
-	return INVALID_INDEX;
+	return DConstants::INVALID_INDEX;
 }
 
 idx_t ContainsGeneric(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle,
                       idx_t needle_size, idx_t base_offset) {
 	if (needle_size > haystack_size) {
 		// needle is bigger than haystack: haystack cannot contain needle
-		return INVALID_INDEX;
+		return DConstants::INVALID_INDEX;
 	}
 	// this implementation is inspired by Raphael Javaux's faststrstr (https://github.com/RaphaelJ/fast_strstr)
 	// generic contains; note that we can't use strstr because we don't have null-terminated strings anymore
@@ -90,7 +90,7 @@ idx_t ContainsGeneric(const unsigned char *haystack, idx_t haystack_size, const 
 			}
 		}
 		if (offset >= haystack_size - needle_size) {
-			return INVALID_INDEX;
+			return DConstants::INVALID_INDEX;
 		}
 		sums_diff -= haystack[offset];
 		sums_diff += haystack[offset + needle_size];
@@ -104,7 +104,7 @@ idx_t ContainsFun::Find(const unsigned char *haystack, idx_t haystack_size, cons
 	// start off by performing a memchr to find the first character of the
 	auto location = memchr(haystack, needle[0], haystack_size);
 	if (location == nullptr) {
-		return INVALID_INDEX;
+		return DConstants::INVALID_INDEX;
 	}
 	idx_t base_offset = (const unsigned char *)location - haystack;
 	haystack_size -= base_offset;
@@ -147,7 +147,7 @@ idx_t ContainsFun::Find(const string_t &haystack_s, const string_t &needle_s) {
 struct ContainsOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {
-		return ContainsFun::Find(left, right) != INVALID_INDEX;
+		return ContainsFun::Find(left, right) != DConstants::INVALID_INDEX;
 	}
 };
 

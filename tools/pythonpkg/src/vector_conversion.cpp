@@ -191,9 +191,9 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		auto src_ptr = (PyObject **)numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
 		auto &out_mask = FlatVector::Validity(out);
+		unique_ptr<PythonGILWrapper> gil;
 		for (idx_t row = 0; row < count; row++) {
 			auto source_idx = offset + row;
-			py::str str_val;
 			PyObject *val = src_ptr[source_idx];
 			if (bind_data.pandas_type == PandasType::OBJECT && !PyUnicode_CheckExact(val)) {
 				if (val == Py_None) {
@@ -204,9 +204,18 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 					out_mask.SetInvalid(row);
 					continue;
 				}
-				py::handle object_handle = val;
-				str_val = py::str(object_handle);
-				val = str_val.ptr();
+				if (!py::isinstance<py::str>(val)) {
+					if (!gil) {
+						gil = bind_data.object_str_val.GetLock();
+					}
+					bind_data.object_str_val.AssignInternal<PyObject>(
+					    [](py::str &obj, PyObject &new_val) {
+						    py::handle object_handle = &new_val;
+						    obj = py::str(object_handle);
+					    },
+					    *val, *gil);
+					val = (PyObject *)bind_data.object_str_val.GetPointerTop()->ptr();
+				}
 			}
 			// Python 3 string representation:
 			// https://github.com/python/cpython/blob/3a8fdb28794b2f19f6c8464378fb8b46bce1f5f4/Include/cpython/unicodeobject.h#L79
@@ -387,8 +396,14 @@ void VectorConversion::BindPandas(py::handle original_df, vector<PandasColumnBin
 					bind_data.pandas_type = PandasType::CATEGORY;
 					auto enum_name = string(py::str(df_columns[col_idx]));
 					vector<string> enum_entries = py::cast<vector<string>>(categories);
+					idx_t size = enum_entries.size();
+					Vector enum_entries_vec(LogicalType::VARCHAR, size);
+					auto enum_entries_ptr = FlatVector::GetData<string_t>(enum_entries_vec);
+					for (idx_t i = 0; i < size; i++) {
+						enum_entries_ptr[i] = StringVector::AddStringOrBlob(enum_entries_vec, enum_entries[i]);
+					}
 					D_ASSERT(py::hasattr(column.attr("cat"), "codes"));
-					duckdb_col_type = LogicalType::ENUM(enum_name, enum_entries);
+					duckdb_col_type = LogicalType::ENUM(enum_name, enum_entries_vec, size);
 					bind_data.numpy_col = py::array(column.attr("cat").attr("codes"));
 					bind_data.mask = nullptr;
 					D_ASSERT(py::hasattr(bind_data.numpy_col, "dtype"));

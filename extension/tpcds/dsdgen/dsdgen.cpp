@@ -34,11 +34,8 @@ static void CreateTPCDSTable(ClientContext &context, string schema, string suffi
 		}
 		info->constraints.push_back(make_unique<UniqueConstraint>(move(pk_columns), true));
 	}
-	auto binder = Binder::CreateBinder(context);
-	auto bound_info = binder->BindCreateTableInfo(move(info));
 	auto &catalog = Catalog::GetCatalog(context);
-
-	catalog.CreateTable(context, bound_info.get());
+	catalog.CreateTable(context, move(info));
 }
 
 void DSDGenWrapper::CreateTPCDSSchema(ClientContext &context, string schema, string suffix, bool keys, bool overwrite) {

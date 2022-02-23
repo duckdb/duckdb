@@ -58,6 +58,10 @@ public:
 	string BindColumn(PositionalReferenceExpression &ref, string &table_name, string &column_name);
 	BindResult BindColumn(PositionalReferenceExpression &ref, idx_t depth);
 
+	unique_ptr<ParsedExpression> CreateColumnReference(const string &table_name, const string &column_name);
+	unique_ptr<ParsedExpression> CreateColumnReference(const string &schema_name, const string &table_name,
+	                                                   const string &column_name);
+
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a
 	//! selection list.
@@ -126,11 +130,12 @@ public:
 	//! Add all the bindings from a BindContext to this BindContext. The other BindContext is destroyed in the process.
 	void AddContext(BindContext other);
 
-private:
-	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
 	Binding *GetBinding(const string &name, string &out_error);
+
+private:
+	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 
 private:
 	//! The set of bindings

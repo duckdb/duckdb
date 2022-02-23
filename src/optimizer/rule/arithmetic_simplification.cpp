@@ -23,14 +23,14 @@ ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &r
 }
 
 unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                           bool &changes_made) {
+                                                           bool &changes_made, bool is_root) {
 	auto root = (BoundFunctionExpression *)bindings[0];
 	auto constant = (BoundConstantExpression *)bindings[1];
 	int constant_child = root->children[0].get() == constant ? 0 : 1;
 	D_ASSERT(root->children.size() == 2);
 	(void)root;
 	// any arithmetic operator involving NULL is always NULL
-	if (constant->value.is_null) {
+	if (constant->value.IsNull()) {
 		return make_unique<BoundConstantExpression>(Value(root->return_type));
 	}
 	auto &func_name = root->function.name;

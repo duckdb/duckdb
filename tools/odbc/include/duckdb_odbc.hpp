@@ -5,97 +5,30 @@
 #include "duckdb.hpp"
 
 #include "duckdb/common/windows.hpp"
+#include "descriptor.hpp"
 
-#include <sql.h>
 #include <sqltypes.h>
 #include <sqlext.h>
+#include <vector>
 
-extern "C" {
-// handles
-SQLRETURN SQLAllocHandle(SQLSMALLINT handle_type, SQLHANDLE input_handle, SQLHANDLE *output_handle_ptr);
-SQLRETURN SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle);
-
-// attributes
-SQLRETURN SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
-                            SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr);
-SQLRETURN SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
-                        SQLINTEGER string_length);
-SQLRETURN SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
-                            SQLINTEGER string_length);
-SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
-                         SQLINTEGER string_length);
-
-// connections
-SQLRETURN SQLDriverConnect(SQLHDBC connection_handle, SQLHWND window_handle, SQLCHAR *in_connection_string,
-                           SQLSMALLINT string_length1, SQLCHAR *out_connection_string, SQLSMALLINT buffer_length,
-                           SQLSMALLINT *string_length2_ptr, SQLUSMALLINT driver_completion);
-SQLRETURN SQLConnect(SQLHDBC connection_handle, SQLCHAR *server_name, SQLSMALLINT name_length1, SQLCHAR *user_name,
-                     SQLSMALLINT name_length2, SQLCHAR *authentication, SQLSMALLINT name_length3);
-
-SQLRETURN SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINTER info_value_ptr,
-                     SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr);
-SQLRETURN SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT completion_type);
-SQLRETURN SQLDisconnect(SQLHDBC connection_handle);
-
-// statements
-SQLRETURN SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1, SQLCHAR *schema_name,
-                    SQLSMALLINT name_length2, SQLCHAR *table_name, SQLSMALLINT name_length3, SQLCHAR *table_type,
-                    SQLSMALLINT name_length4);
-SQLRETURN SQLColumns(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1, SQLCHAR *schema_name,
-                     SQLSMALLINT name_length2, SQLCHAR *table_name, SQLSMALLINT name_length3, SQLCHAR *column_name,
-                     SQLSMALLINT name_length4);
-
-SQLRETURN SQLPrepare(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length);
-SQLRETURN SQLExecDirect(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length);
-SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option);
-SQLRETURN SQLDescribeParam(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number, SQLSMALLINT *data_type_ptr,
-                           SQLULEN *parameter_size_ptr, SQLSMALLINT *decimal_digits_ptr, SQLSMALLINT *nullable_ptr);
-SQLRETURN SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLCHAR *column_name,
-                         SQLSMALLINT buffer_length, SQLSMALLINT *name_length_ptr, SQLSMALLINT *data_type_ptr,
-                         SQLULEN *column_size_ptr, SQLSMALLINT *decimal_digits_ptr, SQLSMALLINT *nullable_ptr);
-SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLUSMALLINT field_identifier,
-                          SQLPOINTER character_attribute_ptr, SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr,
-                          SQLLEN *numeric_attribute_ptr);
-SQLRETURN SQLFetchScroll(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientation, SQLLEN fetch_offset);
-SQLRETURN SQLRowCount(SQLHSTMT statement_handle, SQLLEN *row_count_ptr);
-
-SQLRETURN SQLNumResultCols(SQLHSTMT statement_handle, SQLSMALLINT *column_count_ptr);
-
-SQLRETURN SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLSMALLINT target_type,
-                     SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr);
-
-SQLRETURN SQLPutData(SQLHSTMT statement_handle, SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr);
-
-SQLRETURN SQLCancel(SQLHSTMT statement_handle);
-
-SQLRETURN SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter_count_ptr);
-
-SQLRETURN SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_ptr);
-SQLRETURN SQLMoreResults(SQLHSTMT statement_handle);
-
-// diagnostics
-SQLRETURN SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number,
-                          SQLSMALLINT diag_identifier, SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length,
-                          SQLSMALLINT *string_length_ptr);
-SQLRETURN SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number, SQLCHAR *sql_state,
-                        SQLINTEGER *native_error_ptr, SQLCHAR *message_text, SQLSMALLINT buffer_length,
-                        SQLSMALLINT *text_length_ptr);
-
-// api info
-SQLRETURN SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function_id, SQLUSMALLINT *supported_ptr);
-SQLRETURN SQLGetTypeInfo(SQLHSTMT statement_handle, SQLSMALLINT data_type);
-
-} // extern "C"
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 
 namespace duckdb {
 
 class OdbcFetch;
-class ParameterWrapper;
+class ParameterDescriptor;
+class RowDescriptor;
 
-enum OdbcHandleType { ENV, DBC, STMT };
+enum OdbcHandleType { ENV, DBC, STMT, DESC };
+std::string OdbcHandleTypeToString(OdbcHandleType type);
+
 struct OdbcHandle {
 	explicit OdbcHandle(OdbcHandleType type_p) : type(type_p) {};
 	OdbcHandleType type;
+	// appending all error messages into it
+	std::vector<std::string> error_messages;
 };
 
 struct OdbcHandleEnv : public OdbcHandle {
@@ -104,8 +37,10 @@ struct OdbcHandleEnv : public OdbcHandle {
 };
 
 struct OdbcHandleStmt;
+struct OdbcHandleDesc;
 
 struct OdbcHandleDbc : public OdbcHandle {
+public:
 	explicit OdbcHandleDbc(OdbcHandleEnv *env_p) : OdbcHandle(OdbcHandleType::DBC), env(env_p), autocommit(true) {
 		D_ASSERT(env_p);
 		D_ASSERT(env_p->db);
@@ -113,12 +48,19 @@ struct OdbcHandleDbc : public OdbcHandle {
 	~OdbcHandleDbc();
 	void EraseStmtRef(OdbcHandleStmt *stmt);
 	SQLRETURN MaterializeResult();
+	void ResetStmtDescriptors(OdbcHandleDesc *old_desc);
 
+public:
 	OdbcHandleEnv *env;
 	unique_ptr<Connection> conn;
 	bool autocommit;
+	SQLUINTEGER sql_attr_metadata_id;
 	// reference to an open statement handled by this connection
 	std::vector<OdbcHandleStmt *> vec_stmt_ref;
+
+	// explicitly allocated Application Descriptors
+	OdbcHandleDesc *apd = nullptr;
+	OdbcHandleDesc *ard = nullptr;
 };
 
 inline bool IsSQLVariableLengthType(SQLSMALLINT type) {
@@ -149,37 +91,48 @@ struct OdbcBoundCol {
 };
 
 struct OdbcHandleStmt : public OdbcHandle {
+public:
 	explicit OdbcHandleStmt(OdbcHandleDbc *dbc_p);
 	~OdbcHandleStmt();
 	void Close();
 	SQLRETURN MaterializeResult();
+	void SetARD(OdbcHandleDesc *new_ard);
+	void SetAPD(OdbcHandleDesc *new_apd);
 
+public:
 	OdbcHandleDbc *dbc;
 	unique_ptr<PreparedStatement> stmt;
 	unique_ptr<QueryResult> res;
-	unique_ptr<ParameterWrapper> param_wrapper;
 	vector<OdbcBoundCol> bound_cols;
 	bool open;
 	SQLULEN *rows_fetched_ptr;
-	// appending all statement error messages into it
-	vector<std::string> error_messages;
+
 	// fetcher
 	unique_ptr<OdbcFetch> odbc_fetcher;
+
+	unique_ptr<ParameterDescriptor> param_desc;
+
+	unique_ptr<RowDescriptor> row_desc;
 };
 
-struct OdbcUtils {
-	static string ReadString(const SQLPOINTER ptr, const SQLSMALLINT len) {
-		return len == SQL_NTS ? string((const char *)ptr) : string((const char *)ptr, (size_t)len);
+struct OdbcHandleDesc : public OdbcHandle {
+	//! https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/descriptors?view=sql-server-ver15
+	// TODO requires full implmentation
+public:
+	explicit OdbcHandleDesc(OdbcHandleDbc *dbc_ptr) : OdbcHandle(OdbcHandleType::DESC), dbc(dbc_ptr) {
 	}
+	~OdbcHandleDesc() {
+	}
+	DescRecord *GetDescRecord(idx_t param_idx);
+	SQLRETURN SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field_identifier, SQLPOINTER value_ptr,
+	                       SQLINTEGER buffer_length);
+	void Clear();
+	void Reset();
 
-	static void WriteString(const string &s, SQLCHAR *out_buf, SQLSMALLINT buf_len, SQLSMALLINT *out_len) {
-		if (out_buf) {
-			snprintf((char *)out_buf, buf_len, "%s", s.c_str());
-		}
-		if (out_len) {
-			*out_len = s.size();
-		}
-	}
+public:
+	DescHeader header;
+	std::vector<DescRecord> records;
+	OdbcHandleDbc *dbc;
 };
 
 template <class T>

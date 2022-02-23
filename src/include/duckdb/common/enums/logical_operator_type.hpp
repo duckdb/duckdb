@@ -28,6 +28,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_COPY_TO_FILE = 10,
 	LOGICAL_DISTINCT = 11,
 	LOGICAL_SAMPLE = 12,
+	LOGICAL_LIMIT_PERCENT = 13,
 
 	// -----------------------------
 	// Data sources

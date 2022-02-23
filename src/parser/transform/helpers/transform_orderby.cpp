@@ -34,7 +34,7 @@ bool Transformer::TransformOrderBy(duckdb_libpgquery::PGList *order, vector<Orde
 			} else {
 				throw NotImplementedException("Unimplemented order by type");
 			}
-			auto order_expression = TransformExpression(target, 0);
+			auto order_expression = TransformExpression(target);
 			result.emplace_back(type, null_order, move(order_expression));
 		} else {
 			throw NotImplementedException("ORDER BY list member type %d\n", temp->type);

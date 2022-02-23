@@ -1,8 +1,9 @@
-#include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -50,6 +51,14 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 
 static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
+	D_ASSERT(bound_function.arguments.size() == 2);
+	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL ||
+	    arguments[1]->return_type.id() == LogicalTypeId::SQLNULL) {
+		bound_function.return_type = LogicalType::SQLNULL;
+		bound_function.arguments[0] = LogicalType::SQLNULL;
+		return make_unique<StructExtractBindData>("", 0, LogicalType::SQLNULL);
+	}
+	D_ASSERT(LogicalTypeId::STRUCT == arguments[0]->return_type.id());
 	auto &struct_children = StructType::GetChildTypes(arguments[0]->return_type);
 	if (struct_children.empty()) {
 		throw InternalException("Can't extract something from an empty struct");
@@ -59,14 +68,15 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 
 	if (key_child->return_type.id() != LogicalTypeId::VARCHAR ||
 	    key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
-		throw Exception("Key name for struct_extract needs to be a constant string");
+		throw BinderException("Key name for struct_extract needs to be a constant string");
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
-	if (key_val.is_null || key_val.str_value.length() < 1) {
-		throw Exception("Key name for struct_extract needs to be neither NULL nor empty");
+	auto &key_str = StringValue::Get(key_val);
+	if (key_val.IsNull() || key_str.empty()) {
+		throw BinderException("Key name for struct_extract needs to be neither NULL nor empty");
 	}
-	string key = StringUtil::Lower(key_val.str_value);
+	string key = StringUtil::Lower(key_str);
 
 	LogicalType return_type;
 	idx_t key_index = 0;
@@ -74,15 +84,23 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 
 	for (size_t i = 0; i < struct_children.size(); i++) {
 		auto &child = struct_children[i];
-		if (child.first == key) {
+		if (StringUtil::Lower(child.first) == key) {
 			found_key = true;
 			key_index = i;
 			return_type = child.second;
 			break;
 		}
 	}
+
 	if (!found_key) {
-		throw Exception("Could not find key in struct");
+		vector<string> candidates;
+		candidates.reserve(struct_children.size());
+		for (auto &struct_child : struct_children) {
+			candidates.push_back(struct_child.first);
+		}
+		auto closest_settings = StringUtil::TopNLevenshtein(candidates, key);
+		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");
+		throw BinderException("Could not find key \"%s\" in struct\n%s", key, message);
 	}
 
 	bound_function.return_type = return_type;

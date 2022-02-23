@@ -8,8 +8,38 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
+
+//! Class responsible to keep track of state when removing entries from the catalog.
+//! When deleting, many types of errors can be thrown, since we want to avoid try/catch blocks
+//! this class makes sure that whatever elements were modified are returned to a correct state
+//! when exceptions are thrown.
+//! The idea here is to use RAII (Resource acquisition is initialization) to mimic a try/catch/finally block.
+//! If any exception is raised when this object exists, then its destructor will be called
+//! and the entry will return to its previous state during deconstruction.
+class EntryDropper {
+public:
+	//! Both constructor and destructor are privates because they should only be called by DropEntryDependencies
+	explicit EntryDropper(CatalogSet &catalog_set, idx_t entry_index)
+	    : catalog_set(catalog_set), entry_index(entry_index) {
+		old_deleted = catalog_set.entries[entry_index].get()->deleted;
+	}
+
+	~EntryDropper() {
+		catalog_set.entries[entry_index].get()->deleted = old_deleted;
+	}
+
+private:
+	//! The current catalog_set
+	CatalogSet &catalog_set;
+	//! Keeps track of the state of the entry before starting the delete
+	bool old_deleted;
+	//! Index of entry to be deleted
+	idx_t entry_index;
+};
 
 CatalogSet::CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults)
     : catalog(catalog), defaults(move(defaults)) {
@@ -100,6 +130,23 @@ bool CatalogSet::GetEntryInternal(ClientContext &context, const string &name, id
 	return GetEntryInternal(context, entry_index, catalog_entry);
 }
 
+bool CatalogSet::AlterOwnership(ClientContext &context, ChangeOwnershipInfo *info) {
+	idx_t entry_index;
+	CatalogEntry *entry;
+	if (!GetEntryInternal(context, info->name, entry_index, entry)) {
+		return false;
+	}
+
+	auto owner_entry = catalog.GetEntry(context, info->owner_schema, info->owner_name);
+	if (!owner_entry) {
+		return false;
+	}
+
+	catalog.dependency_manager->AddOwnership(context, owner_entry, entry);
+
+	return true;
+}
+
 bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info) {
 	auto &transaction = Transaction::GetTransaction(context);
 	// lock the catalog for writing
@@ -127,6 +174,7 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 		// alter failed, but did not result in an error
 		return true;
 	}
+
 	if (value->name != original_name) {
 		auto mapping_value = GetMapping(context, value->name);
 		if (mapping_value && !mapping_value->deleted) {
@@ -160,16 +208,26 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	return true;
 }
 
-void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade,
-                                   set_lock_map_t &lock_set) {
-	auto &transaction = Transaction::GetTransaction(context);
-	// check any dependencies of this object
-	entry.catalog->dependency_manager->DropObject(context, &entry, cascade, lock_set);
+void CatalogSet::DropEntryDependencies(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade) {
 
-	// add this catalog to the lock set, if it is not there yet
-	if (lock_set.find(this) == lock_set.end()) {
-		lock_set.insert(make_pair(this, unique_lock<mutex>(catalog_lock)));
-	}
+	// Stores the deleted value of the entry before starting the process
+	EntryDropper dropper(*this, entry_index);
+
+	// To correctly delete the object and its dependencies, it temporarily is set to deleted.
+	entries[entry_index].get()->deleted = true;
+
+	// check any dependencies of this object
+	entry.catalog->dependency_manager->DropObject(context, &entry, cascade);
+
+	// dropper destructor is called here
+	// the destructor makes sure to return the value to the previous state
+	// dropper.~EntryDropper()
+}
+
+void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade) {
+	auto &transaction = Transaction::GetTransaction(context);
+
+	DropEntryDependencies(context, entry_index, entry, cascade);
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
@@ -200,9 +258,7 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
 
-	// create the lock set for this delete operation
-	set_lock_map_t lock_set;
-	DropEntryInternal(context, entry_index, *entry, cascade, lock_set);
+	DropEntryInternal(context, entry_index, *entry, cascade);
 	return true;
 }
 
@@ -387,6 +443,50 @@ void CatalogSet::UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp) {
 	mapping[entry->name]->timestamp = timestamp;
 }
 
+void CatalogSet::AdjustEnumDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove) {
+	CatalogEntry *enum_type_catalog = (CatalogEntry *)EnumType::GetCatalog(column.type);
+	if (enum_type_catalog) {
+		if (remove) {
+			catalog.dependency_manager->dependents_map[enum_type_catalog].erase(entry->parent);
+			catalog.dependency_manager->dependencies_map[entry->parent].erase(enum_type_catalog);
+		} else {
+			catalog.dependency_manager->dependents_map[enum_type_catalog].insert(entry);
+			catalog.dependency_manager->dependencies_map[entry].insert(enum_type_catalog);
+		}
+	}
+}
+
+void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table, ColumnDefinition &column,
+                                  bool remove) {
+	bool found = false;
+	if (column.type.id() == LogicalTypeId::ENUM) {
+		for (auto &old_column : table->columns) {
+			if (old_column.name == column.name && old_column.type.id() != LogicalTypeId::ENUM) {
+				AdjustEnumDependency(entry, column, remove);
+				found = true;
+			}
+		}
+		if (!found) {
+			AdjustEnumDependency(entry, column, remove);
+		}
+	}
+}
+
+void CatalogSet::AdjustTableDependencies(CatalogEntry *entry) {
+	if (entry->type == CatalogType::TABLE_ENTRY && entry->parent->type == CatalogType::TABLE_ENTRY) {
+		// If it's a table entry we have to check for possibly removing or adding user type dependencies
+		auto old_table = (TableCatalogEntry *)entry->parent;
+		auto new_table = (TableCatalogEntry *)entry;
+
+		for (auto &new_column : new_table->columns) {
+			AdjustDependency(entry, old_table, new_column, false);
+		}
+		for (auto &old_column : old_table->columns) {
+			AdjustDependency(entry, new_table, old_column, true);
+		}
+	}
+}
+
 void CatalogSet::Undo(CatalogEntry *entry) {
 	lock_guard<mutex> write_lock(catalog.write_lock);
 
@@ -397,6 +497,9 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 
 	// i.e. we have to place (entry) as (entry->parent) again
 	auto &to_be_removed_node = entry->parent;
+
+	AdjustTableDependencies(entry);
+
 	if (!to_be_removed_node->deleted) {
 		// delete the entry from the dependency manager as well
 		catalog.dependency_manager->EraseObject(to_be_removed_node);
@@ -478,5 +581,4 @@ void CatalogSet::Scan(const std::function<void(CatalogEntry *)> &callback) {
 		}
 	}
 }
-
 } // namespace duckdb

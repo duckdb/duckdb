@@ -115,7 +115,7 @@ void ListFun::RegisterFunction(BuiltinFunctions &set) {
 	    AggregateFunction("list", {LogicalType::ANY}, LogicalTypeId::LIST, AggregateFunction::StateSize<ListAggState>,
 	                      AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction,
 	                      ListCombineFunction, ListFinalize, nullptr, ListBindFunction,
-	                      AggregateFunction::StateDestroy<ListAggState, ListFunction>, nullptr, nullptr, true);
+	                      AggregateFunction::StateDestroy<ListAggState, ListFunction>, nullptr, nullptr);
 	set.AddFunction(agg);
 	agg.name = "array_agg";
 	set.AddFunction(agg);

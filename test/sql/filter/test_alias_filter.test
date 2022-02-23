@@ -12,9 +12,43 @@ statement ok
 INSERT INTO integers VALUES (1), (2), (3), (NULL)
 
 # this fails in postgres and monetdb, but succeeds in sqlite
-# for now, we have this fail as well because it simplifies our life
-# the filter occurs before the projection, hence "j" is not computed until AFTER the filter normally
-# we probably want to change this to succeed
-statement error
-SELECT i % 2 AS j FROM integers WHERE j<>0;
+query I
+SELECT i % 2 AS k FROM integers WHERE k<>0;
+----
+1
+1
 
+# These cases roughly follows what HAVING does.
+# See test/sql/binder/test_having_alias.test.
+
+# alias cannot be qualified
+statement error
+SELECT i % 2 AS k FROM integers WHERE integers.k<>0;
+
+# columns take priority
+query I
+SELECT i % 2 AS i FROM integers WHERE i<>0;
+----
+1
+0
+1
+
+# columns with qualified name
+query I
+SELECT i % 2 AS k FROM integers WHERE integers.i<>0;
+----
+1
+0
+1
+
+# use the same alias multiple times
+query I
+SELECT i % 2 AS k FROM integers WHERE k=k;
+----
+1
+0
+1
+
+# alias to an aggregate doesn't work.
+statement error
+SELECT i % 2 AS o, COUNT(i) AS c FROM integers WHERE c = 0 GROUP BY o;

@@ -51,8 +51,8 @@ const vector<ColumnDefinition> &JoinRelation::Columns() {
 
 string JoinRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth);
-	str = "Join";
-	return str + "\n" + left->ToString(depth + 1) + right->ToString(depth + 1);
+	str = "Join " + JoinTypeToString(join_type);
+	return str + "\n" + left->ToString(depth + 1) + "\n" + right->ToString(depth + 1);
 }
 
 } // namespace duckdb

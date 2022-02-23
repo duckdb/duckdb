@@ -183,7 +183,7 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 	Value quantile_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	auto quantile = quantile_val.GetValue<double>();
 
-	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
+	if (quantile_val.IsNull() || quantile < 0 || quantile > 1) {
 		throw BinderException("QUANTILE can only take parameters in range [0, 1]");
 	}
 	if (arguments.size() <= 2) {
@@ -196,7 +196,7 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 	Value sample_size_val = ExpressionExecutor::EvaluateScalar(*arguments[2]);
 	auto sample_size = sample_size_val.GetValue<int32_t>();
 
-	if (sample_size_val.is_null || sample_size <= 0) {
+	if (sample_size_val.IsNull() || sample_size <= 0) {
 		throw BinderException("Percentage of the sample must be bigger than 0");
 	}
 
@@ -218,7 +218,7 @@ AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 	auto fun = GetReservoirQuantileAggregateFunction(type);
 	fun.bind = BindReservoirQuantile;
 	// temporarily push an argument so we can bind the actual quantile
-	fun.arguments.push_back(LogicalType::DOUBLE);
+	fun.arguments.emplace_back(LogicalType::DOUBLE);
 	return fun;
 }
 

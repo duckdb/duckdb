@@ -281,7 +281,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[coverage][.]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {4}));
 
 		// UDF with 5 input ints, return the last one
-		sql_args.push_back(LogicalType::INTEGER);
+		sql_args.emplace_back(LogicalType::INTEGER);
 		con.CreateVectorizedFunction("udf_five_ints", sql_args, LogicalType::INTEGER,
 		                             &udf_several_constant_input<int, 5>);
 		result = con.Query("SELECT udf_five_ints(1, 2, 3, 4, 5)");
@@ -290,7 +290,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[coverage][.]") {
 		// UDF with 10 input ints, return the last one
 		for (idx_t i = 0; i < 5; ++i) {
 			// adding more 5 items
-			sql_args.push_back(LogicalType::INTEGER);
+			sql_args.emplace_back(LogicalType::INTEGER);
 		}
 		con.CreateVectorizedFunction("udf_ten_ints", sql_args, LogicalType::INTEGER,
 		                             &udf_several_constant_input<int, 10>);

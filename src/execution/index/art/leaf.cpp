@@ -25,14 +25,14 @@ void Leaf::Insert(row_t row_id) {
 }
 
 void Leaf::Remove(row_t row_id) {
-	idx_t entry_offset = INVALID_INDEX;
+	idx_t entry_offset = DConstants::INVALID_INDEX;
 	for (idx_t i = 0; i < num_elements; i++) {
 		if (row_ids[i] == row_id) {
 			entry_offset = i;
 			break;
 		}
 	}
-	if (entry_offset == INVALID_INDEX) {
+	if (entry_offset == DConstants::INVALID_INDEX) {
 		return;
 	}
 	num_elements--;

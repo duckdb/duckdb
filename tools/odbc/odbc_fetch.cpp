@@ -64,6 +64,11 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *stmt) {
 			// it's need to reset the last_fetched_len
 			ResetLastFetchedVariableVal();
 			auto chunk = stmt->res->Fetch();
+			if (!stmt->res->success) {
+				stmt->open = false;
+				stmt->error_messages.emplace_back(stmt->res->error);
+				return SQL_ERROR;
+			}
 			if (!chunk) {
 				resultset_end = true;
 				return SQL_NO_DATA;
@@ -284,6 +289,14 @@ SQLRETURN OdbcFetch::Fetch(SQLHSTMT statement_handle, OdbcHandleStmt *stmt, SQLU
 	return SQL_SUCCESS;
 }
 
+SQLRETURN OdbcFetch::FetchFirst(SQLHSTMT statement_handle, OdbcHandleStmt *stmt) {
+	auto cursor_type_before = cursor_type;
+	cursor_type = SQL_CURSOR_DYNAMIC;
+	auto ret = FetchNextChunk(SQL_FETCH_FIRST, stmt, 0);
+	cursor_type = cursor_type_before;
+	return ret;
+}
+
 SQLRETURN OdbcFetch::ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt) {
 	SQLRETURN ret = SQL_SUCCESS;
 
@@ -417,4 +430,8 @@ void OdbcFetch::SetLastFetchedLength(size_t new_len) {
 
 size_t OdbcFetch::GetLastFetchedLength() {
 	return last_fetched_variable_val.length;
+}
+
+bool OdbcFetch::IsInExecutionState() {
+	return !chunks.empty() && current_chunk != nullptr;
 }

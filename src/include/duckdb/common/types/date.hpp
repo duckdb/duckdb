@@ -103,7 +103,9 @@ public:
 	//! contains January 4 of that year.
 	//! In the ISO week-numbering system, it is possible for early-January dates
 	//! to be part of the 52nd or 53rd week of the previous year.
+	DUCKDB_API static void ExtractISOYearWeek(date_t date, int32_t &year, int32_t &week);
 	DUCKDB_API static int32_t ExtractISOWeekNumber(date_t date);
+	DUCKDB_API static int32_t ExtractISOYearNumber(date_t date);
 	//! Extract the week number as Python handles it.
 	//! Either Monday or Sunday is the first day of the week,
 	//! and any date before the first Monday/Sunday returns week 0

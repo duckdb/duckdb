@@ -82,6 +82,13 @@ struct DateDiff {
 		}
 	};
 
+	struct ISOYearOperator {
+		template <class TA, class TB, class TR>
+		static inline TR Operation(TA startdate, TB enddate) {
+			return Date::ExtractISOYearNumber(enddate) - Date::ExtractISOYearNumber(startdate);
+		}
+	};
+
 	struct MicrosecondsOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
@@ -168,6 +175,12 @@ int64_t DateDiff::WeekOperator::Operation(timestamp_t startdate, timestamp_t end
 }
 
 template <>
+int64_t DateDiff::ISOYearOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
+	return ISOYearOperator::Operation<date_t, date_t, int64_t>(Timestamp::GetDate(startdate),
+	                                                           Timestamp::GetDate(enddate));
+}
+
+template <>
 int64_t DateDiff::MicrosecondsOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
 	return Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate);
 }
@@ -236,6 +249,11 @@ int64_t DateDiff::WeekOperator::Operation(dtime_t startdate, dtime_t enddate) {
 }
 
 template <>
+int64_t DateDiff::ISOYearOperator::Operation(dtime_t startdate, dtime_t enddate) {
+	throw NotImplementedException("\"time\" units \"isoyear\" not recognized");
+}
+
+template <>
 int64_t DateDiff::MicrosecondsOperator::Operation(dtime_t startdate, dtime_t enddate) {
 	return enddate.micros - startdate.micros;
 }
@@ -283,6 +301,8 @@ static int64_t DifferenceDates(DatePartSpecifier type, TA startdate, TB enddate)
 	case DatePartSpecifier::WEEK:
 	case DatePartSpecifier::YEARWEEK:
 		return DateDiff::WeekOperator::template Operation<TA, TB, TR>(startdate, enddate);
+	case DatePartSpecifier::ISOYEAR:
+		return DateDiff::ISOYearOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::MICROSECONDS:
 		return DateDiff::MicrosecondsOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::MILLISECONDS:
@@ -336,6 +356,9 @@ static void DateDiffBinaryExecutor(DatePartSpecifier type, Vector &left, Vector 
 	case DatePartSpecifier::WEEK:
 	case DatePartSpecifier::YEARWEEK:
 		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::WeekOperator>(left, right, result, count);
+		break;
+	case DatePartSpecifier::ISOYEAR:
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::ISOYearOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::MICROSECONDS:
 		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::MicrosecondsOperator>(left, right, result, count);

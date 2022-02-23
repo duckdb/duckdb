@@ -25,13 +25,16 @@ ConstantFoldingRule::ConstantFoldingRule(ExpressionRewriter &rewriter) : Rule(re
 }
 
 unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                  bool &changes_made) {
+                                                  bool &changes_made, bool is_root) {
 	auto root = bindings[0];
 	// the root is a scalar expression that we have to fold
 	D_ASSERT(root->IsFoldable() && root->type != ExpressionType::VALUE_CONSTANT);
 
 	// use an ExpressionExecutor to execute the expression
-	auto result_value = ExpressionExecutor::EvaluateScalar(*root);
+	Value result_value;
+	if (!ExpressionExecutor::TryEvaluateScalar(*root, result_value)) {
+		return nullptr;
+	}
 	D_ASSERT(result_value.type().InternalType() == root->return_type.InternalType());
 	// now get the value from the result vector and insert it back into the plan as a constant expression
 	return make_unique<BoundConstantExpression>(result_value);

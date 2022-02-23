@@ -71,6 +71,16 @@ string TestCreatePath(string suffix) {
 	return fs->JoinPath(TestDirectoryPath(), suffix);
 }
 
+bool TestIsInternalError(const string &error) {
+	if (StringUtil::Contains(error, "Unoptimized Result differs from original result!")) {
+		return true;
+	}
+	if (StringUtil::Contains(error, "INTERNAL")) {
+		return true;
+	}
+	return false;
+}
+
 unique_ptr<DBConfig> GetTestConfig() {
 	auto result = make_unique<DBConfig>();
 	result->checkpoint_wal_size = 0;
@@ -147,7 +157,7 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 		}
 		for (size_t j = 0; j < chunk.size(); j++) {
 			// NULL <> NULL, hence special handling
-			if (vector.GetValue(j).is_null && values[i + j].is_null) {
+			if (vector.GetValue(j).IsNull() && values[i + j].IsNull()) {
 				continue;
 			}
 

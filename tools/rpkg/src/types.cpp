@@ -111,6 +111,10 @@ int RIntegerType::Convert(int val) {
 	return val;
 }
 
+int RFactorType::Convert(int val) {
+	return val - 1;
+}
+
 bool RBooleanType::Convert(int val) {
 	return val;
 }

@@ -1,0 +1,25 @@
+# name: test/sql/copy/parquet/writer/test_parquet_write.test
+# description: Parquet basic write
+# group: [writer]
+
+require parquet
+
+statement ok
+COPY (SELECT 42) TO '__TEST_DIR__/scalar.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM parquet_scan('__TEST_DIR__/scalar.parquet');
+----
+42
+
+# empty result set
+statement ok
+CREATE TABLE empty(i INTEGER)
+
+statement ok
+COPY (SELECT * FROM empty) TO '__TEST_DIR__/empty.parquet' (FORMAT 'parquet')
+
+query I
+SELECT COUNT(*) FROM parquet_scan('__TEST_DIR__/empty.parquet')
+----
+0

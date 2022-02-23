@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/main/config.hpp"
@@ -18,24 +19,38 @@ const char MainHeader::MAGIC_BYTES[] = "DUCK";
 void MainHeader::Serialize(Serializer &ser) {
 	ser.WriteData((data_ptr_t)MAGIC_BYTES, MAGIC_BYTE_SIZE);
 	ser.Write<uint64_t>(version_number);
+	FieldWriter writer(ser);
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
-		ser.Write<uint64_t>(flags[i]);
+		writer.WriteField<uint64_t>(flags[i]);
+	}
+	writer.Finalize();
+}
+
+void MainHeader::CheckMagicBytes(FileHandle &handle) {
+	data_t magic_bytes[MAGIC_BYTE_SIZE];
+	if (handle.GetFileSize() < MainHeader::MAGIC_BYTE_SIZE + MainHeader::MAGIC_BYTE_OFFSET) {
+		throw IOException("The file is not a valid DuckDB database file!");
+	}
+	handle.Read(magic_bytes, MainHeader::MAGIC_BYTE_SIZE, MainHeader::MAGIC_BYTE_OFFSET);
+	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
+		throw IOException("The file is not a valid DuckDB database file!");
 	}
 }
 
 MainHeader MainHeader::Deserialize(Deserializer &source) {
-	char magic_bytes[MAGIC_BYTE_SIZE];
-	source.ReadData((data_ptr_t)magic_bytes, MAGIC_BYTE_SIZE);
+	data_t magic_bytes[MAGIC_BYTE_SIZE];
+	MainHeader header;
+	source.ReadData(magic_bytes, MainHeader::MAGIC_BYTE_SIZE);
 	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
 		throw IOException("The file is not a valid DuckDB database file!");
 	}
-
-	MainHeader header;
 	header.version_number = source.Read<uint64_t>();
 	// read the flags
+	FieldReader reader(source);
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
-		header.flags[i] = source.Read<uint64_t>();
+		header.flags[i] = reader.ReadRequired<uint64_t>();
 	}
+	reader.Finalize();
 	return header;
 }
 
@@ -130,6 +145,7 @@ SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path
 		active_header = 1;
 		max_block = 0;
 	} else {
+		MainHeader::CheckMagicBytes(*handle);
 		// otherwise, we check the metadata of the file
 		header_buffer.ReadAndChecksum(*handle, 0);
 		MainHeader header = DeserializeHeaderStructure<MainHeader>(header_buffer.buffer);

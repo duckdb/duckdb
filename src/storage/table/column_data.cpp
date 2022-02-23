@@ -270,24 +270,24 @@ void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, 
 }
 
 void ColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                        idx_t offset, idx_t update_count) {
+                        idx_t update_count) {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
 		updates = make_unique<UpdateSegment>(*this);
 	}
 	Vector base_vector(type);
 	ColumnScanState state;
-	auto fetch_count = Fetch(state, row_ids[offset], base_vector);
+	auto fetch_count = Fetch(state, row_ids[0], base_vector);
 
 	base_vector.Normalify(fetch_count);
-	updates->Update(transaction, column_index, update_vector, row_ids, offset, update_count, base_vector);
+	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
 void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
                               row_t *row_ids, idx_t update_count, idx_t depth) {
 	// this method should only be called at the end of the path in the base column case
 	D_ASSERT(depth >= column_path.size());
-	ColumnData::Update(transaction, column_path[0], update_vector, row_ids, 0, update_count);
+	ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
 }
 
 unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
@@ -327,7 +327,8 @@ void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, 
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer) {
+unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+                                                         ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto checkpoint_state = CreateCheckpointState(row_group, writer);
@@ -339,7 +340,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 	}
 	lock_guard<mutex> update_guard(update_lock);
 
-	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state);
+	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
 	checkpointer.Checkpoint(move(data.root_node));
 
 	// replace the old tree with the new one

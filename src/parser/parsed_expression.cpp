@@ -1,6 +1,6 @@
 #include "duckdb/parser/parsed_expression.hpp"
 
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -97,73 +97,78 @@ hash_t ParsedExpression::Hash() const {
 	return hash;
 }
 
-void ParsedExpression::Serialize(Serializer &serializer) {
-	serializer.Write<ExpressionClass>(GetExpressionClass());
-	serializer.Write<ExpressionType>(type);
-	serializer.WriteString(alias);
+void ParsedExpression::Serialize(Serializer &serializer) const {
+	FieldWriter writer(serializer);
+	writer.WriteField<ExpressionClass>(GetExpressionClass());
+	writer.WriteField<ExpressionType>(type);
+	writer.WriteString(alias);
+	Serialize(writer);
+	writer.Finalize();
 }
 
 unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source) {
-	auto expression_class = source.Read<ExpressionClass>();
-	auto type = source.Read<ExpressionType>();
-	auto alias = source.Read<string>();
+	FieldReader reader(source);
+	auto expression_class = reader.ReadRequired<ExpressionClass>();
+	auto type = reader.ReadRequired<ExpressionType>();
+	auto alias = reader.ReadRequired<string>();
 	unique_ptr<ParsedExpression> result;
 	switch (expression_class) {
 	case ExpressionClass::BETWEEN:
-		result = BetweenExpression::Deserialize(type, source);
+		result = BetweenExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::CASE:
-		result = CaseExpression::Deserialize(type, source);
+		result = CaseExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::CAST:
-		result = CastExpression::Deserialize(type, source);
+		result = CastExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::COLLATE:
-		result = CollateExpression::Deserialize(type, source);
+		result = CollateExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::COLUMN_REF:
-		result = ColumnRefExpression::Deserialize(type, source);
+		result = ColumnRefExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::COMPARISON:
-		result = ComparisonExpression::Deserialize(type, source);
+		result = ComparisonExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::CONJUNCTION:
-		result = ConjunctionExpression::Deserialize(type, source);
+		result = ConjunctionExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::CONSTANT:
-		result = ConstantExpression::Deserialize(type, source);
+		result = ConstantExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::DEFAULT:
-		result = DefaultExpression::Deserialize(type, source);
+		result = DefaultExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::FUNCTION:
-		result = FunctionExpression::Deserialize(type, source);
+		result = FunctionExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::LAMBDA:
-		result = LambdaExpression::Deserialize(type, source);
+		result = LambdaExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::OPERATOR:
-		result = OperatorExpression::Deserialize(type, source);
+		result = OperatorExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::PARAMETER:
-		result = ParameterExpression::Deserialize(type, source);
+		result = ParameterExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::POSITIONAL_REFERENCE:
-		result = PositionalReferenceExpression::Deserialize(type, source);
+		result = PositionalReferenceExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::STAR:
-		result = StarExpression::Deserialize(type, source);
+		result = StarExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::SUBQUERY:
-		result = SubqueryExpression::Deserialize(type, source);
+		result = SubqueryExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::WINDOW:
-		result = WindowExpression::Deserialize(type, source);
+		result = WindowExpression::Deserialize(type, reader);
 		break;
 	default:
 		throw SerializationException("Unsupported type for expression deserialization!");
 	}
 	result->alias = alias;
+	reader.Finalize();
 	return result;
 }
 

@@ -1,0 +1,23 @@
+# name: test/sql/types/time/test_time_2411.test
+# description: Test bug described on issue 2411
+# group: [time]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE times(i TIME)
+
+statement ok
+CREATE TABLE timestamp(i TIMESTAMP)
+
+statement ok
+INSERT INTO times VALUES ('00:00:01')
+
+statement ok
+INSERT INTO timestamp VALUES ('1993-08-14 00:00:01')
+
+query I
+select count(*) from times inner join timestamp on (timestamp.i::TIME = times.i)
+----
+1

@@ -220,7 +220,7 @@ void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t e
 void ChunkVectorInfo::Serialize(Serializer &serializer) {
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	transaction_t start_time = TRANSACTION_ID_START - 1;
-	transaction_t transaction_id = INVALID_INDEX;
+	transaction_t transaction_id = DConstants::INVALID_INDEX;
 	idx_t count = GetSelVector(start_time, transaction_id, sel, STANDARD_VECTOR_SIZE);
 	if (count == STANDARD_VECTOR_SIZE) {
 		// nothing is deleted: skip writing anything

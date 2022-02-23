@@ -194,8 +194,9 @@ static idx_t NestedSelectOperation(Vector &left, Vector &right, const SelectionV
 	// a selection vector in a single pass. But to implement progressive comparisons,
 	// we have to make multiple passes, so we need to keep track of the original input positions
 	// and then scatter the output selections when we are done.
+	SelectionVector owned_sel;
 	if (!sel) {
-		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+		sel = FlatVector::IncrementalSelectionVector(vcount, owned_sel);
 	}
 
 	VectorData lvdata, rvdata;
@@ -215,7 +216,9 @@ static idx_t NestedSelectOperation(Vector &left, Vector &right, const SelectionV
 
 	// If everything was NULL, fill in false_sel with sel
 	if (count == 0) {
-		ScatterSelection(false_sel, no_match_count, sel, FlatVector::INCREMENTAL_SELECTION_VECTOR);
+		SelectionVector owned_flat_sel;
+		auto flat_sel = FlatVector::IncrementalSelectionVector(vcount, owned_sel);
+		ScatterSelection(false_sel, no_match_count, sel, *flat_sel);
 		return count;
 	}
 

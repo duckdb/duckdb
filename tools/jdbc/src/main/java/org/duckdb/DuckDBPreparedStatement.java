@@ -164,6 +164,10 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		if (params.length == 0) {
 			params = new Object[getParameterMetaData().getParameterCount()];
 		}
+		// Change sql.Timestamp to DuckDBTimestamp
+		if (x instanceof Timestamp) {
+			x = new DuckDBTimestamp((Timestamp)x);
+		}
 		params[parameterIndex - 1] = x;
 	}
 
@@ -469,7 +473,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void setTimestamp(int parameterIndex, Timestamp x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		setObject(parameterIndex, x);
 	}
 
 	@Override
@@ -594,6 +598,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 				setObject(parameterIndex, (String) x);
 			} else {
 				setObject(parameterIndex, x.toString());
+			}
+			break;
+		case Types.TIMESTAMP:
+			if (x instanceof Timestamp) {
+				setObject(parameterIndex, x);
 			}
 			break;
 		default:

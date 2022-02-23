@@ -2,6 +2,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
@@ -350,7 +351,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, RowGroupScanState &sta
 			if (count != max_count) {
 				sel.Initialize(valid_sel);
 			} else {
-				sel.Initialize(FlatVector::INCREMENTAL_SELECTION_VECTOR);
+				sel.Initialize(nullptr);
 			}
 			//! first, we scan the columns with filters, fetch their data and generate a selection vector.
 			//! get runtime statistics
@@ -611,7 +612,13 @@ void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_
 		auto column = column_ids[i];
 		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
 		D_ASSERT(columns[column]->type.id() == update_chunk.data[i].GetType().id());
-		columns[column]->Update(transaction, column, update_chunk.data[i], ids, offset, count);
+		if (offset > 0) {
+			Vector sliced_vector(update_chunk.data[i], offset);
+			sliced_vector.Normalify(count);
+			columns[column]->Update(transaction, column, sliced_vector, ids + offset, count);
+		} else {
+			columns[column]->Update(transaction, column, update_chunk.data[i], ids, count);
+		}
 		MergeStatistics(column, *columns[column]->GetUpdateStatistics());
 	}
 }
@@ -649,7 +656,8 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	// checkpoint the individual columns of the row group
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		auto &column = columns[column_idx];
-		auto checkpoint_state = column->Checkpoint(*this, writer);
+		ColumnCheckpointInfo checkpoint_info {writer.GetColumnCompressionType(column_idx)};
+		auto checkpoint_state = column->Checkpoint(*this, writer, checkpoint_info);
 		D_ASSERT(checkpoint_state);
 
 		auto stats = checkpoint_state->GetStatistics();
@@ -725,9 +733,11 @@ shared_ptr<VersionNode> RowGroup::DeserializeDeletes(Deserializer &source) {
 	return version_info;
 }
 
-void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
-	serializer.Write<uint64_t>(pointer.row_start);
-	serializer.Write<uint64_t>(pointer.tuple_count);
+void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer) {
+	FieldWriter writer(main_serializer);
+	writer.WriteField<uint64_t>(pointer.row_start);
+	writer.WriteField<uint64_t>(pointer.tuple_count);
+	auto &serializer = writer.GetSerializer();
 	for (auto &stats : pointer.statistics) {
 		stats->Serialize(serializer);
 	}
@@ -736,16 +746,20 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
 		serializer.Write<uint64_t>(data_pointer.offset);
 	}
 	CheckpointDeletes(pointer.versions.get(), serializer);
+	writer.Finalize();
 }
 
-RowGroupPointer RowGroup::Deserialize(Deserializer &source, const vector<ColumnDefinition> &columns) {
+RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<ColumnDefinition> &columns) {
 	RowGroupPointer result;
-	result.row_start = source.Read<uint64_t>();
-	result.tuple_count = source.Read<uint64_t>();
+
+	FieldReader reader(main_source);
+	result.row_start = reader.ReadRequired<uint64_t>();
+	result.tuple_count = reader.ReadRequired<uint64_t>();
 
 	result.data_pointers.reserve(columns.size());
 	result.statistics.reserve(columns.size());
 
+	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto stats = BaseStatistics::Deserialize(source, columns[i].type);
 		result.statistics.push_back(move(stats));
@@ -757,6 +771,8 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &source, const vector<ColumnD
 		result.data_pointers.push_back(pointer);
 	}
 	result.versions = DeserializeDeletes(source);
+
+	reader.Finalize();
 	return result;
 }
 
@@ -774,9 +790,9 @@ void RowGroup::GetStorageInfo(idx_t row_group_index, vector<vector<Value>> &resu
 //===--------------------------------------------------------------------===//
 class VersionDeleteState {
 public:
-	VersionDeleteState(RowGroup &info, TransactionData transaction_p, DataTable *table, idx_t base_row)
-	    : info(info), transaction(transaction_p), table(table), current_info(nullptr), current_chunk(INVALID_INDEX),
-	      count(0), base_row(base_row), delete_count(0) {
+	VersionDeleteState(RowGroup &info, TransactionData transaction, DataTable *table, idx_t base_row)
+	    : info(info), transaction(transaction), table(table), current_info(nullptr),
+	      current_chunk(DConstants::INVALID_INDEX), count(0), base_row(base_row), delete_count(0) {
 	}
 
 	RowGroup &info;

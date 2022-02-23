@@ -189,7 +189,7 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 
 	VectorData vdata;
 	vdata.validity = list_validity;
-	vdata.sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	vdata.sel = FlatVector::IncrementalSelectionVector(count, vdata.owned_sel);
 	vdata.data = (data_ptr_t)append_offsets.get();
 
 	// append the list offsets
@@ -219,7 +219,7 @@ idx_t ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result
 }
 
 void ListColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                            idx_t offset, idx_t update_count) {
+                            idx_t update_count) {
 	throw NotImplementedException("List Update is not supported.");
 }
 
@@ -311,10 +311,11 @@ unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup
 	return make_unique<ListColumnCheckpointState>(row_group, *this, writer);
 }
 
-unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer) {
-	auto validity_state = validity.Checkpoint(row_group, writer);
-	auto base_state = ColumnData::Checkpoint(row_group, writer);
-	auto child_state = child_column->Checkpoint(row_group, writer);
+unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+                                                             ColumnCheckpointInfo &checkpoint_info) {
+	auto validity_state = validity.Checkpoint(row_group, writer, checkpoint_info);
+	auto base_state = ColumnData::Checkpoint(row_group, writer, checkpoint_info);
+	auto child_state = child_column->Checkpoint(row_group, writer, checkpoint_info);
 
 	auto &checkpoint_state = (ListColumnCheckpointState &)*base_state;
 	checkpoint_state.validity_state = move(validity_state);

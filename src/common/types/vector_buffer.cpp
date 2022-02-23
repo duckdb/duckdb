@@ -77,7 +77,7 @@ void VectorListBuffer::Append(const Vector &to_append, const SelectionVector &se
 	size += to_append_size - source_offset;
 }
 
-void VectorListBuffer::PushBack(Value &insert) {
+void VectorListBuffer::PushBack(const Value &insert) {
 	if (size + 1 > capacity) {
 		child->Resize(capacity, capacity * 2);
 		capacity *= 2;

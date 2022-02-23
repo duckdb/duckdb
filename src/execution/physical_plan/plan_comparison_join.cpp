@@ -12,6 +12,7 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
 
@@ -28,6 +29,30 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 	if (scan.table_filters && !scan.table_filters->filters.empty()) {
 		// table scan filters
 		return false;
+	}
+	return true;
+}
+
+bool ExtractNumericValue(Value val, int64_t &result) {
+	if (!val.type().IsIntegral()) {
+		switch (val.type().InternalType()) {
+		case PhysicalType::INT16:
+			result = val.GetValueUnsafe<int16_t>();
+			break;
+		case PhysicalType::INT32:
+			result = val.GetValueUnsafe<int32_t>();
+			break;
+		case PhysicalType::INT64:
+			result = val.GetValueUnsafe<int64_t>();
+			break;
+		default:
+			return false;
+		}
+	} else {
+		if (!val.TryCastAs(LogicalType::BIGINT)) {
+			return false;
+		}
+		result = val.GetValue<int64_t>();
 	}
 	return true;
 }
@@ -51,7 +76,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 			return;
 		}
 	}
-	// with integral types
+	// with integral internal types
 	for (auto &&join_stat : op.join_stats) {
 		if (!TypeIsInteger(join_stat->type.InternalType()) || join_stat->type.InternalType() == PhysicalType::INT128) {
 			// perfect join not possible for non-integral types or hugeint
@@ -61,10 +86,17 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 
 	// and when the build range is smaller than the threshold
 	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
-	if (stats_build->min.is_null || stats_build->max.is_null) {
+	if (stats_build->min.IsNull() || stats_build->max.IsNull()) {
 		return;
 	}
-	auto build_range = stats_build->max - stats_build->min; // Join Keys Range
+	int64_t min_value, max_value;
+	if (!ExtractNumericValue(stats_build->min, min_value) || !ExtractNumericValue(stats_build->max, max_value)) {
+		return;
+	}
+	int64_t build_range;
+	if (!TrySubtractOperator::Operation(max_value, min_value, build_range)) {
+		return;
+	}
 
 	// Fill join_stats for invisible join
 	auto stats_probe = reinterpret_cast<NumericStatistics *>(op.join_stats[1].get()); // rhs stats
@@ -76,31 +108,8 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	join_state.build_min = stats_build->min;
 	join_state.build_max = stats_build->max;
 	join_state.estimated_cardinality = op.estimated_cardinality;
-	if (build_range.type().id() == LogicalTypeId::DECIMAL) {
-		switch (build_range.type().InternalType()) {
-		case PhysicalType::INT16:
-			join_state.build_range = build_range.value_.smallint;
-			break;
-		case PhysicalType::INT32:
-			join_state.build_range = build_range.value_.integer;
-			break;
-		case PhysicalType::INT64:
-			join_state.build_range = build_range.value_.bigint;
-			break;
-		case PhysicalType::INT128:
-			throw InternalException("PhysicalType::INT128 not yet implemented for Perfect HJ");
-			//			join_state.build_range = build_range.GetValue<idx_t>();
-			//			break;
-		default:
-			throw InternalException("Invalid Physical Type for Decimals");
-		}
-	} else {
-		join_state.build_range = build_range.GetValue<idx_t>(); // cast integer types into idx_t
-	}
-	if (join_state.build_range > MAX_BUILD_SIZE) {
-		return;
-	}
-	if (stats_probe->max.is_null || stats_probe->min.is_null) {
+	join_state.build_range = build_range;
+	if (join_state.build_range > MAX_BUILD_SIZE || stats_probe->max.IsNull() || stats_probe->min.IsNull()) {
 		return;
 	}
 	if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
@@ -185,14 +194,16 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	if (has_equality) {
 		Index *left_index {}, *right_index {};
 		TransformIndexJoin(context, op, &left_index, &right_index, left.get(), right.get());
-		if (left_index && (context.force_index_join || rhs_cardinality < 0.01 * lhs_cardinality)) {
+		if (left_index &&
+		    (ClientConfig::GetConfig(context).force_index_join || rhs_cardinality < 0.01 * lhs_cardinality)) {
 			auto &tbl_scan = (PhysicalTableScan &)*left;
 			swap(op.conditions[0].left, op.conditions[0].right);
 			return make_unique<PhysicalIndexJoin>(op, move(right), move(left), move(op.conditions), op.join_type,
 			                                      op.right_projection_map, op.left_projection_map, tbl_scan.column_ids,
 			                                      left_index, false, op.estimated_cardinality);
 		}
-		if (right_index && (context.force_index_join || lhs_cardinality < 0.01 * rhs_cardinality)) {
+		if (right_index &&
+		    (ClientConfig::GetConfig(context).force_index_join || lhs_cardinality < 0.01 * rhs_cardinality)) {
 			auto &tbl_scan = (PhysicalTableScan &)*right;
 			return make_unique<PhysicalIndexJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 			                                      op.left_projection_map, op.right_projection_map, tbl_scan.column_ids,

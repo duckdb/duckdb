@@ -1,0 +1,11 @@
+# name: test/sql/subquery/scalar/coalesce_subquery.test
+# description: Issue #2452: Coalesce operator with subquery throws error
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 1 FROM (select 4) v1(vc0) WHERE (3) NOT IN (COALESCE((SELECT 1 WHERE FALSE), v1.vc0));
+----
+1

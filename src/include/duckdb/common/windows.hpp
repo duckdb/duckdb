@@ -6,6 +6,10 @@
 #define NOMINMAX
 #endif
 
+#ifndef _WINSOCKAPI_
+#define _WINSOCKAPI_
+#endif
+
 #include <windows.h>
 
 #undef CreateDirectory

@@ -137,3 +137,33 @@ NULL	NULL	0
 7	NULL	0
 8	8	0
 9	NULL	0
+
+#
+# Compare implementations
+#
+
+foreach windowmode "window" "combine" "separate"
+
+statement ok
+PRAGMA debug_window_mode=${windowmode}
+
+query III
+WITH t(r) AS (VALUES (0), (1), (2), (3), (4), (5), (6), (7), (8), (9), (NULL), (NULL), (NULL))
+SELECT r, r/3, mode(r/3) over (order by r rows between 1 preceding and 1 following) FROM t ORDER BY 1, 2
+----
+NULL	NULL	NULL
+NULL	NULL	NULL
+NULL	NULL	0
+0	0	0
+1	0	0
+2	0	0
+3	1	1
+4	1	1
+5	1	1
+6	2	2
+7	2	2
+8	2	2
+9	3	2
+
+endloop
+

@@ -1,6 +1,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 
@@ -28,13 +29,12 @@ unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
 	return move(copy);
 }
 
-void ConstantExpression::Serialize(Serializer &serializer) {
-	ParsedExpression::Serialize(serializer);
-	value.Serialize(serializer);
+void ConstantExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializable(value);
 }
 
-unique_ptr<ParsedExpression> ConstantExpression::Deserialize(ExpressionType type, Deserializer &source) {
-	Value value = Value::Deserialize(source);
+unique_ptr<ParsedExpression> ConstantExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	Value value = reader.ReadRequiredSerializable<Value, Value>();
 	return make_unique<ConstantExpression>(move(value));
 }
 

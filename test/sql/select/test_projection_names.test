@@ -1,0 +1,61 @@
+# name: test/sql/select/test_projection_names.test
+# description: Test projection lists
+# group: [select]
+
+statement ok
+CREATE TABLE integers("COL1" INTEGER, "COL2" INTEGER)
+
+# *
+statement ok
+CREATE TABLE tbl AS SELECT * FROM integers
+
+query I
+SELECT name FROM pragma_table_info('tbl') ORDER BY name
+----
+COL1
+COL2
+
+statement ok
+DROP TABLE tbl
+
+# col1, col2
+statement ok
+CREATE TABLE tbl AS SELECT COL1, COL2 FROM integers
+
+query I
+SELECT name FROM pragma_table_info('tbl') ORDER BY name
+----
+COL1
+COL2
+
+statement ok
+DROP TABLE tbl
+
+# explicit table reference
+statement ok
+CREATE TABLE tbl AS SELECT integers.COL1, integers.COL2 FROM integers
+
+query I
+SELECT name FROM pragma_table_info('tbl') ORDER BY name
+----
+COL1
+COL2
+
+statement ok
+DROP TABLE tbl
+
+# explicit schema reference
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE TABLE s1.integers("COL1" INTEGER, "COL2" INTEGER)
+
+statement ok
+CREATE TABLE tbl AS SELECT s1.integers.COL1, s1.integers.COL2 FROM s1.integers
+
+query I
+SELECT name FROM pragma_table_info('tbl') ORDER BY name
+----
+COL1
+COL2

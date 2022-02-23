@@ -32,17 +32,17 @@ public:
 	DBConfig config;
 
 public:
-	StorageManager &GetStorageManager();
-	Catalog &GetCatalog();
-	FileSystem &GetFileSystem();
-	TransactionManager &GetTransactionManager();
-	TaskScheduler &GetScheduler();
-	ObjectCache &GetObjectCache();
-	ConnectionManager &GetConnectionManager();
+	DUCKDB_API StorageManager &GetStorageManager();
+	DUCKDB_API Catalog &GetCatalog();
+	DUCKDB_API FileSystem &GetFileSystem();
+	DUCKDB_API TransactionManager &GetTransactionManager();
+	DUCKDB_API TaskScheduler &GetScheduler();
+	DUCKDB_API ObjectCache &GetObjectCache();
+	DUCKDB_API ConnectionManager &GetConnectionManager();
 
 	idx_t NumberOfThreads();
 
-	static DatabaseInstance &GetDatabase(ClientContext &context);
+	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 
 private:
 	void Initialize(const char *path, DBConfig *config);
@@ -56,6 +56,7 @@ private:
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;
+	unordered_set<std::string> loaded_extensions;
 };
 
 //! The database object. This object holds the catalog and all the
@@ -64,6 +65,8 @@ class DuckDB {
 public:
 	DUCKDB_API explicit DuckDB(const char *path = nullptr, DBConfig *config = nullptr);
 	DUCKDB_API explicit DuckDB(const string &path, DBConfig *config = nullptr);
+	DUCKDB_API explicit DuckDB(DatabaseInstance &instance);
+
 	DUCKDB_API ~DuckDB();
 
 	//! Reference to the actual database instance
@@ -73,7 +76,11 @@ public:
 	template <class T>
 	void LoadExtension() {
 		T extension;
+		if (ExtensionIsLoaded(extension.Name())) {
+			return;
+		}
 		extension.Load(*this);
+		SetExtensionLoaded(extension.Name());
 	}
 
 	DUCKDB_API FileSystem &GetFileSystem();
@@ -81,6 +88,9 @@ public:
 	DUCKDB_API idx_t NumberOfThreads();
 	DUCKDB_API static const char *SourceID();
 	DUCKDB_API static const char *LibraryVersion();
+	DUCKDB_API static string Platform();
+	DUCKDB_API bool ExtensionIsLoaded(const std::string &name);
+	DUCKDB_API void SetExtensionLoaded(const std::string &name);
 };
 
 } // namespace duckdb

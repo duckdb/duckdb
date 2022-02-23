@@ -61,7 +61,13 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundBetweenExpression &expr) {
 
 idx_t ExpressionHeuristics::ExpressionCost(BoundCaseExpression &expr) {
 	// CASE WHEN check THEN result_if_true ELSE result_if_false END
-	return Cost(*expr.check) + Cost(*expr.result_if_true) + Cost(*expr.result_if_false) + 5;
+	idx_t case_cost = 0;
+	for (auto &case_check : expr.case_checks) {
+		case_cost += Cost(*case_check.then_expr);
+		case_cost += Cost(*case_check.when_expr);
+	}
+	case_cost += Cost(*expr.else_expr);
+	return case_cost;
 }
 
 idx_t ExpressionHeuristics::ExpressionCost(BoundCastExpression &expr) {

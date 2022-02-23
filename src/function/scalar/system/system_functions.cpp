@@ -31,8 +31,7 @@ unique_ptr<FunctionData> BindSystemFunction(ClientContext &context, ScalarFuncti
 
 static void CurrentQueryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &info = SystemBindData::GetFrom(state);
-
-	Value val(info.context.query);
+	Value val(info.context.GetCurrentQuery());
 	result.Reference(val);
 }
 

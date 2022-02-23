@@ -85,7 +85,7 @@
 
 typedef struct ERR_MSG_T {
 	int flags;
-	char *prompt;
+	const char *prompt;
 } err_msg_t;
 
 /*  Flag determine formating */
@@ -95,6 +95,6 @@ typedef struct ERR_MSG_T {
 
 #define EFLG_SYSTEM 0x0002
 
-int ReportError(int nError, char *arg, int bExit);
-int ReportErrorNoLine(int nError, char *arg, int bExit);
+int ReportError(int nError, const char *arg, int bExit);
+int ReportErrorNoLine(int nError, const char *arg, int bExit);
 void SetErrorGlobals(char *szFileName, int *pnLineNumber);

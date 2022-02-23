@@ -94,7 +94,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 	while (state.current_row_group) {
 		idx_t vector_index;
 		idx_t max_row;
-		if (context.verify_parallelism) {
+		if (ClientConfig::GetConfig(context).verify_parallelism) {
 			vector_index = state.vector_index;
 			max_row = state.current_row_group->start +
 			          MinValue<idx_t>(state.current_row_group->count,
@@ -105,7 +105,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 		}
 		max_row = MinValue<idx_t>(max_row, state.max_row);
 		bool need_to_scan = InitializeScanInRowGroup(scan_state, state.current_row_group, vector_index, max_row);
-		if (context.verify_parallelism) {
+		if (ClientConfig::GetConfig(context).verify_parallelism) {
 			state.vector_index++;
 			if (state.vector_index * STANDARD_VECTOR_SIZE >= state.current_row_group->count) {
 				state.current_row_group = (RowGroup *)state.current_row_group->next.get();
@@ -481,7 +481,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, 
 	vector<LogicalType> scan_types;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
 		if (bound_columns[i] == COLUMN_IDENTIFIER_ROW_ID) {
-			scan_types.push_back(LOGICAL_ROW_TYPE);
+			scan_types.push_back(LogicalType::ROW_TYPE);
 		} else {
 			scan_types.push_back(types[bound_columns[i]]);
 		}

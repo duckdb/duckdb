@@ -44,6 +44,7 @@
 #include "r_params.h"
 #include "tdefs.h"
 #include "release.h"
+#include <cassert>
 
 #define PARAM_MAX_LEN 80
 
@@ -69,8 +70,8 @@ char *params[9];
 #define OPTION_START '-'
 #endif
 
-int read_file(char *param_name, char *option);
-int fnd_param(char *name);
+int read_file(const char *param_name, const char *option);
+int fnd_param(const char *name);
 void print_params(void);
 
 /*
@@ -115,7 +116,7 @@ void load_params() {
  * Side Effects:
  * TODO: None
  */
-void set_flg(char *flag) {
+void set_flg(const char *flag) {
 	int nParam;
 
 	init_params();
@@ -140,7 +141,7 @@ void set_flg(char *flag) {
  * Side Effects:
  * TODO: None
  */
-void clr_flg(char *flag) {
+void clr_flg(const char *flag) {
 	int nParam;
 
 	init_params();
@@ -163,7 +164,7 @@ void clr_flg(char *flag) {
  * Side Effects:
  * TODO: None
  */
-int is_set(char *flag) {
+int is_set(const char *flag) {
 	int nParam, bIsSet = 0;
 
 	init_params();
@@ -192,7 +193,7 @@ int is_set(char *flag) {
  * Side Effects:
  * TODO: None
  */
-void set_int(char *var, char *val) {
+void set_int(const char *var, const char *val) {
 	int nParam;
 
 	init_params();
@@ -218,7 +219,7 @@ void set_int(char *var, char *val) {
  * Side Effects:
  * TODO: None
  */
-int get_int(char *var) {
+int get_int(const char *var) {
 	int nParam;
 
 	init_params();
@@ -229,7 +230,7 @@ int get_int(char *var) {
 		return (0);
 }
 
-double get_dbl(char *var) {
+double get_dbl(const char *var) {
 	int nParam;
 
 	init_params();
@@ -238,7 +239,6 @@ double get_dbl(char *var) {
 		return (atof(params[options[nParam].index]));
 	else
 		return (0);
-
 }
 
 /*
@@ -255,7 +255,7 @@ double get_dbl(char *var) {
  * Side Effects:
  * TODO: None
  */
-void set_str(char *var, char *val) {
+void set_str(const char *var, const char *val) {
 	int nParam;
 
 	init_params();
@@ -282,7 +282,7 @@ void set_str(char *var, char *val) {
  * Side Effects:
  * TODO: None
  */
-char *get_str(char *var) {
+char *get_str(const char *var) {
 	int nParam;
 
 	init_params();
@@ -395,7 +395,7 @@ static void print_options(struct OPTION_T *o, int bShowOptional) {
  * Side Effects:
  * TODO: None
  */
-int save_file(char *path) {
+int save_file(const char *path) {
 	int i, w_adjust;
 	FILE *ofp;
 	time_t timestamp;
@@ -451,7 +451,7 @@ int save_file(char *path) {
  * Side Effects:
  * TODO: None
  */
-int usage(char *param_name, char *msg) {
+int usage(const char *param_name, const char *msg) {
 	init_params();
 
 	fprintf(stderr, "%s Population Generator (Version %d.%d.%d%s)\n", get_str("PROG"), VERSION, RELEASE, MODIFICATION,
@@ -491,76 +491,79 @@ int usage(char *param_name, char *msg) {
  * Side Effects:
  * TODO: None
  */
-int set_option(char *name, char *param) {
-	int res = 1;
-	option_t *o;
-	char parse_int[15];
-	char *cp;
-
-	init_params();
-
-	res = fnd_param(name);
-	if (res == -1)
-		return (res);
-
-	o = &options[res];
-
-	if (o->flags & OPT_NOP) {
-		printf("ERROR: Cannot accept %s.\tNot Implemented!\n", o->name);
-		return (0);
-	}
-
-	/* option is already set from the command line or hard-coded */
-	/* and doesn't allow multiple settings */
-
-	switch (o->flags & TYPE_MASK) {
-	case OPT_FLG:
-		if ((param && (*param == 'Y' || *param == 'Y' || *param == OPTION_START)) || (param == NULL)) {
-			if (o->action)
-				if (o->action((char *)o->name, NULL) < 0)
-					usage((char *)o->name, "Cannot process option");
-			set_flg(name);
-		} else
-			clr_flg(name);
-		res = 1;
-		break;
-	case OPT_INT:
-		if (o->action) {
-			if ((res = o->action((char *)o->name, param)) < 0)
-				usage(NULL, "Bad parameter argument");
-			else
-				sprintf(parse_int, "%d", res);
-		}
-		set_int(name, (o->action) ? parse_int : param);
-		res = 2;
-		break;
-	case OPT_STR:
-		if (*param == '"') {
-			cp = strchr((param + 1), '"');
-			if (cp == NULL) /* non-terminated string literal */
-				usage(NULL, "Non-terminated string");
-			*cp = '\0';
-			param += 1;
-		} else {
-			cp = strpbrk(param, " \t\n");
-			if (cp != NULL)
-				*cp = '\0';
-		}
-		if (o->action && strlen(param))
-			if (o->action((char *)o->name, param) < 0)
-				usage((char *)o->name, "Cannot process option");
-		set_str(name, param);
-		res = 2;
-		break;
-	default:
-		fprintf(stderr, "Invalid option/type (%d/%s)\n", o->flags & TYPE_MASK, o->name);
-		exit(0);
-		break;
-	}
-
-	o->flags |= OPT_SET; /* marked as set */
-
-	return (res);
+int set_option(const char *name, const char *param) {
+	printf("ERROR: set_option not supported");
+	assert(0);
+	exit(1);
+	//	int res = 1;
+	//	option_t *o;
+	//	char parse_int[15];
+	//	char *cp;
+	//
+	//	init_params();
+	//
+	//	res = fnd_param(name);
+	//	if (res == -1)
+	//		return (res);
+	//
+	//	o = &options[res];
+	//
+	//	if (o->flags & OPT_NOP) {
+	//		printf("ERROR: Cannot accept %s.\tNot Implemented!\n", o->name);
+	//		return (0);
+	//	}
+	//
+	//	/* option is already set from the command line or hard-coded */
+	//	/* and doesn't allow multiple settings */
+	//
+	//	switch (o->flags & TYPE_MASK) {
+	//	case OPT_FLG:
+	//		if ((param && (*param == 'Y' || *param == 'Y' || *param == OPTION_START)) || (param == NULL)) {
+	//			if (o->action)
+	//				if (o->action((char *)o->name, NULL) < 0)
+	//					usage((char *)o->name, "Cannot process option");
+	//			set_flg(name);
+	//		} else
+	//			clr_flg(name);
+	//		res = 1;
+	//		break;
+	//	case OPT_INT:
+	//		if (o->action) {
+	//			if ((res = o->action((char *)o->name, param)) < 0)
+	//				usage(NULL, "Bad parameter argument");
+	//			else
+	//				sprintf(parse_int, "%d", res);
+	//		}
+	//		set_int(name, (o->action) ? parse_int : param);
+	//		res = 2;
+	//		break;
+	//	case OPT_STR:
+	//		if (*param == '"') {
+	//			cp = strchr((param + 1), '"');
+	//			if (cp == NULL) /* non-terminated string literal */
+	//				usage(NULL, "Non-terminated string");
+	//			*cp = '\0';
+	//			param += 1;
+	//		} else {
+	//			cp = strpbrk(param, " \t\n");
+	//			if (cp != NULL)
+	//				*cp = '\0';
+	//		}
+	//		if (o->action && strlen(param))
+	//			if (o->action((char *)o->name, param) < 0)
+	//				usage((char *)o->name, "Cannot process option");
+	//		set_str(name, param);
+	//		res = 2;
+	//		break;
+	//	default:
+	//		fprintf(stderr, "Invalid option/type (%d/%s)\n", o->flags & TYPE_MASK, o->name);
+	//		exit(0);
+	//		break;
+	//	}
+	//
+	//	o->flags |= OPT_SET; /* marked as set */
+	//
+	//	return (res);
 }
 
 /*
@@ -577,7 +580,7 @@ int set_option(char *name, char *param) {
  * Side Effects:
  * TODO: 20000309 need to return integer to allow processing of left-over args
  */
-int process_options(int count, char **vector) {
+int process_options(int count, const char **vector) {
 	int option_num = 1, res = 1;
 
 	init_params();
@@ -620,7 +623,7 @@ int process_options(int count, char **vector) {
  * Side Effects:
  * TODO: None
  */
-int read_file(char *param_name, char *optarg) {
+int read_file(const char *param_name, const char *optarg) {
 	FILE *fp;
 	char *cp;
 	char line[MAX_LINE_LEN];
@@ -722,7 +725,7 @@ void print_params(void) {
  * Side Effects:
  * TODO: None
  */
-int fnd_param(char *name) {
+int fnd_param(const char *name) {
 	int i, res = -1;
 
 	for (i = 0; options[i].name != NULL; i++) {
@@ -791,7 +794,7 @@ char *GetParamValue(int nParam) {
  * Side Effects:
  * TODO: None
  */
-int load_param(int nParam, char *szValue) {
+int load_param(int nParam, const char *szValue) {
 	init_params();
 
 	if (options[nParam].flags & OPT_SET) /* already set from the command line */
@@ -816,7 +819,7 @@ int load_param(int nParam, char *szValue) {
  * Side Effects:
  * TODO: None
  */
-int IsIntParam(char *szParam) {
+int IsIntParam(const char *szParam) {
 	int nParam;
 
 	if ((nParam = fnd_param(szParam)) == -1)
@@ -839,7 +842,7 @@ int IsIntParam(char *szParam) {
  * Side Effects:
  * TODO: None
  */
-int IsStrParam(char *szParam) {
+int IsStrParam(const char *szParam) {
 	int nParam;
 
 	if ((nParam = fnd_param(szParam)) == -1)

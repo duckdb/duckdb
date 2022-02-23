@@ -9,6 +9,10 @@
 
 namespace duckdb {
 
+static bool IsCompareDistinct(ExpressionType type) {
+	return type == ExpressionType::COMPARE_DISTINCT_FROM || type == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+}
+
 bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, const Value &val) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 		return false;
@@ -36,14 +40,16 @@ void StatisticsPropagator::SetStatisticsNotNull(ColumnBinding binding) {
 
 void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, ExpressionType comparison_type,
                                                   const Value &constant) {
-	// any comparison filter removes all null values
-	stats.validity_stats = make_unique<ValidityStatistics>(false);
+	// regular comparisons removes all null values
+	if (!IsCompareDistinct(comparison_type)) {
+		stats.validity_stats = make_unique<ValidityStatistics>(false);
+	}
 	if (!stats.type.IsNumeric()) {
 		// don't handle non-numeric columns here (yet)
 		return;
 	}
 	auto &numeric_stats = (NumericStatistics &)stats;
-	if (numeric_stats.min.is_null || numeric_stats.max.is_null) {
+	if (numeric_stats.min.IsNull() || numeric_stats.max.IsNull()) {
 		// no stats available: skip this
 		return;
 	}
@@ -73,9 +79,11 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, Express
 
 void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseStatistics &rstats,
                                                   ExpressionType comparison_type) {
-	// any comparison filter removes all null values
-	lstats.validity_stats = make_unique<ValidityStatistics>(false);
-	rstats.validity_stats = make_unique<ValidityStatistics>(false);
+	// regular comparisons removes all null values
+	if (!IsCompareDistinct(comparison_type)) {
+		lstats.validity_stats = make_unique<ValidityStatistics>(false);
+		rstats.validity_stats = make_unique<ValidityStatistics>(false);
+	}
 	D_ASSERT(lstats.type == rstats.type);
 	if (!lstats.type.IsNumeric()) {
 		// don't handle non-numeric columns here (yet)
@@ -83,7 +91,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 	}
 	auto &left_stats = (NumericStatistics &)lstats;
 	auto &right_stats = (NumericStatistics &)rstats;
-	if (left_stats.min.is_null || left_stats.max.is_null || right_stats.min.is_null || right_stats.max.is_null) {
+	if (left_stats.min.IsNull() || left_stats.max.IsNull() || right_stats.min.IsNull() || right_stats.max.IsNull()) {
 		// no stats available: skip this
 		return;
 	}
@@ -121,6 +129,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 		}
 		break;
 	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		// LEFT = RIGHT
 		// only the tightest bounds pass
 		// so if we have e.g. left = [-50, 250] and right = [-100, 100]
@@ -146,10 +155,11 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &right, ExpressionType comparison_type) {
 	// first check if either side is a bound column ref
 	// any column ref involved in a comparison will not be null after the comparison
-	if (left.type == ExpressionType::BOUND_COLUMN_REF) {
+	bool compare_distinct = IsCompareDistinct(comparison_type);
+	if (!compare_distinct && left.type == ExpressionType::BOUND_COLUMN_REF) {
 		SetStatisticsNotNull(((BoundColumnRefExpression &)left).binding);
 	}
-	if (right.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (!compare_distinct && right.type == ExpressionType::BOUND_COLUMN_REF) {
 		SetStatisticsNotNull(((BoundColumnRefExpression &)right).binding);
 	}
 	// check if this is a comparison between a constant and a column ref
@@ -210,6 +220,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
                                                                      unique_ptr<LogicalOperator> *node_ptr) {
 	// first propagate to the child
 	node_stats = PropagateStatistics(filter.children[0]);
+	if (filter.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+		ReplaceWithEmptyResult(*node_ptr);
+		return make_unique<NodeStatistics>(0, 0);
+	}
 
 	// then propagate to each of the expressions
 	for (idx_t i = 0; i < filter.expressions.size(); i++) {

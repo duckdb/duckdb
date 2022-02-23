@@ -7,6 +7,8 @@
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -65,7 +67,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			// have to resolve columns of the unique constraint
 			vector<idx_t> keys;
 			unordered_set<idx_t> key_set;
-			if (unique.index != INVALID_INDEX) {
+			if (unique.index != DConstants::INVALID_INDEX) {
 				D_ASSERT(unique.index < base.columns.size());
 				// unique constraint is given by single index
 				unique.columns.push_back(base.columns[unique.index].name);
@@ -163,6 +165,15 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	// bind collations to detect any unsupported collation errors
 	for (auto &column : base.columns) {
 		ExpressionBinder::TestCollation(context, StringType::GetCollation(column.type));
+		BindLogicalType(context, column.type);
+		if (column.type.id() == LogicalTypeId::ENUM) {
+			// We add a catalog dependency
+			auto enum_dependency = EnumType::GetCatalog(column.type);
+			if (enum_dependency) {
+				// Only if the ENUM comes from a create type
+				result->dependencies.insert(enum_dependency);
+			}
+		}
 	}
 	this->allow_stream_result = false;
 	return result;

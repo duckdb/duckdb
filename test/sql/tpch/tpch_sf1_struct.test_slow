@@ -155,7 +155,7 @@ CREATE VIEW region AS SELECT
 c['r_regionkey'] AS r_regionkey,
 c['r_name'] AS r_name,
 c['r_comment'] AS r_comment
-FROM region_struct
+FROM region_struct;
 
 statement ok
 CREATE TABLE supplier_struct AS SELECT {

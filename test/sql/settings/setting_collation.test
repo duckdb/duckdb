@@ -1,0 +1,48 @@
+# name: test/sql/settings/setting_collation.test
+# description: Test COLLATION setting
+# group: [settings]
+
+statement ok
+PRAGMA default_collation='NOCASE'
+
+statement ok
+CREATE TABLE collate_test(s VARCHAR)
+
+statement ok
+INSERT INTO collate_test VALUES ('hEllO'), ('WöRlD'), ('wozld')
+
+query I
+SELECT COUNT(*) FROM collate_test WHERE 'BlA'='bLa'
+----
+3
+
+query T
+SELECT * FROM collate_test WHERE s='hello'
+----
+hEllO
+
+query T
+SELECT * FROM collate_test ORDER BY s
+----
+hEllO
+wozld
+WöRlD
+
+statement ok
+PRAGMA default_collation='NOCASE.NOACCENT'
+
+query T
+SELECT * FROM collate_test ORDER BY s
+----
+hEllO
+WöRlD
+wozld
+
+statement error
+PRAGMA default_collation='unknown'
+
+statement ok
+SET GLOBAL default_collation='NOCASE'
+
+statement ok
+SET SESSION default_collation='NOCASE'

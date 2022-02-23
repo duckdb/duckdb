@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -15,6 +16,7 @@
 #include "duckdb/planner/filter/null_filter.hpp"
 
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 
 namespace duckdb {
 
@@ -78,6 +80,7 @@ FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInforma
 }
 
 FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
+	LookUpConjunctions(expr.get());
 	// try to push the filter into the combiner
 	auto result = AddFilter(expr.get());
 	if (result == FilterResult::UNSUPPORTED) {
@@ -268,7 +271,7 @@ bool FilterCombiner::HasFilters() {
 // 					break;
 // 				} else {
 // 					auto &const_value_expr = (BoundConstantExpression &)*comp_in_exp.children[i].get();
-// 					if (const_value_expr.value.is_null) {
+// 					if (const_value_expr.value.IsNull()) {
 // 						return checks;
 // 					}
 // 					if (!min && !max) {
@@ -430,18 +433,16 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				//! This is a like function.
 				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
 				auto &constant_value_expr = (BoundConstantExpression &)*func.children[1].get();
-				string like_string = constant_value_expr.value.str_value;
+				auto like_string = StringValue::Get(constant_value_expr.value);
 				if (like_string.empty()) {
 					continue;
 				}
 				auto column_index = column_ids[column_ref.binding.column_index];
-				auto const_value = constant_value_expr.value.Copy();
-				const_value.str_value = like_string;
 				//! Here the like must be transformed to a BOUND COMPARISON geq le
 				auto lower_bound =
-				    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, const_value);
-				const_value.str_value[const_value.str_value.size() - 1]++;
-				auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, const_value);
+				    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(like_string));
+				like_string[like_string.size() - 1]++;
+				auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(like_string));
 				table_filters.PushFilter(column_index, move(lower_bound));
 				table_filters.PushFilter(column_index, move(upper_bound));
 				table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
@@ -451,8 +452,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				//! This is a like function.
 				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
 				auto &constant_value_expr = (BoundConstantExpression &)*func.children[1].get();
-				string like_string = constant_value_expr.value.str_value;
-				auto const_value = constant_value_expr.value.Copy();
+				auto &like_string = StringValue::Get(constant_value_expr.value);
 				if (like_string[0] == '%' || like_string[0] == '_') {
 					//! We have no prefix so nothing to pushdown
 					break;
@@ -466,19 +466,18 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 					}
 					prefix += c;
 				}
-				const_value.str_value = prefix;
 				auto column_index = column_ids[column_ref.binding.column_index];
 				if (equality) {
 					//! Here the like can be transformed to an equality query
-					auto equal_filter = make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_value);
+					auto equal_filter = make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value(prefix));
 					table_filters.PushFilter(column_index, move(equal_filter));
 					table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
 				} else {
 					//! Here the like must be transformed to a BOUND COMPARISON geq le
 					auto lower_bound =
-					    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, const_value);
-					const_value.str_value[const_value.str_value.size() - 1]++;
-					auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, const_value);
+					    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(prefix));
+					prefix[prefix.size() - 1]++;
+					auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix));
 					table_filters.PushFilter(column_index, move(lower_bound));
 					table_filters.PushFilter(column_index, move(upper_bound));
 					table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
@@ -486,7 +485,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			}
 		} else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
 			auto &func = (BoundOperatorExpression &)*remaining_filter;
-			vector<Value> in_values;
+			vector<hugeint_t> in_values;
 			D_ASSERT(func.children.size() > 1);
 			if (func.children[0]->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
@@ -507,31 +506,31 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				continue;
 			}
 			auto &fst_const_value_expr = (BoundConstantExpression &)*func.children[1].get();
+			auto &type = fst_const_value_expr.value.type();
 
 			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
 			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
-			if (!fst_const_value_expr.value.type().IsIntegral()) {
+			if (!type.IsIntegral()) {
 				continue;
 			}
 
 			bool can_simplify_in_clause = true;
 			for (idx_t i = 1; i < func.children.size(); i++) {
 				auto &const_value_expr = (BoundConstantExpression &)*func.children[i].get();
-				if (const_value_expr.value.is_null) {
+				if (const_value_expr.value.IsNull()) {
 					can_simplify_in_clause = false;
 					break;
 				}
-				in_values.push_back(const_value_expr.value);
+				in_values.push_back(const_value_expr.value.GetValue<hugeint_t>());
 			}
 			if (!can_simplify_in_clause || in_values.empty()) {
 				continue;
 			}
-			Value one(1);
 
 			sort(in_values.begin(), in_values.end());
 
 			for (idx_t in_val_idx = 1; in_val_idx < in_values.size(); in_val_idx++) {
-				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > one || in_values[in_val_idx - 1].is_null) {
+				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > 1) {
 					can_simplify_in_clause = false;
 					break;
 				}
@@ -539,9 +538,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			if (!can_simplify_in_clause) {
 				continue;
 			}
-			auto lower_bound =
-			    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, in_values.front());
-			auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, in_values.back());
+			auto lower_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+			                                               Value::Numeric(type, in_values.front()));
+			auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+			                                               Value::Numeric(type, in_values.back()));
 			table_filters.PushFilter(column_index, move(lower_bound));
 			table_filters.PushFilter(column_index, move(upper_bound));
 			table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
@@ -549,6 +549,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
 		}
 	}
+
+	GenerateORFilters(table_filters, column_ids);
 
 	return table_filters;
 }
@@ -580,7 +582,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression *expr) {
 		idx_t equivalence_set = GetEquivalenceSet(node);
 		auto scalar = left_is_scalar ? comparison.left.get() : comparison.right.get();
 		auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
-		if (constant_value.is_null) {
+		if (constant_value.IsNull()) {
 			// comparisons with null are always null (i.e. will never result in rows)
 			return FilterResult::UNSATISFIABLE;
 		}
@@ -662,7 +664,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		// scalar condition, evaluate it
 		auto result = ExpressionExecutor::EvaluateScalar(*expr).CastAs(LogicalType::BOOLEAN);
 		// check if the filter passes
-		if (result.is_null || !result.value_.boolean) {
+		if (result.IsNull() || !BooleanValue::Get(result)) {
 			// the filter does not pass the scalar test, create an empty result
 			return FilterResult::UNSATISFIABLE;
 		} else {
@@ -985,6 +987,176 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 		D_ASSERT(IsLessThan(right.comparison_type) && IsGreaterThan(left.comparison_type));
 		return InvertValueComparisonResult(CompareValueInformation(right, left));
 	}
+}
+
+void FilterCombiner::LookUpConjunctions(Expression *expr) {
+	if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
+		auto root_or_expr = (BoundConjunctionExpression *)expr;
+		for (const auto &entry : map_col_conjunctions) {
+			for (const auto &conjs_to_push : entry.second) {
+				if (conjs_to_push->root_or->Equals(root_or_expr)) {
+					return;
+				}
+			}
+		}
+
+		cur_root_or = root_or_expr;
+		cur_conjunction = root_or_expr;
+		cur_colref_to_push = nullptr;
+		if (!BFSLookUpConjunctions(cur_root_or)) {
+			if (cur_colref_to_push) {
+				auto entry = map_col_conjunctions.find(cur_colref_to_push);
+				auto &vec_conjs_to_push = entry->second;
+				if (vec_conjs_to_push.size() == 1) {
+					map_col_conjunctions.erase(entry);
+					return;
+				}
+				vec_conjs_to_push.pop_back();
+			}
+		}
+		return;
+	}
+
+	// Verify if the expression has a column already pushed down by other OR expression
+	VerifyOrsToPush(*expr);
+}
+
+bool FilterCombiner::BFSLookUpConjunctions(BoundConjunctionExpression *conjunction) {
+	vector<BoundConjunctionExpression *> conjunctions_to_visit;
+
+	for (auto &child : conjunction->children) {
+		switch (child->GetExpressionClass()) {
+		case ExpressionClass::BOUND_CONJUNCTION: {
+			auto child_conjunction = (BoundConjunctionExpression *)child.get();
+			conjunctions_to_visit.emplace_back(child_conjunction);
+			break;
+		}
+		case ExpressionClass::BOUND_COMPARISON: {
+			if (!UpdateConjunctionFilter((BoundComparisonExpression *)child.get())) {
+				return false;
+			}
+			break;
+		}
+		default: {
+			return false;
+		}
+		}
+	}
+
+	for (auto child_conjunction : conjunctions_to_visit) {
+		cur_conjunction = child_conjunction;
+		// traverse child conjuction
+		if (!BFSLookUpConjunctions(child_conjunction)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void FilterCombiner::VerifyOrsToPush(Expression &expr) {
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto colref = (BoundColumnRefExpression *)&expr;
+		auto entry = map_col_conjunctions.find(colref);
+		if (entry == map_col_conjunctions.end()) {
+			return;
+		}
+		map_col_conjunctions.erase(entry);
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { VerifyOrsToPush(child); });
+}
+
+bool FilterCombiner::UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr) {
+	bool left_is_scalar = comparison_expr->left->IsFoldable();
+	bool right_is_scalar = comparison_expr->right->IsFoldable();
+
+	Expression *non_scalar_expr;
+	if (left_is_scalar || right_is_scalar) {
+		// only support comparison with scalar
+		non_scalar_expr = left_is_scalar ? comparison_expr->right.get() : comparison_expr->left.get();
+
+		if (non_scalar_expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+			return UpdateFilterByColumn((BoundColumnRefExpression *)non_scalar_expr, comparison_expr);
+		}
+	}
+
+	return false;
+}
+
+bool FilterCombiner::UpdateFilterByColumn(BoundColumnRefExpression *column_ref,
+                                          BoundComparisonExpression *comparison_expr) {
+	if (cur_colref_to_push == nullptr) {
+		cur_colref_to_push = column_ref;
+
+		auto or_conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+		or_conjunction->children.emplace_back(comparison_expr->Copy());
+
+		unique_ptr<ConjunctionsToPush> conjs_to_push = make_unique<ConjunctionsToPush>();
+		conjs_to_push->conjunctions.emplace_back(move(or_conjunction));
+		conjs_to_push->root_or = cur_root_or;
+
+		auto &&vec_col_conjs = map_col_conjunctions[column_ref];
+		vec_col_conjs.emplace_back(move(conjs_to_push));
+		vec_colref_insertion_order.emplace_back(column_ref);
+		return true;
+	}
+
+	auto entry = map_col_conjunctions.find(cur_colref_to_push);
+	D_ASSERT(entry != map_col_conjunctions.end());
+	auto &conjunctions_to_push = entry->second.back();
+
+	if (!cur_colref_to_push->Equals(column_ref)) {
+		// check for multiple colunms in the same root OR node
+		if (cur_root_or == cur_conjunction) {
+			return false;
+		}
+		// found an AND using a different column, we should stop the look up
+		if (cur_conjunction->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+			return false;
+		}
+
+		// found a different column, AND conditions cannot be preserved anymore
+		conjunctions_to_push->preserve_and = false;
+		return true;
+	}
+
+	auto &last_conjunction = conjunctions_to_push->conjunctions.back();
+	if (cur_conjunction->GetExpressionType() == last_conjunction->GetExpressionType()) {
+		last_conjunction->children.emplace_back(comparison_expr->Copy());
+	} else {
+		auto new_conjunction = make_unique<BoundConjunctionExpression>(cur_conjunction->GetExpressionType());
+		new_conjunction->children.emplace_back(comparison_expr->Copy());
+		conjunctions_to_push->conjunctions.emplace_back(move(new_conjunction));
+	}
+	return true;
+}
+
+void FilterCombiner::GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids) {
+	for (const auto colref : vec_colref_insertion_order) {
+		auto column_index = column_ids[colref->binding.column_index];
+		if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
+			break;
+		}
+
+		for (const auto &conjunctions_to_push : map_col_conjunctions[colref]) {
+			// root OR filter to push into the TableFilter
+			auto root_or_filter = make_unique<ConjunctionOrFilter>();
+			// variable to hold the last conjuntion filter pointer
+			// the next filter will be added into it, i.e., we create a chain of conjunction filters
+			ConjunctionFilter *last_conj_filter = root_or_filter.get();
+
+			for (auto &conjunction : conjunctions_to_push->conjunctions) {
+				if (conjunction->GetExpressionType() == ExpressionType::CONJUNCTION_AND &&
+				    conjunctions_to_push->preserve_and) {
+					GenerateConjunctionFilter<ConjunctionAndFilter>(conjunction.get(), last_conj_filter);
+				} else {
+					GenerateConjunctionFilter<ConjunctionOrFilter>(conjunction.get(), last_conj_filter);
+				}
+			}
+			table_filter.PushFilter(column_index, move(root_or_filter));
+		}
+	}
+	map_col_conjunctions.clear();
+	vec_colref_insertion_order.clear();
 }
 
 } // namespace duckdb

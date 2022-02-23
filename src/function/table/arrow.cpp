@@ -14,7 +14,8 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "utf8proc_wrapper.hpp"
-
+#include "duckdb/common/types/arrow_aux_data.hpp"
+#include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/mutex.hpp"
 #include <map>
@@ -161,20 +162,16 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 }
 
 unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, vector<Value> &inputs,
-                                                           unordered_map<string, Value> &named_parameters,
+                                                           named_parameter_map_t &named_parameters,
                                                            vector<LogicalType> &input_table_types,
                                                            vector<string> &input_table_names,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
-	auto stream_factory_ptr = inputs[0].GetPointer();
-	unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce)(
+	typedef unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce_t)(
 	    uintptr_t stream_factory_ptr,
 	    std::pair<std::unordered_map<idx_t, string>, std::vector<string>> & project_columns,
-	    TableFilterCollection * filters) =
-	    (unique_ptr<ArrowArrayStreamWrapper>(*)(uintptr_t stream_factory_ptr,
-	                                            std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &
-	                                                project_columns,
-	                                            TableFilterCollection * filters)) inputs[1]
-	        .GetPointer();
+	    TableFilterCollection * filters);
+	auto stream_factory_ptr = inputs[0].GetPointer();
+	auto stream_factory_produce = (stream_factory_produce_t)inputs[1].GetPointer();
 	auto rows_per_thread = inputs[2].GetValue<uint64_t>();
 	std::pair<std::unordered_map<idx_t, string>, std::vector<string>> project_columns;
 #ifndef DUCKDB_NO_THREADS
@@ -995,6 +992,8 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
 		if (array.length != scan_state.chunk->arrow_array.length) {
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
+		output.data[idx].GetBuffer()->SetAuxiliaryData(make_unique<ArrowAuxiliaryData>(scan_state.chunk),
+		                                               VectorAuxiliaryDataType::ARROW_AUXILIARY);
 		if (array.dictionary) {
 			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_convert_data,
 			                              col_idx, arrow_convert_idx);
@@ -1050,7 +1049,7 @@ void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const
 
 idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
-	if (bind_data.number_of_rows <= 0 || context.verify_parallelism) {
+	if (bind_data.number_of_rows <= 0 || ClientConfig::GetConfig(context).verify_parallelism) {
 		return context.db->NumberOfThreads();
 	}
 	return ((bind_data.number_of_rows + bind_data.rows_per_thread - 1) / bind_data.rows_per_thread) + 1;
@@ -1103,12 +1102,12 @@ unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContex
 	return make_unique<NodeStatistics>(bind_data.number_of_rows, bind_data.number_of_rows);
 }
 
-int ArrowTableFunction::ArrowProgress(ClientContext &context, const FunctionData *bind_data_p) {
+double ArrowTableFunction::ArrowProgress(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
 	if (bind_data.number_of_rows == 0) {
 		return 100;
 	}
-	auto percentage = bind_data.lines_read * 100 / bind_data.number_of_rows;
+	auto percentage = bind_data.lines_read * 100.0 / bind_data.number_of_rows;
 	return percentage;
 }
 

@@ -187,6 +187,10 @@ TEST_CASE("Test multiple result sets", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
+	con.DisableQueryVerification();
+	con.EnableQueryVerification();
+
+	con.ForceParallelism();
 
 	result = con.Query("SELECT 42; SELECT 84");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
@@ -224,8 +228,8 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	// "result2" we can read
 	REQUIRE(CHECK_COLUMN(result2, 0, {42}));
 
-	// error in query
-	result = con.SendQuery("SELECT 'hello'::INT;");
+	// error in binding
+	result = con.SendQuery("SELECT * FROM nonexistanttable");
 	REQUIRE(!result->ToString().empty());
 	REQUIRE(result->type == QueryResultType::MATERIALIZED_RESULT);
 	REQUIRE_FAIL(result);
@@ -344,7 +348,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 static void VerifyStreamResult(unique_ptr<QueryResult> result) {
 	REQUIRE(result->types[0] == LogicalType::INTEGER);
 	size_t current_row = 0;
-	size_t current_expected_value = 0;
+	int current_expected_value = 0;
 	size_t expected_rows = 500 * 5;
 	while (true) {
 		auto chunk = result->Fetch();
@@ -476,4 +480,23 @@ TEST_CASE("Test connection API", "[api]") {
 TEST_CASE("Test parser tokenize", "[api]") {
 	Parser parser;
 	REQUIRE_NOTHROW(parser.Tokenize("SELECT * FROM table WHERE i+1=3 AND j='hello'; --tokenize example query"));
+}
+
+TEST_CASE("Test opening an invalid database file", "[api]") {
+	unique_ptr<DuckDB> db;
+	bool success = false;
+	try {
+		db = make_unique<DuckDB>("data/parquet-testing/blob.parquet");
+		success = true;
+	} catch (std::exception &ex) {
+		REQUIRE(StringUtil::Contains(ex.what(), "DuckDB"));
+	}
+	REQUIRE(!success);
+	try {
+		db = make_unique<DuckDB>("data/parquet-testing/h2oai/h2oai_group_small.parquet");
+		success = true;
+	} catch (std::exception &ex) {
+		REQUIRE(StringUtil::Contains(ex.what(), "DuckDB"));
+	}
+	REQUIRE(!success);
 }

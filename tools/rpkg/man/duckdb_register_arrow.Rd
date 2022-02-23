@@ -3,11 +3,14 @@
 \name{duckdb_register_arrow}
 \alias{duckdb_register_arrow}
 \alias{duckdb_unregister_arrow}
+\alias{duckdb_list_arrow}
 \title{Register an Arrow data source as a virtual table}
 \usage{
-duckdb_register_arrow(conn, name, arrow_scannable)
+duckdb_register_arrow(conn, name, arrow_scannable, use_async = NULL)
 
 duckdb_unregister_arrow(conn, name)
+
+duckdb_list_arrow(conn)
 }
 \arguments{
 \item{conn}{A DuckDB connection, created by \code{dbConnect()}.}
@@ -15,6 +18,8 @@ duckdb_unregister_arrow(conn, name)
 \item{name}{The name for the virtual table that is registered or unregistered}
 
 \item{arrow_scannable}{A scannable Arrow-object}
+
+\item{use_async}{Switched to the asynchronous scanner. (deprecated)}
 }
 \value{
 These functions are called for their side effect.

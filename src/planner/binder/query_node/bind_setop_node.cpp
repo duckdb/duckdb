@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-static void GatherAliases(BoundQueryNode &node, unordered_map<string, idx_t> &aliases,
+static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &aliases,
                           expression_map_t<idx_t> &expressions) {
 	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
 		// setop, recurse
@@ -35,7 +35,7 @@ static void GatherAliases(BoundQueryNode &node, unordered_map<string, idx_t> &al
 					// there is a conflict
 					// we place "-1" in the aliases map at this location
 					// "-1" signifies that there is an ambiguous reference
-					aliases[name] = INVALID_INDEX;
+					aliases[name] = DConstants::INVALID_INDEX;
 				}
 			} else {
 				// the alias is not in there yet, just assign it
@@ -47,7 +47,7 @@ static void GatherAliases(BoundQueryNode &node, unordered_map<string, idx_t> &al
 				// the node is in there
 				// repeat the same as with the alias: if there is an ambiguity we insert "-1"
 				if (expr_entry->second != i) {
-					expressions[expr.get()] = INVALID_INDEX;
+					expressions[expr.get()] = DConstants::INVALID_INDEX;
 				}
 			} else {
 				// not in there yet, just place it in there
@@ -81,7 +81,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 		// we recursively visit the children of this node to extract aliases and expressions that can be referenced in
 		// the ORDER BY
-		unordered_map<string, idx_t> alias_map;
+		case_insensitive_map_t<idx_t> alias_map;
 		expression_map_t<idx_t> expression_map;
 		GatherAliases(*result, alias_map, expression_map);
 

@@ -1,14 +1,14 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/regexp.hpp"
+
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "utf8proc_wrapper.hpp"
-
-#include "duckdb/function/scalar/regexp.hpp"
 
 namespace duckdb {
 
@@ -38,7 +38,7 @@ static inline duckdb_re2::StringPiece CreateStringPiece(string_t &input) {
 	return duckdb_re2::StringPiece(input.GetDataUnsafe(), input.GetSize());
 }
 
-static void ParseRegexOptions(string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr) {
+static void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr) {
 	for (idx_t i = 0; i < options.size(); i++) {
 		switch (options[i]) {
 		case 'c':
@@ -97,6 +97,11 @@ struct RegexLocalState : public FunctionData {
 		D_ASSERT(info.constant_pattern);
 	}
 
+	explicit RegexLocalState(RegexpExtractBindData &info)
+	    : constant_pattern(duckdb_re2::StringPiece(info.constant_string.c_str(), info.constant_string.size())) {
+		D_ASSERT(info.constant_pattern);
+	}
+
 	RE2 constant_pattern;
 };
 
@@ -144,15 +149,15 @@ static unique_ptr<FunctionData> RegexpMatchesBind(ClientContext &context, Scalar
 			throw InvalidInputException("Regex options field must be a constant");
 		}
 		Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[2]);
-		if (!options_str.is_null && options_str.type().id() == LogicalTypeId::VARCHAR) {
-			ParseRegexOptions(options_str.str_value, options);
+		if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
+			ParseRegexOptions(StringValue::Get(options_str), options);
 		}
 	}
 
 	if (arguments[1]->IsFoldable()) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-		if (!pattern_str.is_null && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
-			return make_unique<RegexpMatchesBindData>(options, pattern_str.str_value);
+		if (!pattern_str.IsNull() && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
+			return make_unique<RegexpMatchesBindData>(options, StringValue::Get(pattern_str));
 		}
 	}
 	return make_unique<RegexpMatchesBindData>(options, "");
@@ -195,12 +200,91 @@ static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarF
 			throw InvalidInputException("Regex options field must be a constant");
 		}
 		Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[3]);
-		if (!options_str.is_null && options_str.type().id() == LogicalTypeId::VARCHAR) {
-			ParseRegexOptions(options_str.str_value, data->options, &data->global_replace);
+		if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
+			ParseRegexOptions(StringValue::Get(options_str), data->options, &data->global_replace);
 		}
 	}
 
 	return move(data);
+}
+
+inline static string_t Extract(const string_t &input, Vector &result, const RE2 &re,
+                               const duckdb_re2::StringPiece &rewrite) {
+	std::string extracted;
+	RE2::Extract(input.GetString(), re, rewrite, &extracted);
+	return StringVector::AddString(result, extracted.c_str(), extracted.size());
+}
+
+static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	const auto &info = (RegexpExtractBindData &)*func_expr.bind_info;
+
+	auto &strings = args.data[0];
+	auto &patterns = args.data[1];
+	if (info.constant_pattern) {
+		auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+		UnaryExecutor::Execute<string_t, string_t>(strings, result, args.size(), [&](string_t input) {
+			return Extract(input, result, lstate.constant_pattern, info.rewrite);
+		});
+	} else {
+		BinaryExecutor::Execute<string_t, string_t, string_t>(strings, patterns, result, args.size(),
+		                                                      [&](string_t input, string_t pattern) {
+			                                                      RE2 re(CreateStringPiece(pattern));
+			                                                      return Extract(input, result, re, info.rewrite);
+		                                                      });
+	}
+}
+
+static unique_ptr<FunctionData> RegexExtractInitLocalState(const BoundFunctionExpression &expr,
+                                                           FunctionData *bind_data) {
+	auto &info = (RegexpExtractBindData &)*bind_data;
+	if (info.constant_pattern) {
+		return make_unique<RegexLocalState>(info);
+	}
+	return nullptr;
+}
+
+RegexpExtractBindData::RegexpExtractBindData(bool constant_pattern, const string &constant_string,
+                                             const string &group_string_p)
+    : constant_pattern(constant_pattern), constant_string(constant_string), group_string(group_string_p),
+      rewrite(group_string) {
+}
+
+unique_ptr<FunctionData> RegexpExtractBindData::Copy() {
+	return make_unique<RegexpExtractBindData>(constant_pattern, constant_string, group_string);
+}
+
+static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarFunction &bound_function,
+                                                 vector<unique_ptr<Expression>> &arguments) {
+	D_ASSERT(arguments.size() >= 2);
+
+	bool constant_pattern = arguments[1]->IsFoldable();
+	string pattern = "";
+	if (constant_pattern) {
+		Value pattern_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+		if (!pattern_str.IsNull() && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
+			pattern = StringValue::Get(pattern_str);
+		}
+	}
+
+	string group_string = "";
+	if (arguments.size() == 3) {
+		if (!arguments[2]->IsFoldable()) {
+			throw InvalidInputException("Group index field field must be a constant!");
+		}
+		Value group = ExpressionExecutor::EvaluateScalar(*arguments[2]);
+		if (!group.IsNull()) {
+			auto group_idx = group.GetValue<int32_t>();
+			if (group_idx < 0 || group_idx > 9) {
+				throw InvalidInputException("Group index must be between 0 and 9!");
+			}
+			group_string = "\\" + to_string(group_idx);
+		}
+	} else {
+		group_string = "\\0";
+	}
+
+	return make_unique<RegexpExtractBindData>(constant_pattern, pattern, group_string);
 }
 
 void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
@@ -227,9 +311,18 @@ void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                   LogicalType::VARCHAR, RegexReplaceFunction, false, RegexReplaceBind));
 
+	ScalarFunctionSet regexp_extract("regexp_extract");
+	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                          RegexExtractFunction, false, RegexExtractBind, nullptr, nullptr,
+	                                          RegexExtractInitLocalState));
+	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER},
+	                                          LogicalType::VARCHAR, RegexExtractFunction, false, RegexExtractBind,
+	                                          nullptr, nullptr, RegexExtractInitLocalState));
+
 	set.AddFunction(regexp_full_match);
 	set.AddFunction(regexp_partial_match);
 	set.AddFunction(regexp_replace);
+	set.AddFunction(regexp_extract);
 }
 
 } // namespace duckdb

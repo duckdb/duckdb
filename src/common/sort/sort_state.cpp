@@ -1,3 +1,4 @@
+#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/sort/sorted_block.hpp"
@@ -261,7 +262,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	const idx_t sorting_entry_size = gstate.sort_layout.entry_size;
 	for (idx_t i = 0; i < count; i++) {
 		auto index = Load<uint32_t>(sorting_ptr);
-		memcpy(ordered_data_ptr, unordered_data_ptr + index * row_width, row_width);
+		FastMemcpy(ordered_data_ptr, unordered_data_ptr + index * row_width, row_width);
 		ordered_data_ptr += row_width;
 		sorting_ptr += sorting_entry_size;
 	}
@@ -403,7 +404,7 @@ void GlobalSortState::InitializeMergeRound() {
 	}
 }
 
-void GlobalSortState::CompleteMergeRound() {
+void GlobalSortState::CompleteMergeRound(bool keep_radix_data) {
 	sorted_blocks.clear();
 	for (auto &sorted_block_vector : sorted_blocks_temp) {
 		sorted_blocks.push_back(make_unique<SortedBlock>(buffer_manager, *this));
@@ -415,7 +416,7 @@ void GlobalSortState::CompleteMergeRound() {
 		odd_one_out = nullptr;
 	}
 	// Only one block left: Done!
-	if (sorted_blocks.size() == 1) {
+	if (sorted_blocks.size() == 1 && !keep_radix_data) {
 		sorted_blocks[0]->radix_sorting_data.clear();
 		sorted_blocks[0]->blob_sorting_data = nullptr;
 	}

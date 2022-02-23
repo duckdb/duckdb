@@ -20,7 +20,6 @@ CREATE TABLE lineitem(l_orderkey INT NOT NULL,
                       l_shipmode VARCHAR(10) NOT NULL,
                       l_comment VARCHAR(44) NOT NULL);
 
-
 statement ok
 COPY lineitem FROM 'test/sql/copy/csv/data/lineitem1k.tbl.gz' DELIMITER '|';
 

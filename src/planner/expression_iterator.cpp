@@ -39,9 +39,11 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 	case ExpressionClass::BOUND_CASE: {
 		auto &case_expr = (BoundCaseExpression &)expr;
-		callback(case_expr.check);
-		callback(case_expr.result_if_true);
-		callback(case_expr.result_if_false);
+		for (auto &case_check : case_expr.case_checks) {
+			callback(case_check.when_expr);
+			callback(case_check.then_expr);
+		}
+		callback(case_expr.else_expr);
 		break;
 	}
 	case ExpressionClass::BOUND_CAST: {
@@ -142,6 +144,15 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 		auto &bound_crossproduct = (BoundCrossProductRef &)ref;
 		EnumerateTableRefChildren(*bound_crossproduct.left, callback);
 		EnumerateTableRefChildren(*bound_crossproduct.right, callback);
+		break;
+	}
+	case TableReferenceType::EXPRESSION_LIST: {
+		auto &bound_expr_list = (BoundExpressionListRef &)ref;
+		for (auto &expr_list : bound_expr_list.values) {
+			for (auto &expr : expr_list) {
+				EnumerateExpression(expr, callback);
+			}
+		}
 		break;
 	}
 	case TableReferenceType::JOIN: {

@@ -9,6 +9,9 @@
 namespace duckdb {
 
 unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSelectStmt *stmt) {
+	D_ASSERT(stmt->type == duckdb_libpgquery::T_PGSelectStmt);
+	auto stack_checker = StackCheck();
+
 	unique_ptr<QueryNode> node;
 
 	switch (stmt->op) {
@@ -40,7 +43,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 			auto target = reinterpret_cast<duckdb_libpgquery::PGNode *>(stmt->distinctClause->head->data.ptr_value);
 			if (target) {
 				//  add the columns defined in the ON clause to the select list
-				TransformExpressionList(*stmt->distinctClause, modifier->distinct_on_targets, 0);
+				TransformExpressionList(*stmt->distinctClause, modifier->distinct_on_targets);
 			}
 			result->modifiers.push_back(move(modifier));
 		}
@@ -56,16 +59,18 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 				throw ParserException("SELECT clause without selection list");
 			}
 			// select list
-			TransformExpressionList(*stmt->targetList, result->select_list, 0);
+			TransformExpressionList(*stmt->targetList, result->select_list);
 			result->from_table = TransformFrom(stmt->fromClause);
 		}
 
 		// where
-		result->where_clause = TransformExpression(stmt->whereClause, 0);
+		result->where_clause = TransformExpression(stmt->whereClause);
 		// group by
-		TransformGroupBy(stmt->groupClause, result->groups);
+		TransformGroupBy(stmt->groupClause, *result);
 		// having
-		result->having = TransformExpression(stmt->havingClause, 0);
+		result->having = TransformExpression(stmt->havingClause);
+		// qualify
+		result->qualify = TransformExpression(stmt->qualifyClause);
 		// sample
 		result->sample = TransformSampleOptions(stmt->sampleOptions);
 		break;
@@ -120,14 +125,24 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 		node->modifiers.push_back(move(order_modifier));
 	}
 	if (stmt->limitCount || stmt->limitOffset) {
-		auto limit_modifier = make_unique<LimitModifier>();
-		if (stmt->limitCount) {
-			limit_modifier->limit = TransformExpression(stmt->limitCount, 0);
+		if (stmt->limitCount && stmt->limitCount->type == duckdb_libpgquery::T_PGLimitPercent) {
+			auto limit_percent_modifier = make_unique<LimitPercentModifier>();
+			auto expr_node = reinterpret_cast<duckdb_libpgquery::PGLimitPercent *>(stmt->limitCount)->limit_percent;
+			limit_percent_modifier->limit = TransformExpression(expr_node);
+			if (stmt->limitOffset) {
+				limit_percent_modifier->offset = TransformExpression(stmt->limitOffset);
+			}
+			node->modifiers.push_back(move(limit_percent_modifier));
+		} else {
+			auto limit_modifier = make_unique<LimitModifier>();
+			if (stmt->limitCount) {
+				limit_modifier->limit = TransformExpression(stmt->limitCount);
+			}
+			if (stmt->limitOffset) {
+				limit_modifier->offset = TransformExpression(stmt->limitOffset);
+			}
+			node->modifiers.push_back(move(limit_modifier));
 		}
-		if (stmt->limitOffset) {
-			limit_modifier->offset = TransformExpression(stmt->limitOffset, 0);
-		}
-		node->modifiers.push_back(move(limit_modifier));
 	}
 	return node;
 }

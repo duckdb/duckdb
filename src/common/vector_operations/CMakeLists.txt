@@ -1,6 +1,5 @@
-add_library_unity(
-  duckdb_vector_operations
-  OBJECT
+add_library(
+  duckdb_vector_operations OBJECT
   boolean_operators.cpp
   vector_cast.cpp
   comparison_operators.cpp

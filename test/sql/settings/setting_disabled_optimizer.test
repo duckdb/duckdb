@@ -1,0 +1,21 @@
+# name: test/sql/settings/setting_disabled_optimizer.test
+# description: Test disabled optimizers setting
+# group: [settings]
+
+statement ok
+SET disabled_optimizers=''
+
+statement ok
+SET disabled_optimizers TO 'expression_rewriter'
+
+statement ok
+SET disabled_optimizers TO 'expression_rewriter,filter_pushdown,join_order'
+
+statement ok
+SELECT current_setting('disabled_optimizers');
+
+statement error
+SET disabled_optimizers TO 'expression_rewriteX'
+
+statement error
+SET disabled_optimizers TO 'unknown_optimizer'

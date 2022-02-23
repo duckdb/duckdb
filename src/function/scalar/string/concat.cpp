@@ -4,6 +4,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 #include <string.h>
 
@@ -197,7 +198,7 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 		}
 	}
 	switch (separator.GetVectorType()) {
-	case VectorType::CONSTANT_VECTOR:
+	case VectorType::CONSTANT_VECTOR: {
 		if (ConstantVector::IsNull(separator)) {
 			// constant NULL as separator: return constant NULL vector
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -205,9 +206,11 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 			return;
 		}
 		// no null values
-		TemplatedConcatWS(args, (string_t *)vdata.data, *vdata.sel, FlatVector::INCREMENTAL_SELECTION_VECTOR,
-		                  args.size(), result);
+		SelectionVector owned_sel;
+		auto sel = FlatVector::IncrementalSelectionVector(args.size(), owned_sel);
+		TemplatedConcatWS(args, (string_t *)vdata.data, *vdata.sel, *sel, args.size(), result);
 		return;
+	}
 	default: {
 		// default case: loop over nullmask and create a non-null selection vector
 		idx_t not_null_count = 0;
@@ -250,6 +253,7 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	concat_op.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, ConcatOperator));
 	concat_op.AddFunction(ScalarFunction({LogicalType::BLOB, LogicalType::BLOB}, LogicalType::BLOB, ConcatOperator));
+	concat_op.AddFunction(ListConcatFun::GetFunction());
 	set.AddFunction(concat_op);
 
 	ScalarFunction concat_ws = ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::VARCHAR},

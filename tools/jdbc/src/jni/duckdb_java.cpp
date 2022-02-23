@@ -2,7 +2,6 @@
 #include "duckdb.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/appender.hpp"
-#include "parquet-extension.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -48,7 +47,6 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 	}
 	try {
 		auto db = new DuckDB(database, &config);
-		db->LoadExtension<ParquetExtension>();
 		return env->NewDirectByteBuffer(db, 0);
 	} catch (exception &e) {
 		env->ThrowNew(env->FindClass("java/sql/SQLException"), e.what());
@@ -154,6 +152,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 		auto float_class = env->FindClass("java/lang/Float");
 		auto double_class = env->FindClass("java/lang/Double");
 		auto string_class = env->FindClass("java/lang/String");
+		auto timestamp_class = env->FindClass("org/duckdb/DuckDBTimestamp");
 
 		for (idx_t i = 0; i < param_len; i++) {
 			auto param = env->GetObjectArrayElement(params, i);
@@ -179,6 +178,10 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 			} else if (env->IsInstanceOf(param, long_class)) {
 				duckdb_params.push_back(
 				    Value::BIGINT(env->CallLongMethod(param, env->GetMethodID(long_class, "longValue", "()J"))));
+				continue;
+			} else if (env->IsInstanceOf(param, timestamp_class)) {
+				duckdb_params.push_back(Value::TIMESTAMP((timestamp_t)env->CallLongMethod(
+				    param, env->GetMethodID(timestamp_class, "getMicrosEpoch", "()J"))));
 				continue;
 			} else if (env->IsInstanceOf(param, float_class)) {
 				duckdb_params.push_back(
@@ -327,9 +330,11 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		case LogicalTypeId::DOUBLE:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
 			break;
+		case LogicalTypeId::TIMESTAMP:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(timestamp_t));
+			break;
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::DATE:
-		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::INTERVAL: {
 			Vector string_vec(LogicalType::VARCHAR);
 			VectorOperations::Cast(vec, string_vec, row_count);

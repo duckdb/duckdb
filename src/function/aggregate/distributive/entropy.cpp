@@ -110,6 +110,12 @@ struct EntropyFunctionString : EntropyFunctionBase {
 	}
 };
 
+template <typename INPUT_TYPE, typename RESULT_TYPE>
+AggregateFunction GetEntropyFunction(const LogicalType &input_type, const LogicalType &result_type) {
+	return AggregateFunction::UnaryAggregateDestructor<EntropyState<INPUT_TYPE>, INPUT_TYPE, RESULT_TYPE,
+	                                                   EntropyFunction>(input_type, result_type);
+}
+
 AggregateFunction GetEntropyFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::UINT16:
@@ -157,9 +163,8 @@ void EntropyFun::RegisterFunction(BuiltinFunctions &set) {
 	entropy.AddFunction(GetEntropyFunction(PhysicalType::INT64));
 	entropy.AddFunction(GetEntropyFunction(PhysicalType::DOUBLE));
 	entropy.AddFunction(GetEntropyFunction(PhysicalType::VARCHAR));
-	entropy.AddFunction(
-	    AggregateFunction::UnaryAggregateDestructor<EntropyState<int64_t>, int64_t, double, EntropyFunction>(
-	        LogicalType::TIMESTAMP, LogicalType::DOUBLE));
+	entropy.AddFunction(GetEntropyFunction<int64_t, double>(LogicalType::TIMESTAMP, LogicalType::DOUBLE));
+	entropy.AddFunction(GetEntropyFunction<int64_t, double>(LogicalType::TIMESTAMP_TZ, LogicalType::DOUBLE));
 	set.AddFunction(entropy);
 }
 

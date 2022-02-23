@@ -46,9 +46,7 @@ public:
 	static bool Equals(const FunctionExpression *a, const FunctionExpression *b);
 	hash_t Hash() const override;
 
-	//! Serializes a FunctionExpression to a stand-alone binary blob
-	void Serialize(Serializer &serializer) override;
-	//! Deserializes a blob back into an FunctionExpression
-	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 };
 } // namespace duckdb

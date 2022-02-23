@@ -158,7 +158,7 @@ void ProcessErrorCode(int nErrorCode, char *szRoutineName, char *szParam, int nP
  * Side Effects:
  * TODO: None
  */
-int ReportError(int nError, char *msg, int bExit) {
+int ReportError(int nError, const char *msg, int bExit) {
 	fprintf(stderr, "ERROR?!\n");
 	return (nError);
 }
@@ -177,7 +177,7 @@ int ReportError(int nError, char *msg, int bExit) {
  * Side Effects:
  * TODO: None
  */
-int ReportErrorNoLine(int nError, char *msg, int bExit) {
+int ReportErrorNoLine(int nError, const char *msg, int bExit) {
 	char e_msg[1024];
 
 	if (nError < MAX_ERROR) {

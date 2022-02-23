@@ -9,9 +9,9 @@
 namespace duckdb {
 
 PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-                                                 bool all_combinable, idx_t estimated_cardinality)
+                                                 idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types), estimated_cardinality),
-      aggregates(move(expressions)), all_combinable(all_combinable) {
+      aggregates(move(expressions)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -114,7 +114,6 @@ SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSi
 
 	DataChunk &payload_chunk = sink.payload_chunk;
 	sink.child_executor.SetChunk(input);
-	payload_chunk.SetCardinality(input);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		DataChunk filtered_input;
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
@@ -129,6 +128,8 @@ SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSi
 			filtered_input.Slice(input, true_sel, count);
 			sink.child_executor.SetChunk(filtered_input);
 			payload_chunk.SetCardinality(count);
+		} else {
+			payload_chunk.SetCardinality(input);
 		}
 		// resolve the child expressions of the aggregate (if any)
 		if (!aggregate.children.empty()) {
@@ -156,25 +157,20 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState
 	D_ASSERT(!gstate.finished);
 
 	// finalize: combine the local state into the global state
-	if (all_combinable) {
-		// all aggregates are combinable: we might be doing a parallel aggregate
-		// use the combine method to combine the partial aggregates
-		lock_guard<mutex> glock(gstate.lock);
-		for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-			auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
-			Vector source_state(Value::POINTER((uintptr_t)source.state.aggregates[aggr_idx].get()));
-			Vector dest_state(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
+	// all aggregates are combinable: we might be doing a parallel aggregate
+	// use the combine method to combine the partial aggregates
+	lock_guard<mutex> glock(gstate.lock);
+	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
+		Vector source_state(Value::POINTER((uintptr_t)source.state.aggregates[aggr_idx].get()));
+		Vector dest_state(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
 
-			aggregate.function.combine(source_state, dest_state, 1);
-		}
-	} else {
-		// complex aggregates: this is necessarily a non-parallel aggregate
-		// simply move over the source state into the global state
-		source.state.Move(gstate.state);
+		aggregate.function.combine(source_state, dest_state, 1);
 	}
 
+	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &source.child_executor, "child_executor", 0);
-	context.client.profiler->Flush(context.thread.profiler);
+	client_profiler.Flush(context.thread.profiler);
 }
 
 SinkFinalizeType PhysicalSimpleAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,

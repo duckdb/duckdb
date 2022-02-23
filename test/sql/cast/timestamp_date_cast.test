@@ -1,0 +1,24 @@
+# name: test/sql/cast/timestamp_date_cast.test
+# description: Issue #2588: Incorrect result with date conversion
+# group: [cast]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table test as
+select '2021-02-04 19:30:00'::timestamp t;
+
+query I
+select *
+from test
+where (t::date) = '2021-02-04'::date;
+----
+2021-02-04 19:30:00
+
+query I
+select *
+from test
+where (t::date) = '2021-02-04';
+----
+2021-02-04 19:30:00

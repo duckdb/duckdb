@@ -16,7 +16,7 @@ SetScope ToSetScope(duckdb_libpgquery::VariableSetScope pg_scope) {
 	case duckdb_libpgquery::VariableSetScope::VAR_SET_SCOPE_GLOBAL:
 		return SetScope::GLOBAL;
 	case duckdb_libpgquery::VariableSetScope::VAR_SET_SCOPE_DEFAULT:
-		return SetScope::SESSION;
+		return SetScope::AUTOMATIC;
 	default:
 		throw InternalException("Unexpected pg_scope: %d", pg_scope);
 	}
@@ -44,7 +44,7 @@ unique_ptr<SetStatement> Transformer::TransformSet(duckdb_libpgquery::PGNode *no
 	D_ASSERT(stmt->args->head && stmt->args->head->data.ptr_value);
 	D_ASSERT(((duckdb_libpgquery::PGNode *)stmt->args->head->data.ptr_value)->type == duckdb_libpgquery::T_PGAConst);
 
-	auto value = TransformValue(((duckdb_libpgquery::PGAConst *)stmt->args->head->data.ptr_value)->val, 0)->value;
+	auto value = TransformValue(((duckdb_libpgquery::PGAConst *)stmt->args->head->data.ptr_value)->val)->value;
 
 	return make_unique<SetStatement>(name, value, ToSetScope(stmt->scope));
 }

@@ -2,7 +2,6 @@
 # description: Test Nested Types Nested on other Nested types
 # group: [nested]
 
-
 query T
 SELECT [{'i':1,'j':[2,3]},NULL]
 ----

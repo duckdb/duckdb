@@ -1,0 +1,58 @@
+# name: test/sql/copy/csv/column_names.test
+# description: Test correct column name output in read_csv functions
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/issue2518.csv', header=False, columns={'rsID':'INT', 'CHR': 'VARCHAR', 'POS': 'INT','REFB': 'VARCHAR','ALTB':'VARCHAR'})
+
+query IIIII
+SELECT rsID, chr, pos, refb, altb FROM t1
+----
+4690	1	14673	G	A,C,T
+5	7	91839110	C	T
+6	7	91747131	A	G
+7	7	91779557	T	A
+8	7	92408329	C	T
+9	7	92373453	TG	T
+10	7	92383888	A	C,G,T
+1090	8	402108	C	G,T
+11	7	11364201	C	T
+1184	6	187649	T	A,C,G
+
+statement ok
+CREATE TABLE t2 AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/issue2518.csv', header=False, columns={'rsID':'INT', 'CHR': 'VARCHAR', 'POS': 'INT','REFB': 'VARCHAR','ALTB':'VARCHAR'}, AUTO_DETECT=0)
+
+query IIIII
+SELECT rsID, chr, pos, refb, altb FROM t2
+----
+4690	1	14673	G	A,C,T
+5	7	91839110	C	T
+6	7	91747131	A	G
+7	7	91779557	T	A
+8	7	92408329	C	T
+9	7	92373453	TG	T
+10	7	92383888	A	C,G,T
+1090	8	402108	C	G,T
+11	7	11364201	C	T
+1184	6	187649	T	A,C,G
+
+
+statement ok
+CREATE TABLE t3 AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/issue2518.csv', columns={'rsID':'INT', 'CHR': 'VARCHAR', 'POS': 'INT','REFB': 'VARCHAR','ALTB':'VARCHAR'})
+
+query IIIII
+SELECT rsID, chr, pos, refb, altb FROM t3
+----
+4690	1	14673	G	A,C,T
+5	7	91839110	C	T
+6	7	91747131	A	G
+7	7	91779557	T	A
+8	7	92408329	C	T
+9	7	92373453	TG	T
+10	7	92383888	A	C,G,T
+1090	8	402108	C	G,T
+11	7	11364201	C	T
+1184	6	187649	T	A,C,G

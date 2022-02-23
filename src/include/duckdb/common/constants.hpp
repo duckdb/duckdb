@@ -11,8 +11,28 @@
 #include <memory>
 #include <cstdint>
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
+
+// API versions
+// if no explicit API version is defined, the latest API version is used
+// Note that using older API versions (i.e. not using DUCKDB_API_LATEST) is deprecated.
+// These will not be supported long-term, and will be removed in future versions.
+
+#ifndef DUCKDB_API_0_3_1
+#define DUCKDB_API_0_3_1 1
+#endif
+#ifndef DUCKDB_API_0_3_2
+#define DUCKDB_API_0_3_2 2
+#endif
+#ifndef DUCKDB_API_LATEST
+#define DUCKDB_API_LATEST DUCKDB_API_0_3_2
+#endif
+
+#ifndef DUCKDB_API_VERSION
+#define DUCKDB_API_VERSION DUCKDB_API_LATEST
+#endif
 
 //! inline std directives that we use frequently
 using std::move;
@@ -35,9 +55,6 @@ typedef int64_t row_t;
 
 //! The type used for hashes
 typedef uint64_t hash_t;
-
-//! The value used to signify an invalid index entry
-extern const idx_t INVALID_INDEX;
 
 //! data pointers
 typedef uint8_t data_t;
@@ -63,6 +80,11 @@ extern const transaction_t MAXIMUM_QUERY_ID;
 extern const transaction_t NOT_DELETED_ID;
 
 extern const double PI;
+
+struct DConstants {
+	//! The value used to signify an invalid index entry
+	static constexpr const idx_t INVALID_INDEX = idx_t(-1);
+};
 
 struct Storage {
 	//! The size of a hard disk sector, only really needed for Direct IO

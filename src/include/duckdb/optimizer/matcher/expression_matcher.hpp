@@ -60,24 +60,29 @@ class CaseExpressionMatcher : public ExpressionMatcher {
 public:
 	CaseExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_CASE) {
 	}
-	//! The check expression to match (if any)
-	unique_ptr<ExpressionMatcher> check;
-	//! The result_if_true expression to match (if any)
-	unique_ptr<ExpressionMatcher> result_if_true;
-	//! The result_if_false expression to match (if any)
-	unique_ptr<ExpressionMatcher> result_if_false;
 
 	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
 };
 
 class ComparisonExpressionMatcher : public ExpressionMatcher {
 public:
-	ComparisonExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_COMPARISON) {
+	ComparisonExpressionMatcher()
+	    : ExpressionMatcher(ExpressionClass::BOUND_COMPARISON), policy(SetMatcher::Policy::INVALID) {
 	}
 	//! The matchers for the child expressions
 	vector<unique_ptr<ExpressionMatcher>> matchers;
 	//! The set matcher matching policy to use
 	SetMatcher::Policy policy;
+
+	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
+};
+
+class CastExpressionMatcher : public ExpressionMatcher {
+public:
+	CastExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_CAST) {
+	}
+	//! The matcher for the child expressions
+	unique_ptr<ExpressionMatcher> matcher;
 
 	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
 };
@@ -96,7 +101,8 @@ public:
 
 class ConjunctionExpressionMatcher : public ExpressionMatcher {
 public:
-	ConjunctionExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_CONJUNCTION) {
+	ConjunctionExpressionMatcher()
+	    : ExpressionMatcher(ExpressionClass::BOUND_CONJUNCTION), policy(SetMatcher::Policy::INVALID) {
 	}
 	//! The matchers for the child expressions
 	vector<unique_ptr<ExpressionMatcher>> matchers;

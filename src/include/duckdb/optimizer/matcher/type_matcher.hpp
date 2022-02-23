@@ -18,36 +18,36 @@ public:
 	virtual ~TypeMatcher() {
 	}
 
-	virtual bool Match(PhysicalType type) = 0;
+	virtual bool Match(const LogicalType &type) = 0;
 };
 
 //! The SpecificTypeMatcher class matches only a single specified type
 class SpecificTypeMatcher : public TypeMatcher {
 public:
-	explicit SpecificTypeMatcher(PhysicalType type) : type(type) {
+	explicit SpecificTypeMatcher(LogicalType type) : type(type) {
 	}
 
-	bool Match(PhysicalType type) override {
-		return type == this->type;
+	bool Match(const LogicalType &type_p) override {
+		return type_p == this->type;
 	}
 
 private:
-	PhysicalType type;
+	LogicalType type;
 };
 
 //! The NumericTypeMatcher class matches any numeric type (DECIMAL, INTEGER, etc...)
 class NumericTypeMatcher : public TypeMatcher {
 public:
-	bool Match(PhysicalType type) override {
-		return TypeIsNumeric(type);
+	bool Match(const LogicalType &type) override {
+		return type.IsNumeric();
 	}
 };
 
 //! The IntegerTypeMatcher class matches only integer types (INTEGER, SMALLINT, TINYINT, BIGINT)
 class IntegerTypeMatcher : public TypeMatcher {
 public:
-	bool Match(PhysicalType type) override {
-		return TypeIsInteger(type);
+	bool Match(const LogicalType &type) override {
+		return type.IsIntegral();
 	}
 };
 

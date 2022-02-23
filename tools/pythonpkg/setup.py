@@ -10,11 +10,14 @@ from setuptools import setup, Extension
 
 lib_name = 'duckdb'
 
-extensions = ['parquet', 'icu', 'fts','tpch', 'tpcds', 'visualizer']
+extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer']
 
 if platform.system() == 'Windows':
     extensions = ['parquet', 'icu', 'fts','tpch']
 
+unity_build = 0
+if 'DUCKDB_BUILD_UNITY' in os.environ:
+    unity_build = 16
 
 def parallel_cpp_compile(self, sources, output_dir=None, macros=None, include_dirs=None, debug=0,
                          extra_preargs=None, extra_postargs=None, depends=None):
@@ -39,7 +42,6 @@ def parallel_cpp_compile(self, sources, output_dir=None, macros=None, include_di
 if os.name != 'nt':
     import distutils.ccompiler
     distutils.ccompiler.CCompiler.compile = parallel_cpp_compile
-
 
 def open_utf8(fpath, flags):
     import sys
@@ -85,6 +87,10 @@ if platform.system() == 'Darwin':
 if platform.system() == 'Windows':
     toolchain_args.extend(['-DDUCKDB_BUILD_LIBRARY','-DWIN32'])
 
+if 'BUILD_HTTPFS' in os.environ:
+    libraries += ['crypto', 'ssl']
+    extensions += ['httpfs']
+
 for ext in extensions:
     toolchain_args.extend(['-DBUILD_{}_EXTENSION'.format(ext.upper())])
 
@@ -101,10 +107,6 @@ class get_numpy_include(object):
         import numpy
         return numpy.get_include()
 
-
-if 'BUILD_HTTPFS' in os.environ:
-    libraries += ['crypto', 'ssl']
-    extensions += ['httpfs']
 
 extra_files = []
 header_files = []
@@ -125,7 +127,7 @@ if len(existing_duckdb_dir) == 0:
         sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
         import package_build
 
-        (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, 'duckdb'), extensions)
+        (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, 'duckdb'), extensions, False, unity_build)
 
         duckdb_sources = [os.path.sep.join(package_build.get_relative_path(script_path, x).split('/')) for x in source_list]
         duckdb_sources.sort()
@@ -232,7 +234,10 @@ setup(
          'numpy>=1.14'
     ],
     data_files = data_files,
-    packages=['duckdb_query_graph'],
+    packages=[
+        'duckdb_query_graph',
+        'duckdb-stubs'
+    ],
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.6.0'],
     use_scm_version = setuptools_scm_conf,

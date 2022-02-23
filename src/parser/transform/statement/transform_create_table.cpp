@@ -39,9 +39,8 @@ OnCreateConflict Transformer::TransformOnConflict(duckdb_libpgquery::PGOnCreateC
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(duckdb_libpgquery::PGCollateClause *collate,
-                                                               idx_t depth) {
-	auto child = TransformExpression(collate->arg, depth + 1);
+unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(duckdb_libpgquery::PGCollateClause *collate) {
+	auto child = TransformExpression(collate->arg);
 	auto collation = TransformCollation(collate);
 	return make_unique<CollateExpression>(collation, move(child));
 }

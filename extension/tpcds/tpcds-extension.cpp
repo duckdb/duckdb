@@ -1,3 +1,5 @@
+#define DUCKDB_EXTENSION_MAIN
+
 #include "tpcds-extension.hpp"
 
 #include "dsdgen.hpp"
@@ -26,7 +28,7 @@ struct DSDGenFunctionData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value> &inputs,
-                                           unordered_map<string, Value> &named_parameters,
+                                           named_parameter_map_t &named_parameters,
                                            vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                            vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<DSDGenFunctionData>();
@@ -34,16 +36,16 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value>
 		if (kv.first == "sf") {
 			result->sf = kv.second.GetValue<double>();
 		} else if (kv.first == "schema") {
-			result->schema = kv.second.str_value;
+			result->schema = StringValue::Get(kv.second);
 		} else if (kv.first == "suffix") {
-			result->suffix = kv.second.str_value;
+			result->suffix = StringValue::Get(kv.second);
 		} else if (kv.first == "overwrite") {
 			result->overwrite = kv.second.GetValue<bool>();
 		} else if (kv.first == "keys") {
 			result->keys = kv.second.GetValue<bool>();
 		}
 	}
-	return_types.push_back(LogicalType::BOOLEAN);
+	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 	return move(result);
 }
@@ -73,15 +75,15 @@ unique_ptr<FunctionOperatorData> TPCDSInit(ClientContext &context, const Functio
 }
 
 static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, vector<Value> &inputs,
-                                               unordered_map<string, Value> &named_parameters,
+                                               named_parameter_map_t &named_parameters,
                                                vector<LogicalType> &input_table_types,
                                                vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                vector<string> &names) {
 	names.emplace_back("query_nr");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("query");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
@@ -108,18 +110,18 @@ static void TPCDSQueryFunction(ClientContext &context, const FunctionData *bind_
 }
 
 static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, vector<Value> &inputs,
-                                                     unordered_map<string, Value> &named_parameters,
+                                                     named_parameter_map_t &named_parameters,
                                                      vector<LogicalType> &input_table_types,
                                                      vector<string> &input_table_names,
                                                      vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("query_nr");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("scale_factor");
-	return_types.push_back(LogicalType::DOUBLE);
+	return_types.emplace_back(LogicalType::DOUBLE);
 
 	names.emplace_back("answer");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
@@ -199,4 +201,19 @@ std::string TPCDSExtension::GetAnswer(double sf, int query) {
 	return tpcds::DSDGenWrapper::GetAnswer(sf, query);
 }
 
+std::string TPCDSExtension::Name() {
+	return "tpcds";
+}
+
 } // namespace duckdb
+
+extern "C" {
+DUCKDB_EXTENSION_API void tpcds_init(duckdb::DatabaseInstance &db) {
+	duckdb::DuckDB db_wrapper(db);
+	db_wrapper.LoadExtension<duckdb::TPCDSExtension>();
+}
+
+DUCKDB_EXTENSION_API const char *tpcds_version() {
+	return duckdb::DuckDB::LibraryVersion();
+}
+}

@@ -1,0 +1,24 @@
+# name: test/sql/function/list/generate_subscripts.test
+# description: Test generate_subscripts function
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT generate_subscripts([4,5,6], 1)
+----
+1
+2
+3
+
+query I
+SELECT generate_subscripts([], 1)
+----
+
+query I
+SELECT generate_subscripts(NULL, 1)
+----
+
+statement error
+SELECT generate_subscripts([[1,2],[3,4],[5,6]], 2)

@@ -69,7 +69,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	DataChunk chunk;
 	chunk.Initialize(types);
 	for (idx_t i = 1; i < expr.children.size(); i++) {
-		// reoslve this expression to a constant
+		// resolve this expression to a constant
 		auto value = ExpressionExecutor::EvaluateScalar(*expr.children[i]);
 		idx_t index = chunk.size();
 		chunk.SetCardinality(chunk.size() + 1);

@@ -20,6 +20,7 @@
 
 namespace duckdb {
 struct CopyInfo;
+struct CSVFileHandle;
 struct FileHandle;
 struct StrpTimeFormat;
 
@@ -56,8 +57,8 @@ struct BufferedCSVReaderOptions {
 	//! The file path of the CSV file to read
 	string file_path;
 	//! Whether file is compressed or not, and if so which compression type
-	//! ("infer" (default; infer from file extention), "gzip", "none")
-	string compression = "infer";
+	//! AUTO_DETECT (default; infer from file extension)
+	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
 	//! Whether or not to automatically detect dialect and datatypes
 	bool auto_detect = false;
 	//! Whether or not a delimiter was defined by the user
@@ -94,20 +95,17 @@ struct BufferedCSVReaderOptions {
 	idx_t buffer_size = STANDARD_VECTOR_SIZE * 100;
 	//! Consider all columns to be of type varchar
 	bool all_varchar = false;
+	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
+	idx_t maximum_line_size = 2097152;
+
 	//! The date format to use (if any is specified)
 	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
 	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
-	std::string toString() const {
-		return "DELIMITER='" + delimiter + (has_delimiter ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-		       ", QUOTE='" + quote + (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-		       ", ESCAPE='" + escape + (has_escape ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-		       ", HEADER=" + std::to_string(header) +
-		       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
-		       ", SAMPLE_SIZE=" + std::to_string(sample_chunk_size * sample_chunks) +
-		       ", ALL_VARCHAR=" + std::to_string(all_varchar);
-	}
+	void SetDelimiter(const string &delimiter);
+
+	std::string ToString() const;
 };
 
 enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DATATYPES = 2, PARSING_HEADER = 3 };
@@ -116,8 +114,6 @@ enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DA
 class BufferedCSVReader {
 	//! Initial buffer read size; can be extended for long lines
 	static constexpr idx_t INITIAL_BUFFER_SIZE = 16384;
-	//! Maximum CSV line size: specified because if we reach this amount, we likely have the wrong delimiters
-	static constexpr idx_t MAXIMUM_CSV_LINE_SIZE = 1048576;
 	ParserMode mode;
 
 public:
@@ -126,16 +122,14 @@ public:
 
 	BufferedCSVReader(FileSystem &fs, FileOpener *opener, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
+	~BufferedCSVReader();
 
 	FileSystem &fs;
 	FileOpener *opener;
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;
 	vector<string> col_names;
-	unique_ptr<FileHandle> file_handle;
-	bool plain_file_source = false;
-	idx_t file_size = 0;
-	FileCompressionType compression = FileCompressionType::UNCOMPRESSED;
+	unique_ptr<CSVFileHandle> file_handle;
 
 	unique_ptr<char[]> buffer;
 	idx_t buffer_size;
@@ -166,6 +160,8 @@ public:
 public:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(DataChunk &insert_chunk);
+
+	idx_t GetFileSize();
 
 private:
 	//! Initialize Parser
@@ -213,7 +209,7 @@ private:
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(idx_t &start);
 
-	unique_ptr<FileHandle> OpenCSV(const BufferedCSVReaderOptions &options);
+	unique_ptr<CSVFileHandle> OpenCSV(const BufferedCSVReaderOptions &options);
 
 	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
 	void DetectDialect(const vector<LogicalType> &requested_types, BufferedCSVReaderOptions &original_options,

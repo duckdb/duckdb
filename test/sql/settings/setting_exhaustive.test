@@ -1,0 +1,80 @@
+# name: test/sql/settings/setting_exhaustive.test
+# description: Exhaustive setting tests
+# group: [settings]
+
+# access_mode
+foreach access_mode AUTOMATIC READ_ONLY READ_WRITE
+
+statement ok
+SET access_mode='${access_mode}';
+
+statement ok
+SELECT * FROM duckdb_settings();
+
+endloop
+
+statement error
+SET access_mode='unknown';
+
+# debug_window_mode
+statement error
+SET debug_window_mode='unknown';
+
+# default_order
+foreach default_order ASC DESC
+
+statement ok
+SET default_order='${default_order}';
+
+statement ok
+SELECT * FROM duckdb_settings();
+
+endloop
+
+statement error
+SET default_order='unknown';
+
+# enable_external_access
+statement error
+SET enable_external_access=true
+
+# enable_profiling
+statement ok
+SET profile_output='__TEST_DIR__/profile_output'
+
+foreach enable_profiling json query_tree query_tree_optimizer
+
+statement ok
+SET enable_profiling='${enable_profiling}';
+
+statement ok
+SELECT * FROM duckdb_settings();
+
+endloop
+
+statement error
+SET enable_profiling='unknown';
+
+# enable_progress_bar
+statement ok
+PRAGMA disable_print_progress_bar
+
+statement ok
+SET enable_progress_bar=true;
+
+statement error
+SET GLOBAL enable_progress_bar=true;
+
+# explain_output
+foreach explain_output all optimized_only physical_only
+
+statement ok
+SET explain_output='${explain_output}';
+
+statement ok
+SELECT * FROM duckdb_settings();
+
+endloop
+
+statement error
+SET explain_output='unknown';

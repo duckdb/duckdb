@@ -39,7 +39,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_ColumnDefault: {
-			auto expr = TransformExpression(command->def, 0);
+			auto expr = TransformExpression(command->def);
 			result->info = make_unique<SetDefaultInfo>(qname.schema, qname.name, command->name, move(expr));
 			break;
 		}
@@ -49,7 +49,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 
 			unique_ptr<ParsedExpression> expr;
 			if (cdef->raw_default) {
-				expr = TransformExpression(cdef->raw_default, 0);
+				expr = TransformExpression(cdef->raw_default);
 			} else {
 				auto colref = make_unique<ColumnRefExpression>(command->name);
 				expr = make_unique<CastExpression>(column_definition.type, move(colref));

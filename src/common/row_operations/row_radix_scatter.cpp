@@ -122,7 +122,7 @@ void RadixScatterListVector(Vector &v, VectorData &vdata, const SelectionVector 
 					// denote that the list is not empty with a 1
 					key_locations[i][0] = 1;
 					key_locations[i]++;
-					RowOperations::RadixScatter(child_vector, list_size, FlatVector::INCREMENTAL_SELECTION_VECTOR, 1,
+					RowOperations::RadixScatter(child_vector, list_size, *FlatVector::IncrementalSelectionVector(), 1,
 					                            key_locations + i, false, true, false, prefix_len, width - 1,
 					                            list_entry.offset);
 				} else {
@@ -153,7 +153,7 @@ void RadixScatterListVector(Vector &v, VectorData &vdata, const SelectionVector 
 				// denote that the list is not empty with a 1
 				key_locations[i][0] = 1;
 				key_locations[i]++;
-				RowOperations::RadixScatter(child_vector, list_size, FlatVector::INCREMENTAL_SELECTION_VECTOR, 1,
+				RowOperations::RadixScatter(child_vector, list_size, *FlatVector::IncrementalSelectionVector(), 1,
 				                            key_locations + i, false, true, false, prefix_len, width - 1,
 				                            list_entry.offset);
 			} else {
@@ -196,7 +196,7 @@ void RadixScatterStructVector(Vector &v, VectorData &vdata, idx_t vcount, const 
 	}
 	// serialize the struct
 	auto &child_vector = *StructVector::GetEntries(v)[0];
-	RowOperations::RadixScatter(child_vector, vcount, FlatVector::INCREMENTAL_SELECTION_VECTOR, add_count,
+	RowOperations::RadixScatter(child_vector, vcount, *FlatVector::IncrementalSelectionVector(), add_count,
 	                            key_locations, false, true, false, prefix_len, width, offset);
 	// invert bits if desc
 	if (desc) {

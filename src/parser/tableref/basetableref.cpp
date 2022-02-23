@@ -1,6 +1,6 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -17,20 +17,18 @@ bool BaseTableRef::Equals(const TableRef *other_p) const {
 	       column_name_alias == other->column_name_alias;
 }
 
-void BaseTableRef::Serialize(Serializer &serializer) {
-	TableRef::Serialize(serializer);
-
-	serializer.WriteString(schema_name);
-	serializer.WriteString(table_name);
-	serializer.WriteStringVector(column_name_alias);
+void BaseTableRef::Serialize(FieldWriter &writer) const {
+	writer.WriteString(schema_name);
+	writer.WriteString(table_name);
+	writer.WriteList<string>(column_name_alias);
 }
 
-unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &source) {
+unique_ptr<TableRef> BaseTableRef::Deserialize(FieldReader &reader) {
 	auto result = make_unique<BaseTableRef>();
 
-	result->schema_name = source.Read<string>();
-	result->table_name = source.Read<string>();
-	source.ReadStringVector(result->column_name_alias);
+	result->schema_name = reader.ReadRequired<string>();
+	result->table_name = reader.ReadRequired<string>();
+	result->column_name_alias = reader.ReadRequiredList<string>();
 
 	return move(result);
 }

@@ -17,31 +17,31 @@ struct DuckDBTypesData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, vector<Value> &inputs,
-                                                unordered_map<string, Value> &named_parameters,
+                                                named_parameter_map_t &named_parameters,
                                                 vector<LogicalType> &input_table_types,
                                                 vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                 vector<string> &names) {
 	names.emplace_back("schema_name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("schema_oid");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("type_oid");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("type_name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("type_size");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	// NUMERIC, STRING, DATETIME, BOOLEAN, COMPOSITE, USER
 	names.emplace_back("type_category");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("internal");
-	return_types.push_back(LogicalType::BOOLEAN);
+	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	return nullptr;
 }
@@ -49,7 +49,7 @@ static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, vector<V
 unique_ptr<FunctionOperatorData> DuckDBTypesInit(ClientContext &context, const FunctionData *bind_data,
                                                  const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<DuckDBTypesData>();
-	result->types = LogicalType::ALL_TYPES;
+	result->types = LogicalType::AllTypes();
 	// FIXME: add user-defined types here (when we have them)
 	return move(result);
 }
@@ -104,6 +104,8 @@ void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data, 
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::INTERVAL:
+		case LogicalTypeId::TIME_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ:
 			category = "DATETIME";
 			break;
 		case LogicalTypeId::CHAR:

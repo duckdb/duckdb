@@ -352,10 +352,11 @@ static void QuicksortInPlace(ChunkCollection *sort_by, vector<OrderType> &desc, 
 }
 
 void ChunkCollection::Sort(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t result[]) {
-	D_ASSERT(result);
 	if (count == 0) {
 		return;
 	}
+	D_ASSERT(result);
+
 	// start off with an initial quicksort
 	int64_t part = QuicksortInitial(this, desc, null_order, result);
 

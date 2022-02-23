@@ -1,0 +1,30 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_simple.test
+# description: Test storage bitpacking, but simple
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression='bitpacking'
+
+# simple compression with few values
+statement ok
+CREATE TABLE test (id VARCHAR, a BIGINT);
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR, -i FROM range(0,32) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+select a from test limit 5;
+----
+0
+-1
+-2
+-3
+-4
+
+

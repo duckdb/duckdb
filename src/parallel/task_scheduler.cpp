@@ -103,7 +103,11 @@ TaskScheduler::~TaskScheduler() {
 }
 
 TaskScheduler &TaskScheduler::GetScheduler(ClientContext &context) {
-	return context.db->GetScheduler();
+	return TaskScheduler::GetScheduler(DatabaseInstance::GetDatabase(context));
+}
+
+TaskScheduler &TaskScheduler::GetScheduler(DatabaseInstance &db) {
+	return db.GetScheduler();
 }
 
 unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
@@ -128,7 +132,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 		// wait for a signal with a timeout; the timeout allows us to periodically check
 		queue->semaphore.wait(TASK_TIMEOUT_USECS);
 		if (queue->q.try_dequeue(task)) {
-			task->Execute();
+			task->Execute(TaskExecutionMode::PROCESS_ALL);
 			task.reset();
 		}
 	}

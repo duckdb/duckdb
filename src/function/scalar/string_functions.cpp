@@ -1,5 +1,6 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/blob_functions.hpp"
+#include "duckdb/function/scalar/uuid_functions.hpp"
 
 namespace duckdb {
 
@@ -39,6 +40,9 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	// blob functions
 	Register<Base64Fun>();
 	Register<EncodeFun>();
+
+	// uuid functions
+	Register<UUIDFun>();
 }
 
 } // namespace duckdb

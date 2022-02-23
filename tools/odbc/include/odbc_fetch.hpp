@@ -5,7 +5,6 @@
 #include "duckdb/common/windows.hpp"
 
 #include <sqltypes.h>
-#include <sql.h>
 #include <sqlext.h>
 #include <vector>
 #include <stack>
@@ -64,6 +63,8 @@ public:
 	SQLRETURN Fetch(SQLHSTMT statement_handle, OdbcHandleStmt *stmt, SQLULEN fetch_orientation = SQL_FETCH_NEXT,
 	                SQLLEN fetch_offset = 0);
 
+	SQLRETURN FetchFirst(SQLHSTMT statement_handle, OdbcHandleStmt *stmt);
+
 	SQLRETURN FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *stmt, SQLLEN fetch_offset);
 
 	SQLRETURN GetValue(SQLUSMALLINT col_idx, Value &value);
@@ -76,6 +77,8 @@ public:
 	void SetLastFetchedVariableVal(row_t col_idx);
 	void SetLastFetchedLength(size_t new_len);
 	size_t GetLastFetchedLength();
+
+	bool IsInExecutionState();
 
 private:
 	SQLRETURN ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt);

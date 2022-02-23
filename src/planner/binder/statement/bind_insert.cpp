@@ -40,7 +40,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		// insertion statement specifies column list
 
 		// create a mapping of (list index) -> (column index)
-		unordered_map<string, idx_t> column_name_map;
+		case_insensitive_map_t<idx_t> column_name_map;
 		for (idx_t i = 0; i < stmt.columns.size(); i++) {
 			column_name_map[stmt.columns[i]] = i;
 			auto entry = table->name_map.find(stmt.columns[i]);
@@ -57,8 +57,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			auto &col = table->columns[i];
 			auto entry = column_name_map.find(col.name);
 			if (entry == column_name_map.end()) {
-				// column not specified, set index to INVALID_INDEX
-				insert->column_index_map.push_back(INVALID_INDEX);
+				// column not specified, set index to DConstants::INVALID_INDEX
+				insert->column_index_map.push_back(DConstants::INVALID_INDEX);
 			} else {
 				// column was specified, set to the index
 				insert->column_index_map.push_back(entry->second);

@@ -1,5 +1,5 @@
 # name: test/sql/function/string/test_ascii.test
-# description:  test ascii() and chr() functions
+# description: test ascii() and chr() functions
 # group: [string]
 
 #statement ok
@@ -72,6 +72,9 @@ NULL
 
 statement error
 SELECT CHR(-10)
+
+statement error
+SELECT CHR(1073741824)
 
 statement error
 SELECT CHR()

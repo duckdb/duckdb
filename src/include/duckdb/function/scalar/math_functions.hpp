@@ -101,4 +101,8 @@ struct NextAfterFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct EvenFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

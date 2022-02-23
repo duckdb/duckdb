@@ -5,57 +5,58 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 using namespace duckdb;
 
-SEXP RApi::RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
+void RApi::RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_register_R: Need external pointer parameter for connection");
+		cpp11::stop("duckdb_register_R: Need external pointer parameter for connection");
 	}
-	Connection *conn = (Connection *)R_ExternalPtrAddr(connsexp);
-	if (!conn) {
-		Rf_error("duckdb_register_R: Invalid connection");
+	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
+	if (!conn_wrapper || !conn_wrapper->conn) {
+		cpp11::stop("duckdb_register_R: Invalid connection");
 	}
 	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
-		Rf_error("duckdb_register_R: Need single string parameter for name");
+		cpp11::stop("duckdb_register_R: Need single string parameter for name");
 	}
 	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
 	if (name.empty()) {
-		Rf_error("duckdb_register_R: name parameter cannot be empty");
+		cpp11::stop("duckdb_register_R: name parameter cannot be empty");
 	}
 	if (TYPEOF(valuesexp) != VECSXP || Rf_length(valuesexp) < 1 ||
 	    strcmp("data.frame", CHAR(STRING_ELT(GET_CLASS(valuesexp), 0))) != 0) {
-		Rf_error("duckdb_register_R: Need at least one-column data frame parameter for value");
+		cpp11::stop("duckdb_register_R: Need at least one-column data frame parameter for value");
 	}
 	try {
-		conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)valuesexp)})->CreateView(name, true, true);
+		conn_wrapper->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)valuesexp)})
+		    ->CreateView(name, true, true);
 		auto key = Rf_install(("_registered_df_" + name).c_str());
 		Rf_setAttrib(connsexp, key, valuesexp);
 	} catch (std::exception &e) {
-		Rf_error("duckdb_register_R: Failed to register data frame: %s", e.what());
+		cpp11::stop("duckdb_register_R: Failed to register data frame: %s", e.what());
 	}
-	return R_NilValue;
 }
 
-SEXP RApi::UnregisterDataFrame(SEXP connsexp, SEXP namesexp) {
+void RApi::UnregisterDataFrame(SEXP connsexp, SEXP namesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_unregister_R: Need external pointer parameter for connection");
+		cpp11::stop("duckdb_unregister_R: Need external pointer parameter for connection");
 	}
-	Connection *conn = (Connection *)R_ExternalPtrAddr(connsexp);
-	if (!conn) {
-		Rf_error("duckdb_unregister_R: Invalid connection");
+	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
+	if (!conn_wrapper || !conn_wrapper->conn) {
+		cpp11::stop("duckdb_unregister_R: Invalid connection");
 	}
 	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
-		Rf_error("duckdb_unregister_R: Need single string parameter for name");
+		cpp11::stop("duckdb_unregister_R: Need single string parameter for name");
 	}
 	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
 	auto key = Rf_install(("_registered_df_" + name).c_str());
 	Rf_setAttrib(connsexp, key, R_NilValue);
-	auto res = conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
+	auto res = conn_wrapper->conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
 	if (!res->success) {
-		Rf_error(res->error.c_str());
+		cpp11::stop(res->error.c_str());
 	}
-	return R_NilValue;
 }
 
 class RArrowTabularStreamFactory {
@@ -72,11 +73,11 @@ public:
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
 		auto stream_ptr_sexp =
 		    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&res->arrow_array_stream))));
-		SEXP export_call;
 
-		auto export_fun = r.Protect(VECTOR_ELT(factory->export_fun, 0));
+		cpp11::function export_fun = VECTOR_ELT(factory->export_fun, 0);
+
 		if (project_columns.second.empty()) {
-			export_call = r.Protect(Rf_lang3(export_fun, factory->arrow_scannable, stream_ptr_sexp));
+			export_fun(factory->arrow_scannable, stream_ptr_sexp);
 		} else {
 			auto projection_sexp = r.Protect(RApi::StringsToSexp(project_columns.second));
 			SEXP filters_sexp = r.Protect(Rf_ScalarLogical(true));
@@ -84,10 +85,8 @@ public:
 
 				filters_sexp = r.Protect(TransformFilter(*filters, project_columns.first, factory->export_fun));
 			}
-			export_call = r.Protect(
-			    Rf_lang5(export_fun, factory->arrow_scannable, stream_ptr_sexp, projection_sexp, filters_sexp));
+			export_fun(factory->arrow_scannable, stream_ptr_sexp, projection_sexp, filters_sexp);
 		}
-		RApi::REvalThrows(export_call);
 		return res;
 	}
 
@@ -138,11 +137,11 @@ private:
 		}
 		case TableFilterType::CONJUNCTION_AND: {
 			auto &and_filter = (ConjunctionAndFilter &)filter;
-			return TransformChildFilters(functions, column_name, "and", and_filter.child_filters);
+			return TransformChildFilters(functions, column_name, "and_kleene", and_filter.child_filters);
 		}
 		case TableFilterType::CONJUNCTION_OR: {
 			auto &and_filter = (ConjunctionAndFilter &)filter;
-			return TransformChildFilters(functions, column_name, "or", and_filter.child_filters);
+			return TransformChildFilters(functions, column_name, "or_kleene", and_filter.child_filters);
 		}
 
 		default:
@@ -173,24 +172,20 @@ private:
 		fit++;
 		for (; fit != filter_collection.table_filters->filters.end(); ++fit) {
 			SEXP rhs = r.Protect(TransformFilterExpression(*fit->second, columns[fit->first], functions));
-			res = r.Protect(CreateExpression(functions, "and", res, rhs));
+			res = r.Protect(CreateExpression(functions, "and_kleene", res, rhs));
 		}
 		return res;
 	}
 
 	static SEXP CallArrowFactory(SEXP functions, idx_t idx, SEXP op1, SEXP op2 = R_NilValue, SEXP op3 = R_NilValue) {
-		RProtector r;
-		auto create_fun = r.Protect(VECTOR_ELT(functions, idx));
-		SEXP create_call;
+		cpp11::function create_fun = VECTOR_ELT(functions, idx);
 		if (Rf_isNull(op2)) {
-			create_call = r.Protect(Rf_lang2(create_fun, op1));
+			return create_fun(op1);
 		} else if (Rf_isNull(op3)) {
-			create_call = r.Protect(Rf_lang3(create_fun, op1, op2));
+			return create_fun(op1, op2);
 		} else {
-			create_call = r.Protect(Rf_lang4(create_fun, op1, op2, op3));
+			return create_fun(op1, op2, op3);
 		}
-
-		return RApi::REvalThrows(create_call);
 	}
 
 	static SEXP CreateExpression(SEXP functions, const string name, SEXP op1, SEXP op2 = R_NilValue) {
@@ -210,7 +205,7 @@ private:
 
 static SEXP duckdb_finalize_arrow_factory_R(SEXP factorysexp) {
 	if (TYPEOF(factorysexp) != EXTPTRSXP) {
-		Rf_error("duckdb_finalize_arrow_factory_R: Need external pointer parameter");
+		cpp11::stop("duckdb_finalize_arrow_factory_R: Need external pointer parameter");
 	}
 	auto *factoryaddr = (RArrowTabularStreamFactory *)R_ExternalPtrAddr(factorysexp);
 	if (factoryaddr) {
@@ -220,65 +215,85 @@ static SEXP duckdb_finalize_arrow_factory_R(SEXP factorysexp) {
 	return R_NilValue;
 }
 
-SEXP RApi::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp) {
-	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_register_R: Need external pointer parameter for connection");
+unique_ptr<TableFunctionRef> RApi::ArrowScanReplacement(const string &table_name, void *data) {
+	auto db_wrapper = (DBWrapper *)data;
+	lock_guard<mutex> arrow_scans_lock(db_wrapper->lock);
+	for (auto &e : db_wrapper->arrow_scans) {
+		if (e.first == table_name) {
+			auto table_function = make_unique<TableFunctionRef>();
+			vector<unique_ptr<ParsedExpression>> children;
+			children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)R_ExternalPtrAddr(e.second))));
+			children.push_back(
+			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));
+			children.push_back(make_unique<ConstantExpression>(Value::UBIGINT(100000)));
+			table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
+			return table_function;
+		}
 	}
-	Connection *conn = (Connection *)R_ExternalPtrAddr(connsexp);
-	if (!conn) {
-		Rf_error("duckdb_register_R: Invalid connection");
+	return nullptr;
+}
+
+void RApi::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp) {
+	if (TYPEOF(connsexp) != EXTPTRSXP) {
+		cpp11::stop("duckdb_register_R: Need external pointer parameter for connection");
+	}
+	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
+	if (!conn_wrapper || !conn_wrapper->conn) {
+		cpp11::stop("duckdb_register_R: Invalid connection");
 	}
 	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
-		Rf_error("duckdb_register_R: Need single string parameter for name");
+		cpp11::stop("duckdb_register_R: Need single string parameter for name");
 	}
 	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
 	if (name.empty()) {
-		Rf_error("duckdb_register_R: name parameter cannot be empty");
+		cpp11::stop("duckdb_register_R: name parameter cannot be empty");
 	}
 
 	if (!IS_LIST(export_funsexp)) {
-		Rf_error("duckdb_register_R: Need function list for export function");
+		cpp11::stop("duckdb_register_R: Need function list for export function");
 	}
 
 	RProtector r;
 	auto stream_factory = new RArrowTabularStreamFactory(export_funsexp, valuesexp);
-	auto stream_factory_produce = RArrowTabularStreamFactory::Produce;
-	conn->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory),
-	                                   Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(100000)})
-	    ->CreateView(name, true, true);
-
 	// make r external ptr object to keep factory around until arrow table is unregistered
 	SEXP factorysexp = r.Protect(R_MakeExternalPtr(stream_factory, R_NilValue, R_NilValue));
 	R_RegisterCFinalizer(factorysexp, (void (*)(SEXP))duckdb_finalize_arrow_factory_R);
 
+	{
+		auto *db_wrapper = (DBWrapper *)R_ExternalPtrAddr(conn_wrapper->db_sexp);
+		// TODO check if this name already exists?
+		lock_guard<mutex> arrow_scans_lock(db_wrapper->lock);
+		auto &arrow_scans = db_wrapper->arrow_scans;
+		arrow_scans[name] = factorysexp;
+	}
 	SEXP state_list = r.Protect(NEW_LIST(3));
 	SET_VECTOR_ELT(state_list, 0, export_funsexp);
 	SET_VECTOR_ELT(state_list, 1, valuesexp);
 	SET_VECTOR_ELT(state_list, 2, factorysexp);
 
 	auto key = Rf_install(("_registered_arrow_" + name).c_str());
-	Rf_setAttrib(connsexp, key, state_list);
-
-	return R_NilValue;
+	Rf_setAttrib(conn_wrapper->db_sexp, key, state_list);
 }
 
-SEXP RApi::UnregisterArrow(SEXP connsexp, SEXP namesexp) {
+void RApi::UnregisterArrow(SEXP connsexp, SEXP namesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_unregister_R: Need external pointer parameter for connection");
+		cpp11::stop("duckdb_unregister_R: Need external pointer parameter for connection");
 	}
-	Connection *conn = (Connection *)R_ExternalPtrAddr(connsexp);
-	if (!conn) {
-		Rf_error("duckdb_unregister_R: Invalid connection");
+	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
+	if (!conn_wrapper || !conn_wrapper->conn) {
+		cpp11::stop("duckdb_unregister_R: Invalid connection");
 	}
 	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
-		Rf_error("duckdb_unregister_R: Need single string parameter for name");
+		cpp11::stop("duckdb_unregister_R: Need single string parameter for name");
 	}
+
 	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
-	auto key = Rf_install(("_registered_arrow_" + name).c_str());
-	Rf_setAttrib(connsexp, key, R_NilValue);
-	auto res = conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
-	if (!res->success) {
-		Rf_error(res->error.c_str());
+	{
+		auto *db_wrapper = (DBWrapper *)R_ExternalPtrAddr(conn_wrapper->db_sexp);
+		lock_guard<mutex> arrow_scans_lock(db_wrapper->lock);
+		auto &arrow_scans = db_wrapper->arrow_scans;
+		arrow_scans.erase(name);
 	}
-	return R_NilValue;
+	auto key = Rf_install(("_registered_arrow_" + name).c_str());
+	Rf_setAttrib(conn_wrapper->db_sexp, key, R_NilValue);
 }

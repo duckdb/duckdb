@@ -1,4 +1,4 @@
-# name: benchmark/tpch/expression_reordering/adaptive_numeric_reordering_and.benchmark
+# name: benchmark/tpch/expression_reordering/adaptive_numeric_reordering_or.benchmark
 # description: Re-order numeric comparisons adaptively
 # group: [expression_reordering]
 

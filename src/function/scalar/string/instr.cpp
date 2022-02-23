@@ -14,7 +14,7 @@ struct InstrOperator {
 		int64_t string_position = 0;
 
 		auto location = ContainsFun::Find(haystack, needle);
-		if (location != INVALID_INDEX) {
+		if (location != DConstants::INVALID_INDEX) {
 			auto len = (utf8proc_ssize_t)location;
 			auto str = reinterpret_cast<const utf8proc_uint8_t *>(haystack.GetDataUnsafe());
 			D_ASSERT(len <= (utf8proc_ssize_t)haystack.GetSize());
@@ -33,7 +33,7 @@ struct InstrAsciiOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA haystack, TB needle) {
 		auto location = ContainsFun::Find(haystack, needle);
-		return location == INVALID_INDEX ? 0 : location + 1;
+		return location == DConstants::INVALID_INDEX ? 0 : location + 1;
 	}
 };
 
@@ -61,6 +61,8 @@ void InstrFun::RegisterFunction(BuiltinFunctions &set) {
 	                     nullptr, InStrPropagateStats);
 	set.AddFunction(instr);
 	instr.name = "strpos";
+	set.AddFunction(instr);
+	instr.name = "position";
 	set.AddFunction(instr);
 }
 

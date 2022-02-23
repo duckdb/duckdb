@@ -18,6 +18,14 @@ const char *Exception::what() const noexcept {
 	return exception_message_.c_str();
 }
 
+bool Exception::UncaughtException() {
+#if __cplusplus >= 201703L
+	return std::uncaught_exceptions() > 0;
+#else
+	return std::uncaught_exception();
+#endif
+}
+
 string Exception::ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
 	return ExceptionFormatValue::Format(msg, values);
 }
@@ -90,9 +98,15 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "Invalid Input";
 	case ExceptionType::OUT_OF_MEMORY:
 		return "Out of Memory";
+	case ExceptionType::PERMISSION:
+		return "Permission";
 	default:
 		return "Unknown";
 	}
+}
+
+StandardException::StandardException(ExceptionType exception_type, const string &message)
+    : Exception(exception_type, message) {
 }
 
 CastException::CastException(const PhysicalType orig_type, const PhysicalType new_type)
@@ -169,6 +183,9 @@ CatalogException::CatalogException(const string &msg) : StandardException(Except
 }
 
 ParserException::ParserException(const string &msg) : StandardException(ExceptionType::PARSER, msg) {
+}
+
+PermissionException::PermissionException(const string &msg) : StandardException(ExceptionType::PERMISSION, msg) {
 }
 
 SyntaxException::SyntaxException(const string &msg) : Exception(ExceptionType::SYNTAX, msg) {

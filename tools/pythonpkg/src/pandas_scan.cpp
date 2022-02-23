@@ -53,7 +53,7 @@ PandasScanFunction::PandasScanFunction()
 }
 
 unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, vector<Value> &inputs,
-                                                            unordered_map<string, Value> &named_parameters,
+                                                            named_parameter_map_t &named_parameters,
                                                             vector<LogicalType> &input_table_types,
                                                             vector<string> &input_table_names,
                                                             vector<LogicalType> &return_types, vector<string> &names) {
@@ -81,7 +81,7 @@ unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanInit(ClientContex
 }
 
 idx_t PandasScanFunction::PandasScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
-	if (context.verify_parallelism) {
+	if (ClientConfig::GetConfig(context).verify_parallelism) {
 		return context.db->NumberOfThreads();
 	}
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
@@ -128,12 +128,12 @@ bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, con
 	return true;
 }
 
-int PandasScanFunction::PandasProgress(ClientContext &context, const FunctionData *bind_data_p) {
+double PandasScanFunction::PandasProgress(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 	if (bind_data.row_count == 0) {
 		return 100;
 	}
-	auto percentage = bind_data.lines_read * 100 / bind_data.row_count;
+	auto percentage = (bind_data.lines_read * 100.0) / bind_data.row_count;
 	return percentage;
 }
 

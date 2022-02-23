@@ -21,7 +21,7 @@ public:
 	PandasScanFunction();
 
 	static unique_ptr<FunctionData> PandasScanBind(ClientContext &context, vector<Value> &inputs,
-	                                               unordered_map<string, Value> &named_parameters,
+	                                               named_parameter_map_t &named_parameters,
 	                                               vector<LogicalType> &input_table_types,
 	                                               vector<string> &input_table_names, vector<LogicalType> &return_types,
 	                                               vector<string> &names);
@@ -44,7 +44,7 @@ public:
 	static bool PandasScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
 	                                        FunctionOperatorData *operator_state, ParallelState *parallel_state_p);
 
-	static int PandasProgress(ClientContext &context, const FunctionData *bind_data_p);
+	static double PandasProgress(ClientContext &context, const FunctionData *bind_data_p);
 
 	//! The main pandas scan function: note that this can be called in parallel without the GIL
 	//! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed

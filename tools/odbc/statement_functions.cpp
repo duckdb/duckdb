@@ -1,7 +1,9 @@
 #include "statement_functions.hpp"
 #include "odbc_interval.hpp"
 #include "odbc_fetch.hpp"
-#include "parameter_wrapper.hpp"
+#include "odbc_utils.hpp"
+#include "descriptor.hpp"
+#include "parameter_descriptor.hpp"
 
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -27,6 +29,7 @@ using duckdb::interval_t;
 using duckdb::LogicalType;
 using duckdb::LogicalTypeId;
 using duckdb::OdbcInterval;
+using duckdb::OdbcUtils;
 using duckdb::Store;
 using duckdb::string_t;
 using duckdb::timestamp_t;
@@ -51,7 +54,8 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 			stmt->error_messages.emplace_back(stmt->stmt->error);
 			return SQL_ERROR;
 		}
-		stmt->param_wrapper->param_descriptors.resize(stmt->stmt->n_param);
+		stmt->param_desc->ResetParams(stmt->stmt->n_param);
+
 		stmt->bound_cols.resize(stmt->stmt->ColumnCount());
 		return SQL_SUCCESS;
 	});
@@ -65,6 +69,15 @@ SQLRETURN duckdb::BatchExecuteStmt(SQLHSTMT statement_handle) {
 		do {
 			ret = SingleExecuteStmt(stmt);
 		} while (ret == SQL_STILL_EXECUTING);
+
+		// now, fetching the first chunk to verify constant folding (See: PR #2462 and issue #2452)
+		if (ret == SQL_SUCCESS) {
+			auto fetch_ret = stmt->odbc_fetcher->FetchFirst(statement_handle, stmt);
+			if (fetch_ret == SQL_ERROR) {
+				return fetch_ret;
+			}
+		}
+
 		return ret;
 	});
 }
@@ -82,10 +95,11 @@ SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
 	}
 
 	std::vector<Value> values;
-	SQLRETURN ret = stmt->param_wrapper->GetValues(values);
-	if (ret == SQL_NEED_DATA) {
+	SQLRETURN ret = stmt->param_desc->GetParamValues(values);
+	if (ret == SQL_NEED_DATA || ret == SQL_ERROR) {
 		return ret;
 	}
+
 	stmt->res = stmt->stmt->Execute(values);
 
 	if (!stmt->res->success) {
@@ -163,20 +177,10 @@ static bool CastTimestampValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value
 	}
 }
 
-SQLRETURN SetStringValueLength(const std::string &val_str, SQLLEN *str_len_or_ind_ptr) {
-	if (str_len_or_ind_ptr) {
-		// it fills the required lenght from string value
-		*str_len_or_ind_ptr = val_str.size();
-		return SQL_SUCCESS;
-	}
-	// there is no length pointer
-	return SQL_ERROR;
-}
-
 SQLRETURN GetVariableValue(const std::string &val_str, SQLUSMALLINT col_idx, duckdb::OdbcHandleStmt *stmt,
                            SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 	if (!target_value_ptr) {
-		return SetStringValueLength(val_str, str_len_or_ind_ptr);
+		return OdbcUtils::SetStringValueLength(val_str, str_len_or_ind_ptr);
 	}
 
 	SQLRETURN ret = SQL_SUCCESS;
@@ -221,7 +225,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 
 		Value val;
 		stmt->odbc_fetcher->GetValue(col_or_param_num - 1, val);
-		if (val.is_null) {
+		if (val.IsNull()) {
 			if (!str_len_or_ind_ptr) {
 				return SQL_ERROR;
 			}
@@ -269,7 +273,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_WCHAR: {
 			std::string str = val.GetValue<std::string>();
 			if (!target_value_ptr) {
-				return SetStringValueLength(str, str_len_or_ind_ptr);
+				return OdbcUtils::SetStringValueLength(str, str_len_or_ind_ptr);
 			}
 
 			SQLRETURN ret = SQL_SUCCESS;
@@ -787,5 +791,59 @@ SQLRETURN duckdb::ExecDirectStmt(SQLHSTMT statement_handle, SQLCHAR *statement_t
 	if (execute_status != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
+	return SQL_SUCCESS;
+}
+
+SQLRETURN duckdb::ExecuteStmt(SQLHSTMT statement_handle) {
+	return duckdb::WithStatement(statement_handle,
+	                             [&](duckdb::OdbcHandleStmt *stmt) { return duckdb::BatchExecuteStmt(stmt); });
+}
+
+SQLRETURN duckdb::BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number,
+                                    SQLSMALLINT input_output_type, SQLSMALLINT value_type, SQLSMALLINT parameter_type,
+                                    SQLULEN column_size, SQLSMALLINT decimal_digits, SQLPOINTER parameter_value_ptr,
+                                    SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
+		if (input_output_type != SQL_PARAM_INPUT) {
+			stmt->error_messages.emplace_back("Output parameters are not supported.");
+			return SQL_ERROR;
+		}
+		/* check input parameters */
+		if (parameter_number < 1) {
+			stmt->error_messages.emplace_back("Invalid descriptor index.");
+			return SQL_ERROR;
+		}
+		idx_t param_idx = parameter_number - 1;
+
+		//! New descriptor
+		auto ipd_record = stmt->param_desc->ipd->GetDescRecord(param_idx);
+		auto apd_record = stmt->param_desc->apd->GetDescRecord(param_idx);
+
+		ipd_record->sql_desc_parameter_type = input_output_type;
+		ipd_record->sql_desc_length = column_size;
+		ipd_record->sql_desc_precision = column_size;
+		ipd_record->sql_desc_scale = decimal_digits;
+		if (value_type == SQL_DECIMAL || value_type == SQL_NUMERIC || value_type == SQL_FLOAT ||
+		    value_type == SQL_REAL || value_type == SQL_DOUBLE) {
+			ipd_record->sql_desc_precision = column_size;
+		}
+
+		if (ipd_record->SetValueType(parameter_type) == SQL_ERROR ||
+		    apd_record->SetValueType(value_type) == SQL_ERROR) {
+			stmt->error_messages.emplace_back("Error while binding parameter/value type.");
+			return SQL_ERROR;
+		}
+
+		apd_record->sql_desc_data_ptr = parameter_value_ptr;
+		apd_record->sql_desc_octet_length = buffer_length;
+		apd_record->sql_desc_indicator_ptr = str_len_or_ind_ptr;
+		apd_record->sql_desc_octet_length_ptr = str_len_or_ind_ptr;
+
+		return SQL_SUCCESS;
+	});
+}
+
+SQLRETURN duckdb::CloseStmt(duckdb::OdbcHandleStmt *stmt) {
+	stmt->Close();
 	return SQL_SUCCESS;
 }

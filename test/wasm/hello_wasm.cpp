@@ -23,6 +23,6 @@ int32_t HelloWasm() {
 		std::cerr << result->error << std::endl;
 		return -1;
 	}
-	return result->GetValue(0, 0).value_.bigint;
+	return result->GetValue(0, 0).GetValue<int64_t>();
 }
 }

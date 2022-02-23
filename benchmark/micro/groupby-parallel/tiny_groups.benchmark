@@ -1,6 +1,6 @@
 # name: benchmark/micro/groupby-parallel/tiny_groups.benchmark
 # description: Aggregation with small group count
-# group: [groupby]
+# group: [groupby-parallel]
 
 name Grouped Aggregate (S, 100 groups)
 group aggregate

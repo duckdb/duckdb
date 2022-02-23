@@ -19,16 +19,16 @@ static void TestKeyEqual(Key &left, Key &right) {
 	REQUIRE(!(right > left));
 }
 
-static void TestKeyBigger(Key &big, Key &small) {
-	REQUIRE(!(big == small));
-	if (!(big >= small)) {
+static void TestKeyBigger(Key &big_key, Key &small_key) {
+	REQUIRE(!(big_key == small_key));
+	if (!(big_key >= small_key)) {
 		REQUIRE(0);
 	}
-	REQUIRE(big > small);
+	REQUIRE(big_key > small_key);
 
-	REQUIRE(!(small == big));
-	REQUIRE(!(small >= big));
-	REQUIRE(!(small > big));
+	REQUIRE(!(small_key == big_key));
+	REQUIRE(!(small_key >= big_key));
+	REQUIRE(!(small_key > big_key));
 }
 
 static void TestKeys(vector<unique_ptr<Key>> &keys) {

@@ -13,6 +13,7 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/enums/pending_execution_result.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -20,11 +21,14 @@ class DataChunk;
 class PhysicalOperator;
 class PipelineExecutor;
 class OperatorState;
+class QueryProfiler;
 class ThreadContext;
 class Task;
 
 struct PipelineEventStack;
 struct ProducerToken;
+
+using event_map_t = unordered_map<const Pipeline *, PipelineEventStack>;
 
 class Executor {
 	friend class Pipeline;
@@ -41,6 +45,9 @@ public:
 
 	void Initialize(PhysicalOperator *physical_plan);
 	void BuildPipelines(PhysicalOperator *op, Pipeline *current);
+
+	void CancelTasks();
+	PendingExecutionResult ExecuteTask();
 
 	void Reset();
 
@@ -63,7 +70,7 @@ public:
 	void Flush(ThreadContext &context);
 
 	//! Returns the progress of the pipelines
-	bool GetPipelinesProgress(int &current_progress);
+	bool GetPipelinesProgress(double &current_progress);
 
 	void CompletePipeline() {
 		completed_pipelines++;
@@ -81,14 +88,11 @@ private:
 	                            unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines,
 	                            vector<shared_ptr<Event>> &events, bool main_schedule = true);
 
-	void SchedulePipeline(const shared_ptr<Pipeline> &pipeline,
-	                      unordered_map<Pipeline *, PipelineEventStack> &event_map, vector<shared_ptr<Event>> &events,
-	                      bool complete_pipeline);
-	void ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, PipelineEventStack &stack,
-	                           unordered_map<Pipeline *, PipelineEventStack> &event_map,
-	                           vector<shared_ptr<Event>> &events);
-	void ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline,
-	                           unordered_map<Pipeline *, PipelineEventStack> &event_map,
+	void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, event_map_t &event_map,
+	                      vector<shared_ptr<Event>> &events, bool complete_pipeline);
+	Pipeline *ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, const Pipeline *parent,
+	                                event_map_t &event_map, vector<shared_ptr<Event>> &events);
+	void ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline, event_map_t &event_map,
 	                           vector<shared_ptr<Event>> &events);
 	void ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_ptr<Pipeline>> &result);
 	bool NextExecutor();
@@ -117,6 +121,8 @@ private:
 	vector<pair<ExceptionType, string>> exceptions;
 	//! List of events
 	vector<shared_ptr<Event>> events;
+	//! The query profiler
+	shared_ptr<QueryProfiler> profiler;
 
 	//! The amount of completed pipelines of the query
 	atomic<idx_t> completed_pipelines;
@@ -139,5 +145,10 @@ private:
 
 	//! Active recursive CTE node (if any)
 	PhysicalOperator *recursive_cte;
+
+	//! The last pending execution result (if any)
+	PendingExecutionResult execution_result;
+	//! The current task in process (if any)
+	unique_ptr<Task> task;
 };
 } // namespace duckdb

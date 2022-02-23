@@ -1,0 +1,22 @@
+# name: benchmark/micro/window/window_count_star_fixed_100.benchmark
+# description: Moving COUNT(*) performance, fixed 100 element window
+# group: [window]
+
+name Windowed COUNT(*), Fixed 100
+group window
+
+load
+create table rank100 as
+    select b % 100 as a, b from range(10000000) tbl(b)
+
+run
+select sum(c)
+from (
+    select count(*) over (
+        order by b asc
+        rows between 100 preceding and current row) as c
+    from rank100
+    ) q;
+
+result I
+1009994950

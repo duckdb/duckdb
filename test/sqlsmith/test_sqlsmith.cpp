@@ -19,7 +19,6 @@ static void test_runner() {
 
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	db.LoadExtension<TPCHExtension>();
 	Connection con(db);
 
 	con.EnableProfiling();

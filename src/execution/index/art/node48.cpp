@@ -12,7 +12,7 @@ Node48::Node48(ART &art, size_t compression_length) : Node(art, NodeType::N48, c
 
 idx_t Node48::GetChildPos(uint8_t k) {
 	if (child_index[k] == Node::EMPTY_MARKER) {
-		return INVALID_INDEX;
+		return DConstants::INVALID_INDEX;
 	} else {
 		return k;
 	}
@@ -33,7 +33,7 @@ idx_t Node48::GetChildGreaterEqual(uint8_t k, bool &equal) {
 }
 
 idx_t Node48::GetNextPos(idx_t pos) {
-	for (pos == INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
+	for (pos == DConstants::INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
 		if (child_index[pos] != Node::EMPTY_MARKER) {
 			return pos;
 		}
@@ -52,7 +52,7 @@ idx_t Node48::GetMin() {
 			return i;
 		}
 	}
-	return INVALID_INDEX;
+	return DConstants::INVALID_INDEX;
 }
 
 void Node48::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {

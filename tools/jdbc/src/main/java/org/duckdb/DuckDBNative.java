@@ -39,7 +39,7 @@ public class DuckDBNative {
 			}
 			Files.copy(lib_res.openStream(), lib_file, StandardCopyOption.REPLACE_EXISTING);
 			new File(lib_file.toString()).deleteOnExit();
-			System.load(lib_file.toString());
+			System.load(lib_file.toAbsolutePath().toString());
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

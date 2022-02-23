@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/tokens.hpp"
 
 #include <functional>
 
@@ -21,6 +22,11 @@ public:
 	static void EnumerateChildren(ParsedExpression &expr, const std::function<void(ParsedExpression &child)> &callback);
 	static void EnumerateChildren(ParsedExpression &expr,
 	                              const std::function<void(unique_ptr<ParsedExpression> &child)> &callback);
+
+	static void EnumerateTableRefChildren(TableRef &ref,
+	                                      const std::function<void(unique_ptr<ParsedExpression> &child)> &callback);
+	static void EnumerateQueryNodeChildren(QueryNode &node,
+	                                       const std::function<void(unique_ptr<ParsedExpression> &child)> &callback);
 };
 
 } // namespace duckdb

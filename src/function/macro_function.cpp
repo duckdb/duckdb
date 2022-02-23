@@ -25,7 +25,8 @@ string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionE
 			} else if (defaults.find(arg->alias) != defaults.end()) {
 				return StringUtil::Format("Duplicate default parameters %s!", arg->alias);
 			}
-			defaults[arg->alias] = move(arg);
+			auto alias = arg->alias;
+			defaults[alias] = move(arg);
 		} else if (!defaults.empty()) {
 			return "Positional parameters cannot come after parameters with a default value!";
 		} else {
@@ -41,7 +42,7 @@ string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionE
 		error = StringUtil::Format(
 		    "Macro function '%s(%s)' requires ", macro_func.name,
 		    StringUtil::Join(parameters, parameters.size(), ", ", [](const unique_ptr<ParsedExpression> &p) {
-			    return ((ColumnRefExpression &)*p).column_name;
+			    return ((ColumnRefExpression &)*p).column_names[0];
 		    }));
 		error += parameters.size() == 1 ? "a single positional argument"
 		                                : StringUtil::Format("%i positional arguments", parameters.size());

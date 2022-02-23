@@ -28,7 +28,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTabl
 	}
 	auto &create_info = (CreateTableInfo &)*op.info->base;
 	auto &catalog = Catalog::GetCatalog(context);
-	auto existing_entry = catalog.GetEntry<TableCatalogEntry>(context, create_info.schema, create_info.table, true);
+	auto existing_entry =
+	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info.schema, create_info.table, true);
 	if (!existing_entry && !op.children.empty()) {
 		D_ASSERT(op.children.size() == 1);
 		auto create = make_unique<PhysicalCreateTableAs>(op, op.schema, move(op.info), op.estimated_cardinality);

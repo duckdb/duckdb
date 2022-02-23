@@ -152,7 +152,7 @@ static bool HasCorrelatedColumns(Expression &expression) {
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	auto left = CreatePlan(*ref.left);
 	auto right = CreatePlan(*ref.right);
-	if (ref.type == JoinType::RIGHT && context.enable_optimizer) {
+	if (ref.type == JoinType::RIGHT && ClientConfig::GetConfig(context).enable_optimizer) {
 		// we turn any right outer joins into left outer joins for optimization purposes
 		// they are the same but with sides flipped, so treating them the same simplifies life
 		ref.type = JoinType::LEFT;

@@ -276,7 +276,7 @@ string append_to_primary_key(Connection &con, idx_t thread_nr) {
 		return "Failed initial query: " + result->error;
 	}
 	auto chunk = result->Fetch();
-	Value initial_count = chunk->GetValue(0, 0);
+	auto initial_count = chunk->GetValue(0, 0).GetValue<int32_t>();
 	for (int32_t i = 0; i < 50; i++) {
 		result = con.Query("INSERT INTO integers VALUES ($1)", (int32_t)(thread_nr * 1000 + i));
 		if (!result->success) {
@@ -284,9 +284,9 @@ string append_to_primary_key(Connection &con, idx_t thread_nr) {
 		}
 		// check the count
 		result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers WHERE i >= 0");
-		if (!CHECK_COLUMN(result, 0, {initial_count + i + 1})) {
+		if (!CHECK_COLUMN(result, 0, {Value::INTEGER(initial_count + i + 1)})) {
 			return "Incorrect result for CHECK_COLUMN [" + result->error + "], expected " +
-			       (initial_count + i + 1).ToString() + " rows";
+			       Value::INTEGER(initial_count + i + 1).ToString() + " rows";
 		}
 	}
 	if (!con.Query("COMMIT")->success) {

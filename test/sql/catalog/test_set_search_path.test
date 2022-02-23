@@ -32,10 +32,10 @@ statement ok
 CREATE TABLE test5.test5_table(i INTEGER);
 
 # Reading the config - It should be empty for now.
-statement error
+statement ok
 SELECT CURRENT_SETTING('search_path');
 
-statement error
+statement ok
 SELECT CURRENT_SETTING('schema');
 
 # Setting the default value.
@@ -148,15 +148,12 @@ statement ok
 CREATE TABLE test2.table_with_same_name(in_test2 INTEGER);
 
 statement error
----
 SELECT in_main FROM table_with_same_name;
 
 statement error
----
 SELECT in_test2 FROM table_with_same_name;
 
 statement ok
----
 SELECT in_test FROM table_with_same_name;
 
 

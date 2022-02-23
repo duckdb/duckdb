@@ -4,6 +4,9 @@
 #include "duckdb/common/exception.hpp"
 
 #include "duckdb/main/stream_query_result.hpp"
+
+#include "duckdb/common/result_arrow_wrapper.hpp"
+
 namespace duckdb {
 
 ArrowSchemaWrapper::~ArrowSchemaWrapper() {
@@ -54,8 +57,8 @@ void ArrowArrayStreamWrapper::GetSchema(ArrowSchemaWrapper &schema) {
 	// LCOV_EXCL_STOP
 }
 
-unique_ptr<ArrowArrayWrapper> ArrowArrayStreamWrapper::GetNextChunk() {
-	auto current_chunk = make_unique<ArrowArrayWrapper>();
+shared_ptr<ArrowArrayWrapper> ArrowArrayStreamWrapper::GetNextChunk() {
+	auto current_chunk = make_shared<ArrowArrayWrapper>();
 	if (arrow_array_stream.get_next(&arrow_array_stream, &current_chunk->arrow_array)) { // LCOV_EXCL_START
 		throw InvalidInputException("arrow_scan: get_next failed(): %s", string(GetError()));
 	} // LCOV_EXCL_STOP
@@ -79,7 +82,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = (StreamQueryResult &)result;
-		if (!stream_result.is_open) {
+		if (!stream_result.IsOpen()) {
 			my_stream->last_error = "Query Stream is closed";
 			return -1;
 		}
@@ -100,18 +103,27 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = (StreamQueryResult &)result;
-		if (!stream_result.is_open) {
-			my_stream->last_error = "Query Stream is closed";
-			return -1;
+		if (!stream_result.IsOpen()) {
+			// Nothing to output
+			out->release = nullptr;
+			return 0;
 		}
 	}
-	auto data_chunk = result.Fetch();
-	if (!data_chunk) {
-		//! Nothing to output
+	unique_ptr<DataChunk> chunk_result = result.Fetch();
+	if (!chunk_result) {
+		// Nothing to output
 		out->release = nullptr;
 		return 0;
 	}
-	data_chunk->ToArrowArray(out);
+	for (idx_t i = 1; i < my_stream->vectors_per_chunk; i++) {
+		auto new_chunk = result.Fetch();
+		if (!new_chunk) {
+			break;
+		} else {
+			chunk_result->Append(*new_chunk, true);
+		}
+	}
+	chunk_result->ToArrowArray(out);
 	return 0;
 }
 
@@ -131,11 +143,15 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
 	return my_stream->last_error.c_str();
 }
-ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p)
+ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t approx_batch_size)
     : result(move(result_p)) {
 	//! We first initialize the private data of the stream
 	stream.private_data = this;
-
+	//! Ceil Approx_Batch_Size/STANDARD_VECTOR_SIZE
+	if (approx_batch_size == 0) {
+		throw std::runtime_error("Approximate Batch Size of Record Batch MUST be higher than 0");
+	}
+	vectors_per_chunk = (approx_batch_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
 	//! We initialize the stream functions
 	stream.get_schema = ResultArrowArrayStreamWrapper::MyStreamGetSchema;
 	stream.get_next = ResultArrowArrayStreamWrapper::MyStreamGetNext;

@@ -4,6 +4,6 @@ endif()
 
 include_directories(include)
 
-add_library(sqlite3 STATIC sqlite3.c)
-TARGET_LINK_LIBRARIES(sqlite3 pthread)
+add_library(duckdb_sqlite3 STATIC sqlite3.c)
+TARGET_LINK_LIBRARIES(duckdb_sqlite3 pthread)
 

@@ -32,42 +32,32 @@ SELECT * FROM test ORDER BY b
 
 # verify that the sequence was used during the append
 statement ok
-INSERT INTO test (b) VALUES (12), (13)
+INSERT INTO test (b) VALUES (12);
+
+statement ok
+INSERT INTO test (b) VALUES (13);
 
 query III
 SELECT * FROM test ORDER BY b
 ----
-2
-11
-2
-3
-12
-3
-4
-13
-4
+2	11	2
+3	12	3
+4	13	4
 
 # restart and insert one more time
 restart
 
 statement ok
-INSERT INTO test (b) VALUES (14), (15)
+INSERT INTO test (b) VALUES (14)
+
+statement ok
+INSERT INTO test (b) VALUES (15)
 
 query III
 SELECT * FROM test ORDER BY b
 ----
-2
-11
-2
-3
-12
-3
-4
-13
-4
-5
-14
-5
-6
-15
-6
+2	11	2
+3	12	3
+4	13	4
+5	14	5
+6	15	6

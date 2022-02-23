@@ -23,17 +23,28 @@ class ObjectCacheEntry {
 public:
 	virtual ~ObjectCacheEntry() {
 	}
+
+	virtual string GetObjectType() = 0;
 };
 
 class ObjectCache {
 public:
-	shared_ptr<ObjectCacheEntry> Get(string key) {
+	shared_ptr<ObjectCacheEntry> GetObject(const string &key) {
 		lock_guard<mutex> glock(lock);
 		auto entry = cache.find(key);
 		if (entry == cache.end()) {
 			return nullptr;
 		}
 		return entry->second;
+	}
+
+	template <class T>
+	shared_ptr<T> Get(const string &key) {
+		shared_ptr<ObjectCacheEntry> object = GetObject(key);
+		if (!object || object->GetObjectType() != T::ObjectType()) {
+			return nullptr;
+		}
+		return std::static_pointer_cast<T, ObjectCacheEntry>(object);
 	}
 
 	void Put(string key, shared_ptr<ObjectCacheEntry> value) {

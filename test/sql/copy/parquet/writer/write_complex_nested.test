@@ -1,0 +1,137 @@
+# name: test/sql/copy/parquet/writer/write_complex_nested.test
+# description: Parquet write complex structures
+# group: [writer]
+
+require parquet
+
+# struct of lists
+statement ok
+CREATE TABLE struct_of_lists AS SELECT * FROM (VALUES
+	({'a': [1, 2, 3], 'b': ['hello', 'world']}),
+	({'a': [4, NULL, 5], 'b': ['duckduck', 'goose']}),
+	({'a': NULL, 'b': ['longlonglonglonglonglong', NULL, NULL]}),
+	(NULL),
+    ({'a': [], 'b': []}),
+    ({'a': [1, 2, 3], 'b': NULL})
+) tbl(i);
+
+statement ok
+COPY struct_of_lists TO '__TEST_DIR__/complex_list.parquet' (FORMAT 'parquet');
+
+query I
+SELECT i FROM parquet_scan('__TEST_DIR__/complex_list.parquet');
+----
+{'a': [1, 2, 3], 'b': [hello, world]}
+{'a': [4, NULL, 5], 'b': [duckduck, goose]}
+{'a': NULL, 'b': [longlonglonglonglonglong, NULL, NULL]}
+NULL
+{'a': [], 'b': []}
+{'a': [1, 2, 3], 'b': NULL}
+
+# list of structs
+statement ok
+CREATE TABLE list_of_structs AS SELECT * FROM (VALUES
+	([{'a': 1, 'b': 100}, NULL, {'a': 2, 'b': 101}]),
+	(NULL),
+	([]),
+	([{'a': NULL, 'b': 102}, {'a': 3, 'b': NULL}, NULL])
+) tbl(i);
+
+statement ok
+COPY list_of_structs TO '__TEST_DIR__/complex_list.parquet' (FORMAT 'parquet');
+
+query I
+SELECT i FROM parquet_scan('__TEST_DIR__/complex_list.parquet');
+----
+[{'a': 1, 'b': 100}, NULL, {'a': 2, 'b': 101}]
+NULL
+[]
+[{'a': NULL, 'b': 102}, {'a': 3, 'b': NULL}, NULL]
+
+# list of structs of structs
+statement ok
+CREATE TABLE list_of_struct_of_structs AS SELECT * FROM (VALUES
+	([{'a': {'x': 33}, 'b': {'y': 42, 'z': 99}}, NULL, {'a': {'x': NULL}, 'b': {'y': 43, 'z': 100}}]),
+	(NULL),
+	([]),
+	([{'a': NULL, 'b': {'y': NULL, 'z': 101}}, {'a': {'x': 34}, 'b': {'y': 43, 'z': NULL}}]),
+	([{'a': NULL, 'b': NULL}])
+) tbl(i);
+
+statement ok
+COPY list_of_struct_of_structs TO '__TEST_DIR__/complex_list.parquet' (FORMAT 'parquet');
+
+query I
+SELECT i FROM parquet_scan('__TEST_DIR__/complex_list.parquet');
+----
+[{'a': {'x': 33}, 'b': {'y': 42, 'z': 99}}, NULL, {'a': {'x': NULL}, 'b': {'y': 43, 'z': 100}}]
+NULL
+[]
+[{'a': NULL, 'b': {'y': NULL, 'z': 101}}, {'a': {'x': 34}, 'b': {'y': 43, 'z': NULL}}]
+[{'a': NULL, 'b': NULL}]
+
+# list of lists
+# no empty lists or nulls
+statement ok
+CREATE TABLE list_of_lists_simple AS SELECT * FROM (VALUES
+	([[1, 2, 3], [4, 5]]),
+	([[6, 7]]),
+	([[8, 9, 10], [11, 12]])
+) tbl(i);
+
+statement ok
+COPY list_of_lists_simple TO '__TEST_DIR__/complex_list.parquet' (FORMAT 'parquet');
+
+query I
+SELECT i FROM parquet_scan('__TEST_DIR__/complex_list.parquet');
+----
+[[1, 2, 3], [4, 5]]
+[[6, 7]]
+[[8, 9, 10], [11, 12]]
+
+# list of lists with nulls and empty lists
+statement ok
+CREATE TABLE list_of_lists AS SELECT * FROM (VALUES
+	([[1, 2, 3], [4, 5], [], [6, 7]]),
+	([[8, NULL, 10], NULL, []]),
+	([]),
+	(NULL),
+	([[11, 12, 13, 14], [], NULL, [], [], [15], [NULL, NULL, NULL]])
+) tbl(i);
+
+statement ok
+COPY list_of_lists TO '__TEST_DIR__/complex_list.parquet' (FORMAT 'parquet');
+
+query I
+SELECT i FROM parquet_scan('__TEST_DIR__/complex_list.parquet');
+----
+[[1, 2, 3], [4, 5], [], [6, 7]]
+[[8, NULL, 10], NULL, []]
+[]
+NULL
+[[11, 12, 13, 14], [], NULL, [], [], [15], [NULL, NULL, NULL]]
+
+# list of lists of lists of lists
+statement ok
+CREATE TABLE list_of_lists_of_lists_of_lists AS
+   SELECT [LIST(i)] i FROM list_of_lists
+   UNION ALL
+   SELECT NULL
+   UNION ALL
+   SELECT [NULL]
+   UNION ALL
+   SELECT [[], NULL, [], []]
+   UNION ALL
+   SELECT [[[NULL, NULL, [NULL]], NULL, [[], [7, 8, 9], [NULL], NULL, []]], [], [NULL]]
+
+statement ok
+COPY list_of_lists_of_lists_of_lists TO '__TEST_DIR__/complex_list.parquet' (FORMAT 'parquet');
+
+query I
+SELECT i FROM parquet_scan('__TEST_DIR__/complex_list.parquet');
+----
+[[[[1, 2, 3], [4, 5], [], [6, 7]], [[8, NULL, 10], NULL, []], [], NULL, [[11, 12, 13, 14], [], NULL, [], [], [15], [NULL, NULL, NULL]]]]
+NULL
+[NULL]
+[[], NULL, [], []]
+[[[NULL, NULL, [NULL]], NULL, [[], [7, 8, 9], [NULL], NULL, []]], [], [NULL]]

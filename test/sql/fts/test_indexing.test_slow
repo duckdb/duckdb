@@ -1,5 +1,5 @@
 # name: test/sql/fts/test_indexing.test_slow
-# DESCription: Full text search indexing
+# description: Full text search indexing
 # group: [fts]
 
 require fts

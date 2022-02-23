@@ -26,25 +26,27 @@ private:
 };
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
+	auto &profiler = QueryProfiler::Get(context);
+
 	// first resolve column references
-	context.profiler->StartPhase("column_binding");
+	profiler.StartPhase("column_binding");
 	ColumnBindingResolver resolver;
 	resolver.VisitOperator(*op);
-	context.profiler->EndPhase();
+	profiler.EndPhase();
 
 	// now resolve types of all the operators
-	context.profiler->StartPhase("resolve_types");
+	profiler.StartPhase("resolve_types");
 	op->ResolveOperatorTypes();
-	context.profiler->EndPhase();
+	profiler.EndPhase();
 
 	// extract dependencies from the logical plan
 	DependencyExtractor extractor(dependencies);
 	extractor.VisitOperator(*op);
 
 	// then create the main physical plan
-	context.profiler->StartPhase("create_plan");
+	profiler.StartPhase("create_plan");
 	auto plan = CreatePlan(*op);
-	context.profiler->EndPhase();
+	profiler.EndPhase();
 	return plan;
 }
 
@@ -67,6 +69,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalUnnest &)op);
 	case LogicalOperatorType::LOGICAL_LIMIT:
 		return CreatePlan((LogicalLimit &)op);
+	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
+		return CreatePlan((LogicalLimitPercent &)op);
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		return CreatePlan((LogicalSample &)op);
 	case LogicalOperatorType::LOGICAL_ORDER_BY:

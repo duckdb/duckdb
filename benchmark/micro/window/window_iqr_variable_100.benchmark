@@ -1,0 +1,23 @@
+# name: benchmark/micro/window/window_iqr_variable_100.benchmark
+# description: Moving IQR performance, variable 100 element window
+# group: [window]
+
+name Windowed IQR, Variable 100
+group window
+
+load
+create table rank100 as
+    select b % 100 as a, b from range(10000000) tbl(b)
+
+run
+select min(iqr), max(iqr)
+from (
+    select quantile_cont(a, [0.25, 0.5, 0.75]) over (
+        order by b asc
+        rows between mod(b * 47, 521) preceding and 100 - mod(b * 47, 521) following) as iqr
+    from rank100
+    ) q;
+
+result II
+[0.000000, 0.000000, 0.000000]	[76.500000, 84.000000, 91.500000]
+

@@ -1,6 +1,6 @@
 # name: benchmark/micro/aggregate/quantile/quantile.benchmark
 # description: Quantile Function
-# group: [aggregate]
+# group: [quantile]
 
 name Quantile
 group quantile

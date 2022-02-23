@@ -25,6 +25,7 @@ public:
 	                   FileOpener *opener = nullptr);
 
 	FileSystem &fs;
+	string path;
 	unique_ptr<data_t[]> data;
 	idx_t offset;
 	idx_t total_written;

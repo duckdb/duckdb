@@ -292,4 +292,10 @@ string StringUtil::CandidatesMessage(const vector<string> &candidates, const str
 	return result_str;
 }
 
+string StringUtil::CandidatesErrorMessage(const vector<string> &strings, const string &target,
+                                          const string &message_prefix, idx_t n) {
+	auto closest_strings = StringUtil::TopNLevenshtein(strings, target, n);
+	return StringUtil::CandidatesMessage(closest_strings, message_prefix);
+}
+
 } // namespace duckdb

@@ -1,0 +1,86 @@
+# name: test/sql/timezone/test_icu_calendar.test
+# description: Test the ICU calendar interface
+# group: [timezone]
+
+require icu
+
+query I
+SELECT name FROM icu_calendar_names()
+GROUP BY 1
+ORDER BY 1;
+----
+buddhist
+chinese
+coptic
+dangi
+ethiopic
+ethiopic-amete-alem
+gregorian
+hebrew
+indian
+islamic
+islamic-civil
+islamic-rgsa
+islamic-tbla
+islamic-umalqura
+iso8601
+japanese
+persian
+roc
+
+query IIII
+SELECT * FROM duckdb_settings() WHERE name = 'Calendar';
+----
+Calendar	gregorian	The current calendar	VARCHAR
+
+statement error
+SET Calendar = 'fnord';
+
+#
+# Japanese calendar testing
+#
+statement ok
+SET Calendar = 'japanese';
+
+query IIII
+SELECT * FROM duckdb_settings() WHERE name = 'Calendar';
+----
+Calendar	japanese	The current calendar	VARCHAR
+
+statement ok
+SET TimeZone = 'Asia/Tokyo';
+
+statement ok
+CREATE TABLE timestamps AS SELECT ts::TIMESTAMPTZ AS ts, era FROM (VALUES
+	('0645-06-30 00:00:00+00', 'Taika'),
+	('1867-01-01 00:00:00+00', 'Keiou'),
+	('1868-09-07 00:00:00+00', 'Keiou'),
+	('1868-09-08 00:00:00+00', 'Meiji'),
+	('1912-07-29 00:00:00+00', 'Meiji'),
+	('1912-07-30 00:00:00+00', 'Taisho'),
+	('1926-12-24 00:00:00+00', 'Taisho'),
+	('1926-12-25 00:00:00+00', 'Showa'),
+	('1989-01-06 00:00:00+00', 'Showa'),
+	('1989-01-08 00:00:00+00', 'Heisei'),
+	('2019-05-01 00:00:00+00', 'Reiwa'),
+	('2022-01-01 00:00:00+00', 'Reiwa')
+) tbl(ts, era);
+
+# See http://www.meijigakuin.ac.jp/~watson/ref/mtsh.html for details on recent era boundaries.
+query III
+SELECT era, ts, DATE_PART(['era', 'year', 'month', 'day'], ts)
+FROM timestamps
+ORDER BY 2
+----
+Taika	0645-06-30 00:00:00+00	{'era': 0, 'year': 1, 'month': 6, 'day': 27}
+Keiou	1867-01-01 00:00:00+00	{'era': 231, 'year': 3, 'month': 1, 'day': 1}
+Keiou	1868-09-07 00:00:00+00	{'era': 231, 'year': 4, 'month': 9, 'day': 7}
+Meiji	1868-09-08 00:00:00+00	{'era': 232, 'year': 1, 'month': 9, 'day': 8}
+Meiji	1912-07-29 00:00:00+00	{'era': 232, 'year': 45, 'month': 7, 'day': 29}
+Taisho	1912-07-30 00:00:00+00	{'era': 233, 'year': 1, 'month': 7, 'day': 30}
+Taisho	1926-12-24 00:00:00+00	{'era': 233, 'year': 15, 'month': 12, 'day': 24}
+Showa	1926-12-25 00:00:00+00	{'era': 234, 'year': 1, 'month': 12, 'day': 25}
+Showa	1989-01-06 00:00:00+00	{'era': 234, 'year': 64, 'month': 1, 'day': 6}
+Heisei	1989-01-08 00:00:00+00	{'era': 235, 'year': 1, 'month': 1, 'day': 8}
+Reiwa	2019-05-01 00:00:00+00	{'era': 236, 'year': 1, 'month': 5, 'day': 1}
+Reiwa	2022-01-01 00:00:00+00	{'era': 236, 'year': 4, 'month': 1, 'day': 1}

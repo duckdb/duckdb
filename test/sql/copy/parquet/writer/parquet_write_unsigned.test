@@ -1,0 +1,75 @@
+# name: test/sql/copy/parquet/writer/parquet_write_unsigned.test
+# description: Parquet unsigned types round trip
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE values_UTINYINT AS SELECT d::UTINYINT d FROM (VALUES
+    (0), (42), (NULL), (255)) tbl (d);
+
+statement ok
+CREATE TABLE values_USMALLINT AS SELECT d::USMALLINT d FROM (VALUES
+    (0), (42), (NULL), (65535)) tbl (d);
+
+statement ok
+CREATE TABLE values_UINTEGER AS SELECT d::UINTEGER d FROM (VALUES
+    (0), (42), (NULL), (4294967295)) tbl (d);
+
+statement ok
+CREATE TABLE values_UBIGINT AS SELECT d::UBIGINT d FROM (VALUES
+    (0), (42), (NULL), (18446744073709551615)) tbl (d);
+
+foreach type UTINYINT USMALLINT UINTEGER UBIGINT
+
+statement ok
+CREATE OR REPLACE TABLE unsigned(d ${type})
+
+statement ok
+INSERT INTO unsigned SELECT * FROM values_${type}
+
+statement ok
+COPY unsigned TO '__TEST_DIR__/unsigned.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM '__TEST_DIR__/unsigned.parquet' EXCEPT SELECT * FROM unsigned
+----
+
+query I
+SELECT * FROM unsigned EXCEPT SELECT * FROM '__TEST_DIR__/unsigned.parquet'
+----
+
+query I
+SELECT * FROM '__TEST_DIR__/unsigned.parquet' WHERE d=42
+----
+42
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/unsigned.parquet' WHERE d>42
+----
+1
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/unsigned.parquet' WHERE d>=42
+----
+2
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/unsigned.parquet' WHERE d<42
+----
+1
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/unsigned.parquet' WHERE d<=42
+----
+2
+
+query I
+SELECT typeof(d)='${type}' FROM '__TEST_DIR__/unsigned.parquet' LIMIT 1
+----
+true
+
+endloop

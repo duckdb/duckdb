@@ -128,6 +128,9 @@ statement ok
 begin transaction
 
 statement ok
+drop table person;
+
+statement ok
 drop TYPE mood;
 
 statement ok

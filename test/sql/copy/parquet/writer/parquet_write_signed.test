@@ -1,0 +1,75 @@
+# name: test/sql/copy/parquet/writer/parquet_write_signed.test
+# description: Parquet signed types round trip
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE values_TINYINT AS SELECT d::TINYINT d FROM (VALUES
+    (-128), (42), (NULL), (127)) tbl (d);
+
+statement ok
+CREATE TABLE values_SMALLINT AS SELECT d::SMALLINT d FROM (VALUES
+    (-32768), (42), (NULL), (32767)) tbl (d);
+
+statement ok
+CREATE TABLE values_INTEGER AS SELECT d::INTEGER d FROM (VALUES
+    (-2147483648), (42), (NULL), (2147483647)) tbl (d);
+
+statement ok
+CREATE TABLE values_BIGINT AS SELECT d::BIGINT d FROM (VALUES
+    (-9223372036854775808), (42), (NULL), (9223372036854775807)) tbl (d);
+
+foreach type TINYINT SMALLINT INTEGER BIGINT
+
+statement ok
+CREATE OR REPLACE TABLE signed(d ${type})
+
+statement ok
+INSERT INTO signed SELECT * FROM values_${type}
+
+statement ok
+COPY signed TO '__TEST_DIR__/signed.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM '__TEST_DIR__/signed.parquet' EXCEPT SELECT * FROM signed
+----
+
+query I
+SELECT * FROM signed EXCEPT SELECT * FROM '__TEST_DIR__/signed.parquet'
+----
+
+query I
+SELECT * FROM '__TEST_DIR__/signed.parquet' WHERE d=42
+----
+42
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/signed.parquet' WHERE d>42
+----
+1
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/signed.parquet' WHERE d>=42
+----
+2
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/signed.parquet' WHERE d<42
+----
+1
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/signed.parquet' WHERE d<=42
+----
+2
+
+query I
+SELECT typeof(d)='${type}' FROM '__TEST_DIR__/signed.parquet' LIMIT 1
+----
+true
+
+endloop

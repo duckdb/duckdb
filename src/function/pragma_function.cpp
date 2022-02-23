@@ -29,22 +29,10 @@ PragmaFunction PragmaFunction::PragmaStatement(const string &name, pragma_functi
 	return PragmaFunction(name, PragmaType::PRAGMA_STATEMENT, nullptr, function, move(types), LogicalType::INVALID);
 }
 
-PragmaFunction PragmaFunction::PragmaAssignment(const string &name, pragma_query_t query, LogicalType type) {
-	vector<LogicalType> types {move(type)};
-	return PragmaFunction(name, PragmaType::PRAGMA_ASSIGNMENT, query, nullptr, move(types), LogicalType::INVALID);
-}
-
-PragmaFunction PragmaFunction::PragmaAssignment(const string &name, pragma_function_t function, LogicalType type) {
-	vector<LogicalType> types {move(type)};
-	return PragmaFunction(name, PragmaType::PRAGMA_ASSIGNMENT, nullptr, function, move(types), LogicalType::INVALID);
-}
-
 string PragmaFunction::ToString() {
 	switch (type) {
 	case PragmaType::PRAGMA_STATEMENT:
 		return StringUtil::Format("PRAGMA %s", name);
-	case PragmaType::PRAGMA_ASSIGNMENT:
-		return StringUtil::Format("PRAGMA %s=%s", name, arguments[0].ToString());
 	case PragmaType::PRAGMA_CALL: {
 		return StringUtil::Format("PRAGMA %s", SimpleNamedParameterFunction::ToString());
 	}

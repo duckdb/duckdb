@@ -1,4 +1,4 @@
-# name: benchmark/tpch/union/union_into_aggregate.benchmark
+# name: benchmark/tpch/union/q01_union.benchmark
 # description: Union of separate tables into a single aggregate
 # group: [union]
 

@@ -22,37 +22,37 @@ struct PragmaDetailedProfilingOutputData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> PragmaDetailedProfilingOutputBind(ClientContext &context, vector<Value> &inputs,
-                                                                  unordered_map<string, Value> &named_parameters,
+                                                                  named_parameter_map_t &named_parameters,
                                                                   vector<LogicalType> &input_table_types,
                                                                   vector<string> &input_table_names,
                                                                   vector<LogicalType> &return_types,
                                                                   vector<string> &names) {
 	names.emplace_back("OPERATOR_ID");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("ANNOTATION");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("ID");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("NAME");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("TIME");
-	return_types.push_back(LogicalType::DOUBLE);
+	return_types.emplace_back(LogicalType::DOUBLE);
 
 	names.emplace_back("CYCLES_PER_TUPLE");
-	return_types.push_back(LogicalType::DOUBLE);
+	return_types.emplace_back(LogicalType::DOUBLE);
 
 	names.emplace_back("SAMPLE_SIZE");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("INPUT_SIZE");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("EXTRA_INFO");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return make_unique<PragmaDetailedProfilingOutputData>(return_types);
 }

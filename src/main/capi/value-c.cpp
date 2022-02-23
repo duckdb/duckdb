@@ -27,8 +27,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 template <class T>
 T UnsafeFetch(duckdb_result *result, idx_t col, idx_t row) {
-	D_ASSERT(row < result->row_count);
-	return ((T *)result->columns[col].data)[row];
+	D_ASSERT(row < result->__deprecated_row_count);
+	return ((T *)result->__deprecated_columns[col].__deprecated_data)[row];
 }
 
 //===--------------------------------------------------------------------===//
@@ -149,10 +149,10 @@ RESULT_TYPE TryCastCInternal(duckdb_result *result, idx_t col, idx_t row) {
 }
 
 static bool CanFetchValue(duckdb_result *result, idx_t col, idx_t row) {
-	if (!result || col >= result->column_count || row >= result->row_count) {
+	if (!result || col >= result->__deprecated_column_count || row >= result->__deprecated_row_count) {
 		return false;
 	}
-	if (result->columns[col].nullmask[row]) {
+	if (result->__deprecated_columns[col].__deprecated_nullmask[row]) {
 		return false;
 	}
 	return true;
@@ -163,7 +163,7 @@ static RESULT_TYPE GetInternalCValue(duckdb_result *result, idx_t col, idx_t row
 	if (!CanFetchValue(result, col, row)) {
 		return FetchDefaultValue::Operation<RESULT_TYPE>();
 	}
-	switch (result->columns[col].type) {
+	switch (result->__deprecated_columns[col].__deprecated_type) {
 	case DUCKDB_TYPE_BOOLEAN:
 		return TryCastCInternal<bool, RESULT_TYPE, OP>(result, col, row);
 	case DUCKDB_TYPE_TINYINT:
@@ -304,7 +304,7 @@ char *duckdb_value_varchar_internal(duckdb_result *result, idx_t col, idx_t row)
 }
 
 duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
-	if (CanFetchValue(result, col, row) && result->columns[col].type == DUCKDB_TYPE_BLOB) {
+	if (CanFetchValue(result, col, row) && result->__deprecated_columns[col].__deprecated_type == DUCKDB_TYPE_BLOB) {
 		auto internal_result = UnsafeFetch<duckdb_blob>(result, col, row);
 
 		duckdb_blob result_blob;
@@ -317,8 +317,8 @@ duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
 }
 
 bool duckdb_value_is_null(duckdb_result *result, idx_t col, idx_t row) {
-	if (!result || col >= result->column_count || row >= result->row_count) {
+	if (!result || col >= result->__deprecated_column_count || row >= result->__deprecated_row_count) {
 		return false;
 	}
-	return result->columns[col].nullmask[row];
+	return result->__deprecated_columns[col].__deprecated_nullmask[row];
 }

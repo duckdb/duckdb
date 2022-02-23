@@ -12,7 +12,7 @@ BoundStatement Binder::Bind(PragmaStatement &stmt) {
 	auto entry = catalog.GetEntry<PragmaFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->name, false);
 	string error;
 	idx_t bound_idx = Function::BindFunction(entry->name, entry->functions, *stmt.info, error);
-	if (bound_idx == INVALID_INDEX) {
+	if (bound_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(FormatError(stmt.stmt_location, error));
 	}
 	auto &bound_function = entry->functions[bound_idx];

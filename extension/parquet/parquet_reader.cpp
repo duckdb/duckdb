@@ -5,7 +5,6 @@
 
 #include "boolean_column_reader.hpp"
 #include "callback_column_reader.hpp"
-#include "decimal_column_reader.hpp"
 #include "list_column_reader.hpp"
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
@@ -86,76 +85,153 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	return make_shared<ParquetFileMetadataCache>(move(metadata), current_time);
 }
 
-static LogicalType DeriveLogicalType(const SchemaElement &s_ele) {
+LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string) {
 	// inner node
 	D_ASSERT(s_ele.__isset.type && s_ele.num_children == 0);
-	switch (s_ele.type) {
-	case Type::BOOLEAN:
-		return LogicalType::BOOLEAN;
-	case Type::INT32:
-		if (s_ele.__isset.converted_type) {
-			switch (s_ele.converted_type) {
-			case ConvertedType::DATE:
-				return LogicalType::DATE;
-			case ConvertedType::UINT_8:
-				return LogicalType::UTINYINT;
-			case ConvertedType::UINT_16:
-				return LogicalType::USMALLINT;
-			default:
+	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
+		throw IOException("FIXED_LEN_BYTE_ARRAY requires length to be set");
+	}
+	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && s_ele.__isset.logicalType && s_ele.logicalType.__isset.UUID) {
+		return LogicalType::UUID;
+	}
+	if (s_ele.__isset.converted_type) {
+		switch (s_ele.converted_type) {
+		case ConvertedType::INT_8:
+			if (s_ele.type == Type::INT32) {
+				return LogicalType::TINYINT;
+			} else {
+				throw IOException("INT8 converted type can only be set for value of Type::INT32");
+			}
+		case ConvertedType::INT_16:
+			if (s_ele.type == Type::INT32) {
+				return LogicalType::SMALLINT;
+			} else {
+				throw IOException("INT16 converted type can only be set for value of Type::INT32");
+			}
+		case ConvertedType::INT_32:
+			if (s_ele.type == Type::INT32) {
 				return LogicalType::INTEGER;
+			} else {
+				throw IOException("INT32 converted type can only be set for value of Type::INT32");
 			}
-		}
-		return LogicalType::INTEGER;
-	case Type::INT64:
-		if (s_ele.__isset.converted_type) {
-			switch (s_ele.converted_type) {
-			case ConvertedType::TIMESTAMP_MICROS:
-			case ConvertedType::TIMESTAMP_MILLIS:
-				return LogicalType::TIMESTAMP;
-			case ConvertedType::UINT_32:
-				return LogicalType::UINTEGER;
-			case ConvertedType::UINT_64:
-				return LogicalType::UBIGINT;
-			default:
+		case ConvertedType::INT_64:
+			if (s_ele.type == Type::INT64) {
 				return LogicalType::BIGINT;
+			} else {
+				throw IOException("INT64 converted type can only be set for value of Type::INT32");
 			}
-		}
-		return LogicalType::BIGINT;
-
-	case Type::INT96: // always a timestamp it would seem
-		return LogicalType::TIMESTAMP;
-	case Type::FLOAT:
-		return LogicalType::FLOAT;
-	case Type::DOUBLE:
-		return LogicalType::DOUBLE;
-	case Type::BYTE_ARRAY:
-	case Type::FIXED_LEN_BYTE_ARRAY:
-		if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
-			return LogicalType::INVALID;
-		}
-		if (s_ele.__isset.converted_type) {
-			switch (s_ele.converted_type) {
-			case ConvertedType::DECIMAL:
-				if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && s_ele.__isset.scale && s_ele.__isset.type_length) {
-					return LogicalType::DECIMAL(s_ele.precision, s_ele.scale);
-				}
-				return LogicalType::INVALID;
-
-			case ConvertedType::UTF8:
+		case ConvertedType::UINT_8:
+			if (s_ele.type == Type::INT32) {
+				return LogicalType::UTINYINT;
+			} else {
+				throw IOException("UINT8 converted type can only be set for value of Type::INT32");
+			}
+		case ConvertedType::UINT_16:
+			if (s_ele.type == Type::INT32) {
+				return LogicalType::USMALLINT;
+			} else {
+				throw IOException("UINT16 converted type can only be set for value of Type::INT32");
+			}
+		case ConvertedType::UINT_32:
+			if (s_ele.type == Type::INT32) {
+				return LogicalType::UINTEGER;
+			} else {
+				throw IOException("UINT32 converted type can only be set for value of Type::INT32");
+			}
+		case ConvertedType::UINT_64:
+			if (s_ele.type == Type::INT64) {
+				return LogicalType::UBIGINT;
+			} else {
+				throw IOException("UINT64 converted type can only be set for value of Type::INT64");
+			}
+		case ConvertedType::DATE:
+			if (s_ele.type == Type::INT32) {
+				return LogicalType::DATE;
+			} else {
+				throw IOException("DATE converted type can only be set for value of Type::INT32");
+			}
+		case ConvertedType::TIMESTAMP_MICROS:
+		case ConvertedType::TIMESTAMP_MILLIS:
+			if (s_ele.type == Type::INT64) {
+				return LogicalType::TIMESTAMP;
+			} else {
+				throw IOException("TIMESTAMP converted type can only be set for value of Type::INT64");
+			}
+		case ConvertedType::DECIMAL:
+			if (!s_ele.__isset.precision || !s_ele.__isset.scale) {
+				throw IOException("DECIMAL requires a length and scale specifier!");
+			}
+			switch (s_ele.type) {
+			case Type::BYTE_ARRAY:
+			case Type::FIXED_LEN_BYTE_ARRAY:
+			case Type::INT32:
+			case Type::INT64:
+				return LogicalType::DECIMAL(s_ele.precision, s_ele.scale);
+			default:
+				throw IOException(
+				    "DECIMAL converted type can only be set for value of Type::(FIXED_LEN_)BYTE_ARRAY/INT32/INT64");
+			}
+		case ConvertedType::UTF8:
+			switch (s_ele.type) {
+			case Type::BYTE_ARRAY:
+			case Type::FIXED_LEN_BYTE_ARRAY:
 				return LogicalType::VARCHAR;
 			default:
-				return LogicalType::BLOB;
+				throw IOException("UTF8 converted type can only be set for Type::(FIXED_LEN_)BYTE_ARRAY");
 			}
+		case ConvertedType::TIME_MILLIS:
+		case ConvertedType::TIME_MICROS:
+			if (s_ele.type == Type::INT64) {
+				return LogicalType::TIME;
+			} else {
+				throw IOException("TIME_MICROS converted type can only be set for value of Type::INT64");
+			}
+		case ConvertedType::INTERVAL:
+			return LogicalType::INTERVAL;
+		case ConvertedType::MAP:
+		case ConvertedType::MAP_KEY_VALUE:
+		case ConvertedType::LIST:
+		case ConvertedType::ENUM:
+		case ConvertedType::JSON:
+		case ConvertedType::BSON:
+		default:
+			throw IOException("Unsupported converted type");
 		}
-		return LogicalType::BLOB;
-	default:
-		return LogicalType::INVALID;
+	} else {
+		// no converted type set
+		// use default type for each physical type
+		switch (s_ele.type) {
+		case Type::BOOLEAN:
+			return LogicalType::BOOLEAN;
+		case Type::INT32:
+			return LogicalType::INTEGER;
+		case Type::INT64:
+			return LogicalType::BIGINT;
+		case Type::INT96: // always a timestamp it would seem
+			return LogicalType::TIMESTAMP;
+		case Type::FLOAT:
+			return LogicalType::FLOAT;
+		case Type::DOUBLE:
+			return LogicalType::DOUBLE;
+		case Type::BYTE_ARRAY:
+		case Type::FIXED_LEN_BYTE_ARRAY:
+			if (binary_as_string) {
+				return LogicalType::VARCHAR;
+			}
+			return LogicalType::BLOB;
+		default:
+			return LogicalType::INVALID;
+		}
 	}
 }
 
-static unique_ptr<ColumnReader> CreateReaderRecursive(ParquetReader &reader, const FileMetaData *file_meta_data,
-                                                      idx_t depth, idx_t max_define, idx_t max_repeat,
-                                                      idx_t &next_schema_idx, idx_t &next_file_idx) {
+LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
+	return DeriveLogicalType(s_ele, parquet_options.binary_as_string);
+}
+
+unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData *file_meta_data, idx_t depth,
+                                                              idx_t max_define, idx_t max_repeat,
+                                                              idx_t &next_schema_idx, idx_t &next_file_idx) {
 	D_ASSERT(file_meta_data);
 	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
 	auto &s_ele = file_meta_data->schema[next_schema_idx];
@@ -183,7 +259,7 @@ static unique_ptr<ColumnReader> CreateReaderRecursive(ParquetReader &reader, con
 
 			auto &child_ele = file_meta_data->schema[next_schema_idx];
 
-			auto child_reader = CreateReaderRecursive(reader, file_meta_data, depth + 1, max_define, max_repeat,
+			auto child_reader = CreateReaderRecursive(file_meta_data, depth + 1, max_define, max_repeat,
 			                                          next_schema_idx, next_file_idx);
 			child_types.push_back(make_pair(child_ele.name, child_reader->Type()));
 			child_readers.push_back(move(child_reader));
@@ -193,35 +269,75 @@ static unique_ptr<ColumnReader> CreateReaderRecursive(ParquetReader &reader, con
 		D_ASSERT(!child_types.empty());
 		unique_ptr<ColumnReader> result;
 		LogicalType result_type;
-		// if we only have a single child no reason to create a struct ay
-		if (child_types.size() > 1 || depth == 0) {
+
+		bool is_repeated = s_ele.repetition_type == FieldRepetitionType::REPEATED;
+		bool is_list = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::LIST;
+		bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
+		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
+		if (!is_map_kv && this_idx > 0) {
+			// check if the parent node of this is a map
+			auto &p_ele = file_meta_data->schema[this_idx - 1];
+			bool parent_is_map = p_ele.__isset.converted_type && p_ele.converted_type == ConvertedType::MAP;
+			bool parent_has_children = p_ele.__isset.num_children && p_ele.num_children == 1;
+			is_map_kv = parent_is_map && parent_has_children;
+		}
+
+		if (is_map_kv) {
+			if (child_types.size() != 2) {
+				throw IOException("MAP_KEY_VALUE requires two children");
+			}
+			if (!is_repeated) {
+				throw IOException("MAP_KEY_VALUE needs to be repeated");
+			}
+			result_type = LogicalType::MAP(move(child_types[0].second), move(child_types[1].second));
+			for (auto &child_reader : child_readers) {
+				auto child_type = LogicalType::LIST(child_reader->Type());
+				child_reader = make_unique<ListColumnReader>(*this, move(child_type), s_ele, this_idx, max_define,
+				                                             max_repeat, move(child_reader));
+			}
+			result = make_unique<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define - 1,
+			                                         max_repeat - 1, move(child_readers));
+			return result;
+		}
+		if (child_types.size() > 1 || (!is_list && !is_map && !is_repeated)) {
 			result_type = LogicalType::STRUCT(move(child_types));
-			result = make_unique<StructColumnReader>(reader, result_type, s_ele, this_idx, max_define, max_repeat,
+			result = make_unique<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
 			                                         move(child_readers));
 		} else {
 			// if we have a struct with only a single type, pull up
 			result_type = child_types[0].second;
 			result = move(child_readers[0]);
 		}
-		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
+		if (is_repeated) {
 			result_type = LogicalType::LIST(result_type);
-			return make_unique<ListColumnReader>(reader, result_type, s_ele, this_idx, max_define, max_repeat,
+			return make_unique<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
 			                                     move(result));
 		}
 		return result;
 	} else { // leaf node
+		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
+			const auto derived_type = DeriveLogicalType(s_ele);
+			auto list_type = LogicalType::LIST(derived_type);
+
+			auto element_reader =
+			    ColumnReader::CreateReader(*this, derived_type, s_ele, next_file_idx++, max_define, max_repeat);
+
+			return make_unique<ListColumnReader>(*this, list_type, s_ele, this_idx, max_define, max_repeat,
+			                                     move(element_reader));
+		}
+
 		// TODO check return value of derive type or should we only do this on read()
-		return ColumnReader::CreateReader(reader, DeriveLogicalType(s_ele), s_ele, next_file_idx++, max_define,
+		return ColumnReader::CreateReader(*this, DeriveLogicalType(s_ele), s_ele, next_file_idx++, max_define,
 		                                  max_repeat);
 	}
 }
 
 // TODO we don't need readers for columns we are not going to read ay
-static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const FileMetaData *file_meta_data) {
+unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::format::FileMetaData *file_meta_data) {
 	idx_t next_schema_idx = 0;
 	idx_t next_file_idx = 0;
 
-	auto ret = CreateReaderRecursive(reader, file_meta_data, 0, 0, 0, next_schema_idx, next_file_idx);
+	auto ret = CreateReaderRecursive(file_meta_data, 0, 0, 0, next_schema_idx, next_file_idx);
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
 	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
 	return ret;
@@ -239,7 +355,7 @@ void ParquetReader::InitializeSchema(const vector<LogicalType> &expected_types_p
 	}
 
 	bool has_expected_types = !expected_types_p.empty();
-	auto root_reader = CreateReader(*this, file_meta_data);
+	auto root_reader = CreateReader(file_meta_data);
 
 	auto &root_type = root_reader->Type();
 	auto &child_types = StructType::GetChildTypes(root_type);
@@ -270,6 +386,13 @@ void ParquetReader::InitializeSchema(const vector<LogicalType> &expected_types_p
 	D_ASSERT(!return_types.empty());
 }
 
+ParquetOptions::ParquetOptions(ClientContext &context) {
+	Value binary_as_string_val;
+	if (context.TryGetCurrentSetting("binary_as_string", binary_as_string_val)) {
+		binary_as_string = binary_as_string_val.GetValue<bool>();
+	}
+}
+
 ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file_handle_p,
                              const vector<LogicalType> &expected_types_p, const string &initial_filename_p)
     : allocator(allocator_p) {
@@ -280,28 +403,31 @@ ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file
 }
 
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const vector<LogicalType> &expected_types_p,
-                             const string &initial_filename_p)
-    : allocator(Allocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)) {
+                             ParquetOptions parquet_options_p, const string &initial_filename_p)
+    : allocator(Allocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)),
+      parquet_options(parquet_options_p) {
 	auto &fs = FileSystem::GetFileSystem(context_p);
 	file_name = move(file_name_p);
 	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
 	                          FileSystem::DEFAULT_COMPRESSION, file_opener);
+	if (!file_handle->CanSeek()) {
+		throw NotImplementedException(
+		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
+		    "metadata is located at the end of the file. Write the stream to disk first and read from there instead.");
+	}
 	// If object cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
-
 	auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
 	if (!ObjectCache::ObjectCacheEnabled(context_p)) {
 		metadata = LoadMetadata(allocator, *file_handle);
 	} else {
-		metadata =
-		    std::dynamic_pointer_cast<ParquetFileMetadataCache>(ObjectCache::GetObjectCache(context_p).Get(file_name));
+		metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
 		if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
 			metadata = LoadMetadata(allocator, *file_handle);
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 		}
 	}
-
 	InitializeSchema(expected_types_p, initial_filename_p);
 }
 
@@ -318,7 +444,7 @@ const FileMetaData *ParquetReader::GetFileMetadata() {
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ParquetReader &reader, LogicalType &type,
                                                          column_t file_col_idx, const FileMetaData *file_meta_data) {
 	unique_ptr<BaseStatistics> column_stats;
-	auto root_reader = CreateReader(reader, file_meta_data);
+	auto root_reader = reader.CreateReader(file_meta_data);
 	auto column_reader = ((StructColumnReader *)root_reader.get())->GetChildReader(file_col_idx);
 
 	for (auto &row_group : file_meta_data->row_groups) {
@@ -392,7 +518,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 	    file_handle->file_system.OpenFile(file_handle->path, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
 	                                      FileSystem::DEFAULT_COMPRESSION, file_opener);
 	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle);
-	state.root_reader = CreateReader(*this, GetFileMetadata());
+	state.root_reader = CreateReader(GetFileMetadata());
 
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
@@ -438,66 +564,55 @@ void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_ma
 	}
 }
 
+template <class T, class OP>
+void TemplatedFilterOperation(Vector &v, const Value &constant, parquet_filter_t &filter_mask, idx_t count) {
+	TemplatedFilterOperation<T, OP>(v, constant.template GetValueUnsafe<T>(), filter_mask, count);
+}
+
 template <class OP>
 static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &filter_mask, idx_t count) {
 	if (filter_mask.none() || count == 0) {
 		return;
 	}
-	switch (v.GetType().id()) {
-	case LogicalTypeId::BOOLEAN:
-		TemplatedFilterOperation<bool, OP>(v, constant.value_.boolean, filter_mask, count);
+	switch (v.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+		TemplatedFilterOperation<bool, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::UTINYINT:
-		TemplatedFilterOperation<uint8_t, OP>(v, constant.value_.utinyint, filter_mask, count);
+	case PhysicalType::UINT8:
+		TemplatedFilterOperation<uint8_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::USMALLINT:
-		TemplatedFilterOperation<uint16_t, OP>(v, constant.value_.usmallint, filter_mask, count);
+	case PhysicalType::UINT16:
+		TemplatedFilterOperation<uint16_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::UINTEGER:
-		TemplatedFilterOperation<uint32_t, OP>(v, constant.value_.uinteger, filter_mask, count);
+	case PhysicalType::UINT32:
+		TemplatedFilterOperation<uint32_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::UBIGINT:
-		TemplatedFilterOperation<uint64_t, OP>(v, constant.value_.ubigint, filter_mask, count);
+	case PhysicalType::UINT64:
+		TemplatedFilterOperation<uint64_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::INTEGER:
-		TemplatedFilterOperation<int32_t, OP>(v, constant.value_.integer, filter_mask, count);
+	case PhysicalType::INT8:
+		TemplatedFilterOperation<int8_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::BIGINT:
-		TemplatedFilterOperation<int64_t, OP>(v, constant.value_.bigint, filter_mask, count);
+	case PhysicalType::INT16:
+		TemplatedFilterOperation<int16_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::FLOAT:
-		TemplatedFilterOperation<float, OP>(v, constant.value_.float_, filter_mask, count);
+	case PhysicalType::INT32:
+		TemplatedFilterOperation<int32_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::DOUBLE:
-		TemplatedFilterOperation<double, OP>(v, constant.value_.double_, filter_mask, count);
+	case PhysicalType::INT64:
+		TemplatedFilterOperation<int64_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::DATE:
-		TemplatedFilterOperation<date_t, OP>(v, constant.value_.date, filter_mask, count);
+	case PhysicalType::INT128:
+		TemplatedFilterOperation<hugeint_t, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::TIMESTAMP:
-		TemplatedFilterOperation<timestamp_t, OP>(v, constant.value_.timestamp, filter_mask, count);
+	case PhysicalType::FLOAT:
+		TemplatedFilterOperation<float, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::VARCHAR:
-		TemplatedFilterOperation<string_t, OP>(v, string_t(constant.str_value), filter_mask, count);
+	case PhysicalType::DOUBLE:
+		TemplatedFilterOperation<double, OP>(v, constant, filter_mask, count);
 		break;
-	case LogicalTypeId::DECIMAL:
-		switch (v.GetType().InternalType()) {
-		case PhysicalType::INT16:
-			TemplatedFilterOperation<int16_t, OP>(v, constant.value_.smallint, filter_mask, count);
-			break;
-		case PhysicalType::INT32:
-			TemplatedFilterOperation<int32_t, OP>(v, constant.value_.integer, filter_mask, count);
-			break;
-		case PhysicalType::INT64:
-			TemplatedFilterOperation<int64_t, OP>(v, constant.value_.bigint, filter_mask, count);
-			break;
-		case PhysicalType::INT128:
-			TemplatedFilterOperation<hugeint_t, OP>(v, constant.value_.hugeint, filter_mask, count);
-			break;
-		default:
-			throw InternalException("Unsupported internal type for decimal");
-		}
+	case PhysicalType::VARCHAR:
+		TemplatedFilterOperation<string_t, OP>(v, constant, filter_mask, count);
 		break;
 	default:
 		throw NotImplementedException("Unsupported type for filter %s", v.ToString());
@@ -515,11 +630,13 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 	}
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &conjunction = (ConjunctionOrFilter &)filter;
+		parquet_filter_t or_mask;
 		for (auto &child_filter : conjunction.child_filters) {
 			parquet_filter_t child_mask = filter_mask;
 			ApplyFilter(v, *child_filter, child_mask, count);
-			filter_mask |= child_mask;
+			or_mask |= child_mask;
 		}
+		filter_mask &= or_mask;
 		break;
 	}
 	case TableFilterType::CONSTANT_COMPARISON: {

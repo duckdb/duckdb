@@ -56,7 +56,7 @@ public:
 
 	virtual string GetName() const;
 	virtual string ParamsToString() const;
-	virtual string ToString(idx_t depth = 0) const;
+	virtual string ToString() const;
 	void Print();
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
 	virtual void Verify();

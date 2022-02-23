@@ -17,8 +17,18 @@
  * under the License.
  */
 
+#ifndef THRIFT_CONFIG_H
+#define THRIFT_CONFIG_H
+
+
 #ifdef _WIN32
-//#include <thrift/windows/config.h>
+#if defined(_M_IX86) || defined(_M_X64)
+#define ARITHMETIC_RIGHT_SHIFT 1
+#define SIGNED_RIGHT_SHIFT_IS 1
+#endif
 #else
-#include "thrift/config.h"
+#define SIGNED_RIGHT_SHIFT_IS  1
+#define ARITHMETIC_RIGHT_SHIFT 1
+#endif
+
 #endif

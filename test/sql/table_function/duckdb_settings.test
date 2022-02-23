@@ -1,0 +1,19 @@
+# name: test/sql/table_function/duckdb_settings.test
+# description: Test duckdb_settings function
+# group: [table_function]
+
+statement ok
+SELECT * FROM duckdb_settings();
+
+query II
+SELECT name, value FROM duckdb_settings() WHERE name='default_null_order';
+----
+default_null_order	nulls_first
+
+statement ok
+SET default_null_order='nulls_last'
+
+query II
+SELECT name, value FROM duckdb_settings() WHERE name='default_null_order';
+----
+default_null_order	nulls_last

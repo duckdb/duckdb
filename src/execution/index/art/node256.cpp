@@ -10,7 +10,7 @@ idx_t Node256::GetChildPos(uint8_t k) {
 	if (child[k]) {
 		return k;
 	} else {
-		return INVALID_INDEX;
+		return DConstants::INVALID_INDEX;
 	}
 }
 
@@ -25,7 +25,7 @@ idx_t Node256::GetChildGreaterEqual(uint8_t k, bool &equal) {
 			return pos;
 		}
 	}
-	return INVALID_INDEX;
+	return DConstants::INVALID_INDEX;
 }
 
 idx_t Node256::GetMin() {
@@ -34,11 +34,11 @@ idx_t Node256::GetMin() {
 			return i;
 		}
 	}
-	return INVALID_INDEX;
+	return DConstants::INVALID_INDEX;
 }
 
 idx_t Node256::GetNextPos(idx_t pos) {
-	for (pos == INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
+	for (pos == DConstants::INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
 		if (child[pos]) {
 			return pos;
 		}

@@ -27,10 +27,11 @@ Connection::Connection(DuckDB &database) : Connection(*database.instance) {
 }
 
 string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
+	auto &profiler = QueryProfiler::Get(*context);
 	if (format == ProfilerPrintFormat::JSON) {
-		return context->profiler->ToJSON();
+		return profiler.ToJSON();
 	} else {
-		return context->profiler->ToString();
+		return profiler.ToString();
 	}
 }
 
@@ -47,15 +48,15 @@ void Connection::DisableProfiling() {
 }
 
 void Connection::EnableQueryVerification() {
-	context->query_verification_enabled = true;
+	ClientConfig::GetConfig(*context).query_verification_enabled = true;
 }
 
 void Connection::DisableQueryVerification() {
-	context->query_verification_enabled = false;
+	ClientConfig::GetConfig(*context).query_verification_enabled = false;
 }
 
 void Connection::ForceParallelism() {
-	context->verify_parallelism = true;
+	ClientConfig::GetConfig(*context).verify_parallelism = true;
 }
 
 unique_ptr<QueryResult> Connection::SendQuery(const string &query) {
@@ -72,6 +73,14 @@ unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> s
 	auto result = context->Query(move(statement), false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
+}
+
+unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query) {
+	return context->PendingQuery(query);
+}
+
+unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement) {
+	return context->PendingQuery(move(statement));
 }
 
 unique_ptr<PreparedStatement> Connection::Prepare(const string &query) {
@@ -138,7 +147,13 @@ shared_ptr<Relation> Connection::View(const string &schema_name, const string &t
 
 shared_ptr<Relation> Connection::TableFunction(const string &fname) {
 	vector<Value> values;
-	return TableFunction(fname, values);
+	named_parameter_map_t named_parameters;
+	return TableFunction(fname, values, named_parameters);
+}
+
+shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values,
+                                               const named_parameter_map_t &named_parameters) {
+	return make_shared<TableFunctionRelation>(*context, fname, values, named_parameters);
 }
 
 shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values) {
@@ -180,7 +195,7 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 	// parse columns
 	vector<ColumnDefinition> column_list;
 	for (auto &column : columns) {
-		auto col_list = Parser::ParseColumnList(column);
+		auto col_list = Parser::ParseColumnList(column, context->GetParserOptions());
 		if (col_list.size() != 1) {
 			throw ParserException("Expected a single column definition");
 		}
@@ -189,8 +204,16 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 	return make_shared<ReadCSVRelation>(*context, csv_file, move(column_list));
 }
 
-shared_ptr<Relation> Connection::RelationFromQuery(const string &query, const string &alias) {
-	return make_shared<QueryRelation>(*context, query, alias);
+unordered_set<string> Connection::GetTableNames(const string &query) {
+	return context->GetTableNames(query);
+}
+
+shared_ptr<Relation> Connection::RelationFromQuery(const string &query, string alias, const string &error) {
+	return RelationFromQuery(QueryRelation::ParseStatement(*context, query, error), move(alias));
+}
+
+shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> select_stmt, string alias) {
+	return make_shared<QueryRelation>(*context, move(select_stmt), move(alias));
 }
 
 void Connection::BeginTransaction() {

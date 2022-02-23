@@ -159,7 +159,7 @@
  */
 %left		JOIN CROSS LEFT FULL RIGHT INNER_P NATURAL
 /* kluge to keep from causing shift/reduce conflicts */
-%right		PRESERVE STRIP_P
+%right		PRESERVE STRIP_P IGNORE_P RESPECT_P
 
 %%
 

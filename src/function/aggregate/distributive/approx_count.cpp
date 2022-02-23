@@ -91,6 +91,12 @@ struct ApproxCountDistinctFunctionString : ApproxCountDistinctFunctionBase {
 	}
 };
 
+template <typename INPUT_TYPE, typename RESULT_TYPE>
+AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type, const LogicalType &result_type) {
+	return AggregateFunction::UnaryAggregateDestructor<ApproxDistinctCountState, INPUT_TYPE, RESULT_TYPE,
+	                                                   ApproxCountDistinctFunction>(input_type, result_type);
+}
+
 AggregateFunction GetApproxCountDistinctFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::UINT16:
@@ -146,9 +152,10 @@ void ApproxCountDistinctFun::RegisterFunction(BuiltinFunctions &set) {
 	approx_count.AddFunction(GetApproxCountDistinctFunction(PhysicalType::INT64));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(PhysicalType::DOUBLE));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(PhysicalType::VARCHAR));
-	approx_count.AddFunction(AggregateFunction::UnaryAggregateDestructor<ApproxDistinctCountState, int64_t, int64_t,
-	                                                                     ApproxCountDistinctFunction>(
-	    LogicalType::TIMESTAMP, LogicalType::BIGINT));
+	approx_count.AddFunction(
+	    GetApproxCountDistinctFunction<int64_t, int64_t>(LogicalType::TIMESTAMP, LogicalType::BIGINT));
+	approx_count.AddFunction(
+	    GetApproxCountDistinctFunction<int64_t, int64_t>(LogicalType::TIMESTAMP_TZ, LogicalType::BIGINT));
 	set.AddFunction(approx_count);
 }
 

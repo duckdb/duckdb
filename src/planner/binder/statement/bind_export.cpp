@@ -43,7 +43,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.enable_external_access) {
-		throw Exception("COPY TO is disabled by configuration");
+		throw PermissionException("COPY TO is disabled through configuration");
 	}
 	BoundStatement result;
 	result.types = {LogicalType::BOOLEAN};

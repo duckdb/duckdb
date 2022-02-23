@@ -1,0 +1,139 @@
+# name: test/sql/copy/parquet/writer/write_struct.test
+# description: Parquet write struct
+# group: [writer]
+
+require parquet
+
+# standard struct
+statement ok
+CREATE TABLE struct AS SELECT * FROM (VALUES
+	({'a': 42, 'b': 84}),
+	({'a': 33, 'b': 32}),
+	({'a': 42, 'b': 27})
+) tbl(i);
+
+statement ok
+COPY struct TO '__TEST_DIR__/test_struct.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM parquet_scan('__TEST_DIR__/test_struct.parquet');
+----
+{'a': 42, 'b': 84}
+{'a': 33, 'b': 32}
+{'a': 42, 'b': 27}
+
+# struct with nulls
+statement ok
+CREATE TABLE struct_nulls AS SELECT * FROM (VALUES
+	({'a': 42, 'b': 84}),
+	({'a': NULL, 'b': 32}),
+	(NULL),
+	({'a': 42, 'b': NULL})
+) tbl(i);
+
+statement ok
+COPY struct_nulls TO '__TEST_DIR__/test_struct_nulls.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM parquet_scan('__TEST_DIR__/test_struct_nulls.parquet');
+----
+{'a': 42, 'b': 84}
+{'a': NULL, 'b': 32}
+NULL
+{'a': 42, 'b': NULL}
+
+# nested structs
+statement ok
+CREATE TABLE struct_nested AS SELECT * FROM (VALUES
+	({'a': {'x': 3, 'x1': 22}, 'b': {'y': 27, 'y1': 44}}),
+	({'a': {'x': 9, 'x1': 26}, 'b': {'y': 1, 'y1': 999}}),
+	({'a': {'x': 17, 'x1': 23}, 'b': {'y': 3, 'y1': 9999}})
+) tbl(i);
+
+statement ok
+COPY struct_nested TO '__TEST_DIR__/struct_nested.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM parquet_scan('__TEST_DIR__/struct_nested.parquet');
+----
+{'a': {'x': 3, 'x1': 22}, 'b': {'y': 27, 'y1': 44}}
+{'a': {'x': 9, 'x1': 26}, 'b': {'y': 1, 'y1': 999}}
+{'a': {'x': 17, 'x1': 23}, 'b': {'y': 3, 'y1': 9999}}
+
+# nested structs
+statement ok
+CREATE TABLE struct_nested_null AS SELECT * FROM (VALUES
+	({'a': {'x': 3, 'x1': 22}, 'b': {'y': NULL, 'y1': 44}}),
+	({'a': {'x': NULL, 'x1': 26}, 'b': {'y': 1, 'y1': NULL}}),
+	({'a': {'x': 17, 'x1': NULL}, 'b': {'y': 3, 'y1': 9999}}),
+	(NULL),
+	({'a': NULL, 'b': NULL})
+) tbl(i);
+
+statement ok
+COPY struct_nested_null TO '__TEST_DIR__/struct_nested_null.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM parquet_scan('__TEST_DIR__/struct_nested_null.parquet');
+----
+{'a': {'x': 3, 'x1': 22}, 'b': {'y': NULL, 'y1': 44}}
+{'a': {'x': NULL, 'x1': 26}, 'b': {'y': 1, 'y1': NULL}}
+{'a': {'x': 17, 'x1': NULL}, 'b': {'y': 3, 'y1': 9999}}
+NULL
+{'a': NULL, 'b': NULL}
+
+# single struct
+statement ok
+CREATE TABLE single_struct AS SELECT * FROM (VALUES
+	({'a': 42}),
+	({'a': 33}),
+	({'a': 42})
+) tbl(i);
+
+statement ok
+COPY single_struct TO '__TEST_DIR__/single_struct.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM parquet_scan('__TEST_DIR__/single_struct.parquet');
+----
+{'a': 42}
+{'a': 33}
+{'a': 42}
+
+# single struct nulls
+statement ok
+CREATE TABLE single_struct_null AS SELECT * FROM (VALUES
+	({'a': 42}),
+	({'a': NULL}),
+	(NULL)
+) tbl(i);
+
+statement ok
+COPY single_struct_null TO '__TEST_DIR__/single_struct_null.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM parquet_scan('__TEST_DIR__/single_struct_null.parquet');
+----
+{'a': 42}
+{'a': NULL}
+NULL
+
+# nested single struct
+statement ok
+CREATE TABLE nested_single_struct AS SELECT * FROM (VALUES
+	({'a': {'b': 42}}),
+	({'a': {'b': NULL}}),
+	({'a': NULL}),
+	(NULL)
+) tbl(i);
+
+statement ok
+COPY nested_single_struct TO '__TEST_DIR__/nested_single_struct.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM parquet_scan('__TEST_DIR__/nested_single_struct.parquet');
+----
+{'a': {'b': 42}}
+{'a': {'b': NULL}}
+{'a': NULL}
+NULL

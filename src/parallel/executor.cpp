@@ -26,7 +26,7 @@ Executor::~Executor() {
 }
 
 Executor &Executor::Get(ClientContext &context) {
-	return context.executor;
+	return context.GetExecutor();
 }
 
 void Executor::AddEvent(shared_ptr<Event> event) {
@@ -40,13 +40,17 @@ struct PipelineEventStack {
 	Event *pipeline_complete_event;
 };
 
-void Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, PipelineEventStack &parent_stack,
-                                     unordered_map<Pipeline *, PipelineEventStack> &event_map,
-                                     vector<shared_ptr<Event>> &events) {
+Pipeline *Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, const Pipeline *parent,
+                                          event_map_t &event_map, vector<shared_ptr<Event>> &events) {
 	pipeline->Ready();
 
 	D_ASSERT(pipeline);
 	auto pipeline_event = make_shared<PipelineEvent>(pipeline);
+
+	auto parent_stack_entry = event_map.find(parent);
+	D_ASSERT(parent_stack_entry != event_map.end());
+
+	auto &parent_stack = parent_stack_entry->second;
 
 	PipelineEventStack stack;
 	stack.pipeline_event = pipeline_event.get();
@@ -57,18 +61,21 @@ void Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, Pipel
 	parent_stack.pipeline_finish_event->AddDependency(*pipeline_event);
 
 	events.push_back(move(pipeline_event));
+	event_map.insert(make_pair(pipeline.get(), stack));
+
+	auto parent_pipeline = pipeline.get();
 
 	auto union_entry = union_pipelines.find(pipeline.get());
 	if (union_entry != union_pipelines.end()) {
 		for (auto &entry : union_entry->second) {
-			ScheduleUnionPipeline(entry, parent_stack, event_map, events);
+			parent_pipeline = ScheduleUnionPipeline(entry, parent_pipeline, event_map, events);
 		}
 	}
-	event_map.insert(make_pair(pipeline.get(), stack));
+
+	return parent_pipeline;
 }
 
-void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline,
-                                     unordered_map<Pipeline *, PipelineEventStack> &event_map,
+void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline, event_map_t &event_map,
                                      vector<shared_ptr<Event>> &events) {
 	pipeline->Ready();
 
@@ -102,12 +109,10 @@ void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline
 	}
 
 	events.push_back(move(pipeline_event));
-
 	event_map.insert(make_pair(child_ptr, stack));
 }
 
-void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline,
-                                unordered_map<Pipeline *, PipelineEventStack> &event_map,
+void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, event_map_t &event_map,
                                 vector<shared_ptr<Event>> &events, bool complete_pipeline) {
 	D_ASSERT(pipeline);
 
@@ -129,13 +134,15 @@ void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline,
 	events.push_back(move(pipeline_finish_event));
 	events.push_back(move(pipeline_complete_event));
 
+	event_map.insert(make_pair(pipeline.get(), stack));
+
 	auto union_entry = union_pipelines.find(pipeline.get());
 	if (union_entry != union_pipelines.end()) {
+		auto parent_pipeline = pipeline.get();
 		for (auto &entry : union_entry->second) {
-			ScheduleUnionPipeline(entry, stack, event_map, events);
+			parent_pipeline = ScheduleUnionPipeline(entry, parent_pipeline, event_map, events);
 		}
 	}
-	event_map.insert(make_pair(pipeline.get(), stack));
 }
 
 void Executor::ScheduleEventsInternal(const vector<shared_ptr<Pipeline>> &pipelines,
@@ -143,7 +150,7 @@ void Executor::ScheduleEventsInternal(const vector<shared_ptr<Pipeline>> &pipeli
                                       vector<shared_ptr<Event>> &events, bool main_schedule) {
 	D_ASSERT(events.empty());
 	// create all the required pipeline events
-	unordered_map<Pipeline *, PipelineEventStack> event_map;
+	event_map_t event_map;
 	for (auto &pipeline : pipelines) {
 		SchedulePipeline(pipeline, event_map, events, main_schedule);
 	}
@@ -248,16 +255,6 @@ void Executor::VerifyPipelines() {
 #endif
 }
 
-void Executor::WorkOnTasks() {
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-
-	unique_ptr<Task> task;
-	while (scheduler.GetTaskFromProducer(*producer, task)) {
-		task->Execute();
-		task.reset();
-	}
-}
-
 void Executor::Initialize(PhysicalOperator *plan) {
 	Reset();
 
@@ -266,7 +263,8 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		lock_guard<mutex> elock(executor_lock);
 		physical_plan = plan;
 
-		context.profiler->Initialize(physical_plan);
+		this->profiler = context.profiler;
+		profiler->Initialize(physical_plan);
 		this->producer = scheduler.CreateProducer();
 
 		auto root_pipeline = make_shared<Pipeline>(*this);
@@ -282,60 +280,102 @@ void Executor::Initialize(PhysicalOperator *plan) {
 
 		ScheduleEvents();
 	}
+}
 
-	// now execute tasks from this producer until all pipelines are completed
-	while (completed_pipelines < total_pipelines) {
-		WorkOnTasks();
-		if (!HasError()) {
-			// no exceptions: continue
-			continue;
+void Executor::CancelTasks() {
+	task.reset();
+	// we do this by creating weak pointers to all pipelines
+	// then clearing our references to the pipelines
+	// and waiting until all pipelines have been destroyed
+	vector<weak_ptr<Pipeline>> weak_references;
+	{
+		lock_guard<mutex> elock(executor_lock);
+		if (pipelines.empty()) {
+			return;
 		}
-
-		// an exception has occurred executing one of the pipelines
-		// we need to wait until all threads are finished
-		// we do this by creating weak pointers to all pipelines
-		// then clearing our references to the pipelines
-		// and waiting until all pipelines have been destroyed
-		vector<weak_ptr<Pipeline>> weak_references;
-		{
-			lock_guard<mutex> elock(executor_lock);
-			weak_references.reserve(pipelines.size());
-			for (auto &pipeline : pipelines) {
+		weak_references.reserve(pipelines.size());
+		for (auto &pipeline : pipelines) {
+			weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+		}
+		for (auto &kv : union_pipelines) {
+			for (auto &pipeline : kv.second) {
 				weak_references.push_back(weak_ptr<Pipeline>(pipeline));
 			}
-			for (auto &kv : union_pipelines) {
-				for (auto &pipeline : kv.second) {
-					weak_references.push_back(weak_ptr<Pipeline>(pipeline));
-				}
-			}
-			for (auto &kv : child_pipelines) {
-				for (auto &pipeline : kv.second) {
-					weak_references.push_back(weak_ptr<Pipeline>(pipeline));
-				}
-			}
-			pipelines.clear();
-			union_pipelines.clear();
-			child_pipelines.clear();
-			events.clear();
 		}
-		for (auto &weak_ref : weak_references) {
-			while (true) {
-				auto weak = weak_ref.lock();
-				if (!weak) {
-					break;
-				}
+		for (auto &kv : child_pipelines) {
+			for (auto &pipeline : kv.second) {
+				weak_references.push_back(weak_ptr<Pipeline>(pipeline));
 			}
 		}
+		pipelines.clear();
+		union_pipelines.clear();
+		child_pipelines.clear();
+		events.clear();
+	}
+	WorkOnTasks();
+	for (auto &weak_ref : weak_references) {
+		while (true) {
+			auto weak = weak_ref.lock();
+			if (!weak) {
+				break;
+			}
+		}
+	}
+}
+
+void Executor::WorkOnTasks() {
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+
+	unique_ptr<Task> task;
+	while (scheduler.GetTaskFromProducer(*producer, task)) {
+		task->Execute(TaskExecutionMode::PROCESS_ALL);
+		task.reset();
+	}
+}
+
+PendingExecutionResult Executor::ExecuteTask() {
+	if (execution_result != PendingExecutionResult::RESULT_NOT_READY) {
+		return execution_result;
+	}
+	// check if there are any incomplete pipelines
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	while (completed_pipelines < total_pipelines) {
+		// there are! if we don't already have a task, fetch one
+		if (!task) {
+			scheduler.GetTaskFromProducer(*producer, task);
+		}
+		if (task) {
+			// if we have a task, partially process it
+			auto result = task->Execute(TaskExecutionMode::PROCESS_PARTIAL);
+			if (result != TaskExecutionResult::TASK_NOT_FINISHED) {
+				// if the task is finished, clean it up
+				task.reset();
+			}
+		}
+		if (!HasError()) {
+			// we (partially) processed a task and no exceptions were thrown
+			// give back control to the caller
+			return PendingExecutionResult::RESULT_NOT_READY;
+		}
+		execution_result = PendingExecutionResult::EXECUTION_ERROR;
+
+		// an exception has occurred executing one of the pipelines
+		// we need to cancel all tasks associated with this executor
+		CancelTasks();
 		ThrowException();
 	}
+	D_ASSERT(!task);
 
 	lock_guard<mutex> elock(executor_lock);
 	pipelines.clear();
 	NextExecutor();
 	if (!exceptions.empty()) { // LCOV_EXCL_START
 		// an exception has occurred executing one of the pipelines
+		execution_result = PendingExecutionResult::EXECUTION_ERROR;
 		ThrowExceptionInternal();
 	} // LCOV_EXCL_STOP
+	execution_result = PendingExecutionResult::RESULT_READY;
+	return execution_result;
 }
 
 void Executor::Reset() {
@@ -354,6 +394,7 @@ void Executor::Reset() {
 	union_pipelines.clear();
 	child_pipelines.clear();
 	child_dependencies.clear();
+	execution_result = PendingExecutionResult::RESULT_NOT_READY;
 }
 
 void Executor::AddChildPipeline(Pipeline *current) {
@@ -386,12 +427,8 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 	D_ASSERT(current);
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
-		auto pipeline = make_shared<Pipeline>(*this);
-		pipeline->sink = op;
 		op->sink_state.reset();
 
-		// the current is dependent on this pipeline to complete
-		current->AddDependency(pipeline);
 		PhysicalOperator *pipeline_child = nullptr;
 		switch (op->type) {
 		case PhysicalOperatorType::CREATE_TABLE_AS:
@@ -406,8 +443,9 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		case PhysicalOperatorType::RESERVOIR_SAMPLE:
 		case PhysicalOperatorType::TOP_N:
 		case PhysicalOperatorType::COPY_TO_FILE:
-		case PhysicalOperatorType::EXPRESSION_SCAN:
 		case PhysicalOperatorType::LIMIT:
+		case PhysicalOperatorType::LIMIT_PERCENT:
+		case PhysicalOperatorType::EXPLAIN_ANALYZE:
 			D_ASSERT(op->children.size() == 1);
 			// single operator:
 			// the operator becomes the data source of the current pipeline
@@ -479,6 +517,10 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		default:
 			throw InternalException("Unimplemented sink type!");
 		}
+		// the current is dependent on this pipeline to complete
+		auto pipeline = make_shared<Pipeline>(*this);
+		pipeline->sink = op;
+		current->AddDependency(pipeline);
 		D_ASSERT(pipeline_child);
 		// recurse into the pipeline child
 		BuildPipelines(pipeline_child, pipeline.get());
@@ -633,11 +675,10 @@ void Executor::ThrowExceptionInternal() { // LCOV_EXCL_START
 } // LCOV_EXCL_STOP
 
 void Executor::Flush(ThreadContext &tcontext) {
-	lock_guard<mutex> elock(executor_lock);
-	context.profiler->Flush(tcontext.profiler);
+	profiler->Flush(tcontext.profiler);
 }
 
-bool Executor::GetPipelinesProgress(int &current_progress) { // LCOV_EXCL_START
+bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_START
 	lock_guard<mutex> elock(executor_lock);
 
 	if (!pipelines.empty()) {

@@ -10,6 +10,10 @@ def check_category_equal(category):
     df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
     assert df_in.equals(df_out)
 
+def check_result_list(category,res):
+    for i in range (len(category)):
+        assert category[i][0] == res[i]
+
 def check_create_table(category):
     conn = duckdb.connect()
 
@@ -25,6 +29,10 @@ def check_create_table(category):
     conn.execute("CREATE TABLE t1 AS SELECT * FROM df_in")
     conn.execute("CREATE TABLE t2 AS SELECT * FROM df_in")
 
+    # Check fetchall
+    res =  conn.execute("SELECT t1.x FROM t1").fetchall()
+    check_result_list(res,category)
+
     # Do a insert to trigger string -> cat 
     conn.execute("INSERT INTO t1 VALUES ('2','2')")
 
@@ -34,13 +42,15 @@ def check_create_table(category):
     res =  conn.execute("SELECT t1.x FROM t1 inner join t2 on (t1.x = t2.x)").fetchall()
     assert res == conn.execute("SELECT x FROM t1").fetchall()
     
-    # Can't compare different ENUMs
-    with pytest.raises(Exception):
-        conn.execute("SELECT * FROM t1 inner join t2 on (t1.x = t2.y)").fetchall()
+    res = conn.execute("SELECT t1.x FROM t1 inner join t2 on (t1.x = t2.y)").fetchall()
+    assert res == conn.execute("SELECT x FROM t1").fetchall()
+
     
     assert res == conn.execute("SELECT x FROM t1").fetchall()
     # Triggering the cast with ENUM as a src
     conn.execute("ALTER TABLE t1 ALTER x SET DATA TYPE VARCHAR")
+    # We should be able to drop the table without any dependencies
+    conn.execute("DROP TABLE t1")
 
 class TestCategory(object):
 

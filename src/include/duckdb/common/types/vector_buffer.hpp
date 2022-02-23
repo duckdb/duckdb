@@ -31,6 +31,21 @@ enum class VectorBufferType : uint8_t {
 	OPAQUE_BUFFER        // opaque buffer, can be created for example by the parquet reader
 };
 
+enum class VectorAuxiliaryDataType : uint8_t {
+	ARROW_AUXILIARY // Holds Arrow Chunks that this vector depends on
+};
+
+struct VectorAuxiliaryData {
+	explicit VectorAuxiliaryData(VectorAuxiliaryDataType type_p)
+	    : type(type_p) {
+
+	      };
+	VectorAuxiliaryDataType type;
+
+	virtual ~VectorAuxiliaryData() {
+	}
+};
+
 //! The VectorBuffer is a class used by the vector to hold its data
 class VectorBuffer {
 public:
@@ -53,8 +68,17 @@ public:
 	data_ptr_t GetData() {
 		return data.get();
 	}
+
 	void SetData(unique_ptr<data_t[]> new_data) {
 		data = move(new_data);
+	}
+
+	VectorAuxiliaryData *GetAuxiliaryData() {
+		return aux_data.get();
+	}
+
+	void SetAuxiliaryData(unique_ptr<VectorAuxiliaryData> aux_data_p, VectorAuxiliaryDataType aux_type_p) {
+		aux_data = move(aux_data_p);
 	}
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
@@ -67,8 +91,13 @@ public:
 		return buffer_type;
 	}
 
+	inline VectorAuxiliaryDataType GetAuxiliaryDataType() const {
+		return aux_data->type;
+	}
+
 protected:
 	VectorBufferType buffer_type;
+	unique_ptr<VectorAuxiliaryData> aux_data;
 	unique_ptr<data_t[]> data;
 };
 
@@ -163,7 +192,7 @@ public:
 	void Append(const Vector &to_append, idx_t to_append_size, idx_t source_offset = 0);
 	void Append(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size, idx_t source_offset = 0);
 
-	void PushBack(Value &insert);
+	void PushBack(const Value &insert);
 
 	idx_t capacity = 0;
 	idx_t size = 0;

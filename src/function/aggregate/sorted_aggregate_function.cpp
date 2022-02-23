@@ -210,9 +210,11 @@ struct SortedAggregateFunction {
 
 			// Apply the sort before delegating the chunks
 			const auto agg_count = state->ordering.Count();
-			reordering.resize(agg_count);
-			state->ordering.Sort(order_bind->order_sense, order_bind->null_order, reordering.data());
-			state->arguments.Reorder(reordering.data());
+			if (agg_count > 0) {
+				reordering.resize(agg_count);
+				state->ordering.Sort(order_bind->order_sense, order_bind->null_order, reordering.data());
+				state->arguments.Reorder(reordering.data());
+			}
 
 			for (auto &chunk : state->arguments.Chunks()) {
 				// These are all simple updates, so use it if available

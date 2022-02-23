@@ -30,6 +30,7 @@ typedef enum PGBackslashQuoteType {
 PGList *raw_parser(const char *str);
 
 bool is_keyword(const char *str);
+std::vector<PGKeyword> keyword_list();
 
 std::vector<PGSimplifiedToken> tokenize(const char *str);
 

@@ -9,15 +9,18 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
 
 namespace duckdb {
 
 class LogicalExplain : public LogicalOperator {
 public:
-	explicit LogicalExplain(unique_ptr<LogicalOperator> plan) : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN) {
+	LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType explain_type)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type) {
 		children.push_back(move(plan));
 	}
 
+	ExplainType explain_type;
 	string physical_plan;
 	string logical_plan_unopt;
 	string logical_plan_opt;

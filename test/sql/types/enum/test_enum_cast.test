@@ -33,3 +33,91 @@ ok
 sad
 happy
 NULL
+
+# Cast from ENUM to Integer
+statement ok
+CREATE TYPE years AS ENUM ('2001', '2006', '2012', '2018');
+
+statement ok
+CREATE TABLE albums (
+    name text,
+    year_release years
+);
+
+statement ok
+INSERT INTO albums VALUES ('Tenacious D', '2001'), ('The Pick of Destiny', '2006'),('Rize of the Fenix', '2012'), ('Post-Apocalypto', '2018'), ('Something Random', NULL);
+
+query II
+select name, year_release::INT from albums
+----
+Tenacious D	2001
+The Pick of Destiny	2006
+Rize of the Fenix	2012
+Post-Apocalypto	2018
+Something Random	NULL
+
+query I
+select name from albums where year_release::INT > 2010
+----
+Rize of the Fenix
+Post-Apocalypto
+
+statement ok
+CREATE TYPE years_error AS ENUM ('2001', '2006', '2012', 'bla');
+
+statement ok
+CREATE TABLE albums_error (
+    name text,
+    year_release years_error
+);
+
+statement ok
+INSERT INTO albums_error VALUES ('Tenacious D', '2001'), ('The Pick of Destiny', 'bla')
+
+# Conversion Error: Could not convert string 'bla' to INT32
+statement error
+select name, year_release::INT from albums_error
+
+query II
+select name, year_release::INT from albums_error where year_release = '2001'
+----
+Tenacious D	2001
+
+query II
+select name, TRY_CAST(year_release AS INT) from albums_error
+----
+Tenacious D	2001
+The Pick of Destiny	NULL
+
+# Check some other varchar conversions
+
+query II
+select name, year_release::DOUBLE from albums
+----
+Tenacious D	2001.000000
+The Pick of Destiny	2006.000000
+Rize of the Fenix	2012.000000
+Post-Apocalypto	2018.000000
+Something Random	NULL
+
+
+statement ok
+CREATE TYPE dates AS ENUM ('2001-01-01');
+
+statement ok
+CREATE TABLE dates_table (
+    year_release dates
+);
+
+statement ok
+INSERT INTO dates_table VALUES ('2001-01-01')
+
+query I
+select year_release::DATE from dates_table
+----
+2001-01-01
+
+query I
+select year_release::TIMESTAMP from dates_table
+----
+2001-01-01 00:00:00

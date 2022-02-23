@@ -7,7 +7,6 @@ add_library_unity(
   test_big_storage.cpp
   test_repeated_checkpoint.cpp
   test_storage.cpp
-  test_readonly.cpp
   test_database_size.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_storage>

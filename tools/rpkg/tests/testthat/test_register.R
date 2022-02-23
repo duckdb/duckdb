@@ -1,5 +1,6 @@
 test_that("duckdb_register() works", {
   con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
 
   # most basic case
   duckdb::duckdb_register(con, "my_df1", iris)
@@ -31,8 +32,6 @@ test_that("duckdb_register() works", {
 
   # this needs to be empty now
   expect_true(length(attributes(con@conn_ref)) == 0)
-
-  dbDisconnect(con, shutdown = T)
 })
 
 
@@ -47,7 +46,7 @@ test_that("various error cases for duckdb_register()", {
   expect_error(duckdb::duckdb_register(con, "", iris))
   expect_error(duckdb::duckdb_unregister(1, "my_df1"))
   expect_error(duckdb::duckdb_unregister(con, ""))
-  dbDisconnect(con, shutdown = T)
+  dbDisconnect(con, shutdown = TRUE)
 
   expect_error(duckdb::duckdb_unregister(con, "my_df1"))
 })
@@ -55,6 +54,8 @@ test_that("various error cases for duckdb_register()", {
 
 test_that("uppercase data frames are queryable", {
   con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
   duckdb::duckdb_register(con, "My_Mtcars", mtcars)
   dbGetQuery(con, "SELECT * FROM \"My_Mtcars\"")
 
@@ -62,5 +63,4 @@ test_that("uppercase data frames are queryable", {
   row.names(res) <- row.names(mtcars)
   expect_true(identical(res, mtcars))
   duckdb::duckdb_unregister(con, "My_Mtcars")
-  dbDisconnect(con, shutdown = T)
 })

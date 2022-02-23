@@ -155,8 +155,9 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 
 void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
 	auto &state = (HashJoinLocalState &)lstate;
+	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &state.build_executor, "build_executor", 1);
-	context.client.profiler->Flush(context.thread.profiler);
+	client_profiler.Flush(context.thread.profiler);
 }
 
 //===--------------------------------------------------------------------===//
@@ -171,10 +172,8 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		D_ASSERT(sink.hash_table->equality_types.size() == 1);
 		auto key_type = sink.hash_table->equality_types[0];
 		use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable(key_type);
-	} else {
-		sink.perfect_join_executor.reset();
 	}
-	// In case large build side or duplicates, use regular hash join
+	// In case of a large build side or duplicates, use regular hash join
 	if (!use_perfect_hash) {
 		sink.perfect_join_executor.reset();
 		sink.hash_table->Finalize();

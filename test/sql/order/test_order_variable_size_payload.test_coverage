@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 # first iteration runs externally, second runs normally
 statement ok
-PRAGMA force_external
+PRAGMA debug_force_external=true
 
 loop i 0 2
 
@@ -511,6 +511,6 @@ statement ok
 DROP TABLE DirectReports;
 
 statement ok
-PRAGMA disable_force_external
+PRAGMA debug_force_external=false
 
 endloop

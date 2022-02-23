@@ -521,8 +521,8 @@ void UpdateSegment::CleanupUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 // Check for conflicts in update
 //===--------------------------------------------------------------------===//
-static void CheckForConflicts(UpdateInfo *info, TransactionData transaction, row_t *ids, idx_t count, row_t offset,
-                              UpdateInfo *&node) {
+static void CheckForConflicts(UpdateInfo *info, TransactionData transaction, row_t *ids, const SelectionVector &sel,
+                              idx_t count, row_t offset, UpdateInfo *&node) {
 	if (!info) {
 		return;
 	}
@@ -534,7 +534,7 @@ static void CheckForConflicts(UpdateInfo *info, TransactionData transaction, row
 		// as both ids and info->tuples are sorted, this is similar to a merge join
 		idx_t i = 0, j = 0;
 		while (true) {
-			auto id = ids[i] - offset;
+			auto id = ids[sel.get_index(i)] - offset;
 			if (id == info->tuples[j]) {
 				throw TransactionException("Conflict on update!");
 			} else if (id < info->tuples[j]) {
@@ -552,7 +552,7 @@ static void CheckForConflicts(UpdateInfo *info, TransactionData transaction, row
 			}
 		}
 	}
-	CheckForConflicts(info->next, transaction, ids, count, offset, node);
+	CheckForConflicts(info->next, transaction, ids, sel, count, offset, node);
 }
 
 //===--------------------------------------------------------------------===//
@@ -886,74 +886,69 @@ unique_ptr<BaseStatistics> UpdateSegment::GetStatistics() {
 	return stats.statistics->Copy();
 }
 
-idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t offset,
-                               idx_t count, SelectionVector &sel) {
+idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
+                               SelectionVector &sel) {
 	auto &mask = FlatVector::Validity(update);
 	auto &validity = (ValidityStatistics &)*stats.statistics;
 	if (!mask.AllValid() && !validity.has_null) {
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = offset + i;
-			if (!mask.RowIsValid(idx)) {
+			if (!mask.RowIsValid(i)) {
 				validity.has_null = true;
 				break;
 			}
 		}
 	}
-	sel.Initialize((sel_t *)(FlatVector::INCREMENTAL_VECTOR + offset));
+	sel.Initialize(nullptr);
 	return count;
 }
 
 template <class T>
-idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t offset,
-                                       idx_t count, SelectionVector &sel) {
+idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
+                                       SelectionVector &sel) {
 	auto update_data = FlatVector::GetData<T>(update);
 	auto &mask = FlatVector::Validity(update);
 
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = offset + i;
-			NumericStatistics::Update<T>(stats, update_data[idx]);
+			NumericStatistics::Update<T>(stats, update_data[i]);
 		}
-		sel.Initialize((sel_t *)(FlatVector::INCREMENTAL_VECTOR + offset));
+		sel.Initialize(nullptr);
 		return count;
 	} else {
 		idx_t not_null_count = 0;
 		sel.Initialize(STANDARD_VECTOR_SIZE);
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = offset + i;
-			if (mask.RowIsValid(idx)) {
-				sel.set_index(not_null_count++, idx);
-				NumericStatistics::Update<T>(stats, update_data[idx]);
+			if (mask.RowIsValid(i)) {
+				sel.set_index(not_null_count++, i);
+				NumericStatistics::Update<T>(stats, update_data[i]);
 			}
 		}
 		return not_null_count;
 	}
 }
 
-idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t offset,
-                             idx_t count, SelectionVector &sel) {
+idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
+                             SelectionVector &sel) {
 	auto update_data = FlatVector::GetData<string_t>(update);
 	auto &mask = FlatVector::Validity(update);
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = offset + i;
-			((StringStatistics &)*stats.statistics).Update(update_data[idx]);
-			if (!update_data[idx].IsInlined()) {
-				update_data[idx] = segment->GetStringHeap().AddString(update_data[idx]);
+			((StringStatistics &)*stats.statistics).Update(update_data[i]);
+			if (!update_data[i].IsInlined()) {
+				update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
 			}
 		}
-		sel.Initialize(FlatVector::INCREMENTAL_SELECTION_VECTOR);
+		sel.Initialize(nullptr);
 		return count;
 	} else {
 		idx_t not_null_count = 0;
 		sel.Initialize(STANDARD_VECTOR_SIZE);
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = offset + i;
-			if (mask.RowIsValid(idx)) {
-				sel.set_index(not_null_count++, idx);
-				((StringStatistics &)*stats.statistics).Update(update_data[idx]);
-				if (!update_data[idx].IsInlined()) {
-					update_data[idx] = segment->GetStringHeap().AddString(update_data[idx]);
+			if (mask.RowIsValid(i)) {
+				sel.set_index(not_null_count++, i);
+				((StringStatistics &)*stats.statistics).Update(update_data[i]);
+				if (!update_data[i].IsInlined()) {
+					update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
 				}
 			}
 		}
@@ -1055,7 +1050,7 @@ UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, 
 	return update_info;
 }
 
-void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vector &update, row_t *ids, idx_t offset,
+void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vector &update, row_t *ids,
                            idx_t count, Vector &base_data) {
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
@@ -1066,7 +1061,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 	SelectionVector sel;
 	{
 		lock_guard<mutex> stats_guard(stats_lock);
-		count = statistics_update_function(this, stats, update, offset, count, sel);
+		count = statistics_update_function(this, stats, update, count, sel);
 	}
 	if (count == 0) {
 		return;
@@ -1100,7 +1095,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		// there is already a version here, check if there are any conflicts and search for the node that belongs to
 		// this transaction in the version chain
 		auto base_info = root->info[vector_index]->info.get();
-		CheckForConflicts(base_info->next, transaction, ids, count, vector_offset, node);
+		CheckForConflicts(base_info->next, transaction, ids, sel, count, vector_offset, node);
 
 		// there are no conflicts
 		// first, check if this thread has already done any updates

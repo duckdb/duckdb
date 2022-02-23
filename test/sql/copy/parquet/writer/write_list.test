@@ -1,0 +1,92 @@
+# name: test/sql/copy/parquet/writer/write_list.test
+# description: Parquet write list
+# group: [writer]
+
+require parquet
+
+# standard list
+statement ok
+CREATE TABLE list AS SELECT * FROM (VALUES
+	([1, 2, 3]),
+	([4, 5]),
+	([6, 7]),
+    ([8, 9, 10, 11])
+) tbl(i);
+
+statement ok
+COPY list TO '__TEST_DIR__/test_list.parquet' (FORMAT 'parquet');
+
+query I
+SELECT i FROM parquet_scan('__TEST_DIR__/test_list.parquet');
+----
+[1, 2, 3]
+[4, 5]
+[6, 7]
+[8, 9, 10, 11]
+
+# empty and NULL lists
+statement ok
+CREATE TABLE null_empty_list AS SELECT * FROM (VALUES
+	([1, 2, 3]),
+	([4, 5]),
+	([6, 7]),
+	([NULL]),
+	([]),
+	([]),
+	([]),
+	([]),
+    ([8, NULL, 10, 11]),
+    (NULL)
+) tbl(i);
+
+statement ok
+COPY null_empty_list TO '__TEST_DIR__/test_list.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM parquet_scan('__TEST_DIR__/test_list.parquet');
+----
+[1, 2, 3]
+[4, 5]
+[6, 7]
+[NULL]
+[]
+[]
+[]
+[]
+[8, NULL, 10, 11]
+NULL
+
+# empty list
+statement ok
+COPY (SELECT []::INT[]) TO '__TEST_DIR__/test_empty_list.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM '__TEST_DIR__/test_empty_list.parquet'
+----
+[]
+
+# null list
+statement ok
+COPY (SELECT NULL::INT[]) TO '__TEST_DIR__/test_null_list.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM '__TEST_DIR__/test_null_list.parquet'
+----
+NULL
+
+# big list (> vector size)
+statement ok
+CREATE TABLE big_list AS SELECT LIST(CASE WHEN i%2=0 THEN NULL ELSE i END) l FROM range(20000) tbl(i);
+
+query I
+SELECT SUM(i) FROM (SELECT UNNEST(l) FROM big_list) t(i)
+----
+100000000
+
+statement ok
+COPY big_list TO '__TEST_DIR__/big_list.parquet' (FORMAT 'parquet');
+
+query I
+SELECT SUM(i) FROM (SELECT UNNEST(l) FROM '__TEST_DIR__/big_list.parquet') t(i)
+----
+100000000

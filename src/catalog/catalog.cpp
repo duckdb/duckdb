@@ -23,6 +23,7 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -47,6 +48,12 @@ Catalog &Catalog::GetCatalog(ClientContext &context) {
 CatalogEntry *Catalog::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
 	auto schema = GetSchema(context, info->base->schema);
 	return CreateTable(context, schema, info);
+}
+
+CatalogEntry *Catalog::CreateTable(ClientContext &context, unique_ptr<CreateTableInfo> info) {
+	auto binder = Binder::CreateBinder(context);
+	auto bound_info = binder->BindCreateTableInfo(move(info));
+	return CreateTable(context, bound_info.get());
 }
 
 CatalogEntry *Catalog::CreateTable(ClientContext &context, SchemaCatalogEntry *schema, BoundCreateTableInfo *info) {
@@ -174,6 +181,15 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 	lookup.schema->DropEntry(context, info);
 }
 
+CatalogEntry *Catalog::AddFunction(ClientContext &context, CreateFunctionInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	return AddFunction(context, schema, info);
+}
+
+CatalogEntry *Catalog::AddFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateFunctionInfo *info) {
+	return schema->AddFunction(context, info);
+}
+
 SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &schema_name, bool if_exists,
                                        QueryErrorContext error_context) {
 	D_ASSERT(!schema_name.empty());
@@ -274,6 +290,19 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 	}
 
 	return {nullptr, nullptr};
+}
+
+CatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema, const string &name) {
+	vector<CatalogType> entry_types {CatalogType::TABLE_ENTRY, CatalogType::SEQUENCE_ENTRY};
+
+	for (auto entry_type : entry_types) {
+		CatalogEntry *result = GetEntry(context, entry_type, schema, name, true);
+		if (result != nullptr) {
+			return result;
+		}
+	}
+
+	throw CatalogException("CatalogElement \"%s.%s\" does not exist!", schema, name);
 }
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name, const string &name,

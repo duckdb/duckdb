@@ -51,7 +51,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 	if (!column_index_map.empty()) {
 		// columns specified by the user, use column_index_map
 		for (idx_t i = 0; i < table->columns.size(); i++) {
-			if (column_index_map[i] == INVALID_INDEX) {
+			if (column_index_map[i] == DConstants::INVALID_INDEX) {
 				// insert default value
 				istate.default_executor.ExecuteExpression(i, istate.insert_chunk.data[i]);
 			} else {
@@ -85,8 +85,9 @@ unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &c
 
 void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
 	auto &state = (InsertLocalState &)lstate;
+	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &state.default_executor, "default_executor", 1);
-	context.client.profiler->Flush(context.thread.profiler);
+	client_profiler.Flush(context.thread.profiler);
 }
 
 //===--------------------------------------------------------------------===//

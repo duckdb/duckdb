@@ -83,4 +83,18 @@ public:
 	vector<unique_ptr<Expression>> target_distincts;
 };
 
+class BoundLimitPercentModifier : public BoundResultModifier {
+public:
+	BoundLimitPercentModifier() : BoundResultModifier(ResultModifierType::LIMIT_PERCENT_MODIFIER) {
+	}
+	//! LIMIT %
+	double limit_percent = 100.0;
+	//! OFFSET
+	int64_t offset_val = 0;
+	//! Expression in case limit is not constant
+	unique_ptr<Expression> limit;
+	//! Expression in case limit is not constant
+	unique_ptr<Expression> offset;
+};
+
 } // namespace duckdb

@@ -168,8 +168,8 @@ TEST_CASE("Concurrent checkpoint with single updater", "[interquery][.]") {
 
 		Value expected_money_from, expected_money_to;
 
-		expected_money_from = money_from - amount;
-		expected_money_to = money_to + amount;
+		expected_money_from = Value::INTEGER(IntegerValue::Get(money_from) - amount);
+		expected_money_to = Value::INTEGER(IntegerValue::Get(money_to) + amount);
 
 		REQUIRE(new_money_from == expected_money_from);
 		REQUIRE(new_money_to == expected_money_to);

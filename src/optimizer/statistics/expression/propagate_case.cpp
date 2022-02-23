@@ -6,15 +6,17 @@ namespace duckdb {
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCaseExpression &bound_case,
                                                                      unique_ptr<Expression> *expr_ptr) {
 	// propagate in all the children
-	auto check_stats = PropagateExpression(bound_case.check);
-	auto res_if_true_stats = PropagateExpression(bound_case.result_if_true);
-	auto res_if_false_stats = PropagateExpression(bound_case.result_if_false);
-	// for a case statement, the resulting stats are the merged stats of the two children
-	if (!res_if_true_stats || !res_if_false_stats) {
-		return nullptr;
+	auto result_stats = PropagateExpression(bound_case.else_expr);
+	for (auto &case_check : bound_case.case_checks) {
+		PropagateExpression(case_check.when_expr);
+		auto then_stats = PropagateExpression(case_check.then_expr);
+		if (!then_stats) {
+			result_stats.reset();
+		} else if (result_stats) {
+			result_stats->Merge(*then_stats);
+		}
 	}
-	res_if_true_stats->Merge(*res_if_false_stats);
-	return res_if_true_stats;
+	return result_stats;
 }
 
 } // namespace duckdb

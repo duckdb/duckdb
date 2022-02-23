@@ -24,7 +24,7 @@ bool BoundConstantExpression::Equals(const BaseExpression *other_p) const {
 
 hash_t BoundConstantExpression::Hash() const {
 	hash_t result = Expression::Hash();
-	return CombineHash(ValueOperations::Hash(value), result);
+	return CombineHash(value.Hash(), result);
 }
 
 unique_ptr<Expression> BoundConstantExpression::Copy() {

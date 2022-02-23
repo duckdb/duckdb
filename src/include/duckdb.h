@@ -9,14 +9,32 @@
 
 #pragma once
 
+// duplicate of duckdb/main/winapi.hpp
+#ifndef DUCKDB_API
 #ifdef _WIN32
-#ifdef DUCKDB_BUILD_LIBRARY
+#if defined(DUCKDB_BUILD_LIBRARY) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
 #define DUCKDB_API __declspec(dllexport)
 #else
 #define DUCKDB_API __declspec(dllimport)
 #endif
 #else
 #define DUCKDB_API
+#endif
+#endif
+
+// duplicate of duckdb/common/constants.hpp
+#ifndef DUCKDB_API_0_3_1
+#define DUCKDB_API_0_3_1 1
+#endif
+#ifndef DUCKDB_API_0_3_2
+#define DUCKDB_API_0_3_2 2
+#endif
+#ifndef DUCKDB_API_LATEST
+#define DUCKDB_API_LATEST DUCKDB_API_0_3_2
+#endif
+
+#ifndef DUCKDB_API_VERSION
+#define DUCKDB_API_VERSION DUCKDB_API_LATEST
 #endif
 
 #include <stdbool.h>
@@ -128,19 +146,43 @@ typedef struct {
 } duckdb_blob;
 
 typedef struct {
+#if DUCKDB_API_VERSION < DUCKDB_API_0_3_2
 	void *data;
 	bool *nullmask;
 	duckdb_type type;
 	char *name;
+#else
+	// deprecated, use duckdb_column_data
+	void *__deprecated_data;
+	// deprecated, use duckdb_nullmask_data
+	bool *__deprecated_nullmask;
+	// deprecated, use duckdb_column_type
+	duckdb_type __deprecated_type;
+	// deprecated, use duckdb_column_name
+	char *__deprecated_name;
+#endif
 	void *internal_data;
 } duckdb_column;
 
 typedef struct {
+#if DUCKDB_API_VERSION < DUCKDB_API_0_3_2
 	idx_t column_count;
 	idx_t row_count;
 	idx_t rows_changed;
 	duckdb_column *columns;
 	char *error_message;
+#else
+	// deprecated, use duckdb_column_count
+	idx_t __deprecated_column_count;
+	// deprecated, use duckdb_row_count
+	idx_t __deprecated_row_count;
+	// deprecated, use duckdb_rows_changed
+	idx_t __deprecated_rows_changed;
+	// deprecated, use duckdb_column_ family of functions
+	duckdb_column *__deprecated_columns;
+	// deprecated, use duckdb_result_error
+	char *__deprecated_error_message;
+#endif
 	void *internal_data;
 } duckdb_result;
 

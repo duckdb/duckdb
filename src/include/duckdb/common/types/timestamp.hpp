@@ -27,6 +27,12 @@ struct timestamp_struct {
 //! type.
 class Timestamp {
 public:
+	// min timestamp is 290308-12-22 (BC)
+	constexpr static const int32_t MIN_YEAR = -290308;
+	constexpr static const int32_t MIN_MONTH = 12;
+	constexpr static const int32_t MIN_DAY = 22;
+
+public:
 	//! Convert a string in the format "YYYY-MM-DD hh:mm:ss" to a timestamp object
 	DUCKDB_API static timestamp_t FromString(const string &str);
 	DUCKDB_API static bool TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result);

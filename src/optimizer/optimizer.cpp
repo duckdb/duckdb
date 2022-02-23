@@ -35,6 +35,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_unique<MoveConstantsRule>(rewriter));
 	rewriter.rules.push_back(make_unique<LikeOptimizationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<EmptyNeedleRemovalRule>(rewriter));
+	rewriter.rules.push_back(make_unique<EnumComparisonRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
@@ -50,9 +51,10 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 		// optimizer is marked as disabled: skip
 		return;
 	}
-	context.profiler->StartPhase(OptimizerTypeToString(type));
+	auto &profiler = QueryProfiler::Get(context);
+	profiler.StartPhase(OptimizerTypeToString(type));
 	callback();
-	context.profiler->EndPhase();
+	profiler.EndPhase();
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {

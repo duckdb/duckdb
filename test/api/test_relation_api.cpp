@@ -350,6 +350,27 @@ TEST_CASE("Test combinations of joins", "[relation_api]") {
 	REQUIRE_NO_FAIL(con.Query("SELECT * FROM sqlite_master"));
 }
 
+TEST_CASE("Test crossproduct relation", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	unique_ptr<QueryResult> result;
+	shared_ptr<Relation> values, vcross;
+
+	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
+
+	auto v1 = values->Alias("v1");
+	auto v2 = values->Alias("v2");
+
+	// run cross product
+	vcross = v1->CrossProduct(v2);
+	REQUIRE_NOTHROW(result = vcross->Order("v1.i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 2, 2, 2, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 10, 10, 5, 5, 5, 4, 4, 4}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 1, 2, 3, 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {10, 5, 4, 10, 5, 4, 10, 5, 4}));
+}
+
 TEST_CASE("Test view creation of relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);

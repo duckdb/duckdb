@@ -108,7 +108,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	if (update.update_is_del_and_insert) {
 		// the update updates a column required by an index, push projections for all columns
 		unordered_set<column_t> all_columns;
-		for (idx_t i = 0; i < table.storage->types.size(); i++) {
+		for (idx_t i = 0; i < table.storage->column_definitions.size(); i++) {
 			all_columns.insert(i);
 		}
 		BindExtraColumns(table, get, proj, update, all_columns);
@@ -196,7 +196,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 	// finally add the row id column to the projection list
 	proj->expressions.push_back(make_unique<BoundColumnRefExpression>(
-	    LOGICAL_ROW_TYPE, ColumnBinding(get->table_index, get->column_ids.size())));
+	    LogicalType::ROW_TYPE, ColumnBinding(get->table_index, get->column_ids.size())));
 	get->column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
 	// set the projection as child of the update node and finalize the result

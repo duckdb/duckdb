@@ -107,7 +107,7 @@ TEST_CASE("Test file buffers for reading/writing to file", "[file_system]") {
 	// create the buffer and fill it with data
 	auto buf = make_unique<FileBuffer>(allocator, FileBufferType::BLOCK, 4096);
 	int64_t *ptr = (int64_t *)buf->buffer;
-	for (size_t i = 0; i < 10; i++) {
+	for (int64_t i = 0; i < 10; i++) {
 		ptr[i] = i;
 	}
 
@@ -122,7 +122,7 @@ TEST_CASE("Test file buffers for reading/writing to file", "[file_system]") {
 	buf->Clear();
 	// now read data back into the buffer
 	REQUIRE_NOTHROW(buf->Read(*handle, 0));
-	for (size_t i = 0; i < 10; i++) {
+	for (int64_t i = 0; i < 10; i++) {
 		REQUIRE(ptr[i] == i);
 	}
 	// close the file

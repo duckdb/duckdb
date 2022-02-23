@@ -106,16 +106,16 @@ idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &re
 }
 
 void StandardColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                                idx_t offset, idx_t update_count) {
-	ColumnData::Update(transaction, column_index, update_vector, row_ids, offset, update_count);
-	validity.Update(transaction, column_index, update_vector, row_ids, offset, update_count);
+                                idx_t update_count) {
+	ColumnData::Update(transaction, column_index, update_vector, row_ids, update_count);
+	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
 }
 
 void StandardColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
                                       Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
 	if (depth >= column_path.size()) {
 		// update this column
-		ColumnData::Update(transaction, column_path[0], update_vector, row_ids, 0, update_count);
+		ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
 	} else {
 		// update the child column (i.e. the validity column)
 		validity.UpdateColumn(transaction, column_path, update_vector, row_ids, update_count, depth + 1);
@@ -176,9 +176,10 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::CreateCheckpointState(RowG
 	return make_unique<StandardColumnCheckpointState>(row_group, *this, writer);
 }
 
-unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer) {
-	auto validity_state = validity.Checkpoint(row_group, writer);
-	auto base_state = ColumnData::Checkpoint(row_group, writer);
+unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+                                                                 ColumnCheckpointInfo &checkpoint_info) {
+	auto validity_state = validity.Checkpoint(row_group, writer, checkpoint_info);
+	auto base_state = ColumnData::Checkpoint(row_group, writer, checkpoint_info);
 	auto &checkpoint_state = (StandardColumnCheckpointState &)*base_state;
 	checkpoint_state.validity_state = move(validity_state);
 	return base_state;

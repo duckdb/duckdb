@@ -1,0 +1,150 @@
+# name: test/sql/aggregate/group/group_by_limits.test
+# description: Test aggregates on numeric limits
+# group: [group]
+
+statement ok
+PRAGMA enable_verification
+
+# TINYINT limits
+statement ok
+CREATE TABLE t(t_k0 TINYINT);
+
+statement ok
+INSERT INTO t VALUES (-128), (127);
+
+query II
+SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
+----
+-128	 1
+127	1
+
+statement ok
+DROP TABLE t;
+
+# SMALLINT limits
+statement ok
+CREATE TABLE t(t_k0 SMALLINT);
+
+statement ok
+INSERT INTO t VALUES (-32768), (32767);
+
+query II
+SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
+----
+-32768	 1
+32767	1
+
+statement ok
+DROP TABLE t;
+
+# INTEGER limits
+statement ok
+CREATE TABLE t(t_k0 INTEGER);
+
+statement ok
+INSERT INTO t VALUES (-2147483648), (2147483647);
+
+query II
+SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
+----
+-2147483648	 1
+2147483647	1
+
+statement ok
+DROP TABLE t;
+
+# BIGINT limits
+statement ok
+CREATE TABLE t(t_k0 BIGINT);
+
+statement ok
+INSERT INTO t VALUES (-9223372036854775808), (9223372036854775807);
+
+query II
+SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
+----
+-9223372036854775808	 1
+9223372036854775807	1
+
+statement ok
+DROP TABLE t;
+
+# HUGEINT limits
+statement ok
+CREATE TABLE t(t_k0 HUGEINT);
+
+statement ok
+INSERT INTO t VALUES (-170141183460469231731687303715884105727), (170141183460469231731687303715884105727);
+
+query II
+SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
+----
+-170141183460469231731687303715884105727	 1
+170141183460469231731687303715884105727	1
+
+statement ok
+DROP TABLE t;
+
+# UTINYINT limits
+statement ok
+CREATE TABLE t(t_k0 UTINYINT);
+
+statement ok
+INSERT INTO t VALUES (0), (255);
+
+query II
+SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
+----
+0	 1
+255	1
+
+statement ok
+DROP TABLE t;
+
+# USMALLINT limits
+statement ok
+CREATE TABLE t(t_k0 USMALLINT);
+
+statement ok
+INSERT INTO t VALUES (0), (65535);
+
+query II
+SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
+----
+0	 1
+65535	1
+
+statement ok
+DROP TABLE t;
+
+# UINTEGER limits
+statement ok
+CREATE TABLE t(t_k0 UINTEGER);
+
+statement ok
+INSERT INTO t VALUES (0), (4294967295);
+
+query II
+SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
+----
+0	 1
+4294967295	1
+
+statement ok
+DROP TABLE t;
+
+# UBIGINT limits
+statement ok
+CREATE TABLE t(t_k0 UBIGINT);
+
+statement ok
+INSERT INTO t VALUES (0), (18446744073709551615);
+
+query II
+SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
+----
+0	 1
+18446744073709551615	1
+
+statement ok
+DROP TABLE t;

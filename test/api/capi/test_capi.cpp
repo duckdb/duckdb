@@ -136,19 +136,19 @@ double CAPIResult::Fetch(idx_t col, idx_t row) {
 
 template <>
 duckdb_date CAPIResult::Fetch(idx_t col, idx_t row) {
-	auto data = (duckdb_date *)result.columns[col].data;
+	auto data = (duckdb_date *)duckdb_column_data(&result, col);
 	return data[row];
 }
 
 template <>
 duckdb_time CAPIResult::Fetch(idx_t col, idx_t row) {
-	auto data = (duckdb_time *)result.columns[col].data;
+	auto data = (duckdb_time *)duckdb_column_data(&result, col);
 	return data[row];
 }
 
 template <>
 duckdb_timestamp CAPIResult::Fetch(idx_t col, idx_t row) {
-	auto data = (duckdb_timestamp *)result.columns[col].data;
+	auto data = (duckdb_timestamp *)duckdb_column_data(&result, col);
 	return data[row];
 }
 
@@ -159,7 +159,7 @@ duckdb_interval CAPIResult::Fetch(idx_t col, idx_t row) {
 
 template <>
 duckdb_blob CAPIResult::Fetch(idx_t col, idx_t row) {
-	auto data = (duckdb_blob *)result.columns[col].data;
+	auto data = (duckdb_blob *)duckdb_column_data(&result, col);
 	return data[row];
 }
 
@@ -645,7 +645,7 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	duckdb_bind_null(stmt, 1);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
-	REQUIRE(res.columns[0].nullmask[0] == true);
+	REQUIRE(duckdb_nullmask_data(&res, 0)[0] == true);
 	duckdb_destroy_result(&res);
 
 	duckdb_destroy_prepare(&stmt);

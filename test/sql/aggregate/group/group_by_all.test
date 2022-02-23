@@ -1,0 +1,115 @@
+# name: test/sql/aggregate/group/group_by_all.test
+# description: Test GROUP BY ALL
+# group: [group]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(g integer, i integer);
+
+statement ok
+INSERT INTO integers values (0, 1), (0, 2), (1, 3), (1, NULL);
+
+query II
+SELECT g, SUM(i) FROM integers GROUP BY ALL ORDER BY 1
+----
+0	3
+1	3
+
+# we can also use the star syntax
+query II
+SELECT g, SUM(i) FROM integers GROUP BY * ORDER BY 1
+----
+0	3
+1	3
+
+query II
+SELECT g, SUM(i) FROM integers GROUP BY 1 ORDER BY ALL
+----
+0	3
+1	3
+
+query II
+SELECT g, SUM(i) FROM integers GROUP BY 1 ORDER BY *
+----
+0	3
+1	3
+
+# multiple aggregates
+query IIIII
+SELECT g, SUM(i), COUNT(*), COUNT(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1
+----
+0	3	2	2	0
+1	3	2	1	2
+
+# complex groups: here we group by the entire calculation
+query III
+SELECT i%2, SUM(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1
+----
+NULL	NULL	1
+0	2	0
+1	4	1
+
+# i.e. we group like this
+query III
+SELECT i%2, SUM(i), SUM(g) FROM integers GROUP BY 1 ORDER BY 1
+----
+NULL	NULL	1
+0	2	0
+1	4	1
+
+# NOT like this
+query III
+SELECT i%2, SUM(i), SUM(g) FROM integers GROUP BY i ORDER BY 1
+----
+NULL	NULL	1
+0	2	0
+1	1	0
+1	3	1
+
+# we can do this with multiple columns in the group too
+query III
+SELECT (g+i)%2, SUM(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1
+----
+NULL	NULL	1
+0	5	1
+1	1	0
+
+query III
+SELECT (g+i)%2, SUM(i), SUM(g) FROM integers GROUP BY 1 ORDER BY 1
+----
+NULL	NULL	1
+0	5	1
+1	1	0
+
+query III
+SELECT (g+i)%2, SUM(i), SUM(g) FROM integers GROUP BY g, i ORDER BY 1, 2
+----
+NULL	NULL	1
+0	2	0
+0	3	1
+1	1	0
+
+# we CANNOT mix aggregates and groups
+statement error
+SELECT (g+i)%2 + SUM(i), SUM(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1
+
+# multiple groups
+
+
+query IIIII
+SELECT g, i, g%2, SUM(i), SUM(g) FROM integers GROUP BY 1, 2, 3 ORDER BY 1, 2, 3, 4
+----
+0	1	0	1	0
+0	2	0	2	0
+1	NULL	1	NULL	1
+1	3	1	3	1
+
+query IIIII
+SELECT g, i, g%2, SUM(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1, 2, 3, 4
+----
+0	1	0	1	0
+0	2	0	2	0
+1	NULL	1	NULL	1
+1	3	1	3	1

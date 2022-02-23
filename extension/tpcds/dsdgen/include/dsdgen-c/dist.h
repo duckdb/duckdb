@@ -72,21 +72,21 @@ typedef struct DISTINDEX_T {
 /* must match WriteDist() in dcomp.c */
 #define IDX_SIZE (D_NAME_LEN + 7 * sizeof(int))
 
-int dist_op(void *dest, int op, char *d_name, int vset, int wset, int stream);
+int dist_op(void *dest, int op, const char *d_name, int vset, int wset, int stream);
 #define pick_distribution(dest, dist, v, w, s) dist_op(dest, 0, dist, v, w, s)
 #define dist_member(dest, dist, v, w)          dist_op(dest, 1, dist, v, w, 0)
 #define dist_max(dist, w)                      dist->maximums[w - 1]
-int dist_weight(int *dest, char *d, int index, int wset);
-int distsize(char *szDistname);
-int dist_type(char *szDistName, int vset);
-d_idx_t *find_dist(char *name);
-int IntegrateDist(char *szDistName, int nPct, int nStartIndex, int nWeightSet);
-void dump_dist(char *szName);
-int dist_active(char *szName, int nWeightSet);
-int DistNameIndex(char *szDist, int nNameType, char *szName);
-int DistSizeToShiftWidth(char *szDist, int nWeightSet);
-int MatchDistWeight(void *dest, char *szDist, int nWeight, int nWeightSet, int ValueSet);
-int findDistValue(char *szValue, char *szDistName, int ValueSet);
+int dist_weight(int *dest, const char *d, int index, int wset);
+int distsize(const char *szDistname);
+int dist_type(const char *szDistName, int vset);
+d_idx_t *find_dist(const char *name);
+int IntegrateDist(const char *szDistName, int nPct, int nStartIndex, int nWeightSet);
+void dump_dist(const char *szName);
+int dist_active(const char *szName, int nWeightSet);
+int DistNameIndex(const char *szDist, int nNameType, const char *szName);
+int DistSizeToShiftWidth(const char *szDist, int nWeightSet);
+int MatchDistWeight(void *dest, const char *szDist, int nWeight, int nWeightSet, int ValueSet);
+int findDistValue(const char *szValue, const char *szDistName, int ValueSet);
 int di_compare(const void *op1, const void *op2);
 
 #define DIST_UNIFORM     0x0001

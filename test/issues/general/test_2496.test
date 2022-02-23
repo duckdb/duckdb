@@ -1,0 +1,37 @@
+# name: test/issues/general/test_2496.test
+# description: Issue 2496: Incorrect Struct Sorting Order on Ties
+# group: [general]
+
+statement ok
+CREATE TABLE list_str AS
+SELECT * FROM (VALUES
+	({'x': 'duck', 'y': ''}),
+	({'x': 'duck', 'y': 'goose'})
+) tbl(i)
+
+query II
+SELECT lhs.i, rhs.i
+FROM list_str lhs, list_str rhs
+ORDER BY lhs.i, rhs.i
+----
+{'x': duck, 'y': }	{'x': duck, 'y': }
+{'x': duck, 'y': }	{'x': duck, 'y': goose}
+{'x': duck, 'y': goose}	{'x': duck, 'y': }
+{'x': duck, 'y': goose}	{'x': duck, 'y': goose}
+
+statement ok
+CREATE TABLE test AS
+SELECT * FROM (VALUES
+	(['duck', '']),
+	(['duck', 'goose'])
+) tbl(i)
+
+query II
+SELECT lhs.i, rhs.i
+FROM test lhs, test rhs
+ORDER BY lhs.i, rhs.i
+----
+[duck, ]	[duck, ]
+[duck, ]	[duck, goose]
+[duck, goose]	[duck, ]
+[duck, goose]	[duck, goose]

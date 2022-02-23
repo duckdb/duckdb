@@ -41,7 +41,7 @@ public:
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
 	              idx_t result_idx) override;
-	void Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t offset,
+	void Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
 	            idx_t update_count) override;
 	void UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
 	                  row_t *row_ids, idx_t update_count, idx_t depth) override;
@@ -50,7 +50,8 @@ public:
 	void CommitDropColumn() override;
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+	                                             ColumnCheckpointInfo &checkpoint_info) override;
 
 	void DeserializeColumn(Deserializer &source) override;
 

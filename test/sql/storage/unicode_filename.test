@@ -1,0 +1,104 @@
+# name: test/sql/storage/unicode_filename.test
+# description: Test storage with a unicode filename
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/中文.db
+
+# create a database and insert values
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)
+
+statement ok
+CREATE TABLE test2 (a INTEGER);
+
+statement ok
+INSERT INTO test2 VALUES (13), (12), (11)
+
+query II
+SELECT * FROM test ORDER BY a
+----
+NULL	NULL
+11	22
+12	21
+13	22
+
+query I
+SELECT * FROM test2 ORDER BY a
+----
+11
+12
+13
+
+loop i 0 10
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT * FROM test ORDER BY a
+----
+NULL	NULL
+11	22
+12	21
+13	22
+
+query I
+SELECT * FROM test2 ORDER BY a
+----
+11
+12
+13
+
+endloop
+
+# verify that the tables are still there after a restart
+restart
+
+query II
+SELECT * FROM test ORDER BY a
+----
+NULL	NULL
+11	22
+12	21
+13	22
+
+query I
+SELECT * FROM test2 ORDER BY a
+----
+11
+12
+13
+
+# append a row
+statement ok
+INSERT INTO test VALUES (14, 23)
+
+query II
+SELECT * FROM test ORDER BY a
+----
+NULL	NULL
+11	22
+12	21
+13	22
+14	23
+
+restart
+
+query II
+SELECT * FROM test ORDER BY a
+----
+NULL	NULL
+11	22
+12	21
+13	22
+14	23
+
+statement ok
+DROP TABLE test
+
+statement ok
+DROP TABLE test2

@@ -1,0 +1,20 @@
+# name: test/sql/function/generic/case_condition.test
+# description: Test CASE in a conditional statement
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl AS SELECT * FROM range(10) tbl(i)
+
+query I
+SELECT * FROM tbl
+WHERE
+CASE WHEN i%2=0 THEN 1 ELSE 0 END
+AND
+CASE WHEN i<5 THEN 1 ELSE 0 END
+----
+0
+2
+4

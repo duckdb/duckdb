@@ -28,6 +28,11 @@ struct TransactionData;
 
 struct DataTableInfo;
 
+struct ColumnCheckpointInfo {
+	ColumnCheckpointInfo(CompressionType compression_type_p) : compression_type(compression_type_p) {};
+	CompressionType compression_type;
+};
+
 class ColumnData {
 	friend class ColumnDataCheckpointer;
 
@@ -91,7 +96,7 @@ public:
 	                      idx_t result_idx);
 
 	virtual void Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-	                    idx_t offset, idx_t update_count);
+	                    idx_t update_count);
 	virtual void UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
 	                          row_t *row_ids, idx_t update_count, idx_t depth);
 	virtual unique_ptr<BaseStatistics> GetUpdateStatistics();
@@ -99,7 +104,8 @@ public:
 	virtual void CommitDropColumn();
 
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer);
-	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer);
+	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+	                                                     ColumnCheckpointInfo &checkpoint_info);
 
 	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
