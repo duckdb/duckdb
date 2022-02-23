@@ -108,7 +108,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		case ConstraintType::FOREIGN_KEY: {
 			auto &foreign_key = (ForeignKeyConstraint &)*cond;
 			D_ASSERT(!foreign_key.pk_keys.empty());
-			D_ASSERT(foreign_key.is_fk_table && !foreign_key.fk_columns.empty() || !foreign_key.fk_keys.empty());
+			D_ASSERT((foreign_key.is_fk_table && !foreign_key.fk_columns.empty()) || !foreign_key.fk_keys.empty());
 			if (foreign_key.fk_keys.empty()) {
 				for (auto &keyname : foreign_key.fk_columns) {
 					auto entry = info.name_map.find(keyname);
