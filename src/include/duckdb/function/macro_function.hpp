@@ -14,6 +14,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+//#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -25,7 +26,7 @@ enum class MacroType : uint8_t {
 };
 
 
-class MacroCatalogEntry;
+class BaseMacroCatalogEntry;
 
 class MacroFunction {
 public:
@@ -34,7 +35,7 @@ public:
 
 	//MacroFunction(void);
 	//! Check whether the supplied arguments are valid
-	static string ValidateArguments(MacroCatalogEntry &macro_func, FunctionExpression &function_expr,
+	static string ValidateArguments(BaseMacroCatalogEntry &macro_func, FunctionExpression &function_expr,
 	                                vector<unique_ptr<ParsedExpression>> &positionals,
 	                                unordered_map<string, unique_ptr<ParsedExpression>> &defaults);
 

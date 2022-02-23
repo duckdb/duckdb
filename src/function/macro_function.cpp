@@ -1,5 +1,6 @@
-#include <iostream>
+
 #include "duckdb/function/macro_function.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
 
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
@@ -7,9 +8,8 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/function/scalar_macro_function.hpp"
-#include "duckdb/function/table_macro_function.hpp"
+
+
 
 namespace duckdb {
 
@@ -24,11 +24,12 @@ MacroFunction::MacroFunction(void) {
 }
  */
 
-string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionExpression &function_expr,
+string MacroFunction::ValidateArguments(BaseMacroCatalogEntry &macro_func, FunctionExpression &function_expr,
                                         vector<unique_ptr<ParsedExpression>> &positionals,
                                         unordered_map<string, unique_ptr<ParsedExpression>> &defaults) {
 	// separate positional and default arguments
-	auto &macro_def = *macro_func.function;
+	//auto &macro_def = (BaseFunction &)*macro_func.function;
+	auto &macro_def= (ScalarMacroFunction &)macro_func.function;
 	for (auto &arg : function_expr.children) {
 		if (arg->type == ExpressionType::VALUE_CONSTANT && !arg->alias.empty()) {
 			// default argument
