@@ -211,3 +211,7 @@ class TestRAPIAggregations(object):
     def test_cum_sem(self, duckdb_cursor):
         rel = initialize(duckdb_cursor)
         aggregation_generic(rel.sem,[[(0.35355339059327373,)], [(0.35355339059327373, 0.38890872965260104)]])
+
+    def test_describe(self, duckdb_cursor):
+        rel = initialize(duckdb_cursor)
+        assert rel.describe().fetchall() == [('[Min: 1, Max: 2][Has Null: true]', '[Min: 2.10, Max: 3.20][Has Null: true]', '[Min: a, Max: b, Has Unicode: false, Max String Length: 1][Has Null: true]')]

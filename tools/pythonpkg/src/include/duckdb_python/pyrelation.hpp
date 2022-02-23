@@ -116,6 +116,8 @@ public:
 
 	unique_ptr<DuckDBPyRelation> SEM(const string &aggr_columns, const string &groups = "");
 
+	unique_ptr<DuckDBPyRelation> Describe();
+
 	idx_t Length();
 
 	py::tuple Shape();
@@ -182,6 +184,9 @@ public:
 	string Print();
 
 private:
+	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
+	                              const string &groups = "", const string &function_parameter = "",
+	                              const string &projected_columns = "", const string &window_function = "");
 	py::object map_function;
 };
 

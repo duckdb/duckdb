@@ -89,6 +89,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         py::arg("aggregation_columns"))
 	    .def("cummin", &DuckDBPyRelation::CumMin, "Returns the cumulative minimum of the aggregate column.",
 	         py::arg("aggregation_columns"))
+	    .def("describe", &DuckDBPyRelation::Describe,
+	         "Gives basic statistics (e.g., min,max) and if null exists for each column of the relation.")
 	    .def("union", &DuckDBPyRelation::Union,
 	         "Create the set union of this relation object with another relation object in other_rel")
 	    .def("except_", &DuckDBPyRelation::Except,
@@ -129,10 +131,6 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("__str__", &DuckDBPyRelation::Print)
 	    .def("__repr__", &DuckDBPyRelation::Print);
 }
-
-//! Do we have column statistics?
-// describe()
-// Basic descriptive and statistics for each column.
 
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
 }
@@ -228,9 +226,19 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, con
 	return make_unique<DuckDBPyRelation>(rel->Aggregate(expr));
 }
 
-string GenerateExpressionList(const string &function_name, const string &aggregated_columns, const string &groups,
-                              const string &function_parameter, const string &projected_columns,
-                              const string &window_function = "") {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
+	string columns;
+	for (auto &column_rel : rel->Columns()) {
+		columns += column_rel.name + ",";
+	}
+	columns.erase(columns.size() - 1, columns.size());
+	auto expr = GenerateExpressionList("stats", columns);
+	return make_unique<DuckDBPyRelation>(rel->Project(expr)->Limit(1));
+}
+
+string DuckDBPyRelation::GenerateExpressionList(const string &function_name, const string &aggregated_columns,
+                                                const string &groups, const string &function_parameter,
+                                                const string &projected_columns, const string &window_function) {
 	auto input = StringUtil::Split(aggregated_columns, ',');
 	string expr;
 	if (!projected_columns.empty()) {
