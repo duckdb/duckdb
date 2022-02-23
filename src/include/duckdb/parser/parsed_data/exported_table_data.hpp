@@ -30,7 +30,6 @@ struct ExportedTableInfo {
 };
 
 struct BoundExportData : public ParseInfo {
-	// std::map<TableCatalogEntry *, ExportedTableData> data;
 	std::vector<ExportedTableInfo> data;
 };
 
