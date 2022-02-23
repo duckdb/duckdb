@@ -95,26 +95,6 @@ public:
 		yyjson_mut_doc_free(mut_doc);
 		return result;
 	}
-	//! Write the string if it's a string, else write the value
-	static inline string_t WriteStringVal(yyjson_val *val, Vector &vector) {
-		// Create mutable copy of the read val
-		auto *mut_doc = yyjson_mut_doc_new(nullptr);
-		auto *mut_val = yyjson_val_mut_copy(mut_doc, val);
-		yyjson_mut_doc_set_root(mut_doc, mut_val);
-		// Write mutable copy to string
-		idx_t len;
-		char *data = yyjson_mut_write(mut_doc, WRITE_FLAG, (size_t *)&len);
-		// Remove quotes if necessary
-		string_t result {};
-		if (yyjson_is_str(val)) {
-			result = StringVector::AddString(vector, data + 1, len - 2);
-		} else {
-			result = StringVector::AddString(vector, data, len);
-		}
-		free(data);
-		yyjson_mut_doc_free(mut_doc);
-		return result;
-	}
 
 	//! Get type string corresponding to yyjson type
 	static inline const char *const ValTypeToString(yyjson_val *val) {
@@ -254,50 +234,48 @@ public:
 	                        std::function<bool(yyjson_val *, T &, Vector &)> fun) {
 		auto &func_expr = (BoundFunctionExpression &)state.expr;
 		const auto &info = (JSONReadManyFunctionData &)*func_expr.bind_info;
-		const auto &ptrs = info.ptrs;
-		const auto &lens = info.lens;
-		D_ASSERT(ptrs.size() == lens.size());
-		const idx_t num_paths = ptrs.size();
+		D_ASSERT(info.ptrs.size() == info.lens.size());
 
 		const auto count = args.size();
+		const idx_t num_paths = info.ptrs.size();
+		const idx_t list_size = count * num_paths;
+
 		VectorData input_data;
 		auto &input_vector = args.data[0];
 		input_vector.Orrify(count, input_data);
 		auto inputs = (string_t *)input_data.data;
 
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_entries = FlatVector::GetData<list_entry_t>(result);
-		auto &result_validity = FlatVector::Validity(result);
+		ListVector::Reserve(result, list_size);
+		auto list_entries = FlatVector::GetData<list_entry_t>(result);
+		auto &list_validity = FlatVector::Validity(result);
 
-		ListVector::Reserve(result, num_paths * count);
-		ListVector::SetListSize(result, num_paths * count);
-
-		auto &result_child = ListVector::GetEntry(result);
-		auto result_child_data = FlatVector::GetData<T>(result_child);
-		auto &result_child_validity = FlatVector::Validity(result_child);
+		auto &child = ListVector::GetEntry(result);
+		auto child_data = FlatVector::GetData<T>(child);
+		auto &child_validity = FlatVector::Validity(child);
 
 		idx_t offset = 0;
 		for (idx_t i = 0; i < count; i++) {
-			result_entries[i].offset = offset;
-			result_entries[i].length = num_paths;
-
 			auto idx = input_data.sel->get_index(i);
 			if (!input_data.validity.RowIsValid(idx)) {
-				result_validity.SetInvalid(i);
+				list_validity.SetInvalid(i);
 				continue;
 			}
 
 			auto doc = ReadDocument(inputs[idx]);
 			for (idx_t path_i = 0; path_i < num_paths; path_i++) {
-				if (!fun(GetPointerUnsafe<yyjson_val>(doc->root, ptrs[path_i], lens[path_i]),
-				         result_child_data[offset + path_i], result_child)) {
-					result_child_validity.SetInvalid(offset);
+				auto child_idx = offset + path_i;
+				if (!fun(GetPointerUnsafe<yyjson_val>(doc->root, info.ptrs[path_i], info.lens[path_i]),
+				         child_data[child_idx], child)) {
+					child_validity.SetInvalid(child_idx);
 				}
 			}
-			offset += num_paths;
 			yyjson_doc_free(doc);
+
+			list_entries[i].offset = offset;
+			list_entries[i].length = num_paths;
+			offset += num_paths;
 		}
-		D_ASSERT(offset = num_paths * count);
+		ListVector::SetListSize(result, offset);
 
 		if (input_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);

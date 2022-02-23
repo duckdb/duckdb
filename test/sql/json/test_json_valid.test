@@ -91,7 +91,12 @@ SELECT json_valid('" \& "');
 0
 
 query T
-SELECT json_valid('" \'' "');
+SELECT '" \'' "';
+----
+" \' "
+
+query T
+SELECT json_valid('" \\'' "');
 ----
 0
 
