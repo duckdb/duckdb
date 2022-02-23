@@ -444,10 +444,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContex
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 
 	for (idx_t i = 0; i < columns.size(); i++) {
-		create_info->columns.push_back(move(columns[i].Copy()));
+		create_info->columns.push_back(columns[i].Copy());
 	}
 	for (idx_t i = 0; i < constraints.size(); i++) {
-		create_info->constraints.push_back(move(constraints[i]->Copy()));
+		create_info->constraints.push_back(constraints[i]->Copy());
 	}
 
 	auto binder = Binder::CreateBinder(context);
