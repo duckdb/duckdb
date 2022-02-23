@@ -33,58 +33,6 @@ static unique_ptr<FunctionData> ToSubstraitBind(ClientContext &context, vector<V
 	return move(result);
 }
 
-void CompareQueryResults(QueryResult &actual_result, QueryResult &roundtrip_result) {
-	// actual_result compare the success state of the results
-	if (!actual_result.success) {
-		throw InternalException("Query failed");
-	}
-	if (actual_result.success != roundtrip_result.success) {
-		throw InternalException("Roundtrip substrait plan failed");
-	}
-
-	// FIXME: How to name expression?
-	//	// compare names
-	//	if (names != other.names) {
-	//		return false;
-	//	}
-	// compare types
-	if (actual_result.types != roundtrip_result.types) {
-		throw InternalException("Substrait Plan Types differ from Actual Result Types");
-	}
-	// now compare the actual values
-	// fetch chunks
-	while (true) {
-		auto lchunk = actual_result.Fetch();
-		auto rchunk = roundtrip_result.Fetch();
-		if (!lchunk && !rchunk) {
-			return;
-		}
-		if (!lchunk || !rchunk) {
-			throw InternalException("Substrait Plan Types chunk differs from Actual Result chunk");
-		}
-		if (lchunk->size() == 0 && rchunk->size() == 0) {
-			return;
-		}
-		if (lchunk->size() != rchunk->size()) {
-			throw InternalException("Substrait Plan Types chunk size differs from Actual Result chunk size");
-		}
-		for (idx_t col = 0; col < rchunk->ColumnCount(); col++) {
-			for (idx_t row = 0; row < rchunk->size(); row++) {
-				auto lvalue = lchunk->GetValue(col, row);
-				auto rvalue = rchunk->GetValue(col, row);
-				if (lvalue.IsNull() && rvalue.IsNull()) {
-					continue;
-				}
-				if (lvalue != rvalue) {
-					lchunk->Print();
-					rchunk->Print();
-					throw InternalException("Substrait Plan Result differs from Actual Result");
-				}
-			}
-		}
-	}
-}
-
 shared_ptr<Relation> SubstraitPlanToDuckDBRel(Connection &conn, string &serialized) {
 	SubstraitToDuckDB transformer_s2d(conn, serialized);
 	return transformer_s2d.TransformPlan();
@@ -109,7 +57,11 @@ static void ToSubFunction(ClientContext &context, const FunctionData *bind_data,
 		auto actual_result = new_conn.Query(data.query);
 		auto sub_relation = SubstraitPlanToDuckDBRel(new_conn, serialized);
 		auto substrait_result = sub_relation->Execute();
-		CompareQueryResults(*actual_result, *substrait_result);
+		if (!actual_result->Equals(*substrait_result)) {
+			query_plan->Print();
+			sub_relation->Print();
+			throw InternalException("The query result of DuckDB's query plan does not match Substrait");
+		}
 	}
 }
 
