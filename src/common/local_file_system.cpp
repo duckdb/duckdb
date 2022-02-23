@@ -52,9 +52,8 @@ static void AssertValidFileFlags(uint8_t flags) {
 
 #ifdef __MINGW32__
 bool LocalFileSystem::FileExists(const string &filename) {
-	int wchars_num = MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, NULL, 0);
-	wchar_t *wpath = new wchar_t[wchars_num];
-	MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, wpath, wchars_num);
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
 		struct _stat64i32 status;
 		_wstat(wpath, &status);
@@ -65,9 +64,8 @@ bool LocalFileSystem::FileExists(const string &filename) {
 	return false;
 }
 bool LocalFileSystem::IsPipe(const string &filename) {
-	int wchars_num = MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, NULL, 0);
-	wchar_t *wpath = new wchar_t[wchars_num];
-	MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, wpath, wchars_num);
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
 		struct _stat64i32 status;
 		_wstat(wpath, &status);
@@ -110,9 +108,8 @@ bool LocalFileSystem::IsPipe(const string &filename) {
 
 #else
 bool LocalFileSystem::FileExists(const string &filename) {
-	int wchars_num = MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, NULL, 0);
-	wchar_t *wpath = new wchar_t[wchars_num];
-	MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, wpath, wchars_num);
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
 		struct _stat64i32 status;
 		_wstat(wpath, &status);
@@ -123,9 +120,8 @@ bool LocalFileSystem::FileExists(const string &filename) {
 	return false;
 }
 bool LocalFileSystem::IsPipe(const string &filename) {
-	int wchars_num = MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, NULL, 0);
-	wchar_t *wpath = new wchar_t[wchars_num];
-	MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, wpath, wchars_num);
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
 		struct _stat64i32 status;
 		_wstat(wpath, &status);
