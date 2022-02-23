@@ -5,6 +5,8 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
+#include "duckdb/function/scalar_macro_function.hpp"
+
 namespace duckdb {
 
 void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr) {
@@ -41,7 +43,10 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, MacroCatalogEntry *macro_func, idx_t depth,
                                        unique_ptr<ParsedExpression> *expr) {
-	auto &macro_def = *macro_func->function;
+
+	// recast function so we can access the scalar member function->expression
+	auto &macro_def = (ScalarMacroFunction &)*macro_func->function;
+
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
@@ -72,7 +77,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, MacroCatalo
 	macro_binding = new_macro_binding.get();
 
 	// replace current expression with stored macro expression, and replace params
-	*expr = macro_func->function->expression->Copy();
+	*expr = macro_def.expression->Copy();
 	ReplaceMacroParametersRecursive(*expr);
 
 	// bind the unfolded macro
