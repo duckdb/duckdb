@@ -170,7 +170,7 @@ class TestRAPIAggregations(object):
                 (2, 30, 50),
                 (2, 30, 51);""")
         rel = duckdb_cursor.table('aggr')
-        assert rel.skew('k,v,v2').execute().fetchall() == [(-3.316624790355393, -0.16344366935199223, 0.3654008511025841)]
+        munge_compare(rel.skew('k,v,v2').execute().fetchall(),[(-3.316624790355393, -0.16344366935199223, 0.3654008511025841)])
 
     def test_kurt(self, duckdb_cursor):
         rel = initialize(duckdb_cursor)
@@ -190,7 +190,8 @@ class TestRAPIAggregations(object):
                 (2, 30, 50),
                 (2, 30, 51);""")
         rel = duckdb_cursor.table('aggr')
-        assert rel.kurt('k,v,v2').execute().fetchall() == [(10.99999999999836, -1.9614277138467147, -1.445119691585509)]
+        munge_compare(rel.kurt('k,v,v2').execute().fetchall(),[(10.99999999999836, -1.9614277138467147, -1.445119691585509)])
+
 
     def test_cum_sum(self, duckdb_cursor):
         rel = initialize(duckdb_cursor)
