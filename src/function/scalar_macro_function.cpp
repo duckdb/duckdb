@@ -17,7 +17,8 @@
 
 namespace duckdb {
 
-	ScalarMacroFunction::ScalarMacroFunction(unique_ptr<ParsedExpression> expression) : MacroFunction(MacroType::SCALAR_MACRO), expression(move(expression))  { }
+	ScalarMacroFunction::ScalarMacroFunction(unique_ptr<ParsedExpression> expression)
+      : MacroFunction(MacroType::SCALAR_MACRO), expression(move(expression))  {  }
 
 	ScalarMacroFunction::ScalarMacroFunction(void) : MacroFunction(MacroType::SCALAR_MACRO){}
 

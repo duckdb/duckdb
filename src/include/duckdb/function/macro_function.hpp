@@ -38,8 +38,6 @@ public:
 	                                vector<unique_ptr<ParsedExpression>> &positionals,
 	                                unordered_map<string, unique_ptr<ParsedExpression>> &defaults);
 
-	virtual ~MacroFunction() {};
-
 	// The type
  	MacroType  type;
 	//! The positional parameters
@@ -47,10 +45,9 @@ public:
 	//! The default parameters and their associated values
 	unordered_map<string, unique_ptr<ParsedExpression>> default_parameters;
 
-	unique_ptr<QueryNode> query_node;
-
-
 public:
+	virtual ~MacroFunction() {};
+
 	void CopyProperties( MacroFunction &other);
 
 	virtual unique_ptr<MacroFunction> Copy()=0;

@@ -20,16 +20,14 @@ namespace duckdb {
 
 class ScalarMacroFunction : public MacroFunction {
 public:
-
 	ScalarMacroFunction(unique_ptr<ParsedExpression> expression);
 
 	ScalarMacroFunction(void);
 	//! The macro expression
 	unique_ptr<ParsedExpression> expression;
 
-	~ScalarMacroFunction() override;
-
 public:
+ 	  ~ScalarMacroFunction() override;
 	  unique_ptr<MacroFunction> Copy() override;
 
 

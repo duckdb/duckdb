@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#pragma once
 //! The SelectStatement of the view
+#include "duckdb/function/table_macro_function.hpp"
 #include  "duckdb/function/macro_function.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/function/function.hpp"
@@ -19,17 +19,19 @@
 namespace duckdb {
 
 
-class TableMacroFunction : public MacroFunction {
-public:
-	TableMacroFunction(unique_ptr<QueryNode> query_node);
+TableMacroFunction::TableMacroFunction(unique_ptr<QueryNode> query_node)
+    : MacroFunction(MacroType::TABLE_MACRO) , query_node(move(query_node)){ }
 
-	TableMacroFunction(void);
-	//! The main query node
-	unique_ptr<QueryNode> query_node;
+TableMacroFunction::TableMacroFunction(void) : MacroFunction(MacroType::TABLE_MACRO) { }
 
-public:
-	~TableMacroFunction();
-	unique_ptr<MacroFunction> Copy() override;
-};
+TableMacroFunction::~TableMacroFunction() {}
 
-} // namespace duckdb
+
+  unique_ptr<MacroFunction> TableMacroFunction::Copy() {
+		auto result= make_unique<TableMacroFunction>();
+	    result->query_node=query_node->Copy();
+		this->CopyProperties(*result);
+	    return move( result);
+	}
+
+    } // namespace duckdb
