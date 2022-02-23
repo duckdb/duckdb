@@ -6,12 +6,9 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
-<<<<<<< HEAD
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
-=======
->>>>>>> 92c394233ccb04671c973be71de3e797b30b4cca
 
 namespace duckdb {
 
