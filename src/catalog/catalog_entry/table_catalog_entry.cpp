@@ -128,6 +128,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	if (info->type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
 	}
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		if (constraints[i]->type == ConstraintType::FOREIGN_KEY) {
+			throw ConstraintException("Can't alter table has FOREIGN KEY constraint");
+		}
+	}
 	auto table_info = (AlterTableInfo *)info;
 	switch (table_info->alter_table_type) {
 	case AlterTableType::RENAME_COLUMN: {

@@ -36,6 +36,18 @@ static void CreateColumnMap(BoundCreateTableInfo &info, bool allow_duplicate_nam
 	}
 }
 
+bool IsPrimaryKeyOrUniqueKey(TableCatalogEntry *table_ptr, idx_t key) {
+	for (auto &constraint : table_ptr->bound_constraints) {
+		if (constraint->type == ConstraintType::UNIQUE) {
+			auto &unique = (BoundUniqueConstraint &)*constraint;
+			if (unique.key_set.find(key) != unique.key_set.end()) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	auto &base = (CreateTableInfo &)*info.base;
 
