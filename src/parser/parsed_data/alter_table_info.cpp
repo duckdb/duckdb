@@ -259,7 +259,7 @@ unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(FieldReader &reader, string sc
 //===--------------------------------------------------------------------===//
 ForeignKeyConstraintInfo::ForeignKeyConstraintInfo(string schema_p, string table_p, string fk_table,
                                                    vector<string> pk_columns, vector<string> fk_columns,
-                                                   vector<idx_t> pk_keys, vector<idx_t> fk_keys, bool is_add_fk)
+                                                   vector<idx_t> pk_keys, vector<idx_t> fk_keys, bool is_fk_add)
     : AlterTableInfo(AlterTableType::FOREIGN_KEY_CONSTR, move(schema_p), move(table_p)), fk_table(move(fk_table)),
       pk_columns(move(pk_columns)), fk_columns(move(fk_columns)), pk_keys(move(pk_keys)), fk_keys(move(fk_keys)),
       is_fk_add(is_fk_add) {

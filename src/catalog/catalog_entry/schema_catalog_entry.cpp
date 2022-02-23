@@ -229,7 +229,9 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 					fk_keys = foreign_key.fk_keys;
 					break;
 				} else {
-					throw CatalogException("Could not drop the table because this table is main key table of the table\"%s\"", foreign_key.pk_table);
+					throw CatalogException(
+					    "Could not drop the table because this table is main key table of the table \"%s\"",
+					    foreign_key.pk_table);
 				}
 			}
 		}

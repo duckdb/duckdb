@@ -548,7 +548,12 @@ string TableCatalogEntry::ToSQL() {
 				}
 				extra_constraints.push_back(constraint->ToString());
 			}
-		} else if (constraint->type != ConstraintType::FOREIGN_KEY) {
+		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
+			auto &fk = (ForeignKeyConstraint &)*constraint;
+			if (fk.is_fk_table) {
+				extra_constraints.push_back(constraint->ToString());
+			}
+		} else {
 			extra_constraints.push_back(constraint->ToString());
 		}
 	}
