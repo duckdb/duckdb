@@ -90,7 +90,6 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "array_append", {"arr", "el", nullptr}, "list_append(arr, el)"},
 	{DEFAULT_SCHEMA, "list_prepend", {"e", "l", nullptr}, "list_concat(list_value(e), l)"},
 	{DEFAULT_SCHEMA, "array_prepend", {"el", "arr", nullptr}, "list_prepend(el, arr)"},
-	{DEFAULT_SCHEMA, "array_contains", {"arr", "e", nullptr}, "e=ANY(arr)"},
 	{DEFAULT_SCHEMA, "array_pop_back", {"arr", nullptr}, "arr[:LEN(arr)-1]"},
 	{DEFAULT_SCHEMA, "array_pop_front", {"arr", nullptr}, "arr[1:]"},
 	{DEFAULT_SCHEMA, "array_push_back", {"arr", "e", nullptr}, "list_concat(arr, list_value(e))"},

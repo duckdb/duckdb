@@ -41,39 +41,10 @@ SELECT 4>ALL([1, 2, 3, NULL]);
 ----
 NULL
 
-# ARRAY_CONTAINS rewrite
 query I
-SELECT ARRAY_CONTAINS([1, 2, 3], 1);
-----
-true
-
-query I
-SELECT ARRAY_CONTAINS([1, 2, 3], 4);
+SELECT 1=ANY(NULL);
 ----
 false
-
-query I
-SELECT ARRAY_CONTAINS([1, 2, 3], NULL);
-----
-NULL
-
-query I
-SELECT ARRAY_CONTAINS([1, 2, NULL], 1);
-----
-true
-
-query I
-SELECT ARRAY_CONTAINS([1, 2, NULL], 4);
-----
-NULL
-
-query I
-SELECT ARRAY_CONTAINS([NULL], NULL);
-----
-NULL
-
-statement error
-SELECT ARRAY_CONTAINS(NULL, 1);
 
 # non-scalar list
 statement ok
