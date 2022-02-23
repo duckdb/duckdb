@@ -240,8 +240,8 @@ int64_t duckdb_value_int64(duckdb_result *result, idx_t col, idx_t row) {
 duckdb_decimal duckdb_value_decimal(duckdb_result *result, idx_t col, idx_t row) {
 	duckdb_decimal result_value;
 
-	LogicalType *logical_type = (LogicalType *)result->__deprecated_columns[col].duckdb_logical_type;
-	logical_type->GetDecimalProperties(result_value.width, result_value.scale);
+	auto column_data = (duckdb::DuckDBColumnData *)result->__deprecated_columns[col].internal_data;
+	column_data->type.GetDecimalProperties(result_value.width, result_value.scale);
 
 	auto internal_value = GetInternalCValue<hugeint_t>(result, col, row);
 	result_value.value.lower = internal_value.lower;

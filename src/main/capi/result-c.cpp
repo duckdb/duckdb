@@ -1,7 +1,5 @@
 #include "duckdb/main/capi_internal.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/serializer/buffered_serializer.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
 
 namespace duckdb {
 
@@ -55,11 +53,9 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 	// zero initialize the columns (so we can cleanly delete it in case a malloc fails)
 	memset(out->__deprecated_columns, 0, sizeof(duckdb_column) * out->__deprecated_column_count);
 	for (idx_t i = 0; i < out->__deprecated_column_count; i++) {
-		BufferedSerializer serializer;
-		result->types[i].Serialize(serializer);
-		BufferedDeserializer deserializer(serializer);
-		auto cloned_type = new LogicalType(LogicalType::Deserialize(deserializer));
-		out->__deprecated_columns[i].duckdb_logical_type = (void *)cloned_type;
+		auto column_data = new DuckDBColumnData();
+		column_data->type = result->types[i];
+		out->__deprecated_columns[i].internal_data = column_data;
 		out->__deprecated_columns[i].__deprecated_type = ConvertCPPTypeToC(result->types[i]);
 		out->__deprecated_columns[i].__deprecated_name = strdup(result->names[i].c_str());
 		out->__deprecated_columns[i].__deprecated_nullmask =
@@ -323,9 +319,9 @@ static void DuckdbDestroyColumn(duckdb_column column, idx_t count) {
 	if (column.__deprecated_name) {
 		duckdb_free(column.__deprecated_name);
 	}
-	if (column.duckdb_logical_type) {
-		duckdb::LogicalType *type = (duckdb::LogicalType *)column.duckdb_logical_type;
-		delete type;
+	if (column.internal_data) {
+		auto column_data = (duckdb::DuckDBColumnData *)column.internal_data;
+		delete column_data;
 	}
 }
 
