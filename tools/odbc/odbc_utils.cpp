@@ -1,5 +1,6 @@
 #include "odbc_utils.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "sqlext.h"
 
 #include <sql.h>
 #include <regex>
@@ -20,6 +21,18 @@ SQLRETURN OdbcUtils::SetStringValueLength(const string &val_str, SQLLEN *str_len
 	}
 	// there is no length pointer
 	return SQL_ERROR;
+}
+
+bool OdbcUtils::IsCharType(SQLSMALLINT type) {
+	switch (type) {
+	case SQL_CHAR:
+	case SQL_VARCHAR:
+	case SQL_WVARCHAR:
+	case SQL_BINARY:
+		return true;
+	default:
+		return false;
+	}
 }
 
 SQLRETURN OdbcUtils::SetStringAndLength(vector<string> &error_messages, const string &val_str,

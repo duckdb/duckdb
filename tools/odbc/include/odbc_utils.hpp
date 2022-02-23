@@ -40,6 +40,8 @@ public:
 		return SQL_SUCCESS;
 	}
 
+	static bool IsCharType(SQLSMALLINT type);
+
 	static SQLRETURN SetStringValueLength(const std::string &val_str, SQLLEN *str_len_or_ind_ptr);
 	static SQLRETURN SetStringAndLength(std::vector<std::string> &error_messages, const std::string &val_str,
 	                                    SQLPOINTER target_value_ptr, SQLSMALLINT buffer_length,
