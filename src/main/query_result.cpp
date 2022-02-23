@@ -93,6 +93,9 @@ bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START
 			for (idx_t row = 0; row < rchunk->size(); row++) {
 				auto lvalue = lchunk->GetValue(col, row);
 				auto rvalue = rchunk->GetValue(col, row);
+				if (lvalue.IsNull() && rvalue.IsNull()) {
+					continue;
+				}
 				if (lvalue != rvalue) {
 					return false;
 				}
