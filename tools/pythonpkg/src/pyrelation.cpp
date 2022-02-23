@@ -78,6 +78,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
 	    .def("kurt", &DuckDBPyRelation::Kurt, "Returns the excess kurtosis of the aggregate column.",
 	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
+	    .def("sem", &DuckDBPyRelation::SEM, "Returns the standard error of the mean of the aggregate column.",
+	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
 	    .def("unique", &DuckDBPyRelation::Unique, "Number of distinct values in a column.", py::arg("unique_aggr"))
 	    .def("cumsum", &DuckDBPyRelation::CumSum, "Returns the cumulative sum of the aggregate column.",
 	         py::arg("aggregation_columns"))
@@ -132,9 +134,6 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 // describe()
 // Basic descriptive and statistics for each column.
 
-//! Missing function
-// sem()
-// Standard error of the mean
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
 }
 
@@ -327,6 +326,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Skew(const string &aggr_columns, 
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Kurt(const string &aggr_columns, const string &groups) {
 	return GenericAggregator("kurtosis", aggr_columns, groups);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SEM(const string &aggr_columns, const string &groups) {
+	return GenericAggregator("sem", aggr_columns, groups);
 }
 
 idx_t DuckDBPyRelation::Length() {

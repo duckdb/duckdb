@@ -114,6 +114,8 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Kurt(const string &aggr_columns, const string &groups = "");
 
+	unique_ptr<DuckDBPyRelation> SEM(const string &aggr_columns, const string &groups = "");
+
 	idx_t Length();
 
 	py::tuple Shape();
