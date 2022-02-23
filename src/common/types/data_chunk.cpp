@@ -7,6 +7,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/null_value.hpp"
@@ -423,13 +424,13 @@ void SetStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &
 }
 
 struct ArrowUUIDConversion {
-	using internal_type_t = uint64_t;
+	using internal_type_t = hugeint_t;
 
 	static unique_ptr<Vector> InitializeVector(Vector &data, idx_t size) {
 		return make_unique<Vector>(LogicalType::VARCHAR, size);
 	}
 
-	static idx_t GetStringLength(uint64_t value) {
+	static idx_t GetStringLength(hugeint_t value) {
 		return UUID::STRING_SIZE;
 	}
 
@@ -603,7 +604,7 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		break;
 	}
 	case LogicalTypeId::UUID: {
-		SetVarchar<ArrowUUIDConversion, uint64_t>(child_holder, type, data, size);
+		SetVarchar<ArrowUUIDConversion, hugeint_t>(child_holder, type, data, size);
 		break;
 	}
 	case LogicalTypeId::LIST: {
