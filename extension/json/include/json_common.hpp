@@ -44,10 +44,65 @@ public:
 	const vector<size_t> lens;
 };
 
+template <class YYJSON_DOC_T>
+static inline void CleanupDoc(YYJSON_DOC_T *doc) {
+	throw InternalException("Unknown yyjson document type");
+}
+
+template <>
+inline void CleanupDoc(yyjson_doc *doc) {
+	yyjson_doc_free(doc);
+}
+
+template <>
+inline void CleanupDoc(yyjson_mut_doc *doc) {
+	yyjson_mut_doc_free(doc);
+}
+
+template <class YYJSON_DOC_T>
+class DocPointer {
+private:
+	YYJSON_DOC_T *doc;
+
+public:
+	explicit DocPointer(YYJSON_DOC_T *doc) : doc(doc) {
+	}
+
+	DocPointer(const DocPointer &obj) = delete;
+	DocPointer &operator=(const DocPointer &obj) = delete;
+
+	DocPointer(DocPointer &&other) {
+		this->doc = other.doc;
+		other.doc = nullptr;
+	}
+
+	void operator=(DocPointer &&other) {
+		CleanupDoc<YYJSON_DOC_T>(doc);
+		this->ptr = other.ptr;
+		other.ptr = nullptr;
+	}
+
+	inline YYJSON_DOC_T *operator*() const {
+		return doc;
+	}
+
+	inline YYJSON_DOC_T *operator->() const {
+		return doc;
+	}
+
+	inline bool IsNull() const {
+		return doc == nullptr;
+	}
+
+	~DocPointer() {
+		CleanupDoc<YYJSON_DOC_T>(doc);
+	}
+};
+
 struct JSONCommon {
 private:
 	//! Read/Write flag that make sense for us
-	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN;
+	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
 
 	//! Some defines copied from yyjson.cpp
@@ -66,14 +121,18 @@ public:
 	static constexpr auto TYPE_STRING_OBJECT = "OBJECT";
 
 public:
+	static inline DocPointer<yyjson_mut_doc> CreateDocument() {
+		return DocPointer<yyjson_mut_doc>(yyjson_mut_doc_new(nullptr));
+	}
+
 	//! Read JSON document (returns nullptr if invalid JSON)
-	static inline yyjson_doc *ReadDocumentUnsafe(const string_t &input) {
-		return yyjson_read(input.GetDataUnsafe(), input.GetSize(), READ_FLAG);
+	static inline DocPointer<yyjson_doc> ReadDocumentUnsafe(const string_t &input) {
+		return DocPointer<yyjson_doc>(yyjson_read(input.GetDataUnsafe(), input.GetSize(), READ_FLAG));
 	}
 	//! Read JSON document (throws error if malformed JSON)
-	static inline yyjson_doc *ReadDocument(const string_t &input) {
+	static inline DocPointer<yyjson_doc> ReadDocument(const string_t &input) {
 		auto result = ReadDocumentUnsafe(input);
-		if (!result) {
+		if (result.IsNull()) {
 			throw InvalidInputException("malformed JSON");
 		}
 		return result;
@@ -81,18 +140,16 @@ public:
 	//! Write JSON value to string_t
 	static inline string_t WriteVal(yyjson_mut_doc *doc, Vector &vector) {
 		idx_t len;
-		auto data = yyjson_mut_write(doc, WRITE_FLAG, (size_t *)&len);
-		auto result = StringVector::AddString(vector, data, len);
-		free(data);
+		auto data = MutWrite(doc, len);
+		auto result = StringVector::AddString(vector, data.get(), len);
 		return result;
 	}
 	static inline string_t WriteVal(yyjson_val *val, Vector &vector) {
 		// Create mutable copy of the read val
-		auto *mut_doc = yyjson_mut_doc_new(nullptr);
-		auto *mut_val = yyjson_val_mut_copy(mut_doc, val);
-		yyjson_mut_doc_set_root(mut_doc, mut_val);
-		auto result = WriteVal(mut_doc, vector);
-		yyjson_mut_doc_free(mut_doc);
+		auto mut_doc = CreateDocument();
+		auto *mut_val = yyjson_val_mut_copy(*mut_doc, val);
+		yyjson_mut_doc_set_root(*mut_doc, mut_val);
+		auto result = WriteVal(*mut_doc, vector);
 		return result;
 	}
 
@@ -130,40 +187,40 @@ public:
 	static void ValidatePathDollar(const char *ptr, const idx_t &len);
 
 	//! Get JSON value using JSON path query (safe, checks the path query)
-	template <class yyjson_t>
-	static inline yyjson_t *GetPointer(yyjson_t *root, const string_t &path_str) {
+	template <class YYJSON_VAL_T>
+	static inline YYJSON_VAL_T *GetPointer(YYJSON_VAL_T *root, const string_t &path_str) {
 		auto ptr = path_str.GetDataUnsafe();
 		auto len = path_str.GetSize();
 		if (len == 0) {
-			return GetPointerUnsafe<yyjson_t>(root, ptr, len);
+			return GetPointerUnsafe<YYJSON_VAL_T>(root, ptr, len);
 		}
 		switch (*ptr) {
 		case '/': {
 			// '/' notation must be '\0'-terminated
 			auto str = string(ptr, len);
-			return GetPointerUnsafe<yyjson_t>(root, str.c_str(), len);
+			return GetPointerUnsafe<YYJSON_VAL_T>(root, str.c_str(), len);
 		}
 		case '$': {
 			ValidatePathDollar(ptr, len);
-			return GetPointerUnsafe<yyjson_t>(root, ptr, len);
+			return GetPointerUnsafe<YYJSON_VAL_T>(root, ptr, len);
 		}
 		default:
 			auto str = "/" + string(ptr, len);
-			return GetPointerUnsafe<yyjson_t>(root, str.c_str(), len);
+			return GetPointerUnsafe<YYJSON_VAL_T>(root, str.c_str(), len);
 		}
 	}
 
 	//! Get JSON value using JSON path query (unsafe)
-	template <class yyjson_t>
-	static inline yyjson_t *GetPointerUnsafe(yyjson_t *root, const char *ptr, const idx_t &len) {
+	template <class YYJSON_VAL_T>
+	static inline YYJSON_VAL_T *GetPointerUnsafe(YYJSON_VAL_T *root, const char *ptr, const idx_t &len) {
 		if (len == 0) {
 			return nullptr;
 		}
 		switch (*ptr) {
 		case '/':
-			return TemplatedGetPointer<yyjson_t>(root, ptr, len);
+			return TemplatedGetPointer<YYJSON_VAL_T>(root, ptr, len);
 		case '$':
-			return TemplatedGetPointerDollar<yyjson_t>(root, ptr, len);
+			return TemplatedGetPointerDollar<YYJSON_VAL_T>(root, ptr, len);
 		default:
 			throw InternalException("JSON path does not start with '/' or '$'");
 		}
@@ -179,11 +236,10 @@ public:
 		                                             [&](string_t input, ValidityMask &mask, idx_t idx) {
 			                                             auto doc = JSONCommon::ReadDocument(input);
 			                                             T result_val {};
-			                                             if (!fun(doc->root, result_val, result)) {
+			                                             if (doc.IsNull() || !fun(doc->root, result_val, result)) {
 				                                             // Cannot find path
 				                                             mask.SetInvalid(idx);
 			                                             }
-			                                             yyjson_doc_free(doc);
 			                                             return result_val;
 		                                             });
 	}
@@ -204,11 +260,10 @@ public:
 			    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
 				    auto doc = ReadDocument(input);
 				    T result_val {};
-				    if (!fun(GetPointerUnsafe<yyjson_val>(doc->root, ptr, len), result_val, result)) {
+				    if (doc.IsNull() || !fun(GetPointerUnsafe<yyjson_val>(doc->root, ptr, len), result_val, result)) {
 					    // Cannot find path
 					    mask.SetInvalid(idx);
 				    }
-				    yyjson_doc_free(doc);
 				    return result_val;
 			    });
 		} else {
@@ -218,11 +273,10 @@ public:
 			    inputs, paths, result, args.size(), [&](string_t input, string_t path, ValidityMask &mask, idx_t idx) {
 				    auto doc = ReadDocument(input);
 				    T result_val {};
-				    if (!fun(GetPointer<yyjson_val>(doc->root, path), result_val, result)) {
+				    if (doc.IsNull() || !fun(GetPointer<yyjson_val>(doc->root, path), result_val, result)) {
 					    // Cannot find path
 					    mask.SetInvalid(idx);
 				    }
-				    yyjson_doc_free(doc);
 				    return result_val;
 			    });
 		}
@@ -264,12 +318,11 @@ public:
 			auto doc = ReadDocument(inputs[idx]);
 			for (idx_t path_i = 0; path_i < num_paths; path_i++) {
 				auto child_idx = offset + path_i;
-				if (!fun(GetPointerUnsafe<yyjson_val>(doc->root, info.ptrs[path_i], info.lens[path_i]),
-				         child_data[child_idx], child)) {
+				if (doc.IsNull() || !fun(GetPointerUnsafe<yyjson_val>(doc->root, info.ptrs[path_i], info.lens[path_i]),
+				                         child_data[child_idx], child)) {
 					child_validity.SetInvalid(child_idx);
 				}
 			}
-			yyjson_doc_free(doc);
 
 			list_entries[i].offset = offset;
 			list_entries[i].length = num_paths;
@@ -284,14 +337,14 @@ public:
 
 private:
 	//! Get JSON pointer using /field/index/... notation
-	template <class yyjson_t>
-	static inline yyjson_t *TemplatedGetPointer(yyjson_t *root, const char *ptr, const idx_t &len) {
-		throw InternalException("Unknown yyjson type");
+	template <class YYJSON_VAL_T>
+	static inline YYJSON_VAL_T *TemplatedGetPointer(YYJSON_VAL_T *root, const char *ptr, const idx_t &len) {
+		throw InternalException("Unknown yyjson value type");
 	}
 
 	//! Get JSON pointer using $.field[index]... notation
-	template <class yyjson_t>
-	static yyjson_t *TemplatedGetPointerDollar(yyjson_t *val, const char *ptr, const idx_t &len) {
+	template <class YYJSON_VAL_T>
+	static YYJSON_VAL_T *TemplatedGetPointerDollar(YYJSON_VAL_T *val, const char *ptr, const idx_t &len) {
 		if (len == 1) {
 			// Just '$'
 			return val;
@@ -303,7 +356,7 @@ private:
 			const auto &c = *ptr++;
 			if (c == '.') {
 				// Object
-				if (!IsObj<yyjson_t>(val)) {
+				if (!IsObj<YYJSON_VAL_T>(val)) {
 					return nullptr;
 				}
 				bool escaped = false;
@@ -313,7 +366,7 @@ private:
 					escaped = true;
 				}
 				auto key_len = ReadString(ptr, end, escaped);
-				val = ObjGetN<yyjson_t>(val, ptr, key_len);
+				val = ObjGetN<YYJSON_VAL_T>(val, ptr, key_len);
 				ptr += key_len;
 				if (escaped) {
 					// Skip past closing '"'
@@ -321,7 +374,7 @@ private:
 				}
 			} else if (c == '[') {
 				// Array
-				if (!IsArr<yyjson_t>(val)) {
+				if (!IsArr<YYJSON_VAL_T>(val)) {
 					return nullptr;
 				}
 				bool from_back = false;
@@ -339,10 +392,10 @@ private:
 				idx_t idx;
 				auto idx_len = ReadIndex(ptr, end, idx);
 				if (from_back) {
-					auto arr_size = ArrSize<yyjson_t>(val);
+					auto arr_size = ArrSize<YYJSON_VAL_T>(val);
 					idx = idx > arr_size ? arr_size : arr_size - idx;
 				}
-				val = ArrGet<yyjson_t>(val, idx);
+				val = ArrGet<YYJSON_VAL_T>(val, idx);
 				ptr += idx_len;
 				// Skip past closing ']'
 				ptr++;
@@ -398,41 +451,46 @@ private:
 		return idx >= (idx_t)IDX_T_MAX ? 0 : ptr - before;
 	}
 
-	template <class yyjson_t>
-	static inline bool IsObj(yyjson_t *val) {
-		throw InternalException("Unknown yyjson type");
+	template <class YYJSON_VAL_T>
+	static inline bool IsObj(YYJSON_VAL_T *val) {
+		throw InternalException("Unknown yyjson value type");
 	}
 
-	template <class yyjson_t>
-	static inline yyjson_t *ObjGetN(yyjson_t *val, const char *ptr, idx_t key_len) {
-		throw InternalException("Unknown yyjson type");
+	template <class YYJSON_VAL_T>
+	static inline YYJSON_VAL_T *ObjGetN(YYJSON_VAL_T *val, const char *ptr, idx_t key_len) {
+		throw InternalException("Unknown yyjson value type");
 	}
 
-	template <class yyjson_t>
-	static inline bool IsArr(yyjson_t *val) {
-		throw InternalException("Unknown yyjson type");
+	template <class YYJSON_VAL_T>
+	static inline bool IsArr(YYJSON_VAL_T *val) {
+		throw InternalException("Unknown yyjson value type");
 	}
 
-	template <class yyjson_t>
-	static inline size_t ArrSize(yyjson_t *val) {
-		throw InternalException("Unknown yyjson type");
+	template <class YYJSON_VAL_T>
+	static inline size_t ArrSize(YYJSON_VAL_T *val) {
+		throw InternalException("Unknown yyjson value type");
 	}
 
-	template <class yyjson_t>
-	static inline yyjson_t *ArrGet(yyjson_t *val, idx_t index) {
-		throw InternalException("Unknown yyjson type");
+	template <class YYJSON_VAL_T>
+	static inline YYJSON_VAL_T *ArrGet(YYJSON_VAL_T *val, idx_t index) {
+		throw InternalException("Unknown yyjson value type");
+	}
+
+	//! Wrapper around yyjson_mut_write so we don't have to free the malloc'ed char[]
+	static unique_ptr<char[]> MutWrite(yyjson_mut_doc *doc, idx_t &len) {
+		unique_ptr<char[]> result;
+		result.reset(yyjson_mut_write(doc, WRITE_FLAG, (size_t *)&len));
+		return result;
 	}
 
 public:
 	static void ThrowValFormatError(string error_string, yyjson_val *val) {
-		auto *mut_doc = yyjson_mut_doc_new(nullptr);
-		auto *mut_val = yyjson_val_mut_copy(mut_doc, val);
-		yyjson_mut_doc_set_root(mut_doc, mut_val);
+		auto mut_doc = CreateDocument();
+		auto *mut_val = yyjson_val_mut_copy(*mut_doc, val);
+		yyjson_mut_doc_set_root(*mut_doc, mut_val);
 		idx_t len;
-		auto data = yyjson_mut_write(mut_doc, WRITE_FLAG, (size_t *)&len);
-		error_string = StringUtil::Format(error_string, string(data, len));
-		free(data);
-		yyjson_mut_doc_free(mut_doc);
+		auto data = MutWrite(*mut_doc, len);
+		error_string = StringUtil::Format(error_string, string(data.get(), len));
 		throw InvalidInputException(error_string);
 	}
 
@@ -510,84 +568,6 @@ public:
 		}
 		if (strict) {
 			ThrowValFormatError("Failed to cast value to DECIMAL: %s", val);
-		}
-		return false;
-	}
-
-	static inline bool GetValueUUID(yyjson_val *val, hugeint_t &result, Vector &vector, bool strict) {
-		switch (yyjson_get_type(val)) {
-		case YYJSON_TYPE_NULL:
-		case YYJSON_TYPE_NONE:
-			return false;
-		case YYJSON_TYPE_STR: {
-			string error_message;
-			if (TryCastToUUID::Operation(GetStringFromVal(val), result, vector, &error_message, strict)) {
-				return true;
-			}
-			break;
-		}
-		case YYJSON_TYPE_NUM:
-		case YYJSON_TYPE_BOOL:
-		case YYJSON_TYPE_ARR:
-		case YYJSON_TYPE_OBJ:
-			break;
-		default:
-			throw InternalException("Unexpected yyjson type in GetValueUUID");
-		}
-		if (strict) {
-			ThrowValFormatError("Failed to cast value to UUID: %s", val);
-		}
-		return false;
-	}
-
-	template <class T, class OP>
-	static inline bool GetValueDateTime(yyjson_val *val, T &result, bool strict) {
-		switch (yyjson_get_type(val)) {
-		case YYJSON_TYPE_NULL:
-		case YYJSON_TYPE_NONE:
-			return false;
-		case YYJSON_TYPE_STR: {
-			string error_message;
-			if (OP::template Operation<string_t, T>(GetStringFromVal(val), result, &error_message, strict)) {
-				return true;
-			}
-			break;
-		}
-		case YYJSON_TYPE_NUM:
-		case YYJSON_TYPE_BOOL:
-		case YYJSON_TYPE_ARR:
-		case YYJSON_TYPE_OBJ:
-			break;
-		default:
-			throw InternalException("Unexpected yyjson type in GetValueDateTime");
-		}
-		if (strict) {
-			ThrowValFormatError("Failed to cast value to DateTime: %s", val);
-		}
-		return false;
-	}
-
-	template <class OP>
-	static inline bool GetValueTimestamp(yyjson_val *val, timestamp_t &result, bool strict) {
-		switch (yyjson_get_type(val)) {
-		case YYJSON_TYPE_NULL:
-		case YYJSON_TYPE_NONE:
-			return false;
-		case YYJSON_TYPE_STR:
-			if (OP::template Operation<string_t>(GetStringFromVal(val), result, strict)) {
-				return true;
-			}
-			break;
-		case YYJSON_TYPE_NUM:
-		case YYJSON_TYPE_BOOL:
-		case YYJSON_TYPE_ARR:
-		case YYJSON_TYPE_OBJ:
-			break;
-		default:
-			throw InternalException("Unexpected yyjson type in GetValueTimestamp");
-		}
-		if (strict) {
-			ThrowValFormatError("Failed to cast value to Timestamp: %s", val);
 		}
 		return false;
 	}

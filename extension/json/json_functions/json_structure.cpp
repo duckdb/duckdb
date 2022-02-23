@@ -161,10 +161,9 @@ static inline yyjson_mut_val *BuildStructure(yyjson_val *val, yyjson_mut_doc *st
 }
 
 static inline bool Structure(yyjson_val *val, string_t &result_val, Vector &result) {
-	auto structure_doc = yyjson_mut_doc_new(nullptr);
-	yyjson_mut_doc_set_root(structure_doc, BuildStructure(val, structure_doc));
-	result_val = JSONCommon::WriteVal(structure_doc, result);
-	yyjson_mut_doc_free(structure_doc);
+	auto structure_doc = JSONCommon::CreateDocument();
+	yyjson_mut_doc_set_root(*structure_doc, BuildStructure(val, *structure_doc));
+	result_val = JSONCommon::WriteVal(*structure_doc, result);
 	return true;
 }
 

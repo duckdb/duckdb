@@ -164,7 +164,6 @@ inline yyjson_mut_val *CreateJSONValue(yyjson_mut_doc *doc, const string_t &valu
 inline yyjson_mut_val *CreateJSONValueFromJSON(yyjson_mut_doc *doc, const string_t &value) {
 	auto value_doc = JSONCommon::ReadDocument(value);
 	auto result = yyjson_val_mut_copy(doc, value_doc->root);
-	yyjson_doc_free(value_doc);
 	return result;
 }
 
@@ -357,10 +356,10 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	const auto &info = (JSONCreateFunctionData &)*func_expr.bind_info;
 	// Initialize objects
 	const idx_t count = args.size();
-	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+	auto doc = JSONCommon::CreateDocument();
 	yyjson_mut_val *objs[STANDARD_VECTOR_SIZE];
 	for (idx_t i = 0; i < count; i++) {
-		objs[i] = yyjson_mut_obj(doc);
+		objs[i] = yyjson_mut_obj(*doc);
 	}
 	// Initialize a re-usable value array
 	yyjson_mut_val *vals[STANDARD_VECTOR_SIZE];
@@ -368,15 +367,14 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	for (idx_t pair_idx = 0; pair_idx < args.data.size() / 2; pair_idx++) {
 		Vector &key_v = args.data[pair_idx * 2];
 		Vector &value_v = args.data[pair_idx * 2 + 1];
-		CreateKeyValuePairs(info, doc, objs, vals, key_v, value_v, count);
+		CreateKeyValuePairs(info, *doc, objs, vals, key_v, value_v, count);
 	}
 	// Write JSON objects to string
 	auto objects = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
-		yyjson_mut_doc_set_root(doc, objs[i]);
-		objects[i] = JSONCommon::WriteVal(doc, result);
+		yyjson_mut_doc_set_root(*doc, objs[i]);
+		objects[i] = JSONCommon::WriteVal(*doc, result);
 	}
-	yyjson_mut_doc_free(doc);
 }
 
 static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -384,16 +382,16 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	const auto &info = (JSONCreateFunctionData &)*func_expr.bind_info;
 	// Initialize arrays
 	const idx_t count = args.size();
-	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+	auto doc = JSONCommon::CreateDocument();
 	yyjson_mut_val *arrs[STANDARD_VECTOR_SIZE];
 	for (idx_t i = 0; i < count; i++) {
-		arrs[i] = yyjson_mut_arr(doc);
+		arrs[i] = yyjson_mut_arr(*doc);
 	}
 	// Initialize a re-usable value array
 	yyjson_mut_val *vals[STANDARD_VECTOR_SIZE];
 	// Loop through args
 	for (auto &v : args.data) {
-		CreateValues(info, doc, vals, v, count);
+		CreateValues(info, *doc, vals, v, count);
 		for (idx_t i = 0; i < count; i++) {
 			yyjson_mut_arr_append(arrs[i], vals[i]);
 		}
@@ -401,10 +399,9 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	// Write JSON arrays to string
 	auto objects = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
-		yyjson_mut_doc_set_root(doc, arrs[i]);
-		objects[i] = JSONCommon::WriteVal(doc, result);
+		yyjson_mut_doc_set_root(*doc, arrs[i]);
+		objects[i] = JSONCommon::WriteVal(*doc, result);
 	}
-	yyjson_mut_doc_free(doc);
 }
 
 static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -412,9 +409,9 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	const auto &info = (JSONCreateFunctionData &)*func_expr.bind_info;
 	// Initialize array for values
 	const idx_t count = args.size();
-	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+	auto doc = JSONCommon::CreateDocument();
 	yyjson_mut_val *vals[STANDARD_VECTOR_SIZE];
-	CreateValues(info, doc, vals, args.data[0], count);
+	CreateValues(info, *doc, vals, args.data[0], count);
 	// Write JSON values to string
 	auto objects = FlatVector::GetData<string_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
@@ -423,13 +420,12 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = input_data.sel->get_index(i);
 		if (input_data.validity.RowIsValid(idx)) {
-			yyjson_mut_doc_set_root(doc, vals[i]);
-			objects[i] = JSONCommon::WriteVal(doc, result);
+			yyjson_mut_doc_set_root(*doc, vals[i]);
+			objects[i] = JSONCommon::WriteVal(*doc, result);
 		} else {
 			result_validity.SetInvalid(i);
 		}
 	}
-	yyjson_mut_doc_free(doc);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetObjectFunction() {

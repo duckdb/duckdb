@@ -540,6 +540,8 @@ string LogicalTypeIdToString(LogicalTypeId type);
 
 DUCKDB_API LogicalTypeId TransformStringToLogicalTypeId(const string &str);
 
+DUCKDB_API LogicalType TransformStringToLogicalType(const string &str);
+
 //! Returns the PhysicalType for the given type
 template <class T>
 PhysicalType GetTypeId() {

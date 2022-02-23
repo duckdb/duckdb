@@ -33,59 +33,6 @@ static LogicalType StructureToTypeObject(yyjson_val *obj) {
 	return LogicalType::STRUCT(child_types);
 }
 
-static LogicalType StructureToTypeVal(yyjson_val *val) {
-	auto type_string = StringUtil::Lower(yyjson_get_str(val));
-	LogicalType result;
-	if ((StringUtil::StartsWith(type_string, "decimal(") || StringUtil::StartsWith(type_string, "dec(") ||
-	     StringUtil::StartsWith(type_string, "numeric(")) &&
-	    StringUtil::EndsWith(type_string, ")")) {
-		// Parse the DECIMAL width and scale
-		auto start = type_string.find('(') + 1;
-		auto end = type_string.size() - 1;
-		auto ws_string = string(type_string.c_str() + start, end - start);
-		auto split = StringUtil::Split(ws_string, ',');
-		if (split.size() == 1 || split.size() == 2) {
-			vector<idx_t> ws;
-			for (auto &s : split) {
-				char *p_end = nullptr;
-				idx_t digit = strtoull(s.c_str(), &p_end, 10);
-				if (!p_end) {
-					throw InvalidInputException("unable to parse decimal type \"%s\"", type_string);
-				}
-				ws.push_back(digit);
-			}
-			if (ws[0] < 1 || ws[0] > 38) {
-				throw InvalidInputException("decimal width must be between 1 and 38");
-			}
-			if (ws.size() == 2 && ws[1] > ws[0]) {
-				throw InvalidInputException("decimal scale cannot be greater than width");
-			}
-			auto scale = ws.size() == 2 ? ws[1] : 0;
-			result = LogicalType::DECIMAL(ws[0], scale);
-		} else {
-			throw InvalidInputException("unable to parse decimal type \"%s\"", type_string);
-		}
-	} else {
-		result = TransformStringToLogicalTypeId(type_string);
-		switch (result.id()) {
-		case LogicalTypeId::DECIMAL:
-			// This is our default
-			result = LogicalType::DECIMAL(18, 3);
-			break;
-		case LogicalTypeId::ENUM:
-		case LogicalTypeId::USER:
-		case LogicalTypeId::STRUCT:
-		case LogicalTypeId::MAP:
-		case LogicalTypeId::LIST:
-			throw InvalidInputException("unsupported type in JSON structure: \"%s\"", type_string);
-		default:
-			break;
-		}
-	}
-	D_ASSERT(result != LogicalType::INVALID);
-	return result;
-}
-
 static LogicalType StructureToType(yyjson_val *val) {
 	switch (yyjson_get_type(val)) {
 	case YYJSON_TYPE_ARR:
@@ -93,7 +40,7 @@ static LogicalType StructureToType(yyjson_val *val) {
 	case YYJSON_TYPE_OBJ:
 		return StructureToTypeObject(val);
 	case YYJSON_TYPE_STR:
-		return StructureToTypeVal(val);
+		return TransformStringToLogicalType(StringUtil::Lower(yyjson_get_str(val)));
 	default:
 		throw InvalidInputException("invalid JSON structure");
 	}
@@ -113,7 +60,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 		}
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
 		auto doc = JSONCommon::ReadDocumentUnsafe(structure_string);
-		if (!doc) {
+		if (doc.IsNull()) {
 			throw InvalidInputException("malformed JSON structure");
 		}
 		bound_function.return_type = StructureToType(doc->root);
@@ -149,47 +96,35 @@ static void TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t cou
 	}
 }
 
-static void TransformUUID(yyjson_val *vals[], Vector &result, const idx_t count, const bool strict) {
-	auto data = (hugeint_t *)FlatVector::GetData(result);
-	auto &validity = FlatVector::Validity(result);
+static void TransformFromString(yyjson_val *vals[], Vector &result, const idx_t count, const LogicalType &target,
+                                const bool strict) {
+	Vector string_vector(LogicalTypeId::VARCHAR, count);
+	auto data = (string_t *)FlatVector::GetData(string_vector);
+	auto &validity = FlatVector::Validity(string_vector);
+
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
-		if (!val || yyjson_is_null(val) || !JSONCommon::GetValueUUID(val, data[i], result, strict)) {
+		if (!val || yyjson_is_null(val)) {
 			validity.SetInvalid(i);
+		} else if (strict && !yyjson_is_str(val)) {
+			JSONCommon::ThrowValFormatError("Unable to cast '%s' to " + LogicalTypeIdToString(target.id()), val);
+		} else {
+			data[i] = StringVector::AddString(string_vector, yyjson_get_str(val), yyjson_get_len(val));
 		}
+	}
+
+	string error_message;
+	if (!VectorOperations::TryCast(string_vector, result, count, &error_message, strict) && strict) {
+		throw InvalidInputException(error_message);
 	}
 }
 
-static void TransformString(yyjson_val *vals[], Vector &result, const idx_t count) {
+static void TransformToString(yyjson_val *vals[], Vector &result, const idx_t count) {
 	auto data = (string_t *)FlatVector::GetData(result);
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
 		if (!val || yyjson_is_null(val) || !JSONCommon::GetValueString(val, data[i], result)) {
-			validity.SetInvalid(i);
-		}
-	}
-}
-
-template <class T, class OP>
-static void TransformDateTime(yyjson_val *vals[], Vector &result, const idx_t count, const bool strict) {
-	auto data = (T *)FlatVector::GetData(result);
-	auto &validity = FlatVector::Validity(result);
-	for (idx_t i = 0; i < count; i++) {
-		const auto &val = vals[i];
-		if (!val || yyjson_is_null(val) || !JSONCommon::GetValueDateTime<T, OP>(val, data[i], strict)) {
-			validity.SetInvalid(i);
-		}
-	}
-}
-
-template <class OP>
-static void TransformTimestamp(yyjson_val *vals[], Vector &result, const idx_t count, const bool strict) {
-	auto data = (timestamp_t *)FlatVector::GetData(result);
-	auto &validity = FlatVector::Validity(result);
-	for (idx_t i = 0; i < count; i++) {
-		const auto &val = vals[i];
-		if (!val || yyjson_is_null(val) || !JSONCommon::GetValueTimestamp<OP>(val, data[i], strict)) {
 			validity.SetInvalid(i);
 		}
 	}
@@ -256,6 +191,8 @@ static void TransformArray(yyjson_val *vals[], Vector &result, const idx_t count
 static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, bool strict) {
 	auto result_type = result.GetType();
 	switch (result_type.id()) {
+	case LogicalTypeId::SQLNULL:
+		return;
 	case LogicalTypeId::BOOLEAN:
 		return TransformNumerical<bool>(vals, result, count, strict);
 	case LogicalTypeId::TINYINT:
@@ -276,8 +213,10 @@ static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, boo
 		return TransformNumerical<uint64_t>(vals, result, count, strict);
 	case LogicalTypeId::HUGEINT:
 		return TransformNumerical<hugeint_t>(vals, result, count, strict);
-	case LogicalTypeId::UUID:
-		return TransformUUID(vals, result, count, strict);
+	case LogicalTypeId::FLOAT:
+		return TransformNumerical<float>(vals, result, count, strict);
+	case LogicalTypeId::DOUBLE:
+		return TransformNumerical<double>(vals, result, count, strict);
 	case LogicalTypeId::DECIMAL: {
 		auto width = DecimalType::GetWidth(result_type);
 		auto scale = DecimalType::GetScale(result_type);
@@ -294,32 +233,21 @@ static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, boo
 			throw InternalException("Unimplemented internal type for decimal");
 		}
 	}
-	case LogicalTypeId::FLOAT:
-		return TransformNumerical<float>(vals, result, count, strict);
-	case LogicalTypeId::DOUBLE:
-		return TransformNumerical<double>(vals, result, count, strict);
 	case LogicalTypeId::DATE:
-		return TransformDateTime<date_t, TryCastErrorMessage>(vals, result, count, strict);
+	case LogicalTypeId::UUID:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
-		return TransformDateTime<dtime_t, TryCastErrorMessage>(vals, result, count, strict);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return TransformTimestamp<TryCast>(vals, result, count, strict);
 	case LogicalTypeId::TIMESTAMP_NS:
-		return TransformTimestamp<TryCastToTimestampNS>(vals, result, count, strict);
 	case LogicalTypeId::TIMESTAMP_MS:
-		return TransformTimestamp<TryCastToTimestampMS>(vals, result, count, strict);
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return TransformTimestamp<TryCastToTimestampSec>(vals, result, count, strict);
 	case LogicalTypeId::INTERVAL:
-		return TransformDateTime<interval_t, TryCastErrorMessage>(vals, result, count, strict);
+		return TransformFromString(vals, result, count, result_type, strict);
 	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
-		return TransformString(vals, result, count);
-	case LogicalTypeId::SQLNULL:
-		return;
+		return TransformToString(vals, result, count);
 	case LogicalTypeId::STRUCT:
 		return TransformObject(vals, result, count, result_type, strict);
 	case LogicalTypeId::LIST:
@@ -337,26 +265,23 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 	input.Orrify(count, input_data);
 	auto inputs = (string_t *)input_data.data;
 	// Read documents
-	yyjson_doc *docs[STANDARD_VECTOR_SIZE];
+	vector<DocPointer<yyjson_doc>> docs;
+	docs.reserve(count);
 	yyjson_val *vals[STANDARD_VECTOR_SIZE];
 	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(idx)) {
-			docs[i] = nullptr;
+			docs.emplace_back(nullptr);
 			vals[i] = nullptr;
 			result_validity.SetInvalid(i);
 		} else {
-			docs[i] = JSONCommon::ReadDocument(inputs[idx]);
-			vals[i] = docs[i]->root;
+			docs.emplace_back(JSONCommon::ReadDocument(inputs[idx]));
+			vals[i] = docs.back()->root;
 		}
 	}
 	// Transform
 	Transform(vals, result, count, strict);
-	// Free documents again
-	for (idx_t i = 0; i < count; i++) {
-		yyjson_doc_free(docs[i]);
-	}
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetTransformFunction() {

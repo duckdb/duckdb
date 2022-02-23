@@ -6,7 +6,7 @@ static void CheckPath(const Value &path_val, string &path, size_t &len) {
 	string error;
 	Value path_str_val;
 	if (!path_val.TryCastAs(LogicalType::VARCHAR, path_str_val, &error)) {
-		throw InvalidInputException("Cannot cast JSON path to VARCHAR");
+		throw InvalidInputException(error);
 	}
 	auto path_str = path_str_val.GetValueUnsafe<string_t>();
 	len = path_str.GetSize();

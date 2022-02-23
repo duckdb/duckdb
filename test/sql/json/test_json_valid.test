@@ -38,7 +38,7 @@ SELECT * FROM j1 WHERE NOT json_valid(x);
 query T
 SELECT json_valid('{"a":55,"b":72,}');
 ----
-false
+true
 
 query T
 SELECT json_valid('{"a":55,"b":72}');
@@ -48,7 +48,7 @@ true
 query T
 SELECT json_valid('["a",55,"b",72,]');
 ----
-false
+true
 
 query T
 SELECT json_valid('["a",55,"b",72]');

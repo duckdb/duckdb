@@ -1,21 +1,21 @@
 #include "duckdb/common/types.hpp"
 
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
-
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/parser.hpp"
 
 #include <cmath>
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
@@ -575,8 +575,11 @@ LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
 	}
 }
 
-LogicalTypeId TransformStringToLogicalType(const string &str) {
-
+LogicalType TransformStringToLogicalType(const string &str) {
+	if (StringUtil::Lower(str) == "null") {
+		return LogicalType::SQLNULL;
+	}
+	return Parser::ParseColumnList("dummy " + str)[0].type;
 }
 
 bool LogicalType::IsIntegral() const {
