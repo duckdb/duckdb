@@ -33,7 +33,7 @@ string PragmaFunctionsQuery(ClientContext &context, const FunctionParameters &pa
 string PragmaShow(ClientContext &context, const FunctionParameters &parameters) {
 	// PRAGMA table_info but with some aliases
 	return StringUtil::Format(
-	    "SELECT name AS \"colomn_name\", type as \"column_type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' "
+	    "SELECT name AS \"column_name\", type as \"column_type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' "
 	    "END AS \"null\", NULL AS \"key\", dflt_value AS \"default\", NULL AS \"extra\" FROM pragma_table_info('%s')",
 	    parameters.values[0].ToString());
 }
