@@ -457,8 +457,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContex
 		create_info->constraints.push_back(move(constraint));
 	}
 	if (info.is_fk_add) {
-		create_info->constraints.push_back(make_unique<ForeignKeyConstraint>(info.fk_table, info.pk_columns, info.pk_keys,
-																			info.fk_columns, info.fk_keys, false));
+		create_info->constraints.push_back(make_unique<ForeignKeyConstraint>(
+		    info.fk_table, info.pk_columns, info.pk_keys, info.fk_columns, info.fk_keys, false));
 	}
 
 	auto binder = Binder::CreateBinder(context);
@@ -548,7 +548,7 @@ string TableCatalogEntry::ToSQL() {
 				}
 				extra_constraints.push_back(constraint->ToString());
 			}
-		} else {
+		} else if (constraint->type != ConstraintType::FOREIGN_KEY) {
 			extra_constraints.push_back(constraint->ToString());
 		}
 	}

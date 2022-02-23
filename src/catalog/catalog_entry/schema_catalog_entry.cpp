@@ -214,19 +214,23 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 	string pk_table;
 	vector<string> pk_columns, fk_columns;
 	vector<idx_t> pk_keys, fk_keys;
-	auto *table_entry = (TableCatalogEntry *)existing_entry;
-	for (idx_t i = 0; i < table_entry->bound_constraints.size(); i++) {
-		auto &cond = table_entry->bound_constraints[i];
-		if (cond->type == ConstraintType::FOREIGN_KEY) {
-			auto &foreign_key = (ForeignKeyConstraint &)*cond;
-			if (foreign_key.is_fk_table) {
-				is_found = true;
-				pk_table = foreign_key.pk_table;
-				pk_columns = foreign_key.pk_columns;
-				pk_keys = foreign_key.pk_keys;
-				fk_columns = foreign_key.fk_columns;
-				fk_keys = foreign_key.fk_keys;
-				break;
+	if (existing_entry->type == CatalogType::TABLE_ENTRY) {
+		auto *table_entry = (TableCatalogEntry *)existing_entry;
+		for (idx_t i = 0; i < table_entry->constraints.size(); i++) {
+			auto &cond = table_entry->constraints[i];
+			if (cond->type == ConstraintType::FOREIGN_KEY) {
+				auto &foreign_key = (ForeignKeyConstraint &)*cond;
+				if (foreign_key.is_fk_table) {
+					is_found = true;
+					pk_table = foreign_key.pk_table;
+					pk_columns = foreign_key.pk_columns;
+					pk_keys = foreign_key.pk_keys;
+					fk_columns = foreign_key.fk_columns;
+					fk_keys = foreign_key.fk_keys;
+					break;
+				} else {
+					throw CatalogException("Could not drop the table because this table is main key table of the table\"%s\"", foreign_key.pk_table);
+				}
 			}
 		}
 	}
@@ -237,10 +241,10 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 
 	// remove the foreign key constraint in main key table if main key table's name is valid
 	if (is_found) {
-		// alter primary key table
+		// alter primary key tablee
 		auto &catalog = Catalog::GetCatalog(context);
 		unique_ptr<ForeignKeyConstraintInfo> info = make_unique<ForeignKeyConstraintInfo>(
-			DEFAULT_SCHEMA, pk_table, table_entry->name, pk_columns, fk_columns, pk_keys, fk_keys, false);
+		    DEFAULT_SCHEMA, pk_table, existing_entry->name, pk_columns, fk_columns, pk_keys, fk_keys, false);
 		catalog.Alter(context, info.get());
 	}
 }

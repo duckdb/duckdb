@@ -34,11 +34,11 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 			pk_columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
 		}
 		if (pk_columns.size() != fk_columns.size()) {
-			throw ParserException(
-			    "The number of referencing and referenced columns for foreign keys must be the same");
+			throw ParserException("The number of referencing and referenced columns for foreign keys must be the same");
 		}
 		if (fk_columns.size() <= 0) {
-			throw ParserException("The number of referencing and referenced columns for foreign keys must be greater than 0");
+			throw ParserException(
+			    "The number of referencing and referenced columns for foreign keys must be greater than 0");
 		}
 		vector<idx_t> pk_keys, fk_keys;
 		return make_unique<ForeignKeyConstraint>(move(pk_table), move(pk_columns), move(pk_keys), move(fk_columns),
