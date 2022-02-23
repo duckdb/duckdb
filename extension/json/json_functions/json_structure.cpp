@@ -49,70 +49,66 @@ static inline yyjson_mut_val *GetConsistentArrayStructureObject(const vector<yyj
 	return result;
 }
 
-static inline bool StringEquals(const char *lhs, const char *rhs) {
-	return strcmp(lhs, rhs) == 0;
-}
-
-static inline bool EitherEquals(const char *s1, const char *s2, const char *target) {
-	return StringEquals(s1, target) || StringEquals(s2, target);
-}
-
-static inline void GetMaxTypeString(const char *type_string, const char *elem_type_string, const char **result) {
-	if (!type_string) {
-		*result = elem_type_string;
-	} else if (!elem_type_string) {
-		*result = type_string;
-	} else if (StringEquals(type_string, elem_type_string)) {
-		*result = type_string;
-	} else if (EitherEquals(type_string, elem_type_string, JSONCommon::TYPE_STRING_VARCHAR)) {
-		*result = JSONCommon::TYPE_STRING_VARCHAR;
-	} else if (EitherEquals(type_string, elem_type_string, JSONCommon::TYPE_STRING_DOUBLE)) {
-		*result = JSONCommon::TYPE_STRING_DOUBLE;
-	} else if (EitherEquals(type_string, elem_type_string, JSONCommon::TYPE_STRING_BIGINT)) {
-		*result = JSONCommon::TYPE_STRING_BIGINT;
-	} else if (EitherEquals(type_string, elem_type_string, JSONCommon::TYPE_STRING_UBIGINT)) {
-		*result = JSONCommon::TYPE_STRING_UBIGINT;
-	} else {
-		D_ASSERT(StringEquals(type_string, JSONCommon::TYPE_STRING_BOOLEAN) &&
-		         StringEquals(elem_type_string, JSONCommon::TYPE_STRING_BOOLEAN));
-		*result = JSONCommon::TYPE_STRING_BOOLEAN;
+static inline yyjson_mut_val *GetMaxTypeVal(yyjson_mut_val *a, yyjson_mut_val *b) {
+	auto a_type = yyjson_mut_get_type(a);
+	auto b_type = yyjson_mut_get_type(b);
+	if (a_type == YYJSON_TYPE_NULL) {
+		return b;
+	} else if (b_type == YYJSON_TYPE_NULL) {
+		return a;
+	} else if (a_type == YYJSON_TYPE_ARR) {
+		if (b_type != YYJSON_TYPE_ARR) {
+			throw InvalidInputException("Inconsistent JSON structure");
+		} else {
+			return a;
+		}
+	} else if (a_type == YYJSON_TYPE_OBJ) {
+		if (b_type != YYJSON_TYPE_OBJ) {
+			throw InvalidInputException("Inconsistent JSON structure");
+		} else {
+			return a;
+		}
+	} else if (a_type == YYJSON_TYPE_STR) {
+		return a;
+	} else if (b_type == YYJSON_TYPE_STR) {
+		return b;
 	}
+	auto a_subtype = yyjson_mut_get_subtype(a);
+	auto b_subtype = yyjson_mut_get_subtype(b);
+	if (a_subtype == YYJSON_SUBTYPE_REAL) {
+		return a;
+	} else if (b_subtype == YYJSON_SUBTYPE_REAL) {
+		return b;
+	} else if (a_subtype == YYJSON_SUBTYPE_SINT) {
+		return a;
+	} else if (b_subtype == YYJSON_SUBTYPE_SINT) {
+		return b;
+	} else if (a_subtype == YYJSON_SUBTYPE_UINT) {
+		return a;
+	} else if (b_subtype == YYJSON_SUBTYPE_UINT) {
+		return b;
+	}
+	D_ASSERT(a_type == YYJSON_TYPE_BOOL && b_type == YYJSON_TYPE_BOOL);
+	return a;
 }
 
+//! Arrays must have compatible types
 static inline yyjson_mut_val *GetConsistentArrayStructure(const vector<yyjson_mut_val *> &elem_structures,
                                                           yyjson_mut_doc *structure_doc) {
 	if (elem_structures.empty()) {
-		return yyjson_mut_str(structure_doc, JSONCommon::TYPE_STRING_NULL);
+		return yyjson_mut_null(structure_doc);
 	}
-	auto type = yyjson_mut_get_type(elem_structures[0]);
-	auto type_string = yyjson_mut_get_str(elem_structures[0]);
+	auto val = elem_structures[0];
 	for (idx_t i = 1; i < elem_structures.size(); i++) {
-		auto elem_type = yyjson_mut_get_type(elem_structures[i]);
-		auto elem_type_string = yyjson_mut_get_str(elem_structures[i]);
-		if (type_string && strcmp(type_string, JSONCommon::TYPE_STRING_NULL) == 0) {
-			// Iterate until we find non-null
-			type = elem_type;
-			type_string = elem_type_string;
-			continue;
-		}
-		if (elem_type_string && strcmp(elem_type_string, JSONCommon::TYPE_STRING_NULL) == 0) {
-			// Skip over encountered nulls after we found one
-			continue;
-		}
-		if (type != elem_type) {
-			throw InvalidInputException("Inconsistent JSON structure");
-		}
-		GetMaxTypeString(type_string, elem_type_string, &type_string);
+		val = GetMaxTypeVal(val, elem_structures[i]);
 	}
-	switch (type) {
+	switch (yyjson_mut_get_type(val)) {
 	case YYJSON_TYPE_ARR:
 		return GetConsistentArrayStructureArray(elem_structures, structure_doc);
 	case YYJSON_TYPE_OBJ:
 		return GetConsistentArrayStructureObject(elem_structures, structure_doc);
-	case YYJSON_TYPE_STR:
-		return yyjson_mut_str(structure_doc, type_string);
 	default:
-		throw InternalException("Unexpected JSON type arrived at GetConsistentArrayStructure");
+		return val;
 	}
 }
 
@@ -156,13 +152,45 @@ static inline yyjson_mut_val *BuildStructure(yyjson_val *val, yyjson_mut_doc *st
 	case YYJSON_TYPE_OBJ:
 		return BuildStructureObject(val, structure_doc);
 	default:
-		return yyjson_mut_str(structure_doc, JSONCommon::ValTypeToString(val));
+		return yyjson_val_mut_copy(structure_doc, val);
+	}
+}
+
+//! Forward declaration for recursion
+static inline yyjson_mut_val *ConvertStructure(yyjson_mut_val *val, yyjson_mut_doc *structure_doc);
+
+static inline yyjson_mut_val *ConvertStructureArray(yyjson_mut_val *arr, yyjson_mut_doc *structure_doc) {
+	D_ASSERT(yyjson_mut_arr_size(arr) == 1);
+	yyjson_mut_arr_insert(arr, ConvertStructure(yyjson_mut_arr_remove_first(arr), structure_doc), 0);
+	return arr;
+}
+
+static inline yyjson_mut_val *ConvertStructureObject(yyjson_mut_val *obj, yyjson_mut_doc *structure_doc) {
+	yyjson_mut_val *key;
+	yyjson_mut_obj_iter iter;
+	yyjson_mut_obj_iter_init(obj, &iter);
+	while ((key = yyjson_mut_obj_iter_next(&iter))) {
+		yyjson_mut_obj_replace(obj, key, ConvertStructure(yyjson_mut_obj_iter_get_val(key), structure_doc));
+	}
+	return obj;
+}
+
+//! Convert structure to contain type strings
+static inline yyjson_mut_val *ConvertStructure(yyjson_mut_val *val, yyjson_mut_doc *structure_doc) {
+	switch (yyjson_mut_get_type(val)) {
+	case YYJSON_TYPE_ARR:
+		return ConvertStructureArray(val, structure_doc);
+	case YYJSON_TYPE_OBJ:
+		return ConvertStructureObject(val, structure_doc);
+	default:
+		return yyjson_mut_str(structure_doc, JSONCommon::ValTypeToString<yyjson_mut_val>(val));
 	}
 }
 
 static inline bool Structure(yyjson_val *val, string_t &result_val, Vector &result) {
 	auto structure_doc = JSONCommon::CreateDocument();
-	yyjson_mut_doc_set_root(*structure_doc, BuildStructure(val, *structure_doc));
+	auto structure = BuildStructure(val, *structure_doc);
+	yyjson_mut_doc_set_root(*structure_doc, ConvertStructure(structure, *structure_doc));
 	result_val = JSONCommon::WriteVal(*structure_doc, result);
 	return true;
 }

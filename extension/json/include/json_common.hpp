@@ -154,14 +154,15 @@ public:
 	}
 
 	//! Get type string corresponding to yyjson type
-	static inline const char *const ValTypeToString(yyjson_val *val) {
-		switch (yyjson_get_type(val)) {
+	template <class YYJSON_VAL_T>
+	static inline const char *const ValTypeToString(YYJSON_VAL_T *val) {
+		switch (GetType<YYJSON_VAL_T>(val)) {
 		case YYJSON_TYPE_NULL:
 			return JSONCommon::TYPE_STRING_NULL;
 		case YYJSON_TYPE_BOOL:
 			return JSONCommon::TYPE_STRING_BOOLEAN;
 		case YYJSON_TYPE_NUM:
-			switch (unsafe_yyjson_get_subtype(val)) {
+			switch (GetSubType<YYJSON_VAL_T>(val)) {
 			case YYJSON_SUBTYPE_UINT:
 				return JSONCommon::TYPE_STRING_UBIGINT;
 			case YYJSON_SUBTYPE_SINT:
@@ -476,6 +477,16 @@ private:
 		throw InternalException("Unknown yyjson value type");
 	}
 
+	template <class YYJSON_VAL_T>
+	static inline yyjson_type GetType(YYJSON_VAL_T *val) {
+		throw InternalException("Unknown yyjson value type");
+	}
+
+	template <class YYJSON_VAL_T>
+	static inline yyjson_subtype GetSubType(YYJSON_VAL_T *val) {
+		throw InternalException("Unknown yyjson value type");
+	}
+
 	//! Wrapper around yyjson_mut_write so we don't have to free the malloc'ed char[]
 	static unique_ptr<char[]> MutWrite(yyjson_mut_doc *doc, idx_t &len) {
 		unique_ptr<char[]> result;
@@ -695,6 +706,24 @@ inline yyjson_val *JSONCommon::ArrGet(yyjson_val *val, idx_t index) {
 template <>
 inline yyjson_mut_val *JSONCommon::ArrGet(yyjson_mut_val *val, idx_t index) {
 	return yyjson_mut_arr_get(val, index);
+}
+
+template <>
+inline yyjson_type JSONCommon::GetType(yyjson_val *val) {
+	return yyjson_get_type(val);
+}
+template <>
+inline yyjson_type JSONCommon::GetType(yyjson_mut_val *val) {
+	return yyjson_mut_get_type(val);
+}
+
+template <>
+inline yyjson_subtype JSONCommon::GetSubType(yyjson_val *val) {
+	return yyjson_get_subtype(val);
+}
+template <>
+inline yyjson_subtype JSONCommon::GetSubType(yyjson_mut_val *val) {
+	return yyjson_mut_get_subtype(val);
 }
 
 } // namespace duckdb

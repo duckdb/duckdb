@@ -4,6 +4,16 @@
 
 require json
 
+
+
+query T
+select json_structure('[true,null,false,1]')
+----
+["UBIGINT"]
+
+
+
+
 statement ok
 pragma enable_verification
 

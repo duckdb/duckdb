@@ -230,11 +230,13 @@ static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, boo
 		case PhysicalType::INT128:
 			return TransformDecimal<hugeint_t>(vals, result, count, width, scale, strict);
 		default:
-			throw InternalException("Unimplemented internal type for decimal");
+			throw InternalException("Unimplemented physical type for decimal");
 		}
 	}
+	case LogicalTypeId::AGGREGATE_STATE:
+	case LogicalTypeId::ENUM:
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::UUID:
+	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
@@ -242,7 +244,7 @@ static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, boo
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::UUID:
 		return TransformFromString(vals, result, count, result_type, strict);
 	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
@@ -253,7 +255,7 @@ static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, boo
 	case LogicalTypeId::LIST:
 		return TransformArray(vals, result, count, strict);
 	default:
-		throw InternalException("Unexpected type arrived at Transform");
+		throw InternalException("Unexpected type at JSON Transform %s", LogicalTypeIdToString(result_type.id()));
 	}
 }
 
