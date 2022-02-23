@@ -147,9 +147,9 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	// write the load.sql file
 	// for every table, we write COPY INTO statement with the specified options
 	stringstream load_ss;
-	for (auto const &kv : exported_tables.data) {
-		auto table = kv.first;
-		auto exported_table_info = kv.second;
+	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
+		auto table = exported_tables.data[i].entry;
+		auto exported_table_info = exported_tables.data[i].table_data;
 		WriteCopyStatement(fs, load_ss, table, *info, exported_table_info, function);
 	}
 	WriteStringStreamToFile(fs, opener, load_ss, fs.JoinPath(info->file_path, "load.sql"));

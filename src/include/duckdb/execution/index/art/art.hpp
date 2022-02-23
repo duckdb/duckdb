@@ -62,7 +62,7 @@ struct ARTIndexScanState : public IndexScanState {
 	idx_t result_index = 0;
 };
 
-enum VerifyExistanceType : uint8_t {
+enum VerifyExistenceType : uint8_t {
 	APPEND = 0,    // for purpose to append into table
 	APPEND_FK = 1, // for purpose to append into table has foreign key
 	DELETE_FK = 2  // for purpose to delete from table related to foreign key
@@ -147,7 +147,7 @@ private:
 
 	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);
 
-	void VerifyExistence(DataChunk &chunk, VerifyExistanceType verify_type);
+	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type);
 };
 
 } // namespace duckdb

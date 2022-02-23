@@ -452,14 +452,11 @@ static TableIndexList &GetForeignKeyConstraintIndicesAndChunk(const string &tabl
 	for (idx_t i = 0; i < table_entry_ptr->columns.size(); i++) {
 		types.emplace_back(table_entry_ptr->columns[i].type);
 	}
-	dst_chunk.Initialize(types);
-	dst_chunk.SetCardinality(src_chunk.size());
-	for (idx_t idx = 0; idx < src_chunk.size(); idx++) {
-		for (idx_t i = 0; i < src_keys.size(); i++) {
-			Value val = src_chunk.GetValue(src_keys[i], idx);
-			dst_chunk.SetValue(dst_keys[i], idx, val);
-		}
+	dst_chunk.InitializeEmpty(types);
+	for (idx_t i = 0; i < src_keys.size(); i++) {
+		dst_chunk.data[dst_keys[i]].Reference(src_chunk.data[src_keys[i]]);
 	}
+	dst_chunk.SetCardinality(src_chunk.size());
 
 	return indices;
 }
@@ -973,16 +970,8 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, ClientContext 
 			break;
 		}
 		case ConstraintType::UNIQUE:
+		case ConstraintType::FOREIGN_KEY:
 			break;
-		case ConstraintType::FOREIGN_KEY: {
-			auto &foreign_key = *reinterpret_cast<BoundForeignKeyConstraint *>(constraint.get());
-			if (foreign_key.is_fk_table) {
-				VerifyAppendForeignKeyConstraint(foreign_key, context, chunk);
-			} else {
-				VerifyDeleteForeignKeyConstraint(foreign_key, context, chunk);
-			}
-			break;
-		}
 		default:
 			throw NotImplementedException("Constraint type not implemented!");
 		}

@@ -1,0 +1,27 @@
+# name: test/sql/constraints/foreignkey/test_fk_roolback.test
+# description: FOREIGN KEY and transactions
+# group: [foreignkey]
+
+statement ok
+CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk_integers VALUES (1);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
+
+# can't delete the primary table because of dependency
+statement error
+DROP TABLE pk_integers
+
+statement ok
+ROLLBACK
+
+# can delete the primary table because no exist dependency
+statement ok
+DROP TABLE pk_integers
+

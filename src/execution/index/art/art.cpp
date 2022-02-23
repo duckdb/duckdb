@@ -266,15 +266,15 @@ bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifi
 }
 
 void ART::VerifyAppend(DataChunk &chunk) {
-	VerifyExistence(chunk, VerifyExistanceType::APPEND);
+	VerifyExistence(chunk, VerifyExistenceType::APPEND);
 }
 
 void ART::VerifyAppendForeignKey(DataChunk &chunk) {
-	VerifyExistence(chunk, VerifyExistanceType::APPEND_FK);
+	VerifyExistence(chunk, VerifyExistenceType::APPEND_FK);
 }
 
 void ART::VerifyDeleteForeignKey(DataChunk &chunk) {
-	VerifyExistence(chunk, VerifyExistanceType::DELETE_FK);
+	VerifyExistence(chunk, VerifyExistenceType::DELETE_FK);
 }
 
 bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
@@ -853,8 +853,8 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 	return true;
 }
 
-void ART::VerifyExistence(DataChunk &chunk, VerifyExistanceType verify_type) {
-	if (verify_type != VerifyExistanceType::DELETE_FK && !is_unique) {
+void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type) {
+	if (verify_type != VerifyExistenceType::DELETE_FK && !is_unique) {
 		return;
 	}
 
@@ -875,27 +875,8 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistanceType verify_type) {
 			continue;
 		}
 		Node *node_ptr = Lookup(tree, *keys[i], 0);
-		bool throw_exception = false;
-		switch (verify_type) {
-		case VerifyExistanceType::APPEND: {
-			if (node_ptr != nullptr) {
-				throw_exception = true;
-			}
-			break;
-		}
-		case VerifyExistanceType::APPEND_FK: {
-			if (node_ptr == nullptr) {
-				throw_exception = true;
-			}
-			break;
-		}
-		case VerifyExistanceType::DELETE_FK: {
-			if (node_ptr != nullptr) {
-				throw_exception = true;
-			}
-			break;
-		}
-		}
+		bool throw_exception =
+		    verify_type == VerifyExistenceType::APPEND_FK ? node_ptr == nullptr : node_ptr != nullptr;
 		if (throw_exception) {
 			string key_name;
 			for (idx_t k = 0; k < expression_result.ColumnCount(); k++) {
@@ -905,23 +886,20 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistanceType verify_type) {
 				key_name += unbound_expressions[k]->GetName() + ": " + expression_result.data[k].GetValue(i).ToString();
 			}
 			switch (verify_type) {
-			case VerifyExistanceType::APPEND: {
+			case VerifyExistenceType::APPEND: {
 				// node already exists in tree
 				throw ConstraintException("duplicate key \"%s\" violates %s constraint", key_name,
 				                          is_primary ? "primary key" : "unique");
-				break;
 			}
-			case VerifyExistanceType::APPEND_FK: {
+			case VerifyExistenceType::APPEND_FK: {
 				// found node no exists in tree
 				throw ConstraintException(
 				    "violates foreign key constraint because key \"%s\" no exist in referenced table", key_name);
-				break;
 			}
-			case VerifyExistanceType::DELETE_FK: {
+			case VerifyExistenceType::DELETE_FK: {
 				// found node exists in tree
 				throw ConstraintException(
 				    "violates foreign key constraint because key \"%s\" exist in table has foreign key", key_name);
-				break;
 			}
 			}
 		}
