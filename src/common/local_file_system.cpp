@@ -52,26 +52,32 @@ static void AssertValidFileFlags(uint8_t flags) {
 
 #ifdef __MINGW32__
 bool LocalFileSystem::FileExists(const string &filename) {
-	if (_access(filename.c_str(), 0) == 0) {
-		struct stat status;
-		stat(filename.c_str(), &status);
+	int wchars_num = MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, NULL, 0);
+	wchar_t *wpath = new wchar_t[wchars_num];
+	MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, wpath, wchars_num);
+	if (_waccess(wpath, 0) == 0) {
+		struct _stat64i32 status;
+		_wstat(wpath, &status);
 		if (status.st_size > 0) {
 			return true;
 		}
 	}
 	return false;
 }
-
 bool LocalFileSystem::IsPipe(const string &filename) {
-	if (_access(filename.c_str(), 0) == 0) {
-		struct stat status;
-		stat(filename.c_str(), &status);
+	int wchars_num = MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, NULL, 0);
+	wchar_t *wpath = new wchar_t[wchars_num];
+	MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, wpath, wchars_num);
+	if (_waccess(wpath, 0) == 0) {
+		struct _stat64i32 status;
+		_wstat(wpath, &status);
 		if (status.st_size == 0) {
 			return true;
 		}
 	}
 	return false;
 }
+
 #else
 #ifndef _WIN32
 bool LocalFileSystem::FileExists(const string &filename) {
