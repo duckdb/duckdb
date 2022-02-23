@@ -970,8 +970,16 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, ClientContext 
 			break;
 		}
 		case ConstraintType::UNIQUE:
-		case ConstraintType::FOREIGN_KEY:
 			break;
+		case ConstraintType::FOREIGN_KEY: {
+			auto &foreign_key = *reinterpret_cast<BoundForeignKeyConstraint *>(constraint.get());
+			if (foreign_key.is_fk_table) {
+				VerifyAppendForeignKeyConstraint(foreign_key, context, chunk);
+			} else {
+				VerifyDeleteForeignKeyConstraint(foreign_key, context, chunk);
+			}
+			break;
+		}
 		default:
 			throw NotImplementedException("Constraint type not implemented!");
 		}
