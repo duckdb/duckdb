@@ -66,7 +66,7 @@ static LogicalType StructureToTypeVal(yyjson_val *val) {
 			throw InvalidInputException("unable to parse decimal type \"%s\"", type_string);
 		}
 	} else {
-		result = TransformStringToLogicalType(type_string);
+		result = TransformStringToLogicalTypeId(type_string);
 		switch (result.id()) {
 		case LogicalTypeId::DECIMAL:
 			// This is our default

@@ -504,7 +504,7 @@ string LogicalType::ToString() const {
 }
 // LCOV_EXCL_STOP
 
-LogicalTypeId TransformStringToLogicalType(const string &str) {
+LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
 	auto lower_str = StringUtil::Lower(str);
 	// Transform column type
 	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed" || lower_str == "integer" ||
@@ -573,6 +573,10 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		// It is checked in the binder
 		return LogicalTypeId::USER;
 	}
+}
+
+LogicalTypeId TransformStringToLogicalType(const string &str) {
+
 }
 
 bool LogicalType::IsIntegral() const {

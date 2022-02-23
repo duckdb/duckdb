@@ -538,7 +538,7 @@ struct AggregateStateType {
 
 string LogicalTypeIdToString(LogicalTypeId type);
 
-DUCKDB_API LogicalTypeId TransformStringToLogicalType(const string &str);
+DUCKDB_API LogicalTypeId TransformStringToLogicalTypeId(const string &str);
 
 //! Returns the PhysicalType for the given type
 template <class T>
