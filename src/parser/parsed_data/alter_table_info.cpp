@@ -259,16 +259,16 @@ unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(FieldReader &reader, string sc
 //===--------------------------------------------------------------------===//
 ForeignKeyConstraintInfo::ForeignKeyConstraintInfo(string schema_p, string table_p, string fk_table,
                                                    vector<string> pk_columns, vector<string> fk_columns,
-                                                   vector<idx_t> pk_keys, vector<idx_t> fk_keys)
+                                                   vector<idx_t> pk_keys, vector<idx_t> fk_keys, bool is_add_fk)
     : AlterTableInfo(AlterTableType::FOREIGN_KEY_CONSTR, move(schema_p), move(table_p)), fk_table(move(fk_table)),
-      pk_columns(move(pk_columns)), fk_columns(move(fk_columns)), pk_keys(move(pk_keys)), fk_keys(move(fk_keys)) {
+      pk_columns(move(pk_columns)), fk_columns(move(fk_columns)), pk_keys(move(pk_keys)), fk_keys(move(fk_keys)), is_fk_add(is_fk_add) {
 }
 ForeignKeyConstraintInfo::~ForeignKeyConstraintInfo() {
 }
 
 unique_ptr<AlterInfo> ForeignKeyConstraintInfo::Copy() const {
 	return make_unique_base<AlterInfo, ForeignKeyConstraintInfo>(schema, name, fk_table, pk_columns, fk_columns,
-	                                                             pk_keys, fk_keys);
+	                                                             pk_keys, fk_keys, is_fk_add);
 }
 
 void ForeignKeyConstraintInfo::SerializeAlterTable(FieldWriter &writer) const {
@@ -277,6 +277,7 @@ void ForeignKeyConstraintInfo::SerializeAlterTable(FieldWriter &writer) const {
 	writer.WriteList<string>(fk_columns);
 	writer.WriteList<idx_t>(pk_keys);
 	writer.WriteList<idx_t>(fk_keys);
+	writer.WriteField<bool>(is_fk_add);
 }
 
 unique_ptr<AlterInfo> ForeignKeyConstraintInfo::Deserialize(FieldReader &reader, string schema, string table) {
@@ -285,8 +286,9 @@ unique_ptr<AlterInfo> ForeignKeyConstraintInfo::Deserialize(FieldReader &reader,
 	auto fk_columns = reader.ReadRequiredList<string>();
 	auto pk_keys = reader.ReadRequiredList<idx_t>();
 	auto fk_keys = reader.ReadRequiredList<idx_t>();
+	auto is_fk_add = reader.ReadRequired<bool>();
 	return make_unique<ForeignKeyConstraintInfo>(move(schema), move(table), move(fk_table), move(pk_columns),
-	                                             move(fk_columns), move(pk_keys), move(fk_keys));
+	                                             move(fk_columns), move(pk_keys), move(fk_keys), is_fk_add);
 }
 
 //===--------------------------------------------------------------------===//

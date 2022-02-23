@@ -7,9 +7,9 @@
 namespace duckdb {
 
 ForeignKeyConstraint::ForeignKeyConstraint(string pk_table, vector<string> pk_columns, vector<idx_t> pk_keys,
-                                           vector<string> fk_columns, bool is_fk_table)
+                                           vector<string> fk_columns, vector<idx_t> fk_keys, bool is_fk_table)
     : Constraint(ConstraintType::FOREIGN_KEY), pk_table(move(pk_table)), pk_columns(move(pk_columns)),
-      pk_keys(move(pk_keys)), fk_columns(move(fk_columns)), is_fk_table(is_fk_table) {
+      pk_keys(move(pk_keys)), fk_columns(move(fk_columns)), fk_keys(move(fk_keys)), is_fk_table(is_fk_table) {
 }
 
 string ForeignKeyConstraint::ToString() const {
@@ -41,7 +41,7 @@ string ForeignKeyConstraint::ToString() const {
 }
 
 unique_ptr<Constraint> ForeignKeyConstraint::Copy() const {
-	return make_unique<ForeignKeyConstraint>(pk_table, pk_columns, pk_keys, fk_columns, is_fk_table);
+	return make_unique<ForeignKeyConstraint>(pk_table, pk_columns, pk_keys, fk_columns, fk_keys, is_fk_table);
 }
 
 void ForeignKeyConstraint::Serialize(FieldWriter &writer) const {
@@ -51,6 +51,7 @@ void ForeignKeyConstraint::Serialize(FieldWriter &writer) const {
 	writer.WriteList<idx_t>(pk_keys);
 	D_ASSERT(fk_columns.size() <= NumericLimits<uint32_t>::Maximum());
 	writer.WriteList<string>(fk_columns);
+	writer.WriteList<idx_t>(fk_keys);
 	writer.WriteField<bool>(is_fk_table);
 }
 
@@ -59,10 +60,12 @@ unique_ptr<Constraint> ForeignKeyConstraint::Deserialize(FieldReader &source) {
 	auto pk_columns = source.ReadRequiredList<string>();
 	auto pk_keys = source.ReadRequiredList<idx_t>();
 	auto fk_columns = source.ReadRequiredList<string>();
+	auto fk_keys = source.ReadRequiredList<idx_t>();
 	auto is_fk_table = source.ReadRequired<bool>();
 
 	// column list parsed constraint
-	return make_unique<ForeignKeyConstraint>(pk_table, move(pk_columns), move(pk_keys), move(fk_columns), is_fk_table);
+	return make_unique<ForeignKeyConstraint>(pk_table, move(pk_columns), move(pk_keys), move(fk_columns), move(fk_keys),
+	                                         is_fk_table);
 }
 
 } // namespace duckdb

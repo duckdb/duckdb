@@ -128,11 +128,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	if (info->type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
 	}
-	for (idx_t i = 0; i < constraints.size(); i++) {
-		if (constraints[i]->type == ConstraintType::FOREIGN_KEY) {
-			throw ConstraintException("Can't alter table has FOREIGN KEY constraint");
-		}
-	}
 	auto table_info = (AlterTableInfo *)info;
 	switch (table_info->alter_table_type) {
 	case AlterTableType::RENAME_COLUMN: {
@@ -452,21 +447,22 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContex
 		create_info->columns.push_back(columns[i].Copy());
 	}
 	for (idx_t i = 0; i < constraints.size(); i++) {
-		create_info->constraints.push_back(constraints[i]->Copy());
+		auto constraint = constraints[i]->Copy();
+		if (constraint->type == ConstraintType::FOREIGN_KEY) {
+			ForeignKeyConstraint &fk_cond = (ForeignKeyConstraint &)*constraint;
+			if (fk_cond.is_fk_table == false && fk_cond.pk_table == info.fk_table) {
+				continue;
+			}
+		}
+		create_info->constraints.push_back(move(constraint));
+	}
+	if (info.is_fk_add) {
+		create_info->constraints.push_back(make_unique<ForeignKeyConstraint>(info.fk_table, info.pk_columns, info.pk_keys,
+																			info.fk_columns, info.fk_keys, false));
 	}
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
-
-	bound_create_info->constraints.push_back(
-	    make_unique<ForeignKeyConstraint>(info.fk_table, info.pk_columns, info.pk_keys, info.fk_columns, false));
-	unordered_set<idx_t> pk_key_set, fk_key_set;
-	for (idx_t i = 0; i < info.pk_keys.size(); i++) {
-		pk_key_set.insert(info.pk_keys[i]);
-		fk_key_set.insert(info.fk_keys[i]);
-	}
-	bound_create_info->bound_constraints.push_back(make_unique<BoundForeignKeyConstraint>(
-	    false, info.fk_table, info.pk_keys, move(pk_key_set), info.fk_keys, move(fk_key_set)));
 
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }

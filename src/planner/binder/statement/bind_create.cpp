@@ -220,6 +220,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			if (cond->type == ConstraintType::FOREIGN_KEY) {
 				auto &foreign_key = (ForeignKeyConstraint &)*cond;
 				if (foreign_key.is_fk_table) {
+					D_ASSERT(foreign_key.pk_keys.empty() && !foreign_key.pk_columns.empty());
 					// have to resolve referenced table
 					auto pk_table_entry_ptr =
 					    catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, foreign_key.pk_table);

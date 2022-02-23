@@ -36,23 +36,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTabl
 		if (cond->type == ConstraintType::FOREIGN_KEY) {
 			auto &foreign_key = (ForeignKeyConstraint &)*cond;
 			if (foreign_key.is_fk_table) {
-				// have to resolve columns of the foreign key table and referenced table
-				D_ASSERT(!foreign_key.pk_keys.empty() && !foreign_key.fk_columns.empty());
-				vector<idx_t> fk_keys;
-				// foreign key is given by list of names
-				// have to resolve names
-				for (auto &keyname : foreign_key.fk_columns) {
-					auto entry = op.info->name_map.find(keyname);
-					if (entry == op.info->name_map.end()) {
-						throw ParserException("column \"%s\" named in key does not exist", keyname);
-					}
-					fk_keys.push_back(entry->second);
-				}
-
+				D_ASSERT(!foreign_key.pk_keys.empty() && !foreign_key.fk_keys.empty());
 				// alter primary key table
 				unique_ptr<ForeignKeyConstraintInfo> info = make_unique<ForeignKeyConstraintInfo>(
 				    DEFAULT_SCHEMA, foreign_key.pk_table, create_info.table, foreign_key.pk_columns,
-				    foreign_key.fk_columns, foreign_key.pk_keys, fk_keys);
+				    foreign_key.fk_columns, foreign_key.pk_keys, foreign_key.fk_keys, true);
 				catalog.Alter(context, info.get());
 
 				// make a dependency between this table and referenced table

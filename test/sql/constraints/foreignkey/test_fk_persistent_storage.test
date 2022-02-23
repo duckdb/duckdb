@@ -18,17 +18,17 @@ statement ok
 INSERT INTO fk_integers VALUES (1), (2)
 
 # restart the system
-#restart
+restart
 
 # check foreign key constraint
-statement error
-DELETE FROM pk_integers WHERE i=2
-
 statement error
 INSERT INTO fk_integers VALUES (4)
 
 statement ok
 INSERT INTO fk_integers VALUES (3)
+
+# restart the system
+restart
 
 statement error
 DELETE FROM pk_integers WHERE i=3
@@ -39,6 +39,9 @@ DELETE FROM fk_integers WHERE j=3
 statement ok
 DELETE FROM pk_integers WHERE i=3
 
+# restart the system
+restart
+
 statement error
 UPDATE pk_integers SET i=5 WHERE i=2
 
@@ -47,6 +50,9 @@ UPDATE fk_integers SET i=4 WHERE j=2
 
 statement error
 UPDATE fk_integers SET i=4 WHERE j=2
+
+# restart the system
+restart
 
 statement error
 DROP TABLE pk_integers;

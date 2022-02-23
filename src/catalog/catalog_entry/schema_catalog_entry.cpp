@@ -31,6 +31,8 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -206,8 +208,40 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info->name,
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info->type));
 	}
+
+	// if there is a foreign key constraint, get taht information
+	bool is_found = false;
+	string pk_table;
+	vector<string> pk_columns, fk_columns;
+	vector<idx_t> pk_keys, fk_keys;
+	auto *table_entry = (TableCatalogEntry *)existing_entry;
+	for (idx_t i = 0; i < table_entry->bound_constraints.size(); i++) {
+		auto &cond = table_entry->bound_constraints[i];
+		if (cond->type == ConstraintType::FOREIGN_KEY) {
+			auto &foreign_key = (ForeignKeyConstraint &)*cond;
+			if (foreign_key.is_fk_table) {
+				is_found = true;
+				pk_table = foreign_key.pk_table;
+				pk_columns = foreign_key.pk_columns;
+				pk_keys = foreign_key.pk_keys;
+				fk_columns = foreign_key.fk_columns;
+				fk_keys = foreign_key.fk_keys;
+				break;
+			}
+		}
+	}
+
 	if (!set.DropEntry(context, info->name, info->cascade)) {
 		throw InternalException("Could not drop element because of an internal error");
+	}
+
+	// remove the foreign key constraint in main key table if main key table's name is valid
+	if (is_found) {
+		// alter primary key table
+		auto &catalog = Catalog::GetCatalog(context);
+		unique_ptr<ForeignKeyConstraintInfo> info = make_unique<ForeignKeyConstraintInfo>(
+			DEFAULT_SCHEMA, pk_table, table_entry->name, pk_columns, fk_columns, pk_keys, fk_keys, false);
+		catalog.Alter(context, info.get());
 	}
 }
 

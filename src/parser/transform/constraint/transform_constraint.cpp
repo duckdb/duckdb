@@ -35,14 +35,14 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		}
 		if (pk_columns.size() != fk_columns.size()) {
 			throw ParserException(
-			    "The count of columns are primary keys must be equal with the count of columns are foreign keys");
+			    "The number of referencing and referenced columns for foreign keys must be the same");
 		}
 		if (fk_columns.size() <= 0) {
-			throw ParserException("The count of columns are foreign keys must be greater than 0");
+			throw ParserException("The number of referencing and referenced columns for foreign keys must be greater than 0");
 		}
-		vector<idx_t> pk_keys;
+		vector<idx_t> pk_keys, fk_keys;
 		return make_unique<ForeignKeyConstraint>(move(pk_table), move(pk_columns), move(pk_keys), move(fk_columns),
-		                                         true);
+		                                         move(fk_keys), true);
 	}
 	default:
 		throw NotImplementedException("Constraint type not handled yet!");

@@ -200,7 +200,7 @@ public:
 //===--------------------------------------------------------------------===//
 struct ForeignKeyConstraintInfo : public AlterTableInfo {
 	ForeignKeyConstraintInfo(string schema, string table, string fk_table, vector<string> pk_columns,
-	                         vector<string> fk_columns, vector<idx_t> pk_keys, vector<idx_t> fk_keys);
+	                         vector<string> fk_columns, vector<idx_t> pk_keys, vector<idx_t> fk_keys, bool is_fk_add);
 	~ForeignKeyConstraintInfo() override;
 
 	string fk_table;
@@ -208,6 +208,7 @@ struct ForeignKeyConstraintInfo : public AlterTableInfo {
 	vector<string> fk_columns;
 	vector<idx_t> pk_keys;
 	vector<idx_t> fk_keys;
+	bool is_fk_add; // if this is true, add fk constraint, if this is false, delete fk constraint
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
