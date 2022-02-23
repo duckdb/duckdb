@@ -53,47 +53,47 @@ function ptr_to_arr(buffer, ptype, n) {
 // this follows the wasm udfs somewhat but is simpler because we can pass data much more cleanly
 Connection.prototype.register = function(name, return_type, fun) {
     // TODO what if this throws an error somewhere? do we need a try/catch?
-    return this.register_bulk(name, return_type, function(descr, data_buffers) {
+    return this.register_bulk(name, return_type, function(descr) {
         try {
             const data_arr = [];
             const validity_arr = [];
 
             for (const idx in descr.args) {
                 const arg = descr.args[idx];
-                validity_arr.push(data_buffers[arg.validity_buffer]);
-                data_arr.push(ptr_to_arr(data_buffers[arg.data_buffer], arg.physical_type, descr.rows));
+                validity_arr.push(arg.data_buffers[arg.validity_buffer]);
+                data_arr.push(ptr_to_arr(arg.data_buffers[arg.data_buffer], arg.physical_type, descr.rows));
             }
 
-            const out_data = ptr_to_arr(data_buffers[descr.ret.data_buffer], descr.ret.physical_type, descr.rows);
-            const out_validity = data_buffers[descr.ret.validity_buffer];
+            const out_data = ptr_to_arr(descr.ret.data_buffers[descr.ret.data_buffer], descr.ret.physical_type, descr.rows);
+            const out_validity = descr.ret.data_buffers[descr.ret.validity_buffer];
 
             switch (descr.args.length) {
                 case 0:
                     for (let i = 0; i < descr.rows; ++i) {
                         const res = fun();
                         out_data[i] = res;
-                        out_validity[i] = res == undefined ? 0 : 1;
+                        out_validity[i] = res == undefined || res == null ? 0 : 1;
                     }
                     break;
                 case 1:
                     for (let i = 0; i < descr.rows; ++i) {
                         const res = fun(validity_arr[0][i] ? data_arr[0][i] : undefined);
                         out_data[i] = res;
-                        out_validity[i] = res == undefined ? 0 : 1;
+                        out_validity[i] = res == undefined || res == null ? 0 : 1;
                     }
                     break;
                 case 2:
                     for (let i = 0; i < descr.rows; ++i) {
                         const res = fun(validity_arr[0][i] ? data_arr[0][i] : undefined, validity_arr[1][i] ? data_arr[1][i] : undefined);
                         out_data[i] = res;
-                        out_validity[i] = res == undefined ? 0 : 1;
+                        out_validity[i] = res == undefined || res == null ? 0 : 1;
                     }
                     break;
                 case 3:
                     for (let i = 0; i < descr.rows; ++i) {
                         const res = fun(validity_arr[0][i] ? data_arr[0][i] : undefined, validity_arr[1][i] ? data_arr[1][i] : undefined, validity_arr[2][i] ? data_arr[2][i] : undefined);
                         out_data[i] = res;
-                        out_validity[i] = res == undefined ? 0 : 1;
+                        out_validity[i] = res == undefined || res == null ? 0 : 1;
                     }
                     break;
                 default:

@@ -78,21 +78,22 @@ struct JSArgs {
 	std::string error;
 };
 
-typedef std::vector<duckdb::unique_ptr<duckdb::data_t[]>> additional_buffers_t;
+static Napi::Value transform_vector(Napi::Env env, duckdb::Vector &vec, duckdb::idx_t rows, bool copy) {
+	Napi::EscapableHandleScope scope(env);
 
-static Napi::Object transform_vector(Napi::Env env, duckdb::Vector &vec, duckdb::idx_t rows,
-                                     additional_buffers_t &additional_buffers, Napi::Array &data_buffers, bool copy) {
+	Napi::Array data_buffers(Napi::Array::New(env));
+
 	auto data_buffer_index = -1;
 	auto length_buffer_index = -1;
 	auto validity_buffer_index = -1;
 
-	additional_buffers.emplace_back(duckdb::unique_ptr<duckdb::data_t[]>(new duckdb::data_t[rows]));
+	auto validity_buffer = Napi::Buffer<uint8_t>::New(env, rows);
 	auto validity = duckdb::FlatVector::Validity(vec);
-	auto validity_ptr = additional_buffers.back().get();
+	auto validity_ptr = validity_buffer.Data();
 	for (duckdb::idx_t row_idx = 0; row_idx < rows; row_idx++) {
 		validity_ptr[row_idx] = validity.RowIsValid(row_idx);
 	}
-	data_buffers.Set(data_buffers.Length(), Napi::Buffer<uint8_t>::New(env, additional_buffers.back().get(), rows));
+	data_buffers.Set(data_buffers.Length(), validity_buffer);
 	validity_buffer_index = data_buffers.Length() - 1;
 
 	auto &vec_type = vec.GetType();
@@ -107,9 +108,12 @@ static Napi::Object transform_vector(Napi::Env env, duckdb::Vector &vec, duckdb:
 	case duckdb::LogicalTypeId::UINTEGER:
 	case duckdb::LogicalTypeId::FLOAT:
 	case duckdb::LogicalTypeId::DOUBLE: {
-		data_buffers.Set(data_buffers.Length(),
-		                 Napi::Buffer<uint8_t>::New(env, duckdb::FlatVector::GetData<uint8_t>(vec),
-		                                            rows * duckdb::GetTypeIdSize(vec_type.InternalType())));
+		auto data_buffer = Napi::Buffer<uint8_t>::New(env, rows * duckdb::GetTypeIdSize(vec_type.InternalType()));
+		// TODO this is technically not neccessary but it fixes a crash in Node 14. Some weird data ownership issue.
+		memcpy(data_buffer.Data(), duckdb::FlatVector::GetData<uint8_t>(vec),
+		       rows * duckdb::GetTypeIdSize(vec_type.InternalType()));
+
+		data_buffers.Set(data_buffers.Length(), data_buffer);
 		data_buffer_index = data_buffers.Length() - 1;
 		break;
 	}
@@ -138,23 +142,22 @@ static Napi::Object transform_vector(Napi::Env env, duckdb::Vector &vec, duckdb:
 	desc.Set("validity_buffer", validity_buffer_index);
 	desc.Set("data_buffer", data_buffer_index);
 	desc.Set("length_buffer", length_buffer_index);
+	desc.Set("data_buffers", data_buffers);
 
-	return desc;
+	return scope.Escape(desc);
 }
 
 void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, nullptr_t *, JSArgs *jsargs) {
 	try { // if we dont catch exceptions here we terminate node if one happens ^^
-		Napi::Array data_buffers(Napi::Array::New(env, 0));
-		additional_buffers_t additional_buffers;
 
 		// set up descriptor and data arrays
 		Napi::Array args_descr(Napi::Array::New(env, jsargs->args->ColumnCount()));
 		for (duckdb::idx_t col_idx = 0; col_idx < jsargs->args->ColumnCount(); col_idx++) {
 			auto &vec = jsargs->args->data[col_idx];
-			auto arg_descr = transform_vector(env, vec, jsargs->rows, additional_buffers, data_buffers, true);
+			auto arg_descr = transform_vector(env, vec, jsargs->rows, true);
 			args_descr.Set(col_idx, arg_descr);
 		}
-		auto ret_descr = transform_vector(env, *jsargs->result, jsargs->rows, additional_buffers, data_buffers, false);
+		auto ret_descr = transform_vector(env, *jsargs->result, jsargs->rows, false);
 
 		Napi::Object descr(Napi::Object::New(env));
 		descr.Set("rows", jsargs->rows);
@@ -162,7 +165,7 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, nullptr_t *, JSA
 		descr.Set("ret", ret_descr);
 
 		// actually call the UDF, or rather its vectorized wrapper from duckdb.js/Connection.prototype.register wrapper
-		jsudf({descr, data_buffers});
+		jsudf({descr});
 
 		if (env.IsExceptionPending()) {
 			// bit of a dance to get a nice error message if possible
@@ -178,13 +181,21 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, nullptr_t *, JSA
 		}
 
 		// transform the result back to a vector
-		auto return_validity = data_buffers.Get(ret_descr.Get("validity_buffer")).As<Napi::Buffer<uint8_t>>();
+		auto return_validity = ret_descr.ToObject()
+		                           .Get("data_buffers")
+		                           .ToObject()
+		                           .Get(ret_descr.ToObject().Get("validity_buffer"))
+		                           .As<Napi::Buffer<uint8_t>>();
 		for (duckdb::idx_t row_idx = 0; row_idx < jsargs->rows; row_idx++) {
 			duckdb::FlatVector::SetNull(*jsargs->result, row_idx, !return_validity[row_idx]);
 		}
 
 		if (jsargs->result->GetType().id() == duckdb::LogicalTypeId::VARCHAR) {
-			auto return_string_array = data_buffers.Get(ret_descr.Get("data_buffer")).ToObject();
+			auto return_string_array = ret_descr.ToObject()
+			                               .Get("data_buffers")
+			                               .ToObject()
+			                               .Get(ret_descr.ToObject().Get("data_buffer"))
+			                               .ToObject();
 			auto return_string_vec_ptr = duckdb::FlatVector::GetData<duckdb::string_t>(*jsargs->result);
 
 			for (duckdb::idx_t row_idx = 0; row_idx < jsargs->rows; row_idx++) {
@@ -195,6 +206,14 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, nullptr_t *, JSA
 					return_string_vec_ptr[row_idx] = duckdb::StringVector::AddString(*jsargs->result, str);
 				}
 			}
+		} else {
+			auto return_data = ret_descr.ToObject()
+			                       .Get("data_buffers")
+			                       .ToObject()
+			                       .Get(ret_descr.ToObject().Get("data_buffer"))
+			                       .As<Napi::Buffer<uint8_t>>();
+			memcpy(duckdb::FlatVector::GetData<uint8_t>(*jsargs->result), return_data.Data(),
+			       jsargs->rows * duckdb::GetTypeIdSize(jsargs->result->GetType().InternalType()));
 		}
 	} catch (const std::exception &e) {
 		jsargs->error = e.what();
