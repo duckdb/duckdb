@@ -63,7 +63,6 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 
 		query += string(buffer.get(), fsize);
 	}
-	printf("import sql = %s\n", query.c_str());
 	return query;
 }
 

@@ -14,8 +14,8 @@ namespace duckdb {
 using std::stringstream;
 
 static void WriteCatalogEntries(stringstream &ss, vector<CatalogEntry *> &entries) {
-	for (auto &entry : entries) {
-		ss << entry->ToSQL() << std::endl;
+	for (idx_t i = 0; i < entries.size(); i++) {
+		ss << entries[i]->ToSQL() << std::endl;
 	}
 	ss << std::endl;
 }
