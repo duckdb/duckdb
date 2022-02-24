@@ -234,65 +234,71 @@ SQLRETURN SQL_API SQLConnect(SQLHDBC connection_handle, SQLCHAR *server_name, SQ
 SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number, SQLCHAR *sql_state,
                                 SQLINTEGER *native_error_ptr, SQLCHAR *message_text, SQLSMALLINT buffer_length,
                                 SQLSMALLINT *text_length_ptr) {
-	if (!handle) {
-		std::string msg_str("Handle is NULL.");
-		OdbcUtils::WriteString(msg_str, message_text, buffer_length, text_length_ptr);
-		return SQL_INVALID_HANDLE;
-	}
-	if (rec_number <= 0 || buffer_length < 0) {
-		return SQL_ERROR;
-	}
-	if (message_text) {
-		*message_text = '\0';
-	}
-	if (text_length_ptr) {
-		*text_length_ptr = 0;
-	}
-	if (sql_state) {
-		*sql_state = '\0';
-	}
-	if (native_error_ptr) {
-		*native_error_ptr = 0; // we don't have error codes
-	}
-
-	auto *hdl = (duckdb::OdbcHandle *)handle;
 
 	// lambda function that writes the diagnostic messages
-	std::function<SQLRETURN(duckdb::OdbcHandle *, duckdb::OdbcHandleType)> func_write_diag =
+	std::function<bool(duckdb::OdbcHandle *, duckdb::OdbcHandleType)> is_valid_type_func =
 	    [&](duckdb::OdbcHandle *hdl, duckdb::OdbcHandleType target_type) {
 		    if (hdl->type != target_type) {
 			    std::string msg_str("Handle type " + duckdb::OdbcHandleTypeToString(hdl->type) + " mismatch with " +
 			                        duckdb::OdbcHandleTypeToString(target_type));
 			    OdbcUtils::WriteString(msg_str, message_text, buffer_length, text_length_ptr);
-			    return SQL_SUCCESS;
+			    return false;
 		    }
-
-		    // Errors should be placed at the error_messages
-		    if ((size_t)rec_number <= hdl->error_messages.size()) {
-			    OdbcUtils::WriteString(hdl->error_messages[rec_number - 1], message_text, buffer_length,
-			                           text_length_ptr);
-			    return SQL_SUCCESS;
-		    } else {
-			    return SQL_NO_DATA;
-		    }
+		    return true;
 	    };
 
-	switch (handle_type) {
-	case SQL_HANDLE_ENV: {
-		return func_write_diag(hdl, duckdb::OdbcHandleType::ENV);
-	}
-	case SQL_HANDLE_DBC: {
-		return func_write_diag(hdl, duckdb::OdbcHandleType::DBC);
-	}
-	case SQL_HANDLE_STMT: {
-		return func_write_diag(hdl, duckdb::OdbcHandleType::STMT);
-	}
-	case SQL_HANDLE_DESC: {
-		return func_write_diag(hdl, duckdb::OdbcHandleType::DESC);
-	}
-	default:
-		return SQL_INVALID_HANDLE;
-	}
+	return duckdb::WithHandle(handle, [&](duckdb::OdbcHandle *odbc_handle) {
+		bool is_valid_type;
+		switch (handle_type) {
+		case SQL_HANDLE_ENV: {
+			is_valid_type = is_valid_type_func(odbc_handle, duckdb::OdbcHandleType::ENV);
+			break;
+		}
+		case SQL_HANDLE_DBC: {
+			is_valid_type = is_valid_type_func(odbc_handle, duckdb::OdbcHandleType::DBC);
+			break;
+		}
+		case SQL_HANDLE_STMT: {
+			is_valid_type = is_valid_type_func(odbc_handle, duckdb::OdbcHandleType::STMT);
+			break;
+		}
+		case SQL_HANDLE_DESC: {
+			is_valid_type = is_valid_type_func(odbc_handle, duckdb::OdbcHandleType::DESC);
+			break;
+		}
+		default:
+			return SQL_INVALID_HANDLE;
+		}
+		if (!is_valid_type) {
+			// return SQL_SUCCESS because the error message was written to the message_text
+			return SQL_SUCCESS;
+		}
+
+		if (rec_number <= 0) {
+			OdbcUtils::WriteString("Record number is less than 1", message_text, buffer_length, text_length_ptr);
+			return SQL_SUCCESS;
+		}
+		if (buffer_length < 0) {
+			OdbcUtils::WriteString("Buffer length is negative", message_text, buffer_length, text_length_ptr);
+			return SQL_SUCCESS;
+		}
+		if ((size_t)rec_number > odbc_handle->odbc_diagnostic->diag_records.size()) {
+			return SQL_NO_DATA;
+		}
+
+		auto rec_idx = rec_number - 1;
+		auto diag_record = odbc_handle->odbc_diagnostic->diag_records[rec_idx];
+		OdbcUtils::WriteString(diag_record.sql_diag_message_text, message_text, buffer_length, text_length_ptr);
+
+		if (sql_state && strlen((char *)sql_state) == 5) {
+			OdbcUtils::WriteString(diag_record.sql_diag_sqlstate, sql_state, 5);
+		}
+		if (native_error_ptr) {
+			duckdb::Store<SQLINTEGER>(diag_record.sql_diag_native, (duckdb::data_ptr_t)native_error_ptr);
+		}
+
+		return SQL_SUCCESS;
+	});
 }
 
 SQLRETURN SQL_API SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number,
