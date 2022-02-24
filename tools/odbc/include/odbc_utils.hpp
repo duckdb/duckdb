@@ -19,7 +19,7 @@ public:
 	static std::string ReadString(const SQLPOINTER ptr, const SQLSMALLINT len);
 	// static void WriteString(const std::string &s, SQLCHAR *out_buf, SQLSMALLINT buf_len, SQLSMALLINT *out_len);
 	template <typename INT_TYPE>
-	static void WriteString(const string &s, SQLCHAR *out_buf, SQLSMALLINT buf_len, INT_TYPE *out_len) {
+	static void WriteString(const string &s, SQLCHAR *out_buf, SQLSMALLINT buf_len, INT_TYPE *out_len = nullptr) {
 		INT_TYPE written_chars = 0;
 		if (out_buf) {
 			written_chars = (INT_TYPE)snprintf((char *)out_buf, buf_len, "%s", s.c_str());
@@ -27,6 +27,10 @@ public:
 		if (out_len) {
 			*out_len = written_chars;
 		}
+	}
+	// template specialization for int to pass a null pointer
+	static void WriteString(const string &s, SQLCHAR *out_buf, SQLSMALLINT buf_len) {
+		WriteString<int>(s, out_buf, buf_len, nullptr);
 	}
 
 	template <typename FIELD_TYPE>
