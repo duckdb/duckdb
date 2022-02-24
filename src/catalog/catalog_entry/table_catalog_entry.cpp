@@ -365,17 +365,14 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	vector<column_t> bound_columns;
 	AlterBinder expr_binder(*binder, context, *this, bound_columns, info.target_type);
 	auto expression = info.expression->Copy();
-	LogicalType *target_type = &info.target_type;
-
 	auto bound_expression = expr_binder.Bind(expression);
-	bound_expression->return_type = *target_type;
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	if (bound_columns.empty()) {
 		bound_columns.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
 
 	auto new_storage =
-	    make_shared<DataTable>(context, *storage, change_idx, *target_type, move(bound_columns), *bound_expression);
+	    make_shared<DataTable>(context, *storage, change_idx, info.target_type, move(bound_columns), *bound_expression);
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
 }
