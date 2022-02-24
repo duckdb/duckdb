@@ -63,7 +63,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("value_counts", &DuckDBPyRelation::ValueCounts, "Count number of rows with each unique value of variable",
 	         py::arg("value_counts_aggr"), py::arg("group_expr") = "")
 	    .def("unique", &DuckDBPyRelation::Unique, "Number of distinct values in a column.", py::arg("unique_aggr"))
-	    .def("union", &DuckDBPyRelation::Union,
+	    .def("union", &DuckDBPyRelation::Union, py::arg("union_rel"),
 	         "Create the set union of this relation object with another relation object in other_rel")
 	    .def("except_", &DuckDBPyRelation::Except,
 	         "Create the set except of this relation object with another relation object in other_rel",
@@ -149,6 +149,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrowTable(py::object &table,
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
+	if (!conn){
+		throw std::runtime_error("This relation's connection is closed.");
+	}
 	return make_unique<DuckDBPyRelation>(rel->Project(expr),conn);
 }
 
@@ -378,21 +381,21 @@ py::object DuckDBPyRelation::ToArrowTable() {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Union(DuckDBPyRelation *other) {
-	if (!conn){
+	if (!conn || !other->conn){
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	return make_unique<DuckDBPyRelation>(rel->Union(other->rel),conn);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Except(DuckDBPyRelation *other) {
-	if (!conn){
+	if (!conn || !other->conn){
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	return make_unique<DuckDBPyRelation>(rel->Except(other->rel),conn);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Intersect(DuckDBPyRelation *other) {
-	if (!conn){
+	if (!conn || !other->conn){
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	return make_unique<DuckDBPyRelation>(rel->Intersect(other->rel),conn);
@@ -400,7 +403,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Intersect(DuckDBPyRelation *other
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, const string &condition,
                                                     const string &type) {
-	if (!conn){
+	if (!conn || !other->conn){
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	JoinType dtype;
