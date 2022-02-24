@@ -33,7 +33,20 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 		cpp11::stop("rapi_prepare: Invalid connection");
 	}
 
-	auto stmt = conn->conn->Prepare(query.c_str());
+	auto statements = conn->conn->ExtractStatements(query.c_str());
+	if (statements.empty()) {
+		// no statements to execute
+		cpp11::stop("rapi_prepare: No statements to execute");
+	}
+	// if there are multiple statements, we directly execute the statements besides the last one
+	// we only return the result of the last statement to the user, unless one of the previous statements fails
+	for (idx_t i = 0; i + 1 < statements.size(); i++) {
+		auto res = conn->conn->Query(move(statements[i]));
+		if (!res->success) {
+			cpp11::stop("rapi_prepare: Failed to execute statement %s\nError: %s", query.c_str(), res->error.c_str());
+		}
+	}
+	auto stmt = conn->conn->Prepare(move(statements.back()));
 	if (!stmt->success) {
 		cpp11::stop("rapi_prepare: Failed to prepare query %s\nError: %s", query.c_str(), stmt->error.c_str());
 	}

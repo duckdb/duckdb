@@ -427,10 +427,11 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &cont
 	return move(local_data);
 }
 
-static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data) {
+static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data,
+                                                               const string &file_path) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
-	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), csv_data.files[0],
+	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path,
 	                                                   FileSystem::GetFileOpener(context), options.compression);
 
 	if (options.header) {
@@ -524,6 +525,7 @@ static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, Glo
 //===--------------------------------------------------------------------===//
 void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
 	auto &global_state = (GlobalWriteCSVData &)gstate;
+
 	global_state.handle->Close();
 	global_state.handle.reset();
 }

@@ -53,6 +53,9 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 	// zero initialize the columns (so we can cleanly delete it in case a malloc fails)
 	memset(out->__deprecated_columns, 0, sizeof(duckdb_column) * out->__deprecated_column_count);
 	for (idx_t i = 0; i < out->__deprecated_column_count; i++) {
+		auto column_data = new DuckDBColumnData();
+		column_data->type = result->types[i];
+		out->__deprecated_columns[i].internal_data = column_data;
 		out->__deprecated_columns[i].__deprecated_type = ConvertCPPTypeToC(result->types[i]);
 		out->__deprecated_columns[i].__deprecated_name = strdup(result->names[i].c_str());
 		out->__deprecated_columns[i].__deprecated_nullmask =
@@ -215,9 +218,72 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 			}
 			break;
 		}
+		case LogicalTypeId::DECIMAL: {
+			// get data
+			idx_t row = 0;
+			auto target = (hugeint_t *)out->__deprecated_columns[col].__deprecated_data;
+			switch (result->types[col].InternalType()) {
+			case PhysicalType::INT16: {
+				for (auto &chunk : result->collection.Chunks()) {
+					auto source = FlatVector::GetData<int16_t>(chunk->data[col]);
+					for (idx_t k = 0; k < chunk->size(); k++) {
+						if (!FlatVector::IsNull(chunk->data[col], k)) {
+							target[row].lower = source[k];
+							target[row].upper = 0;
+						}
+						row++;
+					}
+				}
+				break;
+			}
+			case PhysicalType::INT32: {
+				for (auto &chunk : result->collection.Chunks()) {
+					auto source = FlatVector::GetData<int32_t>(chunk->data[col]);
+					for (idx_t k = 0; k < chunk->size(); k++) {
+						if (!FlatVector::IsNull(chunk->data[col], k)) {
+							target[row].lower = source[k];
+							target[row].upper = 0;
+						}
+						row++;
+					}
+				}
+				break;
+			}
+			case PhysicalType::INT64: {
+				for (auto &chunk : result->collection.Chunks()) {
+					auto source = FlatVector::GetData<int64_t>(chunk->data[col]);
+					for (idx_t k = 0; k < chunk->size(); k++) {
+						if (!FlatVector::IsNull(chunk->data[col], k)) {
+							target[row].lower = source[k];
+							target[row].upper = 0;
+						}
+						row++;
+					}
+				}
+				break;
+			}
+			case PhysicalType::INT128: {
+				for (auto &chunk : result->collection.Chunks()) {
+					auto source = FlatVector::GetData<hugeint_t>(chunk->data[col]);
+					for (idx_t k = 0; k < chunk->size(); k++) {
+						if (!FlatVector::IsNull(chunk->data[col], k)) {
+							target[row].lower = source[k].lower;
+							target[row].upper = source[k].upper;
+						}
+						row++;
+					}
+				}
+				break;
+			}
+			default:
+				throw std::runtime_error("Unsupported physical type for Decimal" +
+				                         TypeIdToString(result->types[col].InternalType()));
+			}
+			break;
+		}
 		default: // LCOV_EXCL_START
-			// unsupported type for C API
-			D_ASSERT(0);
+			std::string err_msg = "Unsupported type for C API: " + result->types[col].ToString();
+			out->__deprecated_error_message = strdup(err_msg.c_str());
 			return DuckDBError;
 		} // LCOV_EXCL_STOP
 	}
@@ -252,6 +318,10 @@ static void DuckdbDestroyColumn(duckdb_column column, idx_t count) {
 	}
 	if (column.__deprecated_name) {
 		duckdb_free(column.__deprecated_name);
+	}
+	if (column.internal_data) {
+		auto column_data = (duckdb::DuckDBColumnData *)column.internal_data;
+		delete column_data;
 	}
 }
 

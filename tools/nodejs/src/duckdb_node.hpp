@@ -2,6 +2,7 @@
 #define NODE_ADDON_API_DISABLE_DEPRECATED
 #include <napi.h>
 #include <queue>
+#include <unordered_map>
 
 #include "duckdb.hpp"
 
@@ -76,6 +77,11 @@ private:
 	static Napi::FunctionReference constructor;
 };
 
+struct JSArgs;
+void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, nullptr_t *, JSArgs *data);
+
+typedef Napi::TypedThreadSafeFunction<nullptr_t, JSArgs, DuckDBNodeUDFLauncher> DuckDBNodeUDFFUnction;
+
 class Connection : public Napi::ObjectWrap<Connection> {
 public:
 	Connection(const Napi::CallbackInfo &info);
@@ -85,6 +91,8 @@ public:
 public:
 	Napi::Value Prepare(const Napi::CallbackInfo &info);
 	Napi::Value Exec(const Napi::CallbackInfo &info);
+	Napi::Value Register(const Napi::CallbackInfo &info);
+	Napi::Value Unregister(const Napi::CallbackInfo &info);
 
 	static bool HasInstance(Napi::Value val) {
 		Napi::Env env = val.Env();
@@ -99,6 +107,7 @@ public:
 	static Napi::FunctionReference constructor;
 	std::unique_ptr<duckdb::Connection> connection;
 	Database *database_ref;
+	std::unordered_map<std::string, DuckDBNodeUDFFUnction> udfs;
 };
 
 struct StatementParam;

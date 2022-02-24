@@ -518,6 +518,9 @@ static bool BlobCastSwitch(Vector &source, Vector &result, idx_t count, string *
 		// blob to varchar
 		VectorStringCast<string_t, duckdb::CastFromBlob>(source, result, count);
 		break;
+	case LogicalTypeId::AGGREGATE_STATE:
+		result.Reinterpret(source);
+		break;
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}
@@ -706,6 +709,15 @@ static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *
 	return true;
 }
 
+static bool AggregateStateToBlobCast(Vector &source, Vector &result, idx_t count, string *error_message, bool strict) {
+	if (result.GetType().id() != LogicalTypeId::BLOB) {
+		throw TypeMismatchException(source.GetType(), result.GetType(),
+		                            "Cannot cast AGGREGATE_STATE to anything but BLOB");
+	}
+	result.Reinterpret(source);
+	return true;
+}
+
 static bool StructCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::STRUCT:
@@ -821,6 +833,8 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 		return ListCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::ENUM:
 		return EnumCastSwitch(source, result, count, error_message, strict);
+	case LogicalTypeId::AGGREGATE_STATE:
+		return AggregateStateToBlobCast(source, result, count, error_message, strict);
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}
