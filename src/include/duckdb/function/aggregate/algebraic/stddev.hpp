@@ -127,4 +127,18 @@ struct STDDevPopOperation : public STDDevBaseOperation {
 		}
 	}
 };
+
+struct StandardErrorOfTheMeanOperation : public STDDevBaseOperation {
+	template <class T, class STATE>
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+		if (state->count == 0) {
+			mask.SetInvalid(idx);
+		} else {
+			target[idx] = sqrt(state->dsquared / state->count) / sqrt((state->count));
+			if (!Value::DoubleIsValid(target[idx])) {
+				throw OutOfRangeException("SEM is out of range!");
+			}
+		}
+	}
+};
 } // namespace duckdb

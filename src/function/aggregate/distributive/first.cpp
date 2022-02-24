@@ -108,7 +108,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 		if (!state->is_set || state->is_null) {
 			mask.SetInvalid(idx);
 		} else {
-			target[idx] = StringVector::AddString(result, state->value);
+			target[idx] = StringVector::AddStringOrBlob(result, state->value);
 		}
 	}
 
