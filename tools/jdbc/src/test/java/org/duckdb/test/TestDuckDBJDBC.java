@@ -144,51 +144,6 @@ public class TestDuckDBJDBC {
 
 	}
 
-	// public static void test_timestamp_tz() throws Exception {
-	// 	Connection conn = DriverManager.getConnection("jdbc:duckdb:");
-	// 	Statement stmt = conn.createStatement();
-
-	// 	ResultSet rs;
-		
-		// stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMPTZ)");
-		// stmt.execute("INSERT INTO t (id, t1) VALUES (1, '2022-01-01T12:11:10+02')");
-		// stmt.execute("INSERT INTO t (id, t1) VALUES (2, '2022-01-01T12:11:10')");
-
-		// PreparedStatement ps = conn.prepareStatement(
-				// "INSERT INTO T (id, t1) VALUES (?, ?)");
-
-		// OffsetDateTime odt1 = OffsetDateTime.of(2020, 10, 7, 13, 15, 7, 12345, ZoneOffset.ofHours(7));
-		// OffsetDateTime odt2 = OffsetDateTime.of(1878, 10, 2, 1, 15, 7, 12345, ZoneOffset.ofHours(-5));
-
-		// ps.setObject(1, 3);
-		// ps.setObject(2, odt1);
-		// ps.execute();
-		// ps.setObject(2, OffsetDateTime.now(), Types.TIMESTAMP_WITH_TIMEZONE);
-		// ps.setObject(1, 4);
-		// ps.execute();
-		// ps.setObject(1, 5);
-		// ps.setObject(2, odt2);
-		// ps.execute();
-
-	// 	rs = stmt.executeQuery("SELECT * FROM t ORDER BY id");
-	// 	ResultSetMetaData meta = rs.getMetaData();
-		// rs.next();
-		// System.out.println(rs.getObject(2, OffsetDateTime.class));
-		// rs.next();
-		// System.out.println(rs.getObject(2, OffsetDateTime.class));
-		// rs.next();
-		// System.out.println(rs.getObject(2, OffsetDateTime.class));
-		// rs.next();
-		// System.out.println(rs.getObject(2, OffsetDateTime.class));
-		// rs.next();
-		// System.out.println(rs.getObject(2, OffsetDateTime.class));
-
-	// 	rs.close();
-	// 	stmt.close();
-		// conn.close();
-		// System.exit(0);
-	// }
-
 	public static void test_result() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
