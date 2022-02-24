@@ -135,6 +135,11 @@ double CAPIResult::Fetch(idx_t col, idx_t row) {
 }
 
 template <>
+duckdb_decimal CAPIResult::Fetch(idx_t col, idx_t row) {
+	return duckdb_value_decimal(&result, col, row);
+}
+
+template <>
 duckdb_date CAPIResult::Fetch(idx_t col, idx_t row) {
 	auto data = (duckdb_date *)duckdb_column_data(&result, col);
 	return data[row];
@@ -500,6 +505,25 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(!result->Fetch<bool>(0, 1));
 	REQUIRE(result->Fetch<bool>(0, 2));
 	REQUIRE(result->Fetch<string>(0, 2) == "true");
+
+	// decimal columns
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE decimals(dec DECIMAL(18, 4) NULL)"));
+	REQUIRE_NO_FAIL(tester.Query("INSERT INTO decimals VALUES (NULL), (12.3)"));
+
+	result = tester.Query("SELECT * FROM decimals ORDER BY dec");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->IsNull(0, 0));
+	duckdb_decimal decimal = result->Fetch<duckdb_decimal>(0, 1);
+	REQUIRE(duckdb_decimal_to_double(decimal) == 12.3);
+	// test more decimal physical types
+	result = tester.Query("SELECT 1.2::DECIMAL(4,1), 100.3::DECIMAL(9,1), 320938.4298::DECIMAL(18,4), "
+	                      "49082094824.904820482094::DECIMAL(30,12), NULL::DECIMAL");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(0, 0)) == 1.2);
+	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(1, 0)) == 100.3);
+	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(2, 0)) == 320938.4298);
+	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(3, 0)) == 49082094824.904820482094);
+	REQUIRE(result->IsNull(4, 0));
 }
 
 TEST_CASE("Test errors in C API", "[capi]") {
@@ -541,6 +565,22 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	// various edge cases/nullptrs
 	REQUIRE(duckdb_query_arrow_schema(out_arrow, nullptr) == DuckDBSuccess);
 	REQUIRE(duckdb_query_arrow_array(out_arrow, nullptr) == DuckDBSuccess);
+
+	// default duckdb_value_date on invalid date
+	result = tester.Query("SELECT 1, true, 'a'");
+	REQUIRE_NO_FAIL(*result);
+	duckdb_date_struct d = result->Fetch<duckdb_date_struct>(0, 0);
+	REQUIRE(d.year == 1970);
+	REQUIRE(d.month == 1);
+	REQUIRE(d.day == 1);
+	d = result->Fetch<duckdb_date_struct>(1, 0);
+	REQUIRE(d.year == 1970);
+	REQUIRE(d.month == 1);
+	REQUIRE(d.day == 1);
+	d = result->Fetch<duckdb_date_struct>(2, 0);
+	REQUIRE(d.year == 1970);
+	REQUIRE(d.month == 1);
+	REQUIRE(d.day == 1);
 }
 
 TEST_CASE("Test prepared statements in C API", "[capi]") {

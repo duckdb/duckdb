@@ -145,11 +145,12 @@ public:
 	DUCKDB_API virtual void MoveFile(const string &source, const string &target);
 	//! Check if a file exists
 	DUCKDB_API virtual bool FileExists(const string &filename);
+	//! Check if path is pipe
+	DUCKDB_API virtual bool IsPipe(const string &filename);
 	//! Remove a file from disk
 	DUCKDB_API virtual void RemoveFile(const string &filename);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
-
 	//! Sets the working directory
 	DUCKDB_API static void SetWorkingDirectory(const string &path);
 	//! Gets the working directory

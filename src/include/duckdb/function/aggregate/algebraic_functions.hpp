@@ -48,4 +48,8 @@ struct VarianceFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct StandardErrorOfTheMeanFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

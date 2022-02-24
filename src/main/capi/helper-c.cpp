@@ -45,6 +45,8 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_BLOB;
 	case LogicalTypeId::INTERVAL:
 		return DUCKDB_TYPE_INTERVAL;
+	case LogicalTypeId::DECIMAL:
+		return DUCKDB_TYPE_DECIMAL;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return DUCKDB_TYPE_INVALID;
@@ -88,6 +90,8 @@ idx_t GetCTypeSize(duckdb_type type) {
 		return sizeof(duckdb_blob);
 	case DUCKDB_TYPE_INTERVAL:
 		return sizeof(duckdb_interval);
+	case DUCKDB_TYPE_DECIMAL:
+		return sizeof(duckdb_hugeint);
 	default: // LCOV_EXCL_START
 		// unsupported type
 		D_ASSERT(0);
