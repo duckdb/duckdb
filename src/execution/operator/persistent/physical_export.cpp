@@ -118,9 +118,7 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 			if (entry->internal) {
 				return;
 			}
-			if (entry->type == CatalogType::TABLE_ENTRY) {
-				tables.push_back(entry);
-			} else {
+			if (entry->type != CatalogType::TABLE_ENTRY) {
 				views.push_back(entry);
 			}
 		});
@@ -130,6 +128,11 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		             [&](CatalogEntry *entry) { custom_types.push_back(entry); });
 		schema->Scan(context.client, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { indexes.push_back(entry); });
 	});
+
+	// consider the order of tables because of foreign key constraint
+	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
+		tables.push_back((CatalogEntry *)exported_tables.data[i].entry);
+	}
 
 	// write the schema.sql file
 	// export order is SCHEMA -> SEQUENCE -> TABLE -> VIEW -> INDEX
