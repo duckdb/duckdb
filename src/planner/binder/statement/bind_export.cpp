@@ -58,8 +58,8 @@ void ScanForeignKeyTable(vector<TableCatalogEntry *> &ordered, vector<TableCatal
 			auto &cond = table_entry->constraints[j];
 			if (cond->type == ConstraintType::FOREIGN_KEY) {
 				auto &fk = (ForeignKeyConstraint &)*cond;
-				if (move_only_pk_table && fk.is_fk_table ||
-				    !move_only_pk_table && fk.is_fk_table && IsExistMainKeyTable(fk.pk_table, unordered)) {
+				if ((move_only_pk_table && fk.is_fk_table) ||
+				    (!move_only_pk_table && fk.is_fk_table && IsExistMainKeyTable(fk.pk_table, unordered))) {
 					move_to_ordered = false;
 					break;
 				}
