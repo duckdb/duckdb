@@ -121,8 +121,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	BoundExportData exported_tables;
 
-	idx_t id = 0; // Id for table
-	for (auto &table : tables) {
+	for (idx_t id = 0; id < tables.size(); id++) {
+		auto &table = tables[id];
 		auto info = make_unique<CopyInfo>();
 		// we copy the options supplied to the EXPORT
 		info->format = stmt.info->format;
@@ -153,7 +153,6 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		table_info.entry = table;
 		table_info.table_data = exported_data;
 		exported_tables.data.push_back(table_info);
-		id++;
 
 		// generate the copy statement and bind it
 		CopyStatement copy_stmt;
