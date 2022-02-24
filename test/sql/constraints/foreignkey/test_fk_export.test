@@ -6,13 +6,7 @@ statement ok
 CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
 
 statement ok
-INSERT INTO pk_integers VALUES (1), (2), (3)
-
-statement ok
 CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
-
-statement ok
-INSERT INTO fk_integers VALUES (1), (2)
 
 # now export the db
 statement ok
@@ -27,19 +21,11 @@ DROP TABLE pk_integers;
 statement ok
 IMPORT DATABASE '__TEST_DIR__/export_test'
 
-# check data
-query I
-SELECT * FROM pk_integers
-----
-1
-2
-3
+statement ok
+INSERT INTO pk_integers VALUES (1), (2), (3)
 
-query I
-SELECT * FROM fk_integers
-----
-1
-2
+statement ok
+INSERT INTO fk_integers VALUES (1), (2)
 
 # check foreign key constraint
 statement error
