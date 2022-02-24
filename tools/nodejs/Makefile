@@ -18,6 +18,8 @@ clean:
 	rm -f test/support/big.db-journal
 	rm -rf ./node_modules/
 	rm -rf src/duckdb.*
+	rm -rf src/parquet-amalgamation.*
+
 
 test:
 	npm test

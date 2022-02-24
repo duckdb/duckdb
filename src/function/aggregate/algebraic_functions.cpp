@@ -14,7 +14,7 @@ void BuiltinFunctions::RegisterAlgebraicAggregates() {
 	Register<VarPopFun>();
 	Register<VarSampFun>();
 	Register<VarianceFun>();
-
+	Register<StandardErrorOfTheMeanFun>();
 	Register<Corr>();
 }
 
