@@ -4,6 +4,7 @@ using duckdb::DiagRecord;
 using duckdb::OdbcDiagnostic;
 using std::string;
 
+// OdbcDiagnostic static initializations and functions ******************************
 const std::unordered_map<SQLINTEGER, std::string> OdbcDiagnostic::MAP_DYNAMIC_FUNCTION = {
     {SQL_DIAG_ALTER_DOMAIN, "ALTER DOMAIN"},
     {SQL_DIAG_ALTER_TABLE, "ALTER TABLE"},
@@ -192,6 +193,28 @@ bool OdbcDiagnostic::IsDiagRecordField(SQLSMALLINT rec_field) {
 	default:
 		return false;
 	}
+}
+
+void OdbcDiagnostic::FormatDiagnosticMessage(DiagRecord &diag_record, const std::string &data_source,
+                                             const std::string &component) {
+	// https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/diagnostic-messages?view=sql-server-ver15
+	// [ vendor-identifier ][ ODBC-component-identifier ][ data-source-identifier ] data-source-supplied-text
+	D_ASSERT(!diag_record.sql_diag_message_text.empty());
+
+	string msg = "DuckDB";
+	if (!data_source.empty()) {
+		msg += "->" + data_source;
+	}
+	if (!component.empty()) {
+		msg += "->" + component;
+	}
+	msg += "\n" + diag_record.sql_diag_message_text;
+
+	diag_record.sql_diag_message_text = msg;
+}
+
+void OdbcDiagnostic::AddDiagRecord(const DiagRecord &diag_record) {
+	diag_records.emplace_back(diag_record);
 }
 
 string OdbcDiagnostic::GetDiagDynamicFunction() {
