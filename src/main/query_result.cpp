@@ -211,6 +211,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "g";
 		break;
 	case LogicalTypeId::UUID:
+		child.format = "w:16"; // do we need to use a custimized format so we can convert back?
+		break;
 	case LogicalTypeId::VARCHAR:
 		child.format = "u";
 		break;

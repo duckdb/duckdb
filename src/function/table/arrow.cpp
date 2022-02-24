@@ -155,6 +155,10 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 		std::string parameters = format.substr(format.find(':') + 1);
 		idx_t fixed_size = std::stoi(parameters);
 		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
+		// TODO: this is not right as not all fixed size 16 blob is uuid
+		if (fixed_size == 16) {
+			return LogicalType::UUID;
+		}
 		return LogicalType::BLOB;
 	} else {
 		throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
@@ -786,6 +790,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		}
 		break;
 	}
+	case LogicalTypeId::UUID: // TODO: need to convert to hugeint_t
 	case LogicalTypeId::BLOB: {
 		ArrowToDuckDBBlob(vector, array, scan_state, size, arrow_convert_data, col_idx, arrow_convert_idx,
 		                  nested_offset);
