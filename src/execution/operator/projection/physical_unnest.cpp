@@ -238,7 +238,7 @@ OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk 
 
 			if (state.list_data.data[col_idx].GetType() == LogicalType::SQLNULL) {
 				// UNNEST(NULL)
-				UnnestNull(0, this_chunk_len, result_vector);
+				chunk.SetCardinality(0);
 			} else {
 				auto &vdata = state.list_vector_data[col_idx];
 				auto &child_data = state.list_child_data[col_idx];
