@@ -314,6 +314,15 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
+	if (info.target_type.id() == LogicalTypeId::USER) {
+		auto &user_type_name = UserType::GetTypeName(info.target_type);
+		auto user_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(
+		    context, CatalogType::TYPE_ENTRY, schema->name, user_type_name, true);
+		if (!user_type_catalog) {
+			throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
+		}
+		info.target_type = user_type_catalog->user_type;
+	}
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	idx_t change_idx = GetColumnIndex(info.column_name);
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -356,23 +365,14 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	vector<column_t> bound_columns;
 	AlterBinder expr_binder(*binder, context, *this, bound_columns, info.target_type);
 	auto expression = info.expression->Copy();
-	LogicalType* target_type = &info.target_type;
-	if (info.target_type.id() == LogicalTypeId::USER) {
-		auto &user_type_name = UserType::GetTypeName(info.target_type);
-		auto user_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY,
-		                                                                               schema->name, user_type_name, true);
-		if (!user_type_catalog) {
-			throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
-		}
-		target_type = &user_type_catalog->user_type;
-	}
+	LogicalType *target_type = &info.target_type;
+
 	auto bound_expression = expr_binder.Bind(expression);
 	bound_expression->return_type = *target_type;
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	if (bound_columns.empty()) {
 		bound_columns.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
-
 
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, change_idx, *target_type, move(bound_columns), *bound_expression);
