@@ -159,9 +159,9 @@ public:
 		return result;
 	}
 	//! Wrapper around yyjson_mut_write so we don't have to free the malloc'ed char[]
-	static unique_ptr<char[]> MutWrite(yyjson_mut_doc *doc, idx_t &len) {
-		unique_ptr<char[]> result;
-		result.reset(yyjson_mut_write(doc, WRITE_FLAG, (size_t *)&len));
+	static unique_ptr<char, void (*)(void *)> MutWrite(yyjson_mut_doc *doc, idx_t &len) {
+		auto result = unique_ptr<char, decltype(free) *>(
+		    reinterpret_cast<char *>(yyjson_mut_write(doc, WRITE_FLAG, (size_t *)&len)), free);
 		return result;
 	}
 	//! Write JSON value to string_t
