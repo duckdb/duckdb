@@ -138,14 +138,11 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.def("limit", &DuckDBPyRelation::LimitDF, "Retrieve the first n rows from the Data.Frame df", py::arg("df"),
 	      py::arg("n"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 
-	pybind_opts.disable_function_signatures();
 	m.def("query_df", &DuckDBPyRelation::QueryDF,
-	      "query_df(self, df: pandas.DataFrame, virtual_table_name: str, sql_query: str) -> DuckDBPyRelation \n"
 	      "Run the given SQL query in sql_query on the view named virtual_table_name that contains the content of "
 	      "Data.Frame df",
 	      py::arg("df"), py::arg("virtual_table_name"), py::arg("sql_query"),
 	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
-	pybind_opts.enable_function_signatures();
 
 	m.def("write_csv", &DuckDBPyRelation::WriteCsvDF, "Write the Data.Frame df to a CSV file in file_name",
 	      py::arg("df"), py::arg("file_name"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
