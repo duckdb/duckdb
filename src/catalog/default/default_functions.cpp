@@ -4,6 +4,8 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 
+#include "duckdb/function/scalar_macro_function.hpp"
+
 namespace duckdb {
 
 static DefaultMacro internal_macros[] = {
