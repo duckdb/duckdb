@@ -1384,7 +1384,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::BLOB:
 		return "'" + ToString() + "'::" + type_.ToString();
 	case LogicalTypeId::VARCHAR:
-		return "'" + ToString() + "'";
+		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	case LogicalTypeId::STRUCT: {
 		string ret = "{";
 		auto &child_types = StructType::GetChildTypes(type_);
