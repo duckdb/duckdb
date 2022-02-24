@@ -1,7 +1,10 @@
 #ifndef ODBC_DIAGNOSTIC_HPP
 #define ODBC_DIAGNOSTIC_HPP
 
-#include "duckdb_odbc.hpp"
+#include "duckdb.hpp"
+
+#include "sqlext.h"
+#include "sqltypes.h"
 
 #include <set>
 #include <string>
@@ -43,6 +46,9 @@ public:
 
 public:
 	static bool IsDiagRecordField(SQLSMALLINT diag_identifier);
+
+	void FormatDiagnosticMessage(DiagRecord &diag_record, const std::string &data_source, const std::string &component);
+	void AddDiagRecord(const DiagRecord &diag_record);
 
 	std::string GetDiagDynamicFunction();
 	bool VerifyRecordIndex(SQLINTEGER rec_idx);
