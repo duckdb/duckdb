@@ -15,26 +15,20 @@ namespace duckdb {
 
 //MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(move(expression)) {}
 
-MacroFunction::MacroFunction(MacroType type) : type(type){
+MacroFunction::MacroFunction(MacroType type) : type(type) {
 }
 
-/*
-MacroFunction::MacroFunction(void) {
-	this->type=MacroType::VOID_MACRO;
-}
- */
+string MacroFunction::ValidateArguments( MacroFunction &macro_def , string name, FunctionExpression &function_expr,
+                                 vector<unique_ptr<ParsedExpression>> &positionals,
+                                 unordered_map<string, unique_ptr<ParsedExpression>> &defaults) {
 
-string MacroFunction::ValidateArguments(BaseMacroCatalogEntry &macro_func, FunctionExpression &function_expr,
-                                        vector<unique_ptr<ParsedExpression>> &positionals,
-                                        unordered_map<string, unique_ptr<ParsedExpression>> &defaults) {
+
 	// separate positional and default arguments
-	//auto &macro_def = (BaseFunction &)*macro_func.function;
-	auto &macro_def= (ScalarMacroFunction &)macro_func.function;
 	for (auto &arg : function_expr.children) {
 		if (arg->type == ExpressionType::VALUE_CONSTANT && !arg->alias.empty()) {
 			// default argument
 			if (macro_def.default_parameters.find(arg->alias) == macro_def.default_parameters.end()) {
-				return StringUtil::Format("Macro %s does not have default parameter %s!", macro_func.name, arg->alias);
+				return StringUtil::Format("Macro %s does not have default parameter %s!", name, arg->alias);
 			} else if (defaults.find(arg->alias) != defaults.end()) {
 				return StringUtil::Format("Duplicate default parameters %s!", arg->alias);
 			}
@@ -49,10 +43,10 @@ string MacroFunction::ValidateArguments(BaseMacroCatalogEntry &macro_func, Funct
 
 	// validate if the right number of arguments was supplied
 	string error;
-	auto &parameters = macro_func.function->parameters;
+	auto &parameters = macro_def.parameters;
 	if (parameters.size() != positionals.size()) {
 		error = StringUtil::Format(
-		    "Macro function '%s(%s)' requires ", macro_func.name,
+		    "Macro function '%s(%s)' requires ", name,
 		    StringUtil::Join(parameters, parameters.size(), ", ", [](const unique_ptr<ParsedExpression> &p) {
 			    return ((ColumnRefExpression &)*p).column_names[0];
 		    }));
@@ -86,28 +80,5 @@ void MacroFunction::CopyProperties( MacroFunction &other) {
 }
 
 
-/*
-unique_ptr<MacroFunction> MacroFunction::Copy() {
-	auto result = make_unique<MacroFunction>(this->type);
-
-
-	if (expression) {
-		result->expression = expression->Copy();
-	}
-
-	if (query_node) {
-		result->query_node = query_node->Copy();
-	}
-
-
-	for (auto &param : parameters) {
-		result->parameters.push_back(param->Copy());
-	}
-	for (auto &kv : default_parameters) {
-		result->default_parameters[kv.first] = kv.second->Copy();
-	}
-	return result;
-}
-*/
 
 } // namespace duckdb
