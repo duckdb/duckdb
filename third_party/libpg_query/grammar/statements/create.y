@@ -446,6 +446,7 @@ opt_definition:
 
 OptTableElementList:
 			TableElementList					{ $$ = $1; }
+			| TableElementList ','					{ $$ = $1; }
 			| /*EMPTY*/							{ $$ = NIL; }
 		;
 
@@ -499,6 +500,11 @@ columnList:
 			| columnList ',' columnElem				{ $$ = lappend($1, $3); }
 		;
 
+columnList_opt_comma:
+			columnList								{ $$ = $1; }
+			| columnList ','						{ $$ = $1; }
+		;
+
 
 func_type:	Typename								{ $$ = $1; }
 			| type_function_name attrs '%' TYPE_P
@@ -531,7 +537,7 @@ ConstraintElem:
 					n->initially_valid = !n->skip_validation;
 					$$ = (PGNode *)n;
 				}
-			| UNIQUE '(' columnList ')' opt_definition
+			| UNIQUE '(' columnList_opt_comma ')' opt_definition
 				ConstraintAttributeSpec
 				{
 					PGConstraint *n = makeNode(PGConstraint);
@@ -559,7 +565,7 @@ ConstraintElem:
 								   NULL, yyscanner);
 					$$ = (PGNode *)n;
 				}
-			| PRIMARY KEY '(' columnList ')' opt_definition
+			| PRIMARY KEY '(' columnList_opt_comma ')' opt_definition
 				ConstraintAttributeSpec
 				{
 					PGConstraint *n = makeNode(PGConstraint);
@@ -587,7 +593,7 @@ ConstraintElem:
 								   NULL, yyscanner);
 					$$ = (PGNode *)n;
 				}
-			| FOREIGN KEY '(' columnList ')' REFERENCES qualified_name
+			| FOREIGN KEY '(' columnList_opt_comma ')' REFERENCES qualified_name
 				opt_column_list key_match key_actions ConstraintAttributeSpec
 				{
 					PGConstraint *n = makeNode(PGConstraint);
