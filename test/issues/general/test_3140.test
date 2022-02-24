@@ -1,4 +1,4 @@
-# name: test/issues/general/test_3091.test_slow
+# name: test/issues/general/test_3140.test
 # description: Issue 3091: Parser error in test, same query in CLI works fine
 # group: [general]
 
