@@ -7,7 +7,7 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-
+#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include <cstring>
 
 namespace duckdb {
@@ -141,7 +141,7 @@ void WriteAheadLog::WriteDropMacro(MacroCatalogEntry *entry) {
 	writer->WriteString(entry->name);
 }
 
-void WriteAheadLog::WriteCreateTableMacro(MacroCatalogEntry *entry) {
+void WriteAheadLog::WriteCreateTableMacro(TableMacroCatalogEntry *entry) {
 	if (skip_writing) {
 		return;
 	}
@@ -149,7 +149,7 @@ void WriteAheadLog::WriteCreateTableMacro(MacroCatalogEntry *entry) {
 	entry->Serialize(*writer);
 }
 
-void WriteAheadLog::WriteDropTableMacro(MacroCatalogEntry *entry) {
+void WriteAheadLog::WriteDropTableMacro(TableMacroCatalogEntry *entry) {
 	if (skip_writing) {
 		return;
 	}

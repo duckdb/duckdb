@@ -162,12 +162,13 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 		}
 	});
 
+	vector<TableMacroCatalogEntry *> table_macros;
 	schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->internal) {
 			return;
 		}
 		if (entry->type == CatalogType::TABLE_MACRO_ENTRY) {
-			macros.push_back((MacroCatalogEntry *)entry);
+			table_macros.push_back((TableMacroCatalogEntry *)entry);
 		}
 	});
 
@@ -199,6 +200,12 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	metadata_writer->Write<uint32_t>(macros.size());
 	for (auto &macro : macros) {
 		WriteMacro(*macro);
+	}
+
+	// finally write the macro's
+	metadata_writer->Write<uint32_t>(table_macros.size());
+	for (auto &macro : table_macros) {
+		WriteTableMacro(*macro);
 	}
 }
 
@@ -238,6 +245,12 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	for (uint32_t i = 0; i < macro_count; i++) {
 		ReadMacro(context, reader);
 	}
+
+	uint32_t table_macro_count = reader.Read<uint32_t>();
+	for (uint32_t i = 0; i < table_macro_count; i++) {
+		ReadTableMacro(context, reader);
+	}
+
 }
 
 //===--------------------------------------------------------------------===//
@@ -294,6 +307,17 @@ void CheckpointManager::ReadMacro(ClientContext &context, MetaBlockReader &reade
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateFunction(context, info.get());
 }
+
+void CheckpointManager::WriteTableMacro(TableMacroCatalogEntry &macro) {
+	macro.Serialize(*metadata_writer);
+}
+
+void CheckpointManager::ReadTableMacro(ClientContext &context, MetaBlockReader &reader) {
+	auto info = TableMacroCatalogEntry::Deserialize(reader);
+	auto &catalog = Catalog::GetCatalog(db);
+	catalog.CreateFunction(context, info.get());
+}
+
 
 //===--------------------------------------------------------------------===//
 // Table Metadata

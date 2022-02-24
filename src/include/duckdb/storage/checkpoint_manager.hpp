@@ -81,6 +81,7 @@ private:
 	void WriteView(ViewCatalogEntry &table);
 	void WriteSequence(SequenceCatalogEntry &table);
 	void WriteMacro(MacroCatalogEntry &table);
+	void WriteTableMacro(TableMacroCatalogEntry &table);
 	void WriteType(TypeCatalogEntry &table);
 
 	void ReadSchema(ClientContext &context, MetaBlockReader &reader);
@@ -88,6 +89,7 @@ private:
 	void ReadView(ClientContext &context, MetaBlockReader &reader);
 	void ReadSequence(ClientContext &context, MetaBlockReader &reader);
 	void ReadMacro(ClientContext &context, MetaBlockReader &reader);
+	void ReadTableMacro(ClientContext &context, MetaBlockReader &reader);
 	void ReadType(ClientContext &context, MetaBlockReader &reader);
 
 private:

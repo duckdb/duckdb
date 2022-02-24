@@ -15,6 +15,9 @@
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
+#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
+
 namespace duckdb {
 
 struct AlterInfo;
@@ -71,8 +74,8 @@ public:
 	void WriteCreateMacro(MacroCatalogEntry *entry);
 	void WriteDropMacro(MacroCatalogEntry *entry);
 
-	void WriteCreateTableMacro(MacroCatalogEntry *entry);
-	void WriteDropTableMacro(MacroCatalogEntry *entry);
+	void WriteCreateTableMacro(TableMacroCatalogEntry *entry);
+	void WriteDropTableMacro(TableMacroCatalogEntry *entry);
 
 	void WriteCreateType(TypeCatalogEntry *entry);
 	void WriteDropType(TypeCatalogEntry *entry);
