@@ -213,7 +213,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, 
 It can only be used to run individual SELECT statements, and converts the result of that SELECT
 statement into a Relation object.
 Use duckdb.query to run arbitrary SQL queries.)";
-	return make_unique<DuckDBPyRelation>(connection->RelationFromQuery(query, alias, duckdb_query_error));
+	return make_unique<DuckDBPyRelation>(connection->RelationFromQuery(query, alias, duckdb_query_error),this);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, const string &alias) {
@@ -224,7 +224,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, c
 	parser.ParseQuery(query);
 	if (parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT) {
 		return make_unique<DuckDBPyRelation>(connection->RelationFromQuery(
-		    unique_ptr_cast<SQLStatement, SelectStatement>(move(parser.statements[0])), alias));
+		    unique_ptr_cast<SQLStatement, SelectStatement>(move(parser.statements[0])), alias),this);
 	}
 	Execute(query);
 	if (result) {
@@ -237,7 +237,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	return make_unique<DuckDBPyRelation>(connection->Table(tname));
+	return make_unique<DuckDBPyRelation>(connection->Table(tname),this);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
@@ -245,14 +245,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 		throw std::runtime_error("connection closed");
 	}
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(std::move(params))};
-	return make_unique<DuckDBPyRelation>(connection->Values(values));
+	return make_unique<DuckDBPyRelation>(connection->Values(values),this);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	return make_unique<DuckDBPyRelation>(connection->View(vname));
+	return make_unique<DuckDBPyRelation>(connection->View(vname),this);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fname, py::object params) {
@@ -261,7 +261,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fna
 	}
 
 	return make_unique<DuckDBPyRelation>(
-	    connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(std::move(params))));
+	    connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(std::move(params))),this);
 }
 
 static std::string GenerateRandomName() {
@@ -286,7 +286,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(py::object value) {
 	registered_objects[name] = make_unique<RegisteredObject>(value);
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)value.ptr()));
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name));
+	return make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name),this);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filename) {
@@ -295,7 +295,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filen
 	}
 	vector<Value> params;
 	params.emplace_back(filename);
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename));
+	return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename),this);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filename, bool binary_as_string) {
@@ -306,7 +306,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filen
 	params.emplace_back(filename);
 	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
 	return make_unique<DuckDBPyRelation>(
-	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(filename));
+	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(filename),this);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &table, const idx_t rows_per_tuple) {
@@ -324,7 +324,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 	        ->TableFunction("arrow_scan",
 	                        {Value::POINTER((uintptr_t)stream_factory.get()),
 	                         Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)})
-	        ->Alias(name));
+	        ->Alias(name),this);
 	registered_objects[name] = make_unique<RegisteredArrow>(move(stream_factory), table);
 	return rel;
 }
@@ -369,6 +369,9 @@ void DuckDBPyConnection::Close() {
 	database = nullptr;
 	for (auto &cur : cursors) {
 		cur->Close();
+	}
+	for (auto& rel: dependent_relations){
+		rel->conn = nullptr;
 	}
 	cursors.clear();
 }
