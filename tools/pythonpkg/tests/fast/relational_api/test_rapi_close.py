@@ -93,7 +93,30 @@ class TestRAPICloseConnRel(object):
 			rel.fetchall()
 		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
 			rel.map(lambda df : df['col0'].add(42).to_frame())
-
+		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
+			rel.mad("")
+		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
+			rel.mode("")
+		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
+			rel.abs("")
+		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
+			rel.prod("")
+		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
+			rel.skew("")
+		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
+			rel.kurt("")
+		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
+			rel.sem("")
+		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
+			rel.cumsum("")
+		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
+			rel.cumprod("")
+		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
+			rel.cummax("")
+		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
+			rel.cummin("")
+		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
+			rel.describe()
 		con = duckdb.connect()
 		con.execute("CREATE TABLE items(item VARCHAR, value DECIMAL(10,2), count INTEGER)")
 		con.execute("INSERT INTO items VALUES ('jeans', 20.0, 1), ('hammer', 42.2, 2)")
