@@ -16,6 +16,7 @@ using std::stringstream;
 static void WriteCatalogEntries(stringstream &ss, vector<CatalogEntry *> &entries) {
 	for (idx_t i = 0; i < entries.size(); i++) {
 		ss << entries[i]->ToSQL() << std::endl;
+		printf("WriteCatalogEntries: entries[%d] = %s\n", (int)i, entries[i]->name.c_str());
 	}
 	ss << std::endl;
 }
@@ -132,6 +133,7 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	// consider the order of tables because of foreign key constraint
 	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
 		tables.push_back((CatalogEntry *)exported_tables.data[i].entry);
+		printf("PhysicalExport::GetData: tables[%d] = %s\n", (int)i, tables[i]->name.c_str());
 	}
 
 	// write the schema.sql file
@@ -151,7 +153,7 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	// for every table, we write COPY INTO statement with the specified options
 	stringstream load_ss;
 	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
-		auto table = exported_tables.data[i].entry;
+		auto &table = exported_tables.data[i].entry;
 		auto exported_table_info = exported_tables.data[i].table_data;
 		WriteCopyStatement(fs, load_ss, table, *info, exported_table_info, function);
 	}

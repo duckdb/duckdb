@@ -123,6 +123,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	for (idx_t id = 0; id < tables.size(); id++) {
 		auto &table = tables[id];
+		printf("Binder::Bind: tables[%d] = %s\n", (int)id, table->name.c_str());
 		auto info = make_unique<CopyInfo>();
 		// we copy the options supplied to the EXPORT
 		info->format = stmt.info->format;
