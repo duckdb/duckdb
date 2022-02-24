@@ -193,7 +193,7 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 
 	case CatalogType::TABLE_MACRO_ENTRY:
 		// create a macro function
-		function = make_unique_base<StandardEntry, MacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
+		function = make_unique_base<StandardEntry, TableMacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
 		break;
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		D_ASSERT(info->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
