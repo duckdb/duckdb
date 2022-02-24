@@ -1,0 +1,47 @@
+# name: test/sql/returning/returning_query.test
+# description: Test returning with top level insert statement
+# group: [returning]
+
+statement ok
+CREATE TABLE table1 (a INTEGER, b INTEGER, c INTEGER);
+
+# insert a number of rows
+statement ok
+INSERT INTO table1 VALUES (1, 2, 3), (4, 5, 6), (7, 8, 9), (10, 11, 12), (13, 14, 15), (16, 17, 18);
+
+# returning all columns
+query I
+DELETE FROM table1 WHERE a=1 RETURNING *;
+----
+1   2   3
+
+# returning constant expression
+query I
+DELETE FROM table1 WHERE a=4 RETURNING * RETURNING 100, "hello duckdb";
+----
+100 "hello duckdb"
+
+# returning using a column alias
+query I
+DELETE FROM table1 WHERE a=7 RETURNING 100 AS aliascol;
+----
+100
+
+# returning the result of inserting multiple columns
+query I
+DELETE FROM table1 where a > 10;
+----
+10  11  12
+13  14  15
+16  17  18
+
+# insert a number of rows
+statement ok
+INSERT INTO table1 VALUES (1, 2, 3), (4, 5, 6), (7, 8, 9), (10, 11, 12), (13, 14, 15), (16, 17, 18);
+
+# test raise function in returning
+query I
+DELETE FROM table1 WHERE a=1 RETURNING RAISE (IGNORE);
+----
+1   2   3
+

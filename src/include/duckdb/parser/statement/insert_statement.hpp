@@ -27,6 +27,9 @@ public:
 	//! Schema name to insert to
 	string schema;
 
+	//! keep track of optional returningList if it's a RETURNING statement
+	vector<unique_ptr<ParsedExpression>> returningList;
+
 protected:
 	InsertStatement(const InsertStatement &other);
 

@@ -227,6 +227,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	// create a materialized result by continuously fetching
 	auto result = make_unique<MaterializedQueryResult>(pending.statement_type, pending.types, pending.names);
 	while (true) {
+		// what is executer? Maybe that's where we end up also looking at the query?
 		auto chunk = FetchInternal(lock, GetExecutor(), *result);
 		if (!chunk || chunk->size() == 0) {
 			break;
@@ -248,9 +249,11 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	StatementType statement_type = statement->type;
 	auto result = make_shared<PreparedStatementData>(statement_type);
 
+
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartPhase("planner");
 	Planner planner(*this);
+	// TODO: make sure the plan created is also dealing with the returning statement
 	planner.CreatePlan(move(statement));
 	D_ASSERT(planner.plan);
 	profiler.EndPhase();
@@ -482,10 +485,12 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientContextLock &lock, const string &query,
                                                                        unique_ptr<SQLStatement> statement) {
 	// prepare the query for execution
+	// you still have the returningList in statement->returningList.
 	auto prepared = CreatePreparedStatement(lock, query, move(statement));
 	// by default, no values are bound
 	vector<Value> bound_values;
 	// execute the prepared statement
+	// TODO: make sure the returning rows are added to prepared.plan!
 	return PendingPreparedStatement(lock, move(prepared), move(bound_values));
 }
 
@@ -627,13 +632,16 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		// no statements, return empty successful result
 		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT);
 	}
-
+	// here you have a returning List in result
+	// It's probably not right, but you have to bubble up the information somehow
 	unique_ptr<QueryResult> result;
 	QueryResult *last_result = nullptr;
 	for (idx_t i = 0; i < statements.size(); i++) {
 		auto &statement = statements[i];
 		bool is_last_statement = i + 1 == statements.size();
 		bool stream_result = allow_stream_result && is_last_statement;
+		// TODO: the statement is converted into a query, and the returning list needs to be
+		// TODO: added to the query statement
 		auto pending_query = PendingQueryInternal(*lock, move(statement));
 		unique_ptr<QueryResult> current_result;
 		if (!pending_query->success) {

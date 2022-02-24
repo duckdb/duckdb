@@ -28,6 +28,8 @@ public:
 	TableCatalogEntry *table;
 	//! The default statements used by the table
 	vector<unique_ptr<Expression>> bound_defaults;
+	//! The list of returning expressions
+	vector<unique_ptr<ParsedExpression>> returning_list;
 
 protected:
 	void ResolveTypes() override {
