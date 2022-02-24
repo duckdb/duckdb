@@ -8,9 +8,15 @@ CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
 statement ok
 CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
 
+statement ok
+INSERT INTO pk_integers VALUES (1), (2), (3)
+
+statement ok
+INSERT INTO fk_integers VALUES (1), (2)
+
 # now export the db
 statement ok
-EXPORT DATABASE '__TEST_DIR__/export_test' (FORMAT CSV)
+EXPORT DATABASE '__TEST_DIR__/fk_constraint' (FORMAT CSV)
 
 statement ok
 DROP TABLE fk_integers;
@@ -19,13 +25,7 @@ statement ok
 DROP TABLE pk_integers;
 
 statement ok
-IMPORT DATABASE '__TEST_DIR__/export_test'
-
-statement ok
-INSERT INTO pk_integers VALUES (1), (2), (3)
-
-statement ok
-INSERT INTO fk_integers VALUES (1), (2)
+IMPORT DATABASE '__TEST_DIR__/fk_constraint'
 
 # check foreign key constraint
 statement error
