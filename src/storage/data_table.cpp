@@ -441,7 +441,7 @@ static TableIndexList &GetForeignKeyConstraintIndicesAndChunk(const string &tabl
                                                               const vector<idx_t> &dst_keys, ClientContext &context,
                                                               DataChunk &src_chunk, DataChunk &dst_chunk) {
 	auto table_entry_ptr =
-	    Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, table_name);
+	    Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, INVALID_SCHEMA, table_name);
 	if (table_entry_ptr == nullptr) {
 		throw ParserException("Can't find table \"%s\" in foreign key constraint", table_name);
 	}
