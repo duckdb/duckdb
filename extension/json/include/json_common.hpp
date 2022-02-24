@@ -105,10 +105,6 @@ private:
 	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
 
-	//! Some defines copied from yyjson.cpp
-	static constexpr auto IDX_T_SAFE_DIG = 19;
-	static constexpr auto IDX_T_MAX = ((idx_t)(~(idx_t)0));
-
 public:
 	//! Constant JSON type strings
 	static constexpr auto TYPE_STRING_NULL = "NULL";
@@ -119,6 +115,31 @@ public:
 	static constexpr auto TYPE_STRING_VARCHAR = "VARCHAR";
 	static constexpr auto TYPE_STRING_ARRAY = "ARRAY";
 	static constexpr auto TYPE_STRING_OBJECT = "OBJECT";
+
+	template <class YYJSON_VAL_T>
+	static inline const char *const ValTypeToString(YYJSON_VAL_T *val) {
+		switch (GetTag<YYJSON_VAL_T>(val)) {
+		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
+			return JSONCommon::TYPE_STRING_NULL;
+		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
+			return JSONCommon::TYPE_STRING_VARCHAR;
+		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
+			return JSONCommon::TYPE_STRING_ARRAY;
+		case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
+			return JSONCommon::TYPE_STRING_OBJECT;
+		case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_TRUE:
+		case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_FALSE:
+			return JSONCommon::TYPE_STRING_BOOLEAN;
+		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
+			return JSONCommon::TYPE_STRING_UBIGINT;
+		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
+			return JSONCommon::TYPE_STRING_BIGINT;
+		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
+			return JSONCommon::TYPE_STRING_DOUBLE;
+		default:
+			throw InternalException("Unexpected yyjson tag in ValTypeToString");
+		}
+	}
 
 public:
 	static inline DocPointer<yyjson_mut_doc> CreateDocument() {
@@ -137,6 +158,12 @@ public:
 		}
 		return result;
 	}
+	//! Wrapper around yyjson_mut_write so we don't have to free the malloc'ed char[]
+	static unique_ptr<char[]> MutWrite(yyjson_mut_doc *doc, idx_t &len) {
+		unique_ptr<char[]> result;
+		result.reset(yyjson_mut_write(doc, WRITE_FLAG, (size_t *)&len));
+		return result;
+	}
 	//! Write JSON value to string_t
 	static inline string_t WriteVal(yyjson_mut_doc *doc, Vector &vector) {
 		idx_t len;
@@ -151,36 +178,6 @@ public:
 		yyjson_mut_doc_set_root(*mut_doc, mut_val);
 		auto result = WriteVal(*mut_doc, vector);
 		return result;
-	}
-
-	//! Get type string corresponding to yyjson type
-	template <class YYJSON_VAL_T>
-	static inline const char *const ValTypeToString(YYJSON_VAL_T *val) {
-		switch (GetType<YYJSON_VAL_T>(val)) {
-		case YYJSON_TYPE_NULL:
-			return JSONCommon::TYPE_STRING_NULL;
-		case YYJSON_TYPE_BOOL:
-			return JSONCommon::TYPE_STRING_BOOLEAN;
-		case YYJSON_TYPE_NUM:
-			switch (GetSubType<YYJSON_VAL_T>(val)) {
-			case YYJSON_SUBTYPE_UINT:
-				return JSONCommon::TYPE_STRING_UBIGINT;
-			case YYJSON_SUBTYPE_SINT:
-				return JSONCommon::TYPE_STRING_BIGINT;
-			case YYJSON_SUBTYPE_REAL:
-				return JSONCommon::TYPE_STRING_DOUBLE;
-			default:
-				throw InternalException("Unexpected yyjson subtype in ValTypeToString");
-			}
-		case YYJSON_TYPE_STR:
-			return JSONCommon::TYPE_STRING_VARCHAR;
-		case YYJSON_TYPE_ARR:
-			return JSONCommon::TYPE_STRING_ARRAY;
-		case YYJSON_TYPE_OBJ:
-			return JSONCommon::TYPE_STRING_OBJECT;
-		default:
-			throw InternalException("Unexpected yyjson type in ValTypeToString");
-		}
 	}
 
 public:
@@ -231,24 +228,24 @@ public:
 	//! Single-argument JSON read function, i.e. json_type('[1, 2, 3]')
 	template <class T>
 	static void UnaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
-	                         std::function<bool(yyjson_val *, T &, Vector &)> fun) {
+	                         std::function<T(yyjson_val *, Vector &)> fun) {
 		auto &inputs = args.data[0];
 		UnaryExecutor::ExecuteWithNulls<string_t, T>(inputs, result, args.size(),
 		                                             [&](string_t input, ValidityMask &mask, idx_t idx) {
 			                                             auto doc = JSONCommon::ReadDocument(input);
-			                                             T result_val {};
-			                                             if (doc.IsNull() || !fun(doc->root, result_val, result)) {
-				                                             // Cannot find path
+			                                             if (doc.IsNull()) {
 				                                             mask.SetInvalid(idx);
+				                                             return T {};
+			                                             } else {
+				                                             return fun(doc->root, result);
 			                                             }
-			                                             return result_val;
 		                                             });
 	}
 
 	//! Two-argument JSON read function (with path query), i.e. json_type('[1, 2, 3]', '$[0]')
 	template <class T>
 	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
-	                          std::function<bool(yyjson_val *, T &, Vector &)> fun) {
+	                          std::function<T(yyjson_val *, Vector &)> fun) {
 		auto &func_expr = (BoundFunctionExpression &)state.expr;
 		const auto &info = (JSONReadFunctionData &)*func_expr.bind_info;
 
@@ -260,12 +257,13 @@ public:
 			UnaryExecutor::ExecuteWithNulls<string_t, T>(
 			    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
 				    auto doc = ReadDocument(input);
-				    T result_val {};
-				    if (doc.IsNull() || !fun(GetPointerUnsafe<yyjson_val>(doc->root, ptr, len), result_val, result)) {
-					    // Cannot find path
+				    yyjson_val *val;
+				    if (doc.IsNull() || !(val = GetPointerUnsafe<yyjson_val>(doc->root, ptr, len))) {
 					    mask.SetInvalid(idx);
+					    return T {};
+				    } else {
+					    return fun(val, result);
 				    }
-				    return result_val;
 			    });
 		} else {
 			// Columnref path
@@ -273,12 +271,13 @@ public:
 			BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
 			    inputs, paths, result, args.size(), [&](string_t input, string_t path, ValidityMask &mask, idx_t idx) {
 				    auto doc = ReadDocument(input);
-				    T result_val {};
-				    if (doc.IsNull() || !fun(GetPointer<yyjson_val>(doc->root, path), result_val, result)) {
-					    // Cannot find path
+				    yyjson_val *val;
+				    if (doc.IsNull() || !(val = GetPointer<yyjson_val>(doc->root, path))) {
 					    mask.SetInvalid(idx);
+					    return T {};
+				    } else {
+					    return fun(val, result);
 				    }
-				    return result_val;
 			    });
 		}
 	}
@@ -286,7 +285,7 @@ public:
 	//! JSON read function with list of path queries, i.e. json_type('[1, 2, 3]', ['$[0]', '$[1]'])
 	template <class T>
 	static void ExecuteMany(DataChunk &args, ExpressionState &state, Vector &result,
-	                        std::function<bool(yyjson_val *, T &, Vector &)> fun) {
+	                        std::function<T(yyjson_val *, Vector &)> fun) {
 		auto &func_expr = (BoundFunctionExpression &)state.expr;
 		const auto &info = (JSONReadManyFunctionData &)*func_expr.bind_info;
 		D_ASSERT(info.ptrs.size() == info.lens.size());
@@ -309,6 +308,7 @@ public:
 		auto &child_validity = FlatVector::Validity(child);
 
 		idx_t offset = 0;
+		yyjson_val *val;
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = input_data.sel->get_index(i);
 			if (!input_data.validity.RowIsValid(idx)) {
@@ -319,9 +319,11 @@ public:
 			auto doc = ReadDocument(inputs[idx]);
 			for (idx_t path_i = 0; path_i < num_paths; path_i++) {
 				auto child_idx = offset + path_i;
-				if (doc.IsNull() || !fun(GetPointerUnsafe<yyjson_val>(doc->root, info.ptrs[path_i], info.lens[path_i]),
-				                         child_data[child_idx], child)) {
+				if (doc.IsNull() ||
+				    !(val = GetPointerUnsafe<yyjson_val>(doc->root, info.ptrs[path_i], info.lens[path_i]))) {
 					child_validity.SetInvalid(child_idx);
+				} else {
+					child_data[child_idx] = fun(val, child);
 				}
 			}
 
@@ -428,6 +430,9 @@ private:
 		}
 	}
 
+	static constexpr auto IDX_T_SAFE_DIG = 19;
+	static constexpr auto IDX_T_MAX = ((idx_t)(~(idx_t)0));
+
 	static inline idx_t ReadIndex(const char *ptr, const char *const end, idx_t &idx) {
 		const char *const before = ptr;
 		idx = 0;
@@ -452,6 +457,7 @@ private:
 		return idx >= (idx_t)IDX_T_MAX ? 0 : ptr - before;
 	}
 
+private:
 	template <class YYJSON_VAL_T>
 	static inline bool IsObj(YYJSON_VAL_T *val) {
 		throw InternalException("Unknown yyjson value type");
@@ -478,179 +484,13 @@ private:
 	}
 
 	template <class YYJSON_VAL_T>
-	static inline yyjson_type GetType(YYJSON_VAL_T *val) {
+	static inline yyjson_type GetTag(YYJSON_VAL_T *val) {
 		throw InternalException("Unknown yyjson value type");
 	}
 
 	template <class YYJSON_VAL_T>
 	static inline yyjson_subtype GetSubType(YYJSON_VAL_T *val) {
 		throw InternalException("Unknown yyjson value type");
-	}
-
-	//! Wrapper around yyjson_mut_write so we don't have to free the malloc'ed char[]
-	static unique_ptr<char[]> MutWrite(yyjson_mut_doc *doc, idx_t &len) {
-		unique_ptr<char[]> result;
-		result.reset(yyjson_mut_write(doc, WRITE_FLAG, (size_t *)&len));
-		return result;
-	}
-
-public:
-	static void ThrowValFormatError(string error_string, yyjson_val *val) {
-		auto mut_doc = CreateDocument();
-		auto *mut_val = yyjson_val_mut_copy(*mut_doc, val);
-		yyjson_mut_doc_set_root(*mut_doc, mut_val);
-		idx_t len;
-		auto data = MutWrite(*mut_doc, len);
-		error_string = StringUtil::Format(error_string, string(data.get(), len));
-		throw InvalidInputException(error_string);
-	}
-
-	template <class T>
-	static inline bool GetValueNumerical(yyjson_val *val, T &result, bool strict) {
-		auto type = yyjson_get_type(val);
-		switch (type) {
-		case YYJSON_TYPE_NULL:
-		case YYJSON_TYPE_NONE:
-			return false;
-		case YYJSON_TYPE_ARR:
-		case YYJSON_TYPE_OBJ:
-			break;
-		default:
-			if (GetValueNumerical<T>(val, result, type, strict)) {
-				return true;
-			}
-			break;
-		}
-		if (strict) {
-			ThrowValFormatError("Failed to cast value to numerical: %s", val);
-		}
-		return false;
-	}
-
-	static inline bool GetValueString(yyjson_val *val, string_t &result, Vector &vector) {
-		switch (yyjson_get_type(val)) {
-		case YYJSON_TYPE_NULL:
-		case YYJSON_TYPE_NONE:
-			return false;
-		case YYJSON_TYPE_BOOL:
-			result = StringCast::Operation<bool>(unsafe_yyjson_get_bool(val), vector);
-			break;
-		case YYJSON_TYPE_STR:
-			result = StringVector::AddString(vector, unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
-			break;
-		case YYJSON_TYPE_NUM:
-			switch (unsafe_yyjson_get_subtype(val)) {
-			case YYJSON_SUBTYPE_UINT:
-				result = StringCast::Operation<uint64_t>(unsafe_yyjson_get_uint(val), vector);
-				break;
-			case YYJSON_SUBTYPE_SINT:
-				result = StringCast::Operation<int64_t>(unsafe_yyjson_get_sint(val), vector);
-				break;
-			case YYJSON_SUBTYPE_REAL:
-				result = StringCast::Operation<double>(unsafe_yyjson_get_real(val), vector);
-				break;
-			default:
-				throw InternalException("Unexpected yyjson subtype in GetValueString");
-			}
-			break;
-		default:
-			// Convert JSON object/arrays to strings because we can
-			result = JSONCommon::WriteVal(val, vector);
-		}
-		// Casting to string should always work (if not NULL)
-		return true;
-	}
-
-	template <class T>
-	static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t width, uint8_t scale, bool strict) {
-		switch (yyjson_get_type(val)) {
-		case YYJSON_TYPE_NULL:
-		case YYJSON_TYPE_NONE:
-			return false;
-		case YYJSON_TYPE_ARR:
-		case YYJSON_TYPE_OBJ:
-			break;
-		default:
-			string error_message;
-			if (GetValueDecimal<T>(val, result, &error_message, width, scale)) {
-				return true;
-			}
-			break;
-		}
-		if (strict) {
-			ThrowValFormatError("Failed to cast value to DECIMAL: %s", val);
-		}
-		return false;
-	}
-
-private:
-	static inline string_t GetStringFromVal(yyjson_val *val) {
-		return string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
-	}
-
-	template <class T>
-	static inline bool GetValueNumerical(yyjson_val *val, T &result, yyjson_type type, bool strict) {
-		bool success;
-		switch (type) {
-		case YYJSON_TYPE_BOOL:
-			success = TryCast::Operation<bool, T>(unsafe_yyjson_get_bool(val), result, strict);
-			break;
-		case YYJSON_TYPE_STR:
-			success = TryCast::Operation<string_t, T>(GetStringFromVal(val), result, strict);
-			break;
-		case YYJSON_TYPE_NUM:
-			switch (unsafe_yyjson_get_subtype(val)) {
-			case YYJSON_SUBTYPE_UINT:
-				success = TryCast::Operation<uint64_t, T>(unsafe_yyjson_get_uint(val), result, strict);
-				break;
-			case YYJSON_SUBTYPE_SINT:
-				success = TryCast::Operation<int64_t, T>(unsafe_yyjson_get_sint(val), result, strict);
-				break;
-			case YYJSON_SUBTYPE_REAL:
-				success = TryCast::Operation<double, T>(unsafe_yyjson_get_real(val), result, strict);
-				break;
-			default:
-				throw InternalException("Unexpected yyjson subtype in TemplatedGetValue");
-			}
-			break;
-		default:
-			throw InternalException("Unexpected yyjson type in TemplatedGetValue");
-		}
-		if (success) {
-			return true;
-		}
-		if (strict) {
-			ThrowValFormatError("Failed to cast value: %s", val);
-		}
-		return false;
-	}
-
-	template <class T>
-	static inline bool GetValueDecimal(yyjson_val *val, T &result, string *error_message, uint8_t width,
-	                                   uint8_t scale) {
-		switch (yyjson_get_type(val)) {
-		case YYJSON_TYPE_BOOL:
-			return TryCastToDecimal::Operation<bool, T>(unsafe_yyjson_get_bool(val), result, error_message, width,
-			                                            scale);
-		case YYJSON_TYPE_STR:
-			return TryCastToDecimal::Operation<string_t, T>(GetStringFromVal(val), result, error_message, width, scale);
-		case YYJSON_TYPE_NUM:
-			switch (unsafe_yyjson_get_subtype(val)) {
-			case YYJSON_SUBTYPE_UINT:
-				return TryCastToDecimal::Operation<uint64_t, T>(unsafe_yyjson_get_uint(val), result, error_message,
-				                                                width, scale);
-			case YYJSON_SUBTYPE_SINT:
-				return TryCastToDecimal::Operation<int64_t, T>(unsafe_yyjson_get_sint(val), result, error_message,
-				                                               width, scale);
-			case YYJSON_SUBTYPE_REAL:
-				return TryCastToDecimal::Operation<double, T>(unsafe_yyjson_get_real(val), result, error_message, width,
-				                                              scale);
-			default:
-				throw InternalException("Unexpected yyjson subtype in GetValueDecimal");
-			}
-		default:
-			throw InternalException("Unexpected yyjson type in GetValueDecimal");
-		}
 	}
 };
 
@@ -709,12 +549,12 @@ inline yyjson_mut_val *JSONCommon::ArrGet(yyjson_mut_val *val, idx_t index) {
 }
 
 template <>
-inline yyjson_type JSONCommon::GetType(yyjson_val *val) {
-	return yyjson_get_type(val);
+inline yyjson_type JSONCommon::GetTag(yyjson_val *val) {
+	return yyjson_get_tag(val);
 }
 template <>
-inline yyjson_type JSONCommon::GetType(yyjson_mut_val *val) {
-	return yyjson_mut_get_type(val);
+inline yyjson_type JSONCommon::GetTag(yyjson_mut_val *val) {
+	return yyjson_mut_get_tag(val);
 }
 
 template <>

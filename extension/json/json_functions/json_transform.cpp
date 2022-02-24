@@ -5,6 +5,16 @@
 
 namespace duckdb {
 
+static void ThrowValFormatError(string error_string, yyjson_val *val) {
+	auto mut_doc = JSONCommon::CreateDocument();
+	auto *mut_val = yyjson_val_mut_copy(*mut_doc, val);
+	yyjson_mut_doc_set_root(*mut_doc, mut_val);
+	idx_t len;
+	auto data = JSONCommon::MutWrite(*mut_doc, len);
+	error_string = StringUtil::Format(error_string, string(data.get(), len));
+	throw InvalidInputException(error_string);
+}
+
 //! Forward declaration for recursion
 static LogicalType StructureToType(yyjson_val *val);
 
@@ -25,7 +35,7 @@ static LogicalType StructureToTypeObject(yyjson_val *obj) {
 		val = yyjson_obj_iter_get_val(key);
 		auto key_str = yyjson_get_str(key);
 		if (names.find(key_str) != names.end()) {
-			JSONCommon::ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
+			ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
 		}
 		names.insert(key_str);
 		child_types.emplace_back(key_str, StructureToType(val));
@@ -34,13 +44,13 @@ static LogicalType StructureToTypeObject(yyjson_val *obj) {
 }
 
 static LogicalType StructureToType(yyjson_val *val) {
-	switch (yyjson_get_type(val)) {
-	case YYJSON_TYPE_ARR:
+	switch (yyjson_get_tag(val)) {
+	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
 		return StructureToTypeArray(val);
-	case YYJSON_TYPE_OBJ:
+	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
 		return StructureToTypeObject(val);
-	case YYJSON_TYPE_STR:
-		return TransformStringToLogicalType(StringUtil::Lower(yyjson_get_str(val)));
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
+		return TransformStringToLogicalType(yyjson_get_str(val));
 	default:
 		throw InvalidInputException("invalid JSON structure");
 	}
@@ -68,6 +78,110 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
+static inline string_t GetString(yyjson_val *val) {
+	return string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
+}
+
+template <class T, class OP = TryCast>
+static inline bool GetValueNumerical(yyjson_val *val, T &result, bool strict) {
+	bool success;
+	switch (yyjson_get_tag(val)) {
+	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
+		return false;
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
+		success = OP::template Operation<string_t, T>(GetString(val), result, strict);
+		break;
+	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
+	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
+		success = false;
+		break;
+	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_TRUE:
+	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_FALSE:
+		success = OP::template Operation<bool, T>(unsafe_yyjson_get_bool(val), result, strict);
+		break;
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
+		success = OP::template Operation<uint64_t, T>(unsafe_yyjson_get_uint(val), result, strict);
+		break;
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
+		success = OP::template Operation<int64_t, T>(unsafe_yyjson_get_sint(val), result, strict);
+		break;
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
+		success = OP::template Operation<double, T>(unsafe_yyjson_get_real(val), result, strict);
+		break;
+	default:
+		throw InternalException("Unknown yyjson tag in GetValueNumerical");
+	}
+	if (!success && strict) {
+		ThrowValFormatError("Failed to cast value to numerical: %s", val);
+	}
+	return success;
+}
+
+template <class T, class OP = TryCastToDecimal>
+static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_t s, bool strict) {
+	bool success;
+	string error_message;
+	switch (yyjson_get_tag(val)) {
+	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
+		return false;
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
+		success = OP::template Operation<string_t, T>(GetString(val), result, &error_message, w, s);
+		break;
+	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
+	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
+		success = false;
+		break;
+	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_TRUE:
+	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_FALSE:
+		success = OP::template Operation<bool, T>(unsafe_yyjson_get_bool(val), result, &error_message, w, s);
+		break;
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
+		success = OP::template Operation<uint64_t, T>(unsafe_yyjson_get_uint(val), result, &error_message, w, s);
+		break;
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
+		success = OP::template Operation<int64_t, T>(unsafe_yyjson_get_sint(val), result, &error_message, w, s);
+		break;
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
+		success = OP::template Operation<double, T>(unsafe_yyjson_get_real(val), result, &error_message, w, s);
+		break;
+	default:
+		throw InternalException("Unknown yyjson tag in GetValueString");
+	}
+	if (!success && strict) {
+		ThrowValFormatError("Failed to cast value to numerical: %s", val);
+	}
+	return success;
+}
+
+static inline bool GetValueString(yyjson_val *val, string_t &result, Vector &vector) {
+	switch (yyjson_get_tag(val)) {
+	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
+		return false;
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
+		result = StringVector::AddString(vector, unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
+		return true;
+	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
+	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
+		result = JSONCommon::WriteVal(val, vector);
+		return true;
+	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_TRUE:
+	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_FALSE:
+		result = StringCast::Operation<bool>(unsafe_yyjson_get_bool(val), vector);
+		return true;
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
+		result = StringCast::Operation<uint64_t>(unsafe_yyjson_get_uint(val), vector);
+		return true;
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
+		result = StringCast::Operation<int64_t>(unsafe_yyjson_get_sint(val), vector);
+		return true;
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
+		result = StringCast::Operation<double>(unsafe_yyjson_get_real(val), vector);
+		return true;
+	default:
+		throw InternalException("Unknown yyjson tag in GetValueString");
+	}
+}
+
 //! Forward declaration for recursion
 static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, bool strict);
 
@@ -77,7 +191,7 @@ static void TransformNumerical(yyjson_val *vals[], Vector &result, const idx_t c
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
-		if (!val || yyjson_is_null(val) || !JSONCommon::GetValueNumerical<T>(val, data[i], strict)) {
+		if (!val || !GetValueNumerical<T>(val, data[i], strict)) {
 			validity.SetInvalid(i);
 		}
 	}
@@ -90,7 +204,7 @@ static void TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t cou
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
-		if (!val || yyjson_is_null(val) || !JSONCommon::GetValueDecimal<T>(val, data[i], width, scale, strict)) {
+		if (!val || !GetValueDecimal<T>(val, data[i], width, scale, strict)) {
 			validity.SetInvalid(i);
 		}
 	}
@@ -107,7 +221,7 @@ static void TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 		if (!val || yyjson_is_null(val)) {
 			validity.SetInvalid(i);
 		} else if (strict && !yyjson_is_str(val)) {
-			JSONCommon::ThrowValFormatError("Unable to cast '%s' to " + LogicalTypeIdToString(target.id()), val);
+			ThrowValFormatError("Unable to cast '%s' to " + LogicalTypeIdToString(target.id()), val);
 		} else {
 			data[i] = StringVector::AddString(string_vector, yyjson_get_str(val), yyjson_get_len(val));
 		}
@@ -124,7 +238,7 @@ static void TransformToString(yyjson_val *vals[], Vector &result, const idx_t co
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
-		if (!val || yyjson_is_null(val) || !JSONCommon::GetValueString(val, data[i], result)) {
+		if (!val || !GetValueString(val, data[i], result)) {
 			validity.SetInvalid(i);
 		}
 	}

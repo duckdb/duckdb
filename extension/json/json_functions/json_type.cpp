@@ -3,11 +3,8 @@
 
 namespace duckdb {
 
-static inline bool GetType(yyjson_val *val, string_t &result_val, Vector &result) {
-	if (val) {
-		result_val = StringVector::AddString(result, JSONCommon::ValTypeToString(val));
-	}
-	return val;
+static inline string_t GetType(yyjson_val *val, Vector &result) {
+	return StringVector::AddString(result, JSONCommon::ValTypeToString(val));
 }
 
 static void UnaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {

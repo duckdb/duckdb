@@ -3,20 +3,13 @@
 
 namespace duckdb {
 
-static inline bool ExtractFromVal(yyjson_val *val, string_t &result_val, Vector &result) {
-	if (val) {
-		result_val = JSONCommon::WriteVal(val, result);
-	}
-	return val;
+static inline string_t ExtractFromVal(yyjson_val *val, Vector &result) {
+	return JSONCommon::WriteVal(val, result);
 }
 
-static inline bool ExtractStringFromVal(yyjson_val *val, string_t &result_val, Vector &result) {
-	if (val) {
-		result_val = yyjson_is_str(val)
-		                 ? StringVector::AddString(result, unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val))
-		                 : JSONCommon::WriteVal(val, result);
-	}
-	return val;
+static inline string_t ExtractStringFromVal(yyjson_val *val, Vector &result) {
+	return yyjson_is_str(val) ? StringVector::AddString(result, unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val))
+	                          : JSONCommon::WriteVal(val, result);
 }
 
 static void ExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
