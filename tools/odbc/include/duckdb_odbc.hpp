@@ -7,6 +7,7 @@
 #include "duckdb/common/windows.hpp"
 #include "descriptor.hpp"
 #include "odbc_diagnostic.hpp"
+#include "odbc_exception.hpp"
 #include "odbc_utils.hpp"
 
 #include <sqltypes.h>
@@ -171,7 +172,7 @@ public:
 template <class T>
 SQLRETURN WithHandle(SQLHANDLE &handle, T &&lambda) {
 	if (!handle) {
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 	auto *hdl = (OdbcHandle *)handle;
 	if (!hdl->odbc_diagnostic) {
@@ -225,7 +226,16 @@ SQLRETURN WithStatement(SQLHANDLE &statement_handle, T &&lambda) {
 	if (!hdl->dbc || !hdl->dbc->conn) {
 		return SQL_ERROR;
 	}
-	return lambda(hdl);
+	try {
+		return lambda(hdl);
+	} catch (OdbcException &ex) {
+		auto diag_record = ex.GetDiagRecord();
+		auto component = ex.GetComponent();
+		auto data_source = hdl->dbc->GetDataSourceName();
+		hdl->odbc_diagnostic->FormatDiagnosticMessage(diag_record, data_source, component);
+		hdl->odbc_diagnostic->AddDiagRecord(diag_record);
+		return ex.GetSqlReturn();
+	}
 }
 
 template <class T>

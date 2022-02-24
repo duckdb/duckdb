@@ -28,6 +28,7 @@ using duckdb::hugeint_t;
 using duckdb::interval_t;
 using duckdb::LogicalType;
 using duckdb::LogicalTypeId;
+using duckdb::OdbcDiagnostic;
 using duckdb::OdbcInterval;
 using duckdb::OdbcUtils;
 using duckdb::Store;
@@ -51,8 +52,10 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 		auto query = duckdb::OdbcUtils::ReadString(statement_text, text_length);
 		stmt->stmt = stmt->dbc->conn->Prepare(query);
 		if (!stmt->stmt->success) {
-			stmt->error_messages.emplace_back(stmt->stmt->error);
-			return SQL_ERROR;
+			OdbcException exception(stmt->stmt->error, "42000", stmt->dbc->GetDataSourceName());
+			exception.SetComponent("PrepareStmt");
+			exception.SetSqlReturn(SQL_ERROR);
+			throw exception;
 		}
 		stmt->param_desc->ResetParams(stmt->stmt->n_param);
 
