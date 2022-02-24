@@ -24,6 +24,8 @@ import java.sql.SQLWarning;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
@@ -141,6 +143,51 @@ public class TestDuckDBJDBC {
 		}
 
 	}
+
+	// public static void test_timestamp_tz() throws Exception {
+	// 	Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+	// 	Statement stmt = conn.createStatement();
+
+	// 	ResultSet rs;
+		
+		// stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMPTZ)");
+		// stmt.execute("INSERT INTO t (id, t1) VALUES (1, '2022-01-01T12:11:10+02')");
+		// stmt.execute("INSERT INTO t (id, t1) VALUES (2, '2022-01-01T12:11:10')");
+
+		// PreparedStatement ps = conn.prepareStatement(
+				// "INSERT INTO T (id, t1) VALUES (?, ?)");
+
+		// OffsetDateTime odt1 = OffsetDateTime.of(2020, 10, 7, 13, 15, 7, 12345, ZoneOffset.ofHours(7));
+		// OffsetDateTime odt2 = OffsetDateTime.of(1878, 10, 2, 1, 15, 7, 12345, ZoneOffset.ofHours(-5));
+
+		// ps.setObject(1, 3);
+		// ps.setObject(2, odt1);
+		// ps.execute();
+		// ps.setObject(2, OffsetDateTime.now(), Types.TIMESTAMP_WITH_TIMEZONE);
+		// ps.setObject(1, 4);
+		// ps.execute();
+		// ps.setObject(1, 5);
+		// ps.setObject(2, odt2);
+		// ps.execute();
+
+	// 	rs = stmt.executeQuery("SELECT * FROM t ORDER BY id");
+	// 	ResultSetMetaData meta = rs.getMetaData();
+		// rs.next();
+		// System.out.println(rs.getObject(2, OffsetDateTime.class));
+		// rs.next();
+		// System.out.println(rs.getObject(2, OffsetDateTime.class));
+		// rs.next();
+		// System.out.println(rs.getObject(2, OffsetDateTime.class));
+		// rs.next();
+		// System.out.println(rs.getObject(2, OffsetDateTime.class));
+		// rs.next();
+		// System.out.println(rs.getObject(2, OffsetDateTime.class));
+
+	// 	rs.close();
+	// 	stmt.close();
+		// conn.close();
+		// System.exit(0);
+	// }
 
 	public static void test_result() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
@@ -353,10 +400,14 @@ public static void test_duckdb_timestamp() throws Exception {
 		Timestamp ts0 = Timestamp.valueOf("1970-01-01 00:00:00");
 		Timestamp ts1 = Timestamp.valueOf("2021-07-29 21:13:11");
 		Timestamp ts2 = Timestamp.valueOf("2021-07-29 21:13:11.123456");
+		Timestamp ts3 = Timestamp.valueOf("1921-07-29 21:13:11");
+		Timestamp ts4 = Timestamp.valueOf("1921-07-29 21:13:11.123456");
 
 		Timestamp cts0 = new DuckDBTimestamp(ts0).toSqlTimestamp();
 		Timestamp cts1 = new DuckDBTimestamp(ts1).toSqlTimestamp();
 		Timestamp cts2 = new DuckDBTimestamp(ts2).toSqlTimestamp();
+		Timestamp cts3 = new DuckDBTimestamp(ts3).toSqlTimestamp();
+		Timestamp cts4 = new DuckDBTimestamp(ts4).toSqlTimestamp();
 		
 		assertTrue(ts0.getTime() == cts0.getTime());
 		assertTrue(ts0.compareTo(cts0) == 0);
@@ -364,6 +415,10 @@ public static void test_duckdb_timestamp() throws Exception {
 		assertTrue(ts1.compareTo(cts1) == 0);
 		assertTrue(ts2.getTime() == cts2.getTime());
 		assertTrue(ts2.compareTo(cts2) == 0);
+		assertTrue(ts3.getTime() == cts3.getTime());
+		assertTrue(ts3.compareTo(cts3) == 0);
+		assertTrue(ts4.getTime() == cts4.getTime());
+		assertTrue(ts4.compareTo(cts4) == 0);
 
 		assertTrue(DuckDBTimestamp.getMicroseconds(DuckDBTimestamp.toSqlTimestamp(5678912345L)) == 5678912345L);
 
@@ -408,6 +463,26 @@ public static void test_duckdb_timestamp() throws Exception {
 		assertTrue(rs4.next());
 		assertEquals(rs4.getInt(1), 1);
 		rs4.close();
+		ps.close();
+
+		Statement stmt2 = conn.createStatement();
+		stmt2.execute("INSERT INTO a (ts) VALUES ('1905-11-02 07:59:58.12345')");
+		ps = conn.prepareStatement(
+				"SELECT COUNT(ts) FROM a WHERE ts = ?");
+		ps.setTimestamp(1, Timestamp.valueOf("1905-11-02 07:59:58.12345"));
+		ResultSet rs5 = ps.executeQuery();
+		assertTrue(rs5.next());
+		assertEquals(rs5.getInt(1), 1);
+		rs5.close();
+		ps.close();
+
+		ps = conn.prepareStatement(
+				"SELECT ts FROM a WHERE ts = ?");
+		ps.setTimestamp(1, Timestamp.valueOf("1905-11-02 07:59:58.12345"));
+		ResultSet rs6 = ps.executeQuery();
+		assertTrue(rs6.next());
+		assertEquals(rs6.getTimestamp(1), Timestamp.valueOf("1905-11-02 07:59:58.12345"));
+		rs6.close();
 		ps.close();
 
 		conn.close();
