@@ -44,6 +44,7 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, MacroCatalogEntry *macro_func, idx_t depth,
                                        unique_ptr<ParsedExpression> *expr) {
 
+
 	// recast function so we can access the scalar member function->expression
 	auto &macro_def = (ScalarMacroFunction &)*macro_func->function;
 
@@ -51,7 +52,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, MacroCatalo
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
 
-	string error = MacroFunction::ValidateArguments(*macro_func, function, positionals, defaults);
+	string error = MacroFunction::ValidateArguments(*macro_func->function, macro_func->name, function, positionals, defaults);
 	if (!error.empty()) {
 		return BindResult(binder.FormatError(*expr->get(), error));
 	}

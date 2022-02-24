@@ -14,7 +14,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
-#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -93,7 +93,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 
 	} else if (func_catalog->type == CatalogType::TABLE_MACRO_ENTRY) {
 
-		auto macro_func = (MacroCatalogEntry *)func_catalog;
+		auto macro_func = (TableMacroCatalogEntry *)func_catalog;
 		auto query_node = BindTableMacro(*fexpr, macro_func, 0);
 		D_ASSERT(query_node);
 

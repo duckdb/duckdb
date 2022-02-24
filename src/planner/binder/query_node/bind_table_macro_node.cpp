@@ -19,22 +19,24 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 
-#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/function/table_macro_function.hpp"
 
 namespace duckdb {
 
-unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, MacroCatalogEntry *macro_func, idx_t depth) {
+unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry *macro_func, idx_t depth) {
 
-	auto node = macro_func->function->query_node->Copy();
+	auto &macro_def = (TableMacroFunction &)*macro_func->function;
+	auto node = macro_def.query_node->Copy();
 
-	auto &macro_def = *macro_func->function;
+	//auto &macro_def = *macro_func->function;
 
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
-	string error = MacroFunction::ValidateArguments(*macro_func, function, positionals, defaults);
+	string error = MacroFunction::ValidateArguments(*macro_func->function, macro_func->name, function, positionals, defaults);
 	if (!error.empty()) {
 		// cannot use error below as binder rnot in scope
 		// return BindResult(binder. FormatError(*expr->get(), error));
