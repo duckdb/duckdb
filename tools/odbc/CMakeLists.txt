@@ -44,6 +44,7 @@ add_library(
   row_descriptor.cpp
   cursor.cpp
   odbc_diagnostic.cpp
+  odbc_exception.cpp
   duckdb_odbc.def)
 
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
