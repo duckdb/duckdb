@@ -37,8 +37,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 			throw ParserException("The number of referencing and referenced columns for foreign keys must be the same");
 		}
 		if (fk_columns.empty()) {
-			throw ParserException(
-			    "The set of referencing and referenced columns for foreign keys must be not empty");
+			throw ParserException("The set of referencing and referenced columns for foreign keys must be not empty");
 		}
 		vector<idx_t> pk_keys, fk_keys;
 		return make_unique<ForeignKeyConstraint>(move(pk_table), move(pk_columns), move(pk_keys), move(fk_columns),
