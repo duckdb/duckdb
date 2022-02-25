@@ -435,29 +435,29 @@ static string JSONSanitize(const string &text) {
 // Print a row
 static void PrintRow(std::ostream &ss, const string &annotation, int id, const string &name, double time,
                      int sample_counter, int tuple_counter, const string &extra_info, int depth) {
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ') << " {\n";
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ')
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ') << " {\n";
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ')
 	   << "   \"annotation\": \"" + JSONSanitize(annotation) + "\",\n";
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ')
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ')
 	   << "   \"id\": " + to_string(id) + ",\n";
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ')
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ')
 	   << "   \"name\": \"" + JSONSanitize(name) + "\",\n";
 #if defined(RDTSC)
 	ss << string(depth * 3, ' ') << "   \"timing\": \"NULL\" ,\n";
 	ss << string(depth * 3, ' ') << "   \"cycles_per_tuple\": " + StringUtil::Format("%.4f", time) + ",\n";
 #else
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ')
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ')
 	   << "   \"timing\":" + to_string(time) + ",\n";
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ')
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ')
 	   << "   \"cycles_per_tuple\": \"NULL\" ,\n";
 #endif
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ')
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ')
 	   << "   \"sample_size\": " << to_string(sample_counter) + ",\n";
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ')
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ')
 	   << "   \"input_size\": " << to_string(tuple_counter) + ",\n";
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ') << "   \"extra_info\": \""
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ') << "   \"extra_info\": \""
 	   << JSONSanitize(extra_info) + "\"\n";
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ') << " },\n";
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ') << " },\n";
 }
 
 static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, int &fun_id, int depth) {
@@ -477,16 +477,16 @@ static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, int &fun_id
 }
 
 static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int depth = 1) {
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ') << " {\n";
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ')
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ') << " {\n";
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ')
 	   << "   \"name\": \"" + JSONSanitize(node.name) + "\",\n";
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ')
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ')
 	   << "   \"timing\":" + to_string(node.info.time) + ",\n";
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ')
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ')
 	   << "   \"cardinality\":" + to_string(node.info.elements) + ",\n";
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ')
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ')
 	   << "   \"extra_info\": \"" + JSONSanitize(node.extra_info) + "\",\n";
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ') << "   \"timings\": [";
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ') << "   \"timings\": [";
 	int32_t function_counter = 1;
 	int32_t expression_counter = 1;
 	ss << "\n ";
@@ -506,10 +506,10 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 	}
 	ss.seekp(-2, ss.cur);
 	ss << "\n";
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ') << "   ],\n";
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ') << "   \"children\": [\n";
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ') << "   ],\n";
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ') << "   \"children\": [\n";
 	if (node.children.empty()) {
-		ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ') << "   ]\n";
+		ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ') << "   ]\n";
 	} else {
 		for (idx_t i = 0; i < node.children.size(); i++) {
 			if (i > 0) {
@@ -517,9 +517,9 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 			}
 			ToJSONRecursive(*node.children[i], ss, depth + 1);
 		}
-		ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ') << "   ]\n";
+		ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ') << "   ]\n";
 	}
-	ss << string(static_cast<std::basic_string<char>::size_type>(depth *) 3, ' ') << " }\n";
+	ss << string(static_cast<std::basic_string<char>::size_type>(depth * 3), ' ') << " }\n";
 }
 
 string QueryProfiler::ToJSON() const {
