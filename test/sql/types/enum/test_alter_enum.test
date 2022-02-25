@@ -44,6 +44,10 @@ select typeof(name) from person limit 1
 ----
 name_enum
 
+# This should not be possible
+statement error
+DROP TYPE name_enum
+
 # We should be able to cast this back to string
 statement ok
 ALTER TABLE person ALTER name TYPE text
