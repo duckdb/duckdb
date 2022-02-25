@@ -53,6 +53,7 @@ void ScanForeignKeyTable(vector<TableCatalogEntry *> &ordered, vector<TableCatal
                          bool move_only_pk_table) {
 	for (vector<TableCatalogEntry *>::iterator i = unordered.begin(); i != unordered.end();) {
 		auto table_entry = *i;
+		printf("ScanForeignKeyTable: table_entry = %s\n", table_entry->name.c_str());
 		bool move_to_ordered = true;
 		for (idx_t j = 0; j < table_entry->constraints.size(); j++) {
 			auto &cond = table_entry->constraints[j];
@@ -60,6 +61,7 @@ void ScanForeignKeyTable(vector<TableCatalogEntry *> &ordered, vector<TableCatal
 				auto &fk = (ForeignKeyConstraint &)*cond;
 				if ((move_only_pk_table && fk.is_fk_table) ||
 				    (!move_only_pk_table && fk.is_fk_table && IsExistMainKeyTable(fk.pk_table, unordered))) {
+					printf("ScanForeignKeyTable: failed table name = %s\n", table_entry->name.c_str());
 					move_to_ordered = false;
 					break;
 				}
@@ -113,7 +115,13 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	// reorder tables because of foreign key constraint
+	for (idx_t i = 0; i < tables.size(); i++) {
+		printf("exported tables[%d] = %s\n", (int)i, tables[i]->name.c_str());
+	}
 	ReorderTableEntries(tables);
+	for (idx_t i = 0; i < tables.size(); i++) {
+		printf("exported tables[%d] = %s\n", (int)i, tables[i]->name.c_str());
+	}
 
 	// now generate the COPY statements for each of the tables
 	auto &fs = FileSystem::GetFileSystem(context);
