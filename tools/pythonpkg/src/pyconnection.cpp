@@ -165,6 +165,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, py::object value) {
 	RegisterPythonObject("__append_df", std::move(value));
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
+	UnregisterPythonObject("__append_df");
 }
 
 DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name, py::object python_object,
