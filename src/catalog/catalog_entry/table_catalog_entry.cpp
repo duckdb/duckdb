@@ -156,7 +156,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		auto change_type_info = (ChangeColumnTypeInfo *)table_info;
 		return ChangeColumnType(context, *change_type_info);
 	}
-	case AlterTableType::FOREIGN_KEY_CONSTR: {
+	case AlterTableType::FOREIGN_KEY_CONSTRAINT: {
 		auto foreign_key_constraint_info = (ForeignKeyConstraintInfo *)table_info;
 		return SetForeignKeyConstraint(context, *foreign_key_constraint_info);
 	}

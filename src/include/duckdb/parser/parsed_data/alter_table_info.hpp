@@ -72,7 +72,7 @@ enum class AlterTableType : uint8_t {
 	REMOVE_COLUMN = 4,
 	ALTER_COLUMN_TYPE = 5,
 	SET_DEFAULT = 6,
-	FOREIGN_KEY_CONSTR
+	FOREIGN_KEY_CONSTRAINT = 7
 };
 
 struct AlterTableInfo : public AlterInfo {

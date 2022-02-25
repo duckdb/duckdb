@@ -53,16 +53,13 @@ void ScanForeignKeyTable(vector<TableCatalogEntry *> &ordered, vector<TableCatal
                          bool move_only_pk_table) {
 	for (vector<TableCatalogEntry *>::iterator i = unordered.begin(); i != unordered.end();) {
 		auto table_entry = *i;
-		printf("ScanForeignKeyTable: table_entry = %s\n", table_entry->name.c_str());
 		bool move_to_ordered = true;
 		for (idx_t j = 0; j < table_entry->constraints.size(); j++) {
 			auto &cond = table_entry->constraints[j];
 			if (cond->type == ConstraintType::FOREIGN_KEY) {
-				printf("ScanForeignKeyTable: found foreign key constraint for table_entry = %s\n", table_entry->name.c_str());
 				auto &fk = (ForeignKeyConstraint &)*cond;
 				if ((move_only_pk_table && fk.is_fk_table) ||
 				    (!move_only_pk_table && fk.is_fk_table && IsExistMainKeyTable(fk.pk_table, unordered))) {
-					printf("ScanForeignKeyTable: failed table name = %s\n", table_entry->name.c_str());
 					move_to_ordered = false;
 					break;
 				}
@@ -77,7 +74,7 @@ void ScanForeignKeyTable(vector<TableCatalogEntry *> &ordered, vector<TableCatal
 	}
 }
 
-void ReorderTableEntries(vector<TableCatalogEntry *> tables) {
+void ReorderTableEntries(vector<TableCatalogEntry *> &tables) {
 	vector<TableCatalogEntry *> ordered;
 	vector<TableCatalogEntry *> unordered = tables;
 	ScanForeignKeyTable(ordered, unordered, true);
@@ -116,13 +113,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	// reorder tables because of foreign key constraint
-	for (idx_t i = 0; i < tables.size(); i++) {
-		printf("exported tables[%d] = %s\n", (int)i, tables[i]->name.c_str());
-	}
 	ReorderTableEntries(tables);
-	for (idx_t i = 0; i < tables.size(); i++) {
-		printf("exported tables[%d] = %s\n", (int)i, tables[i]->name.c_str());
-	}
 
 	// now generate the COPY statements for each of the tables
 	auto &fs = FileSystem::GetFileSystem(context);
@@ -130,8 +121,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	BoundExportData exported_tables;
 
-	for (idx_t id = 0; id < tables.size(); id++) {
-		auto &table = tables[id];
+	idx_t id = 0; // Id for table
+	for (auto &table : tables) {
 		auto info = make_unique<CopyInfo>();
 		// we copy the options supplied to the EXPORT
 		info->format = stmt.info->format;
@@ -162,6 +153,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		table_info.entry = table;
 		table_info.table_data = exported_data;
 		exported_tables.data.push_back(table_info);
+		id++;
 
 		// generate the copy statement and bind it
 		CopyStatement copy_stmt;
