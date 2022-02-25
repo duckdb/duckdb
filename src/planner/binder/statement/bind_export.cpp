@@ -9,7 +9,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
-#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include <algorithm>
@@ -55,12 +55,13 @@ void ScanForeignKeyTable(vector<TableCatalogEntry *> &ordered, vector<TableCatal
 		auto table_entry = *i;
 		printf("ScanForeignKeyTable: table_entry = %s\n", table_entry->name.c_str());
 		bool move_to_ordered = true;
-		for (idx_t j = 0; j < table_entry->bound_constraints.size(); j++) {
+		for (idx_t j = 0; j < table_entry->constraints.size(); j++) {
 			auto &cond = table_entry->constraints[j];
 			if (cond->type == ConstraintType::FOREIGN_KEY) {
-				auto &fk = (BoundForeignKeyConstraint &)*cond;
+				printf("ScanForeignKeyTable: found foreign key constraint for table_entry = %s\n", table_entry->name.c_str());
+				auto &fk = (ForeignKeyConstraint &)*cond;
 				if ((move_only_pk_table && fk.is_fk_table) ||
-				    (!move_only_pk_table && fk.is_fk_table && IsExistMainKeyTable(fk.table, unordered))) {
+				    (!move_only_pk_table && fk.is_fk_table && IsExistMainKeyTable(fk.pk_table, unordered))) {
 					printf("ScanForeignKeyTable: failed table name = %s\n", table_entry->name.c_str());
 					move_to_ordered = false;
 					break;
