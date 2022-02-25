@@ -171,16 +171,28 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	}
 
 	bool has_equality = false;
-	bool has_inequality = false;
+	// bool has_inequality = false;
+	bool has_range = false;
 	bool has_null_equal_conditions = false;
-	for (auto &cond : op.conditions) {
-		if (cond.comparison == ExpressionType::COMPARE_EQUAL ||
-		    cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+	for (size_t c = 0; c < op.conditions.size(); ++c) {
+		auto &cond = op.conditions[c];
+		switch (cond.comparison) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 			has_equality = true;
-		}
-		if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL ||
-		    cond.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
-			has_inequality = true;
+			break;
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			has_range = true;
+			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			// has_inequality = true;
+			break;
+		default:
+			throw NotImplementedException("Unimplemented comparison join");
 		}
 		if (cond.null_values_are_equal) {
 			has_null_equal_conditions = true;
@@ -217,8 +229,17 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		                                     op.estimated_cardinality, perfect_join_stats);
 
 	} else {
-		if (op.conditions.size() == 1 && !has_inequality) {
-			D_ASSERT(!has_null_equal_conditions); // we support this for this join for now
+		bool can_merge = has_range;
+		switch (op.join_type) {
+		case JoinType::SEMI:
+		case JoinType::ANTI:
+		case JoinType::MARK:
+			can_merge = can_merge && op.conditions.size() == 1;
+			break;
+		default:
+			break;
+		}
+		if (can_merge) {
 			// range join: use piecewise merge join
 			plan = make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions),
 			                                               op.join_type, op.estimated_cardinality);
