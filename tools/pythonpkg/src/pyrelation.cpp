@@ -404,10 +404,7 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(py::object df, const string &view_name, const string &sql_query,
                                                      DuckDBPyConnection *conn) {
-	auto relation = conn->FromDF(std::move(df));
-	auto result = relation->Query(view_name, sql_query);
-	conn->UnregisterPythonObject(relation->GetAlias());
-	return result;
+	return conn->FromDF(std::move(df))->Query(view_name, sql_query);
 }
 
 void DuckDBPyRelation::InsertInto(const string &table) {
