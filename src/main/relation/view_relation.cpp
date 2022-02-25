@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-ViewRelation::ViewRelation(weak_ptr<ClientContext> context, string schema_name_p, string view_name_p)
+ViewRelation::ViewRelation(const weak_ptr<ClientContext> &context, string schema_name_p, string view_name_p)
     : Relation(context, RelationType::VIEW_RELATION), schema_name(move(schema_name_p)), view_name(move(view_name_p)) {
 	context.lock()->TryBindRelation(*this, this->columns);
 }

@@ -14,10 +14,10 @@ namespace duckdb {
 
 class TableFunctionRelation : public Relation {
 public:
-	TableFunctionRelation(weak_ptr<ClientContext> context, string name, vector<Value> parameters,
+	TableFunctionRelation(const weak_ptr<ClientContext> &context, string name, vector<Value> parameters,
 	                      named_parameter_map_t named_parameters, shared_ptr<Relation> input_relation_p = nullptr);
 
-	TableFunctionRelation(weak_ptr<ClientContext> context, string name, vector<Value> parameters,
+	TableFunctionRelation(const weak_ptr<ClientContext> &context, string name, vector<Value> parameters,
 	                      shared_ptr<Relation> input_relation_p = nullptr);
 
 	string name;

@@ -1,6 +1,8 @@
 #include "parquet_timestamp.hpp"
 
 #include "duckdb.hpp"
+
+#include <cstddef>
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -29,7 +31,7 @@ Int96 TimestampToImpalaTimestamp(timestamp_t &ts) {
 	int32_t hour, min, sec, msec;
 	Time::Convert(Timestamp::GetTime(ts), hour, min, sec, msec);
 	uint64_t ms_since_midnight = hour * 60 * 60 * 1000 + min * 60 * 1000 + sec * 1000 + msec;
-	auto days_since_epoch = Date::Epoch(Timestamp::GetDate(ts)) / (24 * 60 * 60);
+	auto days_since_epoch = Date::Epoch(Timestamp::GetDate(ts)) / (static_cast<long long>(24 * 60 *) 60);
 	// first two uint32 in Int96 are nanoseconds since midnights
 	// last uint32 is number of days since year 4713 BC ("Julian date")
 	Int96 impala_ts;

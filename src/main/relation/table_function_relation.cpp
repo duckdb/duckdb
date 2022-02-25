@@ -12,14 +12,15 @@
 
 namespace duckdb {
 
-TableFunctionRelation::TableFunctionRelation(weak_ptr<ClientContext> context, string name_p, vector<Value> parameters_p,
-                                             named_parameter_map_t named_parameters,
+TableFunctionRelation::TableFunctionRelation(const weak_ptr<ClientContext> &context, string name_p,
+                                             vector<Value> parameters_p, named_parameter_map_t named_parameters,
                                              shared_ptr<Relation> input_relation_p)
     : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(move(name_p)), parameters(move(parameters_p)),
       named_parameters(move(named_parameters)), input_relation(move(input_relation_p)) {
 	context.lock()->TryBindRelation(*this, this->columns);
 }
-TableFunctionRelation::TableFunctionRelation(weak_ptr<ClientContext> context, string name_p, vector<Value> parameters_p,
+TableFunctionRelation::TableFunctionRelation(const weak_ptr<ClientContext> &context, string name_p,
+                                             vector<Value> parameters_p,
 
                                              shared_ptr<Relation> input_relation_p)
     : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(move(name_p)), parameters(move(parameters_p)),

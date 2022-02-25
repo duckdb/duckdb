@@ -15,7 +15,7 @@ namespace duckdb {
 
 class TableRelation : public Relation {
 public:
-	TableRelation(weak_ptr<ClientContext> context, unique_ptr<TableDescription> description);
+	TableRelation(const weak_ptr<ClientContext> &context, unique_ptr<TableDescription> description);
 
 	unique_ptr<TableDescription> description;
 

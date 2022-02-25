@@ -16,8 +16,8 @@ class SelectStatement;
 
 class QueryRelation : public Relation {
 public:
-	QueryRelation(weak_ptr<ClientContext> context, unique_ptr<SelectStatement> select_stmt, string alias);
-	~QueryRelation();
+	QueryRelation(const weak_ptr<ClientContext> &context, unique_ptr<SelectStatement> select_stmt, string alias);
+	~QueryRelation() override;
 
 	unique_ptr<SelectStatement> select_stmt;
 	string alias;

@@ -14,7 +14,7 @@ namespace duckdb {
 
 class ReadCSVRelation : public Relation {
 public:
-	ReadCSVRelation(weak_ptr<ClientContext> context, string csv_file, vector<ColumnDefinition> columns,
+	ReadCSVRelation(const weak_ptr<ClientContext> &context, string csv_file, vector<ColumnDefinition> columns,
 	                bool auto_detect = false, string alias = string());
 
 	string csv_file;

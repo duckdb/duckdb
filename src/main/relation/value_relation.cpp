@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-ValueRelation::ValueRelation(weak_ptr<ClientContext> context, const vector<vector<Value>> &values,
+ValueRelation::ValueRelation(const weak_ptr<ClientContext> &context, const vector<vector<Value>> &values,
                              vector<string> names_p, string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(move(names_p)), alias(move(alias_p)) {
 	// create constant expressions for the values
@@ -23,7 +23,7 @@ ValueRelation::ValueRelation(weak_ptr<ClientContext> context, const vector<vecto
 	context.lock()->TryBindRelation(*this, this->columns);
 }
 
-ValueRelation::ValueRelation(weak_ptr<ClientContext> context, const string &values_list, vector<string> names_p,
+ValueRelation::ValueRelation(const weak_ptr<ClientContext> &context, const string &values_list, vector<string> names_p,
                              string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(move(names_p)), alias(move(alias_p)) {
 	this->expressions = Parser::ParseValuesList(values_list, context.lock()->GetParserOptions());

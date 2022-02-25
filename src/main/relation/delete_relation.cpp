@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-DeleteRelation::DeleteRelation(weak_ptr<ClientContext> context, unique_ptr<ParsedExpression> condition_p,
+DeleteRelation::DeleteRelation(const weak_ptr<ClientContext> &context, unique_ptr<ParsedExpression> condition_p,
                                string schema_name_p, string table_name_p)
     : Relation(context, RelationType::DELETE_RELATION), condition(move(condition_p)), schema_name(move(schema_name_p)),
       table_name(move(table_name_p)) {

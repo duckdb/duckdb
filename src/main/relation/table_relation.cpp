@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-TableRelation::TableRelation(weak_ptr<ClientContext> context, unique_ptr<TableDescription> description)
+TableRelation::TableRelation(const weak_ptr<ClientContext> &context, unique_ptr<TableDescription> description)
     : Relation(context, RelationType::TABLE_RELATION), description(move(description)) {
 }
 

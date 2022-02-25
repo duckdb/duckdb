@@ -2,14 +2,15 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
-#include "duckdb/main/config.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
 
 namespace duckdb {
@@ -137,7 +138,7 @@ SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path
 		h2.free_list = INVALID_BLOCK;
 		h2.block_count = 0;
 		SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
-		header_buffer.ChecksumAndWrite(*handle, Storage::FILE_HEADER_SIZE * 2);
+		header_buffer.ChecksumAndWrite(*handle, static_cast<uint64_t>(Storage::FILE_HEADER_SIZE *) 2);
 		// ensure that writing to disk is completed before returning
 		handle->Sync();
 		// we start with h2 as active_header, this way our initial write will be in h1
@@ -167,7 +168,7 @@ SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path
 		DatabaseHeader h1, h2;
 		header_buffer.ReadAndChecksum(*handle, Storage::FILE_HEADER_SIZE);
 		h1 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
-		header_buffer.ReadAndChecksum(*handle, Storage::FILE_HEADER_SIZE * 2);
+		header_buffer.ReadAndChecksum(*handle, static_cast<uint64_t>(Storage::FILE_HEADER_SIZE *) 2);
 		h2 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
 		// check the header with the highest iteration count
 		if (h1.iteration > h2.iteration) {

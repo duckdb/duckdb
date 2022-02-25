@@ -11,6 +11,8 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 
+#include <cstddef>
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -295,7 +297,7 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentS
 	// compute the total size required to store this segment
 	auto offset_size = DICTIONARY_HEADER_SIZE + segment.count * sizeof(int32_t);
 	auto total_size = offset_size + dict.size;
-	if (total_size >= Storage::BLOCK_SIZE / 5 * 4) {
+	if (total_size >= static_cast<unsigned long long>(Storage::BLOCK_SIZE / 5 *) 4) {
 		// the block is full enough, don't bother moving around the dictionary
 		return Storage::BLOCK_SIZE;
 	}

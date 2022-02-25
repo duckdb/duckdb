@@ -260,7 +260,8 @@ void TopNHeap::Finalize() {
 }
 
 void TopNHeap::Reduce() {
-	idx_t min_sort_threshold = MaxValue<idx_t>(STANDARD_VECTOR_SIZE * 5, 2 * (limit + offset));
+	idx_t min_sort_threshold =
+	    MaxValue<idx_t>(static_cast<unsigned long long>(STANDARD_VECTOR_SIZE *) 5, 2 * (limit + offset));
 	if (sort_state.count < min_sort_threshold) {
 		// only reduce when we pass two times the limit + offset, or 5 vectors (whichever comes first)
 		return;

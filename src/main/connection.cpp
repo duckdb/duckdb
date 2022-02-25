@@ -212,7 +212,7 @@ shared_ptr<Relation> Connection::RelationFromQuery(const string &query, string a
 	return RelationFromQuery(QueryRelation::ParseStatement(*context, query, error), move(alias));
 }
 
-shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> select_stmt, string alias) {
+shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> select_stmt, const string &alias) {
 	return make_shared<QueryRelation>(context, move(select_stmt), move(alias));
 }
 
