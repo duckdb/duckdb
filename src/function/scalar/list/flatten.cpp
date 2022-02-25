@@ -26,19 +26,19 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 	auto result_entries = FlatVector::GetData<list_entry_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
 
-    if (child_vector.GetType().id() == LogicalTypeId::SQLNULL) {
-        auto result_entries = FlatVector::GetData<list_entry_t>(result);
-        for (idx_t i = 0; i < count; i++) {
-            auto list_index = list_data.sel->get_index(i);
-            if (!list_data.validity.RowIsValid(list_index)) {
-                result_validity.SetInvalid(i);
-                continue;
-            }
-            result_entries[i].offset = 0;
-            result_entries[i].length = 0;
-        }
-        return;
-    }
+	if (child_vector.GetType().id() == LogicalTypeId::SQLNULL) {
+		auto result_entries = FlatVector::GetData<list_entry_t>(result);
+		for (idx_t i = 0; i < count; i++) {
+			auto list_index = list_data.sel->get_index(i);
+			if (!list_data.validity.RowIsValid(list_index)) {
+				result_validity.SetInvalid(i);
+				continue;
+			}
+			result_entries[i].offset = 0;
+			result_entries[i].length = 0;
+		}
+		return;
+	}
 
 	auto child_size = ListVector::GetListSize(input);
 	VectorData child_data;
@@ -55,7 +55,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 		}
 		auto list_entry = list_entries[list_index];
 
-        idx_t source_offset = 0;
+		idx_t source_offset = 0;
 		// Find first valid child list entry to get offset
 		for (idx_t j = 0; j < list_entry.length; j++) {
 			auto child_list_index = child_data.sel->get_index(list_entry.offset + j);
@@ -75,7 +75,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 				break;
 			}
 		}
-        ListVector::Append(result, data_vector, source_offset + length, source_offset);
+		ListVector::Append(result, data_vector, source_offset + length, source_offset);
 
 		result_entries[i].offset = offset;
 		result_entries[i].length = length;
