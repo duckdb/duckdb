@@ -22,6 +22,7 @@ public:
 
 	shared_ptr<Relation> rel;
 	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_stream_factory;
+	unique_ptr<RegisteredObject> backing_object;
 
 public:
 	static void Initialize(py::handle &m);
