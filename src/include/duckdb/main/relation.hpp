@@ -29,12 +29,12 @@ class TableRef;
 
 class Relation : public std::enable_shared_from_this<Relation> {
 public:
-	DUCKDB_API Relation(ClientContext &context, RelationType type) : context(context), type(type) {
+	DUCKDB_API Relation(weak_ptr<ClientContext> context, RelationType type) : context(context), type(type) {
 	}
 	DUCKDB_API virtual ~Relation() {
 	}
 
-	ClientContext &context;
+	weak_ptr<ClientContext> context;
 	RelationType type;
 
 public:

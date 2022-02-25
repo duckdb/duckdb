@@ -8,8 +8,8 @@
 
 namespace duckdb {
 
-ValueRelation::ValueRelation(ClientContext &context, const vector<vector<Value>> &values, vector<string> names_p,
-                             string alias_p)
+ValueRelation::ValueRelation(weak_ptr<ClientContext> context, const vector<vector<Value>> &values,
+                             vector<string> names_p, string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(move(names_p)), alias(move(alias_p)) {
 	// create constant expressions for the values
 	for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
@@ -20,13 +20,14 @@ ValueRelation::ValueRelation(ClientContext &context, const vector<vector<Value>>
 		}
 		this->expressions.push_back(move(expressions));
 	}
-	context.TryBindRelation(*this, this->columns);
+	context.lock()->TryBindRelation(*this, this->columns);
 }
 
-ValueRelation::ValueRelation(ClientContext &context, const string &values_list, vector<string> names_p, string alias_p)
+ValueRelation::ValueRelation(weak_ptr<ClientContext> context, const string &values_list, vector<string> names_p,
+                             string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(move(names_p)), alias(move(alias_p)) {
-	this->expressions = Parser::ParseValuesList(values_list, context.GetParserOptions());
-	context.TryBindRelation(*this, this->columns);
+	this->expressions = Parser::ParseValuesList(values_list, context.lock()->GetParserOptions());
+	context.lock()->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> ValueRelation::GetQueryNode() {

@@ -131,3 +131,12 @@ class TestRAPICloseConnRel(object):
 			valid_rel.intersect(rel)
 		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
 			valid_rel.join(rel, "")
+
+	def test_del_conn(self, duckdb_cursor):
+		con = duckdb.connect()
+		con.execute("CREATE TABLE items(item VARCHAR, value DECIMAL(10,2), count INTEGER)")
+		con.execute("INSERT INTO items VALUES ('jeans', 20.0, 1), ('hammer', 42.2, 2)")
+		rel = con.table("items")
+		del con
+		with pytest.raises(Exception, match='This relation\'s connection is closed.'):
+			print(rel)

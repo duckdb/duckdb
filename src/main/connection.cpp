@@ -134,7 +134,7 @@ shared_ptr<Relation> Connection::Table(const string &schema_name, const string &
 	if (!table_info) {
 		throw Exception("Table does not exist!");
 	}
-	return make_shared<TableRelation>(*context, move(table_info));
+	return make_shared<TableRelation>(context, move(table_info));
 }
 
 shared_ptr<Relation> Connection::View(const string &tname) {
@@ -142,7 +142,7 @@ shared_ptr<Relation> Connection::View(const string &tname) {
 }
 
 shared_ptr<Relation> Connection::View(const string &schema_name, const string &table_name) {
-	return make_shared<ViewRelation>(*context, schema_name, table_name);
+	return make_shared<ViewRelation>(context, schema_name, table_name);
 }
 
 shared_ptr<Relation> Connection::TableFunction(const string &fname) {
@@ -153,11 +153,11 @@ shared_ptr<Relation> Connection::TableFunction(const string &fname) {
 
 shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values,
                                                const named_parameter_map_t &named_parameters) {
-	return make_shared<TableFunctionRelation>(*context, fname, values, named_parameters);
+	return make_shared<TableFunctionRelation>(context, fname, values, named_parameters);
 }
 
 shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values) {
-	return make_shared<TableFunctionRelation>(*context, fname, values);
+	return make_shared<TableFunctionRelation>(context, fname, values);
 }
 
 shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values) {
@@ -167,7 +167,7 @@ shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values) {
 
 shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values, const vector<string> &column_names,
                                         const string &alias) {
-	return make_shared<ValueRelation>(*context, values, column_names, alias);
+	return make_shared<ValueRelation>(context, values, column_names, alias);
 }
 
 shared_ptr<Relation> Connection::Values(const string &values) {
@@ -176,7 +176,7 @@ shared_ptr<Relation> Connection::Values(const string &values) {
 }
 
 shared_ptr<Relation> Connection::Values(const string &values, const vector<string> &column_names, const string &alias) {
-	return make_shared<ValueRelation>(*context, values, column_names, alias);
+	return make_shared<ValueRelation>(context, values, column_names, alias);
 }
 
 shared_ptr<Relation> Connection::ReadCSV(const string &csv_file) {
@@ -188,7 +188,7 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file) {
 	for (idx_t i = 0; i < reader.sql_types.size(); i++) {
 		column_list.emplace_back(reader.col_names[i], reader.sql_types[i]);
 	}
-	return make_shared<ReadCSVRelation>(*context, csv_file, move(column_list), true);
+	return make_shared<ReadCSVRelation>(context, csv_file, move(column_list), true);
 }
 
 shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<string> &columns) {
@@ -201,7 +201,7 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 		}
 		column_list.push_back(move(col_list[0]));
 	}
-	return make_shared<ReadCSVRelation>(*context, csv_file, move(column_list));
+	return make_shared<ReadCSVRelation>(context, csv_file, move(column_list));
 }
 
 unordered_set<string> Connection::GetTableNames(const string &query) {
@@ -213,7 +213,7 @@ shared_ptr<Relation> Connection::RelationFromQuery(const string &query, string a
 }
 
 shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> select_stmt, string alias) {
-	return make_shared<QueryRelation>(*context, move(select_stmt), move(alias));
+	return make_shared<QueryRelation>(context, move(select_stmt), move(alias));
 }
 
 void Connection::BeginTransaction() {

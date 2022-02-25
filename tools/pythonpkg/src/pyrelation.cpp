@@ -134,8 +134,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("__repr__", &DuckDBPyRelation::Print);
 }
 
-DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel, DuckDBPyConnection *conn) : rel(move(rel)), conn(conn) {
-	conn->dependent_relations.push_back(this);
+DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(py::object df, DuckDBPyConnection *conn) {
@@ -179,10 +178,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrowTable(py::object &table,
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
-	if (!conn) {
+
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
-	return make_unique<DuckDBPyRelation>(rel->Project(expr), conn);
+	return make_unique<DuckDBPyRelation>(rel->Project(expr));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(py::object df, const string &expr, DuckDBPyConnection *conn) {
@@ -190,7 +190,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(py::object df, const st
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SetAlias(const string &expr) {
-	return make_unique<DuckDBPyRelation>(rel->Alias(expr), conn);
+	return make_unique<DuckDBPyRelation>(rel->Alias(expr));
 }
 
 py::str DuckDBPyRelation::GetAlias() {
@@ -202,10 +202,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AliasDF(py::object df, const stri
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Filter(const string &expr) {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
-	return make_unique<DuckDBPyRelation>(rel->Filter(expr), conn);
+	return make_unique<DuckDBPyRelation>(rel->Filter(expr));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FilterDf(py::object df, const string &expr, DuckDBPyConnection *conn) {
@@ -213,10 +213,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FilterDf(py::object df, const str
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Limit(int64_t n) {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
-	return make_unique<DuckDBPyRelation>(rel->Limit(n), conn);
+	return make_unique<DuckDBPyRelation>(rel->Limit(n));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LimitDF(py::object df, int64_t n, DuckDBPyConnection *conn) {
@@ -224,10 +224,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LimitDF(py::object df, int64_t n,
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Order(const string &expr) {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
-	return make_unique<DuckDBPyRelation>(rel->Order(expr), conn);
+	return make_unique<DuckDBPyRelation>(rel->Order(expr));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::OrderDf(py::object df, const string &expr, DuckDBPyConnection *conn) {
@@ -235,17 +235,17 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::OrderDf(py::object df, const stri
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, const string &groups) {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	if (!groups.empty()) {
-		return make_unique<DuckDBPyRelation>(rel->Aggregate(expr, groups), conn);
+		return make_unique<DuckDBPyRelation>(rel->Aggregate(expr, groups));
 	}
-	return make_unique<DuckDBPyRelation>(rel->Aggregate(expr), conn);
+	return make_unique<DuckDBPyRelation>(rel->Aggregate(expr));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	string columns;
@@ -254,7 +254,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
 	}
 	columns.erase(columns.size() - 1, columns.size());
 	auto expr = GenerateExpressionList("stats", columns);
-	return make_unique<DuckDBPyRelation>(rel->Project(expr)->Limit(1), conn);
+	return make_unique<DuckDBPyRelation>(rel->Project(expr)->Limit(1));
 }
 
 string DuckDBPyRelation::GenerateExpressionList(const string &function_name, const string &aggregated_columns,
@@ -362,7 +362,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SEM(const string &aggr_columns, c
 }
 
 idx_t DuckDBPyRelation::Length() {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	auto query_result = GenericAggregator("count", "*")->Execute();
@@ -370,7 +370,7 @@ idx_t DuckDBPyRelation::Length() {
 }
 
 py::tuple DuckDBPyRelation::Shape() {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	auto length = Length();
@@ -378,20 +378,20 @@ py::tuple DuckDBPyRelation::Shape() {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Unique(const string &std_columns) {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
-	return make_unique<DuckDBPyRelation>(rel->Project(std_columns)->Distinct(), conn);
+	return make_unique<DuckDBPyRelation>(rel->Project(std_columns)->Distinct());
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericWindowFunction(const string &function_name,
                                                                      const string &aggr_columns) {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	auto expr = GenerateExpressionList(function_name, aggr_columns, "", "", "",
 	                                   "over (rows between unbounded preceding and current row) ");
-	return make_unique<DuckDBPyRelation>(rel->Project(expr), conn);
+	return make_unique<DuckDBPyRelation>(rel->Project(expr));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumSum(const string &aggr_columns) {
@@ -416,10 +416,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(py::object df, const 
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Distinct() {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
-	return make_unique<DuckDBPyRelation>(rel->Distinct(), conn);
+	return make_unique<DuckDBPyRelation>(rel->Distinct());
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(py::object df, DuckDBPyConnection *conn) {
@@ -427,7 +427,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(py::object df, DuckDBP
 }
 
 py::object DuckDBPyRelation::ToDF() {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	auto res = make_unique<DuckDBPyResult>();
@@ -442,7 +442,7 @@ py::object DuckDBPyRelation::ToDF() {
 }
 
 py::object DuckDBPyRelation::Fetchone() {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	auto res = make_unique<DuckDBPyResult>();
@@ -457,7 +457,7 @@ py::object DuckDBPyRelation::Fetchone() {
 }
 
 py::object DuckDBPyRelation::Fetchall() {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	auto res = make_unique<DuckDBPyResult>();
@@ -472,7 +472,7 @@ py::object DuckDBPyRelation::Fetchall() {
 }
 
 py::object DuckDBPyRelation::ToArrowTable() {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	auto res = make_unique<DuckDBPyResult>();
@@ -487,29 +487,29 @@ py::object DuckDBPyRelation::ToArrowTable() {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Union(DuckDBPyRelation *other) {
-	if (!conn || !other->conn) {
+	if (!rel->context.lock() || !other->rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
-	return make_unique<DuckDBPyRelation>(rel->Union(other->rel), conn);
+	return make_unique<DuckDBPyRelation>(rel->Union(other->rel));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Except(DuckDBPyRelation *other) {
-	if (!conn || !other->conn) {
+	if (!rel->context.lock() || !other->rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
-	return make_unique<DuckDBPyRelation>(rel->Except(other->rel), conn);
+	return make_unique<DuckDBPyRelation>(rel->Except(other->rel));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Intersect(DuckDBPyRelation *other) {
-	if (!conn || !other->conn) {
+	if (!rel->context.lock() || !other->rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
-	return make_unique<DuckDBPyRelation>(rel->Intersect(other->rel), conn);
+	return make_unique<DuckDBPyRelation>(rel->Intersect(other->rel));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, const string &condition,
                                                     const string &type) {
-	if (!conn || !other->conn) {
+	if (!rel->context.lock() || !other->rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	JoinType dtype;
@@ -522,34 +522,31 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	} else {
 		throw std::runtime_error("Unsupported join type " + type_string + ", try 'inner' or 'left'");
 	}
-	return make_unique<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype), conn);
+	return make_unique<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
 }
 
 void DuckDBPyRelation::WriteCsv(const string &file) {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	rel->WriteCSV(file);
 }
 
 void DuckDBPyRelation::WriteCsvDF(py::object df, const string &file, DuckDBPyConnection *conn) {
-	if (!conn) {
-		throw std::runtime_error("This relation's connection is closed.");
-	}
 	return conn->FromDF(std::move(df))->WriteCsv(file);
 }
 
 // should this return a rel with the new view?
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_name, bool replace) {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	rel->CreateView(view_name, replace);
-	return make_unique<DuckDBPyRelation>(rel, conn);
+	return make_unique<DuckDBPyRelation>(rel);
 }
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	auto res = make_unique<DuckDBPyResult>();
@@ -561,7 +558,7 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Query(const string &view_name, cons
 }
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	auto res = make_unique<DuckDBPyResult>();
@@ -581,7 +578,7 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(py::object df, const string
 }
 
 void DuckDBPyRelation::InsertInto(const string &table) {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	auto parsed_info = QualifiedName::Parse(table);
@@ -595,7 +592,7 @@ void DuckDBPyRelation::InsertInto(const string &table) {
 }
 
 void DuckDBPyRelation::Insert(py::object params) {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(move(params))};
@@ -604,7 +601,7 @@ void DuckDBPyRelation::Insert(py::object params) {
 }
 
 void DuckDBPyRelation::Create(const string &table) {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	py::gil_scoped_release release;
@@ -612,18 +609,18 @@ void DuckDBPyRelation::Create(const string &table) {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)fun.ptr()));
-	auto res = make_unique<DuckDBPyRelation>(rel->TableFunction("python_map_function", params), conn);
+	auto res = make_unique<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
 	res->map_function = fun;
 	return res;
 }
 
 string DuckDBPyRelation::Print() {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	std::string rel_res_string;
@@ -638,14 +635,14 @@ string DuckDBPyRelation::Print() {
 
 // TODO: RelationType to a python enum
 py::str DuckDBPyRelation::Type() {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	return py::str(RelationTypeToString(rel->type));
 }
 
 py::list DuckDBPyRelation::Columns() {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	py::list res;
@@ -656,7 +653,7 @@ py::list DuckDBPyRelation::Columns() {
 }
 
 py::list DuckDBPyRelation::ColumnTypes() {
-	if (!conn) {
+	if (!rel->context.lock()) {
 		throw std::runtime_error("This relation's connection is closed.");
 	}
 	py::list res;

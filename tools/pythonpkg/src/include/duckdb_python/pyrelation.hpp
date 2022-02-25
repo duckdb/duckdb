@@ -18,11 +18,11 @@ struct DuckDBPyResult;
 
 struct DuckDBPyRelation {
 public:
-	explicit DuckDBPyRelation(shared_ptr<Relation> rel, DuckDBPyConnection *conn);
+	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
 
 	shared_ptr<Relation> rel;
 	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_stream_factory;
-	DuckDBPyConnection *conn;
+	py::object py_conn;
 
 public:
 	static void Initialize(py::handle &m);

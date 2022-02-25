@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-ReadCSVRelation::ReadCSVRelation(ClientContext &context, string csv_file_p, vector<ColumnDefinition> columns_p,
+ReadCSVRelation::ReadCSVRelation(weak_ptr<ClientContext> context, string csv_file_p, vector<ColumnDefinition> columns_p,
                                  bool auto_detect, string alias_p)
     : Relation(context, RelationType::READ_CSV_RELATION), csv_file(move(csv_file_p)), auto_detect(auto_detect),
       alias(move(alias_p)), columns(move(columns_p)) {

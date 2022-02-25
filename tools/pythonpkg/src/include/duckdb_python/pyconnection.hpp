@@ -46,7 +46,6 @@ public:
 	unordered_map<string, unique_ptr<RegisteredObject>> registered_objects;
 	unique_ptr<DuckDBPyResult> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
-	vector<DuckDBPyRelation *> dependent_relations;
 	std::thread::id thread_id = std::this_thread::get_id();
 
 public:

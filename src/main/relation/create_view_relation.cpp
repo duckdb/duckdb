@@ -10,7 +10,7 @@ CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string view
                                        bool temporary_p)
     : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(move(child_p)),
       view_name(move(view_name_p)), replace(replace_p), temporary(temporary_p) {
-	context.TryBindRelation(*this, this->columns);
+	context.lock()->TryBindRelation(*this, this->columns);
 }
 
 BoundStatement CreateViewRelation::Bind(Binder &binder) {
