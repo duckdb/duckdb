@@ -34,21 +34,21 @@ integers
 select
 v1
 
-# Field | Type | Null | Key | Default | Extra
+# column_name | column_type | null | key | default | extra
 query TTTITI
 SHOW integers
 ----
 i	INTEGER	YES	NULL	NULL	NULL
 j	INTEGER	YES	NULL	NULL	NULL
 
-# Field | Type | Null | Key | Default | Extra
+# column_name | column_type | null | key | default | extra
 query TTTITI
 SHOW "select";
 ----
 i	INTEGER	YES	NULL	NULL	NULL
 
 # equivalent to PRAGMA SHOW('integers')
-# Field | Type | Null | Key | Default | Extra
+# column_name | column_type | null | key | default | extra
 query TTTITI
 PRAGMA SHOW('integers')
 ----
@@ -56,7 +56,7 @@ i	INTEGER	YES	NULL	NULL	NULL
 j	INTEGER	YES	NULL	NULL	NULL
 
 # we can also describe views
-# Field | Type | Null | Key | Default | Extra
+# column_name | column_type | null | key | default | extra
 query TTTITI
 DESCRIBE v1
 ----
