@@ -283,10 +283,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(py::object value) {
 		throw std::runtime_error("connection closed");
 	}
 	string name = "df_" + GenerateRandomName();
-	registered_objects[name] = make_unique<RegisteredObject>(value);
+	auto obj = make_unique<RegisteredObject>(value);
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)value.ptr()));
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name));
+	auto rel = make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name));
+	rel->backing_object = std::move(obj);
+	return rel;
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filename) {
