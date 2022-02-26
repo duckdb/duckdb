@@ -1,0 +1,9 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.7.2"
+manifest_format = "2.0"
+
+[[deps.DBInterface]]
+git-tree-sha1 = "9b0dc525a052b9269ccc5f7f04d5b3639c65bca5"
+uuid = "a10d1c49-ce27-4219-8d33-6db1a4562965"
+version = "2.5.0"
