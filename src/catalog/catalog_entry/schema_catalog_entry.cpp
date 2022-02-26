@@ -39,6 +39,40 @@
 
 namespace duckdb {
 
+bool FindForeignKeyInformation(CatalogEntry *entry, string &pk_table, vector<string> &pk_columns,
+                               vector<idx_t> &pk_keys, vector<string> &fk_columns, vector<idx_t> &fk_keys,
+                               bool is_drop) {
+	bool is_found = false;
+	bool is_exception = false;
+	string exception_table;
+	if (entry->type == CatalogType::TABLE_ENTRY) {
+		auto *table_entry = (TableCatalogEntry *)entry;
+		for (idx_t i = 0; i < table_entry->constraints.size(); i++) {
+			auto &cond = table_entry->constraints[i];
+			if (cond->type == ConstraintType::FOREIGN_KEY) {
+				auto &foreign_key = (ForeignKeyConstraint &)*cond;
+				if (foreign_key.is_fk_table) {
+					pk_table = foreign_key.pk_table;
+					pk_columns = foreign_key.pk_columns;
+					pk_keys = foreign_key.pk_keys;
+					fk_columns = foreign_key.fk_columns;
+					fk_keys = foreign_key.fk_keys;
+					is_found = true;
+				} else if (is_drop) {
+					is_exception = true;
+					exception_table = foreign_key.pk_table;
+				}
+			}
+		}
+	}
+	if (is_exception) {
+		throw CatalogException("Could not drop the table because this table is main key table of the table \"%s\"",
+		                       exception_table);
+	}
+
+	return is_found;
+}
+
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name_p, bool internal)
     : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, move(name_p)),
       tables(*catalog, make_unique<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
@@ -104,7 +138,30 @@ CatalogEntry *SchemaCatalogEntry::CreateType(ClientContext &context, CreateTypeI
 CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
 	auto table = make_unique<TableCatalogEntry>(catalog, this, info);
 	table->storage->info->cardinality = table->storage->GetTotalRows();
-	return AddEntry(context, move(table), info->Base().on_conflict, info->dependencies);
+	CatalogEntry *entry = AddEntry(context, move(table), info->Base().on_conflict, info->dependencies);
+	if (entry) {
+		// add a foreign key constraint in main key table if there is a foreign key constraint
+		string pk_table;
+		vector<string> pk_columns, fk_columns;
+		vector<idx_t> pk_keys, fk_keys;
+		if (FindForeignKeyInformation(entry, pk_table, pk_columns, pk_keys, fk_columns, fk_keys, false)) {
+			D_ASSERT(!pk_keys.empty() && !fk_keys.empty());
+			// alter primary key table
+			unique_ptr<ForeignKeyConstraintInfo> alter_info = make_unique<ForeignKeyConstraintInfo>(
+			    DEFAULT_SCHEMA, pk_table, entry->name, pk_columns, fk_columns, pk_keys, fk_keys, true);
+			catalog->Alter(context, alter_info.get());
+
+			// make a dependency between this table and referenced table
+			auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
+			auto pk_table_entry_ptr = set.GetEntry(context, pk_table);
+			if (pk_table_entry_ptr) {
+				info->dependencies.insert(pk_table_entry_ptr);
+			} else {
+				throw ParserException("Can't find table \"%s\" in foreign key constraint", pk_table);
+			}
+		}
+	}
+	return entry;
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateView(ClientContext &context, CreateViewInfo *info) {
@@ -209,33 +266,11 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info->type));
 	}
 
-	// if there is a foreign key constraint, get taht information
-	bool is_found = false;
+	// if there is a foreign key constraint, get that information
 	string pk_table;
 	vector<string> pk_columns, fk_columns;
 	vector<idx_t> pk_keys, fk_keys;
-	if (existing_entry->type == CatalogType::TABLE_ENTRY) {
-		auto *table_entry = (TableCatalogEntry *)existing_entry;
-		for (idx_t i = 0; i < table_entry->constraints.size(); i++) {
-			auto &cond = table_entry->constraints[i];
-			if (cond->type == ConstraintType::FOREIGN_KEY) {
-				auto &foreign_key = (ForeignKeyConstraint &)*cond;
-				if (foreign_key.is_fk_table) {
-					is_found = true;
-					pk_table = foreign_key.pk_table;
-					pk_columns = foreign_key.pk_columns;
-					pk_keys = foreign_key.pk_keys;
-					fk_columns = foreign_key.fk_columns;
-					fk_keys = foreign_key.fk_keys;
-					break;
-				} else {
-					throw CatalogException(
-					    "Could not drop the table because this table is main key table of the table \"%s\"",
-					    foreign_key.pk_table);
-				}
-			}
-		}
-	}
+	bool is_found = FindForeignKeyInformation(existing_entry, pk_table, pk_columns, pk_keys, fk_columns, fk_keys, true);
 
 	if (!set.DropEntry(context, info->name, info->cascade)) {
 		throw InternalException("Could not drop element because of an internal error");

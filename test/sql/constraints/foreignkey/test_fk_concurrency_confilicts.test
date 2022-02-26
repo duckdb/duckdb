@@ -1,5 +1,5 @@
 # name: test/sql/constraints/foreignkey/test_fk_concurrency_confilicts.test
-# description: FOREIGN KEY and concurency conflicts
+# description: FOREIGN KEY and concurency
 # group: [foreignkey]
 
 statement ok con1
@@ -32,6 +32,5 @@ INSERT INTO fk_integers VALUES (1), (2)
 statement error con1
 INSERT INTO fk_integers VALUES (4), (5)
 
-statement error con2
+statement ok con2
 CREATE TABLE fk_integers_another(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
-
