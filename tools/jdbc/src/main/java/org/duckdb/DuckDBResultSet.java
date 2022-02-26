@@ -155,6 +155,8 @@ public class DuckDBResultSet implements ResultSet {
 			return getDate(columnIndex);
 		case TIMESTAMP:
 			return getTimestamp(columnIndex);
+		case TIMESTAMP_WITH_TIME_ZONE:
+			return getTimestamp(columnIndex);
 		case INTERVAL:
 			return getLazyString(columnIndex);
 		default:
@@ -483,6 +485,17 @@ public class DuckDBResultSet implements ResultSet {
 		}
 		return null;
 	}
+
+	private OffsetDateTime getOffsetDateTime(int columnIndex) throws SQLException {
+		if (check_and_null(columnIndex)) {
+			return null;
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
+			return DuckDBTimestamp.toOffsetDateTime(getbuf(columnIndex, 8).getLong());
+		}
+		return null;
+	}
+
 	static class DuckDBBlobResult implements Blob {
 
 		static class ByteBufferBackedInputStream extends InputStream {
@@ -1338,9 +1351,8 @@ public class DuckDBResultSet implements ResultSet {
 				throw new SQLException("Can't convert value to BigInteger " + type.toString());
 			}
 		} else if (type == OffsetDateTime.class) {
-			if (sqlType == DuckDBColumnType.TIMESTAMP_WITH_TIMEZONE) {
-				throw new SQLException("Can't convert value to OffsetDateTime " + type.toString());
-			// return type.cast(getLocalDateTime(columnIndex));
+			if (sqlType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
+                return type.cast(getOffsetDateTime(columnIndex));
 			} else {
 				throw new SQLException("Can't convert value to OffsetDateTime " + type.toString());
 			}
