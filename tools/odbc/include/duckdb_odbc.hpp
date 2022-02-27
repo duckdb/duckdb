@@ -10,6 +10,7 @@
 #include "odbc_exception.hpp"
 #include "odbc_utils.hpp"
 
+#include <iostream> //TODO remove
 #include <sqltypes.h>
 #include <sqlext.h>
 #include <vector>
@@ -219,21 +220,27 @@ SQLRETURN WithStatement(SQLHANDLE &statement_handle, T &&lambda) {
 	if (!statement_handle) {
 		return SQL_ERROR;
 	}
-	auto *hdl = (OdbcHandleStmt *)statement_handle;
-	if (hdl->type != OdbcHandleType::STMT) {
+	auto *hdl_stmt = (OdbcHandleStmt *)statement_handle;
+	if (hdl_stmt->type != OdbcHandleType::STMT) {
 		return SQL_ERROR;
 	}
-	if (!hdl->dbc || !hdl->dbc->conn) {
+	if (!hdl_stmt->dbc || !hdl_stmt->dbc->conn) {
 		return SQL_ERROR;
 	}
+
+	// ODBC requires to clean up the diagnostic for every ODBC function call
+	hdl_stmt->odbc_diagnostic->Clean();
+
 	try {
-		return lambda(hdl);
+		return lambda(hdl_stmt);
 	} catch (OdbcException &ex) {
 		auto diag_record = ex.GetDiagRecord();
 		auto component = ex.GetComponent();
-		auto data_source = hdl->dbc->GetDataSourceName();
-		hdl->odbc_diagnostic->FormatDiagnosticMessage(diag_record, data_source, component);
-		hdl->odbc_diagnostic->AddDiagRecord(diag_record);
+		auto data_source = hdl_stmt->dbc->GetDataSourceName();
+		hdl_stmt->odbc_diagnostic->FormatDiagnosticMessage(diag_record, data_source, component);
+		hdl_stmt->odbc_diagnostic->AddDiagRecord(diag_record);
+		std::cout << "***" << diag_record.sql_diag_message_text << "***\n";
+		std::cout << "***size: " << diag_record.sql_diag_message_text.size() << "***\n";
 		return ex.GetSqlReturn();
 	}
 }

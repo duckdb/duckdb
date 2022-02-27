@@ -282,19 +282,35 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
 			OdbcUtils::WriteString("Buffer length is negative", message_text, buffer_length, text_length_ptr);
 			return SQL_SUCCESS;
 		}
-		if ((size_t)rec_number > odbc_handle->odbc_diagnostic->diag_records.size()) {
+		if ((size_t)rec_number > odbc_handle->odbc_diagnostic->GetTotalRecords()) {
 			return SQL_NO_DATA;
 		}
 
 		auto rec_idx = rec_number - 1;
-		auto diag_record = odbc_handle->odbc_diagnostic->diag_records[rec_idx];
-		OdbcUtils::WriteString(diag_record.sql_diag_message_text, message_text, buffer_length, text_length_ptr);
+		auto &diag_record = odbc_handle->odbc_diagnostic->GetDiagRecord(rec_idx);
 
 		if (sql_state && strlen((char *)sql_state) == 5) {
-			OdbcUtils::WriteString(diag_record.sql_diag_sqlstate, sql_state, 5);
+			OdbcUtils::WriteString(diag_record.sql_diag_sqlstate, sql_state, 6);
 		}
 		if (native_error_ptr) {
 			duckdb::Store<SQLINTEGER>(diag_record.sql_diag_native, (duckdb::data_ptr_t)native_error_ptr);
+		}
+
+		std::string msg = diag_record.GetMessage(buffer_length);
+		OdbcUtils::WriteString(msg, message_text, buffer_length, text_length_ptr);
+
+		if (text_length_ptr) {
+			SQLSMALLINT remaining_chars = msg.size() - buffer_length;
+			duckdb::Store<SQLSMALLINT>(remaining_chars, (duckdb::data_ptr_t)text_length_ptr);
+			if (remaining_chars > 0) {
+				// TODO needs to split the diagnostic message
+				odbc_handle->odbc_diagnostic->AddNewRecIdx(rec_idx);
+				return SQL_SUCCESS_WITH_INFO;
+			}
+		}
+
+		if (message_text == nullptr) {
+			return SQL_SUCCESS_WITH_INFO;
 		}
 
 		return SQL_SUCCESS;
@@ -374,7 +390,7 @@ SQLRETURN SQL_API SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQL
 				return SQL_ERROR;
 			}
 
-			const auto diag_record = hdl->odbc_diagnostic->GetDiagRecord(rec_idx);
+			auto diag_record = hdl->odbc_diagnostic->GetDiagRecord(rec_idx);
 
 			// diag record fields
 			switch (diag_identifier) {
@@ -397,8 +413,8 @@ SQLRETURN SQL_API SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQL
 				return SQL_SUCCESS;
 			}
 			case SQL_DIAG_MESSAGE_TEXT: {
-				duckdb::OdbcUtils::WriteString(diag_record.sql_diag_message_text, (SQLCHAR *)diag_info_ptr,
-				                               buffer_length, string_length_ptr);
+				auto msg = diag_record.GetMessage(buffer_length);
+				duckdb::OdbcUtils::WriteString(msg, (SQLCHAR *)diag_info_ptr, buffer_length, string_length_ptr);
 				return SQL_SUCCESS;
 			}
 			case SQL_DIAG_NATIVE: {

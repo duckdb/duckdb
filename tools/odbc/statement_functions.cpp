@@ -52,9 +52,8 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 		auto query = duckdb::OdbcUtils::ReadString(statement_text, text_length);
 		stmt->stmt = stmt->dbc->conn->Prepare(query);
 		if (!stmt->stmt->success) {
-			OdbcException exception(stmt->stmt->error, "42000", stmt->dbc->GetDataSourceName());
-			exception.SetComponent("PrepareStmt");
-			exception.SetSqlReturn(SQL_ERROR);
+			DiagRecord diag_rec(stmt->stmt->error, "42000", stmt->dbc->GetDataSourceName());
+			OdbcException exception("PrepareStmt", SQL_ERROR, diag_rec);
 			throw exception;
 		}
 		stmt->param_desc->ResetParams(stmt->stmt->n_param);
