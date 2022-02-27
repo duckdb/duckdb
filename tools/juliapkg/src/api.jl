@@ -19,7 +19,7 @@ function duckdb_open(path, out_database)
     return ccall(
         (:duckdb_open, libduckdb),
         Int32,
-        (Ptr{UInt8}, Ref{Ptr{Cvoid}}),
+        (Ptr{UInt8}, Ref{duckdb_database}),
         path,
         out_database,
     )
@@ -33,7 +33,7 @@ Still it is recommended to always correctly close a database object after you ar
 * `database`: The database object to shut down.
 """
 function duckdb_close(database)
-    return ccall((:duckdb_close, libduckdb), Cvoid, (Ref{Ptr{Cvoid}},), database)
+    return ccall((:duckdb_close, libduckdb), Cvoid, (Ref{duckdb_database},), database)
 end
 """
 	duckdb_connect(database, out_connection)
@@ -47,7 +47,7 @@ function duckdb_connect(database, out_connection)
     return ccall(
         (:duckdb_connect, libduckdb),
         Int32,
-        (Ptr{Cvoid}, Ref{Ptr{Cvoid}}),
+        (duckdb_database, Ref{duckdb_connection}),
         database,
         out_connection,
     )
@@ -59,7 +59,7 @@ Closes the specified connection and de-allocates all memory allocated for that c
 * `connection`: The connection to close.
 """
 function duckdb_disconnect(connection)
-    return ccall((:duckdb_disconnect, libduckdb), Cvoid, (Ref{Ptr{Cvoid}},), connection)
+    return ccall((:duckdb_disconnect, libduckdb), Cvoid, (Ref{duckdb_connection},), connection)
 end
 
 # #=
@@ -171,72 +171,72 @@ end
 #     )
 # end
 #
-# """
-# 	duckdb_destroy_result(result)
-# Closes the result and de-allocates all memory allocated for that connection.
-# * `result`: The result to destroy.
-# """
-# function duckdb_destroy_result(result)
-#     return ccall((:duckdb_destroy_result, libduckdb), Cvoid, (Ptr{Cvoid},), result)
-# end
-#
-# """
-# 	duckdb_column_name(result,col)
-# Returns the column name of the specified column. The result should not need be freed; the column names will
-# automatically be destroyed when the result is destroyed.
-# Returns `NULL` if the column is out of range.
-# * `result`: The result object to fetch the column name from.
-# * `col`: The column index.
-# * returns: The column name of the specified column.
-# """
-# function duckdb_column_name(result, col)
-#     return ccall(
-#         (:duckdb_column_name, libduckdb),
-#         Ptr{UInt8},
-#         (Ptr{Cvoid}, Int32),
-#         result,
-#         col - 1,
-#     )
-# end
-#
-# """
-# 	duckdb_column_type(result,col)
-# Returns the column type of the specified column.
-# Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
-# * `result`: The result object to fetch the column type from.
-# * `col`: The column index.
-# * returns: The column type of the specified column.
-# """
-# function duckdb_column_type(result, col)
-#     return ccall(
-#         (:duckdb_column_type, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32),
-#         result,
-#         col - 1,
-#     )
-# end
-#
-# """
-# 	duckdb_column_count(result)
-# Returns the number of columns present in a the result object.
-# * `result`: The result object.
-# * returns: The number of columns present in the result object.
-# """
-# function duckdb_column_count(result)
-#     return ccall((:duckdb_column_count, libduckdb), Int32, (Ptr{Cvoid},), result)
-# end
-#
-# """
-# 	duckdb_row_count(result)
-# Returns the number of rows present in a the result object.
-# * `result`: The result object.
-# * returns: The number of rows present in the result object.
-# """
-# function duckdb_row_count(result)
-#     return ccall((:duckdb_row_count, libduckdb), Int64, (Ptr{Cvoid},), result)
-# end
-#
+"""
+	duckdb_destroy_result(result)
+Closes the result and de-allocates all memory allocated for that connection.
+* `result`: The result to destroy.
+"""
+function duckdb_destroy_result(result)
+    return ccall((:duckdb_destroy_result, libduckdb), Cvoid, (Ref{duckdb_result},), result)
+end
+
+"""
+	duckdb_column_name(result,col)
+Returns the column name of the specified column. The result should not need be freed; the column names will
+automatically be destroyed when the result is destroyed.
+Returns `NULL` if the column is out of range.
+* `result`: The result object to fetch the column name from.
+* `col`: The column index.
+* returns: The column name of the specified column.
+"""
+function duckdb_column_name(result, col)
+    return ccall(
+        (:duckdb_column_name, libduckdb),
+        Ptr{UInt8},
+        (Ref{duckdb_result}, Int32),
+        result,
+        col - 1,
+    )
+end
+
+"""
+	duckdb_column_type(result,col)
+Returns the column type of the specified column.
+Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
+* `result`: The result object to fetch the column type from.
+* `col`: The column index.
+* returns: The column type of the specified column.
+"""
+function duckdb_column_type(result, col)
+    return ccall(
+        (:duckdb_column_type, libduckdb),
+        DUCKDB_TYPE,
+        (Ref{duckdb_result}, Int32),
+        result,
+        col - 1,
+    )
+end
+
+"""
+	duckdb_column_count(result)
+Returns the number of columns present in a the result object.
+* `result`: The result object.
+* returns: The number of columns present in the result object.
+"""
+function duckdb_column_count(result)
+    return ccall((:duckdb_column_count, libduckdb), Int32, (Ref{duckdb_result},), result)
+end
+
+"""
+	duckdb_row_count(result)
+Returns the number of rows present in a the result object.
+* `result`: The result object.
+* returns: The number of rows present in the result object.
+"""
+function duckdb_row_count(result)
+    return ccall((:duckdb_row_count, libduckdb), Int64, (Ref{duckdb_result},), result)
+end
+
 # """
 # 	duckdb_rows_changed(result)
 # Returns the number of rows changed by the query stored in the result. This is relevant only for INSERT/UPDATE/DELETE
@@ -570,24 +570,24 @@ end
 #         row - 1,
 #     )
 # end
-#
-# """
-# duckdb_value_varchar(result,col,row)
-# * returns: The char* value at the specified location, or nullptr if the value cannot be converted.
-# The result must be freed with `duckdb_free`.
-# DUCKDB_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row);
-# """
-# function duckdb_value_varchar(result, col, row)
-#     return ccall(
-#         (:duckdb_value_varchar, libduckdb),
-#         Ptr{UInt8},
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
+
+"""
+duckdb_value_varchar(result,col,row)
+* returns: The char* value at the specified location, or nullptr if the value cannot be converted.
+The result must be freed with `duckdb_free`.
+DUCKDB_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row);
+"""
+function duckdb_value_varchar(result, col, row)
+    return ccall(
+        (:duckdb_value_varchar, libduckdb),
+        Ptr{UInt8},
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
 # """
 # duckdb_value_varchar_internal(result,col,row)
 # * returns: The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
@@ -622,23 +622,23 @@ end
 #         row - 1,
 #     )
 # end
-#
-# """
-# duckdb_value_is_null(result,col,row)
-#  * returns: Returns true if the value at the specified index is NULL, and false otherwise.
-# DUCKDB_API bool duckdb_value_is_null(duckdb_result *result, idx_t col, idx_t row);
-# """
-# function duckdb_value_is_null(result, col, row)
-#     return ccall(
-#         (:duckdb_value_is_null, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
+
+"""
+duckdb_value_is_null(result,col,row)
+ * returns: Returns true if the value at the specified index is NULL, and false otherwise.
+DUCKDB_API bool duckdb_value_is_null(duckdb_result *result, idx_t col, idx_t row);
+"""
+function duckdb_value_is_null(result, col, row)
+    return ccall(
+        (:duckdb_value_is_null, libduckdb),
+        Bool,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
 # #=
 # //===--------------------------------------------------------------------===//
 # // Helpers
@@ -805,10 +805,10 @@ function duckdb_prepare(connection, query, out_prepared_statement)
     return ccall(
         (:duckdb_prepare, libduckdb),
         Int32,
-        (Ptr{Cvoid}, Ptr{UInt8}, Ref{Ptr{Cvoid}}),
+        (duckdb_connection, Ptr{UInt8}, Ref{duckdb_prepared_statement}),
         connection,
         query,
-        out_prepared_statement[],
+        out_prepared_statement,
     )
 end
 
@@ -818,7 +818,7 @@ Closes the prepared statement and de-allocates all memory allocated for that con
 DUCKDB_API void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement);
 """
 function duckdb_destroy_prepare(prepared_statement)
-    return ccall((:duckdb_prepare, libduckdb), Cvoid, (Ref{Ptr{Cvoid}},), prepared_statement[])
+    return ccall((:duckdb_destroy_prepare, libduckdb), Cvoid, (Ref{duckdb_prepared_statement},), prepared_statement)
 end
 
 # """
@@ -1176,26 +1176,26 @@ end
 #     )
 # end
 #
-# """
-# Executes the prepared statement with the given bound parameters, and returns a materialized query result.
-# This method can be called multiple times for each prepared statement, and the parameters can be modified
-# between calls to this function.
-# * prepared_statement: The prepared statement to execute.
-# * out_result: The query result.
-# * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-# DUCKDB_API duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement,
-#                                                 duckdb_result *out_result);
-# """
-# function duckdb_execute_prepared(prepared_statement, out_result)
-#     return ccall(
-#         (:duckdb_execute_prepared, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Ptr{Cvoid}),
-#         prepared_statement,
-#         out_result,
-#     )
-# end
-#
+"""
+Executes the prepared statement with the given bound parameters, and returns a materialized query result.
+This method can be called multiple times for each prepared statement, and the parameters can be modified
+between calls to this function.
+* prepared_statement: The prepared statement to execute.
+* out_result: The query result.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+DUCKDB_API duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement,
+                                                duckdb_result *out_result);
+"""
+function duckdb_execute_prepared(prepared_statement, out_result)
+    return ccall(
+        (:duckdb_execute_prepared, libduckdb),
+        Int32,
+        (duckdb_prepared_statement, Ref{duckdb_result}),
+        prepared_statement,
+        out_result,
+    )
+end
+
 # """
 # Executes the prepared statement with the given bound parameters, and returns an arrow query result.
 # * prepared_statement: The prepared statement to execute.

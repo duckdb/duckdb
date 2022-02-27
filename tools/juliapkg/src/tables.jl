@@ -1,5 +1,3 @@
-# using Tables
-# using Base.Libc
 #
 # sym(ptr) = ccall(:jl_symbol, Ref{Symbol}, (Ptr{UInt8},), ptr)
 #
@@ -132,17 +130,18 @@ DBInterface.prepare(con::Connection, sql::AbstractString) = Stmt(con, sql)
 # like `DataFrame(results)`, `CSV.write("results.csv", results)`, etc.
 # """
 function DBInterface.execute(stmt::Stmt, params::DBInterface.StatementParams)
-    status = execute(stmt, params)
-    _st = _stmt(stmt)
-    cols = sqlite3_column_count(_st.handle)
-    header = Vector{Symbol}(undef, cols)
-    types = Vector{Type}(undef, cols)
-    for i = 1:cols
-        nm = sym(sqlite3_column_name(_st.handle, i))
-        header[i] = nm
-        types[i] = Union{juliatype(_st.handle, i), Missing}
-    end
-    return Query(stmt, Ref(status), header, types, Dict(x=>i for (i, x) in enumerate(header)), Ref(0))
+	return execute(stmt, params);
+#     status = execute(stmt, params)
+#     _st = _stmt(stmt)
+#     cols = sqlite3_column_count(_st.handle)
+#     header = Vector{Symbol}(undef, cols)
+#     types = Vector{Type}(undef, cols)
+#     for i = 1:cols
+#         nm = sym(sqlite3_column_name(_st.handle, i))
+#         header[i] = nm
+#         types[i] = Union{juliatype(_st.handle, i), Missing}
+#     end
+#     return Query(stmt, Ref(status), header, types, Dict(x=>i for (i, x) in enumerate(header)), Ref(0))
 end
 #
 # """
