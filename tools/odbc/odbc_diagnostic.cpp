@@ -1,5 +1,6 @@
 #include "odbc_diagnostic.hpp"
 
+using duckdb::DiagHeader;
 using duckdb::DiagRecord;
 using duckdb::OdbcDiagnostic;
 using std::string;
@@ -199,22 +200,62 @@ void OdbcDiagnostic::FormatDiagnosticMessage(DiagRecord &diag_record, const std:
                                              const std::string &component) {
 	// https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/diagnostic-messages?view=sql-server-ver15
 	// [ vendor-identifier ][ ODBC-component-identifier ][ data-source-identifier ] data-source-supplied-text
-	D_ASSERT(!diag_record.sql_diag_message_text.empty());
+	auto error_msg = diag_record.GetOriginalMessage();
 
-	string msg = "DuckDB";
+	string msg = "ODBC_DuckDB";
 	if (!data_source.empty()) {
 		msg += "->" + data_source;
 	}
 	if (!component.empty()) {
 		msg += "->" + component;
 	}
-	msg += "\n" + diag_record.sql_diag_message_text;
+	msg += "\n" + error_msg;
 
-	diag_record.sql_diag_message_text = msg;
+	diag_record.SetMessage(msg);
 }
 
-void OdbcDiagnostic::AddDiagRecord(const DiagRecord &diag_record) {
+void OdbcDiagnostic::AddDiagRecord(DiagRecord &diag_record) {
+	// if (diag_record.id_diag == -1) {
+	//     if (diag_records.size() > 0) {
+	//         diag_record.id_diag = diag_records.back().id_diag + 1;
+	//     } else {
+	//         diag_record.id_diag = 0;
+	//     }
+	// }
+	auto rec_idx = (SQLSMALLINT)diag_records.size();
 	diag_records.emplace_back(diag_record);
+	vec_record_idx.emplace_back(rec_idx);
+}
+
+void OdbcDiagnostic::AddNewRecIdx(SQLSMALLINT rec_idx) {
+	auto origin_idx = vec_record_idx[rec_idx];
+	// auto diag_rec = &diag_records[origin_idx];
+
+	// auto new_offset = diag_rec->stack_msg_offset.top() + offset;
+	// diag_rec->stack_msg_offset.push(new_offset);
+
+	auto begin = vec_record_idx.begin();
+	vec_record_idx.emplace(std::next(begin, rec_idx + 1), origin_idx);
+
+	// auto original_msg = diag_rec->GetMessage();
+	// auto new_diag_rec = *diag_rec;
+
+	// // split the message between the two diagnostic records
+	// new_diag_rec.SetMessage(original_msg.substr(remaining_chars));
+	// // diag_rec->SetMessage(original_msg.substr(0, remaining_chars));
+
+	// // insert the new diagnostic record right after its
+	// auto begin = diag_records.begin();
+	// diag_records.emplace(std::next(begin, rec_idx + 1), new_diag_rec);
+}
+
+duckdb::idx_t OdbcDiagnostic::GetTotalRecords() {
+	return vec_record_idx.size();
+}
+
+void OdbcDiagnostic::Clean() {
+	header = DiagHeader();
+	diag_records.clear();
 }
 
 string OdbcDiagnostic::GetDiagDynamicFunction() {
@@ -229,9 +270,17 @@ bool OdbcDiagnostic::VerifyRecordIndex(SQLINTEGER rec_idx) {
 	return (rec_idx < (SQLINTEGER)diag_records.size() && rec_idx >= 0);
 }
 
-const DiagRecord &OdbcDiagnostic::GetDiagRecord(SQLINTEGER rec_idx) {
-	D_ASSERT(rec_idx < (SQLINTEGER)diag_records.size() && rec_idx >= 0);
-	return diag_records[rec_idx];
+DiagRecord &OdbcDiagnostic::GetDiagRecord(SQLINTEGER rec_idx) {
+	D_ASSERT(rec_idx < (SQLINTEGER)vec_record_idx.size() && rec_idx >= 0);
+	auto origin_idx = vec_record_idx[rec_idx];
+	auto diag_record = &diag_records[origin_idx];
+	// getting first record, clear up vec_record_idx
+	if (rec_idx == 0 && !diag_record->stack_msg_offset.empty()) {
+		vec_record_idx.clear();
+		vec_record_idx.emplace_back(rec_idx);
+		diag_record->ClearStackMsgOffset();
+	}
+	return *diag_record;
 }
 
 std::string OdbcDiagnostic::GetDiagClassOrigin(SQLINTEGER rec_idx) {
@@ -247,9 +296,119 @@ std::string OdbcDiagnostic::GetDiagClassOrigin(SQLINTEGER rec_idx) {
 std::string OdbcDiagnostic::GetDiagSubclassOrigin(SQLINTEGER rec_idx) {
 	D_ASSERT(rec_idx < (SQLINTEGER)diag_records.size() && rec_idx >= 0);
 	auto sqlstate_str = diag_records[rec_idx].sql_diag_sqlstate;
+	;
 	if (SET_ODBC3_SUBCLASS_ORIGIN.find(sqlstate_str) != SET_ODBC3_SUBCLASS_ORIGIN.end()) {
 		return "ODBC 3.0";
 	} else {
 		return "ISO 9075";
 	}
 }
+
+// DiagRecord functions ****************************************************************
+DiagRecord::DiagRecord(const std::string &msg, const std::string &sqlstate, const std::string &server_name,
+                       SQLINTEGER col_number, SQLINTEGER sql_native, SQLLEN row_number) {
+	D_ASSERT(!msg.empty());
+
+	sql_diag_message_text = msg;
+	sql_diag_sqlstate = sqlstate;
+	sql_diag_server_name = server_name;
+	sql_diag_column_number = col_number;
+	sql_diag_native = sql_native;
+	sql_diag_row_number = row_number;
+
+	stack_msg_offset.push(0);
+}
+
+DiagRecord::DiagRecord(const DiagRecord &other) {
+	// calling copy assigment operator
+	*this = other;
+}
+
+DiagRecord &DiagRecord::operator=(const DiagRecord &other) {
+	if (&other != this) {
+		sql_diag_message_text = other.sql_diag_message_text;
+		sql_diag_sqlstate = other.sql_diag_sqlstate;
+		sql_diag_server_name = other.sql_diag_server_name;
+		sql_diag_column_number = other.sql_diag_column_number;
+		sql_diag_native = other.sql_diag_native;
+		sql_diag_row_number = other.sql_diag_row_number;
+		rec_idx = other.rec_idx;
+		number_chars_read = other.number_chars_read;
+		stack_msg_offset = other.stack_msg_offset;
+	}
+	return *this;
+}
+
+std::string DiagRecord::GetOriginalMessage() {
+	return sql_diag_message_text;
+}
+
+std::string DiagRecord::GetMessage(SQLSMALLINT buff_length) {
+	duckdb::idx_t last_offset = stack_msg_offset.top();
+	// if (!stack_msg_offset.empty()) {
+	//     last_offset = stack_msg_offset.top();
+	// }
+	auto new_offset = last_offset + buff_length;
+	if (new_offset >= sql_diag_message_text.size()) {
+		ClearStackMsgOffset();
+	} else {
+		stack_msg_offset.push(new_offset);
+	}
+	return sql_diag_message_text.substr(last_offset);
+
+	// auto total_chars = (SQLSMALLINT)sql_diag_message_text.size();
+	// D_ASSERT(number_chars_read < total_chars);
+	// if (number_chars_read == 0) {
+	//     return sql_diag_message_text;
+	// }
+	// return sql_diag_message_text.substr(number_chars_read);
+}
+
+void DiagRecord::SetMessage(const std::string &new_msg) {
+	D_ASSERT(!new_msg.empty());
+	sql_diag_message_text = new_msg;
+	number_chars_read = 0;
+	ClearStackMsgOffset();
+}
+
+void DiagRecord::ClearStackMsgOffset() {
+	while (!stack_msg_offset.empty()) {
+		stack_msg_offset.pop();
+	}
+	if (stack_msg_offset.size() == 0) {
+		stack_msg_offset.push(0);
+	}
+}
+
+// SQLINTEGER DiagRecord::GetNumberCharsRead() {
+//     return number_chars_read;
+// }
+// void DiagRecord::ResetNumberCharsRead() {
+//     number_chars_read=0;
+// }
+// SQLINTEGER DiagRecord::IncreaseNumberCharsRead(SQLINTEGER increment) {
+//     return number_chars_read += increment;
+// }
+
+// SQLSMALLINT DiagRecord::GetNumRemainingChars() {
+//     auto msg_offset = stack_msg_offset.top();
+//     auto total_chars = sql_diag_message_text.size();
+//     auto remaining_chars = total_chars - msg_offset;
+//     if (remaining_chars <= 0) {
+//         stack_msg_offset.clear();
+//         stack_msg_offset.push(0);
+//         return 0;
+//     }
+//     return (SQLSMALLINT) remaining_chars;
+// }
+
+// SQLSMALLINT DiagRecord::GetNumRemainingChars(SQLSMALLINT buff_length) {
+//     number_chars_read += buff_length;
+//     auto total_chars = (SQLSMALLINT)sql_diag_message_text.size();
+//     if (number_chars_read >= total_chars) {
+//         number_chars_read = 0;
+//         return 0;
+//     }
+//     auto remaining_chars = total_chars - number_chars_read;
+//     return remaining_chars;
+// }
