@@ -187,6 +187,7 @@ public class TestDuckDBJDBC {
 		assertTrue(rs.getObject(2, OffsetDateTime.class).isEqual(odt5));
 		rs.next();
 		assertTrue(rs.getObject(2, OffsetDateTime.class).isEqual(odt2Rounded));
+		assertTrue(((OffsetDateTime)rs.getObject(2)).isEqual(odt2Rounded));
 
 		rs.close();
 		stmt.close();

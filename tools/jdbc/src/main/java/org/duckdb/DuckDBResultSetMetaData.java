@@ -45,7 +45,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return DuckDBColumnType.DECIMAL;
 		} else if (type_name.equals("TIMESTAMP WITH TIME ZONE")) {
 			return DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE;
-        } else {
+		} else {
 			return DuckDBColumnType.valueOf(type_name);
 		}
 	}

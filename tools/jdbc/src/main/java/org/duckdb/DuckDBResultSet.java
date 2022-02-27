@@ -156,7 +156,7 @@ public class DuckDBResultSet implements ResultSet {
 		case TIMESTAMP:
 			return getTimestamp(columnIndex);
 		case TIMESTAMP_WITH_TIME_ZONE:
-			return getTimestamp(columnIndex);
+			return getOffsetDateTime(columnIndex);
 		case INTERVAL:
 			return getLazyString(columnIndex);
 		default:
@@ -1352,7 +1352,7 @@ public class DuckDBResultSet implements ResultSet {
 			}
 		} else if (type == OffsetDateTime.class) {
 			if (sqlType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
-                return type.cast(getOffsetDateTime(columnIndex));
+				return type.cast(getOffsetDateTime(columnIndex));
 			} else {
 				throw new SQLException("Can't convert value to OffsetDateTime " + type.toString());
 			}
