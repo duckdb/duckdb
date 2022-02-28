@@ -146,7 +146,6 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			throw std::runtime_error("Prepared statement needs " + to_string(prep->n_param) + " parameters, " +
 			                         to_string(py::len(single_query_params)) + " given");
 		}
-		std::cout << "size: " << py::len(single_query_params) << std::endl;
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
 		auto res = make_unique<DuckDBPyResult>();
 		{
