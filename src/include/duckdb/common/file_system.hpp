@@ -139,7 +139,8 @@ public:
 	//! Recursively remove a directory and all files in it
 	DUCKDB_API virtual void RemoveDirectory(const string &directory);
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
-	DUCKDB_API virtual bool ListFiles(const string &directory, const std::function<void(const string&, bool)> &callback);
+	DUCKDB_API virtual bool ListFiles(const string &directory,
+	                                  const std::function<void(const string &, bool)> &callback);
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	DUCKDB_API virtual void MoveFile(const string &source, const string &target);
