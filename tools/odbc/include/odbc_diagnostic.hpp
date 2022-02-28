@@ -2,13 +2,10 @@
 #define ODBC_DIAGNOSTIC_HPP
 
 #include "duckdb.hpp"
+#include "duckdb/common/windows.hpp"
 
 #include "sqlext.h"
 #include "sqltypes.h"
-
-#ifdef _WIN32
-#include <Windows.h>
-#endif
 
 #include <set>
 #include <stack>
@@ -22,10 +19,6 @@ public:
 	explicit DiagRecord(const std::string &msg, const std::string &sqlstate = "", const std::string &server_name = "",
 	                    SQLINTEGER col_number = SQL_NO_COLUMN_NUMBER, SQLINTEGER sql_native = 0,
 	                    SQLLEN row_number = SQL_NO_ROW_NUMBER);
-	// SQLINTEGER GetNumberCharsRead();
-	// void ResetNumberCharsRead();
-	// SQLINTEGER IncreaseNumberCharsRead(SQLINTEGER increment);
-
 	DiagRecord(const DiagRecord &other);
 	DiagRecord &operator=(const DiagRecord &other);
 
@@ -33,8 +26,6 @@ public:
 	std::string GetMessage(SQLSMALLINT buff_length);
 	void SetMessage(const std::string &new_msg);
 	void ClearStackMsgOffset();
-
-	// SQLSMALLINT GetNumRemainingChars(SQLSMALLINT buff_length);
 
 public:
 	// Some fields were commented out because they can be extract from other fields or internal data structures
