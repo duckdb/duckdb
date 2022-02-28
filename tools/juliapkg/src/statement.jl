@@ -33,23 +33,23 @@ mutable struct Stmt <: DBInterface.Statement
     function Stmt(con::Connection, sql::AbstractString)
         handle = Ref{duckdb_prepared_statement}()
         if duckdb_prepare(con.handle, sql, handle) != DuckDBSuccess
-        	error_message = unsafe_string(duckdb_prepare_error(handle))
-        	duckdb_destroy_prepare(handle)
-        	throw(error_message)
+            error_message = unsafe_string(duckdb_prepare_error(handle))
+            duckdb_destroy_prepare(handle)
+            throw(error_message)
         end
-		stmt = new(con, handle[])
-		finalizer(_close_stmt, stmt)
-		return stmt
+        stmt = new(con, handle[])
+        finalizer(_close_stmt, stmt)
+        return stmt
     end
 
     function Stmt(db::DB, sql::AbstractString)
-    	return Stmt(db.main_connection, sql);
+        return Stmt(db.main_connection, sql)
     end
 end
 
 function _close_stmt(stmt::Stmt)
     if stmt.handle != C_NULL
-    	duckdb_destroy_prepare(stmt.handle)
-    	stmt.handle = C_NULL
+        duckdb_destroy_prepare(stmt.handle)
+        stmt.handle = C_NULL
     end
 end

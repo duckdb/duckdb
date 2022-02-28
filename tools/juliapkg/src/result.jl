@@ -3,49 +3,49 @@ using Tables
 sym(ptr) = ccall(:jl_symbol, Ref{Symbol}, (Ptr{UInt8},), ptr)
 
 mutable struct QueryResult
-	handle::duckdb_result
+    handle::duckdb_result
     names::Vector{Symbol}
     types::Vector{Type}
     lookup::Dict{Symbol, Int}
     total_rows::Int
 
-    function QueryResult(stmt::Stmt, params::DBInterface.StatementParams=())
-    	handle = Ref{duckdb_result}()
-		if duckdb_execute_prepared(stmt.handle, handle) != DuckDBSuccess
-        	error_message = unsafe_string(duckdb_result_error(handle))
-        	duckdb_destroy_result(handle)
-        	throw(error_message)
-		end
+    function QueryResult(stmt::Stmt, params::DBInterface.StatementParams = ())
+        handle = Ref{duckdb_result}()
+        if duckdb_execute_prepared(stmt.handle, handle) != DuckDBSuccess
+            error_message = unsafe_string(duckdb_result_error(handle))
+            duckdb_destroy_result(handle)
+            throw(error_message)
+        end
 
-    	column_count = duckdb_column_count(handle)
-    	row_count = duckdb_row_count(handle)
-    	names = Vector{Symbol}(undef, column_count)
-    	types = Vector{Type}(undef, column_count)
-		for i = 1:column_count
-			nm = sym(duckdb_column_name(handle, i))
-			names[i] = nm
-			types[i] = duckdb_type_to_julia_type(duckdb_column_type(handle, i))
-		end
-		lookup = Dict(x=>i for (i, x) in enumerate(names))
-		result = new(handle[], names, types, lookup, row_count)
-		finalizer(_close_result, result)
-		return result
+        column_count = duckdb_column_count(handle)
+        row_count = duckdb_row_count(handle)
+        names = Vector{Symbol}(undef, column_count)
+        types = Vector{Type}(undef, column_count)
+        for i in 1:column_count
+            nm = sym(duckdb_column_name(handle, i))
+            names[i] = nm
+            types[i] = duckdb_type_to_julia_type(duckdb_column_type(handle, i))
+        end
+        lookup = Dict(x => i for (i, x) in enumerate(names))
+        result = new(handle[], names, types, lookup, row_count)
+        finalizer(_close_result, result)
+        return result
     end
 end
 
 function _close_result(result::QueryResult)
-    duckdb_destroy_result(result.handle)
+    return duckdb_destroy_result(result.handle)
 end
 
-function execute(stmt::Stmt, params::DBInterface.StatementParams=())
-	return QueryResult(stmt, params);
+function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
+    return QueryResult(stmt, params)
 end
 
 DBInterface.getconnection(stmt::Stmt) = stmt.db
 
 # explicitly close prepared statement
 function DBInterface.close!(stmt::Stmt)
-	_close_stmt(stmt);
+    return _close_stmt(stmt)
 end
 
 #
@@ -273,7 +273,7 @@ end
 execute(db::DB, sql::AbstractString; kwargs...) = execute(db, sql, values(kwargs))
 
 function DBInterface.transaction(f, db::DB)
-	throw("transaction")
+    throw("transaction")
 end
 
 """
@@ -335,29 +335,40 @@ Base.IteratorSize(::Type{QueryResult}) = Base.SizeUnknown()
 Base.eltype(q::QueryResult) = Row
 
 function DBInterface.close!(q::QueryResult)
-	_close_result(q);
+    return _close_result(q)
 end
 
-duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Bool} = duckdb_value_boolean(handle, col, row_number)
-duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Int8} = duckdb_value_int8(handle, col, row_number)
-duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Int16} = duckdb_value_int16(handle, col, row_number)
-duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Int32} = duckdb_value_int32(handle, col, row_number)
-duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Int64} = duckdb_value_int64(handle, col, row_number)
-duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: UInt8} = duckdb_value_uint8(handle, col, row_number)
-duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: UInt16} = duckdb_value_uint16(handle, col, row_number)
-duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: UInt32} = duckdb_value_uint32(handle, col, row_number)
-duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: UInt64} = duckdb_value_uint64(handle, col, row_number)
-duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Float32} = duckdb_value_float(handle, col, row_number)
-duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Float64} = duckdb_value_double(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Bool} =
+    duckdb_value_boolean(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Int8} =
+    duckdb_value_int8(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Int16} =
+    duckdb_value_int16(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Int32} =
+    duckdb_value_int32(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Int64} =
+    duckdb_value_int64(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: UInt8} =
+    duckdb_value_uint8(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: UInt16} =
+    duckdb_value_uint16(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: UInt32} =
+    duckdb_value_uint32(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: UInt64} =
+    duckdb_value_uint64(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Float32} =
+    duckdb_value_float(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Float64} =
+    duckdb_value_double(handle, col, row_number)
 function duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T}
-	return unsafe_string(duckdb_value_varchar(handle, col, row_number));
+    return unsafe_string(duckdb_value_varchar(handle, col, row_number))
 end
 
 function getvalue(q::QueryResult, col::Int, row_number::Int, ::Type{T}) where {T}
-	if duckdb_value_is_null(q.handle, col, row_number)
-		return missing
-	end
-	return duckdb_internal_value(T, q.handle, col, row_number)
+    if duckdb_value_is_null(q.handle, col, row_number)
+        return missing
+    end
+    return duckdb_internal_value(T, q.handle, col, row_number)
 end
 
 #
@@ -375,30 +386,31 @@ end
 # const FLOAT_TYPES = Union{Float16, Float32, Float64} # exclude BigFloat
 # sqlitevalue(::Type{T}, handle, col) where {T <: FLOAT_TYPES} = convert(T, sqlite3_column_double(handle, col))
 
-Tables.getcolumn(r::Row, ::Type{T}, i::Int, nm::Symbol) where {T} = getvalue(getquery(r), i, getfield(r, :row_number), T)
+Tables.getcolumn(r::Row, ::Type{T}, i::Int, nm::Symbol) where {T} =
+    getvalue(getquery(r), i, getfield(r, :row_number), T)
 
 Tables.getcolumn(r::Row, i::Int) = Tables.getcolumn(r, getquery(r).types[i], i, getquery(r).names[i])
 Tables.getcolumn(r::Row, nm::Symbol) = Tables.getcolumn(r, getquery(r).lookup[nm])
 Tables.columnnames(r::Row) = Tables.columnnames(getquery(r))
 
 function Base.iterate(q::QueryResult)
-	if q.total_rows == 0
-		return nothing
-	end
+    if q.total_rows == 0
+        return nothing
+    end
     return Row(q, 1), 2
 end
 
 function Base.iterate(q::QueryResult, row_number)
-	if row_number > q.total_rows
-		return nothing
-	end
+    if row_number > q.total_rows
+        return nothing
+    end
     return Row(q, row_number), row_number + 1
 end
 
 "Return the last row insert id from the executed statement"
 function DBInterface.lastrowid(q::QueryResult)
-	throw("unimplemented: lastrowid")
-# 	last_insert_rowid(q.stmt.db)
+    throw("unimplemented: lastrowid")
+    # 	last_insert_rowid(q.stmt.db)
 end
 
 """
@@ -425,7 +437,7 @@ The resultset iterator supports the [Tables.jl](https://github.com/JuliaData/Tab
 like `DataFrame(results)`, `CSV.write("results.csv", results)`, etc.
 """
 function DBInterface.execute(stmt::Stmt, params::DBInterface.StatementParams)
-	return execute(stmt, params);
+    return execute(stmt, params)
 end
 
 #
@@ -566,4 +578,3 @@ end
 #     sch = Tables.Schema(names, nothing)
 #     return load!(sch, rows, db, name, db_tableinfo, row, st; kwargs...)
 # end
-

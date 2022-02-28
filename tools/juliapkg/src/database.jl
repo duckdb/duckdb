@@ -55,45 +55,45 @@ mutable struct DuckDBHandle
         handle = Ref{duckdb_database}()
         error = Ref{Ptr{UInt8}}()
         if duckdb_open_ext(f, handle, C_NULL, error) != DuckDBSuccess
-			error_message = unsafe_string(error[])
-			duckdb_free(error[])
-        	throw(error_message)
+            error_message = unsafe_string(error[])
+            duckdb_free(error[])
+            throw(error_message)
         end
 
-		db = new(f, handle[])
-		finalizer(_close_database, db)
-		return db
+        db = new(f, handle[])
+        finalizer(_close_database, db)
+        return db
     end
 end
 
 function _close_database(db::DuckDBHandle)
     # disconnect from DB
     if db.handle != C_NULL
-    	duckdb_close(db.handle)
+        duckdb_close(db.handle)
     end
     db.handle = C_NULL
     return
 end
 
 mutable struct Connection
-	db::DuckDBHandle
-	handle::duckdb_connection
+    db::DuckDBHandle
+    handle::duckdb_connection
 
-	function Connection(db::DuckDBHandle)
+    function Connection(db::DuckDBHandle)
         handle = Ref{duckdb_connection}()
         if duckdb_connect(db.handle, handle) != DuckDBSuccess
-        	throw("failed to open connection")
+            throw("failed to open connection")
         end
-		con = new(db, handle[])
-		finalizer(_close_connection, con)
-		return con
-	end
+        con = new(db, handle[])
+        finalizer(_close_connection, con)
+        return con
+    end
 end
 
 function _close_connection(con::Connection)
     # disconnect
     if con.handle != C_NULL
-    	duckdb_disconnect(con.handle)
+        duckdb_disconnect(con.handle)
     end
     con.handle = C_NULL
     return
@@ -106,8 +106,8 @@ mutable struct DB <: DBInterface.Connection
     function DB(f::AbstractString)
         handle = DuckDBHandle(f)
         main_connection = Connection(handle)
-		db = new(handle, main_connection)
-		return db
+        db = new(handle, main_connection)
+        return db
     end
 end
 

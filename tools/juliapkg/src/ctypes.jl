@@ -46,10 +46,7 @@ duckdb_type_to_julia_type(x::DUCKDB_TYPE) =
     x == DUCKDB_TYPE_USMALLINT ? UInt16 :
     x == DUCKDB_TYPE_UINTEGER ? UInt32 :
     x == DUCKDB_TYPE_UBIGINT ? UInt64 :
-    x == DUCKDB_TYPE_FLOAT ? Float32 :
-    x == DUCKDB_TYPE_DOUBLE ? Float64 :
-    x == DUCKDB_TYPE_VARCHAR ? String :
-    Any
+    x == DUCKDB_TYPE_FLOAT ? Float32 : x == DUCKDB_TYPE_DOUBLE ? Float64 : x == DUCKDB_TYPE_VARCHAR ? String : Any
 
 """
 Days are stored as days since 1970-01-01\n
@@ -153,5 +150,5 @@ DUCKDB_TYPES = Dict(
     DUCKDB_TYPE_INTERVAL => duckdb_interval,
     DUCKDB_TYPE_HUGEINT => duckdb_hugeint,
     DUCKDB_TYPE_VARCHAR => Ptr{UInt8},
-    DUCKDB_TYPE_BLOB => duckdb_blob,
+    DUCKDB_TYPE_BLOB => duckdb_blob
 )

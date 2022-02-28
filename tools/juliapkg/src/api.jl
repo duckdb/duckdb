@@ -16,13 +16,7 @@ If no path is given a new in-memory database is created instead.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_open(path, out_database)
-    return ccall(
-        (:duckdb_open, libduckdb),
-        Int32,
-        (Ptr{UInt8}, Ref{duckdb_database}),
-        path,
-        out_database,
-    )
+    return ccall((:duckdb_open, libduckdb), Int32, (Ptr{UInt8}, Ref{duckdb_database}), path, out_database)
 end
 """
 	Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the the given path.
@@ -70,7 +64,7 @@ function duckdb_connect(database, out_connection)
         Int32,
         (duckdb_database, Ref{duckdb_connection}),
         database,
-        out_connection,
+        out_connection
     )
 end
 
@@ -211,13 +205,7 @@ Returns `NULL` if the column is out of range.
 * returns: The column name of the specified column.
 """
 function duckdb_column_name(result, col)
-    return ccall(
-        (:duckdb_column_name, libduckdb),
-        Ptr{UInt8},
-        (Ref{duckdb_result}, Int32),
-        result,
-        col - 1,
-    )
+    return ccall((:duckdb_column_name, libduckdb), Ptr{UInt8}, (Ref{duckdb_result}, Int32), result, col - 1)
 end
 
 """
@@ -229,13 +217,7 @@ Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
 * returns: The column type of the specified column.
 """
 function duckdb_column_type(result, col)
-    return ccall(
-        (:duckdb_column_type, libduckdb),
-        DUCKDB_TYPE,
-        (Ref{duckdb_result}, Int32),
-        result,
-        col - 1,
-    )
+    return ccall((:duckdb_column_type, libduckdb), DUCKDB_TYPE, (Ref{duckdb_result}, Int32), result, col - 1)
 end
 
 """
@@ -358,7 +340,7 @@ function duckdb_value_boolean(result, col, row)
         (Ref{duckdb_result}, Int32, Int32),
         result,
         col - 1,
-        row - 1,
+        row - 1
     )
 end
 
@@ -367,14 +349,7 @@ end
 * returns: The int8_t value at the specified location, or 0 if the value cannot be converted.
 """
 function duckdb_value_int8(result, col, row)
-    return ccall(
-        (:duckdb_value_int8, libduckdb),
-        Int8,
-        (Ref{duckdb_result}, Int32, Int32),
-        result,
-        col - 1,
-        row - 1,
-    )
+    return ccall((:duckdb_value_int8, libduckdb), Int8, (Ref{duckdb_result}, Int32, Int32), result, col - 1, row - 1)
 end
 
 """
@@ -382,14 +357,7 @@ end
  * returns: The int16_t value at the specified location, or 0 if the value cannot be converted.
 """
 function duckdb_value_int16(result, col, row)
-    return ccall(
-        (:duckdb_value_int16, libduckdb),
-        Int16,
-        (Ref{duckdb_result}, Int32, Int32),
-        result,
-        col - 1,
-        row - 1,
-    )
+    return ccall((:duckdb_value_int16, libduckdb), Int16, (Ref{duckdb_result}, Int32, Int32), result, col - 1, row - 1)
 end
 
 """
@@ -397,14 +365,7 @@ end
  * returns: The int32_t value at the specified location, or 0 if the value cannot be converted.
 """
 function duckdb_value_int32(result, col, row)
-    return ccall(
-        (:duckdb_value_int32, libduckdb),
-        Int32,
-        (Ref{duckdb_result}, Int32, Int32),
-        result,
-        col - 1,
-        row - 1,
-    )
+    return ccall((:duckdb_value_int32, libduckdb), Int32, (Ref{duckdb_result}, Int32, Int32), result, col - 1, row - 1)
 end
 
 """
@@ -412,14 +373,7 @@ end
  * returns: The int64_t value at the specified location, or 0 if the value cannot be converted.
 """
 function duckdb_value_int64(result, col, row)
-    return ccall(
-        (:duckdb_value_int64, libduckdb),
-        Int64,
-        (Ref{duckdb_result}, Int32, Int32),
-        result,
-        col - 1,
-        row - 1,
-    )
+    return ccall((:duckdb_value_int64, libduckdb), Int64, (Ref{duckdb_result}, Int32, Int32), result, col - 1, row - 1)
 end
 
 """
@@ -433,7 +387,7 @@ function duckdb_value_hugeint(result, col, row)
         (Ref{duckdb_result}, Int32, Int32),
         result,
         col - 1,
-        row - 1,
+        row - 1
     )
 end
 
@@ -443,14 +397,7 @@ end
 
 """
 function duckdb_value_uint8(result, col, row)
-    return ccall(
-        (:duckdb_value_uint8, libduckdb),
-        UInt8,
-        (Ref{duckdb_result}, Int32, Int32),
-        result,
-        col - 1,
-        row - 1,
-    )
+    return ccall((:duckdb_value_uint8, libduckdb), UInt8, (Ref{duckdb_result}, Int32, Int32), result, col - 1, row - 1)
 end
 
 """
@@ -464,7 +411,7 @@ function duckdb_value_uint16(result, col, row)
         (Ref{duckdb_result}, Int32, Int32),
         result,
         col - 1,
-        row - 1,
+        row - 1
     )
 end
 
@@ -479,7 +426,7 @@ function duckdb_value_uint32(result, col, row)
         (Ref{duckdb_result}, Int32, Int32),
         result,
         col - 1,
-        row - 1,
+        row - 1
     )
 end
 
@@ -494,7 +441,7 @@ function duckdb_value_uint64(result, col, row)
         (Ref{duckdb_result}, Int32, Int32),
         result,
         col - 1,
-        row - 1,
+        row - 1
     )
 end
 
@@ -509,7 +456,7 @@ function duckdb_value_float(result, col, row)
         (Ref{duckdb_result}, Int32, Int32),
         result,
         col - 1,
-        row - 1,
+        row - 1
     )
 end
 
@@ -524,7 +471,7 @@ function duckdb_value_double(result, col, row)
         (Ref{duckdb_result}, Int32, Int32),
         result,
         col - 1,
-        row - 1,
+        row - 1
     )
 end
 
@@ -534,14 +481,7 @@ duckdb_value_date(result,col,row)
 DUCKDB_API duckdb_date duckdb_value_date(duckdb_result *result, idx_t col, idx_t row);
 """
 function duckdb_value_date(result, col, row)
-    return ccall(
-        (:duckdb_value_date, libduckdb),
-        Int32,
-        (Ref{duckdb_result}, Int32, Int32),
-        result,
-        col - 1,
-        row - 1,
-    )
+    return ccall((:duckdb_value_date, libduckdb), Int32, (Ref{duckdb_result}, Int32, Int32), result, col - 1, row - 1)
 end
 
 """
@@ -550,14 +490,7 @@ duckdb_value_time(result,col,row)
 DUCKDB_API duckdb_time duckdb_value_time(duckdb_result *result, idx_t col, idx_t row);
 """
 function duckdb_value_time(result, col, row)
-    return ccall(
-        (:duckdb_value_time, libduckdb),
-        Int32,
-        (Ref{duckdb_result}, Int32, Int32),
-        result,
-        col - 1,
-        row - 1,
-    )
+    return ccall((:duckdb_value_time, libduckdb), Int32, (Ref{duckdb_result}, Int32, Int32), result, col - 1, row - 1)
 end
 
 """
@@ -572,7 +505,7 @@ function duckdb_value_timestamp(result, col, row)
         (Ref{duckdb_result}, Int32, Int32),
         result,
         col - 1,
-        row - 1,
+        row - 1
     )
 end
 
@@ -588,7 +521,7 @@ function duckdb_value_interval(result, col, row)
         (Ref{duckdb_result}, Int32, Int32),
         result,
         col - 1,
-        row - 1,
+        row - 1
     )
 end
 
@@ -605,7 +538,7 @@ function duckdb_value_varchar(result, col, row)
         (Ref{duckdb_result}, Int32, Int32),
         result,
         col - 1,
-        row - 1,
+        row - 1
     )
 end
 
@@ -623,7 +556,7 @@ function duckdb_value_varchar_internal(result, col, row)
         (Ref{duckdb_result}, Int32, Int32),
         result,
         col - 1,
-        row - 1,
+        row - 1
     )
 end
 
@@ -650,14 +583,7 @@ duckdb_value_is_null(result,col,row)
 DUCKDB_API bool duckdb_value_is_null(duckdb_result *result, idx_t col, idx_t row);
 """
 function duckdb_value_is_null(result, col, row)
-    return ccall(
-        (:duckdb_value_is_null, libduckdb),
-        Bool,
-        (Ref{duckdb_result}, Int32, Int32),
-        result,
-        col - 1,
-        row - 1,
-    )
+    return ccall((:duckdb_value_is_null, libduckdb), Bool, (Ref{duckdb_result}, Int32, Int32), result, col - 1, row - 1)
 end
 
 #=
@@ -829,7 +755,7 @@ function duckdb_prepare(connection, query, out_prepared_statement)
         (duckdb_connection, Ptr{UInt8}, Ref{duckdb_prepared_statement}),
         connection,
         query,
-        out_prepared_statement,
+        out_prepared_statement
     )
 end
 
@@ -851,12 +777,7 @@ The error message should not be freed. It will be de-allocated when `duckdb_dest
 DUCKDB_API const char *duckdb_prepare_error(duckdb_prepared_statement prepared_statement);
 """
 function duckdb_prepare_error(prepared_statement)
-    return ccall(
-        (:duckdb_prepare_error, libduckdb),
-        Ptr{UInt8},
-        (duckdb_prepared_statement,),
-        prepared_statement[],
-    )
+    return ccall((:duckdb_prepare_error, libduckdb), Ptr{UInt8}, (duckdb_prepared_statement,), prepared_statement[])
 end
 
 # """
@@ -1213,7 +1134,7 @@ function duckdb_execute_prepared(prepared_statement, out_result)
         Int32,
         (duckdb_prepared_statement, Ref{duckdb_result}),
         prepared_statement,
-        out_result,
+        out_result
     )
 end
 
