@@ -25,6 +25,7 @@ public:
 	void CreatePlan(unique_ptr<SQLStatement> statement);
 
 	unique_ptr<LogicalOperator> plan;
+	unique_ptr<LogicalOperator> returning_plan;
 	vector<string> names;
 	vector<LogicalType> types;
 	unordered_map<idx_t, vector<unique_ptr<Value>>> value_map;

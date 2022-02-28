@@ -24,7 +24,7 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 
 BoundStatement Binder::Bind(InsertStatement &stmt) {
 	BoundStatement result;
-	if (stmt.returningList.empty()) {
+	if (stmt.returning_list.empty()) {
 		result.names = {"Count"};
 		result.types = {LogicalType::BIGINT};
 	}
@@ -129,7 +129,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// visit the retuning list and expand any "*" statements
 	vector<unique_ptr<ParsedExpression>> new_returning_list;
 	auto returning_result = make_unique<BoundSelectNode>();;
-	for (auto &returning_element : stmt.returningList) {
+	for (auto &returning_element : stmt.returning_list) {
 		if (returning_element->GetExpressionType() == ExpressionType::STAR) {
 			// * statement, expand to all columns from the FROM clause
 			bind_context.GenerateAllColumnExpressions((StarExpression &)*returning_element, new_returning_list);
@@ -138,34 +138,32 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			new_returning_list.push_back(move(returning_element));
 		}
 	}
-	if (new_returning_list.empty()) {
-		throw BinderException("SELECT list is empty after resolving * expressions!");
-	}
-	stmt.returningList = move(new_returning_list);
+	stmt.returning_list = move(new_returning_list);
 
 	// create a mapping of (alias -> index) and a mapping of (Expression -> index) for the RETURNING list
 	case_insensitive_map_t<idx_t> alias_map;
 	expression_map_t<idx_t> projection_map;
-	for (idx_t i = 0; i < stmt.returningList.size(); i++) {
-		auto &expr = stmt.returningList[i];
-		returning_result->names.push_back(expr->GetName());
+	for (idx_t i = 0; i < stmt.returning_list.size(); i++) {
+		auto &expr = stmt.returning_list[i];
+		result.names.push_back(expr->GetName());
 		ExpressionBinder::QualifyColumnNames(*this, expr);
 		if (!expr->alias.empty()) {
 			alias_map[expr->alias] = i;
-			returning_result->names[i] = expr->alias;
+			result.names[i] = expr->alias;
 		}
 		projection_map[expr.get()] = i;
 		returning_result->original_expressions.push_back(expr->Copy());
 	}
-	returning_result->column_count = stmt.returningList.size();
 
-	// after that, bind the returning statement to the SELECT statement
+	returning_result->column_count = stmt.returning_list.size();
+
+	// after that, bind the returning statement to the context of the INSERT statement
 	BoundGroupInformation info;
 	SelectBinder select_binder(*this, context, *returning_result, info);
 	vector<LogicalType> internal_sql_types;
-	for (idx_t i = 0; i < stmt.returningList.size(); i++) {
+	for (idx_t i = 0; i < stmt.returning_list.size(); i++) {
 		LogicalType result_type;
-		auto expr = select_binder.Bind(stmt.returningList[i], &result_type);
+		auto expr = select_binder.Bind(stmt.returning_list[i], &result_type);
 		// TODO: Is there aggregation for these statements? I don't think so
 //		if (stmt.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && select_binder.HasBoundColumns()) {
 //			if (select_binder.BoundAggregates()) {
@@ -179,8 +177,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 //			expr = move(group_ref);
 //		}
 		returning_result->select_list.push_back(move(expr));
-		if (i < returning_result->column_count) {
-			returning_result->types.push_back(result_type);
+		if (i < result.names.size()) {
+			result.types.push_back(result_type);
 		}
 		internal_sql_types.push_back(result_type);
 		// TODO: Is there aggregation for these statements?
@@ -189,7 +187,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 //		}
 	}
 	returning_result->need_prune = returning_result->select_list.size() > returning_result->column_count;
-	int a = 0;
 
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -209,23 +206,23 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	insert->AddChild(move(root));
 
-	result.plan = move(insert);
-	this->allow_stream_result = false;
-	// If you return all of the returning rows, then you will need to be able
-	// to stream back the results
-	if (!stmt.returningList.empty()) {
-		this->allow_stream_result = true;
-		// TODO:
-		//  result.names = names of whatever columns are being returned
-		//  result.types = types of whatever columns are being returned.
-		// for now to not break things
-		D_ASSERT(stmt.returningList.size() == result.names.size());
-		D_ASSERT(stmt.returningList.size() == result.types.size());
-		for (idx_t i = 0; i < stmt.returningList.size(); i++) {
-			result.names.push_back(returning_result->names[i]);
-			result.types.push_back(returning_result->types[i]);
-		}
+	for (auto i = returning_result->select_list.begin(); i != returning_result->select_list.end(); i++) {
+		insert->returning_list.push_back(move(*i));
 	}
+
+	// TODO: check either that you are returning the RETURNING statements or the effected rows.
+	//	D_ASSERT(insert->returning_list.size() == result.names.size());
+	//	D_ASSERT(insert->returning_list.size() == result.types.size());
+
+	if (!insert->returning_list.empty()) {
+		this->allow_stream_result = true;
+	} else {
+		this->allow_stream_result = false;
+	}
+
+	result.plan = move(insert);
+
+
 	return result;
 }
 

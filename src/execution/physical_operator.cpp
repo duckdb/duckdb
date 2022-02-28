@@ -15,6 +15,7 @@ string PhysicalOperator::GetName() const {
 
 string PhysicalOperator::ToString() const {
 	TreeRenderer renderer;
+	// TODO: make sure returning list is included here.
 	return renderer.ToString(*this);
 }
 

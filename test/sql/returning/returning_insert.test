@@ -45,5 +45,9 @@ INSERT INTO table1 VALUES (10, 20, 30), (40, 50, 60), (70, 80, 90) RETURNING a, 
 40  50  60  0
 70  80  90  1
 
-# returning
 
+# insert only a subset of columns, returning * = don't know what this would be yet
+# insert only a subset of columns, return just the subset of columns
+# insert only a subset of columns, return other columns, should be error
+# insert into table using select, return all columns
+# insert into a table, return the columns in a different order

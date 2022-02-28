@@ -27,8 +27,10 @@ public:
 	//! Schema name to insert to
 	string schema;
 
+	//! create a returning statement (interpreted as a select statement).
+	unique_ptr<SelectStatement> returning_statement;
 	//! keep track of optional returningList if it's a RETURNING statement
-	vector<unique_ptr<ParsedExpression>> returningList;
+	vector<unique_ptr<ParsedExpression>> returning_list;
 
 protected:
 	InsertStatement(const InsertStatement &other);

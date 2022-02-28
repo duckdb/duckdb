@@ -268,6 +268,8 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		this->producer = scheduler.CreateProducer();
 
 		auto root_pipeline = make_shared<Pipeline>(*this);
+
+//		auto returning_pipeline = make_shared<Pipeline>(*)
 		root_pipeline->sink = nullptr;
 		BuildPipelines(physical_plan, root_pipeline.get());
 
@@ -696,6 +698,12 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 	root_executor->InitializeChunk(*chunk);
 	while (true) {
 		root_executor->ExecutePull(*chunk);
+		// TODO: does the returning statement also make it here?
+		// TODO: check if the root_executor has a returning operator
+		// auto returning_chunk = make_uniquer(DataChunk);
+		// root_executor->InitizlizeChunk(*chunk);
+		// TODO: then call root_executor->ExecuteReturningPull(*chunk, *returningChunk);
+		// TODO: In ExecuteReturningPull, use the returningPipeline, not some
 		if (chunk->size() == 0) {
 			root_executor->PullFinalize();
 			if (NextExecutor()) {

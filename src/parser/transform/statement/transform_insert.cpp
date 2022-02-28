@@ -47,11 +47,21 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 		for (auto node = stmt->returningList->head; node != nullptr; node = node->next) {
 			auto target = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
 			unique_ptr<ParsedExpression> expr = Transformer::TransformExpression(target);
-			result->returningList.push_back(move(expr));
+			result->returning_list.push_back(move(expr));
 		}
 
 	}
 	result->select_statement = TransformSelect(stmt->selectStmt, false);
+	auto returning_stmt = reinterpret_cast<duckdb_libpgquery::PGSelectStmt *>(node);
+	returning_stmt->valuesLists = stmt->returningList;
+	returning_stmt->withClause = NULL;
+	returning_stmt->windowClause = NULL;
+	returning_stmt->distinctClause = NULL;
+	returning_stmt->whereClause = NULL;
+	returning_stmt->groupClause = NULL;
+	returning_stmt->havingClause = NULL;
+	returning_stmt->sampleOptions = NULL;
+	result->returning_statement = TransformSelect(reinterpret_cast<duckdb_libpgquery::PGNode *>(returning_stmt), false);
 
 	auto qname = TransformQualifiedName(stmt->relation);
 	result->table = qname.name;

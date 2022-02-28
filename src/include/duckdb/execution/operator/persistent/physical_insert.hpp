@@ -17,7 +17,8 @@ namespace duckdb {
 class PhysicalInsert : public PhysicalOperator {
 public:
 	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
-	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality);
+	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
+	               vector<unique_ptr<Expression>> returning_values);
 
 	//! The map from insert column index to table column index
 	vector<idx_t> column_index_map;
@@ -25,6 +26,8 @@ public:
 	TableCatalogEntry *table;
 	//! The default expressions of the columns for which no value is provided
 	vector<unique_ptr<Expression>> bound_defaults;
+	//! The returning values if the returning keyword is used
+	vector<unique_ptr<Expression>> returning_values;
 
 public:
 	// Source interface

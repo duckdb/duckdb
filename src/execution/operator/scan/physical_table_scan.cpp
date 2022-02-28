@@ -80,6 +80,8 @@ void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, Glo
 
 	if (!gstate.parallel_state) {
 		// sequential scan
+		// TODO: figure out how to use this GetData with the chunk to apply the select operators and
+		//       functions to return the right data from the returning statement.
 		function.function(context.client, bind_data.get(), state.operator_data.get(), nullptr, chunk);
 		if (chunk.size() != 0) {
 			return;
