@@ -58,7 +58,7 @@ static duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_stateme
 	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
 		return DuckDBError;
 	}
-	if (param_idx > wrapper->statement->n_param) {
+	if (param_idx <= 0 || param_idx > wrapper->statement->n_param) {
 		return DuckDBError;
 	}
 	if (param_idx > wrapper->values.size()) {

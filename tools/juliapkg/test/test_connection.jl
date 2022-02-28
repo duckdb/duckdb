@@ -1,9 +1,10 @@
+# test_connection.jl
 
 @testset "Test opening a bogus directory" begin
-	@test_throws DuckDB.ConnectionException DBInterface.connect("/path/to/bogus/directory")
+    @test_throws DuckDB.ConnectionException DBInterface.connect("/path/to/bogus/directory")
 end
 
 @testset "Test opening and closing an in-memory database" begin
-	con = DBInterface.connect(":memory:")
-	DBInterface.close!(con)
+    con = DBInterface.connect(":memory:")
+    DBInterface.close!(con)
 end

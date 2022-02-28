@@ -82,7 +82,7 @@ mutable struct Connection
     function Connection(db::DuckDBHandle)
         handle = Ref{duckdb_connection}()
         if duckdb_connect(db.handle, handle) != DuckDBSuccess
-            throw("failed to open connection")
+            throw(ConnectionException("Failed to open connection"))
         end
         con = new(db, handle[])
         finalizer(_close_connection, con)
@@ -111,11 +111,16 @@ mutable struct DB <: DBInterface.Connection
     end
 end
 
+function close_database(db::DB)
+    _close_connection(db.main_connection)
+    return _close_database(db.handle)
+end
+
 DB() = DB(":memory:")
 DBInterface.connect() = DB()
 DBInterface.connect(f::AbstractString) = DB(f)
-DBInterface.close!(db::DB) = _close_database(db)
-Base.close(db::DB) = _close_database(db)
+DBInterface.close!(db::DB) = close_database(db)
+Base.close(db::DB) = close_database(db)
 Base.isopen(db::DB) = db.handle != C_NULL
 
 #

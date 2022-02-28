@@ -780,344 +780,344 @@ function duckdb_prepare_error(prepared_statement)
     return ccall((:duckdb_prepare_error, libduckdb), Ptr{UInt8}, (duckdb_prepared_statement,), prepared_statement[])
 end
 
-# """
-# Returns the number of parameters that can be provided to the given prepared statement.
-# Returns 0 if the query was not successfully prepared.
-# * prepared_statement: The prepared statement to obtain the number of parameters for.
-# DUCKDB_API idx_t duckdb_nparams(duckdb_prepared_statement prepared_statement);
-# """
-# function duckdb_nparams(prepared_statement)
-#     return ccall((:duckdb_nparams, libduckdb), Int32, (Ptr{Cvoid},), prepared_statement)
-# end
-#
-# """
-# Returns the parameter type for the parameter at the given index.
-# Returns `DUCKDB_TYPE_INVALID` if the parameter index is out of range or the statement was not successfully prepared.
-# * prepared_statement: The prepared statement.
-# * param_idx: The parameter index.
-# * returns: The parameter type
-# DUCKDB_API duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
-# """
-# function duckdb_param_type(prepared_statement, param_idx)
-#     return ccall(
-#         (:duckdb_param_type, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32),
-#         prepared_statement,
-#         param_idx,
-#     )
-# end
-#
-# """
-# Binds a bool value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_boolean(duckdb_prepared_statement prepared_statement, idx_t param_idx, bool val);
-# """
-# function duckdb_bind_boolean(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_boolean, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds an int8_t value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_int8(duckdb_prepared_statement prepared_statement, idx_t param_idx, int8_t val);
-# """
-# function duckdb_bind_int8(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_int8, libduckdb),
-#         Int16,
-#         (Ptr{Cvoid}, Int32, Int16),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds an int16_t value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_int16(duckdb_prepared_statement prepared_statement, idx_t param_idx, int16_t val);
-# """
-# function duckdb_bind_int16(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_int16, libduckdb),
-#         Int16,
-#         (Ptr{Cvoid}, Int32, Int16),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds an int32_t value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_int32(duckdb_prepared_statement prepared_statement, idx_t param_idx, int32_t val);
-# """
-# function duckdb_bind_int32(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_int32, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds an int64_t value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, idx_t param_idx, int64_t val);
-# """
-# function duckdb_bind_int64(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_int64, libduckdb),
-#         Int64,
-#         (Ptr{Cvoid}, Int32, Int64),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds an duckdb_hugeint value to the prepared statement at the specified index.
-# */
-# DUCKDB_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
-#                                             duckdb_hugeint val);
-# """
-# function duckdb_bind_hugeint(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_hugeint, libduckdb),
-#         Int64,
-#         (Ptr{Cvoid}, Int32, Int64),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds an uint8_t value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_uint8(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint8_t val);
-# """
-# function duckdb_bind_uint8(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_uint8, libduckdb),
-#         UInt16,
-#         (Ptr{Cvoid}, Int32, UInt16),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds an uint16_t value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_uint16(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint16_t val);
-# """
-# function duckdb_bind_uint16(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_uint16, libduckdb),
-#         UInt16,
-#         (Ptr{Cvoid}, Int32, UInt16),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds an uint32_t value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_uint32(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint32_t val);
-# """
-# function duckdb_bind_uint32(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_uint32, libduckdb),
-#         UInt32,
-#         (Ptr{Cvoid}, Int32, UInt32),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds an uint64_t value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_uint64(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint64_t val);
-# """
-# function duckdb_bind_uint64(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_uint64, libduckdb),
-#         UInt64,
-#         (Ptr{Cvoid}, Int32, UInt64),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds an float value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, idx_t param_idx, float val);
-# """
-# function duckdb_bind_float(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_float, libduckdb),
-#         Float32,
-#         (Ptr{Cvoid}, Int32, Float32),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds an double value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, idx_t param_idx, double val);
-# """
-# function duckdb_bind_double(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_float, libduckdb),
-#         Float64,
-#         (Ptr{Cvoid}, Int32, Float64),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds a duckdb_date value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_date(duckdb_prepared_statement prepared_statement, idx_t param_idx,
-#                                          duckdb_date val);
-# """
-# function duckdb_bind_date(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_date, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds a duckdb_time value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_time(duckdb_prepared_statement prepared_statement, idx_t param_idx,
-#                                          duckdb_time val);
-# """
-# function duckdb_bind_time(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_time, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds a duckdb_timestamp value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_timestamp(duckdb_prepared_statement prepared_statement, idx_t param_idx,
-#                                               duckdb_timestamp val);
-# """
-# function duckdb_bind_timestamp(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_timestamp, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds a duckdb_interval value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepared_statement, idx_t param_idx,
-#                                              duckdb_interval val);
-# """
-# function duckdb_bind_interval(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_interval, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds a null-terminated varchar value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx,
-#                                             const char *val);
-# """
-# function duckdb_bind_varchar(prepared_statement, param_idx, val)
-#     return ccall(
-#         (:duckdb_bind_varchar, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Ptr{UInt8}),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#     )
-# end
-#
-# """
-# Binds a varchar value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx,
-#                                                    const char *val, idx_t length);
-# """
-# function duckdb_bind_varchar_length(prepared_statement, param_idx, val, length)
-#     return ccall(
-#         (:duckdb_bind_varchar_length, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Ptr{UInt8}, Int32),
-#         prepared_statement,
-#         param_idx,
-#         val,
-#         length,
-#     )
-# end
-#
-# """
-# Binds a blob value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_blob(duckdb_prepared_statement prepared_statement, idx_t param_idx,
-#                                          const void *data, idx_t length);
-# """
-# function duckdb_bind_blob(prepared_statement, param_idx, val, length)
-#     return ccall(
-#         (:duckdb_bind_blob, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Ptr{Cvoid}, Int32),
-#         prepared_statement,
-#         param_idx,
-#         data,
-#         length,
-#     )
-# end
-#
-# """
-# Binds a NULL value to the prepared statement at the specified index.
-# DUCKDB_API duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, idx_t param_idx);
-# """
-# function duckdb_bind_null(prepared_statement, param_idx)
-#     return ccall(
-#         (:duckdb_bind_null, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32),
-#         prepared_statement,
-#         param_idx,
-#     )
-# end
-#
+"""
+Returns the number of parameters that can be provided to the given prepared statement.
+Returns 0 if the query was not successfully prepared.
+* prepared_statement: The prepared statement to obtain the number of parameters for.
+DUCKDB_API idx_t duckdb_nparams(duckdb_prepared_statement prepared_statement);
+"""
+function duckdb_nparams(prepared_statement)
+    return ccall((:duckdb_nparams, libduckdb), Int32, (duckdb_prepared_statement,), prepared_statement)
+end
+
+"""
+Returns the parameter type for the parameter at the given index.
+Returns `DUCKDB_TYPE_INVALID` if the parameter index is out of range or the statement was not successfully prepared.
+* prepared_statement: The prepared statement.
+* param_idx: The parameter index.
+* returns: The parameter type
+DUCKDB_API duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
+"""
+function duckdb_param_type(prepared_statement, param_idx)
+    return ccall(
+        (:duckdb_param_type, libduckdb),
+        Int32,
+        (duckdb_prepared_statement, Int32),
+        prepared_statement,
+        param_idx
+    )
+end
+
+"""
+Binds a bool value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_boolean(duckdb_prepared_statement prepared_statement, idx_t param_idx, bool val);
+"""
+function duckdb_bind_boolean(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_boolean, libduckdb),
+        Int32,
+        (duckdb_prepared_statement, Int32, Int32),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds an int8_t value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_int8(duckdb_prepared_statement prepared_statement, idx_t param_idx, int8_t val);
+"""
+function duckdb_bind_int8(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_int8, libduckdb),
+        Int16,
+        (duckdb_prepared_statement, Int32, Int16),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds an int16_t value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_int16(duckdb_prepared_statement prepared_statement, idx_t param_idx, int16_t val);
+"""
+function duckdb_bind_int16(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_int16, libduckdb),
+        Int16,
+        (duckdb_prepared_statement, Int32, Int16),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds an int32_t value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_int32(duckdb_prepared_statement prepared_statement, idx_t param_idx, int32_t val);
+"""
+function duckdb_bind_int32(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_int32, libduckdb),
+        Int32,
+        (duckdb_prepared_statement, Int32, Int32),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds an int64_t value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, idx_t param_idx, int64_t val);
+"""
+function duckdb_bind_int64(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_int64, libduckdb),
+        Int64,
+        (duckdb_prepared_statement, Int32, Int64),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds an duckdb_hugeint value to the prepared statement at the specified index.
+*/
+DUCKDB_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                            duckdb_hugeint val);
+"""
+function duckdb_bind_hugeint(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_hugeint, libduckdb),
+        Int64,
+        (duckdb_prepared_statement, Int32, Int64),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds an uint8_t value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_uint8(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint8_t val);
+"""
+function duckdb_bind_uint8(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_uint8, libduckdb),
+        UInt16,
+        (duckdb_prepared_statement, Int32, UInt16),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds an uint16_t value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_uint16(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint16_t val);
+"""
+function duckdb_bind_uint16(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_uint16, libduckdb),
+        UInt16,
+        (duckdb_prepared_statement, Int32, UInt16),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds an uint32_t value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_uint32(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint32_t val);
+"""
+function duckdb_bind_uint32(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_uint32, libduckdb),
+        UInt32,
+        (duckdb_prepared_statement, Int32, UInt32),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds an uint64_t value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_uint64(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint64_t val);
+"""
+function duckdb_bind_uint64(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_uint64, libduckdb),
+        UInt64,
+        (duckdb_prepared_statement, Int32, UInt64),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds an float value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, idx_t param_idx, float val);
+"""
+function duckdb_bind_float(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_float, libduckdb),
+        Float32,
+        (duckdb_prepared_statement, Int32, Float32),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds an double value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, idx_t param_idx, double val);
+"""
+function duckdb_bind_double(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_double, libduckdb),
+        Float64,
+        (duckdb_prepared_statement, Int32, Float64),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds a duckdb_date value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_date(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                         duckdb_date val);
+"""
+function duckdb_bind_date(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_date, libduckdb),
+        Int32,
+        (duckdb_prepared_statement, Int32, Int32),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds a duckdb_time value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_time(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                         duckdb_time val);
+"""
+function duckdb_bind_time(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_time, libduckdb),
+        Int32,
+        (duckdb_prepared_statement, Int32, Int32),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds a duckdb_timestamp value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_timestamp(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                              duckdb_timestamp val);
+"""
+function duckdb_bind_timestamp(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_timestamp, libduckdb),
+        Int32,
+        (duckdb_prepared_statement, Int32, Int32),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds a duckdb_interval value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                             duckdb_interval val);
+"""
+function duckdb_bind_interval(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_interval, libduckdb),
+        Int32,
+        (duckdb_prepared_statement, Int32, Int32),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds a null-terminated varchar value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                            const char *val);
+"""
+function duckdb_bind_varchar(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_varchar, libduckdb),
+        Int32,
+        (duckdb_prepared_statement, Int32, Ptr{UInt8}),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds a varchar value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                                   const char *val, idx_t length);
+"""
+function duckdb_bind_varchar_length(prepared_statement, param_idx, val, length)
+    return ccall(
+        (:duckdb_bind_varchar_length, libduckdb),
+        Int32,
+        (duckdb_prepared_statement, Int32, Ptr{UInt8}, Int32),
+        prepared_statement,
+        param_idx,
+        val,
+        length
+    )
+end
+
+"""
+Binds a blob value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_blob(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                         const void *data, idx_t length);
+"""
+function duckdb_bind_blob(prepared_statement, param_idx, val, length)
+    return ccall(
+        (:duckdb_bind_blob, libduckdb),
+        Int32,
+        (duckdb_prepared_statement, Int32, Ptr{Cvoid}, Int32),
+        prepared_statement,
+        param_idx,
+        data,
+        length
+    )
+end
+
+"""
+Binds a NULL value to the prepared statement at the specified index.
+DUCKDB_API duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, idx_t param_idx);
+"""
+function duckdb_bind_null(prepared_statement, param_idx)
+    return ccall(
+        (:duckdb_bind_null, libduckdb),
+        Int32,
+        (duckdb_prepared_statement, Int32),
+        prepared_statement,
+        param_idx
+    )
+end
+
 """
 Executes the prepared statement with the given bound parameters, and returns a materialized query result.
 This method can be called multiple times for each prepared statement, and the parameters can be modified
