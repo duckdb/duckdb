@@ -71,12 +71,12 @@ public:
 	DocPointer(const DocPointer &obj) = delete;
 	DocPointer &operator=(const DocPointer &obj) = delete;
 
-	DocPointer(DocPointer &&other) {
+	DocPointer(DocPointer &&other) noexcept {
 		this->doc = other.doc;
 		other.doc = nullptr;
 	}
 
-	void operator=(DocPointer &&other) {
+	void operator=(DocPointer &&other) noexcept {
 		CleanupDoc<YYJSON_DOC_T>(doc);
 		this->ptr = other.ptr;
 		other.ptr = nullptr;
@@ -487,11 +487,6 @@ private:
 	static inline yyjson_type GetTag(YYJSON_VAL_T *val) {
 		throw InternalException("Unknown yyjson value type");
 	}
-
-	template <class YYJSON_VAL_T>
-	static inline yyjson_subtype GetSubType(YYJSON_VAL_T *val) {
-		throw InternalException("Unknown yyjson value type");
-	}
 };
 
 template <>
@@ -555,15 +550,6 @@ inline yyjson_type JSONCommon::GetTag(yyjson_val *val) {
 template <>
 inline yyjson_type JSONCommon::GetTag(yyjson_mut_val *val) {
 	return yyjson_mut_get_tag(val);
-}
-
-template <>
-inline yyjson_subtype JSONCommon::GetSubType(yyjson_val *val) {
-	return yyjson_get_subtype(val);
-}
-template <>
-inline yyjson_subtype JSONCommon::GetSubType(yyjson_mut_val *val) {
-	return yyjson_mut_get_subtype(val);
 }
 
 } // namespace duckdb
