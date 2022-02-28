@@ -58,12 +58,12 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 	switch (entry_type) {
 	case HtEntryType::HT_WIDTH_64: {
 		hash_prefix_shift = (HASH_WIDTH - sizeof(aggr_ht_entry_64::salt)) * 8;
-		Resize<aggr_ht_entry_64>(static_cast<duckdb::idx_t>(STANDARD_VECTOR_SIZE * 2));
+		Resize<aggr_ht_entry_64>(STANDARD_VECTOR_SIZE * 2);
 		break;
 	}
 	case HtEntryType::HT_WIDTH_32: {
 		hash_prefix_shift = (HASH_WIDTH - sizeof(aggr_ht_entry_32::salt)) * 8;
-		Resize<aggr_ht_entry_32>(static_cast<duckdb::idx_t>(STANDARD_VECTOR_SIZE * 2));
+		Resize<aggr_ht_entry_32>(STANDARD_VECTOR_SIZE * 2);
 		break;
 	}
 	default:

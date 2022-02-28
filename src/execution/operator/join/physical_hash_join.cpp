@@ -268,7 +268,7 @@ public:
 
 	idx_t MaxThreads() override {
 		auto &sink = (HashJoinGlobalState &)*op.sink_state;
-		return sink.hash_table->Count() / (static_cast<unsigned long long>(STANDARD_VECTOR_SIZE * 10));
+		return sink.hash_table->Count() / (STANDARD_VECTOR_SIZE * 10);
 	}
 };
 

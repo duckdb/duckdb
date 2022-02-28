@@ -475,10 +475,10 @@ public:
 	// explicitly allowing these functions to be capitalized to be in-line with the remaining functions
 	DUCKDB_API static LogicalType DECIMAL(int width, int scale);                 // NOLINT
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
-	DUCKDB_API static LogicalType LIST( const LogicalType& child);                       // NOLINT
-	DUCKDB_API static LogicalType STRUCT( const child_list_t<LogicalType>& children);    // NOLINT
+	DUCKDB_API static LogicalType LIST( LogicalType child);                       // NOLINT
+	DUCKDB_API static LogicalType STRUCT( child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type);    // NOLINT
-	DUCKDB_API static LogicalType MAP( const child_list_t<LogicalType>& children);       // NOLINT
+	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT

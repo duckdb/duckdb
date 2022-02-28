@@ -3,23 +3,21 @@
 #include "duckdb.hpp"
 #include "duckdb/common/arrow_wrapper.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/to_string.hpp"
-#include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "utf8proc_wrapper.hpp"
-
-#include <cstddef>
+#include "duckdb/common/types/arrow_aux_data.hpp"
+#include "duckdb/common/types/vector_buffer.hpp"
+#include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/mutex.hpp"
 #include <map>
 
 namespace duckdb {
@@ -658,7 +656,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			}
 			auto tgt_ptr = (date_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
-				tgt_ptr[row] = date_t(int64_t(src_ptr[row]) / (static_cast<long long>(1000 * 60 * 60 * 24)));
+				tgt_ptr[row] = date_t(int64_t(src_ptr[row]) / (1000 * 60 * 60 * 24));
 			}
 			break;
 		}

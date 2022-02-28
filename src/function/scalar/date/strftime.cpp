@@ -1,18 +1,22 @@
-#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/function/scalar/date_functions.hpp"
 
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/to_string.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
+
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
+
+#include "duckdb/function/scalar/strftime.hpp"
+
 #include "duckdb/common/vector_operations/unary_executor.hpp"
+
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar/date_functions.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include <cctype>
-#include <cstddef>
 
 namespace duckdb {
 
@@ -187,7 +191,7 @@ char *StrfTimeFormat::WritePadded(char *target, int32_t value, int32_t padding) 
 	D_ASSERT(padding % 2 == 0);
 	for (int i = 0; i < padding / 2; i++) {
 		int decimals = value % 100;
-		WritePadded2(target + padding - static_cast<ptrdiff_t>(2 * (i + 1)), decimals);
+		WritePadded2(target + padding - 2 * (i + 1), decimals);
 		value /= 100;
 	}
 	return target + padding;

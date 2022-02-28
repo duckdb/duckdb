@@ -403,7 +403,7 @@ public:
 public:
 	idx_t MaxThreads() override {
 		auto &sink = (NestedLoopJoinGlobalState &)*op.sink_state;
-		return sink.right_chunks.Count() / (static_cast<unsigned long long>(STANDARD_VECTOR_SIZE * 10));
+		return sink.right_chunks.Count() / (STANDARD_VECTOR_SIZE * 10);
 	}
 };
 
