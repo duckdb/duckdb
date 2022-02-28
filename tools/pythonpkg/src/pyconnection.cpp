@@ -10,6 +10,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -595,16 +596,13 @@ Value transform_python_value(py::handle ele) {
 		auto size = py::len(ele);
 
 		if (size == 0) {
-			throw std::runtime_error("Empty list parameters are not yet implemented");
+			return Value::EMPTYLIST(LogicalType::SQLNULL);
 		}
 
 		vector<Value> values;
 		values.reserve(size);
 
 		for (auto py_val : ele) {
-			if (py_val.is_none()) {
-				throw std::runtime_error("None support in list parameters is not yet implemented");
-			}
 			values.emplace_back(transform_python_value(py_val));
 		}
 
