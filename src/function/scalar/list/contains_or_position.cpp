@@ -19,9 +19,9 @@ inline bool ValueCompare(const Value &left, const Value &right) {
 	return left == right;
 }
 
-template <class T1, class T2>
+template <class T1, class T2, bool IS_NESTED = false>
 static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state, Vector &result,
-									bool isListContains, bool isNested) {
+									bool isListContains) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto count = args.size();
 	Vector &list = args.data[0];
@@ -62,7 +62,7 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 		const auto &list_entry = list_entries[list_index];
 		auto source_idx = child_data.sel->get_index(list_entry.offset);
 
-		if (!isNested) {
+		if (!IS_NESTED) {
 			// does not require a comparison of nested types
 			auto child_value = FlatVector::GetData<T1>(child_vector);
 			auto values = FlatVector::GetData<T1>(value_vector);
@@ -100,46 +100,45 @@ static void ListContainsOrPosition(DataChunk &args, ExpressionState &state, Vect
 	switch (args.data[1].GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		TemplatedContainsOrPosition<int8_t, T>(args, state, result, isListContains, false);
+		TemplatedContainsOrPosition<int8_t, T>(args, state, result, isListContains);
 		break;
 	case PhysicalType::INT16:
-		TemplatedContainsOrPosition<int16_t, T>(args, state, result, isListContains, false);
+		TemplatedContainsOrPosition<int16_t, T>(args, state, result, isListContains);
 		break;
 	case PhysicalType::INT32:
-		TemplatedContainsOrPosition<int32_t, T>(args, state, result, isListContains, false);
+		TemplatedContainsOrPosition<int32_t, T>(args, state, result, isListContains);
 		break;
 	case PhysicalType::INT64:
-		TemplatedContainsOrPosition<int64_t, T>(args, state, result, isListContains, false);
+		TemplatedContainsOrPosition<int64_t, T>(args, state, result, isListContains);
 		break;
 	case PhysicalType::INT128:
-		TemplatedContainsOrPosition<hugeint_t, T>(args, state, result, isListContains, false);
+		TemplatedContainsOrPosition<hugeint_t, T>(args, state, result, isListContains);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedContainsOrPosition<uint8_t, T>(args, state, result, isListContains, false);
+		TemplatedContainsOrPosition<uint8_t, T>(args, state, result, isListContains);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedContainsOrPosition<uint16_t, T>(args, state, result, isListContains, false);
+		TemplatedContainsOrPosition<uint16_t, T>(args, state, result, isListContains);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedContainsOrPosition<uint32_t, T>(args, state, result, isListContains, false);
+		TemplatedContainsOrPosition<uint32_t, T>(args, state, result, isListContains);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedContainsOrPosition<uint64_t, T>(args, state, result, isListContains, false);
+		TemplatedContainsOrPosition<uint64_t, T>(args, state, result, isListContains);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedContainsOrPosition<float, T>(args, state, result, isListContains, false);
+		TemplatedContainsOrPosition<float, T>(args, state, result, isListContains);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedContainsOrPosition<double, T>(args, state, result, isListContains, false);
+		TemplatedContainsOrPosition<double, T>(args, state, result, isListContains);
 		break;
 	case PhysicalType::VARCHAR:
-		TemplatedContainsOrPosition<string_t, T>(args, state, result, isListContains, false);
+		TemplatedContainsOrPosition<string_t, T>(args, state, result, isListContains);
 		break;
 	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
-		// TODO: what to use as a dummy type? How could I avoid a dummy type?
-		TemplatedContainsOrPosition<int8_t, T>(args, state, result, isListContains, true);
+		TemplatedContainsOrPosition<int8_t, T, true>(args, state, result, isListContains);
 		break;
 	default:
 		throw NotImplementedException("This function has not been implemented for this type");
