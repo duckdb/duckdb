@@ -8,6 +8,7 @@
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression_binder/update_binder.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
 
@@ -38,6 +39,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	auto insert = make_unique<LogicalInsert>(table);
+
 
 	vector<idx_t> named_column_map;
 	if (!stmt.columns.empty()) {
@@ -124,6 +126,10 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// parse select statement and add to logical plan
 	auto root_select = Bind(*stmt.select_statement);
 
+	// bind the returning select on the same statement
+	auto returning_select = Bind(*stmt.returning_statement);
+
+
 	// ------------------------------------------------------------------------------------------------------------
 	// This is to bind the returning list
 	// visit the retuning list and expand any "*" statements
@@ -188,23 +194,29 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 	returning_result->need_prune = returning_result->select_list.size() > returning_result->column_count;
 
+	// curious to know if the Table Function and the bind data can be null in this case.
+	auto scan_function = TableScanFunction::GetFunction();
+	auto bind_data = make_unique<TableScanBindData>(table);
+    auto returning_get = make_unique<LogicalGet>(table->oid, scan_function, move(bind_data), result.types, result.names);
 
 	// ------------------------------------------------------------------------------------------------------------
 	// TODO: bind the returning values similar to how select values are bound in Bind selectStatement.
 	// TODO: once the returning values are bound, update the result.names and result.types
 	// TODO (maybe?): update the plan to return the returning_list values.
 	// TODO:          the value_map in the planner uses those expressions.
-	// here you need to change result.types.size()
+	// TODO: here you need to change result.types.size()
 	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
 	                               table->name.c_str());
 
 	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, move(root_select.plan));
+	auto returning_root = CastLogicalOperatorToTypes(returning_select.types, insert->expected_types, move(returning_select.plan));
 	// TODO: what is this root pointer? how should I use my bound returning list to make sure it's properly updated?
 	// TODO: the root variable is a logical plan. So eventually it should ideally contain the return info in some way so
 	// TODO: that it the return plan can be executed properly. Why do we need the plan? Because the returning statement
 	// TODO: may also need special executing functions.
 
 	insert->AddChild(move(root));
+	returning_get->AddChild(move(returning_root));
 
 	for (auto i = returning_result->select_list.begin(); i != returning_result->select_list.end(); i++) {
 		insert->returning_list.push_back(move(*i));
@@ -221,7 +233,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	result.plan = move(insert);
-
+	result.returning_plan = move(returning_get);
 
 	return result;
 }
