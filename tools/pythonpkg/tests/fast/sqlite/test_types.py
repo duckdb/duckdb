@@ -210,3 +210,44 @@ class DateTimeTests(unittest.TestCase):
         ts2 = self.cur.fetchone()[0]
         self.assertEqual(ts.year, ts2.year)
         self.assertEqual(ts2.microsecond, 510241)
+
+
+class ListTests(unittest.TestCase):
+    def setUp(self):
+        self.con = duckdb.connect(":memory:")
+        self.cur = self.con.cursor()
+        self.cur.execute(
+            "create table test(single INTEGER[], nested INTEGER[][])"
+        )
+
+    def tearDown(self):
+        self.cur.close()
+        self.con.close()
+
+    def test_CheckEmptyList(self):
+        val = []
+        query = "insert into test values (?, ?)"
+        params = val, val
+        with self.assertRaisesRegex(RuntimeError, "Empty list parameters"):
+            self.cur.execute(query, params)
+
+    def test_CheckSingleList(self):
+        val = [1, 2, 3]
+        self.cur.execute("insert into test(single) values (?)", (val,))
+
+    def test_CheckNestedList(self):
+        val = [[1], [2], [3, 4]]
+        self.cur.execute("insert into test(nested) values (?)", (val,))
+
+    def test_CheckNone(self):
+        val = None
+        self.cur.execute("insert into test values (?, ?)", (val, val))
+
+    def test_CheckEmbeddedNone(self):
+        val = [None]
+        query = "insert into test values (?, ?)"
+        params = (val, val)
+        with self.assertRaisesRegex(
+            RuntimeError, "None support in list parameters"
+        ):
+            self.cur.execute(query, params)
