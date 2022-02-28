@@ -228,7 +228,7 @@ class ListTests(unittest.TestCase):
         val = []
         self.cur.execute("insert into test values (?, ?)", (val, val))
         self.assertEqual(
-            self.cur.execute("select * from test ").fetchall(),
+            self.cur.execute("select * from test").fetchall(),
             [(val, val)],
         )
 
@@ -236,7 +236,7 @@ class ListTests(unittest.TestCase):
         val = [1, 2, 3]
         self.cur.execute("insert into test(single) values (?)", (val,))
         self.assertEqual(
-            self.cur.execute("select * from test ").fetchall(),
+            self.cur.execute("select * from test").fetchall(),
             [(val, None)],
         )
 
@@ -244,7 +244,7 @@ class ListTests(unittest.TestCase):
         val = [[1], [2], [3, 4]]
         self.cur.execute("insert into test(nested) values (?)", (val,))
         self.assertEqual(
-            self.cur.execute("select * from test ").fetchall(),
+            self.cur.execute("select * from test").fetchall(),
             [(None, val,)],
         )
 
@@ -252,7 +252,7 @@ class ListTests(unittest.TestCase):
         val = None
         self.cur.execute("insert into test values (?, ?)", (val, val))
         self.assertEqual(
-            self.cur.execute("select * from test ").fetchall(),
+            self.cur.execute("select * from test").fetchall(),
             [(val, val)],
         )
 
@@ -260,6 +260,6 @@ class ListTests(unittest.TestCase):
         val = [None]
         self.cur.execute("insert into test values (?, ?)", (val, val))
         self.assertEqual(
-            self.cur.execute("select * from test ").fetchall(),
+            self.cur.execute("select * from test").fetchall(),
             [(val, val)],
         )
