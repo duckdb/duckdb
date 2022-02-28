@@ -226,28 +226,40 @@ class ListTests(unittest.TestCase):
 
     def test_CheckEmptyList(self):
         val = []
-        query = "insert into test values (?, ?)"
-        params = val, val
-        with self.assertRaisesRegex(RuntimeError, "Empty list parameters"):
-            self.cur.execute(query, params)
+        self.cur.execute("insert into test values (?, ?)", (val, val))
+        self.assertEqual(
+            self.cur.execute("select * from test ").fetchall(),
+            [(val, val)],
+        )
 
     def test_CheckSingleList(self):
         val = [1, 2, 3]
         self.cur.execute("insert into test(single) values (?)", (val,))
+        self.assertEqual(
+            self.cur.execute("select * from test ").fetchall(),
+            [(val, None)],
+        )
 
     def test_CheckNestedList(self):
         val = [[1], [2], [3, 4]]
         self.cur.execute("insert into test(nested) values (?)", (val,))
+        self.assertEqual(
+            self.cur.execute("select * from test ").fetchall(),
+            [(None, val,)],
+        )
 
     def test_CheckNone(self):
         val = None
         self.cur.execute("insert into test values (?, ?)", (val, val))
+        self.assertEqual(
+            self.cur.execute("select * from test ").fetchall(),
+            [(val, val)],
+        )
 
     def test_CheckEmbeddedNone(self):
         val = [None]
-        query = "insert into test values (?, ?)"
-        params = (val, val)
-        with self.assertRaisesRegex(
-            RuntimeError, "None support in list parameters"
-        ):
-            self.cur.execute(query, params)
+        self.cur.execute("insert into test values (?, ?)", (val, val))
+        self.assertEqual(
+            self.cur.execute("select * from test ").fetchall(),
+            [(val, val)],
+        )
