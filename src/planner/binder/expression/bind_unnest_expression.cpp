@@ -53,8 +53,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 
 	// now create a column reference referring to the unnest
 	auto colref = make_unique<BoundColumnRefExpression>(
-		function.alias.empty() ? node.unnests[unnest_index]->ToString() : function.alias, return_type,
-		ColumnBinding(node.unnest_index, unnest_index), depth);
+	    function.alias.empty() ? node.unnests[unnest_index]->ToString() : function.alias, return_type,
+	    ColumnBinding(node.unnest_index, unnest_index), depth);
 
 	return BindResult(move(colref));
 }

@@ -20,8 +20,7 @@ inline bool ValueCompare(const Value &left, const Value &right) {
 }
 
 template <class T1, class T2, bool IS_NESTED = false>
-static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state, Vector &result,
-									bool isListContains) {
+static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state, Vector &result, bool isListContains) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto count = args.size();
 	Vector &list = args.data[0];
@@ -154,7 +153,8 @@ static void ListPositionFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 static unique_ptr<FunctionData> ListContainsOrPositionBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments, bool isListContains) {
+                                                           vector<unique_ptr<Expression>> &arguments,
+                                                           bool isListContains) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 
 	const auto &list = arguments[0]->return_type; // change to list

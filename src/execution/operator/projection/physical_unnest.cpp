@@ -264,7 +264,7 @@ OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk 
 
 						auto base_offset = list_entry.offset + state.list_position;
 						UnnestVector(child_data, child_vector, list_size, base_offset, base_offset + list_count,
-									result_vector);
+						             result_vector);
 					}
 				}
 
