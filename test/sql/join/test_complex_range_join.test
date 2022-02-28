@@ -1,0 +1,459 @@
+# name: test/sql/join/test_complex_range_join.test
+# description: Test inequality join
+# group: [join]
+
+statement ok
+PRAGMA enable_verification
+
+# Coverage for multiple slicing predicates
+query IIIIII
+WITH lhs(i, j, k) AS (VALUES
+	(100, 10, 1),
+	(200, 20, 2)
+),
+rhs(p, q, r) AS (VALUES
+	(100, 10, 1),
+	(200, 20, 2)
+)
+SELECT lhs.*, rhs.*
+FROM lhs, rhs
+WHERE i <= p AND j <> q AND k IS DISTINCT FROM r
+----
+100	10	1	200	20	2
+
+# Coverage for multiple range predicates
+query IIIIII
+WITH lhs(i, j, k) AS (VALUES
+	(100, 10, 1),
+	(200, 20, 2)
+),
+rhs(p, q, r) AS (VALUES
+	(100, 10, 1),
+	(200, 20, 2)
+)
+SELECT lhs.*, rhs.*
+FROM lhs, rhs
+WHERE i <= p AND k >= r AND j <= q
+ORDER BY i
+----
+100	10	1	100	10	1
+200	20	2	200	20	2
+
+# A test involving many (~10) predicates, each filtering out a certain subset of the rows
+# (e.g. a<z and b<z and c<z and d<z and e<z and ... where z=1..100 in random order
+# and a=10, b=20, c=30, etc)
+
+statement ok
+CREATE TABLE wide AS (
+	SELECT
+		i,
+		10 * (i + 0) AS c0,
+		10 * (i + 1) AS c1,
+		10 * (i + 2) AS c2,
+		10 * (i + 3) AS c3,
+		10 * (i + 4) AS c4,
+		10 * (i + 5) AS c5,
+		10 * (i + 6) AS c6,
+		10 * (i + 7) AS c7,
+		10 * (i + 8) AS c8,
+		10 * (i + 9) AS c9
+	FROM range(1, 10) tbl(i)
+);
+
+query IIIIIIIIIII
+SELECT * FROM wide;
+----
+1	10	20	30	40	50	60	70	80	90	100
+2	20	30	40	50	60	70	80	90	100	110
+3	30	40	50	60	70	80	90	100	110	120
+4	40	50	60	70	80	90	100	110	120	130
+5	50	60	70	80	90	100	110	120	130	140
+6	60	70	80	90	100	110	120	130	140	150
+7	70	80	90	100	110	120	130	140	150	160
+8	80	90	100	110	120	130	140	150	160	170
+9	90	100	110	120	130	140	150	160	170	180
+
+statement ok
+CREATE TABLE limits AS (
+	SELECT 100 + (i * 17 % 100) AS z
+	FROM range(1, 10) tbl(i)
+);
+
+query I
+SELECT z FROM limits;
+----
+117
+134
+151
+168
+185
+102
+119
+136
+153
+
+query II
+SELECT i, z
+FROM wide, limits
+WHERE c0 < z
+  AND c1 < z
+  AND c2 < z
+  AND c3 < z
+  AND c4 < z
+  AND c5 < z
+  AND c6 < z
+  AND c7 < z
+  AND c8 < z
+  AND c9 < z
+ORDER BY 1, 2
+----
+1	102
+1	117
+1	119
+1	134
+1	136
+1	151
+1	153
+1	168
+1	185
+2	117
+2	119
+2	134
+2	136
+2	151
+2	153
+2	168
+2	185
+3	134
+3	136
+3	151
+3	153
+3	168
+3	185
+4	134
+4	136
+4	151
+4	153
+4	168
+4	185
+5	151
+5	153
+5	168
+5	185
+6	151
+6	153
+6	168
+6	185
+7	168
+7	185
+8	185
+9	185
+
+# The same test but with NULLs mixed in as well
+statement ok
+CREATE TABLE wide_nulls AS (
+	SELECT i, c0, c1, c2,
+		CASE WHEN i % 7 = 0 THEN NULL ELSE c3 END AS c3,
+		c4, c5, c6, c7,
+		CASE WHEN i % 5 = 0 THEN NULL ELSE c8 END AS c8,
+		c9
+	FROM wide
+);
+
+query IIIIIIIIIII
+SELECT * FROM wide_nulls;
+----
+1	10	20	30	40	50	60	70	80	90	100
+2	20	30	40	50	60	70	80	90	100	110
+3	30	40	50	60	70	80	90	100	110	120
+4	40	50	60	70	80	90	100	110	120	130
+5	50	60	70	80	90	100	110	120	NULL	140
+6	60	70	80	90	100	110	120	130	140	150
+7	70	80	90	NULL	110	120	130	140	150	160
+8	80	90	100	110	120	130	140	150	160	170
+9	90	100	110	120	130	140	150	160	170	180
+
+statement ok
+CREATE TABLE limits_nulls AS (
+	SELECT CASE WHEN z % 9 = 0 THEN NULL ELSE z END AS z
+	FROM limits
+);
+
+query I
+SELECT * FROM limits_nulls;
+----
+NULL
+134
+151
+168
+185
+102
+119
+136
+NULL
+
+query II
+SELECT i, z
+FROM wide_nulls, limits_nulls
+WHERE c0 < z
+  AND c1 < z
+  AND c2 < z
+  AND c3 < z
+  AND c4 < z
+  AND c5 < z
+  AND c6 < z
+  AND c7 < z
+  AND c8 < z
+  AND c9 < z
+ORDER BY 1, 2
+----
+1	102
+1	119
+1	134
+1	136
+1	151
+1	168
+1	185
+2	119
+2	134
+2	136
+2	151
+2	168
+2	185
+3	134
+3	136
+3	151
+3	168
+3	185
+4	134
+4	136
+4	151
+4	168
+4	185
+6	151
+6	168
+6	185
+8	185
+9	185
+
+# Joins on BETWEEN
+query II
+SELECT i, z
+FROM wide, limits
+WHERE z BETWEEN c8 AND c9
+ORDER BY 1, 2;
+----
+2	102
+3	117
+3	119
+5	134
+5	136
+7	151
+7	153
+8	168
+
+query II
+SELECT i, z
+FROM wide_nulls, limits_nulls
+WHERE z BETWEEN c8 AND c9
+ORDER BY 1, 2;
+----
+2	102
+3	119
+7	151
+8	168
+
+# and NOT BETWEEN
+query II
+SELECT i, z
+FROM wide, limits
+WHERE z NOT BETWEEN c8 AND c9
+ORDER BY 1, 2;
+----
+1	102
+1	117
+1	119
+1	134
+1	136
+1	151
+1	153
+1	168
+1	185
+2	117
+2	119
+2	134
+2	136
+2	151
+2	153
+2	168
+2	185
+3	102
+3	134
+3	136
+3	151
+3	153
+3	168
+3	185
+4	102
+4	117
+4	119
+4	134
+4	136
+4	151
+4	153
+4	168
+4	185
+5	102
+5	117
+5	119
+5	151
+5	153
+5	168
+5	185
+6	102
+6	117
+6	119
+6	134
+6	136
+6	151
+6	153
+6	168
+6	185
+7	102
+7	117
+7	119
+7	134
+7	136
+7	168
+7	185
+8	102
+8	117
+8	119
+8	134
+8	136
+8	151
+8	153
+8	185
+9	102
+9	117
+9	119
+9	134
+9	136
+9	151
+9	153
+9	168
+9	185
+
+query II
+SELECT i, z
+FROM wide_nulls, limits_nulls
+WHERE z NOT BETWEEN c8 AND c9
+ORDER BY 1, 2;
+----
+1	102
+1	119
+1	134
+1	136
+1	151
+1	168
+1	185
+2	119
+2	134
+2	136
+2	151
+2	168
+2	185
+3	102
+3	134
+3	136
+3	151
+3	168
+3	185
+4	102
+4	119
+4	134
+4	136
+4	151
+4	168
+4	185
+5	151
+5	168
+5	185
+6	102
+6	119
+6	134
+6	136
+6	151
+6	168
+6	185
+7	102
+7	119
+7	134
+7	136
+7	168
+7	185
+8	102
+8	119
+8	134
+8	136
+8	151
+8	185
+9	102
+9	119
+9	134
+9	136
+9	151
+9	168
+9	185
+
+# Some more tests with joins on COMPARE_DISTINCT_FROM
+query II
+SELECT lhs.i, rhs.i
+FROM wide_nulls lhs, wide_nulls rhs
+WHERE lhs.c3 < rhs.c0
+  AND lhs.c8 IS DISTINCT FROM rhs.c3
+ORDER BY 1, 2;
+----
+1	5
+1	7
+1	8
+1	9
+2	6
+2	7
+2	8
+2	9
+3	7
+3	9
+4	8
+5	9
+
+query II
+EXPLAIN
+SELECT lhs.i, rhs.i
+FROM wide_nulls lhs, wide_nulls rhs
+WHERE lhs.c3 < rhs.c0
+  AND lhs.c8 IS DISTINCT FROM rhs.c3
+ORDER BY 1, 2;
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*
+
+# Multi-predicate merge joins with many matches
+# (similar to test/sql/join/inner/test_unequal_join_duplicates.test
+# but with a merge join with multiple predicates)
+statement ok
+CREATE TABLE many_bounds AS (
+	SELECT * FROM (VALUES (2000, 4000)) tbl(lo, hi)
+);
+
+statement ok
+CREATE TABLE many_values AS (
+	SELECT * from range(10 * 1024) tbl(val)
+);
+
+query I
+SELECT COUNT(*)
+FROM many_values, many_bounds
+WHERE val BETWEEN lo AND hi;
+----
+2001
+
