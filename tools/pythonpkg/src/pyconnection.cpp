@@ -146,6 +146,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			throw std::runtime_error("Prepared statement needs " + to_string(prep->n_param) + " parameters, " +
 			                         to_string(py::len(single_query_params)) + " given");
 		}
+		std::cout << "size: " << py::len(single_query_params) << std::endl;
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
 		auto res = make_unique<DuckDBPyResult>();
 		{
@@ -541,7 +542,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	return res;
 }
 
-Value transform_python_value(py::handle ele) {
+Value TransformPythonValue(py::handle ele) {
 	auto datetime_mod = py::module::import("datetime");
 	auto datetime_date = datetime_mod.attr("date");
 	auto datetime_datetime = datetime_mod.attr("datetime");
@@ -603,7 +604,7 @@ Value transform_python_value(py::handle ele) {
 		values.reserve(size);
 
 		for (auto py_val : ele) {
-			values.emplace_back(transform_python_value(py_val));
+			values.emplace_back(TransformPythonValue(py_val));
 		}
 
 		return Value::LIST(values);
@@ -617,7 +618,8 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 	args.reserve(py::len(params));
 
 	for (auto param : params) {
-		args.emplace_back(transform_python_value(param));
+		throw std::runtime_error("unknown param type " + py::str(param.get_type()).cast<string>());
+		args.emplace_back(TransformPythonValue(param));
 	}
 	return args;
 }
