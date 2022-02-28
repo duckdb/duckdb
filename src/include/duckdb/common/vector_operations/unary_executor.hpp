@@ -53,7 +53,15 @@ private:
 	static inline void ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               const SelectionVector *__restrict sel_vector, ValidityMask &mask,
 	                               ValidityMask &result_mask, void *dataptr, bool adds_nulls) {
-		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
+#ifdef DEBUG
+		// ldata may point to a compressed dictionary buffer which can be smaller than ldata + count
+		idx_t max_index = 0;
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = sel_vector->get_index(i);
+			max_index = MaxValue(max_index, idx);
+		}
+		ASSERT_RESTRICT(ldata, ldata + max_index, result_data, result_data + count);
+#endif
 
 		if (!mask.AllValid()) {
 			result_mask.EnsureWritable();
