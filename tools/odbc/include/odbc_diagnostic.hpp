@@ -6,6 +6,10 @@
 #include "sqlext.h"
 #include "sqltypes.h"
 
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
 #include <set>
 #include <stack>
 #include <string>
