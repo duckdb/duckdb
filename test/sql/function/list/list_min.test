@@ -1,0 +1,60 @@
+# name: test/sql/function/list/list_min.test
+# description: Test list_min function
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+# TODO: more tests covering all types
+# TODO: test aliases
+
+# TODO: is this the desired behavior?
+query T
+select list_min(NULL);
+----
+NULL
+
+query T
+select list_min([NULL]);
+----
+NULL
+
+query T
+select list_min([NULL, NULL, NULL]);
+----
+NULL
+
+query T
+select list_min([1, NULL, 0, NULL, 2, 3]);
+----
+0
+
+query T
+select list_min([1]);
+----
+1
+
+query T
+select list_min([4, 2, 1, 3]);
+----
+1
+
+query T
+select list_min(['cd', 'abc', 'a', 'aa']);
+----
+a
+
+query T
+select list_min([['b'], ['a']]);
+----
+[a]
+
+query T
+select list_min([['b'], [NULL, NULL], ['a'], [NULL]]);
+----
+[a]
+
+query T
+select list_min([['b'], NULL, [NULL, NULL], ['a'], [NULL]]);
+----
+[a]
