@@ -14,13 +14,22 @@ inline bool ValueCompare(const string_t &left, const string_t &right) {
 	return StringComparisonOperators::EqualsOrNot<false>(left, right);
 }
 
-template <>
-inline bool ValueCompare(const Value &left, const Value &right) {
-	return left == right;
-}
+struct ContainsFunctor {
+	template <bool IS_INIT = false>
+	static inline bool UpdateResultEntries(idx_t child_idx) {
+		return (IS_INIT) ? false : true;
+	}
+};
 
-template <class T1, class T2, bool IS_NESTED = false>
-static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state, Vector &result, bool isListContains) {
+struct PositionFunctor {
+	template <bool IS_INIT = false>
+	static inline int32_t UpdateResultEntries(idx_t child_idx) {
+		return (IS_INIT) ? 0 : child_idx + 1;
+	}
+};
+
+template <class T1, class T2, class OP, bool IS_NESTED = false>
+static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto count = args.size();
 	Vector &list = args.data[0];
@@ -61,32 +70,26 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 		const auto &list_entry = list_entries[list_index];
 		auto source_idx = child_data.sel->get_index(list_entry.offset);
 
-		if (!IS_NESTED) {
-			// does not require a comparison of nested types
-			auto child_value = FlatVector::GetData<T1>(child_vector);
-			auto values = FlatVector::GetData<T1>(value_vector);
+		// not required for a comparison of nested types
+		auto child_value = FlatVector::GetData<T1>(child_vector);
+		auto values = FlatVector::GetData<T1>(value_vector);
 
-			result_entries[list_index] = (isListContains) ? false : 0;
-			for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
-				auto child_value_idx = source_idx + child_idx;
+		result_entries[list_index] = OP::template UpdateResultEntries<true>(0);
+		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
+			auto child_value_idx = source_idx + child_idx;
 
-				if (!child_data.validity.RowIsValid(child_value_idx)) {
-					continue;
-				}
+			if (!child_data.validity.RowIsValid(child_value_idx)) {
+				continue;
+			}
+
+			if (!IS_NESTED) {
 				if (ValueCompare<T1>(child_value[child_value_idx], values[value_index])) {
-					result_entries[list_index] = (isListContains) ? true : child_idx + 1;
+					result_entries[list_index] = OP::template UpdateResultEntries(child_idx);
 					break; // Found value in list, no need to look further
 				}
-			}
-		} else {
-			result_entries[list_index] = (isListContains) ? false : 0;
-			for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
-				auto child_value_idx = source_idx + child_idx;
-				if (!child_data.validity.RowIsValid(child_value_idx)) {
-					continue;
-				}
+			} else {
 				if (ValueCompare<Value>(child_vector.GetValue(child_value_idx), value_vector.GetValue(value_index))) {
-					result_entries[list_index] = (isListContains) ? true : child_idx + 1;
+					result_entries[list_index] = OP::template UpdateResultEntries(child_idx);
 					break; // Found value in list, no need to look further
 				}
 			}
@@ -94,50 +97,50 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 	}
 }
 
-template <class T>
-static void ListContainsOrPosition(DataChunk &args, ExpressionState &state, Vector &result, bool isListContains) {
+template <class T, class OP>
+static void ListContainsOrPosition(DataChunk &args, ExpressionState &state, Vector &result) {
 	switch (args.data[1].GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		TemplatedContainsOrPosition<int8_t, T>(args, state, result, isListContains);
+		TemplatedContainsOrPosition<int8_t, T, OP>(args, state, result);
 		break;
 	case PhysicalType::INT16:
-		TemplatedContainsOrPosition<int16_t, T>(args, state, result, isListContains);
+		TemplatedContainsOrPosition<int16_t, T, OP>(args, state, result);
 		break;
 	case PhysicalType::INT32:
-		TemplatedContainsOrPosition<int32_t, T>(args, state, result, isListContains);
+		TemplatedContainsOrPosition<int32_t, T, OP>(args, state, result);
 		break;
 	case PhysicalType::INT64:
-		TemplatedContainsOrPosition<int64_t, T>(args, state, result, isListContains);
+		TemplatedContainsOrPosition<int64_t, T, OP>(args, state, result);
 		break;
 	case PhysicalType::INT128:
-		TemplatedContainsOrPosition<hugeint_t, T>(args, state, result, isListContains);
+		TemplatedContainsOrPosition<hugeint_t, T, OP>(args, state, result);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedContainsOrPosition<uint8_t, T>(args, state, result, isListContains);
+		TemplatedContainsOrPosition<uint8_t, T, OP>(args, state, result);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedContainsOrPosition<uint16_t, T>(args, state, result, isListContains);
+		TemplatedContainsOrPosition<uint16_t, T, OP>(args, state, result);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedContainsOrPosition<uint32_t, T>(args, state, result, isListContains);
+		TemplatedContainsOrPosition<uint32_t, T, OP>(args, state, result);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedContainsOrPosition<uint64_t, T>(args, state, result, isListContains);
+		TemplatedContainsOrPosition<uint64_t, T, OP>(args, state, result);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedContainsOrPosition<float, T>(args, state, result, isListContains);
+		TemplatedContainsOrPosition<float, T, OP>(args, state, result);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedContainsOrPosition<double, T>(args, state, result, isListContains);
+		TemplatedContainsOrPosition<double, T, OP>(args, state, result);
 		break;
 	case PhysicalType::VARCHAR:
-		TemplatedContainsOrPosition<string_t, T>(args, state, result, isListContains);
+		TemplatedContainsOrPosition<string_t, T, OP>(args, state, result);
 		break;
 	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
-		TemplatedContainsOrPosition<int8_t, T, true>(args, state, result, isListContains);
+		TemplatedContainsOrPosition<int8_t, T, OP, true>(args, state, result);
 		break;
 	default:
 		throw NotImplementedException("This function has not been implemented for this type");
@@ -145,16 +148,16 @@ static void ListContainsOrPosition(DataChunk &args, ExpressionState &state, Vect
 }
 
 static void ListContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	return ListContainsOrPosition<bool>(args, state, result, true);
+	return ListContainsOrPosition<bool, ContainsFunctor>(args, state, result);
 }
 
 static void ListPositionFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	return ListContainsOrPosition<int32_t>(args, state, result, false);
+	return ListContainsOrPosition<int32_t, PositionFunctor>(args, state, result);
 }
 
+template <bool IS_CONTAINS = true>
 static unique_ptr<FunctionData> ListContainsOrPositionBind(ClientContext &context, ScalarFunction &bound_function,
-                                                           vector<unique_ptr<Expression>> &arguments,
-                                                           bool isListContains) {
+                                                           vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 
 	const auto &list = arguments[0]->return_type; // change to list
@@ -179,19 +182,19 @@ static unique_ptr<FunctionData> ListContainsOrPositionBind(ClientContext &contex
 		bound_function.arguments[1] = value == max_child_type ? value : max_child_type;
 
 		// list_contains and list_position only differ in their return type
-		bound_function.return_type = (isListContains) ? LogicalType::BOOLEAN : LogicalType::INTEGER;
+		bound_function.return_type = (IS_CONTAINS) ? LogicalType::BOOLEAN : LogicalType::INTEGER;
 	}
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
 static unique_ptr<FunctionData> ListContainsBind(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
-	return ListContainsOrPositionBind(context, bound_function, arguments, true);
+	return ListContainsOrPositionBind(context, bound_function, arguments);
 }
 
 static unique_ptr<FunctionData> ListPositionBind(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
-	return ListContainsOrPositionBind(context, bound_function, arguments, false);
+	return ListContainsOrPositionBind<false>(context, bound_function, arguments);
 }
 
 ScalarFunction ListContainsFun::GetFunction() {
