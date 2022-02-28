@@ -32,8 +32,10 @@ mutable struct Stmt <: DBInterface.Statement
 
     function Stmt(con::Connection, sql::AbstractString)
         handle = Ref{duckdb_prepared_statement}()
-        if duckdb_prepare(con.handle, sql, handle) != 0
-        	throw("failed to open connection")
+        if duckdb_prepare(con.handle, sql, handle) != DuckDBSuccess
+        	error_message = unsafe_string(duckdb_prepare_error(handle))
+        	duckdb_destroy_prepare(handle)
+        	throw(error_message)
         end
 		stmt = new(con, handle[])
 		finalizer(_close_stmt, stmt)

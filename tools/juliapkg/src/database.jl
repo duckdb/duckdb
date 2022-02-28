@@ -51,10 +51,13 @@ mutable struct DuckDBHandle
     handle::duckdb_database
 
     function DuckDBHandle(f::AbstractString)
-        handle = Ref{duckdb_database}()
         f = String(isempty(f) ? f : expanduser(f))
-        if duckdb_open(f, handle) != DuckDBSuccess
-        	throw("failed to open database")
+        handle = Ref{duckdb_database}()
+        error = Ref{Ptr{UInt8}}()
+        if duckdb_open_ext(f, handle, C_NULL, error) != DuckDBSuccess
+			error_message = unsafe_string(error[])
+			duckdb_free(error[])
+        	throw(error_message)
         end
 
 		db = new(f, handle[])

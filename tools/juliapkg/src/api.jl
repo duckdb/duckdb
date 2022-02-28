@@ -25,6 +25,27 @@ function duckdb_open(path, out_database)
     )
 end
 """
+	Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the the given path.
+
+    * path: Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
+    * out_database: The result database object.
+    * config: (Optional) configuration used to start up the database system.
+    * out_error: If set and the function returns DuckDBError, this will contain the reason why the start-up failed.
+    Note that the error must be freed using `duckdb_free`.
+    * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_open_ext(path, out_database, config, out_error)
+    return ccall(
+        (:duckdb_open_ext, libduckdb),
+        Int32,
+        (Ptr{UInt8}, Ref{duckdb_database}, duckdb_config, Ptr{Ptr{UInt8}}),
+        path,
+        out_database,
+        config,
+        out_error
+    )
+end
+"""
 	duckdb_close(database)
 Closes the specified database and de-allocates all memory allocated for that database.
 This should be called after you are done with any database allocated through `duckdb_open`.
@@ -302,274 +323,274 @@ end
 #         col - 1,
 #     )
 # end
-#
-# """
-# 	duckdb_result_error(result)
-# Returns the error message contained within the result. The error is only set if `duckdb_query` returns `DuckDBError`.
-# The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_result` is called.
-# * `result`: The result object to fetch the nullmask from.
-# * returns: The error of the result.
-# """
-# function duckdb_result_error(result)
-#     return ccall((:duckdb_result_error, libduckdb), Ptr{UInt8}, (Ptr{Cvoid},), result)
-# end
-#
-# #=
-# //===--------------------------------------------------------------------===//
-# // Result Functions
-# //===--------------------------------------------------------------------===//
-# // Safe fetch functions
-# // These functions will perform conversions if necessary.
-# // On failure (e.g. if conversion cannot be performed or if the value is NULL) a default value is returned.
-# // Note that these functions are slow since they perform bounds checking and conversion
-# // For fast access of values prefer using duckdb_column_data and duckdb_nullmask_data
-# =#
-#
-#
-# """
-# 	duckdb_value_boolean(result,col,row)
-# * returns: The boolean value at the specified location, or false if the value cannot be converted.
-# """
-# function duckdb_value_boolean(result, col, row)
-#     return ccall(
-#         (:duckdb_value_boolean, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# 	duckdb_value_int8(result,col,row)
-# * returns: The int8_t value at the specified location, or 0 if the value cannot be converted.
-# """
-# function duckdb_value_int8(result, col, row)
-#     return ccall(
-#         (:duckdb_value_int8, libduckdb),
-#         Int8,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# 	duckdb_value_int16(result,col,row)
-#  * returns: The int16_t value at the specified location, or 0 if the value cannot be converted.
-# """
-# function duckdb_value_int16(result, col, row)
-#     return ccall(
-#         (:duckdb_value_int16, libduckdb),
-#         Int16,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# 	duckdb_value_int32(result,col,row)
-#  * returns: The int32_t value at the specified location, or 0 if the value cannot be converted.
-# """
-# function duckdb_value_int32(result, col, row)
-#     return ccall(
-#         (:duckdb_value_int32, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# 	duckdb_value_int64(result,col,row)
-#  * returns: The int64_t value at the specified location, or 0 if the value cannot be converted.
-# """
-# function duckdb_value_int64(result, col, row)
-#     return ccall(
-#         (:duckdb_value_int64, libduckdb),
-#         Int64,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# 	duckdb_value_hugeint(result,col,row)
-#  * returns: The duckdb_hugeint value at the specified location, or 0 if the value cannot be converted.
-# """
-# function duckdb_value_hugeint(result, col, row)
-#     return ccall(
-#         (:duckdb_value_hugeint, libduckdb),
-#         Int64,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# 	duckdb_value_uint8(result,col,row)
-#  * returns: The uint8_t value at the specified location, or 0 if the value cannot be converted.
-#
-# """
-# function duckdb_value_uint8(result, col, row)
-#     return ccall(
-#         (:duckdb_value_uint8, libduckdb),
-#         UInt8,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# 	duckdb_value_uint16(result,col,row)
-#  * returns: The uint16_t value at the specified location, or 0 if the value cannot be converted.
-# """
-# function duckdb_value_uint16(result, col, row)
-#     return ccall(
-#         (:duckdb_value_uint16, libduckdb),
-#         UInt16,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# 	duckdb_value_uint32(result,col,row)
-#  * returns: The uint32_t value at the specified location, or 0 if the value cannot be converted.
-# """
-# function duckdb_value_uint32(result, col, row)
-#     return ccall(
-#         (:duckdb_value_uint32, libduckdb),
-#         UInt32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# 	duckdb_value_uint64(result,col,row)
-# * returns: The uint64_t value at the specified location, or 0 if the value cannot be converted.
-# """
-# function duckdb_value_uint64(result, col, row)
-#     return ccall(
-#         (:duckdb_value_uint64, libduckdb),
-#         UInt64,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# 	duckdb_value_float(result,col,row)
-#  * returns: The float value at the specified location, or 0 if the value cannot be converted.
-# """
-# function duckdb_value_float(result, col, row)
-#     return ccall(
-#         (:duckdb_value_float, libduckdb),
-#         Float32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# 	duckdb_value_double(result,col,row)
-#  * returns: The double value at the specified location, or 0 if the value cannot be converted.
-# """
-# function duckdb_value_double(result, col, row)
-#     return ccall(
-#         (:duckdb_value_double, libduckdb),
-#         Float64,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# duckdb_value_date(result,col,row)
-#  * returns: The duckdb_date value at the specified location, or 0 if the value cannot be converted.
-# DUCKDB_API duckdb_date duckdb_value_date(duckdb_result *result, idx_t col, idx_t row);
-# """
-# function duckdb_value_date(result, col, row)
-#     return ccall(
-#         (:duckdb_value_date, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# duckdb_value_time(result,col,row)
-#  * returns: The duckdb_time value at the specified location, or 0 if the value cannot be converted.
-# DUCKDB_API duckdb_time duckdb_value_time(duckdb_result *result, idx_t col, idx_t row);
-# """
-# function duckdb_value_time(result, col, row)
-#     return ccall(
-#         (:duckdb_value_time, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# duckdb_value_timestamp(result,col,row)
-#  * returns: The duckdb_timestamp value at the specified location, or 0 if the value cannot be converted.
-# DUCKDB_API duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_t col, idx_t row);
-# """
-# function duckdb_value_timestamp(result, col, row)
-#     return ccall(
-#         (:duckdb_value_timestamp, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
-# """
-# duckdb_value_interval(result,col,row)
-#  * returns: The duckdb_interval value at the specified location, or 0 if the value cannot be converted.
-# DUCKDB_API duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t row);
-# """
-# function duckdb_value_interval(result, col, row)
-#     return ccall(
-#         (:duckdb_value_interval, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
+
+"""
+	duckdb_result_error(result)
+Returns the error message contained within the result. The error is only set if `duckdb_query` returns `DuckDBError`.
+The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_result` is called.
+* `result`: The result object to fetch the nullmask from.
+* returns: The error of the result.
+"""
+function duckdb_result_error(result)
+    return ccall((:duckdb_result_error, libduckdb), Ptr{UInt8}, (Ref{duckdb_result},), result)
+end
+
+#=
+//===--------------------------------------------------------------------===//
+// Result Functions
+//===--------------------------------------------------------------------===//
+// Safe fetch functions
+// These functions will perform conversions if necessary.
+// On failure (e.g. if conversion cannot be performed or if the value is NULL) a default value is returned.
+// Note that these functions are slow since they perform bounds checking and conversion
+// For fast access of values prefer using duckdb_column_data and duckdb_nullmask_data
+=#
+
+
+"""
+	duckdb_value_boolean(result,col,row)
+* returns: The boolean value at the specified location, or false if the value cannot be converted.
+"""
+function duckdb_value_boolean(result, col, row)
+    return ccall(
+        (:duckdb_value_boolean, libduckdb),
+        Int32,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+	duckdb_value_int8(result,col,row)
+* returns: The int8_t value at the specified location, or 0 if the value cannot be converted.
+"""
+function duckdb_value_int8(result, col, row)
+    return ccall(
+        (:duckdb_value_int8, libduckdb),
+        Int8,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+	duckdb_value_int16(result,col,row)
+ * returns: The int16_t value at the specified location, or 0 if the value cannot be converted.
+"""
+function duckdb_value_int16(result, col, row)
+    return ccall(
+        (:duckdb_value_int16, libduckdb),
+        Int16,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+	duckdb_value_int32(result,col,row)
+ * returns: The int32_t value at the specified location, or 0 if the value cannot be converted.
+"""
+function duckdb_value_int32(result, col, row)
+    return ccall(
+        (:duckdb_value_int32, libduckdb),
+        Int32,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+	duckdb_value_int64(result,col,row)
+ * returns: The int64_t value at the specified location, or 0 if the value cannot be converted.
+"""
+function duckdb_value_int64(result, col, row)
+    return ccall(
+        (:duckdb_value_int64, libduckdb),
+        Int64,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+	duckdb_value_hugeint(result,col,row)
+ * returns: The duckdb_hugeint value at the specified location, or 0 if the value cannot be converted.
+"""
+function duckdb_value_hugeint(result, col, row)
+    return ccall(
+        (:duckdb_value_hugeint, libduckdb),
+        Int64,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+	duckdb_value_uint8(result,col,row)
+ * returns: The uint8_t value at the specified location, or 0 if the value cannot be converted.
+
+"""
+function duckdb_value_uint8(result, col, row)
+    return ccall(
+        (:duckdb_value_uint8, libduckdb),
+        UInt8,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+	duckdb_value_uint16(result,col,row)
+ * returns: The uint16_t value at the specified location, or 0 if the value cannot be converted.
+"""
+function duckdb_value_uint16(result, col, row)
+    return ccall(
+        (:duckdb_value_uint16, libduckdb),
+        UInt16,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+	duckdb_value_uint32(result,col,row)
+ * returns: The uint32_t value at the specified location, or 0 if the value cannot be converted.
+"""
+function duckdb_value_uint32(result, col, row)
+    return ccall(
+        (:duckdb_value_uint32, libduckdb),
+        UInt32,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+	duckdb_value_uint64(result,col,row)
+* returns: The uint64_t value at the specified location, or 0 if the value cannot be converted.
+"""
+function duckdb_value_uint64(result, col, row)
+    return ccall(
+        (:duckdb_value_uint64, libduckdb),
+        UInt64,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+	duckdb_value_float(result,col,row)
+ * returns: The float value at the specified location, or 0 if the value cannot be converted.
+"""
+function duckdb_value_float(result, col, row)
+    return ccall(
+        (:duckdb_value_float, libduckdb),
+        Float32,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+	duckdb_value_double(result,col,row)
+ * returns: The double value at the specified location, or 0 if the value cannot be converted.
+"""
+function duckdb_value_double(result, col, row)
+    return ccall(
+        (:duckdb_value_double, libduckdb),
+        Float64,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+duckdb_value_date(result,col,row)
+ * returns: The duckdb_date value at the specified location, or 0 if the value cannot be converted.
+DUCKDB_API duckdb_date duckdb_value_date(duckdb_result *result, idx_t col, idx_t row);
+"""
+function duckdb_value_date(result, col, row)
+    return ccall(
+        (:duckdb_value_date, libduckdb),
+        Int32,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+duckdb_value_time(result,col,row)
+ * returns: The duckdb_time value at the specified location, or 0 if the value cannot be converted.
+DUCKDB_API duckdb_time duckdb_value_time(duckdb_result *result, idx_t col, idx_t row);
+"""
+function duckdb_value_time(result, col, row)
+    return ccall(
+        (:duckdb_value_time, libduckdb),
+        Int32,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+duckdb_value_timestamp(result,col,row)
+ * returns: The duckdb_timestamp value at the specified location, or 0 if the value cannot be converted.
+DUCKDB_API duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_t col, idx_t row);
+"""
+function duckdb_value_timestamp(result, col, row)
+    return ccall(
+        (:duckdb_value_timestamp, libduckdb),
+        Int32,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
+"""
+duckdb_value_interval(result,col,row)
+ * returns: The duckdb_interval value at the specified location, or 0 if the value cannot be converted.
+DUCKDB_API duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t row);
+"""
+function duckdb_value_interval(result, col, row)
+    return ccall(
+        (:duckdb_value_interval, libduckdb),
+        Int32,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
 
 """
 duckdb_value_varchar(result,col,row)
@@ -588,24 +609,24 @@ function duckdb_value_varchar(result, col, row)
     )
 end
 
-# """
-# duckdb_value_varchar_internal(result,col,row)
-# * returns: The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
-# If the column is NOT a VARCHAR column this function will return NULL.
-# The result must NOT be freed.
-# DUCKDB_API char *duckdb_value_varchar_internal(duckdb_result *result, idx_t col, idx_t row);
-# """
-# function duckdb_value_varchar_internal(result, col, row)
-#     return ccall(
-#         (:duckdb_value_varchar_internal, libduckdb),
-#         Ptr{UInt8},
-#         (Ptr{Cvoid}, Int32, Int32),
-#         result,
-#         col - 1,
-#         row - 1,
-#     )
-# end
-#
+"""
+duckdb_value_varchar_internal(result,col,row)
+* returns: The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
+If the column is NOT a VARCHAR column this function will return NULL.
+The result must NOT be freed.
+DUCKDB_API char *duckdb_value_varchar_internal(duckdb_result *result, idx_t col, idx_t row);
+"""
+function duckdb_value_varchar_internal(result, col, row)
+    return ccall(
+        (:duckdb_value_varchar_internal, libduckdb),
+        Ptr{UInt8},
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1,
+    )
+end
+
 # """
 # duckdb_value_blob(result,col,row)
 # * returns: The duckdb_blob value at the specified location. Returns a blob with blob.data set to nullptr if the
@@ -639,36 +660,36 @@ function duckdb_value_is_null(result, col, row)
     )
 end
 
-# #=
-# //===--------------------------------------------------------------------===//
-# // Helpers
-# //===--------------------------------------------------------------------===//
-# =#
-#
-#
-# """
-# duckdb_malloc(size)
-#
-# Allocate `size` bytes of memory using the duckdb internal malloc function. Any memory allocated in this manner
-# should be freed using `duckdb_free`.
-# * size: The number of bytes to allocate.
-# * returns: A pointer to the allocated memory region.
-# DUCKDB_API void *duckdb_malloc(size_t size);
-# """
-# function duckdb_malloc(size)
-#     return ccall((:duckdb_malloc, libduckdb), Cvoid, (Csize_t,), size)
-# end
-#
-# """
-# duckdb_free(ptr)
-# Free a value returned from `duckdb_malloc`, `duckdb_value_varchar` or `duckdb_value_blob`.
-# * ptr: The memory region to de-allocate.
-# DUCKDB_API void duckdb_free(void *ptr);
-# """
-# function duckdb_free(ptr)
-#     return ccall((:duckdb_malloc, libduckdb), Cvoid, (Ptr{Cvoid},), ptr)
-# end
-#
+#=
+//===--------------------------------------------------------------------===//
+// Helpers
+//===--------------------------------------------------------------------===//
+=#
+
+
+"""
+duckdb_malloc(size)
+
+Allocate `size` bytes of memory using the duckdb internal malloc function. Any memory allocated in this manner
+should be freed using `duckdb_free`.
+* size: The number of bytes to allocate.
+* returns: A pointer to the allocated memory region.
+DUCKDB_API void *duckdb_malloc(size_t size);
+"""
+function duckdb_malloc(size)
+    return ccall((:duckdb_malloc, libduckdb), Cvoid, (Csize_t,), size)
+end
+
+"""
+duckdb_free(ptr)
+Free a value returned from `duckdb_malloc`, `duckdb_value_varchar` or `duckdb_value_blob`.
+* ptr: The memory region to de-allocate.
+DUCKDB_API void duckdb_free(void *ptr);
+"""
+function duckdb_free(ptr)
+    return ccall((:duckdb_malloc, libduckdb), Cvoid, (Ptr{Cvoid},), ptr)
+end
+
 # #=
 # //===--------------------------------------------------------------------===//
 # // Date/Time/Timestamp Helpers
@@ -821,23 +842,23 @@ function duckdb_destroy_prepare(prepared_statement)
     return ccall((:duckdb_destroy_prepare, libduckdb), Cvoid, (Ref{duckdb_prepared_statement},), prepared_statement)
 end
 
-# """
-# Returns the error message associated with the given prepared statement.
-# If the prepared statement has no error message, this returns `nullptr` instead.
-# The error message should not be freed. It will be de-allocated when `duckdb_destroy_prepare` is called.
-# * prepared_statement: The prepared statement to obtain the error from.
-# * returns: The error message, or `nullptr` if there is none.
-# DUCKDB_API const char *duckdb_prepare_error(duckdb_prepared_statement prepared_statement);
-# """
-# function duckdb_prepare_error(prepared_statement)
-#     return ccall(
-#         (:duckdb_prepare_error, libduckdb),
-#         Ptr{UInt8},
-#         (Ptr{Cvoid},),
-#         prepared_statement,
-#     )
-# end
-#
+"""
+Returns the error message associated with the given prepared statement.
+If the prepared statement has no error message, this returns `nullptr` instead.
+The error message should not be freed. It will be de-allocated when `duckdb_destroy_prepare` is called.
+* prepared_statement: The prepared statement to obtain the error from.
+* returns: The error message, or `nullptr` if there is none.
+DUCKDB_API const char *duckdb_prepare_error(duckdb_prepared_statement prepared_statement);
+"""
+function duckdb_prepare_error(prepared_statement)
+    return ccall(
+        (:duckdb_prepare_error, libduckdb),
+        Ptr{UInt8},
+        (duckdb_prepared_statement,),
+        prepared_statement[],
+    )
+end
+
 # """
 # Returns the number of parameters that can be provided to the given prepared statement.
 # Returns 0 if the query was not successfully prepared.

@@ -12,7 +12,9 @@ mutable struct QueryResult
     function QueryResult(stmt::Stmt, params::DBInterface.StatementParams=())
     	handle = Ref{duckdb_result}()
 		if duckdb_execute_prepared(stmt.handle, handle) != DuckDBSuccess
-			throw("execute failed")
+        	error_message = unsafe_string(duckdb_result_error(handle))
+        	duckdb_destroy_result(handle)
+        	throw(error_message)
 		end
 
     	column_count = duckdb_column_count(handle)
@@ -336,12 +338,42 @@ function DBInterface.close!(q::QueryResult)
 	_close_result(q);
 end
 
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Bool} = duckdb_value_boolean(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Int8} = duckdb_value_int8(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Int16} = duckdb_value_int16(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Int32} = duckdb_value_int32(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Int64} = duckdb_value_int64(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: UInt8} = duckdb_value_uint8(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: UInt16} = duckdb_value_uint16(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: UInt32} = duckdb_value_uint32(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: UInt64} = duckdb_value_uint64(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Float32} = duckdb_value_float(handle, col, row_number)
+duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T <: Float64} = duckdb_value_double(handle, col, row_number)
+function duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_number::Int) where {T}
+	return unsafe_string(duckdb_value_varchar(handle, col, row_number));
+end
+
 function getvalue(q::QueryResult, col::Int, row_number::Int, ::Type{T}) where {T}
 	if duckdb_value_is_null(q.handle, col, row_number)
 		return missing
 	end
-	return unsafe_string(duckdb_value_varchar(q.handle, col, row_number));
+	return duckdb_internal_value(T, q.handle, col, row_number)
 end
+
+#
+# duckdb_value_boolean
+# duckdb_value_int8
+# duckdb_value_int16
+# duckdb_value_int32
+# duckdb_value_int64
+# duckdb_value_uint8
+# duckdb_value_uint16
+# duckdb_value_uint32
+# duckdb_value_uint64
+# duckdb_value_float
+# duckdb_value_double
+# const FLOAT_TYPES = Union{Float16, Float32, Float64} # exclude BigFloat
+# sqlitevalue(::Type{T}, handle, col) where {T <: FLOAT_TYPES} = convert(T, sqlite3_column_double(handle, col))
 
 Tables.getcolumn(r::Row, ::Type{T}, i::Int, nm::Symbol) where {T} = getvalue(getquery(r), i, getfield(r, :row_number), T)
 
@@ -362,8 +394,8 @@ function Base.iterate(q::QueryResult, row_number)
 	end
     return Row(q, row_number), row_number + 1
 end
-#
-# "Return the last row insert id from the executed statement"
+
+"Return the last row insert id from the executed statement"
 function DBInterface.lastrowid(q::QueryResult)
 	throw("unimplemented: lastrowid")
 # 	last_insert_rowid(q.stmt.db)

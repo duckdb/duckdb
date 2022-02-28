@@ -3,6 +3,7 @@ struct DuckDBException <: Exception
 end
 
 const duckdb_database = Ptr{Cvoid}
+const duckdb_config = Ptr{Cvoid}
 const duckdb_connection = Ptr{Cvoid}
 const duckdb_prepared_statement = Ptr{Cvoid}
 const DuckDBSuccess = 0;
