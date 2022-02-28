@@ -270,6 +270,7 @@ INSERT INTO vals2 SELECT * FROM vals1
 
 query IIII
 SELECT * FROM vals1, vals2 WHERE i>9 AND j<=l AND k>=i AND l<11
+ORDER BY 2 DESC, 4 DESC
 ----
 10	10	10	10
 10	9	10	10

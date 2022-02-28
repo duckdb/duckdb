@@ -48,6 +48,6 @@ ExecuteStmt: EXECUTE name execute_param_clause
 		;
 
 
-execute_param_clause: '(' expr_list ')'				{ $$ = $2; }
+execute_param_clause: '(' expr_list_opt_comma ')'				{ $$ = $2; }
 					| /* EMPTY */					{ $$ = NIL; }
 					;
