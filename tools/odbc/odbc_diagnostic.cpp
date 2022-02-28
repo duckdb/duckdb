@@ -215,13 +215,6 @@ void OdbcDiagnostic::FormatDiagnosticMessage(DiagRecord &diag_record, const std:
 }
 
 void OdbcDiagnostic::AddDiagRecord(DiagRecord &diag_record) {
-	// if (diag_record.id_diag == -1) {
-	//     if (diag_records.size() > 0) {
-	//         diag_record.id_diag = diag_records.back().id_diag + 1;
-	//     } else {
-	//         diag_record.id_diag = 0;
-	//     }
-	// }
 	auto rec_idx = (SQLSMALLINT)diag_records.size();
 	diag_records.emplace_back(diag_record);
 	vec_record_idx.emplace_back(rec_idx);
@@ -229,24 +222,8 @@ void OdbcDiagnostic::AddDiagRecord(DiagRecord &diag_record) {
 
 void OdbcDiagnostic::AddNewRecIdx(SQLSMALLINT rec_idx) {
 	auto origin_idx = vec_record_idx[rec_idx];
-	// auto diag_rec = &diag_records[origin_idx];
-
-	// auto new_offset = diag_rec->stack_msg_offset.top() + offset;
-	// diag_rec->stack_msg_offset.push(new_offset);
-
 	auto begin = vec_record_idx.begin();
 	vec_record_idx.emplace(std::next(begin, rec_idx + 1), origin_idx);
-
-	// auto original_msg = diag_rec->GetMessage();
-	// auto new_diag_rec = *diag_rec;
-
-	// // split the message between the two diagnostic records
-	// new_diag_rec.SetMessage(original_msg.substr(remaining_chars));
-	// // diag_rec->SetMessage(original_msg.substr(0, remaining_chars));
-
-	// // insert the new diagnostic record right after its
-	// auto begin = diag_records.begin();
-	// diag_records.emplace(std::next(begin, rec_idx + 1), new_diag_rec);
 }
 
 duckdb::idx_t OdbcDiagnostic::GetTotalRecords() {
@@ -256,6 +233,7 @@ duckdb::idx_t OdbcDiagnostic::GetTotalRecords() {
 void OdbcDiagnostic::Clean() {
 	header = DiagHeader();
 	diag_records.clear();
+	vec_record_idx.clear();
 }
 
 string OdbcDiagnostic::GetDiagDynamicFunction() {
@@ -275,10 +253,12 @@ DiagRecord &OdbcDiagnostic::GetDiagRecord(SQLINTEGER rec_idx) {
 	auto origin_idx = vec_record_idx[rec_idx];
 	auto diag_record = &diag_records[origin_idx];
 	// getting first record, clear up vec_record_idx
-	if (rec_idx == 0 && !diag_record->stack_msg_offset.empty()) {
+	if (rec_idx == 0) {
 		vec_record_idx.clear();
-		vec_record_idx.emplace_back(rec_idx);
-		diag_record->ClearStackMsgOffset();
+		for (duckdb::idx_t i = 0; i < diag_records.size(); ++i) {
+			vec_record_idx.emplace_back(i);
+			diag_records[i].ClearStackMsgOffset();
+		}
 	}
 	return *diag_record;
 }
@@ -345,9 +325,6 @@ std::string DiagRecord::GetOriginalMessage() {
 
 std::string DiagRecord::GetMessage(SQLSMALLINT buff_length) {
 	duckdb::idx_t last_offset = stack_msg_offset.top();
-	// if (!stack_msg_offset.empty()) {
-	//     last_offset = stack_msg_offset.top();
-	// }
 	auto new_offset = last_offset + buff_length;
 	if (new_offset >= sql_diag_message_text.size()) {
 		ClearStackMsgOffset();
@@ -355,13 +332,6 @@ std::string DiagRecord::GetMessage(SQLSMALLINT buff_length) {
 		stack_msg_offset.push(new_offset);
 	}
 	return sql_diag_message_text.substr(last_offset);
-
-	// auto total_chars = (SQLSMALLINT)sql_diag_message_text.size();
-	// D_ASSERT(number_chars_read < total_chars);
-	// if (number_chars_read == 0) {
-	//     return sql_diag_message_text;
-	// }
-	// return sql_diag_message_text.substr(number_chars_read);
 }
 
 void DiagRecord::SetMessage(const std::string &new_msg) {
@@ -372,43 +342,7 @@ void DiagRecord::SetMessage(const std::string &new_msg) {
 }
 
 void DiagRecord::ClearStackMsgOffset() {
-	while (!stack_msg_offset.empty()) {
+	while (!stack_msg_offset.empty() && stack_msg_offset.top() != 0) {
 		stack_msg_offset.pop();
 	}
-	if (stack_msg_offset.size() == 0) {
-		stack_msg_offset.push(0);
-	}
 }
-
-// SQLINTEGER DiagRecord::GetNumberCharsRead() {
-//     return number_chars_read;
-// }
-// void DiagRecord::ResetNumberCharsRead() {
-//     number_chars_read=0;
-// }
-// SQLINTEGER DiagRecord::IncreaseNumberCharsRead(SQLINTEGER increment) {
-//     return number_chars_read += increment;
-// }
-
-// SQLSMALLINT DiagRecord::GetNumRemainingChars() {
-//     auto msg_offset = stack_msg_offset.top();
-//     auto total_chars = sql_diag_message_text.size();
-//     auto remaining_chars = total_chars - msg_offset;
-//     if (remaining_chars <= 0) {
-//         stack_msg_offset.clear();
-//         stack_msg_offset.push(0);
-//         return 0;
-//     }
-//     return (SQLSMALLINT) remaining_chars;
-// }
-
-// SQLSMALLINT DiagRecord::GetNumRemainingChars(SQLSMALLINT buff_length) {
-//     number_chars_read += buff_length;
-//     auto total_chars = (SQLSMALLINT)sql_diag_message_text.size();
-//     if (number_chars_read >= total_chars) {
-//         number_chars_read = 0;
-//         return 0;
-//     }
-//     auto remaining_chars = total_chars - number_chars_read;
-//     return remaining_chars;
-// }

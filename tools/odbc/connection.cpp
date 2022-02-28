@@ -1,6 +1,8 @@
 #include "driver.hpp"
 #include "duckdb_odbc.hpp"
 #include "api_info.hpp"
+#include "odbc_diagnostic.hpp"
+#include "odbc_exception.hpp"
 #include "odbc_utils.hpp"
 
 #include "duckdb/common/helper.hpp"
@@ -953,8 +955,13 @@ SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALL
 			dbc->conn->Commit();
 			return SQL_SUCCESS;
 		case SQL_ROLLBACK:
-			dbc->conn->Rollback();
-			return SQL_SUCCESS;
+			try {
+				dbc->conn->Rollback();
+				return SQL_SUCCESS;
+			} catch (duckdb::Exception &ex) {
+				duckdb::DiagRecord diag_rec(std::string(ex.what()), "HY115", dbc->GetDataSourceName());
+				throw duckdb::OdbcException("SQLEndTran", SQL_ERROR, diag_rec);
+			}
 		default:
 			return SQL_ERROR;
 		}

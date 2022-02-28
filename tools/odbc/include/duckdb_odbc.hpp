@@ -10,7 +10,6 @@
 #include "odbc_exception.hpp"
 #include "odbc_utils.hpp"
 
-#include <iostream> //TODO remove
 #include <sqltypes.h>
 #include <sqlext.h>
 #include <vector>
@@ -212,7 +211,19 @@ SQLRETURN WithConnection(SQLHANDLE &connection_handle, T &&lambda) {
 		return SQL_ERROR;
 	}
 
-	return lambda(hdl);
+	// ODBC requires to clean up the diagnostic for every ODBC function call
+	hdl->odbc_diagnostic->Clean();
+
+	try {
+		return lambda(hdl);
+	} catch (OdbcException &ex) {
+		auto diag_record = ex.GetDiagRecord();
+		auto component = ex.GetComponent();
+		auto data_source = hdl->GetDataSourceName();
+		hdl->odbc_diagnostic->FormatDiagnosticMessage(diag_record, data_source, component);
+		hdl->odbc_diagnostic->AddDiagRecord(diag_record);
+		return ex.GetSqlReturn();
+	}
 }
 
 template <class T>
@@ -239,8 +250,6 @@ SQLRETURN WithStatement(SQLHANDLE &statement_handle, T &&lambda) {
 		auto data_source = hdl_stmt->dbc->GetDataSourceName();
 		hdl_stmt->odbc_diagnostic->FormatDiagnosticMessage(diag_record, data_source, component);
 		hdl_stmt->odbc_diagnostic->AddDiagRecord(diag_record);
-		std::cout << "***" << diag_record.sql_diag_message_text << "***\n";
-		std::cout << "***size: " << diag_record.sql_diag_message_text.size() << "***\n";
 		return ex.GetSqlReturn();
 	}
 }
@@ -254,7 +263,11 @@ SQLRETURN WithStatementPrepared(SQLHANDLE &statement_handle, T &&lambda) {
 		if (!stmt->stmt->success) {
 			return SQL_ERROR;
 		}
-		return lambda(stmt);
+		try {
+			return lambda(stmt);
+		} catch (OdbcException &ex) {
+			throw ex;
+		}
 	});
 }
 
@@ -267,7 +280,11 @@ SQLRETURN WithStatementResult(SQLHANDLE &statement_handle, T &&lambda) {
 		if (!stmt->res->success) {
 			return SQL_ERROR;
 		}
-		return lambda(stmt);
+		try {
+			return lambda(stmt);
+		} catch (OdbcException &ex) {
+			throw ex;
+		}
 	});
 }
 
