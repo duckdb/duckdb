@@ -124,6 +124,10 @@ elseif(${ENABLE_SANITIZER})
   endif()
 endif()
 
+if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+  set(DISABLE_VPTR_SANITIZER TRUE)
+endif()
+
 if(${ENABLE_UBSAN})
   if(${ENABLE_THREAD_SANITIZER})
     message(
