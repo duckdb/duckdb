@@ -152,3 +152,5 @@ DUCKDB_TYPES = Dict(
     DUCKDB_TYPE_VARCHAR => Ptr{UInt8},
     DUCKDB_TYPE_BLOB => duckdb_blob
 )
+
+sym(ptr) = ccall(:jl_symbol, Ref{Symbol}, (Ptr{UInt8},), ptr)

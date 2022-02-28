@@ -57,7 +57,7 @@ mutable struct DuckDBHandle
         if duckdb_open_ext(f, handle, C_NULL, error) != DuckDBSuccess
             error_message = unsafe_string(error[])
             duckdb_free(error[])
-            throw(error_message)
+            throw(ConnectionException(error_message))
         end
 
         db = new(f, handle[])

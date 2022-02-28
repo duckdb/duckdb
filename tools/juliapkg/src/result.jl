@@ -1,7 +1,5 @@
 using Tables
 
-sym(ptr) = ccall(:jl_symbol, Ref{Symbol}, (Ptr{UInt8},), ptr)
-
 mutable struct QueryResult
     handle::duckdb_result
     names::Vector{Symbol}
@@ -295,8 +293,6 @@ rollback transaction or named savepoint
 function rollback end
 
 rollback(db::DB) = execute(db, "ROLLBACK TRANSACTION;")
-
-sym(ptr) = ccall(:jl_symbol, Ref{Symbol}, (Ptr{UInt8},), ptr)
 
 struct Row <: Tables.AbstractRow
     q::QueryResult
