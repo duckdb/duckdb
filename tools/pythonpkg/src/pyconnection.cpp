@@ -617,7 +617,6 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 	args.reserve(py::len(params));
 
 	for (auto param : params) {
-		throw std::runtime_error("unknown param type " + py::str(param.get_type()).cast<string>());
 		args.emplace_back(TransformPythonValue(param));
 	}
 	return args;
