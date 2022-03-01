@@ -166,10 +166,10 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		LogicalType result_type;
 		unique_ptr<Expression> expr = select_binder.Bind(stmt.returning_list[i], &result_type);
 
-		// TODO: FIX THIS!!!!
 		if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
 			// https://stackoverflow.com/questions/36120424/alternatives-of-static-pointer-cast-for-unique-ptr
-			BoundColumnRefExpression& expr2 = *(static_cast<BoundColumnRefExpression*>(expr.get()));
+			auto& expr2 = (BoundColumnRefExpression &)*expr;
+//			BoundColumnRefExpression& expr2 = *(static_cast<BoundColumnRefExpression*>(expr.get()));
 			expr2.binding.table_index = 0;
 		}
 

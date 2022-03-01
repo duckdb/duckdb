@@ -17,6 +17,7 @@ public:
 	InsertGlobalState(const vector<LogicalType> &types, const vector<unique_ptr<Expression>> &bound_defaults)
 		: default_executor(bound_defaults) {
 		insert_count = 0;
+		returned_chunk_count = 0;
 		returning_chunk = ChunkCollection();
 		returning_types = types;
 	}
@@ -25,6 +26,7 @@ public:
 	idx_t insert_count;
 	ChunkCollection returning_chunk;
 	vector<LogicalType> returning_types;
+	idx_t returned_chunk_count;
 	ExpressionExecutor default_executor;
 };
 
@@ -148,16 +150,24 @@ unique_ptr<GlobalSourceState> PhysicalInsert::GetGlobalSourceState(ClientContext
 void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                              LocalSourceState &lstate) const {
 	auto &state = (InsertSourceState &)gstate;
-	auto &g = (InsertGlobalState &)*sink_state;
+	auto &insert_gstate = (InsertGlobalState &)*sink_state;
 	if (state.finished) {
 		return;
 	}
 	// TODO: Here you can push the data back out.
-	(g.returning_chunk.Chunks().at(0))->Copy(chunk);
-
-	chunk.SetCardinality(g.returning_chunk.Chunks().at(0)->size());
-//	chunk.SetValue(0, 0, Value::BIGINT(g.insert_count));
-	state.finished = true;
+	if (insert_gstate.returning_types.empty()) {
+		chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
+		chunk.SetCardinality(1);
+		state.finished = true;
+	} else {
+		idx_t chunk_return = insert_gstate.returned_chunk_count;
+		(insert_gstate.returning_chunk.Chunks().at(chunk_return))->Copy(chunk);
+		chunk.SetCardinality((insert_gstate.returning_chunk.Chunks().at(chunk_return))->size());
+		insert_gstate.returned_chunk_count += 1;
+		if (insert_gstate.returned_chunk_count >= insert_gstate.returning_chunk.Chunks().size()) {
+			state.finished = true;
+		}
+	}
 }
 
 } // namespace duckdb
