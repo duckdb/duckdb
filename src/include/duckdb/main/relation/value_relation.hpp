@@ -15,9 +15,9 @@ namespace duckdb {
 
 class ValueRelation : public Relation {
 public:
-	ValueRelation(const weak_ptr<ClientContext> &context, const vector<vector<Value>> &values, vector<string> names,
-	              string alias = "values");
-	ValueRelation(const weak_ptr<ClientContext> &context, const string &values, vector<string> names,
+	ValueRelation(const std::shared_ptr<ClientContext> &context, const vector<vector<Value>> &values,
+	              vector<string> names, string alias = "values");
+	ValueRelation(const std::shared_ptr<ClientContext> &context, const string &values, vector<string> names,
 	              string alias = "values");
 
 	vector<vector<unique_ptr<ParsedExpression>>> expressions;

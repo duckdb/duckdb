@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-ValueRelation::ValueRelation(const weak_ptr<ClientContext> &context, const vector<vector<Value>> &values,
+ValueRelation::ValueRelation(const std::shared_ptr<ClientContext> &context, const vector<vector<Value>> &values,
                              vector<string> names_p, string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(move(names_p)), alias(move(alias_p)) {
 	// create constant expressions for the values
@@ -20,14 +20,14 @@ ValueRelation::ValueRelation(const weak_ptr<ClientContext> &context, const vecto
 		}
 		this->expressions.push_back(move(expressions));
 	}
-	context.lock()->TryBindRelation(*this, this->columns);
+	context->TryBindRelation(*this, this->columns);
 }
 
-ValueRelation::ValueRelation(const weak_ptr<ClientContext> &context, const string &values_list, vector<string> names_p,
-                             string alias_p)
+ValueRelation::ValueRelation(const std::shared_ptr<ClientContext> &context, const string &values_list,
+                             vector<string> names_p, string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(move(names_p)), alias(move(alias_p)) {
-	this->expressions = Parser::ParseValuesList(values_list, context.lock()->GetParserOptions());
-	context.lock()->TryBindRelation(*this, this->columns);
+	this->expressions = Parser::ParseValuesList(values_list, context->GetParserOptions());
+	context->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> ValueRelation::GetQueryNode() {

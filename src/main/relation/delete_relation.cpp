@@ -6,11 +6,11 @@
 
 namespace duckdb {
 
-DeleteRelation::DeleteRelation(const weak_ptr<ClientContext> &context, unique_ptr<ParsedExpression> condition_p,
+DeleteRelation::DeleteRelation(ClientContextWrapper &context, unique_ptr<ParsedExpression> condition_p,
                                string schema_name_p, string table_name_p)
     : Relation(context, RelationType::DELETE_RELATION), condition(move(condition_p)), schema_name(move(schema_name_p)),
       table_name(move(table_name_p)) {
-	context.lock()->TryBindRelation(*this, this->columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 BoundStatement DeleteRelation::Bind(Binder &binder) {

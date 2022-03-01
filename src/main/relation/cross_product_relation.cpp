@@ -8,10 +8,10 @@ namespace duckdb {
 
 CrossProductRelation::CrossProductRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p)
     : Relation(left_p->context, RelationType::CROSS_PRODUCT_RELATION), left(move(left_p)), right(move(right_p)) {
-	if (left->context.lock() != right->context.lock()) {
+	if (left->context.GetContext() != right->context.GetContext()) {
 		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
-	context.lock()->TryBindRelation(*this, this->columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> CrossProductRelation::GetQueryNode() {

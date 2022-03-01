@@ -18,7 +18,7 @@ ProjectionRelation::ProjectionRelation(shared_ptr<Relation> child_p,
 		}
 	}
 	// bind the expressions
-	context.lock()->TryBindRelation(*this, this->columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> ProjectionRelation::GetQueryNode() {

@@ -22,7 +22,6 @@ public:
 
 	shared_ptr<Relation> rel;
 	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_stream_factory;
-	py::object py_conn;
 
 public:
 	static void Initialize(py::handle &m);

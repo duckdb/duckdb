@@ -10,20 +10,20 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> rig
                            unique_ptr<ParsedExpression> condition_p, JoinType type)
     : Relation(left_p->context, RelationType::JOIN_RELATION), left(move(left_p)), right(move(right_p)),
       condition(move(condition_p)), join_type(type) {
-	if (left->context.lock() != right->context.lock()) {
+	if (left->context.GetContext() != right->context.GetContext()) {
 		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
-	context.lock()->TryBindRelation(*this, this->columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p, vector<string> using_columns_p,
                            JoinType type)
     : Relation(left_p->context, RelationType::JOIN_RELATION), left(move(left_p)), right(move(right_p)),
       using_columns(move(using_columns_p)), join_type(type) {
-	if (left->context.lock() != right->context.lock()) {
+	if (left->context.GetContext() != right->context.GetContext()) {
 		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
-	context.lock()->TryBindRelation(*this, this->columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> JoinRelation::GetQueryNode() {

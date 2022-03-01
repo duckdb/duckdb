@@ -25,6 +25,7 @@ namespace duckdb {
 
 class ChunkCollection;
 class ClientContext;
+
 class DatabaseInstance;
 class DuckDB;
 class LogicalOperator;

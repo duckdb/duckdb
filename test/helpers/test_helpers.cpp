@@ -8,6 +8,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include <cmath>
 #include <fstream>
