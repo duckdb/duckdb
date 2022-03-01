@@ -29,6 +29,7 @@ jobs:
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
+      BUILD_ICU: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_PARQUET: 1
