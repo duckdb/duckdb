@@ -116,33 +116,6 @@ public:
 	explicit S3FileSystem(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
 
-	vector<string> Glob(const string &path, ClientContext *context = nullptr) override {
-		auto first_star_pos = path.find('*');
-		string shared_path = path.substr(0, first_star_pos);
-
-		// We currently need a handle to be able to make the request, however, since we have a contect here, we dont
-		// actually need it?
-		auto file_handle = S3FileSystem::OpenFile(shared_path + "bsfile.txt", FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW, FileLockType::NO_LOCK,
-		                                          DEFAULT_COMPRESSION, FileSystem::GetFileOpener(*context));
-
-		string host_out, http_proto_out, path_out, query_param;
-		S3UrlParse((FileHandle&)file_handle, shared_path, host_out, http_proto_out, path_out, query_param);
-
-		unique_ptr<char[]> buffer_out;
-		idx_t buffer_out_len;
-		auto res = GetRequest((FileHandle&)file_handle, http_proto_out + host_out + "/?list-type=2&prefix=" + UrlEncode(path_out), {}, buffer_out, buffer_out_len);
-
-		std::cout << "Response from aws API:" << std::endl;
-		std::cout << string(buffer_out.get(), buffer_out_len) << std::endl;
-
-		// Create file handle
-		// TODO: need to call openfile, how to get opener for settings?
-		// with: FileOpener *FileSystem::GetFileOpener(ClientContext &context);
-		// TODO need client context, how to get?
-
-		return {path}; // FIXME
-	}
-
 	BufferManager &buffer_manager;
 
 	// HTTP Requests
@@ -171,13 +144,15 @@ public:
 
 	void FlushAllBuffers(S3FileHandle &handle);
 
-	static void S3UrlParse(FileHandle &handle, string url, string &host_out, string &http_proto_out, string &path_out,
+	static void S3UrlParse(string url, string endpoint, string &host_out, string &http_proto_out, string &path_out,
 	                       string &query_param);
 	static std::string UrlEncode(const std::string &input, bool encode_slash = false);
 
 	// Uploads the contents of write_buffer to S3.
 	// Note: caller is responsible to not call this method twice on the same buffer
 	static void UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer);
+
+	vector<string> Glob(const string &path, ClientContext *context = nullptr) override;
 
 protected:
 	std::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
