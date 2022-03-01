@@ -33,6 +33,9 @@ jobs:
       - uses: actions/cache@v1
         env:
           cache-name: cache-artifacts
+      - run: |
+            make
+            cd tools/juliapkg
         with:
           path: ~/.julia/artifacts
           key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
@@ -51,6 +54,7 @@ jobs:
         with:
           version: '~1.7.0-0'
       - run: |
+          cd tools/juliapkg
           julia --project=docs -e '
             using Pkg
             Pkg.develop(PackageSpec(path=pwd()))
