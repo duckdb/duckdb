@@ -54,6 +54,8 @@ function _close_stmt(stmt::Stmt)
     end
 end
 
+DBInterface.getconnection(stmt::Stmt) = stmt.con
+
 # function bind! end
 #
 # function bind!(stmt::_Stmt, params::DBInterface.NamedStatementParams)

@@ -1,51 +1,6 @@
-
-#
-# #Macros
-# macro OK(func)
-#     :($(esc(func)) == 0)
-# end
-#
-# macro CHECK(db,ex)
-#     esc(quote
-#         if !(@OK $ex)
-#             #sqliteerror($db)
-#         end
-#         SQLITE_OK
-#     end)
-# end
-#
-#
-# """
-# Internal wrapper that holds the handle to SQLite3 prepared statement.
-# It is managed by [`SQLite.DB`](@ref) and referenced by the "public" [`SQLite.Stmt`](@ref) object.
-#
-# When no `SQLite.Stmt` instances reference the given `SQlite._Stmt` object,
-# it is closed automatically.
-#
-# When `SQLite.DB` is closed or [`SQLite.finalize_statements!`](@ref) is called,
-# all its `SQLite._Stmt` objects are closed.
-# """
-# mutable struct _Stmt
-#     handle::duckdb_prepared_statement
-#     params::Dict{Int, Any}
-#
-#     function _Stmt(handle::duckdb_prepared_statement)
-#         stmt = new(handle, Dict{Int, Any}())
-#         finalizer(_close!, stmt)
-#         return stmt
-#     end
-# end
-#
-# # close statement
-# function _close!(stmt::_Stmt)
-#     stmt.handle == C_NULL || sqlite3_finalize(stmt.handle)
-#     stmt.handle = C_NULL
-#     return
-# end
-#
-# # _Stmt unique identifier in DB
-# const _StmtId = Int
-#
+"""
+Internal DuckDB database handle.
+"""
 mutable struct DuckDBHandle
     file::String
     handle::duckdb_database
@@ -75,6 +30,15 @@ function _close_database(db::DuckDBHandle)
     return
 end
 
+"""
+A connection object to a DuckDB database.
+
+Transaction contexts are local to a single connection.
+
+A connection can only run a single query concurrently.
+It is possible to open multiple connections to a single DuckDB database instance.
+Multiple connections can run multiple queries concurrently.
+"""
 mutable struct Connection
     db::DuckDBHandle
     handle::duckdb_connection
@@ -99,6 +63,14 @@ function _close_connection(con::Connection)
     return
 end
 
+"""
+A DuckDB database object.
+
+By default a DuckDB database object has an open connection object (db.main_connection).
+When the database object is used directly in queries, it is actually the underlying main_connection that is used.
+
+It is possible to open new connections to a single database instance using DBInterface.connect(db).
+"""
 mutable struct DB <: DBInterface.Connection
     handle::DuckDBHandle
     main_connection::Connection
@@ -119,13 +91,10 @@ end
 DB() = DB(":memory:")
 DBInterface.connect() = DB()
 DBInterface.connect(f::AbstractString) = DB(f)
+DBInterface.connect(db::DB) = Connection(db)
 DBInterface.close!(db::DB) = close_database(db)
 Base.close(db::DB) = close_database(db)
 Base.isopen(db::DB) = db.handle != C_NULL
 
-#
-# sqliteerror(db::DB) = sqliteerror(db.handle)
-# sqliteexception(db::DB) = sqliteexception(db.handle)
-#
-# Base.show(io::IO, db::DuckDB.DB) = print(io, string("DuckDB.DB(", "\"$(db.file)\"", ")"))
-#
+Base.show(io::IO, db::DuckDB.DB) = print(io, string("DuckDB.DB(", "\"$(db.handle.file)\"", ")"))
+Base.show(io::IO, con::DuckDB.Connection) = print(io, string("DuckDB.Connection(", "\"$(con.db.file)\"", ")"))

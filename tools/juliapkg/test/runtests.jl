@@ -2,7 +2,7 @@ using DataFrames
 using DuckDB
 using Test
 
-test_files = ["test_connection.jl", "test_basic_queries.jl", "test_prepare.jl"]
+test_files = ["test_connection.jl", "test_basic_queries.jl", "test_prepare.jl", "test_transaction.jl"]
 
 if size(ARGS)[1] > 0
     filtered_test_files = []

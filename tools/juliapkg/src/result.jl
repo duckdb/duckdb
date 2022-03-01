@@ -41,8 +41,6 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     return QueryResult(stmt, params)
 end
 
-DBInterface.getconnection(stmt::Stmt) = stmt.db
-
 # explicitly close prepared statement
 function DBInterface.close!(stmt::Stmt)
     return _close_stmt(stmt)
@@ -103,40 +101,64 @@ end
 #
 # execute(stmt::Stmt; kwargs...) = execute(stmt, values(kwargs))
 #
-function execute(db::DB, sql::AbstractString, params::DBInterface.StatementParams)
-    stmt = Stmt(db, sql)
+function execute(con::Connection, sql::AbstractString, params::DBInterface.StatementParams)
+    stmt = Stmt(con, sql)
     try
-        return stmt.execute(params)
+        return execute(stmt, params)
     finally
         _close_stmt(stmt) # immediately close, don't wait for GC
     end
 end
 
-execute(db::DB, sql::AbstractString; kwargs...) = execute(db, sql, values(kwargs))
+execute(con::Connection, sql::AbstractString; kwargs...) = execute(con, sql, values(kwargs))
+execute(db::DB, sql::AbstractString, params::DBInterface.StatementParams) = execute(db.main_connection, sql, params)
+execute(db::DB, sql::AbstractString; kwargs...) = execute(db.main_connection, sql, values(kwargs))
+
+function DBInterface.transaction(f, con::Connection)
+    begin_transaction(con)
+    try
+        f()
+    catch
+        rollback(con)
+        rethrow()
+    finally
+        commit(con)
+    end
+end
 
 function DBInterface.transaction(f, db::DB)
-    throw("transaction")
+	DBInterface.transaction(f, db.main_connection)
 end
 
 """
-    DuckDB.commit(db)
-    DuckDB.commit(db, name)
+    DuckDB.begin(db)
 
-commit a transaction or named savepoint
+begin a transaction
+"""
+function begin_transaction end
+
+begin_transaction(con::Connection) = execute(con, "BEGIN TRANSACTION;")
+begin_transaction(db::DB) = begin_transaction(db.main_connection)
+
+"""
+    DuckDB.commit(db)
+
+commit a transaction
 """
 function commit end
 
-commit(db::DB) = execute(db, "COMMIT TRANSACTION;")
+commit(con::Connection) = execute(con, "COMMIT TRANSACTION;")
+commit(db::DB) = commit(db.main_connection)
 
 """
     DuckDB.rollback(db)
-    DuckDB.rollback(db, name)
 
-rollback transaction or named savepoint
+rollback transaction
 """
 function rollback end
 
-rollback(db::DB) = execute(db, "ROLLBACK TRANSACTION;")
+rollback(con::Connection) = execute(con, "ROLLBACK TRANSACTION;")
+rollback(db::DB) = rollback(db.main_connection)
 
 struct Row <: Tables.AbstractRow
     q::QueryResult
@@ -211,21 +233,6 @@ function getvalue(q::QueryResult, col::Int, row_number::Int, ::Type{T}) where {T
     return duckdb_internal_value(T, q.handle, col, row_number)
 end
 
-#
-# duckdb_value_boolean
-# duckdb_value_int8
-# duckdb_value_int16
-# duckdb_value_int32
-# duckdb_value_int64
-# duckdb_value_uint8
-# duckdb_value_uint16
-# duckdb_value_uint32
-# duckdb_value_uint64
-# duckdb_value_float
-# duckdb_value_double
-# const FLOAT_TYPES = Union{Float16, Float32, Float64} # exclude BigFloat
-# sqlitevalue(::Type{T}, handle, col) where {T <: FLOAT_TYPES} = convert(T, sqlite3_column_double(handle, col))
-
 Tables.getcolumn(r::Row, ::Type{T}, i::Int, nm::Symbol) where {T} =
     getvalue(getquery(r), i, getfield(r, :row_number), T)
 
@@ -254,14 +261,14 @@ function DBInterface.lastrowid(q::QueryResult)
 end
 
 """
-    DBInterface.prepare(db::SQLite.DB, sql::AbstractString)
+    DBInterface.prepare(db::DuckDB.DB, sql::AbstractString)
 
-Prepare an SQL statement given as a string in the sqlite database; returns an `SQLite.Stmt` compiled object.
+Prepare an SQL statement given as a string in the DuckDB database; returns a `DuckDB.Stmt` object.
 See `DBInterface.execute`(@ref) for information on executing a prepared statement and passing parameters to bind.
-A `SQLite.Stmt` object can be closed (resources freed) using `DBInterface.close!`(@ref).
+A `DuckDB.Stmt` object can be closed (resources freed) using `DBInterface.close!`(@ref).
 """
-DBInterface.prepare(db::DB, sql::AbstractString) = Stmt(db, sql)
 DBInterface.prepare(con::Connection, sql::AbstractString) = Stmt(con, sql)
+DBInterface.prepare(db::DB, sql::AbstractString) = DBInterface.prepare(db.main_connection, sql)
 
 """
     DBInterface.execute(db::SQLite.DB, sql::String, [params])
