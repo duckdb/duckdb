@@ -11,14 +11,14 @@ defaults:
 
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
+    name: Julia ${{ matrix.version }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         version:
           - '1.6'
-          - '~1.7.0-0'
+          - '1.7'
           - 'nightly'
         os:
           - ubuntu-latest
@@ -40,12 +40,11 @@ jobs:
 
       - name: Set Julia DuckDB Library Path
         run: |
-            export JULIA_DUCKDB_LIBRARY="`pwd`/build/release/src/libduckdb.so"
-            ls $JULIA_DUCKDB_LIBRARY
+          export JULIA_DUCKDB_LIBRARY="`pwd`/build/release/src/libduckdb.so"
+          ls $JULIA_DUCKDB_LIBRARY
 
-      - uses: julia-actions/julia-buildpkg@v1
-        with:
-          prefix: tools/juliapkg
-      - uses: julia-actions/julia-runtest@v1
-        with:
-          prefix: tools/juliapkg
+      - name: Run Tests
+        run: |
+          cd tools/juliapkg
+          ./test.sh
+
