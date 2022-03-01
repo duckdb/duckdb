@@ -308,7 +308,8 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 //===--------------------------------------------------------------------===//
 struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompressionState {
 	DictionaryCompressionAnalyzeState()
-	    : segment_count(0), current_tuple_count(0), current_unique_count(0), current_dict_size(0), current_width(0), next_width(0) {
+	    : segment_count(0), current_tuple_count(0), current_unique_count(0), current_dict_size(0), current_width(0),
+	      next_width(0) {
 	}
 
 	size_t segment_count;
@@ -340,7 +341,8 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompre
 
 	bool HasEnoughSpace(bool new_string, size_t string_size) override {
 		if (new_string) {
-			next_width = BitpackingPrimitives::MinimumBitWidth(current_unique_count + 2); // 1 for null, one for new string
+			next_width =
+			    BitpackingPrimitives::MinimumBitWidth(current_unique_count + 2); // 1 for null, one for new string
 			return DictionaryCompressionStorage::HasEnoughSpace(current_tuple_count + 1, current_unique_count + 1,
 			                                                    current_dict_size + string_size, next_width);
 		} else {

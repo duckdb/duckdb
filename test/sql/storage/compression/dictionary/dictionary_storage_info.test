@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/dictionary/bitpacking_storage_info.test
+# name: test/sql/storage/compression/dictionary/dictionary_storage_info.test
 # description: Test storage with Dictionary compression
 # group: [dictionary]
 
