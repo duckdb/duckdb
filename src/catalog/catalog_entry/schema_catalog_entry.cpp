@@ -33,6 +33,7 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 
 #include <algorithm>
 #include <sstream>

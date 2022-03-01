@@ -18,7 +18,7 @@ namespace duckdb {
 MacroFunction::MacroFunction(MacroType type) : type(type) {
 }
 
-string MacroFunction::ValidateArguments( MacroFunction &macro_def , string name, FunctionExpression &function_expr,
+string MacroFunction::ValidateArguments( MacroFunction &macro_def , const string &name, FunctionExpression &function_expr,
                                  vector<unique_ptr<ParsedExpression>> &positionals,
                                  unordered_map<string, unique_ptr<ParsedExpression>> &defaults) {
 
