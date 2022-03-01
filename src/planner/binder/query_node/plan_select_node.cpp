@@ -137,7 +137,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	// create the projection
 	auto proj = make_unique<LogicalProjection>(statement.projection_index, move(statement.select_list));
 	auto &projection = *proj;
-	//	proj->table_index = root.
 	proj->AddChild(move(root));
 	root = move(proj);
 

@@ -46,7 +46,6 @@ protected:
 	}
 
 	void ResolveTypes() override {
-//		types.emplace_back(LogicalType::BIGINT);
 		if (returning_list.empty()) {
 			types.emplace_back(LogicalType::BIGINT);
 		}

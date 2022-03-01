@@ -27,9 +27,7 @@ public:
 	//! Schema name to insert to
 	string schema;
 
-	//! create a returning statement (interpreted as a select statement).
-	unique_ptr<SelectStatement> returning_statement;
-	//! keep track of optional returningList if it's a RETURNING statement
+	//! keep track of optional returningList if statement contains a RETURNING keyword
 	vector<unique_ptr<ParsedExpression>> returning_list;
 
 protected:

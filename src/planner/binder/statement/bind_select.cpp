@@ -10,5 +10,3 @@ BoundStatement Binder::Bind(SelectStatement &stmt) {
 }
 
 } // namespace duckdb
-
-

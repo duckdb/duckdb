@@ -269,7 +269,6 @@ void Executor::Initialize(PhysicalOperator *plan) {
 
 		auto root_pipeline = make_shared<Pipeline>(*this);
 
-//		auto returning_pipeline = make_shared<Pipeline>(*)
 		root_pipeline->sink = nullptr;
 		BuildPipelines(physical_plan, root_pipeline.get());
 

@@ -100,7 +100,6 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 			StartOperator(pipeline.sink);
 			D_ASSERT(pipeline.sink);
 			D_ASSERT(pipeline.sink->sink_state);
-
 			auto sink_result = pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, sink_chunk);
 			EndOperator(pipeline.sink, nullptr);
 			if (sink_result == SinkResultType::FINISHED) {
@@ -235,9 +234,6 @@ void PipelineExecutor::GoToSource(idx_t &current_idx, idx_t initial_idx) {
 	D_ASSERT(current_idx >= initial_idx);
 }
 
-
-// TODO: use this funciton to apply the returning operators on the returning chunk!
-//       returns an operatorresulttype, but also returns the resulting datachunk.
 OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result, idx_t initial_idx) {
 	if (input.size() == 0) { // LCOV_EXCL_START
 		return OperatorResultType::NEED_MORE_INPUT;

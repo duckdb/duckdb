@@ -20,7 +20,6 @@ namespace duckdb {
 Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
 }
 
-
 void Planner::CreatePlan(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
 

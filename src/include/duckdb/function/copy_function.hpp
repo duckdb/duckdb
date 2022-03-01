@@ -20,8 +20,7 @@ struct LocalFunctionData {
 	}
 };
 
-struct
-    GlobalFunctionData {
+struct GlobalFunctionData {
 	virtual ~GlobalFunctionData() {
 	}
 };

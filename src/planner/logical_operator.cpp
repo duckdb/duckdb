@@ -34,7 +34,6 @@ void LogicalOperator::ResolveOperatorTypes() {
 	}
 	// now resolve the types for this operator
 	ResolveTypes();
-
 	D_ASSERT(types.size() == GetColumnBindings().size());
 }
 
