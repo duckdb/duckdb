@@ -1,18 +1,18 @@
-#include "include/icu-datetrunc.hpp"
-#include "include/icu-datefunc.hpp"
-
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/senary_executor.hpp"
 #include "duckdb/common/vector_operations/septenary_executor.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "include/icu-datefunc.hpp"
+#include "include/icu-datetrunc.hpp"
 
 namespace duckdb {
 
 struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	static inline unique_ptr<icu::TimeZone> SetTimeZone(icu::Calendar *calendar, const string_t &tz_id) {
-		auto tz = unique_ptr<icu::TimeZone>(icu_66::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id.GetString()))));
+		auto tz = unique_ptr<icu::TimeZone>(
+		    icu_66::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id.GetString()))));
 		calendar->setTimeZone(*tz);
 		return tz;
 	}
