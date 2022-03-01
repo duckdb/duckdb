@@ -91,8 +91,9 @@ end
 DB() = DB(":memory:")
 DBInterface.connect(::Type{DB}) = DB()
 DBInterface.connect(::Type{DB}, f::AbstractString) = DB(f)
-DBInterface.connect(db::DB) = Connection(db)
+DBInterface.connect(db::DB) = Connection(db.handle)
 DBInterface.close!(db::DB) = close_database(db)
+DBInterface.close!(con::Connection) = _close_connection(con)
 Base.close(db::DB) = close_database(db)
 Base.isopen(db::DB) = db.handle != C_NULL
 

@@ -16,5 +16,6 @@ include("statement.jl")
 include("result.jl")
 include("transaction.jl")
 include("ddl.jl")
+include("old_interface.jl")
 
 end # module

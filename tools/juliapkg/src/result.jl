@@ -167,7 +167,7 @@ DBInterface.prepare(con::Connection, sql::AbstractString) = Stmt(con, sql)
 DBInterface.prepare(db::DB, sql::AbstractString) = DBInterface.prepare(db.main_connection, sql)
 
 """
-    DBInterface.execute(db::SQLite.DB, sql::String, [params])
+    DBInterface.execute(db::DuckDB.DB, sql::String, [params])
     DBInterface.execute(stmt::SQLite.Stmt, [params])
 
 Bind any positional (`params` as `Vector` or `Tuple`) or named (`params` as `NamedTuple` or `Dict`) parameters to an SQL statement, given by `db` and `sql` or
@@ -181,4 +181,8 @@ like `DataFrame(results)`, `CSV.write("results.csv", results)`, etc.
 """
 function DBInterface.execute(stmt::Stmt, params::DBInterface.StatementParams)
     return execute(stmt, params)
+end
+
+function DBInterface.execute(con::Connection, sql::AbstractString)
+    return execute(Stmt(con, sql))
 end
