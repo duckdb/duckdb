@@ -24,9 +24,11 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 
 	// function can be null here
 	if (stmt->function) {
-		macro_func = make_unique<ScalarMacroFunction>(move(TransformExpression(stmt->function)));
+		auto expression=TransformExpression(stmt->function);
+		macro_func = make_unique<ScalarMacroFunction>(move(expression));
 	} else if (stmt->query) {
-		macro_func = make_unique<TableMacroFunction>(move(TransformSelect(stmt->query, true)->node));
+		auto query_node=TransformSelect(stmt->query, true)->node->Copy();
+		macro_func = make_unique<TableMacroFunction>(move(query_node));
 	}
 
 	auto info =
