@@ -100,6 +100,7 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 			StartOperator(pipeline.sink);
 			D_ASSERT(pipeline.sink);
 			D_ASSERT(pipeline.sink->sink_state);
+
 			auto sink_result = pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, sink_chunk);
 			EndOperator(pipeline.sink, nullptr);
 			if (sink_result == SinkResultType::FINISHED) {

@@ -17,6 +17,7 @@ void LogicalOperatorVisitor::VisitOperatorChildren(LogicalOperator &op) {
 	}
 }
 
+
 void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
                                                   const std::function<void(unique_ptr<Expression> *child)> &callback) {
 	switch (op.type) {
@@ -97,6 +98,13 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_INSERT: {
+		auto &insert = (LogicalInsert &)op;
+		for (auto &expr : insert.returning_list) {
+			callback(&expr);
+		}
+		break;
+	}
 	default:
 		break;
 	}
@@ -107,6 +115,12 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 
 void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *child) { VisitExpression(child); });
+}
+
+void LogicalOperatorVisitor::VisitReturningListExpression(LogicalInsert &op) {
+	for (auto &child : op.returning_list) {
+		VisitExpression(&child);
+	}
 }
 
 void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression) {

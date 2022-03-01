@@ -9,6 +9,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression_binder/update_binder.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
 
@@ -122,14 +123,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		}
 	}
 
-	// insert from select statement
 	// parse select statement and add to logical plan
 	auto root_select = Bind(*stmt.select_statement);
-
-	// bind the returning select on the same statement
-	auto returning_select = Bind(*stmt.returning_statement);
-
-
 	// ------------------------------------------------------------------------------------------------------------
 	// This is to bind the returning list
 	// visit the retuning list and expand any "*" statements
@@ -145,6 +140,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		}
 	}
 	stmt.returning_list = move(new_returning_list);
+
 
 	// create a mapping of (alias -> index) and a mapping of (Expression -> index) for the RETURNING list
 	case_insensitive_map_t<idx_t> alias_map;
@@ -166,38 +162,22 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// after that, bind the returning statement to the context of the INSERT statement
 	BoundGroupInformation info;
 	SelectBinder select_binder(*this, context, *returning_result, info);
-	vector<LogicalType> internal_sql_types;
 	for (idx_t i = 0; i < stmt.returning_list.size(); i++) {
 		LogicalType result_type;
-		auto expr = select_binder.Bind(stmt.returning_list[i], &result_type);
-		// TODO: Is there aggregation for these statements? I don't think so
-//		if (stmt.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && select_binder.HasBoundColumns()) {
-//			if (select_binder.BoundAggregates()) {
-//				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
-//			}
-//			// we are forcing aggregates, and the node has columns bound
-//			// this entry becomes a group
-//			auto group_ref = make_unique<BoundColumnRefExpression>(
-//			    expr->return_type, ColumnBinding(result->group_index, result->groups.group_expressions.size()));
-//			result->groups.group_expressions.push_back(move(expr));
-//			expr = move(group_ref);
-//		}
+		unique_ptr<Expression> expr = select_binder.Bind(stmt.returning_list[i], &result_type);
+
+		// TODO: FIX THIS!!!!
+		if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+			// https://stackoverflow.com/questions/36120424/alternatives-of-static-pointer-cast-for-unique-ptr
+			BoundColumnRefExpression& expr2 = *(static_cast<BoundColumnRefExpression*>(expr.get()));
+			expr2.binding.table_index = 0;
+		}
+
 		returning_result->select_list.push_back(move(expr));
 		if (i < result.names.size()) {
 			result.types.push_back(result_type);
 		}
-		internal_sql_types.push_back(result_type);
-		// TODO: Is there aggregation for these statements?
-//		if (stmt.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
-//			select_binder.ResetBindings();
-//		}
 	}
-	returning_result->need_prune = returning_result->select_list.size() > returning_result->column_count;
-
-	// curious to know if the Table Function and the bind data can be null in this case.
-	auto scan_function = TableScanFunction::GetFunction();
-	auto bind_data = make_unique<TableScanBindData>(table);
-    auto returning_get = make_unique<LogicalGet>(table->oid, scan_function, move(bind_data), result.types, result.names);
 
 	// ------------------------------------------------------------------------------------------------------------
 	// TODO: bind the returning values similar to how select values are bound in Bind selectStatement.
@@ -209,14 +189,12 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	                               table->name.c_str());
 
 	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, move(root_select.plan));
-	auto returning_root = CastLogicalOperatorToTypes(returning_select.types, insert->expected_types, move(returning_select.plan));
 	// TODO: what is this root pointer? how should I use my bound returning list to make sure it's properly updated?
 	// TODO: the root variable is a logical plan. So eventually it should ideally contain the return info in some way so
 	// TODO: that it the return plan can be executed properly. Why do we need the plan? Because the returning statement
 	// TODO: may also need special executing functions.
 
 	insert->AddChild(move(root));
-	returning_get->AddChild(move(returning_root));
 
 	for (auto i = returning_result->select_list.begin(); i != returning_result->select_list.end(); i++) {
 		insert->returning_list.push_back(move(*i));
@@ -233,7 +211,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	result.plan = move(insert);
-	result.returning_plan = move(returning_get);
 
 	return result;
 }

@@ -17,12 +17,14 @@ public:
 	InsertGlobalState(const vector<LogicalType> &types, const vector<unique_ptr<Expression>> &bound_defaults)
 		: default_executor(bound_defaults) {
 		insert_count = 0;
-		returning_chunk.Initialize(types);
+		returning_chunk = ChunkCollection();
+		returning_types = types;
 	}
 
 	mutex lock;
 	idx_t insert_count;
-	DataChunk returning_chunk;
+	ChunkCollection returning_chunk;
+	vector<LogicalType> returning_types;
 	ExpressionExecutor default_executor;
 };
 
@@ -76,12 +78,26 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 		for (idx_t i = 0; i < istate.insert_chunk.ColumnCount(); i++) {
 			D_ASSERT(istate.insert_chunk.data[i].GetType() == chunk.data[i].GetType());
 			istate.insert_chunk.data[i].Reference(chunk.data[i]);
-			gstate.returning_chunk.data[i].Reference(chunk.data[i]);
 		}
 	}
 
+	DataChunk returning_chunk;
+	if (!returning_values.empty()) {
+		auto return_executor = ExpressionExecutor(returning_values);
+		returning_chunk.Initialize(gstate.returning_types);
+		return_executor.Execute(istate.insert_chunk, returning_chunk);
+	}
+
+	// ExpressionExecutor -> execute expressions, store them in a data chunk
+	// ChunkCollection -> collection of data chunks, store the result and scan the result again
+
 	lock_guard<mutex> glock(gstate.lock);
 	table->storage->Append(*table, context.client, istate.insert_chunk);
+
+	if (!returning_values.empty()) {
+		gstate.returning_chunk.Append(returning_chunk);
+	}
+
 	// TODO: insert the data into a returning chunk, or somehow evaluate it given the data.
 	// How do you set up the returning chunk?
 	// But also, how do you end up applying the plan on that data?
@@ -137,11 +153,9 @@ void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		return;
 	}
 	// TODO: Here you can push the data back out.
-	chunk.SetCardinality(chunk.size());
-//	chunk.SetCardinality(1);
-//	for (idx_t i = 0; i < g.returning_chunk.ColumnCount(); i++) {
-//		g.returning_chunk.Copy(chunk, 0);
-//	}
+	(g.returning_chunk.Chunks().at(0))->Copy(chunk);
+
+	chunk.SetCardinality(g.returning_chunk.Chunks().at(0)->size());
 //	chunk.SetValue(0, 0, Value::BIGINT(g.insert_count));
 	state.finished = true;
 }

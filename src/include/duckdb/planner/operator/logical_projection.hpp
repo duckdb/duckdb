@@ -22,6 +22,8 @@ public:
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
 
+	void set_table_index(idx_t set_index);
+
 protected:
 	void ResolveTypes() override;
 };

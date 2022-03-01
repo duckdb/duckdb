@@ -259,10 +259,8 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	profiler.EndPhase();
 
 	auto plan = move(planner.plan);
-	auto returning_plan = move(planner.returning_plan);
 #ifdef DEBUG
 	plan->Verify();
-	returning_plan->Verify();
 #endif
 	// extract the result column names from the plan
 	result->read_only = planner.read_only;

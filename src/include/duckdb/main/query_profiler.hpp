@@ -115,10 +115,11 @@ private:
 	bool enabled;
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;
-	//! The stack of Physical Operators that are currently active
-	const PhysicalOperator *active_operator;
 	//! A mapping of physical operators to recorded timings
 	unordered_map<const PhysicalOperator *, OperatorInformation> timings;
+
+	//! The stack of Physical Operators that are currently active
+	const PhysicalOperator *active_operator;
 };
 
 //! The QueryProfiler can be used to measure timings of queries

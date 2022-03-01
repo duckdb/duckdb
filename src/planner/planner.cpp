@@ -38,9 +38,6 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	this->names = bound_statement.names;
 	this->types = bound_statement.types;
 	this->plan = move(bound_statement.plan);
-	if (this->returning_plan) {
-		this->returning_plan = move(bound_statement.returning_plan);
-	}
 
 	// set up a map of parameter number -> value entries
 	for (auto &expr : bound_parameters) {

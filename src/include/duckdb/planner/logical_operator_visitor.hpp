@@ -35,9 +35,12 @@ protected:
 	//! change this behavior.
 	void VisitOperatorExpressions(LogicalOperator &op);
 
+	void VisitReturningListExpression(LogicalInsert &op);
+
 	// The VisitExpressionChildren method is called at the end of every call to VisitExpression to recursively visit all
 	// expressions in an expression tree. It can be overloaded to prevent automatically visiting the entire tree.
 	virtual void VisitExpressionChildren(Expression &expression);
+
 
 	virtual unique_ptr<Expression> VisitReplace(BoundAggregateExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(BoundBetweenExpression &expr, unique_ptr<Expression> *expr_ptr);
