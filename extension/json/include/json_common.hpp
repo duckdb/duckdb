@@ -229,16 +229,10 @@ public:
 	static void UnaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
 	                         std::function<T(yyjson_val *, Vector &)> fun) {
 		auto &inputs = args.data[0];
-		UnaryExecutor::ExecuteWithNulls<string_t, T>(inputs, result, args.size(),
-		                                             [&](string_t input, ValidityMask &mask, idx_t idx) {
-			                                             auto doc = JSONCommon::ReadDocument(input);
-			                                             if (doc.IsNull()) {
-				                                             mask.SetInvalid(idx);
-				                                             return T {};
-			                                             } else {
-				                                             return fun(doc->root, result);
-			                                             }
-		                                             });
+		UnaryExecutor::Execute<string_t, T>(inputs, result, args.size(), [&](string_t input) {
+			auto doc = JSONCommon::ReadDocument(input);
+			return fun(doc->root, result);
+		});
 	}
 
 	//! Two-argument JSON read function (with path query), i.e. json_type('[1, 2, 3]', '$[0]')
@@ -257,7 +251,7 @@ public:
 			    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
 				    auto doc = ReadDocument(input);
 				    yyjson_val *val;
-				    if (doc.IsNull() || !(val = GetPointerUnsafe<yyjson_val>(doc->root, ptr, len))) {
+				    if (!(val = GetPointerUnsafe<yyjson_val>(doc->root, ptr, len))) {
 					    mask.SetInvalid(idx);
 					    return T {};
 				    } else {
@@ -271,7 +265,7 @@ public:
 			    inputs, paths, result, args.size(), [&](string_t input, string_t path, ValidityMask &mask, idx_t idx) {
 				    auto doc = ReadDocument(input);
 				    yyjson_val *val;
-				    if (doc.IsNull() || !(val = GetPointer<yyjson_val>(doc->root, path))) {
+				    if (!(val = GetPointer<yyjson_val>(doc->root, path))) {
 					    mask.SetInvalid(idx);
 					    return T {};
 				    } else {
@@ -318,8 +312,7 @@ public:
 			auto doc = ReadDocument(inputs[idx]);
 			for (idx_t path_i = 0; path_i < num_paths; path_i++) {
 				auto child_idx = offset + path_i;
-				if (doc.IsNull() ||
-				    !(val = GetPointerUnsafe<yyjson_val>(doc->root, info.ptrs[path_i], info.lens[path_i]))) {
+				if (!(val = GetPointerUnsafe<yyjson_val>(doc->root, info.ptrs[path_i], info.lens[path_i]))) {
 					child_validity.SetInvalid(child_idx);
 				} else {
 					child_data[child_idx] = fun(val, child);
