@@ -324,10 +324,6 @@ public:
 			offset += num_paths;
 		}
 		ListVector::SetListSize(result, offset);
-
-		if (input_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
 	}
 
 private:
