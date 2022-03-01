@@ -1,0 +1,42 @@
+# name: test/sql/join/inner/test_tpch_q09_opt.test
+# description: Profile TPCH q09 with optimizer desabled.
+# group: [inner]
+
+# TPC-H
+require tpch
+
+statement ok
+CALL dbgen(sf=10)
+
+statement ok
+PRAGMA disable_optimizer
+
+statement ok
+PRAGMA enable_profiling
+
+query III
+SELECT
+    nation,
+    o_year,
+    sum(amount) AS sum_profit
+FROM (
+        SELECT
+            n_name AS nation,
+            extract(year FROM o_orderdate) AS o_year,
+            l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity AS amount
+        FROM
+            lineitem 
+            JOIN (SELECT p_partkey FROM part WHERE p_name LIKE '%green%') as temp ON p_partkey = l_partkey 
+            JOIN partsupp ON ps_partkey = l_partkey AND ps_suppkey = l_suppkey
+            JOIN orders ON o_orderkey = l_orderkey
+            JOIN supplier ON s_suppkey = l_suppkey
+            JOIN nation ON s_nationkey = n_nationkey
+ ) as profit
+GROUP BY
+    nation,
+    o_year
+ORDER BY
+    nation,
+    o_year DESC;
+----
+525 values hashing to b6eb36f42bf3c928bb53c81116a6379a
