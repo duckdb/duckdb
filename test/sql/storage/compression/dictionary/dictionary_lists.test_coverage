@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/dictionary/dictionary_lists.test_coverage
-# description: Test storage with Bitpacking inside lists
+# description: Test storage with dictionary compression  inside lists
 # group: [dictionary]
 
 # load the DB from disk

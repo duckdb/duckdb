@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/dictionary/dictionary_struct.test
-# description: Test storage with Bitpacking inside structs
+# description: Test storage with dictionary compression inside structs
 # group: [dictionary]
 
 # load the DB from disk

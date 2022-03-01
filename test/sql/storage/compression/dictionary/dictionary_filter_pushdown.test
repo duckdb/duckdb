@@ -3,7 +3,7 @@
 # group: [dictionary]
 
 # load the DB from disk
-load __TEST_DIR__/test_bitpacking.db
+load __TEST_DIR__/test_dictionary.db
 
 statement ok
 PRAGMA force_compression = 'dictionary'
@@ -17,13 +17,13 @@ INSERT INTO test SELECT i::VARCHAR id, concat('BLEEPBLOOP-', (i%10)::VARCHAR) co
 statement ok
 CHECKPOINT
 
-# filter on the bitpacking column
+# filter on the dictionary column
 query III
 SELECT MIN(col), MAX(col), COUNT(*) FROM test WHERE col >= 'BLEEPBLOOP-5'
 ----
 BLEEPBLOOP-5	BLEEPBLOOP-9	5000
 
-# filter on non-bitpacking column
+# filter on non-dictionary column
 query IIIII
 SELECT MIN(id), MAX(id), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000'
 ----
