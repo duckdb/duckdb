@@ -174,7 +174,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	// check for possible perfect hash table
 	if (sink.perfect_join_executor) {
 		auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin();
-		if (sink.perfect_join_executor->CanDoPerfectHashJoin()) {
+		if (use_perfect_hash) {
 			D_ASSERT(sink.hash_table->equality_types.size() == 1);
 			auto key_type = sink.hash_table->equality_types[0];
 			use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable(key_type);
