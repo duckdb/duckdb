@@ -5,6 +5,7 @@ echo -e "[DuckDB]\nDriver = DuckDB Driver\nDatabase=:memory:\n" > ~/.odbc.ini
 
 export PSQLODBC_TEST_DSN="DuckDB"
 
+TRACE_FILE=/tmp/odbctrace
 BASE_DUCKDB_DIR=$(pwd)
 cd psqlodbc
 export PSQLODBC_DIR=$(pwd)
@@ -14,13 +15,17 @@ rm -f contrib_regression
 rm -f contrib_regression.wal
 ./build/debug/reset-db < sampletables.sql
 if [[ $? != 0 ]]; then
-    cat /tmp/odbctrace
+    cat $TRACE_FILE
     exit 1
 fi
 
 # running supported tests
-./build/debug/psql_odbc_test -f ${BASE_DUCKDB_DIR}/tools/odbc/test/psql_supported_tests
-if [[ $? != 0 ]]; then
-    cat /tmp/odbctrace
-    exit 1
-fi
+while read test_file
+do
+    ./build/debug/psql_odbc_test $test_file
+    if [[ $? != 0 ]]; then
+        cat $TRACE_FILE
+    fi
+    rm $TRACE_FILE
+done < ${BASE_DUCKDB_DIR}/tools/odbc/test/psql_supported_tests
+
