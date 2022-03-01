@@ -102,5 +102,4 @@ unique_ptr<CreateMacroInfo> TableMacroCatalogEntry::Deserialize(Deserializer &ma
 	return info;
 }
 
-
 } // namespace duckdb
