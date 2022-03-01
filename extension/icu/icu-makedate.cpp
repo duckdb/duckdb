@@ -11,9 +11,10 @@
 namespace duckdb {
 
 struct ICUMakeTimestampTZFunc : public ICUDateFunc {
-	static inline void SetTimeZone(icu::Calendar *calendar, const string_t &tz_id) {
-		auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id.GetString())));
+	static inline unique_ptr<icu::TimeZone> SetTimeZone(icu::Calendar *calendar, const string_t &tz_id) {
+		auto tz = unique_ptr<icu::TimeZone>(icu_66::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id.GetString()))));
 		calendar->setTimeZone(*tz);
+		return tz;
 	}
 
 	template <typename T>
@@ -58,7 +59,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 					result.SetVectorType(VectorType::CONSTANT_VECTOR);
 					ConstantVector::SetNull(result, true);
 				} else {
-					SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
+					auto tz = SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
 					SenaryExecutor::Execute<T, T, T, T, T, double, timestamp_t>(
 					    input, result, [&](T yyyy, T mm, T dd, T hr, T mn, double ss) {
 						    return Operation<T>(calendar, yyyy, mm, dd, hr, mn, ss);

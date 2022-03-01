@@ -24,8 +24,8 @@ void JSONExtension::Load(DuckDB &db) {
 	}
 
 	for (idx_t index = 0; json_macros[index].name != nullptr; index++) {
-		auto macro_info = DefaultFunctionGenerator::CreateInternalMacroInfo(json_macros[index]);
-		catalog.CreateFunction(*con.context, (CreateFunctionInfo *)macro_info.get());
+		auto info = DefaultFunctionGenerator::CreateInternalMacroInfo(json_macros[index]);
+		catalog.CreateFunction(*con.context, info.get());
 	}
 
 	con.Commit();
