@@ -335,14 +335,18 @@ parse_bracket : {
 }
 }
 
+static char GetEscapeChar(string_t escape) {
+	// Only one escape character should be allowed
+	if (escape.GetSize() > 1) {
+		throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
+	}
+	return escape.GetSize() == 0 ? '\0' : *escape.GetDataUnsafe();
+}
+
 struct LikeEscapeOperator {
 	template <class TA, class TB, class TC>
 	static inline bool Operation(TA str, TB pattern, TC escape) {
-		// Only one escape character should be allowed
-		if (escape.GetSize() > 1) {
-			throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
-		}
-		char escape_char = escape.GetSize() == 0 ? '\0' : *escape.GetDataUnsafe();
+		char escape_char = GetEscapeChar(escape);
 		return LikeOperatorFunction(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize(),
 		                            escape_char);
 	}
@@ -362,24 +366,44 @@ struct LikeOperator {
 	}
 };
 
+bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\0') {
+	auto str_data = str.GetDataUnsafe();
+	auto str_size = str.GetSize();
+	auto pat_data = pattern.GetDataUnsafe();
+	auto pat_size = pattern.GetSize();
+
+	// lowercase both the str and the pattern
+	idx_t str_llength = LowerFun::LowerLength(str_data, str_size);
+	auto str_ldata = unique_ptr<char[]>(new char[str_llength]);
+	LowerFun::LowerCase(str_data, str_size, str_ldata.get());
+
+	idx_t pat_llength = LowerFun::LowerLength(pat_data, pat_size);
+	auto pat_ldata = unique_ptr<char[]>(new char[pat_llength]);
+	LowerFun::LowerCase(pat_data, pat_size, pat_ldata.get());
+	string_t str_lcase(str_ldata.get(), str_llength);
+	string_t pat_lcase(pat_ldata.get(), pat_llength);
+	return LikeOperatorFunction(str_lcase, pat_lcase, escape);
+}
+
+struct ILikeEscapeOperator {
+	template <class TA, class TB, class TC>
+	static inline bool Operation(TA str, TB pattern, TC escape) {
+		char escape_char = GetEscapeChar(escape);
+		return ILikeOperatorFunction(str, pattern, escape_char);
+	}
+};
+
+struct NotILikeEscapeOperator {
+	template <class TA, class TB, class TC>
+	static inline bool Operation(TA str, TB pattern, TC escape) {
+		return !ILikeEscapeOperator::Operation(str, pattern, escape);
+	}
+};
+
 struct ILikeOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA str, TB pattern) {
-		auto str_data = str.GetDataUnsafe();
-		auto str_size = str.GetSize();
-		auto pat_data = pattern.GetDataUnsafe();
-		auto pat_size = pattern.GetSize();
-		// lowercase both the str and the pattern
-		idx_t str_llength = LowerFun::LowerLength(str_data, str_size);
-		auto str_ldata = unique_ptr<char[]>(new char[str_llength]);
-		LowerFun::LowerCase(str_data, str_size, str_ldata.get());
-
-		idx_t pat_llength = LowerFun::LowerLength(pat_data, pat_size);
-		auto pat_ldata = unique_ptr<char[]>(new char[pat_llength]);
-		LowerFun::LowerCase(pat_data, pat_size, pat_ldata.get());
-		string_t str_lcase(str_ldata.get(), str_llength);
-		string_t pat_lcase(pat_ldata.get(), pat_llength);
-		return LikeOperatorFunction(str_lcase, pat_lcase);
+		return ILikeOperatorFunction(str, pattern);
 	}
 };
 
@@ -487,5 +511,11 @@ void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"not_like_escape"},
 	                ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                               LogicalType::BOOLEAN, LikeEscapeFunction<NotLikeEscapeOperator>));
+
+	set.AddFunction({"ilike_escape"}, ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                                                 LogicalType::BOOLEAN, LikeEscapeFunction<ILikeEscapeOperator>));
+	set.AddFunction({"not_ilike_escape"},
+	                ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                               LogicalType::BOOLEAN, LikeEscapeFunction<NotILikeEscapeOperator>));
 }
 } // namespace duckdb

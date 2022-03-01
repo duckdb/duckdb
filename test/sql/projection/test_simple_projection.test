@@ -11,6 +11,10 @@ CREATE TABLE a (i integer, j integer);
 
 # scan empty table
 query II
+SELECT i, j FROM a;
+----
+
+query II
 SELECT * FROM a;
 ----
 

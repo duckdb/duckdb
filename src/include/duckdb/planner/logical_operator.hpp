@@ -57,7 +57,7 @@ public:
 	virtual string GetName() const;
 	virtual string ParamsToString() const;
 	virtual string ToString() const;
-	void Print();
+	DUCKDB_API void Print();
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
 	virtual void Verify();
 

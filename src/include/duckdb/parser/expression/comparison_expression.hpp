@@ -15,7 +15,8 @@ namespace duckdb {
 //! and has two children.
 class ComparisonExpression : public ParsedExpression {
 public:
-	ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right);
+	DUCKDB_API ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
+	                                unique_ptr<ParsedExpression> right);
 
 	unique_ptr<ParsedExpression> left;
 	unique_ptr<ParsedExpression> right;
@@ -27,7 +28,13 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	void Serialize(Serializer &serializer) override;
-	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
+
+public:
+	template <class T, class BASE>
+	static string ToString(const T &entry) {
+		return entry.left->ToString() + " " + ExpressionTypeToOperator(entry.type) + " " + entry.right->ToString();
+	}
 };
 } // namespace duckdb

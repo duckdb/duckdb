@@ -11,7 +11,7 @@ include_directories(../../third_party/utf8proc/include)
 
 add_library(sqlite3_api_wrapper_static STATIC sqlite3_api_wrapper.cpp
                                               ${ALL_OBJECT_FILES})
-target_link_libraries(sqlite3_api_wrapper_static duckdb_static utf8proc)
+target_link_libraries(sqlite3_api_wrapper_static duckdb_static duckdb_utf8proc)
 link_threads(sqlite3_api_wrapper_static)
 
 if(NOT WIN32)

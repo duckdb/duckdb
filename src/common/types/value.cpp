@@ -10,7 +10,7 @@
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -1344,6 +1344,56 @@ string Value::ToString() const {
 	}
 }
 
+string Value::ToSQLString() const {
+	if (IsNull()) {
+		return ToString();
+	}
+	switch (type_.id()) {
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::BLOB:
+		return "'" + ToString() + "'::" + type_.ToString();
+	case LogicalTypeId::VARCHAR:
+		return "'" + ToString() + "'";
+	case LogicalTypeId::STRUCT: {
+		string ret = "{";
+		auto &child_types = StructType::GetChildTypes(type_);
+		for (size_t i = 0; i < struct_value.size(); i++) {
+			auto &name = child_types[i].first;
+			auto &child = struct_value[i];
+			ret += "'" + name + "': " + child.ToSQLString();
+			if (i < struct_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "}";
+		return ret;
+	}
+	case LogicalTypeId::LIST: {
+		string ret = "[";
+		for (size_t i = 0; i < list_value.size(); i++) {
+			auto &child = list_value[i];
+			ret += child.ToSQLString();
+			if (i < list_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "]";
+		return ret;
+	}
+	default:
+		return ToString();
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Type-specific getters
 //===--------------------------------------------------------------------===//
@@ -1540,10 +1590,12 @@ bool Value::TryCastAs(const LogicalType &target_type, bool strict) {
 	return true;
 }
 
-void Value::Serialize(Serializer &serializer) {
-	type_.Serialize(serializer);
-	serializer.Write<bool>(IsNull());
+void Value::Serialize(Serializer &main_serializer) const {
+	FieldWriter writer(main_serializer);
+	writer.WriteSerializable(type_);
+	writer.WriteField<bool>(IsNull());
 	if (!IsNull()) {
+		auto &serializer = writer.GetSerializer();
 		switch (type_.InternalType()) {
 		case PhysicalType::BOOL:
 			serializer.Write<int8_t>(value_.boolean);
@@ -1594,16 +1646,19 @@ void Value::Serialize(Serializer &serializer) {
 		}
 		}
 	}
+	writer.Finalize();
 }
 
-Value Value::Deserialize(Deserializer &source) {
-	auto type = LogicalType::Deserialize(source);
-	auto is_null = source.Read<bool>();
+Value Value::Deserialize(Deserializer &main_source) {
+	FieldReader reader(main_source);
+	auto type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto is_null = reader.ReadRequired<bool>();
 	Value new_value = Value(type);
 	if (is_null) {
 		return new_value;
 	}
 	new_value.is_null = false;
+	auto &source = reader.GetSource();
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 		new_value.value_.boolean = source.Read<int8_t>();
@@ -1650,9 +1705,11 @@ Value Value::Deserialize(Deserializer &source) {
 	default: {
 		Vector v(type);
 		v.Deserialize(1, source);
-		return v.GetValue(0);
+		new_value = v.GetValue(0);
+		break;
 	}
 	}
+	reader.Finalize();
 	return new_value;
 }
 

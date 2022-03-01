@@ -25,6 +25,21 @@ static void ExecuteMakeDate(DataChunk &input, ExpressionState &state, Vector &re
 	                                          MakeDateOperator::Operation<T, T, T, date_t>);
 }
 
+template <typename T>
+static void ExecuteStructMakeDate(DataChunk &input, ExpressionState &state, Vector &result) {
+	// this should be guaranteed by the binder
+	D_ASSERT(input.ColumnCount() == 1);
+	auto &vec = input.data[0];
+
+	auto &children = StructVector::GetEntries(vec);
+	D_ASSERT(children.size() == 3);
+	auto &yyyy = *children[0];
+	auto &mm = *children[1];
+	auto &dd = *children[2];
+
+	TernaryExecutor::Execute<T, T, T, date_t>(yyyy, mm, dd, result, input.size(), Date::FromDate);
+}
+
 struct MakeTimeOperator {
 	template <typename HH, typename MM, typename SS, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(HH hh, MM mm, SS ss) {
@@ -66,6 +81,11 @@ void MakeDateFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet make_date("make_date");
 	make_date.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                     LogicalType::DATE, ExecuteMakeDate<int64_t>));
+
+	child_list_t<LogicalType> make_date_children {
+	    {"year", LogicalType::BIGINT}, {"month", LogicalType::BIGINT}, {"day", LogicalType::BIGINT}};
+	make_date.AddFunction(
+	    ScalarFunction({LogicalType::STRUCT(make_date_children)}, LogicalType::DATE, ExecuteStructMakeDate<int64_t>));
 	set.AddFunction(make_date);
 
 	ScalarFunctionSet make_time("make_time");

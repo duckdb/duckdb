@@ -58,8 +58,9 @@ public:
 	void PrepareMergePhase();
 	//! Initializes the global sort state for another round of merging
 	void InitializeMergeRound();
-	//! Completes the cascaded merge sort round
-	void CompleteMergeRound();
+	//! Completes the cascaded merge sort round.
+	//! Pass true if you wish to use the radix data for further comparisons.
+	void CompleteMergeRound(bool keep_radix_data = false);
 
 public:
 	//! The lock for updating the order global state

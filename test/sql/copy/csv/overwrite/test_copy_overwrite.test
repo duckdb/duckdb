@@ -1,0 +1,72 @@
+# name: test/sql/copy/csv/overwrite/test_copy_overwrite.test
+# description: Test copy statement with file overwrite
+# group: [overwrite]
+
+# create a table and insert some values
+statement ok
+CREATE TABLE test (a INTEGER, b VARCHAR(10));
+
+statement ok
+INSERT INTO test VALUES (1, 'hello'), (2, 'world '), (3, ' xx');
+
+query IT
+SELECT * FROM test ORDER BY 1;
+----
+1	hello
+2	world 
+3	 xx
+
+# copy to the CSV file
+query I
+COPY test TO '__TEST_DIR__/overwrite.csv';
+----
+3
+
+# now copy to the file again
+query I
+COPY (SELECT * FROM test LIMIT 2) TO '__TEST_DIR__/overwrite.csv';
+----
+2
+
+# reload the data from the file: it should only have two rows
+statement ok
+DELETE FROM test;
+
+query I
+COPY test FROM '__TEST_DIR__/overwrite.csv';
+----
+2
+
+query IT
+SELECT * FROM test ORDER BY 1;
+----
+1	hello
+2	world 
+
+# test query returning error does not export to file
+statement error
+COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv';
+
+statement ok
+DELETE FROM test;
+
+query I
+COPY test FROM '__TEST_DIR__/overwrite.csv';
+----
+2
+
+# this test should still pass as data was not overwritten
+query IT
+SELECT * FROM test ORDER BY 1;
+----
+1	hello
+2	world 
+
+# Test USE_TMP_FILE flag
+statement error
+COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv' (USE_TMP_FILE FALSE);
+
+query I
+SELECT * FROM '__TEST_DIR__/overwrite.csv';
+----
+0

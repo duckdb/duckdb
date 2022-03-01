@@ -1,6 +1,5 @@
 #include "duckdb/parser/expression/lambda_expression.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
@@ -49,24 +48,14 @@ unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
 	return make_unique<LambdaExpression>(parameters, expression->Copy());
 }
 
-void LambdaExpression::Serialize(Serializer &serializer) {
-	ParsedExpression::Serialize(serializer);
-	serializer.Write<uint32_t>(parameters.size());
-	for (auto &parameter : parameters) {
-		serializer.WriteString(parameter);
-	}
-	expression->Serialize(serializer);
+void LambdaExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteList<string>(parameters);
+	writer.WriteSerializable(*expression);
 }
 
-unique_ptr<ParsedExpression> LambdaExpression::Deserialize(ExpressionType type, Deserializer &source) {
-	auto parameter_count = source.Read<uint32_t>();
-	vector<string> parameters;
-	parameters.reserve(parameter_count);
-	for (size_t i = 0; i < parameter_count; i++) {
-		parameters.push_back(source.Read<string>());
-	}
-	auto expression = ParsedExpression::Deserialize(source);
-
+unique_ptr<ParsedExpression> LambdaExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	auto parameters = reader.ReadRequiredList<string>();
+	auto expression = reader.ReadRequiredSerializable<ParsedExpression>();
 	return make_unique<LambdaExpression>(move(parameters), move(expression));
 }
 

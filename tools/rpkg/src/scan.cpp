@@ -50,7 +50,7 @@ struct DataFrameScanState : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
-                                                    unordered_map<string, Value> &named_parameters,
+                                                    named_parameter_map_t &named_parameters,
                                                     vector<LogicalType> &input_table_types,
                                                     vector<string> &input_table_names,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
@@ -111,7 +111,7 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 			duckdb_col_type = LogicalType::DATE;
 			break;
 		default:
-			Rf_error("Unsupported column type for scan");
+			cpp11::stop("rapi_execute: Unsupported column type for scan");
 		}
 		return_types.push_back(duckdb_col_type);
 	}
@@ -177,8 +177,8 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 				break;
 
 			default:
-				Rf_error("duckdb_execute_R: Unknown enum type for scan: %s",
-				         TypeIdToString(v.GetType().InternalType()).c_str());
+				cpp11::stop("rapi_execute: Unknown enum type for scan: %s",
+				            TypeIdToString(v.GetType().InternalType()).c_str());
 			}
 			break;
 		}

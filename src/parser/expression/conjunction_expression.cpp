@@ -1,6 +1,6 @@
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
@@ -36,11 +36,7 @@ void ConjunctionExpression::AddExpression(unique_ptr<ParsedExpression> expr) {
 }
 
 string ConjunctionExpression::ToString() const {
-	string result = children[0]->ToString();
-	for (idx_t i = 1; i < children.size(); i++) {
-		result += " " + ExpressionTypeToOperator(type) + " " + children[i]->ToString();
-	}
-	return result;
+	return ToString<ConjunctionExpression, ParsedExpression>(*this);
 }
 
 bool ConjunctionExpression::Equals(const ConjunctionExpression *a, const ConjunctionExpression *b) {
@@ -57,14 +53,13 @@ unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {
 	return move(copy);
 }
 
-void ConjunctionExpression::Serialize(Serializer &serializer) {
-	ParsedExpression::Serialize(serializer);
-	serializer.WriteList<ParsedExpression>(children);
+void ConjunctionExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializableList(children);
 }
 
-unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(ExpressionType type, Deserializer &source) {
+unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto result = make_unique<ConjunctionExpression>(type);
-	source.ReadList<ParsedExpression>(result->children);
+	result->children = reader.ReadRequiredSerializableList<ParsedExpression>();
 	return move(result);
 }
 

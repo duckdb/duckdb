@@ -27,6 +27,9 @@ public:
 
 public:
 	string ToString() const override {
+		if (!expr) {
+			throw InternalException("ToString(): BoundExpression does not have a child");
+		}
 		return expr->ToString();
 	}
 
@@ -38,6 +41,10 @@ public:
 	}
 
 	unique_ptr<ParsedExpression> Copy() const override {
+		throw SerializationException("Cannot copy or serialize bound expression");
+	}
+
+	void Serialize(FieldWriter &writer) const override {
 		throw SerializationException("Cannot copy or serialize bound expression");
 	}
 };

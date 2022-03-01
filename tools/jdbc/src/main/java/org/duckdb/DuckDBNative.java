@@ -111,6 +111,6 @@ public class DuckDBNative {
 
 	protected static native void duckdb_jdbc_appender_append_double(ByteBuffer appender_ref, double value);
 
-	protected static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, byte[] value);
+	protected static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, String value);
 
 }

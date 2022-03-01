@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
 
@@ -47,7 +47,7 @@ struct TableFunctionData : public FunctionData {
 
 struct FunctionParameters {
 	vector<Value> values;
-	unordered_map<string, Value> named_parameters;
+	named_parameter_map_t named_parameters;
 };
 
 //! Function is the base class used for any type of function (scalar, aggregate or simple function)
@@ -67,7 +67,7 @@ public:
 	                                      const LogicalType &return_type);
 	//! Returns the formatted string name(arg1, arg2.., np1=a, np2=b, ...)
 	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments,
-	                                      const unordered_map<string, LogicalType> &named_parameters);
+	                                      const named_parameter_type_map_t &named_parameters);
 
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! returns DConstants::INVALID_INDEX and sets error if none could be found
@@ -117,14 +117,14 @@ public:
 	DUCKDB_API ~SimpleNamedParameterFunction() override;
 
 	//! The named parameters of the function
-	unordered_map<string, LogicalType> named_parameters;
+	named_parameter_type_map_t named_parameters;
 
 public:
 	DUCKDB_API string ToString() override;
 	DUCKDB_API bool HasNamedParameters();
 
 	DUCKDB_API void EvaluateInputParameters(vector<LogicalType> &arguments, vector<Value> &parameters,
-	                                        unordered_map<string, Value> &named_parameters,
+	                                        named_parameter_map_t &named_parameters,
 	                                        vector<unique_ptr<ParsedExpression>> &children);
 };
 

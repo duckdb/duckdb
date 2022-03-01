@@ -14,6 +14,8 @@
 #include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
+class FieldWriter;
+class FieldReader;
 
 enum ResultModifierType : uint8_t {
 	LIMIT_MODIFIER = 1,
@@ -37,9 +39,11 @@ public:
 	virtual bool Equals(const ResultModifier *other) const;
 
 	//! Create a copy of this ResultModifier
-	virtual unique_ptr<ResultModifier> Copy() = 0;
+	virtual unique_ptr<ResultModifier> Copy() const = 0;
 	//! Serializes a ResultModifier to a stand-alone binary blob
-	virtual void Serialize(Serializer &serializer);
+	void Serialize(Serializer &serializer) const;
+	//! Serializes a ResultModifier to a stand-alone binary blob
+	virtual void Serialize(FieldWriter &writer) const = 0;
 	//! Deserializes a blob back into a ResultModifier
 	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
 };
@@ -58,7 +62,7 @@ struct OrderByNode {
 	unique_ptr<ParsedExpression> expression;
 
 public:
-	void Serialize(Serializer &serializer);
+	void Serialize(Serializer &serializer) const;
 	string ToString() const;
 	static OrderByNode Deserialize(Deserializer &source);
 };
@@ -75,9 +79,9 @@ public:
 
 public:
 	bool Equals(const ResultModifier *other) const override;
-	unique_ptr<ResultModifier> Copy() override;
-	void Serialize(Serializer &serializer) override;
-	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
+	unique_ptr<ResultModifier> Copy() const override;
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 };
 
 class OrderModifier : public ResultModifier {
@@ -90,9 +94,9 @@ public:
 
 public:
 	bool Equals(const ResultModifier *other) const override;
-	unique_ptr<ResultModifier> Copy() override;
-	void Serialize(Serializer &serializer) override;
-	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
+	unique_ptr<ResultModifier> Copy() const override;
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 };
 
 class DistinctModifier : public ResultModifier {
@@ -105,9 +109,9 @@ public:
 
 public:
 	bool Equals(const ResultModifier *other) const override;
-	unique_ptr<ResultModifier> Copy() override;
-	void Serialize(Serializer &serializer) override;
-	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
+	unique_ptr<ResultModifier> Copy() const override;
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 };
 
 class LimitPercentModifier : public ResultModifier {
@@ -122,9 +126,9 @@ public:
 
 public:
 	bool Equals(const ResultModifier *other) const override;
-	unique_ptr<ResultModifier> Copy() override;
-	void Serialize(Serializer &serializer) override;
-	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
+	unique_ptr<ResultModifier> Copy() const override;
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 };
 
 } // namespace duckdb

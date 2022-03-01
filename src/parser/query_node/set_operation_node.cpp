@@ -1,4 +1,5 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -22,7 +23,7 @@ bool SetOperationNode::Equals(const QueryNode *other_p) const {
 	return true;
 }
 
-unique_ptr<QueryNode> SetOperationNode::Copy() {
+unique_ptr<QueryNode> SetOperationNode::Copy() const {
 	auto result = make_unique<SetOperationNode>();
 	result->setop_type = setop_type;
 	result->left = left->Copy();
@@ -31,18 +32,17 @@ unique_ptr<QueryNode> SetOperationNode::Copy() {
 	return move(result);
 }
 
-void SetOperationNode::Serialize(Serializer &serializer) {
-	QueryNode::Serialize(serializer);
-	serializer.Write<SetOperationType>(setop_type);
-	left->Serialize(serializer);
-	right->Serialize(serializer);
+void SetOperationNode::Serialize(FieldWriter &writer) const {
+	writer.WriteField<SetOperationType>(setop_type);
+	writer.WriteSerializable(*left);
+	writer.WriteSerializable(*right);
 }
 
-unique_ptr<QueryNode> SetOperationNode::Deserialize(Deserializer &source) {
+unique_ptr<QueryNode> SetOperationNode::Deserialize(FieldReader &reader) {
 	auto result = make_unique<SetOperationNode>();
-	result->setop_type = source.Read<SetOperationType>();
-	result->left = QueryNode::Deserialize(source);
-	result->right = QueryNode::Deserialize(source);
+	result->setop_type = reader.ReadRequired<SetOperationType>();
+	result->left = reader.ReadRequiredSerializable<QueryNode>();
+	result->right = reader.ReadRequiredSerializable<QueryNode>();
 	return move(result);
 }
 

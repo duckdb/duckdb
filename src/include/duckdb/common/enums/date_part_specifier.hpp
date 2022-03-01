@@ -28,6 +28,7 @@ enum class DatePartSpecifier : uint8_t {
 	DOW,
 	ISODOW,
 	WEEK,
+	ISOYEAR,
 	QUARTER,
 	DOY,
 	YEARWEEK,

@@ -95,6 +95,17 @@ SELECT date_part('era', i) FROM intervals;
 statement error
 SELECT date_part('offset', i) FROM intervals;
 
+# Correctness: Compare date_part values with function values
+foreach partcode millennium century decade year quarter month day hour minute second millisecond microsecond epoch
+
+query III
+SELECT i, DATE_PART('${partcode}', i) AS p, ${partcode}(i) AS f
+FROM intervals
+WHERE p <> f;
+----
+
+endloop
+
 #
 # Structs
 #
@@ -145,7 +156,7 @@ ORDER BY 1;
 
 # Invalid parts
 
-foreach datepart dow isodow doy week yearweek era timezone timezone_hour timezone_minute
+foreach datepart dow isodow doy week isoyear yearweek era timezone timezone_hour timezone_minute
 
 statement error
 SELECT d, DATE_PART(['${datepart}'], d) AS parts

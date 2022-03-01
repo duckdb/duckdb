@@ -444,11 +444,11 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 void BufferedCSVReader::JumpToBeginning(idx_t skip_rows = 0, bool skip_header = false) {
 	ResetBuffer();
 	ResetStream();
-	SkipRowsAndReadHeader(skip_rows, skip_header);
 	sample_chunk_idx = 0;
 	bytes_in_chunk = 0;
 	end_of_file_reached = false;
 	bom_checked = false;
+	SkipRowsAndReadHeader(skip_rows, skip_header);
 }
 
 void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header) {
@@ -921,7 +921,7 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 	// update parser info, and read, generate & set col_names based on previous findings
 	if (((!first_row_consistent || first_row_nulls) && !options.has_header) || (options.has_header && options.header)) {
 		options.header = true;
-		unordered_map<string, idx_t> name_collision_count;
+		case_insensitive_map_t<idx_t> name_collision_count;
 		// get header names from CSV
 		for (idx_t col = 0; col < options.num_cols; col++) {
 			const auto &val = best_header_row.GetValue(col, 0);
@@ -1532,8 +1532,8 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 	while (remaining > buffer_read_size) {
 		buffer_read_size *= 2;
 	}
-	if (remaining + buffer_read_size > MAXIMUM_CSV_LINE_SIZE) {
-		throw InvalidInputException("Maximum line size of %llu bytes exceeded!", MAXIMUM_CSV_LINE_SIZE);
+	if (remaining + buffer_read_size > options.maximum_line_size) {
+		throw InvalidInputException("Maximum line size of %llu bytes exceeded!", options.maximum_line_size);
 	}
 	buffer = unique_ptr<char[]>(new char[buffer_read_size + remaining + 1]);
 	buffer_size = remaining + buffer_read_size;

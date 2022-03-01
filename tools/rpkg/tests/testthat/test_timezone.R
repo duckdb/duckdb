@@ -68,7 +68,7 @@ test_that("timezone_out works with a specified timezone and tz_out_convert = 'fo
 test_that("timezone_out works with '' and tz_out_convert = 'force': forces local timezime", {
   unlockBinding(".sys.timezone", baseenv())
   withr::local_timezone("Pacific/Tahiti")
-  con <- dbConnect(duckdb::duckdb(), timezone_out = "", tz_out_convert = 'force')
+  con <- dbConnect(duckdb::duckdb(), timezone_out = "", tz_out_convert = "force")
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
   query <- "SELECT '1970-01-01 12:00:00'::TIMESTAMP AS ts"
@@ -79,7 +79,7 @@ test_that("timezone_out works with '' and tz_out_convert = 'force': forces local
 test_that("timezone_out works with a specified local timezone and tz_out_convert = 'force': forces local timezime", {
   unlockBinding(".sys.timezone", baseenv())
   withr::local_timezone("Pacific/Tahiti")
-  con <- dbConnect(duckdb::duckdb(), timezone_out = Sys.timezone(), tz_out_convert = 'force')
+  con <- dbConnect(duckdb::duckdb(), timezone_out = Sys.timezone(), tz_out_convert = "force")
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
   query <- "SELECT '1970-01-01 12:00:00'::TIMESTAMP AS ts"
@@ -100,7 +100,7 @@ test_that("timezone_out gives a warning with NULL timezone, and converts to UTC"
 })
 
 test_that("dbConnect fails when tz_out_convert is misspecified", {
-  drv = duckdb::duckdb()
+  drv <- duckdb::duckdb()
   on.exit(duckdb::duckdb_shutdown(drv))
 
   expect_error(dbConnect(drv, tz_out_convert = "nope"))

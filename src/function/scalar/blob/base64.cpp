@@ -36,10 +36,8 @@ static void Base64DecodeFunction(DataChunk &args, ExpressionState &state, Vector
 
 void Base64Fun::RegisterFunction(BuiltinFunctions &set) {
 	// base64 encode
-	ScalarFunction to_base64("base64", {LogicalType::BLOB}, LogicalType::VARCHAR, Base64EncodeFunction);
-	set.AddFunction(to_base64);
-	to_base64.name = "to_base64"; // mysql alias
-	set.AddFunction(to_base64);
+	ScalarFunction to_base64({LogicalType::BLOB}, LogicalType::VARCHAR, Base64EncodeFunction);
+	set.AddFunction({"base64", "to_base64"}, to_base64); // to_base64 is a mysql alias
 
 	set.AddFunction(ScalarFunction("from_base64", {LogicalType::VARCHAR}, LogicalType::BLOB, Base64DecodeFunction));
 }

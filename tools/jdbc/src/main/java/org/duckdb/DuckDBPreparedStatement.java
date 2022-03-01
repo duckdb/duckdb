@@ -26,6 +26,7 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.Calendar;
+import java.time.LocalDateTime;
 
 public class DuckDBPreparedStatement implements PreparedStatement {
 	private DuckDBConnection conn;
@@ -163,6 +164,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		}
 		if (params.length == 0) {
 			params = new Object[getParameterMetaData().getParameterCount()];
+		}
+		// Change sql.Timestamp to DuckDBTimestamp
+		if (x instanceof Timestamp) {
+			x = new DuckDBTimestamp((Timestamp)x);
+		} else if (x instanceof LocalDateTime) {
+			x = new DuckDBTimestamp((LocalDateTime) x);
 		}
 		params[parameterIndex - 1] = x;
 	}
@@ -469,7 +476,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void setTimestamp(int parameterIndex, Timestamp x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		setObject(parameterIndex, x);
 	}
 
 	@Override
@@ -572,8 +579,18 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 				throw new SQLException("Can't convert value to float " + x.getClass().toString());
 			}
 			break;
-		case Types.NUMERIC:
 		case Types.DECIMAL:
+			if (x instanceof BigDecimal) {
+				setObject(parameterIndex, x);
+			} else if (x instanceof Double) {
+				setObject(parameterIndex, new BigDecimal((Double) x));
+			} else if (x instanceof String) {
+				setObject(parameterIndex, new BigDecimal((String) x));
+			} else {
+				throw new SQLException("Can't convert value to double " + x.getClass().toString());
+			}
+			break;
+		case Types.NUMERIC:
 		case Types.DOUBLE:
 			if (x instanceof Double) {
 				setObject(parameterIndex, x);
@@ -596,6 +613,15 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 				setObject(parameterIndex, x.toString());
 			}
 			break;
+		case Types.TIMESTAMP:
+			if (x instanceof Timestamp) {
+				setObject(parameterIndex, x);
+			} else if (x instanceof LocalDateTime) {
+				setObject(parameterIndex, x);
+			} else {
+				throw new SQLException("Can't convert value to timestamp " + x.getClass().toString());
+			}
+			break;
 		default:
 			throw new SQLException("Unknown target type " + targetSqlType);
 		}
@@ -613,7 +639,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void setBigDecimal(int parameterIndex, BigDecimal x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		setObject(parameterIndex, x);
 	}
 
 	@Override

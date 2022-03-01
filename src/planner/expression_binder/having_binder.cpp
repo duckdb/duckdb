@@ -9,7 +9,7 @@
 namespace duckdb {
 
 HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
-                           unordered_map<string, idx_t> &alias_map)
+                           case_insensitive_map_t<idx_t> &alias_map)
     : SelectBinder(binder, context, node, info), column_alias_binder(node, alias_map) {
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }

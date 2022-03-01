@@ -313,6 +313,15 @@ def description(duckdb_conn, queue):
     except:
         queue.put(False)          
 
+def cursor(duckdb_conn, queue):
+    # Get a new connection
+    cx = duckdb_conn.cursor()  
+    try:
+        cx.execute('CREATE TABLE test (i bool, j TIME, k VARCHAR)')
+        queue.put(False)
+    except:
+        queue.put(True)    
+
 class TestDuckMultithread(object):
     def test_same_conn(self, duckdb_cursor):
         duck_threads = DuckDBThreaded(10,execute_query_same_connection)
@@ -427,6 +436,9 @@ class TestDuckMultithread(object):
     def test_description(self, duckdb_cursor):
         duck_threads = DuckDBThreaded(10,description)
         duck_threads.multithread_test()
-    
+
+    def test_cursor(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(10,cursor)
+        duck_threads.multithread_test(False)    
 
 

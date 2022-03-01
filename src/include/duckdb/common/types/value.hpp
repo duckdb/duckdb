@@ -183,6 +183,8 @@ public:
 	DUCKDB_API hash_t Hash() const;
 	//! Convert this value to a string
 	DUCKDB_API string ToString() const;
+	//! Convert this value to a SQL-parseable string
+	DUCKDB_API string ToSQLString() const;
 
 	DUCKDB_API uintptr_t GetPointer() const;
 
@@ -195,7 +197,7 @@ public:
 	DUCKDB_API bool TryCastAs(const LogicalType &target_type, bool strict = false);
 
 	//! Serializes a Value to a stand-alone binary blob
-	DUCKDB_API void Serialize(Serializer &serializer);
+	DUCKDB_API void Serialize(Serializer &serializer) const;
 	//! Deserializes a Value from a blob
 	DUCKDB_API static Value Deserialize(Deserializer &source);
 

@@ -68,6 +68,9 @@ CREATE TABLE a (i INTEGER);
 SELECT SUM(i) FROM a;
 ''' % datafile, out='126')
 
+# system functions
+test('SELECT 1, current_query() as my_column', out='SELECT 1, current_query() as my_column')
+
 # nested types
 test('select LIST_VALUE(1, 2);', out='[1, 2]')
 test("select STRUCT_PACK(x := 3, y := 3);", out="{'x': 3, 'y': 3}")
@@ -413,14 +416,14 @@ test('.databases', out='main:')
 
 # .dump test
 test('''
-CREATE TABLE a (I INTEGER);
+CREATE TABLE a (i INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump
 ''', 'CREATE TABLE a(i INTEGER)')
 
 test('''
-CREATE TABLE a (I INTEGER);
+CREATE TABLE a (i INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump
@@ -428,7 +431,7 @@ INSERT INTO a VALUES (42);
 
 # .dump a specific table
 test('''
-CREATE TABLE a (I INTEGER);
+CREATE TABLE a (i INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump a
@@ -436,7 +439,7 @@ INSERT INTO a VALUES (42);
 
 # .dump LIKE
 test('''
-CREATE TABLE a (I INTEGER);
+CREATE TABLE a (i INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump a%

@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-static void GatherAliases(BoundQueryNode &node, unordered_map<string, idx_t> &aliases,
+static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &aliases,
                           expression_map_t<idx_t> &expressions) {
 	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
 		// setop, recurse
@@ -81,7 +81,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 		// we recursively visit the children of this node to extract aliases and expressions that can be referenced in
 		// the ORDER BY
-		unordered_map<string, idx_t> alias_map;
+		case_insensitive_map_t<idx_t> alias_map;
 		expression_map_t<idx_t> expression_map;
 		GatherAliases(*result, alias_map, expression_map);
 

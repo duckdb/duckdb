@@ -1,7 +1,7 @@
 #include "duckdb/parser/expression/parameter_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/to_string.hpp"
 
@@ -27,14 +27,13 @@ hash_t ParameterExpression::Hash() const {
 	return CombineHash(duckdb::Hash(parameter_nr), result);
 }
 
-void ParameterExpression::Serialize(Serializer &serializer) {
-	ParsedExpression::Serialize(serializer);
-	serializer.Write<idx_t>(parameter_nr);
+void ParameterExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteField<idx_t>(parameter_nr);
 }
 
-unique_ptr<ParsedExpression> ParameterExpression::Deserialize(ExpressionType type, Deserializer &source) {
+unique_ptr<ParsedExpression> ParameterExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto expression = make_unique<ParameterExpression>();
-	expression->parameter_nr = source.Read<idx_t>();
+	expression->parameter_nr = reader.ReadRequired<idx_t>();
 	return move(expression);
 }
 

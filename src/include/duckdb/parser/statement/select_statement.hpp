@@ -27,11 +27,14 @@ public:
 	//! The main query node
 	unique_ptr<QueryNode> node;
 
+protected:
+	SelectStatement(const SelectStatement &other);
+
 public:
 	//! Create a copy of this SelectStatement
 	unique_ptr<SQLStatement> Copy() const override;
 	//! Serializes a SelectStatement to a stand-alone binary blob
-	void Serialize(Serializer &serializer);
+	void Serialize(Serializer &serializer) const;
 	//! Deserializes a blob back into a SelectStatement, returns nullptr if
 	//! deserialization is not possible
 	static unique_ptr<SelectStatement> Deserialize(Deserializer &source);

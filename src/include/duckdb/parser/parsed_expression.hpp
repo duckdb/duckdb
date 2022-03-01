@@ -9,10 +9,16 @@
 #pragma once
 
 #include "duckdb/parser/base_expression.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
 class Serializer;
 class Deserializer;
+class FieldWriter;
+class FieldReader;
 
 //!  The ParsedExpression class is a base class that can represent any expression
 //!  part of a SQL statement.
@@ -46,7 +52,10 @@ public:
 	virtual unique_ptr<ParsedExpression> Copy() const = 0;
 
 	//! Serializes an Expression to a stand-alone binary blob
-	virtual void Serialize(Serializer &serializer);
+	void Serialize(Serializer &serializer) const;
+	//! Serializes an Expression to a stand-alone binary blob
+	virtual void Serialize(FieldWriter &writer) const = 0;
+
 	//! Deserializes a blob back into an Expression [CAN THROW:
 	//! SerializationException]
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &source);

@@ -40,6 +40,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 
 	static void TruncWeek(icu::Calendar *calendar, uint64_t &micros) {
 		calendar->setFirstDayOfWeek(UCAL_MONDAY);
+		calendar->setMinimalDaysInFirstWeek(4);
 		TruncDay(calendar, micros);
 		calendar->set(UCAL_DAY_OF_WEEK, UCAL_MONDAY);
 	}
@@ -58,6 +59,11 @@ struct ICUDateTrunc : public ICUDateFunc {
 	static void TruncYear(icu::Calendar *calendar, uint64_t &micros) {
 		TruncMonth(calendar, micros);
 		calendar->set(UCAL_MONTH, UCAL_JANUARY);
+	}
+
+	static void TruncISOYear(icu::Calendar *calendar, uint64_t &micros) {
+		TruncWeek(calendar, micros);
+		calendar->set(UCAL_WEEK_OF_YEAR, 1);
 	}
 
 	static void TruncDecade(icu::Calendar *calendar, uint64_t &micros) {
@@ -155,6 +161,8 @@ ICUDateFunc::part_trunc_t ICUDateFunc::TruncationFactory(DatePartSpecifier type)
 	case DatePartSpecifier::WEEK:
 	case DatePartSpecifier::YEARWEEK:
 		return ICUDateTrunc::TruncWeek;
+	case DatePartSpecifier::ISOYEAR:
+		return ICUDateTrunc::TruncISOYear;
 	case DatePartSpecifier::DAY:
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:

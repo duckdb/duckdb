@@ -5,13 +5,14 @@ namespace duckdb {
 InsertStatement::InsertStatement() : SQLStatement(StatementType::INSERT_STATEMENT), schema(DEFAULT_SCHEMA) {
 }
 
+InsertStatement::InsertStatement(const InsertStatement &other)
+    : SQLStatement(other),
+      select_statement(unique_ptr_cast<SQLStatement, SelectStatement>(other.select_statement->Copy())),
+      columns(other.columns), table(other.table), schema(other.schema) {
+}
+
 unique_ptr<SQLStatement> InsertStatement::Copy() const {
-	auto result = make_unique<InsertStatement>();
-	result->select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(select_statement->Copy());
-	result->columns = columns;
-	result->table = table;
-	result->schema = schema;
-	return move(result);
+	return unique_ptr<InsertStatement>(new InsertStatement(*this));
 }
 
 } // namespace duckdb

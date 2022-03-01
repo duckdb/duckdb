@@ -404,7 +404,7 @@ void GlobalSortState::InitializeMergeRound() {
 	}
 }
 
-void GlobalSortState::CompleteMergeRound() {
+void GlobalSortState::CompleteMergeRound(bool keep_radix_data) {
 	sorted_blocks.clear();
 	for (auto &sorted_block_vector : sorted_blocks_temp) {
 		sorted_blocks.push_back(make_unique<SortedBlock>(buffer_manager, *this));
@@ -416,7 +416,7 @@ void GlobalSortState::CompleteMergeRound() {
 		odd_one_out = nullptr;
 	}
 	// Only one block left: Done!
-	if (sorted_blocks.size() == 1) {
+	if (sorted_blocks.size() == 1 && !keep_radix_data) {
 		sorted_blocks[0]->radix_sorting_data.clear();
 		sorted_blocks[0]->blob_sorting_data = nullptr;
 	}

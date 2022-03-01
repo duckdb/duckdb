@@ -32,8 +32,8 @@ public:
 	unique_ptr<TableRef> Copy() override;
 
 	//! Serializes a blob into a BaseTableRef
-	void Serialize(Serializer &serializer) override;
+	void Serialize(FieldWriter &serializer) const override;
 	//! Deserializes a blob back into a BaseTableRef
-	static unique_ptr<TableRef> Deserialize(Deserializer &source);
+	static unique_ptr<TableRef> Deserialize(FieldReader &source);
 };
 } // namespace duckdb

@@ -80,6 +80,108 @@ NULL
 47183823-2574-4bfd-b411-99ed177d3e43
 10203040-5060-7080-0102-030405060708
 
+# all types function
+query I nosort alltypes
+SELECT * FROM test_all_types();
+
+query I nosort alltypes
+SELECT * FROM all_types
+
+# complex views
+query IIIIIIIIIIIIIIIII
+SELECT * FROM cv1
+----
+0	1	NULL	0	0	0	1	0	42	0	0	NULL	0	hello world	[1, 2, 3]	{'x': [42, 88]}	0
+3	7	4	0	3	1	0	3	42	3	3	NULL	0	hello world	[1, 2, 3]	{'x': [42, 88]}	3
+1	3	2	1	1	0	1	1	42	1	1	1	1	hello world	[1, 2, 3]	{'x': [42, 88]}	1
+2	5	3	1	2	1	1	2	42	2	2	1	0	hello world	[1, 2, 3]	{'x': [42, 88]}	2
+
+query IIIIII
+SELECT * FROM cv2
+----
+0	2	1	2	2,0	1
+
+query IIIII
+SELECT * FROM cv3
+----
+0	1	0	2	0
+2	3	2	2	3
+3	4	4	3	5
+
+query I
+SELECT * FROM cv4
+----
+1
+2
+3
+
+query I
+SELECT * FROM cv5
+----
+1
+2
+3
+
+query I
+SELECT * FROM cv6
+----
+0
+2
+4
+
+query II
+SELECT * FROM cv7
+----
+0	2
+1	4
+
+query I
+SELECT * FROM cv8
+----
+1
+2
+3
+NULL
+
+query I
+SELECT * FROM cv9
+----
+3
+4
+
+query I
+SELECT * FROM cv10
+----
+0
+1
+2
+3
+
+query IIII
+SELECT * FROM cv11
+----
+0	0	0	0
+0	0	2	2
+0	1	1	1
+0	1	3	3
+1	0	NULL	2
+1	1	NULL	4
+3	NULL	NULL	6
+
+query II
+SELECT * FROM cv12
+----
+0	0
+1	1
+2	2
+3	4
+
+query I
+SELECT * FROM cv13
+----
+2
+1
+
 # Version 29: IGNORE NULLS
 query II
 SELECT i, V29(i) FROM integral_values ORDER BY 1 NULLS LAST

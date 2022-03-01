@@ -364,7 +364,7 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &qu
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
-	Parser parser;
+	Parser parser(GetParserOptions());
 	parser.ParseQuery(query);
 
 	PragmaHandler handler(*this);
@@ -528,7 +528,12 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		auto copied_statement = statement->Copy();
 		if (statement->type == StatementType::SELECT_STATEMENT) {
 			// in case this is a select query, we verify the original statement
-			string error = VerifyQuery(lock, query, move(statement));
+			string error;
+			try {
+				error = VerifyQuery(lock, query, move(statement));
+			} catch (std::exception &ex) {
+				error = ex.what();
+			}
 			if (!error.empty()) {
 				// error in verifying query
 				return make_unique<PendingQueryResult>(error);
@@ -748,7 +753,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	D_ASSERT(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
 	for (idx_t i = 0; i < orig_expr_list.size(); i++) {
 		// run the ToString, to verify that it doesn't crash
-		orig_expr_list[i]->ToString();
+		auto str = orig_expr_list[i]->ToString();
 		// check that the expressions are equivalent
 		D_ASSERT(orig_expr_list[i]->Equals(de_expr_list[i].get()));
 		D_ASSERT(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
@@ -758,6 +763,17 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 		D_ASSERT(orig_expr_list[i]->Hash() == cp_expr_list[i]->Hash());
 
 		D_ASSERT(!orig_expr_list[i]->Equals(nullptr));
+		orig_expr_list[i]->Verify();
+		de_expr_list[i]->Verify();
+		cp_expr_list[i]->Verify();
+
+		// ToString round trip
+		if (orig_expr_list[i]->HasSubquery()) {
+			continue;
+		}
+		auto parsed_list = Parser::ParseExpressionList(str);
+		D_ASSERT(parsed_list.size() == 1);
+		D_ASSERT(parsed_list[0]->Equals(orig_expr_list[i].get()));
 	}
 	// now perform additional checking within the expressions
 	for (idx_t outer_idx = 0; outer_idx < orig_expr_list.size(); outer_idx++) {
@@ -1099,6 +1115,12 @@ bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) 
 
 	result = found_session_value ? session_value->second : global_value->second;
 	return true;
+}
+
+ParserOptions ClientContext::GetParserOptions() {
+	ParserOptions options;
+	options.preserve_identifier_case = ClientConfig::GetConfig(*this).preserve_identifier_case;
+	return options;
 }
 
 } // namespace duckdb

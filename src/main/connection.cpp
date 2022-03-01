@@ -147,12 +147,12 @@ shared_ptr<Relation> Connection::View(const string &schema_name, const string &t
 
 shared_ptr<Relation> Connection::TableFunction(const string &fname) {
 	vector<Value> values;
-	unordered_map<string, Value> named_parameters;
+	named_parameter_map_t named_parameters;
 	return TableFunction(fname, values, named_parameters);
 }
 
 shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values,
-                                               const unordered_map<string, Value> &named_parameters) {
+                                               const named_parameter_map_t &named_parameters) {
 	return make_shared<TableFunctionRelation>(*context, fname, values, named_parameters);
 }
 
@@ -195,7 +195,7 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 	// parse columns
 	vector<ColumnDefinition> column_list;
 	for (auto &column : columns) {
-		auto col_list = Parser::ParseColumnList(column);
+		auto col_list = Parser::ParseColumnList(column, context->GetParserOptions());
 		if (col_list.size() != 1) {
 			throw ParserException("Expected a single column definition");
 		}
@@ -208,8 +208,12 @@ unordered_set<string> Connection::GetTableNames(const string &query) {
 	return context->GetTableNames(query);
 }
 
-shared_ptr<Relation> Connection::RelationFromQuery(const string &query, const string &alias) {
-	return make_shared<QueryRelation>(*context, query, alias);
+shared_ptr<Relation> Connection::RelationFromQuery(const string &query, string alias, const string &error) {
+	return RelationFromQuery(QueryRelation::ParseStatement(*context, query, error), move(alias));
+}
+
+shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> select_stmt, string alias) {
+	return make_shared<QueryRelation>(*context, move(select_stmt), move(alias));
 }
 
 void Connection::BeginTransaction() {

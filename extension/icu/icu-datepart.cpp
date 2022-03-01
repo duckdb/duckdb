@@ -63,13 +63,23 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static int64_t ExtractWeek(icu::Calendar *calendar, const uint64_t micros) {
-		calendar->setFirstDayOfWeek(UCAL_SUNDAY);
+		calendar->setFirstDayOfWeek(UCAL_MONDAY);
 		calendar->setMinimalDaysInFirstWeek(4);
 		return ExtractField(calendar, UCAL_WEEK_OF_YEAR);
 	}
 
+	static int64_t ExtractISOYear(icu::Calendar *calendar, const uint64_t micros) {
+		calendar->setFirstDayOfWeek(UCAL_MONDAY);
+		calendar->setMinimalDaysInFirstWeek(4);
+		return ExtractField(calendar, UCAL_YEAR_WOY);
+	}
+
 	static int64_t ExtractYearWeek(icu::Calendar *calendar, const uint64_t micros) {
-		return ExtractYear(calendar, micros) * 100 + ExtractWeek(calendar, micros);
+		calendar->setFirstDayOfWeek(UCAL_MONDAY);
+		calendar->setMinimalDaysInFirstWeek(4);
+		const auto iyyy = ExtractField(calendar, UCAL_YEAR_WOY);
+		const auto ww = ExtractField(calendar, UCAL_WEEK_OF_YEAR);
+		return iyyy * 100 + ((iyyy > 0) ? ww : -ww);
 	}
 
 	static int64_t ExtractDayOfYear(icu::Calendar *calendar, const uint64_t micros) {
@@ -151,6 +161,8 @@ struct ICUDatePart : public ICUDateFunc {
 			return ExtractISODayOfWeek;
 		case DatePartSpecifier::WEEK:
 			return ExtractWeek;
+		case DatePartSpecifier::ISOYEAR:
+			return ExtractISOYear;
 		case DatePartSpecifier::DOY:
 			return ExtractDayOfYear;
 		case DatePartSpecifier::QUARTER:
@@ -454,9 +466,13 @@ void RegisterICUDatePartFunctions(ClientContext &context) {
 	ICUDatePart::AddUnaryPartCodeFunctions("dayofyear", context);
 	ICUDatePart::AddUnaryPartCodeFunctions("quarter", context);
 	ICUDatePart::AddUnaryPartCodeFunctions("epoch", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("isoyear", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("timezone", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("timezone_hour", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("timezone_minute", context);
 
 	//  register combinations
-	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", context); //  Note this is ISO year and week
 
 	//  register various aliases
 	ICUDatePart::AddUnaryPartCodeFunctions("dayofmonth", context);

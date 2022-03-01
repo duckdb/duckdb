@@ -14,7 +14,8 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "utf8proc_wrapper.hpp"
-
+#include "duckdb/common/types/arrow_aux_data.hpp"
+#include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/mutex.hpp"
 #include <map>
@@ -161,7 +162,7 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 }
 
 unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, vector<Value> &inputs,
-                                                           unordered_map<string, Value> &named_parameters,
+                                                           named_parameter_map_t &named_parameters,
                                                            vector<LogicalType> &input_table_types,
                                                            vector<string> &input_table_names,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
@@ -991,6 +992,8 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
 		if (array.length != scan_state.chunk->arrow_array.length) {
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
+		output.data[idx].GetBuffer()->SetAuxiliaryData(make_unique<ArrowAuxiliaryData>(scan_state.chunk),
+		                                               VectorAuxiliaryDataType::ARROW_AUXILIARY);
 		if (array.dictionary) {
 			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_convert_data,
 			                              col_idx, arrow_convert_idx);

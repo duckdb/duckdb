@@ -1,0 +1,71 @@
+# name: test/sql/keywords/keywords_in_expressions.test
+# description: Test keywords in expressions
+# group: [keywords]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE SCHEMA "SCHEMA";
+
+statement ok
+CREATE TYPE "ENUM" AS ENUM('ALL');
+
+statement ok
+CREATE TABLE "SCHEMA"."TABLE"("COLUMN" "ENUM");
+
+statement ok
+INSERT INTO "SCHEMA"."TABLE" VALUES ('ALL');
+
+# column references
+query I
+SELECT "COLUMN" FROM "SCHEMA"."TABLE";
+----
+ALL
+
+query I
+SELECT "TABLE"."COLUMN" FROM "SCHEMA"."TABLE";
+----
+ALL
+
+query I
+SELECT "SCHEMA"."TABLE"."COLUMN" FROM "SCHEMA"."TABLE";
+----
+ALL
+
+statement ok
+DROP TABLE "SCHEMA"."TABLE";
+
+statement ok
+CREATE TABLE "SCHEMA"."TABLE"("COLUMN" ROW("SOME" ROW("IN" INTEGER)));
+
+statement ok
+INSERT INTO "SCHEMA"."TABLE" VALUES ({'some': {'in': 3}});
+
+# struct fields with column references
+query I
+SELECT "COLUMN"."SOME"."IN" FROM "SCHEMA"."TABLE";
+----
+3
+
+query I
+SELECT "TABLE"."COLUMN"."SOME"."IN" FROM "SCHEMA"."TABLE";
+----
+3
+
+query I
+SELECT "SCHEMA"."TABLE"."COLUMN"."SOME"."IN" FROM "SCHEMA"."TABLE";
+----
+3
+
+# struct extract
+query I
+SELECT (("SCHEMA"."TABLE"."COLUMN")."SOME")."IN" FROM "SCHEMA"."TABLE";
+----
+3
+
+# array index
+query I
+SELECT "SCHEMA"."TABLE"."COLUMN"['SOME']['IN'] FROM "SCHEMA"."TABLE";
+----
+3

@@ -2,7 +2,7 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
@@ -16,7 +16,7 @@ BaseStatistics::BaseStatistics(LogicalType type) : type(move(type)) {
 BaseStatistics::~BaseStatistics() {
 }
 
-bool BaseStatistics::CanHaveNull() {
+bool BaseStatistics::CanHaveNull() const {
 	if (!validity_stats) {
 		// we don't know
 		// solid maybe
@@ -25,21 +25,13 @@ bool BaseStatistics::CanHaveNull() {
 	return ((ValidityStatistics &)*validity_stats).has_null;
 }
 
-bool BaseStatistics::CanHaveNoNull() {
+bool BaseStatistics::CanHaveNoNull() const {
 	if (!validity_stats) {
 		// we don't know
 		// solid maybe
 		return true;
 	}
 	return ((ValidityStatistics &)*validity_stats).has_no_null;
-}
-
-unique_ptr<BaseStatistics> BaseStatistics::Copy() {
-	auto statistics = make_unique<BaseStatistics>(type);
-	if (validity_stats) {
-		statistics->validity_stats = validity_stats->Copy();
-	}
-	return statistics;
 }
 
 void BaseStatistics::Merge(const BaseStatistics &other) {
@@ -84,18 +76,33 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	}
 }
 
-void BaseStatistics::Serialize(Serializer &serializer) {
-	serializer.Write<bool>(CanHaveNull());
-	serializer.Write<bool>(CanHaveNoNull());
+unique_ptr<BaseStatistics> BaseStatistics::Copy() const {
+	auto statistics = make_unique<BaseStatistics>(type);
+	if (validity_stats) {
+		statistics->validity_stats = validity_stats->Copy();
+	}
+	return statistics;
+}
+
+void BaseStatistics::Serialize(Serializer &serializer) const {
+	FieldWriter writer(serializer);
+	writer.WriteField<bool>(CanHaveNull());
+	writer.WriteField<bool>(CanHaveNoNull());
+	Serialize(writer);
+	writer.Finalize();
+}
+
+void BaseStatistics::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, LogicalType type) {
-	bool can_have_null = source.Read<bool>();
-	bool can_have_no_null = source.Read<bool>();
+	FieldReader reader(source);
+	bool can_have_null = reader.ReadRequired<bool>();
+	bool can_have_no_null = reader.ReadRequired<bool>();
 	unique_ptr<BaseStatistics> result;
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
-		return ValidityStatistics::Deserialize(source);
+		return ValidityStatistics::Deserialize(reader);
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -108,16 +115,16 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		result = NumericStatistics::Deserialize(source, move(type));
+		result = NumericStatistics::Deserialize(reader, move(type));
 		break;
 	case PhysicalType::VARCHAR:
-		result = StringStatistics::Deserialize(source, move(type));
+		result = StringStatistics::Deserialize(reader, move(type));
 		break;
 	case PhysicalType::STRUCT:
-		result = StructStatistics::Deserialize(source, move(type));
+		result = StructStatistics::Deserialize(reader, move(type));
 		break;
 	case PhysicalType::LIST:
-		result = ListStatistics::Deserialize(source, move(type));
+		result = ListStatistics::Deserialize(reader, move(type));
 		break;
 	case PhysicalType::INTERVAL:
 		result = make_unique<BaseStatistics>(move(type));
@@ -129,18 +136,18 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	return result;
 }
 
-string BaseStatistics::ToString() {
+string BaseStatistics::ToString() const {
 	return StringUtil::Format("Base Statistics %s", validity_stats ? validity_stats->ToString() : "[]");
 }
 
-void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) {
+void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(vector.GetType() == this->type);
 	if (validity_stats) {
 		validity_stats->Verify(vector, sel, count);
 	}
 }
 
-void BaseStatistics::Verify(Vector &vector, idx_t count) {
+void BaseStatistics::Verify(Vector &vector, idx_t count) const {
 	SelectionVector owned_sel;
 	auto sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
 	Verify(vector, *sel, count);

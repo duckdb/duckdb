@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
@@ -15,11 +16,7 @@ BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type, uniq
 }
 
 string BoundConjunctionExpression::ToString() const {
-	string result = "(" + children[0]->ToString();
-	for (idx_t i = 1; i < children.size(); i++) {
-		result += " " + ExpressionTypeToOperator(type) + " " + children[i]->ToString();
-	}
-	return result + ")";
+	return ConjunctionExpression::ToString<BoundConjunctionExpression, Expression>(*this);
 }
 
 bool BoundConjunctionExpression::Equals(const BaseExpression *other_p) const {

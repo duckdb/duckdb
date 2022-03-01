@@ -523,7 +523,8 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 					break;
 				case 'c':
 				case 'x':
-				case 'X': {
+				case 'X':
+				case 'T': {
 					string subformat;
 					if (format_char == 'c') {
 						// %c: Locale’s appropriate date and time representation.
@@ -533,7 +534,7 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 						// %x - Locale’s appropriate date representation.
 						// we push the ISO date format here
 						subformat = "%Y-%m-%d";
-					} else if (format_char == 'X') {
+					} else if (format_char == 'X' || format_char == 'T') {
 						// %X - Locale’s appropriate time representation.
 						// we push the ISO time format here
 						subformat = "%H:%M:%S";
@@ -1008,7 +1009,18 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				result_data[4] -= minute_offset;
 				break;
 			}
-
+			case StrTimeSpecifier::TZ_NAME: {
+				// skip leading spaces
+				while (pos < size && StringUtil::CharacterIsSpace(data[pos])) {
+					pos++;
+				}
+				// stop when we encounter a space or the end of the string
+				while (pos < size && !StringUtil::CharacterIsSpace(data[pos])) {
+					pos++;
+				}
+				// FIXME: actually use the timestamp...
+				break;
+			}
 			default:
 				throw NotImplementedException("Unsupported specifier for strptime");
 			}
@@ -1105,6 +1117,20 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 		}
 	}
 	return make_unique<StrpTimeBindData>(format);
+}
+
+StrpTimeFormat::ParseResult StrpTimeFormat::Parse(const string &format_string, const string &text) {
+	StrpTimeFormat format;
+	format.format_specifier = format_string;
+	string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
+	if (!error.empty()) {
+		throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
+	}
+	StrpTimeFormat::ParseResult result;
+	if (!format.Parse(text, result)) {
+		throw InvalidInputException("Failed to parse string \"%s\" with format specifier \"%s\"", text, format_string);
+	}
+	return result;
 }
 
 string StrpTimeFormat::FormatStrpTimeError(const string &input, idx_t position) {

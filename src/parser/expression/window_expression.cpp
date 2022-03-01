@@ -1,7 +1,7 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -28,125 +28,8 @@ WindowExpression::WindowExpression(ExpressionType type, string schema, const str
 	}
 }
 
-string WindowExpression::GetName() const {
-	return !alias.empty() ? alias : function_name;
-}
-
 string WindowExpression::ToString() const {
-	// Start with function call
-	string result = function_name + "(";
-	result += StringUtil::Join(children, children.size(), ", ",
-	                           [](const unique_ptr<ParsedExpression> &child) { return child->ToString(); });
-	// Lead/Lag extra arguments
-	if (offset_expr.get()) {
-		result += ", ";
-		result += offset_expr->ToString();
-	}
-	if (default_expr.get()) {
-		result += ", ";
-		result += default_expr->ToString();
-	}
-	// IGNORE NULLS
-	if (ignore_nulls) {
-		result += " IGNORE NULLS";
-	}
-	// Over clause
-	result += ") OVER(";
-	string sep;
-
-	// Partitions
-	if (!partitions.empty()) {
-		result += "PARTITION BY ";
-		result += StringUtil::Join(partitions, partitions.size(), ", ",
-		                           [](const unique_ptr<ParsedExpression> &partition) { return partition->ToString(); });
-		sep = " ";
-	}
-
-	// Orders
-	if (!orders.empty()) {
-		result += sep;
-		result += "ORDER BY ";
-		result +=
-		    StringUtil::Join(orders, orders.size(), ", ", [](const OrderByNode &order) { return order.ToString(); });
-		sep = " ";
-	}
-
-	// Rows/Range
-	string units = "ROWS";
-	string from;
-	switch (start) {
-	case WindowBoundary::CURRENT_ROW_RANGE:
-	case WindowBoundary::CURRENT_ROW_ROWS:
-		from = "CURRENT ROW";
-		units = (start == WindowBoundary::CURRENT_ROW_RANGE) ? "RANGE" : "ROWS";
-		break;
-	case WindowBoundary::UNBOUNDED_PRECEDING:
-		if (end != WindowBoundary::CURRENT_ROW_RANGE) {
-			from = "UNBOUNDED PRECEDING";
-		}
-		break;
-	case WindowBoundary::EXPR_PRECEDING_ROWS:
-	case WindowBoundary::EXPR_PRECEDING_RANGE:
-		from = start_expr->GetName() + " PRECEDING";
-		units = (start == WindowBoundary::EXPR_PRECEDING_RANGE) ? "RANGE" : "ROWS";
-		break;
-	case WindowBoundary::EXPR_FOLLOWING_ROWS:
-	case WindowBoundary::EXPR_FOLLOWING_RANGE:
-		from = start_expr->GetName() + " FOLLOWING";
-		units = (start == WindowBoundary::EXPR_FOLLOWING_RANGE) ? "RANGE" : "ROWS";
-		break;
-	default:
-		break;
-	}
-
-	string to;
-	switch (end) {
-	case WindowBoundary::CURRENT_ROW_RANGE:
-		if (start != WindowBoundary::UNBOUNDED_PRECEDING) {
-			to = "CURRENT ROW";
-			units = "RANGE";
-		}
-		break;
-	case WindowBoundary::CURRENT_ROW_ROWS:
-		to = "CURRENT ROW";
-		units = "ROWS";
-		break;
-	case WindowBoundary::UNBOUNDED_PRECEDING:
-		to = "UNBOUNDED PRECEDING";
-		break;
-	case WindowBoundary::EXPR_PRECEDING_ROWS:
-	case WindowBoundary::EXPR_PRECEDING_RANGE:
-		to = end_expr->GetName() + " PRECEDING";
-		units = (start == WindowBoundary::EXPR_PRECEDING_RANGE) ? "RANGE" : "ROWS";
-		break;
-	case WindowBoundary::EXPR_FOLLOWING_ROWS:
-	case WindowBoundary::EXPR_FOLLOWING_RANGE:
-		to = end_expr->GetName() + " FOLLOWING";
-		units = (start == WindowBoundary::EXPR_FOLLOWING_RANGE) ? "RANGE" : "ROWS";
-		break;
-	default:
-		break;
-	}
-
-	if (!from.empty() || !to.empty()) {
-		result += sep + units;
-	}
-	if (!from.empty() && !to.empty()) {
-		result += " BETWEEN ";
-		result += from;
-		result += " AND ";
-		result += to;
-	} else if (!from.empty()) {
-		result += " ";
-		result += from;
-	} else if (!to.empty()) {
-		result += " ";
-		result += to;
-	}
-
-	result += ")";
-
-	return result;
+	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, schema, function_name);
 }
 
 bool WindowExpression::Equals(const WindowExpression *a, const WindowExpression *b) {
@@ -224,46 +107,49 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	return move(new_window);
 }
 
-void WindowExpression::Serialize(Serializer &serializer) {
-	ParsedExpression::Serialize(serializer);
-	serializer.WriteString(function_name);
-	serializer.WriteString(schema);
-	serializer.WriteList(children);
-	serializer.WriteList(partitions);
+void WindowExpression::Serialize(FieldWriter &writer) const {
+	auto &serializer = writer.GetSerializer();
+
+	writer.WriteString(function_name);
+	writer.WriteString(schema);
+	writer.WriteSerializableList(children);
+	writer.WriteSerializableList(partitions);
+	// FIXME: should not use serializer here (probably)?
 	D_ASSERT(orders.size() <= NumericLimits<uint32_t>::Maximum());
-	serializer.Write<uint32_t>((uint32_t)orders.size());
+	writer.WriteField<uint32_t>((uint32_t)orders.size());
 	for (auto &order : orders) {
 		order.Serialize(serializer);
 	}
-	serializer.Write<WindowBoundary>(start);
-	serializer.Write<WindowBoundary>(end);
+	writer.WriteField<WindowBoundary>(start);
+	writer.WriteField<WindowBoundary>(end);
 
-	serializer.WriteOptional(start_expr);
-	serializer.WriteOptional(end_expr);
-	serializer.WriteOptional(offset_expr);
-	serializer.WriteOptional(default_expr);
-	serializer.Write<bool>(ignore_nulls);
+	writer.WriteOptional(start_expr);
+	writer.WriteOptional(end_expr);
+	writer.WriteOptional(offset_expr);
+	writer.WriteOptional(default_expr);
+	writer.WriteField<bool>(ignore_nulls);
 }
 
-unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, Deserializer &source) {
-	auto function_name = source.Read<string>();
-	auto schema = source.Read<string>();
+unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	auto function_name = reader.ReadRequired<string>();
+	auto schema = reader.ReadRequired<string>();
 	auto expr = make_unique<WindowExpression>(type, schema, function_name);
-	source.ReadList<ParsedExpression>(expr->children);
-	source.ReadList<ParsedExpression>(expr->partitions);
+	expr->children = reader.ReadRequiredSerializableList<ParsedExpression>();
+	expr->partitions = reader.ReadRequiredSerializableList<ParsedExpression>();
 
-	auto order_count = source.Read<uint32_t>();
+	auto order_count = reader.ReadRequired<uint32_t>();
+	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < order_count; i++) {
 		expr->orders.push_back(OrderByNode::Deserialize((source)));
 	}
-	expr->start = source.Read<WindowBoundary>();
-	expr->end = source.Read<WindowBoundary>();
+	expr->start = reader.ReadRequired<WindowBoundary>();
+	expr->end = reader.ReadRequired<WindowBoundary>();
 
-	expr->start_expr = source.ReadOptional<ParsedExpression>();
-	expr->end_expr = source.ReadOptional<ParsedExpression>();
-	expr->offset_expr = source.ReadOptional<ParsedExpression>();
-	expr->default_expr = source.ReadOptional<ParsedExpression>();
-	expr->ignore_nulls = source.Read<bool>();
+	expr->start_expr = reader.ReadOptional<ParsedExpression>(nullptr);
+	expr->end_expr = reader.ReadOptional<ParsedExpression>(nullptr);
+	expr->offset_expr = reader.ReadOptional<ParsedExpression>(nullptr);
+	expr->default_expr = reader.ReadOptional<ParsedExpression>(nullptr);
+	expr->ignore_nulls = reader.ReadRequired<bool>();
 	return move(expr);
 }
 

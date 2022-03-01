@@ -17,7 +17,7 @@
 namespace duckdb {
 
 bool Binder::BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
-                                    vector<Value> &parameters, unordered_map<string, Value> &named_parameters,
+                                    vector<Value> &parameters, named_parameter_map_t &named_parameters,
                                     unique_ptr<BoundSubqueryRef> &subquery, string &error) {
 	bool seen_subquery = false;
 	for (auto &child : expressions) {
@@ -81,7 +81,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	// evaluate the input parameters to the function
 	vector<LogicalType> arguments;
 	vector<Value> parameters;
-	unordered_map<string, Value> named_parameters;
+	named_parameter_map_t named_parameters;
 	unique_ptr<BoundSubqueryRef> subquery;
 	string error;
 	if (!BindFunctionParameters(fexpr->children, arguments, parameters, named_parameters, subquery, error)) {

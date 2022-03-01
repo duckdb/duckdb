@@ -91,9 +91,13 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "list_prepend", {"e", "l", nullptr}, "list_concat(list_value(e), l)"},
 	{DEFAULT_SCHEMA, "array_prepend", {"el", "arr", nullptr}, "list_prepend(el, arr)"},
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, "unnest(generate_series(1, array_length(arr, dim)))"},
+	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, "floor(x/y)"},
+	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
 	{nullptr, nullptr, {nullptr}, nullptr}};
 
-static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &schema, const string &name) {
+static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &input_schema, const string &input_name) {
+	auto schema = StringUtil::Lower(input_schema);
+	auto name = StringUtil::Lower(input_name);
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
 		if (internal_macros[index].schema == schema && internal_macros[index].name == name) {
 			// parse the expression

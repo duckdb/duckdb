@@ -99,7 +99,7 @@ public:
 	SchemaCatalogEntry *BindCreateFunctionInfo(CreateInfo &info);
 
 	//! Check usage, and cast named parameters to their types
-	static void BindNamedParameters(unordered_map<string, LogicalType> &types, unordered_map<string, Value> &values,
+	static void BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
 	                                QueryErrorContext &error_context, string &func_name);
 
 	unique_ptr<BoundTableRef> Bind(TableRef &ref);
@@ -114,6 +114,9 @@ public:
 	CommonTableExpressionInfo *FindCTE(const string &name, bool skip = false);
 
 	bool CTEIsAlreadyBound(CommonTableExpressionInfo *cte);
+
+	//! Add the view to the set of currently bound views - used for detecting recursive view definitions
+	void AddBoundView(ViewCatalogEntry *view);
 
 	void PushExpressionBinder(ExpressionBinder *binder);
 	void PopExpressionBinder();
@@ -176,6 +179,8 @@ private:
 	BindingMode mode = BindingMode::STANDARD_BINDING;
 	//! Table names extracted for BindingMode::EXTRACT_NAMES
 	unordered_set<string> table_names;
+	//! The set of bound views
+	unordered_set<ViewCatalogEntry *> bound_views;
 
 private:
 	//! Bind the default values of the columns of a table
@@ -226,7 +231,7 @@ private:
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
 
 	bool BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
-	                            vector<Value> &parameters, unordered_map<string, Value> &named_parameters,
+	                            vector<Value> &parameters, named_parameter_map_t &named_parameters,
 	                            unique_ptr<BoundSubqueryRef> &subquery, string &error);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);

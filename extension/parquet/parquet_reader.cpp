@@ -514,9 +514,13 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 	state.group_idx_list = move(groups_to_read);
 	state.filters = filters;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
-	state.file_handle =
-	    file_handle->file_system.OpenFile(file_handle->path, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
-	                                      FileSystem::DEFAULT_COMPRESSION, file_opener);
+
+	if (!state.file_handle) {
+		state.file_handle =
+		    file_handle->file_system.OpenFile(file_handle->path, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+		                                      FileSystem::DEFAULT_COMPRESSION, file_opener);
+	}
+
 	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle);
 	state.root_reader = CreateReader(GetFileMetadata());
 
@@ -630,11 +634,13 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 	}
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &conjunction = (ConjunctionOrFilter &)filter;
+		parquet_filter_t or_mask;
 		for (auto &child_filter : conjunction.child_filters) {
 			parquet_filter_t child_mask = filter_mask;
 			ApplyFilter(v, *child_filter, child_mask, count);
-			filter_mask |= child_mask;
+			or_mask |= child_mask;
 		}
+		filter_mask &= or_mask;
 		break;
 	}
 	case TableFilterType::CONSTANT_COMPARISON: {

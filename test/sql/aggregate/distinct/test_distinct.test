@@ -53,3 +53,16 @@ SELECT DISTINCT CASE WHEN a > 11 THEN 11 ELSE a END FROM test
 ----
 11
 
+# Distinct LIST<VARCHAR> with NULL in a subsequent position (Issue #3056)
+statement ok
+CREATE TABLE issue3056 AS (SELECT * FROM (VALUES
+	(['TGTA']),
+	(['CGGT']),
+	(['CCTC']),
+	(['TCTA']),
+	(['AGGG']),
+	(NULL))
+tbl(genes));
+
+statement ok
+SELECT DISTINCT genes FROM issue3056;

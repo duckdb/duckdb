@@ -1,7 +1,7 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -13,7 +13,7 @@ CastExpression::CastExpression(LogicalType target, unique_ptr<ParsedExpression> 
 }
 
 string CastExpression::ToString() const {
-	return (try_cast ? "TRY_CAST(" : "CAST(") + child->ToString() + " AS " + cast_type.ToString() + ")";
+	return ToString<CastExpression, ParsedExpression>(*this);
 }
 
 bool CastExpression::Equals(const CastExpression *a, const CastExpression *b) {
@@ -35,17 +35,16 @@ unique_ptr<ParsedExpression> CastExpression::Copy() const {
 	return move(copy);
 }
 
-void CastExpression::Serialize(Serializer &serializer) {
-	ParsedExpression::Serialize(serializer);
-	child->Serialize(serializer);
-	cast_type.Serialize(serializer);
-	serializer.Write<bool>(try_cast);
+void CastExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializable(*child);
+	writer.WriteSerializable(cast_type);
+	writer.WriteField<bool>(try_cast);
 }
 
-unique_ptr<ParsedExpression> CastExpression::Deserialize(ExpressionType type, Deserializer &source) {
-	auto child = ParsedExpression::Deserialize(source);
-	auto cast_type = LogicalType::Deserialize(source);
-	auto try_cast = source.Read<bool>();
+unique_ptr<ParsedExpression> CastExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	auto child = reader.ReadRequiredSerializable<ParsedExpression>();
+	auto cast_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto try_cast = reader.ReadRequired<bool>();
 	return make_unique_base<ParsedExpression, CastExpression>(cast_type, move(child), try_cast);
 }
 

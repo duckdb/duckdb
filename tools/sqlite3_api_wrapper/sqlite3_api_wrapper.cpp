@@ -135,7 +135,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		*pzTail = zSql + query.size();
 	}
 	try {
-		Parser parser;
+		Parser parser(db->con->context->GetParserOptions());
 		parser.ParseQuery(query);
 		if (parser.statements.size() == 0) {
 			return SQLITE_OK;
@@ -199,6 +199,7 @@ bool sqlite3_display_result(StatementType type) {
 	case StatementType::PRAGMA_STATEMENT:
 	case StatementType::SELECT_STATEMENT:
 	case StatementType::SHOW_STATEMENT:
+	case StatementType::CALL_STATEMENT:
 		return true;
 	default:
 		return false;
@@ -1602,7 +1603,7 @@ const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 
 	if (pVal->type == SQLiteTypeValue::INTEGER || pVal->type == SQLiteTypeValue::FLOAT) {
 		Value value = (pVal->type == SQLiteTypeValue::INTEGER) ? Value::BIGINT(pVal->u.i) : Value::DOUBLE(pVal->u.r);
-		if (value.TryCastAs(LogicalType::VARCHAR) == false) {
+		if (!value.TryCastAs(LogicalType::VARCHAR)) {
 			pVal->db->errCode = SQLITE_NOMEM;
 			return nullptr;
 		}

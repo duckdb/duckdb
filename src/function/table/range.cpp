@@ -18,7 +18,7 @@ struct RangeFunctionBindData : public TableFunctionData {
 
 template <bool GENERATE_SERIES>
 static unique_ptr<FunctionData>
-RangeFunctionBind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
+RangeFunctionBind(ClientContext &context, vector<Value> &inputs, named_parameter_map_t &named_parameters,
                   vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                   vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<RangeFunctionBindData>();
@@ -129,7 +129,7 @@ struct RangeDateTimeBindData : public TableFunctionData {
 
 template <bool GENERATE_SERIES>
 static unique_ptr<FunctionData>
-RangeDateTimeBind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
+RangeDateTimeBind(ClientContext &context, vector<Value> &inputs, named_parameter_map_t &named_parameters,
                   vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                   vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<RangeDateTimeBindData>();

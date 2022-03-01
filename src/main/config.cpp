@@ -43,6 +43,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
                                                  DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
                                                  DUCKDB_LOCAL(PerfectHashThresholdSetting),
+                                                 DUCKDB_LOCAL(PreserveIdentifierCase),
                                                  DUCKDB_LOCAL(ProfilerHistorySize),
                                                  DUCKDB_LOCAL(ProfileOutputSetting),
                                                  DUCKDB_LOCAL(ProfilingModeSetting),
@@ -82,8 +83,10 @@ ConfigurationOption *DBConfig::GetOptionByIndex(idx_t target_index) {
 }
 
 ConfigurationOption *DBConfig::GetOptionByName(const string &name) {
+	auto lname = StringUtil::Lower(name);
 	for (idx_t index = 0; internal_options[index].name; index++) {
-		if (internal_options[index].name == name) {
+		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));
+		if (internal_options[index].name == lname) {
 			return internal_options + index;
 		}
 	}

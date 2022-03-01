@@ -41,6 +41,7 @@ class ClientContextLock;
 struct CreateScalarFunctionInfo;
 class ScalarFunctionCatalogEntry;
 struct ActiveQueryContext;
+struct ParserOptions;
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
@@ -157,6 +158,9 @@ public:
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
+
+	//! Returns the parser options for this client context
+	DUCKDB_API ParserOptions GetParserOptions();
 
 	DUCKDB_API unique_ptr<DataChunk> Fetch(ClientContextLock &lock, StreamQueryResult &result);
 

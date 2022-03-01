@@ -1,0 +1,55 @@
+# name: test/sql/join/iejoin/test_iejoin_east_west.test
+# description: Test IEJoin
+# group: [iejoin]
+
+statement ok
+PRAGMA enable_verification
+
+# create tables
+statement ok
+CREATE TABLE east AS SELECT * FROM (VALUES
+    ('r1', 100, 140, 12, 2),
+    ('r2', 101, 100, 12, 8),
+    ('r3', 103,  90,  5, 4)
+) east(rid, id, dur, rev, cores)
+
+statement ok
+CREATE TABLE west AS SELECT * FROM (VALUES
+    ('s1', 404, 100,  6, 4),
+    ('s2', 498, 140, 11, 2),
+    ('s3', 676,  80, 10, 1),
+    ('s4', 742,  90,  5, 4)
+) west(rid, t_id, time, cost, cores)
+
+# Qs
+query II
+SELECT s1.rid, s2.rid
+FROM west s1, west s2
+WHERE s1.time > s2.time
+ORDER BY 1, 2
+----
+s1	s3
+s1	s4
+s2	s1
+s2	s3
+s2	s4
+s4	s3
+
+# Qp
+query II
+SELECT s1.rid, s2.rid
+FROM west s1, west s2
+WHERE s1.time > s2.time AND s1.cost < s2.cost
+ORDER BY 1, 2
+----
+s1	s3
+s4	s3
+
+# Qt
+query II
+SELECT east.rid, west.rid
+FROM east, west
+WHERE east.dur < west.time AND east.rev > west.cost
+ORDER BY 1, 2
+----
+r2	s2

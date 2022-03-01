@@ -16,7 +16,7 @@ namespace duckdb {
 //! ConstantExpression represents a constant value in the query
 class ConstantExpression : public ParsedExpression {
 public:
-	explicit ConstantExpression(Value val);
+	DUCKDB_API explicit ConstantExpression(Value val);
 
 	//! The constant value referenced
 	Value value;
@@ -29,8 +29,8 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	void Serialize(Serializer &serializer) override;
-	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 };
 
 } // namespace duckdb

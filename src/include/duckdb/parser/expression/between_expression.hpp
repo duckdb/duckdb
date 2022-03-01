@@ -28,7 +28,13 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	void Serialize(Serializer &serializer) override;
-	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
+
+public:
+	template <class T, class BASE>
+	static string ToString(const T &entry) {
+		return entry.input->ToString() + " BETWEEN " + entry.lower->ToString() + " AND " + entry.upper->ToString();
+	}
 };
 } // namespace duckdb

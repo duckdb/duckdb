@@ -1,8 +1,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -22,21 +21,7 @@ OperatorExpression::OperatorExpression(ExpressionType type, vector<unique_ptr<Pa
 }
 
 string OperatorExpression::ToString() const {
-	auto op = ExpressionTypeToOperator(type);
-	if (!op.empty()) {
-		// use the operator string to represent the operator
-		if (children.size() == 1) {
-			return op + children[0]->ToString();
-		} else if (children.size() == 2) {
-			return children[0]->ToString() + " " + op + " " + children[1]->ToString();
-		}
-	}
-	// if there is no operator we render it as a function
-	auto result = ExpressionTypeToString(type) + "(";
-	result += StringUtil::Join(children, children.size(), ", ",
-	                           [](const unique_ptr<ParsedExpression> &child) { return child->ToString(); });
-	result += ")";
-	return result;
+	return ToString<OperatorExpression, ParsedExpression>(*this);
 }
 
 bool OperatorExpression::Equals(const OperatorExpression *a, const OperatorExpression *b) {
@@ -60,14 +45,13 @@ unique_ptr<ParsedExpression> OperatorExpression::Copy() const {
 	return move(copy);
 }
 
-void OperatorExpression::Serialize(Serializer &serializer) {
-	ParsedExpression::Serialize(serializer);
-	serializer.WriteList(children);
+void OperatorExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializableList(children);
 }
 
-unique_ptr<ParsedExpression> OperatorExpression::Deserialize(ExpressionType type, Deserializer &source) {
+unique_ptr<ParsedExpression> OperatorExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto expression = make_unique<OperatorExpression>(type);
-	source.ReadList<ParsedExpression>(expression->children);
+	expression->children = reader.ReadRequiredSerializableList<ParsedExpression>();
 	return move(expression);
 }
 

@@ -29,5 +29,8 @@ public:
 
 	static bool IsKeyword(const std::string &text);
 	static std::vector<duckdb_libpgquery::PGKeyword> KeywordList();
+
+	static void SetPreserveIdentifierCase(bool downcase);
 };
+
 }

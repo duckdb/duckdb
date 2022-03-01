@@ -1,6 +1,10 @@
 name: Python
 on: [push, pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}
+  cancel-in-progress: true
+
 defaults:
   run:
     shell: bash
@@ -160,7 +164,7 @@ jobs:
         CIBW_BUILD: ${{ matrix.python_build}}
         CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
         CIBW_TEST_REQUIRES: 'pytest'
-        CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" mypy && (pip install --prefer-binary "pyarrow==6.0" || true)'
+        CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" mypy'
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         TWINE_USERNAME: 'hfmuehleisen'

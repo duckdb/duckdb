@@ -177,4 +177,15 @@ class TestRelation(object):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
         duckdb.write_csv(test_df, temp_file_name)
         csv_rel = duckdb.from_csv_auto(temp_file_name)
-        assert  csv_rel.execute().fetchall() == [(1, 'one'), (2, 'two'), (3, 'three'), (4, 'four')] 
+        assert  csv_rel.execute().fetchall() == [(1, 'one'), (2, 'two'), (3, 'three'), (4, 'four')]
+
+
+    def test_join_types(self, duckdb_cursor):
+        test_df1 = pd.DataFrame.from_dict({"i":[1, 2, 3, 4]})
+        test_df2 = pd.DataFrame.from_dict({"j":[  3, 4, 5, 6]})
+        rel1 = duckdb_cursor.from_df(test_df1)
+        rel2 = duckdb_cursor.from_df(test_df2)
+
+        assert rel1.join(rel2, 'i=j', 'inner').aggregate('count()').fetchone()[0] == 2
+
+        assert rel1.join(rel2, 'i=j', 'left').aggregate('count()').fetchone()[0] == 4

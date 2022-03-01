@@ -67,11 +67,20 @@ endif
 ifeq (${BUILD_HTTPFS}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_HTTPFS_EXTENSION=1
 endif
+ifeq (${BUILD_EXCEL}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_EXCEL_EXTENSION=1
+endif
+ifeq (${STATIC_OPENSSL}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DOPENSSL_USE_STATIC_LIBS=1
+endif
 ifeq (${BUILD_SQLSMITH}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_SQLSMITH=1
 endif
 ifeq (${BUILD_TPCE}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_TPCE=1
+endif
+ifeq (${BUILD_SUBSTRAIT_EXTENSION}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_SUBSTRAIT_EXTENSION=1
 endif
 ifeq (${BUILD_JDBC}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DJDBC_DRIVER=1
@@ -197,6 +206,7 @@ format-check-silent:
 	python3 scripts/format.py --all --check --silent
 
 format-fix:
+	rm -rf src/amalgamation/*
 	python3 scripts/format.py --all --fix --noconfirm
 
 format-head:

@@ -1,0 +1,27 @@
+# name: test/sql/copy/parquet/parquet2strings.test
+# description: Issue #2261: TPC-H Q6 fails on Parquet input
+# group: [parquet]
+
+# Here's how we generate this
+# from pyspark.sql import SparkSession
+# from pyspark.sql.types import *
+# from pyspark.sql.functions import *
+
+# spark = SparkSession.builder.master("local").config("spark.hadoop.parquet.writer.version", "v2").getOrCreate()
+# sc = spark.sparkContext
+# ref = spark.range(42, 10000, 2).toDF("id").orderBy(rand())
+# ref2 = ref.selectExpr("*", "repeat('XYZ', id%5) || cast(id as string) id_string")
+
+# ref2.show(10)
+# ref2.write.parquet("p2strings.parquet")
+# ref2.write.csv("p2strings.csv")
+
+# for now
+mode skip
+
+require parquet
+
+
+query I
+SELECT id_string FROM 'data/parquet-testing/p2strings.parquet' limit 10;
+----
