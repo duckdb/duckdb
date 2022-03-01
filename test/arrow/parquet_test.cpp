@@ -24,7 +24,6 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "test_helpers.hpp"
-#include "duckdb/main/client_context.hpp"
 
 std::shared_ptr<arrow::Table> ReadParquetFile(const duckdb::string &path) {
 	std::shared_ptr<arrow::io::ReadableFile> infile;
@@ -182,7 +181,7 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
-	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context->GetContext());
+	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
 
 	auto parquet_files = fs.Glob("data/parquet-testing/*.parquet");
 	for (auto &parquet_path : parquet_files) {
@@ -198,7 +197,7 @@ TEST_CASE("Test Arrow Parquet Files", "[arrow]") {
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
-	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context->GetContext());
+	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
 
 	auto parquet_files = fs.Glob("data/parquet-testing/arrow/*.parquet");
 	for (auto &parquet_path : parquet_files) {
@@ -211,7 +210,7 @@ TEST_CASE("Test Parquet Files Decimal", "[arrow]") {
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
-	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context->GetContext());
+	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
 
 	//! Decimal Files
 	auto parquet_files = fs.Glob("data/parquet-testing/decimal/*.parquet");
@@ -226,7 +225,7 @@ TEST_CASE("Test Parquet Files Glob", "[arrow]") {
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
-	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context->GetContext());
+	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
 
 	auto parquet_files = fs.Glob("data/parquet-testing/cache/*.parquet");
 	for (auto &parquet_path : parquet_files) {
