@@ -1,4 +1,4 @@
-#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-BaseMacroCatalogEntry::BaseMacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
+MacroCatalogEntry::MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
     : StandardEntry(
           (info->function->type == MacroType::SCALAR_MACRO ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY),
           schema, catalog, info->name),
@@ -15,11 +15,11 @@ BaseMacroCatalogEntry::BaseMacroCatalogEntry(Catalog *catalog, SchemaCatalogEntr
 	this->internal = info->internal;
 }
 
-MacroCatalogEntry::MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
-    : BaseMacroCatalogEntry(catalog, schema, info) {
+ScalarMacroCatalogEntry::ScalarMacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
+    : MacroCatalogEntry(catalog, schema, info) {
 }
 
-void MacroCatalogEntry::Serialize(Serializer &main_serializer) {
+void ScalarMacroCatalogEntry::Serialize(Serializer &main_serializer) {
 	D_ASSERT(!internal);
 	auto &scalar_function = (ScalarMacroFunction &)*function;
 	FieldWriter writer(main_serializer);
@@ -37,7 +37,7 @@ void MacroCatalogEntry::Serialize(Serializer &main_serializer) {
 	writer.Finalize();
 }
 
-unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &main_source) {
+unique_ptr<CreateMacroInfo> ScalarMacroCatalogEntry::Deserialize(Deserializer &main_source) {
 	auto info = make_unique<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 	FieldReader reader(main_source);
 	info->schema = reader.ReadRequired<string>();
@@ -60,7 +60,7 @@ unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &main_so
 }
 
 TableMacroCatalogEntry::TableMacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
-    : BaseMacroCatalogEntry(catalog, schema, info) {
+    : MacroCatalogEntry(catalog, schema, info) {
 }
 
 void TableMacroCatalogEntry::Serialize(Serializer &main_serializer) {

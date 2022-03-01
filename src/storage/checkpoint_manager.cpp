@@ -1,7 +1,7 @@
 #include "duckdb/storage/checkpoint_manager.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -152,13 +152,13 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 		custom_types.push_back((TypeCatalogEntry *)entry);
 	});
 
-	vector<MacroCatalogEntry *> macros;
+	vector<ScalarMacroCatalogEntry *> macros;
 	schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->internal) {
 			return;
 		}
 		if (entry->type == CatalogType::MACRO_ENTRY) {
-			macros.push_back((MacroCatalogEntry *)entry);
+			macros.push_back((ScalarMacroCatalogEntry *)entry);
 		}
 	});
 
@@ -297,12 +297,12 @@ void CheckpointManager::ReadType(ClientContext &context, MetaBlockReader &reader
 //===--------------------------------------------------------------------===//
 // Macro's
 //===--------------------------------------------------------------------===//
-void CheckpointManager::WriteMacro(MacroCatalogEntry &macro) {
+void CheckpointManager::WriteMacro(ScalarMacroCatalogEntry &macro) {
 	macro.Serialize(*metadata_writer);
 }
 
 void CheckpointManager::ReadMacro(ClientContext &context, MetaBlockReader &reader) {
-	auto info = MacroCatalogEntry::Deserialize(reader);
+	auto info = ScalarMacroCatalogEntry::Deserialize(reader);
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateFunction(context, info.get());
 }
