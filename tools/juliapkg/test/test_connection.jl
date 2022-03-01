@@ -10,4 +10,5 @@ end
 	# verify that double-closing does not cause any problems
     DBInterface.close!(con)
     DBInterface.close!(con)
+    @test 1==1
 end
