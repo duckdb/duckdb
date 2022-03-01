@@ -26,45 +26,47 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// In-Place Operators
 	//===--------------------------------------------------------------------===//
-	//! A += B
-	static void AddInPlace(Vector &A, int64_t B, idx_t count);
+	//! left += delta
+	static void AddInPlace(Vector &left, int64_t delta, idx_t count);
 
 	//===--------------------------------------------------------------------===//
 	// NULL Operators
 	//===--------------------------------------------------------------------===//
-	//! result = IS NOT NULL(A)
-	static void IsNotNull(Vector &A, Vector &result, idx_t count);
-	//! result = IS NULL (A)
-	static void IsNull(Vector &A, Vector &result, idx_t count);
-	// Returns whether or not a vector has a NULL value
-	static bool HasNull(Vector &A, idx_t count);
-	static bool HasNotNull(Vector &A, idx_t count);
+	//! result = IS NOT NULL(input)
+	static void IsNotNull(Vector &arg, Vector &result, idx_t count);
+	//! result = IS NULL (input)
+	static void IsNull(Vector &input, Vector &result, idx_t count);
+	// Returns whether or not arg vector has a NULL value
+	static bool HasNull(Vector &input, idx_t count);
+	static bool HasNotNull(Vector &input, idx_t count);
+	//! Count the number of not-NULL values.
+	static idx_t CountNotNull(Vector &input, const idx_t count);
 
 	//===--------------------------------------------------------------------===//
 	// Boolean Operations
 	//===--------------------------------------------------------------------===//
-	// result = A && B
-	static void And(Vector &A, Vector &B, Vector &result, idx_t count);
-	// result = A || B
-	static void Or(Vector &A, Vector &B, Vector &result, idx_t count);
-	// result = NOT(A)
-	static void Not(Vector &A, Vector &result, idx_t count);
+	// result = left && right
+	static void And(Vector &left, Vector &right, Vector &result, idx_t count);
+	// result = left || right
+	static void Or(Vector &left, Vector &right, Vector &result, idx_t count);
+	// result = NOT(left)
+	static void Not(Vector &left, Vector &result, idx_t count);
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operations
 	//===--------------------------------------------------------------------===//
-	// result = A == B
-	static void Equals(Vector &A, Vector &B, Vector &result, idx_t count);
-	// result = A != B
-	static void NotEquals(Vector &A, Vector &B, Vector &result, idx_t count);
-	// result = A > B
-	static void GreaterThan(Vector &A, Vector &B, Vector &result, idx_t count);
-	// result = A >= B
-	static void GreaterThanEquals(Vector &A, Vector &B, Vector &result, idx_t count);
-	// result = A < B
-	static void LessThan(Vector &A, Vector &B, Vector &result, idx_t count);
-	// result = A <= B
-	static void LessThanEquals(Vector &A, Vector &B, Vector &result, idx_t count);
+	// result = left == right
+	static void Equals(Vector &left, Vector &right, Vector &result, idx_t count);
+	// result = left != right
+	static void NotEquals(Vector &left, Vector &right, Vector &result, idx_t count);
+	// result = left > right
+	static void GreaterThan(Vector &left, Vector &right, Vector &result, idx_t count);
+	// result = left >= right
+	static void GreaterThanEquals(Vector &left, Vector &right, Vector &result, idx_t count);
+	// result = left < right
+	static void LessThan(Vector &left, Vector &right, Vector &result, idx_t count);
+	// result = left <= right
+	static void LessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count);
 
 	// result = A != B with nulls being equal
 	static void DistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count);
@@ -147,12 +149,12 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Hash functions
 	//===--------------------------------------------------------------------===//
-	// result = HASH(A)
+	// hashes = HASH(input)
 	static void Hash(Vector &input, Vector &hashes, idx_t count);
 	static void Hash(Vector &input, Vector &hashes, const SelectionVector &rsel, idx_t count);
-	// A ^= HASH(B)
-	static void CombineHash(Vector &hashes, Vector &B, idx_t count);
-	static void CombineHash(Vector &hashes, Vector &B, const SelectionVector &rsel, idx_t count);
+	// hashes ^= HASH(input)
+	static void CombineHash(Vector &hashes, Vector &input, idx_t count);
+	static void CombineHash(Vector &hashes, Vector &input, const SelectionVector &rsel, idx_t count);
 
 	//===--------------------------------------------------------------------===//
 	// Generate functions

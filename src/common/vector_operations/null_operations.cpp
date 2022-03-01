@@ -84,4 +84,30 @@ bool VectorOperations::HasNull(Vector &input, idx_t count) {
 	}
 }
 
+idx_t VectorOperations::CountNotNull(Vector &input, const idx_t count) {
+	idx_t valid = 0;
+
+	VectorData vdata;
+	input.Orrify(count, vdata);
+	if (vdata.validity.AllValid()) {
+		return count;
+	}
+	switch (input.GetVectorType()) {
+	case VectorType::FLAT_VECTOR:
+		valid += vdata.validity.CountValid(count);
+		break;
+	case VectorType::CONSTANT_VECTOR:
+		valid += vdata.validity.CountValid(1) * count;
+		break;
+	default:
+		for (idx_t i = 0; i < count; ++i) {
+			const auto row_idx = vdata.sel->get_index(i);
+			valid += int(vdata.validity.RowIsValid(row_idx));
+		}
+		break;
+	}
+
+	return valid;
+}
+
 } // namespace duckdb

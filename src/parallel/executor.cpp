@@ -467,6 +467,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
 		case PhysicalOperatorType::HASH_JOIN:
 		case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
+		case PhysicalOperatorType::IE_JOIN:
 		case PhysicalOperatorType::CROSS_PRODUCT:
 			// regular join, create a pipeline with RHS source that sinks into this pipeline
 			pipeline_child = op->children[1].get();
