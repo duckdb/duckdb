@@ -10,4 +10,3 @@ close(db::DB) = DBInterface.close!(db)
 
 toDataFrame(res::QueryResult) = DataFrame(res)
 toDataFrame(con::Connection, sql::AbstractString) = toDataFrame(DBInterface.execute(con, sql))
-

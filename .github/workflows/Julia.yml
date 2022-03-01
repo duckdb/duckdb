@@ -37,7 +37,15 @@ jobs:
       - name: Build DuckDB
         run: |
             make
-            cd tools/juliapkg
+
+      - name: Set Julia DuckDB Library Path
+        run: |
+            export JULIA_DUCKDB_LIBRARY="`pwd`/build/release/src/libduckdb.so"
+            ls $JULIA_DUCKDB_LIBRARY
 
       - uses: julia-actions/julia-buildpkg@v1
+        with:
+          prefix: tools/juliapkg
       - uses: julia-actions/julia-runtest@v1
+        with:
+          prefix: tools/juliapkg

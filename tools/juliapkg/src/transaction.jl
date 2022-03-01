@@ -12,7 +12,7 @@ function DBInterface.transaction(f, con::Connection)
 end
 
 function DBInterface.transaction(f, db::DB)
-	DBInterface.transaction(f, db.main_connection)
+    return DBInterface.transaction(f, db.main_connection)
 end
 
 """

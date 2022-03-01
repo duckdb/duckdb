@@ -1,7 +1,11 @@
 # Let's keep C function calls until Julia function has been tested functional.
 using Base.Libc
 
-libduckdb = "/Users/myth/Programs/duckdb-bugfix/build/debug/src/libduckdb.dylib"
+if "JULIA_DUCKDB_LIBRARY" in keys(ENV)
+    libduckdb = ENV["JULIA_DUCKDB_LIBRARY"]
+else
+    using DuckDB_jll
+end
 
 #=//===--------------------------------------------------------------------===//
 // Open/Connect

@@ -1,6 +1,7 @@
 mutable struct Stmt <: DBInterface.Statement
     con::Connection
     handle::duckdb_prepared_statement
+    sql::AbstractString
 
     function Stmt(con::Connection, sql::AbstractString)
         handle = Ref{duckdb_prepared_statement}()
@@ -9,7 +10,7 @@ mutable struct Stmt <: DBInterface.Statement
             duckdb_destroy_prepare(handle)
             throw(QueryException(error_message))
         end
-        stmt = new(con, handle[])
+        stmt = new(con, handle[], sql)
         finalizer(_close_stmt, stmt)
         return stmt
     end
@@ -43,12 +44,12 @@ duckdb_bind_internal(stmt::Stmt, i::Integer, val::Float64) = duckdb_bind_double(
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::Missing) = duckdb_bind_null(stmt.handle, i);
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::Nothing) = duckdb_bind_null(stmt.handle, i);
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::AbstractString) = duckdb_bind_varchar(stmt.handle, i, val);
-duckdb_bind_internal(stmt::Stmt, i::Integer, val::Vector{UInt8})  = duckdb_bind_blob(stmt.handle, i, val, sizeof(val));
+duckdb_bind_internal(stmt::Stmt, i::Integer, val::Vector{UInt8}) = duckdb_bind_blob(stmt.handle, i, val, sizeof(val));
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::WeakRefString{UInt8}) =
     duckdb_bind_varchar(stmt.handle, i, val.ptr, val.len);
 
 function duckdb_bind_internal(stmt::Stmt, i::Integer, val::Any)
-	println(val);
+    println(val)
     throw(NotImplementedException("unsupported type for bind"))
 end
 

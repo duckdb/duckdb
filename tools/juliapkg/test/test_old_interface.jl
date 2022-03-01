@@ -38,17 +38,14 @@ end
     db = DuckDB.open(":memory:")
     con = DuckDB.connect(db)
     res = DuckDB.execute(con, "CREATE TABLE integers(date DATE, jcol INTEGER)")
-    res = DuckDB.execute(
-        con,
-        "INSERT INTO integers VALUES ('2021-09-27', 4), ('2021-09-28', 6), ('2021-09-29', 8)",
-    )
+    res = DuckDB.execute(con, "INSERT INTO integers VALUES ('2021-09-27', 4), ('2021-09-28', 6), ('2021-09-29', 8)")
     res = DuckDB.execute(con, "SELECT * FROM integers")
     df = DuckDB.toDataFrame(res)
     @test isa(df, DataFrame)
     df = DuckDB.toDataFrame(con, "SELECT * FROM integers")
     @test isa(df, DataFrame)
-#     FIXME: appendDataFrame
-#     DuckDB.appendDataFrame(df, con, "integers")
+    #     FIXME: appendDataFrame
+    #     DuckDB.appendDataFrame(df, con, "integers")
     DuckDB.disconnect(con)
     DuckDB.close(db)
 end
@@ -101,14 +98,8 @@ end
 @testset "Items table" begin
     db = DuckDB.open(":memory:")
     con = DuckDB.connect(db)
-    res = DuckDB.execute(
-        con,
-        "CREATE TABLE items(item VARCHAR, value DECIMAL(10,2), count INTEGER);",
-    )
-    res = DuckDB.execute(
-        con,
-        "INSERT INTO items VALUES ('jeans', 20.0, 1), ('hammer', 42.2, 2);",
-    )
+    res = DuckDB.execute(con, "CREATE TABLE items(item VARCHAR, value DECIMAL(10,2), count INTEGER);")
+    res = DuckDB.execute(con, "INSERT INTO items VALUES ('jeans', 20.0, 1), ('hammer', 42.2, 2);")
     res = DuckDB.toDataFrame(con, "SELECT * FROM items;")
     @test isa(res, DataFrame)
     DuckDB.disconnect(con)

@@ -12,7 +12,12 @@ mutable struct QueryResult
 
         handle = Ref{duckdb_result}()
         if duckdb_execute_prepared(stmt.handle, handle) != DuckDBSuccess
-            error_message = unsafe_string(duckdb_result_error(handle))
+            error_ptr = duckdb_result_error(handle)
+            if error_ptr == C_NULL
+                error_message = string("Execute of query \"", stmt.sql, "\" failed: unknown error")
+            else
+                error_message = unsafe_string(error_ptr)
+            end
             duckdb_destroy_result(handle)
             throw(QueryException(error_message))
         end
@@ -23,15 +28,15 @@ mutable struct QueryResult
         types = Vector{Type}(undef, column_count)
         for i in 1:column_count
             name = sym(duckdb_column_name(handle, i))
-			if name in view(names, 1:(i - 1))
-				j = 1
-				new_name = Symbol(name, :_, j)
-				while new_name in view(names, 1:(i - 1))
-					j += 1
-					new_name = Symbol(name, :_, j)
-				end
-				name = new_name
-			end
+            if name in view(names, 1:(i - 1))
+                j = 1
+                new_name = Symbol(name, :_, j)
+                while new_name in view(names, 1:(i - 1))
+                    j += 1
+                    new_name = Symbol(name, :_, j)
+                end
+                name = new_name
+            end
             names[i] = name
             types[i] = duckdb_type_to_julia_type(duckdb_column_type(handle, i))
         end
