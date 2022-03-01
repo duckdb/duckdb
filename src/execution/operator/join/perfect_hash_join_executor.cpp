@@ -111,6 +111,7 @@ bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
 			sel_vec.set_index(sel_idx, idx);
 			if (bitmap_build_idx[idx]) {
+				// abort in case of duplicates
 				return false;
 			} else {
 				bitmap_build_idx[idx] = true;

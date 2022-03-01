@@ -68,7 +68,8 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 	auto state = make_unique<HashJoinGlobalState>();
 	state->hash_table =
 	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, join_type);
-	state->hash_table->has_unique_keys = context.config.enable_unique_join; // allows optimization enabling/disabling
+	// unique keys optimization enabling/disabling
+	state->hash_table->has_unique_keys = context.config.enable_unique_join;
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
 		if (delim_types.size() + 1 == conditions.size()) {
@@ -109,9 +110,11 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 			info.result_chunk.Initialize(payload_types);
 		}
 	}
-	// for perfect hash join
-	state->perfect_join_executor =
-	    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, perfect_join_statistics);
+	// for perfect hash join enabling/disabling
+	if (context.config.enable_perfect_join) {
+		state->perfect_join_executor =
+		    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, perfect_join_statistics);
+	}
 	return move(state);
 }
 
@@ -169,16 +172,18 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
                                             GlobalSinkState &gstate) const {
 	auto &sink = (HashJoinGlobalState &)gstate;
 	// check for possible perfect hash table
-	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin();
-	if (use_perfect_hash) {
-		D_ASSERT(sink.hash_table->equality_types.size() == 1);
-		auto key_type = sink.hash_table->equality_types[0];
-		use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable(key_type);
-	}
-	// In case of a large build side or duplicates, use regular hash join
-	if (!use_perfect_hash) {
-		sink.perfect_join_executor.reset();
-		sink.hash_table->Finalize();
+	if (sink.perfect_join_executor) {
+		auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin();
+		if (sink.perfect_join_executor->CanDoPerfectHashJoin()) {
+			D_ASSERT(sink.hash_table->equality_types.size() == 1);
+			auto key_type = sink.hash_table->equality_types[0];
+			use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable(key_type);
+		}
+		// In case of a large build side or duplicates, abort to a regular hash join
+		if (!use_perfect_hash) {
+			sink.perfect_join_executor.reset();
+			sink.hash_table->Finalize();
+		}
 	}
 	sink.finalized = true;
 	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
@@ -226,10 +231,11 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
 		return OperatorResultType::FINISHED;
 	}
+	// Probe it using perfect hash join structure
 	if (sink.perfect_join_executor) {
 		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, chunk, *state.perfect_hash_join_state);
 	}
-
+	// Regular Probe path
 	if (state.scan_structure) {
 		// still have elements remaining from the previous probe (i.e. we got
 		// >1024 elements in the previous probe)

@@ -50,6 +50,8 @@ struct ClientConfig {
 	idx_t perfect_ht_threshold = 12;
 	//! Enables unique_check in the hash_join
 	bool enable_unique_join = true;
+	//! Enables perfect join check in the hash_join
+	bool enable_perfect_join = true;
 
 	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;

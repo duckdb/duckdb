@@ -1,20 +1,23 @@
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/common/to_string.hpp"
+
 #include "duckdb/common/fstream.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/execution/operator/join/physical_delim_join.hpp"
-#include "duckdb/execution/operator/helper/physical_execute.hpp"
+#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/tree_renderer.hpp"
-#include "duckdb/parser/sql_statement.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/execution/operator/helper/physical_execute.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
-#include <utility>
+#include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+
 #include <algorithm>
+#include <utility>
 
 namespace duckdb {
 
@@ -253,6 +256,9 @@ void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t 
 }
 void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor *expression_executor,
                              const string &name, int id) {
+	if (phys_op->type == PhysicalOperatorType::HASH_JOIN) {
+		auto &sink = (HashJoinGlobalState &)phys_op->sink_state;
+	}
 	auto entry = timings.find(phys_op);
 	if (entry == timings.end()) {
 		return;
