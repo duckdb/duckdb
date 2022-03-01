@@ -324,6 +324,16 @@ SELECT list_contains([{a: 1}, {a: 2}], {a: 3})
 0
 
 query T
+SELECT list_contains([{a: 1, b: 3}, {a: 2, b: 2}], {a: 2, b: 2})
+----
+1
+
+query T
+SELECT list_contains([{a: 1, b: 3}, {a: 2, b: 2}], {a: 1, b: 2})
+----
+0
+
+query T
 SELECT list_contains([MAP([1], [2])], MAP([1], [2]))
 ----
 1

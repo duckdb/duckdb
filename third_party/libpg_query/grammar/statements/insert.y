@@ -140,7 +140,7 @@ set_clause:
 
 
 opt_on_conflict:
-			ON CONFLICT opt_conf_expr DO UPDATE SET set_clause_list	where_clause
+			ON CONFLICT opt_conf_expr DO UPDATE SET set_clause_list_opt_comma	where_clause
 				{
 					$$ = makeNode(PGOnConflictClause);
 					$$->action = PG_ONCONFLICT_UPDATE;
@@ -246,6 +246,10 @@ set_clause_list:
 			| set_clause_list ',' set_clause	{ $$ = list_concat($1,$3); }
 		;
 
+set_clause_list_opt_comma:
+			set_clause_list								{ $$ = $1; }
+			| set_clause_list ','							{ $$ = $1; }
+		;
 
 index_params:	index_elem							{ $$ = list_make1($1); }
 			| index_params ',' index_elem			{ $$ = lappend($1, $3); }

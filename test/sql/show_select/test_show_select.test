@@ -17,27 +17,27 @@ INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3), (NULL, NULL)
 statement ok
 INSERT INTO integers2 VALUES (1, 30, 'a', '1992-01-01'), (8, 12, 'b', '1992-01-01'), (3, 24, 'c', '1992-01-01'), (9, 16, 'd', '1992-01-01'), (10, NULL, 'e', '1992-01-01')
 
-# Field | Type | Null | Key | Default | Extra
+# column_name | column_type | null | key | default | extra
 query TTTTTT
 SHOW SELECT * FROM integers
 ----
 i	INTEGER	YES	NULL	NULL	NULL
 j	INTEGER	YES	NULL	NULL	NULL
 
-# Field | Type | Null | Key | Default | Extra
+# column_name | column_type | null | key | default | extra
 query TTTTTT
 DESCRIBE SELECT * FROM integers
 ----
 i	INTEGER	YES	NULL	NULL	NULL
 j	INTEGER	YES	NULL	NULL	NULL
 
-# Field | Type | Null | Key | Default | Extra
+# column_name | column_type | null | key | default | extra
 query TTTTTT
 SHOW SELECT i FROM integers
 ----
 i	INTEGER	YES	NULL	NULL	NULL
 
-# Field | Type | Null | Key | Default | Extra
+# column_name | column_type | null | key | default | extra
 query TTTTTT
 SHOW SELECT integers.i, integers2.st, integers2.d FROM integers, integers2 WHERE integers.i=integers2.i
 ----
@@ -45,7 +45,7 @@ i	INTEGER	YES	NULL	NULL	NULL
 st	VARCHAR	YES	NULL	NULL	NULL
 d	DATE	YES	NULL	NULL	NULL
 
-# Field | Type | Null | Key | Default | Extra
+# column_name | column_type | null | key | default | extra
 query TTTTTT
 SHOW SELECT SUM(i) AS sum1, j FROM integers GROUP BY j HAVING j < 10
 ----
