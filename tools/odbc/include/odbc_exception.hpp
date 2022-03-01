@@ -16,7 +16,7 @@ public:
 
 	const std::string GetComponent();
 	const SQLRETURN GetSqlReturn();
-	const DiagRecord GetDiagRecord();
+	const DiagRecord &GetDiagRecord();
 
 private:
 	std::string component;
