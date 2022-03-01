@@ -144,7 +144,7 @@ public:
 
 	py::object Fetchall();
 
-	py::object ToArrowTable();
+	py::object ToArrowTable(idx_t batch_size);
 
 	unique_ptr<DuckDBPyRelation> Union(DuckDBPyRelation *other);
 

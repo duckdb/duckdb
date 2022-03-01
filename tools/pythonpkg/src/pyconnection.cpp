@@ -44,10 +44,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
 	         "Fetch a chunk of the result as Data.Frame following execute()", py::arg("vectors_per_chunk") = 1)
 	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
-	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
-	    .def("fetch_arrow_chunk", &DuckDBPyConnection::FetchArrowChunk,
-	         "Fetch a chunk of the result as an Arrow Table following execute()", py::arg("vectors_per_chunk") = 1,
-	         py::arg("return_table") = false)
+	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()", py::arg("chunk_size") = 1)
 	    .def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
 	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("approx_batch_size") = 1)
 	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
@@ -417,19 +414,13 @@ py::object DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk) const
 	return result->FetchDFChunk(vectors_per_chunk);
 }
 
-py::object DuckDBPyConnection::FetchArrow() {
+py::object DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
-	return result->FetchArrowTable();
+	return result->FetchArrowTable(chunk_size);
 }
 
-py::object DuckDBPyConnection::FetchArrowChunk(const idx_t vectors_per_chunk, bool return_table) const {
-	if (!result) {
-		throw std::runtime_error("no open result set");
-	}
-	return result->FetchArrowTableChunk(vectors_per_chunk, return_table);
-}
 
 py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t approx_batch_size) const {
 	if (!result) {

@@ -38,11 +38,9 @@ public:
 
 	py::object FetchDF();
 
+	py::object FetchArrowTable(idx_t chunk_size);
+
 	py::object FetchDFChunk(idx_t vectors_per_chunk);
-
-	py::object FetchArrowTableChunk(idx_t num_of_vectors = 1, bool return_table = false);
-
-	py::object FetchArrowTable(bool stream = false, idx_t num_of_vectors = 1, bool return_table = true);
 
 	py::object FetchRecordBatchReader(idx_t vectors_per_chunk);
 
@@ -54,6 +52,8 @@ public:
 
 private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
+	py::object  FetchAllArrowChunks(bool stream, idx_t chunk_size);
+	py::object FetchArrowObject(idx_t chunk_size, bool return_arrow_stream);
 };
 
 } // namespace duckdb

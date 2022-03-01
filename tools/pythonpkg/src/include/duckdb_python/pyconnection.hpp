@@ -109,9 +109,8 @@ public:
 
 	py::object FetchDFChunk(const idx_t vectors_per_chunk = 1) const;
 
-	py::object FetchArrow();
+	py::object FetchArrow(idx_t chunk_size);
 
-	py::object FetchArrowChunk(const idx_t vectors_per_chunk, bool return_table) const;
 
 	py::object FetchRecordBatchReader(const idx_t vectors_per_chunk) const;
 
