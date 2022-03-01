@@ -73,7 +73,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 
 SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = (CreateMacroInfo &)info;
-    auto &scalar_function = (ScalarMacroFunction &) *base.function;
+	auto &scalar_function = (ScalarMacroFunction &)*base.function;
 
 	if (scalar_function.expression->HasParameter()) {
 		throw BinderException("Parameter expressions within macro's are not supported!");

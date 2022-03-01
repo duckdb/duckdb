@@ -250,7 +250,6 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	for (uint32_t i = 0; i < table_macro_count; i++) {
 		ReadTableMacro(context, reader);
 	}
-
 }
 
 //===--------------------------------------------------------------------===//
@@ -317,7 +316,6 @@ void CheckpointManager::ReadTableMacro(ClientContext &context, MetaBlockReader &
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateFunction(context, info.get());
 }
-
 
 //===--------------------------------------------------------------------===//
 // Table Metadata

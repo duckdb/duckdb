@@ -1,42 +1,34 @@
-#include <iostream>
-#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/common/string_util.hpp"
-
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
-
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 
 namespace duckdb {
 
-unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry *macro_func, idx_t depth) {
+unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry *macro_func,
+                                             idx_t depth) {
 
 	auto &macro_def = (TableMacroFunction &)*macro_func->function;
 	auto node = macro_def.query_node->Copy();
 
-	//auto &macro_def = *macro_func->function;
+	// auto &macro_def = *macro_func->function;
 
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
-	string error = MacroFunction::ValidateArguments(*macro_func->function, macro_func->name, function, positionals, defaults);
+	string error =
+	    MacroFunction::ValidateArguments(*macro_func->function, macro_func->name, function, positionals, defaults);
 	if (!error.empty()) {
 		// cannot use error below as binder rnot in scope
 		// return BindResult(binder. FormatError(*expr->get(), error));

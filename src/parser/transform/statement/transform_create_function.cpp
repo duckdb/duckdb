@@ -6,7 +6,6 @@
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 
-
 namespace duckdb {
 
 unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgquery::PGNode *node) {
@@ -20,20 +19,20 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	auto result = make_unique<CreateStatement>();
 	auto qname = TransformQualifiedName(stmt->name);
 
-	unique_ptr<MacroFunction> macro_func; ;
+	unique_ptr<MacroFunction> macro_func;
+	;
 
 	// function can be null here
-	if(stmt->function) {
-		macro_func= make_unique<ScalarMacroFunction>( move (TransformExpression(stmt->function)));
-	} else if(stmt->query ) {
-		macro_func = make_unique<TableMacroFunction>(move (TransformSelect(stmt->query, true)->node));
-
+	if (stmt->function) {
+		macro_func = make_unique<ScalarMacroFunction>(move(TransformExpression(stmt->function)));
+	} else if (stmt->query) {
+		macro_func = make_unique<TableMacroFunction>(move(TransformSelect(stmt->query, true)->node));
 	}
 
-	auto info = make_unique<CreateMacroInfo>( (stmt->function? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY)  );
+	auto info =
+	    make_unique<CreateMacroInfo>((stmt->function ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY));
 	info->schema = qname.schema;
 	info->name = qname.name;
-
 
 	if (stmt->params) {
 		vector<unique_ptr<ParsedExpression>> parameters;

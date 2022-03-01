@@ -8,7 +8,7 @@
 
 #pragma once
 //! The SelectStatement of the view
-#include  "duckdb/function/macro_function.hpp"
+#include "duckdb/function/macro_function.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -27,10 +27,8 @@ public:
 	unique_ptr<ParsedExpression> expression;
 
 public:
- 	  ~ScalarMacroFunction() override;
-	  unique_ptr<MacroFunction> Copy() override;
-
-
+	~ScalarMacroFunction() override;
+	unique_ptr<MacroFunction> Copy() override;
 };
 
 } // namespace duckdb

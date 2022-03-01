@@ -13,8 +13,6 @@
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 
-
-
 namespace duckdb {
 
 //! A macro function in the catalog
@@ -26,19 +24,11 @@ public:
 
 public:
 	//! Serialize the meta information of the MacroCatalogEntry a serializer
-	virtual void Serialize(Serializer &serializer)=0;
+	virtual void Serialize(Serializer &serializer) = 0;
 
 	//! Deserializes to a CreateMacroInfo
-	//static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &source);
-	//static unique_ptr<CreateMacroInfo> Deserialize2(Deserializer &main_source);
+	// static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &source);
+	// static unique_ptr<CreateMacroInfo> Deserialize2(Deserializer &main_source);
 };
 
-
-
 } // namespace duckdb
-
-
-
-
-
-

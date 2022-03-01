@@ -14,8 +14,6 @@
 
 namespace duckdb {
 
-
-
 //! A macro function in the catalog
 class TableMacroCatalogEntry : public BaseMacroCatalogEntry {
 public:
@@ -26,13 +24,7 @@ public:
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateMacroInfo
 	static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &source);
-	//static unique_ptr<CreateMacroInfo> Deserialize2(Deserializer &main_source);
+	// static unique_ptr<CreateMacroInfo> Deserialize2(Deserializer &main_source);
 };
 
 } // namespace duckdb
-
-
-
-
-
-

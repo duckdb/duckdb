@@ -9,19 +9,16 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
-
-
 namespace duckdb {
 
-//MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(move(expression)) {}
+// MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(move(expression)) {}
 
 MacroFunction::MacroFunction(MacroType type) : type(type) {
 }
 
-string MacroFunction::ValidateArguments( MacroFunction &macro_def , const string &name, FunctionExpression &function_expr,
-                                 vector<unique_ptr<ParsedExpression>> &positionals,
-                                 unordered_map<string, unique_ptr<ParsedExpression>> &defaults) {
-
+string MacroFunction::ValidateArguments(MacroFunction &macro_def, const string &name, FunctionExpression &function_expr,
+                                        vector<unique_ptr<ParsedExpression>> &positionals,
+                                        unordered_map<string, unique_ptr<ParsedExpression>> &defaults) {
 
 	// separate positional and default arguments
 	for (auto &arg : function_expr.children) {
@@ -69,8 +66,8 @@ string MacroFunction::ValidateArguments( MacroFunction &macro_def , const string
 	return error;
 }
 
-void MacroFunction::CopyProperties( MacroFunction &other) {
-	other.type=type;
+void MacroFunction::CopyProperties(MacroFunction &other) {
+	other.type = type;
 	for (auto &param : parameters) {
 		other.parameters.push_back(param->Copy());
 	}
@@ -78,7 +75,5 @@ void MacroFunction::CopyProperties( MacroFunction &other) {
 		other.default_parameters[kv.first] = kv.second->Copy();
 	}
 }
-
-
 
 } // namespace duckdb

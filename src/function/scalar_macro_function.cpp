@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/function/scalar_macro_function.hpp"
-#include  "duckdb/function/macro_function.hpp"
+#include "duckdb/function/macro_function.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -17,27 +17,27 @@
 
 namespace duckdb {
 
-	ScalarMacroFunction::ScalarMacroFunction(unique_ptr<ParsedExpression> expression)
-      : MacroFunction(MacroType::SCALAR_MACRO), expression(move(expression))  {  }
+ScalarMacroFunction::ScalarMacroFunction(unique_ptr<ParsedExpression> expression)
+    : MacroFunction(MacroType::SCALAR_MACRO), expression(move(expression)) {
+}
 
-	ScalarMacroFunction::ScalarMacroFunction(void) : MacroFunction(MacroType::SCALAR_MACRO){}
+ScalarMacroFunction::ScalarMacroFunction(void) : MacroFunction(MacroType::SCALAR_MACRO) {
+}
 
-    unique_ptr<MacroFunction> ScalarMacroFunction::Copy() {
-         auto result= make_unique<ScalarMacroFunction>(move(expression->Copy()));
-         //result->expression=expression->Copy();
-		 CopyProperties(*result);
+unique_ptr<MacroFunction> ScalarMacroFunction::Copy() {
+	auto result = make_unique<ScalarMacroFunction>(move(expression->Copy()));
+	// result->expression=expression->Copy();
+	CopyProperties(*result);
 
-		 return move( result);
+	return move(result);
+}
+
+ScalarMacroFunction::~ScalarMacroFunction() {
+	/*
+	if (expression) {
+	    (void)expression.release();
 	}
-
-    ScalarMacroFunction::~ScalarMacroFunction() {
-	    /*
-	    if (expression) {
-		    (void)expression.release();
-	    }
-	     */
-
-
-    }
+	 */
+}
 
 } // namespace duckdb

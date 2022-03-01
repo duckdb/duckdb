@@ -14,7 +14,6 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/common/algorithm.hpp"
 
-
 namespace duckdb {
 
 struct DuckDBFunctionsData : public FunctionOperatorData {
@@ -227,7 +226,6 @@ struct MacroExtractor {
 	}
 };
 
-
 struct TableMacroExtractor {
 	static idx_t FunctionCount(TableMacroCatalogEntry &entry) {
 		return 1;
@@ -281,9 +279,6 @@ struct TableMacroExtractor {
 		return Value();
 	}
 };
-
-
-
 
 struct TableFunctionExtractor {
 	static idx_t FunctionCount(TableFunctionCatalogEntry &entry) {
@@ -443,8 +438,8 @@ void DuckDBFunctionsFunction(ClientContext &context, const FunctionData *bind_da
 			    standard_entry, data.offset_in_entry, output, count);
 			break;
 		case CatalogType::TABLE_MACRO_ENTRY:
-			finished = ExtractFunctionData<TableMacroCatalogEntry, TableMacroExtractor>(standard_entry, data.offset_in_entry,
-			                                                                  output, count);
+			finished = ExtractFunctionData<TableMacroCatalogEntry, TableMacroExtractor>(
+			    standard_entry, data.offset_in_entry, output, count);
 			break;
 
 		case CatalogType::MACRO_ENTRY:
