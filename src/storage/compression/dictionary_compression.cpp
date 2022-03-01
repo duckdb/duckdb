@@ -10,6 +10,65 @@
 
 namespace duckdb {
 
+// https://github.com/martinus/robin-hood-hashing/releases/tag/3.11.5
+inline size_t hash_bytes(void const *ptr, size_t len) noexcept {
+	static constexpr uint64_t m = UINT64_C(0xc6a4a7935bd1e995);
+	static constexpr uint64_t seed = UINT64_C(0xe17a1465);
+	static constexpr unsigned int r = 47;
+
+	auto const *const data64 = static_cast<uint64_t const *>(ptr);
+	uint64_t h = seed ^ (len * m);
+
+	size_t const n_blocks = len / 8;
+	for (size_t i = 0; i < n_blocks; ++i) {
+		auto k = Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(data64 + i));
+
+		k *= m;
+		k ^= k >> r;
+		k *= m;
+
+		h ^= k;
+		h *= m;
+	}
+
+	auto const *const data8 = reinterpret_cast<uint8_t const *>(data64 + n_blocks);
+	switch (len & 7U) {
+	case 7:
+		h ^= static_cast<uint64_t>(data8[6]) << 48U;
+	case 6:
+		h ^= static_cast<uint64_t>(data8[5]) << 40U;
+	case 5:
+		h ^= static_cast<uint64_t>(data8[4]) << 32U;
+	case 4:
+		h ^= static_cast<uint64_t>(data8[3]) << 24U;
+	case 3:
+		h ^= static_cast<uint64_t>(data8[2]) << 16U;
+	case 2:
+		h ^= static_cast<uint64_t>(data8[1]) << 8U;
+	case 1:
+		h ^= static_cast<uint64_t>(data8[0]);
+		h *= m;
+	default:
+		break;
+	}
+	h ^= h >> r;
+	h *= m;
+	h ^= h >> r;
+	return static_cast<size_t>(h);
+}
+
+struct StringHash {
+	std::size_t operator()(const string_t &k) const {
+		return hash_bytes(k.GetDataUnsafe(), k.GetSize());
+	}
+};
+
+struct StringCompare {
+	bool operator()(const string_t &lhs, const string_t &rhs) const {
+		return StringComparisonOperators::EqualsOrNot<false>(lhs, rhs);
+	}
+};
+
 // Abstract class for keeping compression state either for compression or size analysis
 class DictionaryCompressionState : public CompressionState {
 public:
@@ -165,7 +224,7 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 	data_ptr_t current_end_ptr;
 
 	// Buffers and map for current segment
-	std::unordered_map<string, uint32_t> current_string_map;
+	std::unordered_map<string_t, uint32_t, StringHash, StringCompare> current_string_map;
 	std::vector<uint32_t> index_buffer;
 	std::vector<uint32_t> selection_buffer;
 
@@ -185,7 +244,7 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 	}
 
 	bool LookupString(string_t str) override {
-		auto search = current_string_map.find(str.GetString());
+		auto search = current_string_map.find(str);
 		auto has_result = search != current_string_map.end();
 
 		if (has_result) {
@@ -207,7 +266,7 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		// Update buffers and map
 		index_buffer.push_back(current_dictionary.size);
 		selection_buffer.push_back(index_buffer.size() - 1);
-		current_string_map.insert({str.GetString(), index_buffer.size() - 1});
+		current_string_map.insert({str, index_buffer.size() - 1});
 		DictionaryCompressionStorage::SetDictionary(*current_segment, *current_handle, current_dictionary);
 
 		current_width = next_width;
@@ -316,19 +375,19 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompre
 	idx_t current_tuple_count;
 	idx_t current_unique_count;
 	size_t current_dict_size;
-	std::unordered_set<string> current_set;
+	std::unordered_set<string_t, StringHash, StringCompare> current_set;
 	bitpacking_width_t current_width;
 	bitpacking_width_t next_width;
 
 	bool LookupString(string_t str) override {
-		return current_set.count(str.GetString());
+		return current_set.count(str);
 	}
 
 	void AddNewString(string_t str) override {
 		current_tuple_count++;
 		current_unique_count++;
 		current_dict_size += str.GetSize();
-		current_set.insert(str.GetString());
+		current_set.insert(str);
 		current_width = next_width;
 	}
 
