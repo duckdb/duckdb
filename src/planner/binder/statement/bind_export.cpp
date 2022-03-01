@@ -73,7 +73,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	BoundExportData exported_tables;
 
-	idx_t id = 0; // Id for table
+	unordered_set<string> table_name_index;
 	for (auto &table : tables) {
 		auto info = make_unique<CopyInfo>();
 		// we copy the options supplied to the EXPORT
@@ -82,16 +82,25 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		// set up the file name for the COPY TO
 
 		auto exported_data = ExportedTableData();
-		if (table->schema->name == DEFAULT_SCHEMA) {
-			info->file_path =
-			    fs.JoinPath(stmt.info->file_path,
-			                StringUtil::Format("%s_%s.%s", to_string(id), SanitizeExportIdentifier(table->name),
-			                                   copy_function->function.extension));
-		} else {
-			info->file_path = fs.JoinPath(
-			    stmt.info->file_path,
-			    StringUtil::Format("%s_%s_%s.%s", SanitizeExportIdentifier(table->schema->name), to_string(id),
-			                       SanitizeExportIdentifier(table->name), copy_function->function.extension));
+		idx_t id = 0;
+		while (true) {
+			string id_suffix = id == 0 ? string() : "_" + to_string(id);
+			if (table->schema->name == DEFAULT_SCHEMA) {
+				info->file_path = fs.JoinPath(stmt.info->file_path,
+				                              StringUtil::Format("%s%s.%s", SanitizeExportIdentifier(table->name),
+				                                                 id_suffix, copy_function->function.extension));
+			} else {
+				info->file_path =
+				    fs.JoinPath(stmt.info->file_path,
+				                StringUtil::Format("%s_%s%s.%s", SanitizeExportIdentifier(table->schema->name),
+				                                   SanitizeExportIdentifier(table->name), id_suffix,
+				                                   copy_function->function.extension));
+			}
+			if (table_name_index.find(info->file_path) == table_name_index.end()) {
+				// this name was not yet taken: take it
+				break;
+			}
+			id++;
 		}
 		info->is_from = false;
 		info->schema = table->schema->name;
@@ -102,7 +111,6 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		exported_data.file_path = info->file_path;
 
 		exported_tables.data[table] = exported_data;
-		id++;
 
 		// generate the copy statement and bind it
 		CopyStatement copy_stmt;

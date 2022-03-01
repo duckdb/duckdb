@@ -22,10 +22,8 @@ void WriteData(duckdb_column *column, ChunkCollection &source, idx_t col) {
 
 duckdb_state duckdb_translate_column(MaterializedQueryResult &result, duckdb_column *column, idx_t col, char **error) {
 	idx_t row_count = result.collection.Count();
-	column->__deprecated_nullmask =
-	    (bool *)duckdb_malloc(sizeof(bool) * result.collection.Count());
-	column->__deprecated_data =
-	    duckdb_malloc(GetCTypeSize(column->__deprecated_type) * row_count);
+	column->__deprecated_nullmask = (bool *)duckdb_malloc(sizeof(bool) * result.collection.Count());
+	column->__deprecated_data = duckdb_malloc(GetCTypeSize(column->__deprecated_type) * row_count);
 	if (!column->__deprecated_nullmask || !column->__deprecated_data) { // LCOV_EXCL_START
 		// malloc failure
 		return DuckDBError;
@@ -291,7 +289,8 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 	}
 	// now write the data
 	for (idx_t col = 0; col < out->__deprecated_column_count; col++) {
-		auto state = duckdb_translate_column(*result, &out->__deprecated_columns[col], col, &out->__deprecated_error_message);
+		auto state =
+		    duckdb_translate_column(*result, &out->__deprecated_columns[col], col, &out->__deprecated_error_message);
 		if (state != DuckDBSuccess) {
 			return state;
 		}
