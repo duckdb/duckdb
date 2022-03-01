@@ -25,13 +25,13 @@ statement ok
 INSERT INTO  greek_tbl VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma'), (4, 'delta'), (5, 'epsilon'),(6, 'zeta'), (7, 'eta') , (8, 'theta'), (9, 'iota') , (10, 'kappa'); 
 
 statement ok
-CREATE TABLE MACRO xt(a,_name) as SELECT * FROM test_tbl WHERE(id>=a or name=_name);
+CREATE  MACRO xt(a,_name) as TABLE SELECT * FROM test_tbl WHERE(id>=a or name=_name);
 
 statement ok
-CREATE TABLE MACRO xt2(a,_name) as SELECT * FROM test_tbl WHERE(id>=a or name like _name);
+CREATE  MACRO xt2(a,_name) as TABLE SELECT * FROM test_tbl WHERE(id>=a or name like _name);
 
 statement ok
-CREATE TABLE MACRO sgreek(a,b,c) as SELECT a,b FROM greek_tbl WHERE(id >= c);
+CREATE  MACRO sgreek(a,b,c) as TABLE SELECT a,b FROM greek_tbl WHERE(id >= c);
 
 query II
 ( SELECT* FROM xt(1, 'tom') UNION SELECT* FROM  xt2(1, '%%%') ) INTERSECT SELECT* FROM xt(100,'midge');
@@ -58,14 +58,14 @@ SELECT * FROM xt2(100,'m%');
 
 # check similar to
 statement ok
-CREATE TABLE MACRO xtm(cmp_str) as SELECT id, name FROM test_tbl  WHERE( name similar to cmp_str);
+CREATE  MACRO xtm(cmp_str) as TABLE SELECT id, name FROM test_tbl  WHERE( name similar to cmp_str);
 
 statement ok
 SELECT * FROM xtm('m.*');
 
 # check regexp_matches
 statement ok
-CREATE TABLE MACRO  xt_reg(cmp) as SELECT * FROM test_tbl WHERE regexp_matches(name ,cmp );
+CREATE  MACRO  xt_reg(cmp) as TABLE SELECT * FROM test_tbl WHERE regexp_matches(name ,cmp );
 
 statement ok
 SELECT * FROM xt_reg('^m');
@@ -75,7 +75,7 @@ statement ok
 CREATE MACRO   cmp(a,m) as regexp_matches(a,m) or a similar to m;
 
 statement ok
-CREATE TABLE MACRO   gm(m) as SELECT * FROM  greek_tbl WHERE cmp(name,m);
+CREATE  MACRO gm(m) as TABLE SELECT * FROM  greek_tbl WHERE cmp(name,m);
 
 statement ok
 SELECT * FROM  gm('^m');
@@ -86,11 +86,11 @@ CREATE MACRO xt(a,b) as a+b;
 
 # drop table macro
 statement ok  
-DROP TABLE MACRO xt;
+DROP MACRO TABLE xt;
 
 # use column identifer as a macro parameter
 statement ok
-CREATE TABLE MACRO xt(id, imax) as SELECT id,name FROM test_tbl WHERE id<=imax;
+CREATE MACRO xt(id, imax) as TABLE SELECT id,name FROM test_tbl WHERE id<=imax;
 
 query II
 SELECT * FROM xt(id,1);
@@ -99,7 +99,7 @@ SELECT * FROM xt(id,1);
 
 # try to create table macro with pre-existing table name "range"
 statement error
-CREATE TABLE MACRO range(a,b) as  select a,b from test_tbl;
+CREATE  MACRO range(a,b) as TABLE select a,b from test_tbl;
 
 # use table macro as a scalar macro
 query II
