@@ -45,28 +45,28 @@ jobs:
             ${{ runner.os }}-
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
-  docs:
-    name: Documentation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
-        with:
-          version: '~1.7.0-0'
-      - run: |
-          cd tools/juliapkg
-          julia --project=docs -e '
-            using Pkg
-            Pkg.develop(PackageSpec(path=pwd()))
-            Pkg.instantiate()'
-      - run: |
-          julia --project=docs -e '
-            using Documenter: DocMeta, doctest
-            using DuckDB
-            DocMeta.setdocmeta!(DuckDB, :DocTestSetup, :(using DuckDB); recursive=true)
-            doctest(DuckDB)'
-      - run: julia --project=docs docs/make.jl
-        env:
-          JULIA_PKG_SERVER: ""
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
+#  docs:
+#    name: Documentation
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v2
+#      - uses: julia-actions/setup-julia@v1
+#        with:
+#          version: '~1.7.0-0'
+#      - run: |
+#          cd tools/juliapkg
+#          julia --project=docs -e '
+#            using Pkg
+#            Pkg.develop(PackageSpec(path=pwd()))
+#            Pkg.instantiate()'
+#      - run: |
+#          julia --project=docs -e '
+#            using Documenter: DocMeta, doctest
+#            using DuckDB
+#            DocMeta.setdocmeta!(DuckDB, :DocTestSetup, :(using DuckDB); recursive=true)
+#            doctest(DuckDB)'
+#      - run: julia --project=docs docs/make.jl
+#        env:
+#          JULIA_PKG_SERVER: ""
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
