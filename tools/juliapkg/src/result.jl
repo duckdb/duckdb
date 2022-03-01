@@ -1,7 +1,7 @@
 using Tables
 
 mutable struct QueryResult
-    handle::duckdb_result
+    handle::Ref{duckdb_result}
     names::Vector{Symbol}
     types::Vector{Type}
     lookup::Dict{Symbol, Int}
@@ -22,12 +22,21 @@ mutable struct QueryResult
         names = Vector{Symbol}(undef, column_count)
         types = Vector{Type}(undef, column_count)
         for i in 1:column_count
-            nm = sym(duckdb_column_name(handle, i))
-            names[i] = nm
+            name = sym(duckdb_column_name(handle, i))
+			if name in view(names, 1:(i - 1))
+				j = 1
+				new_name = Symbol(name, :_, j)
+				while new_name in view(names, 1:(i - 1))
+					j += 1
+					new_name = Symbol(name, :_, j)
+				end
+				name = new_name
+			end
+            names[i] = name
             types[i] = duckdb_type_to_julia_type(duckdb_column_type(handle, i))
         end
         lookup = Dict(x => i for (i, x) in enumerate(names))
-        result = new(handle[], names, types, lookup, row_count)
+        result = new(handle, names, types, lookup, row_count)
         finalizer(_close_result, result)
         return result
     end
@@ -114,52 +123,6 @@ execute(con::Connection, sql::AbstractString; kwargs...) = execute(con, sql, val
 execute(db::DB, sql::AbstractString, params::DBInterface.StatementParams) = execute(db.main_connection, sql, params)
 execute(db::DB, sql::AbstractString; kwargs...) = execute(db.main_connection, sql, values(kwargs))
 
-function DBInterface.transaction(f, con::Connection)
-    begin_transaction(con)
-    try
-        f()
-    catch
-        rollback(con)
-        rethrow()
-    finally
-        commit(con)
-    end
-end
-
-function DBInterface.transaction(f, db::DB)
-	DBInterface.transaction(f, db.main_connection)
-end
-
-"""
-    DuckDB.begin(db)
-
-begin a transaction
-"""
-function begin_transaction end
-
-begin_transaction(con::Connection) = execute(con, "BEGIN TRANSACTION;")
-begin_transaction(db::DB) = begin_transaction(db.main_connection)
-
-"""
-    DuckDB.commit(db)
-
-commit a transaction
-"""
-function commit end
-
-commit(con::Connection) = execute(con, "COMMIT TRANSACTION;")
-commit(db::DB) = commit(db.main_connection)
-
-"""
-    DuckDB.rollback(db)
-
-rollback transaction
-"""
-function rollback end
-
-rollback(con::Connection) = execute(con, "ROLLBACK TRANSACTION;")
-rollback(db::DB) = rollback(db.main_connection)
-
 struct Row <: Tables.AbstractRow
     q::QueryResult
     row_number::Int
@@ -227,10 +190,10 @@ function duckdb_internal_value(::Type{T}, handle::duckdb_result, col::Int, row_n
 end
 
 function getvalue(q::QueryResult, col::Int, row_number::Int, ::Type{T}) where {T}
-    if duckdb_value_is_null(q.handle, col, row_number)
+    if duckdb_value_is_null(q.handle[], col, row_number)
         return missing
     end
-    return duckdb_internal_value(T, q.handle, col, row_number)
+    return duckdb_internal_value(T, q.handle[], col, row_number)
 end
 
 Tables.getcolumn(r::Row, ::Type{T}, i::Int, nm::Symbol) where {T} =
@@ -255,10 +218,11 @@ function Base.iterate(q::QueryResult, row_number)
 end
 
 "Return the last row insert id from the executed statement"
-function DBInterface.lastrowid(q::QueryResult)
-    throw("unimplemented: lastrowid")
-    # 	last_insert_rowid(q.stmt.db)
+function DBInterface.lastrowid(con::Connection)
+    throw(NotImplementedException("Unimplemented: lastrowid"))
 end
+
+DBInterface.lastrowid(db::DB) = DBInterface.lastrowid(db.main_connection)
 
 """
     DBInterface.prepare(db::DuckDB.DB, sql::AbstractString)

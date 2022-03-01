@@ -1,7 +1,7 @@
 # test_basic_queries.jl
 
 @testset "Test DBInterface.execute" begin
-    con = DBInterface.connect()
+    con = DBInterface.connect(DuckDB.DB)
 
     results = DBInterface.execute(con, "SELECT 42 a")
 
@@ -21,7 +21,7 @@
 end
 
 @testset "Test numeric data types" begin
-    con = DBInterface.connect()
+    con = DBInterface.connect(DuckDB.DB)
 
     results = DBInterface.execute(
         con,
@@ -48,7 +48,7 @@ SELECT NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
 end
 
 @testset "Test strings" begin
-    con = DBInterface.connect()
+    con = DBInterface.connect(DuckDB.DB)
 
     results = DBInterface.execute(
         con,
@@ -73,7 +73,7 @@ SELECT '🦆🍞🦆'
 end
 
 @testset "DBInterface.execute errors" begin
-    con = DBInterface.connect()
+    con = DBInterface.connect(DuckDB.DB)
 
     # parser error
     @test_throws DuckDB.QueryException DBInterface.execute(con, "SELEC")

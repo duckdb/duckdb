@@ -89,8 +89,8 @@ function close_database(db::DB)
 end
 
 DB() = DB(":memory:")
-DBInterface.connect() = DB()
-DBInterface.connect(f::AbstractString) = DB(f)
+DBInterface.connect(::Type{DB}) = DB()
+DBInterface.connect(::Type{DB}, f::AbstractString) = DB(f)
 DBInterface.connect(db::DB) = Connection(db)
 DBInterface.close!(db::DB) = close_database(db)
 Base.close(db::DB) = close_database(db)

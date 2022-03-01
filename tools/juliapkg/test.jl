@@ -4,7 +4,7 @@ using DBInterface
 using Debugger
 using DataFrames
 
-db = DBInterface.connect()
+db = DBInterface.connect(DuckDB.DB)
 
 
 # print(db)

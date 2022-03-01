@@ -1,7 +1,7 @@
 # test_prepare.jl
 
 @testset "Test DBInterface.prepare" begin
-    con = DBInterface.connect()
+    con = DBInterface.connect(DuckDB.DB)
 
     DBInterface.execute(con, "CREATE TABLE test_table(i INTEGER, j DOUBLE)")
     stmt = DBInterface.prepare(con, "INSERT INTO test_table VALUES(?, ?)")
@@ -33,7 +33,7 @@
 end
 
 @testset "DBInterface.prepare: named parameters not supported yet" begin
-    con = DBInterface.connect()
+    con = DBInterface.connect(DuckDB.DB)
 
     DBInterface.execute(con, "CREATE TABLE test_table(i INTEGER, j DOUBLE)")
 	@test_throws DuckDB.QueryException DBInterface.prepare(con, "INSERT INTO test_table VALUES(:col1, :col2)")

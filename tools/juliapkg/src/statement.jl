@@ -107,11 +107,13 @@ duckdb_bind_internal(stmt::Stmt, i::Integer, val::Float64) = duckdb_bind_double(
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::Missing) = duckdb_bind_null(stmt.handle, i);
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::Nothing) = duckdb_bind_null(stmt.handle, i);
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::AbstractString) = duckdb_bind_varchar(stmt.handle, i, val);
+duckdb_bind_internal(stmt::Stmt, i::Integer, val::Vector{UInt8})  = duckdb_bind_blob(stmt.handle, i, val, sizeof(val));
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::WeakRefString{UInt8}) =
     duckdb_bind_varchar(stmt.handle, i, val.ptr, val.len);
 
 function duckdb_bind_internal(stmt::Stmt, i::Integer, val::Any)
-    throw("unsupported type for bind")
+	println(val);
+    throw(NotImplementedException("unsupported type for bind"))
     # bind!(stmt, i, sqlserialize(val))
 end
 
@@ -119,7 +121,7 @@ function BindParameters(stmt::Stmt, params::DBInterface.StatementParams)
     i = 1
     for param in params
         if duckdb_bind_internal(stmt, i, param) != DuckDBSuccess
-            throw("failed to bind parameter")
+            throw(QueryException("Failed to bind parameter"))
         end
         i += 1
     end

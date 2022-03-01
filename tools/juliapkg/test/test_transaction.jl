@@ -1,7 +1,7 @@
 # test_transaction.jl
 
 @testset "Test DBInterface.transaction" begin
-    con = DBInterface.connect(":memory:")
+    con = DBInterface.connect(DuckDB.DB, ":memory:")
 
 	# throw an exception in DBInterface.transaction
 	# this should cause a rollback to happen
