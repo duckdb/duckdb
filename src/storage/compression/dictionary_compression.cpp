@@ -31,7 +31,7 @@ public:
 					// Big strings not implemented for dictionary compression
 					return false;
 				}
-				new_string = !LookupString(data[idx].GetString());
+				new_string = !LookupString(data[idx]);
 			}
 
 			bool fits = HasEnoughSpace(new_string, string_size);
@@ -59,7 +59,7 @@ protected:
 	// Should verify the State
 	virtual void Verify() = 0;
 	// Performs a lookup of str, storing the result internally
-	virtual bool LookupString(string str) = 0;
+	virtual bool LookupString(string_t str) = 0;
 	// Add the most recently looked up str to compression state
 	virtual void AddLastLookup() = 0;
 	// Add string to the state that is known to not be seen yet
@@ -184,8 +184,8 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		D_ASSERT(index_buffer.size() == current_string_map.size() + 1); // +1 is for null value
 	}
 
-	bool LookupString(string str) override {
-		auto search = current_string_map.find(str);
+	bool LookupString(string_t str) override {
+		auto search = current_string_map.find(str.GetString());
 		auto has_result = search != current_string_map.end();
 
 		if (has_result) {
@@ -320,11 +320,12 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompre
 	bitpacking_width_t current_width;
 	bitpacking_width_t next_width;
 
-	bool LookupString(string str) override {
-		return current_set.count(str) == 0;
+	bool LookupString(string_t str) override {
+		return current_set.count(str.GetString());
 	}
 
 	void AddNewString(string_t str) override {
+		current_tuple_count++;
 		current_unique_count++;
 		current_dict_size += str.GetSize();
 		current_set.insert(str.GetString());
