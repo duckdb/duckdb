@@ -33,7 +33,8 @@ struct PositionFunctor {
 };
 
 template <class CHILD_TYPE, class RETURN_TYPE, class OP>
-static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state, Vector &result, bool is_nested = false) {
+static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state, Vector &result,
+                                        bool is_nested = false) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto count = args.size();
 	Vector &list = args.data[0];
