@@ -99,6 +99,12 @@ public:
 	}
 };
 
+struct CharDeleter {
+	inline void operator()(char *data) {
+		free(data);
+	}
+};
+
 struct JSONCommon {
 private:
 	//! Read/Write flag that make sense for us
@@ -159,10 +165,8 @@ public:
 		return result;
 	}
 	//! Wrapper around yyjson_mut_write so we don't have to free the malloc'ed char[]
-	static unique_ptr<char, void (*)(void *)> MutWrite(yyjson_mut_doc *doc, idx_t &len) {
-		auto result = unique_ptr<char, decltype(free) *>(
-		    reinterpret_cast<char *>(yyjson_mut_write(doc, WRITE_FLAG, (size_t *)&len)), free);
-		return result;
+	static unique_ptr<char, CharDeleter> MutWrite(yyjson_mut_doc *doc, idx_t &len) {
+		return unique_ptr<char, CharDeleter>(yyjson_mut_write(doc, WRITE_FLAG, (size_t *)&len));
 	}
 	//! Write JSON value to string_t
 	static inline string_t WriteVal(yyjson_mut_doc *doc, Vector &vector) {
