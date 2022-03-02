@@ -1,6 +1,6 @@
 # name: test/sql/pragma/pragma_database_size_readonly.test
 # description: PRAGMA database_size read only
-# group: [storage]
+# group: [pragma]
 
 # load the DB from disk
 load __TEST_DIR__/database_size_read_only.db
