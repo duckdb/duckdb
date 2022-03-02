@@ -33,13 +33,13 @@ SELECT ARRAY[1, i] FROM range(3) tbl(i) ORDER BY i
 
 # use in WHERE clause
 query I
-SELECT ARRAY[i] FROM range(3) tbl(i) WHERE (ARRAY[i])[0] == 1
+SELECT ARRAY[i] FROM range(3) tbl(i) WHERE (ARRAY[i])[1] == 1
 ----
 [1]
 
 # conversion failure (mixed types)
 query I
-SELECT ARRAY[i, 'hello'] FROM range(3) tbl(i) WHERE (ARRAY[i])[0] == 1
+SELECT ARRAY[i, 'hello'] FROM range(3) tbl(i) WHERE (ARRAY[i])[1] == 1
 ----
 [1, hello]
 

@@ -21,9 +21,14 @@ select list_extract([1, 2, 3], NULL);
 NULL
 
 query I
-SELECT list_extract([1, 2, 3], 1)
+SELECT list_extract([1, 2, 3], 2)
 ----
 2
+
+query I
+SELECT list_extract([1, 2, 3], 1)
+----
+1
 
 statement ok
 PREPARE v1 AS SELECT list_extract($1::int[], 1)
@@ -31,7 +36,7 @@ PREPARE v1 AS SELECT list_extract($1::int[], 1)
 query I
 EXECUTE v1([1, 2, 3])
 ----
-2
+1
 
 query I
 EXECUTE v1(NULL)
@@ -42,7 +47,7 @@ statement ok
 PREPARE v2 AS SELECT list_extract([1, 2, 3], $1)
 
 query I
-EXECUTE v2(1)
+EXECUTE v2(2)
 ----
 2
 
@@ -57,7 +62,7 @@ create macro extract_field(my_struct, my_field) as my_struct[my_field];
 query I
 SELECT extract_field([1, 2, 3], 1)
 ----
-2
+1
 
 # the same but with array_length
 query I
@@ -100,7 +105,7 @@ SELECT my_extract('1234', 1)
 query T
 SELECT my_extract([1, 2, 3, 4], 2)
 ----
-3
+2
 
 query T
 SELECT my_extract({a: 1, b: 2, c: 3, d: 4}, 'd')
@@ -108,12 +113,12 @@ SELECT my_extract({a: 1, b: 2, c: 3, d: 4}, 'd')
 4
 
 statement ok
-CREATE MACRO my_list_or_string_extract_2(my_list_or_string) AS my_list_or_string[2]
+CREATE MACRO my_list_or_string_extract_2(my_list_or_string) AS my_list_or_string[3]
 
 query T
 SELECT my_list_or_string_extract_2('1234')
 ----
-3
+4
 
 query T
 SELECT my_list_or_string_extract_2('12')
@@ -161,7 +166,7 @@ CREATE MACRO my_specific_list_extract(index) AS list_value(1, 2, 3, 4)[index]
 query T
 SELECT my_specific_list_extract(2)
 ----
-3
+2
 
 statement error
 SELECT my_specific_list_extract('c')
