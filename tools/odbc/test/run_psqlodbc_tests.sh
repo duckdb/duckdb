@@ -25,7 +25,9 @@ do
     ./build/debug/psql_odbc_test $test_file
     if [[ $? != 0 ]]; then
         cat $TRACE_FILE
+        exit 1
     fi
+    # clean odbc trace file
     rm $TRACE_FILE
 done < ${BASE_DUCKDB_DIR}/tools/odbc/test/psql_supported_tests
 
