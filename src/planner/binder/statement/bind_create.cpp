@@ -218,23 +218,26 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		for (idx_t i = 0; i < create_info.constraints.size(); i++) {
 			auto &cond = create_info.constraints[i];
 			if (cond->type == ConstraintType::FOREIGN_KEY) {
-				auto &foreign_key = (ForeignKeyConstraint &)*cond;
-				if (foreign_key.is_fk_table) {
-					D_ASSERT(foreign_key.pk_keys.empty() && !foreign_key.pk_columns.empty());
-					// have to resolve referenced table
-					auto pk_table_entry_ptr =
-					    catalog.GetEntry<TableCatalogEntry>(context, INVALID_SCHEMA, foreign_key.pk_table);
-					if (!pk_table_entry_ptr) {
-						throw ParserException("Can't find table \"%s\" in foreign key constraint",
-						                      foreign_key.pk_table);
-					}
-					D_ASSERT(!foreign_key.pk_columns.empty() && foreign_key.pk_keys.empty());
-					for (auto &keyname : foreign_key.pk_columns) {
-						auto entry = pk_table_entry_ptr->name_map.find(keyname);
-						if (entry == pk_table_entry_ptr->name_map.end()) {
-							throw ParserException("column \"%s\" named in key does not exist", keyname);
+				auto &fk = (ForeignKeyConstraint &)*cond;
+				if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+					D_ASSERT(fk.info.pk_keys.empty() && !fk.pk_columns.empty());
+					if (create_info.table == fk.info.table) {
+						fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
+					} else {
+						// have to resolve referenced table
+						auto pk_table_entry_ptr =
+						    catalog.GetEntry<TableCatalogEntry>(context, fk.info.schema, fk.info.table);
+						if (!pk_table_entry_ptr) {
+							throw ParserException("Can't find table \"%s\" in foreign key constraint", fk.info.table);
 						}
-						foreign_key.pk_keys.push_back(entry->second);
+						D_ASSERT(!fk.pk_columns.empty() && fk.info.pk_keys.empty());
+						for (auto &keyname : fk.pk_columns) {
+							auto entry = pk_table_entry_ptr->name_map.find(keyname);
+							if (entry == pk_table_entry_ptr->name_map.end()) {
+								throw ParserException("column \"%s\" named in key does not exist", keyname);
+							}
+							fk.info.pk_keys.push_back(entry->second);
+						}
 					}
 				}
 			}

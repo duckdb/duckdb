@@ -5,7 +5,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/check_binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
@@ -106,28 +105,36 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY: {
-			auto &foreign_key = (ForeignKeyConstraint &)*cond;
-			D_ASSERT(!foreign_key.pk_keys.empty());
-			D_ASSERT((foreign_key.is_fk_table && !foreign_key.fk_columns.empty()) || !foreign_key.fk_keys.empty());
-			if (foreign_key.fk_keys.empty()) {
-				for (auto &keyname : foreign_key.fk_columns) {
+			auto &fk = (ForeignKeyConstraint &)*cond;
+			D_ASSERT((fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE && !fk.info.pk_keys.empty()) ||
+			         (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
+			         fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
+			if (fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE && fk.info.pk_keys.empty()) {
+				for (auto &keyname : fk.pk_columns) {
 					auto entry = info.name_map.find(keyname);
 					if (entry == info.name_map.end()) {
 						throw ParserException("column \"%s\" named in key does not exist", keyname);
 					}
-					foreign_key.fk_keys.push_back(entry->second);
+					fk.info.pk_keys.push_back(entry->second);
+				}
+			}
+			if (fk.info.fk_keys.empty()) {
+				for (auto &keyname : fk.fk_columns) {
+					auto entry = info.name_map.find(keyname);
+					if (entry == info.name_map.end()) {
+						throw ParserException("column \"%s\" named in key does not exist", keyname);
+					}
+					fk.info.fk_keys.push_back(entry->second);
 				}
 			}
 			unordered_set<idx_t> fk_key_set, pk_key_set;
-			for (idx_t i = 0; i < foreign_key.pk_keys.size(); i++) {
-				pk_key_set.insert(foreign_key.pk_keys[i]);
+			for (idx_t i = 0; i < fk.info.pk_keys.size(); i++) {
+				pk_key_set.insert(fk.info.pk_keys[i]);
 			}
-			for (idx_t i = 0; i < foreign_key.fk_keys.size(); i++) {
-				fk_key_set.insert(foreign_key.fk_keys[i]);
+			for (idx_t i = 0; i < fk.info.fk_keys.size(); i++) {
+				fk_key_set.insert(fk.info.fk_keys[i]);
 			}
-			info.bound_constraints.push_back(make_unique<BoundForeignKeyConstraint>(
-			    foreign_key.is_fk_table, foreign_key.pk_table, foreign_key.pk_keys, pk_key_set, foreign_key.fk_keys,
-			    fk_key_set));
+			info.bound_constraints.push_back(make_unique<BoundForeignKeyConstraint>(fk.info, pk_key_set, fk_key_set));
 			break;
 		}
 		default:

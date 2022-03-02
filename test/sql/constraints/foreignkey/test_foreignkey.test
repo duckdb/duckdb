@@ -15,10 +15,6 @@ CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname T
 statement error
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songalbum) REFERENCES album(artistid, albumname));
 
-# self referencing Foreign Key
-statement error
-CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES song(songartist, songalbum));
-
 statement ok
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, albumname));
 
@@ -152,19 +148,25 @@ ALTER TABLE album DROP COLUMN albumcover;
 statement ok
 DROP TABLE album;
 
+# multiple columns and indices
 statement ok
-CREATE TABLE pkt(i INTEGER UNIQUE, k INTEGER)
+CREATE TABLE pkt(i INTEGER UNIQUE, k INTEGER UNIQUE)
 
 statement ok
 INSERT INTO pkt VALUES (1, 11), (2, 12), (3, 13)
 
 statement ok
-CREATE TABLE fkt(j INTEGER, l INTEGER, FOREIGN KEY (j) REFERENCES pkt(i))
+CREATE TABLE fkt(j INTEGER, l INTEGER UNIQUE, FOREIGN KEY (j) REFERENCES pkt(i))
+
+statement ok
+CREATE INDEX k_index ON pkt(k)
+
+statement ok
+CREATE INDEX l_index ON fkt(l)
 
 statement ok
 INSERT INTO fkt VALUES (1, 101), (2, 102)
 
-# check foreign key constraint
 statement error
 INSERT INTO fkt VALUES (4, 104)
 
@@ -189,6 +191,12 @@ UPDATE fkt SET i=4 WHERE l=102
 statement error
 UPDATE fkt SET i=4 WHERE l=102
 
+statement ok
+DROP INDEX k_index
+
+statement ok
+DROP INDEX l_index
+
 statement error
 DROP TABLE pkt;
 
@@ -197,3 +205,76 @@ DROP TABLE fkt;
 
 statement ok
 DROP TABLE pkt;
+
+# for tables that do not live in the current schema search path
+statement ok
+CREATE SCHEMA s1
+
+statement ok
+CREATE TABLE s1.pkt(i INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE s1.fkt(j INTEGER, FOREIGN KEY (j) REFERENCES s1.pkt(i))
+
+statement ok
+INSERT INTO s1.pkt VALUES (1), (2), (3), (4), (5)
+
+statement ok
+INSERT INTO s1.fkt VALUES (2), (3)
+
+statement error
+INSERT INTO s1.fkt VALUES (6)
+
+statement ok
+INSERT INTO s1.fkt VALUES (1)
+
+statement error
+DELETE FROM s1.pkt WHERE i=2
+
+statement ok
+DELETE FROM s1.pkt WHERE i=5
+
+statement error
+DROP TABLE s1.pkt;
+
+statement ok
+DROP TABLE s1.fkt;
+
+statement ok
+DROP TABLE s1.pkt;
+
+# insert a tuple in the main table and the referencing table that refers to that tuple
+statement ok
+CREATE TABLE pkt(i INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE fkt(j INTEGER, FOREIGN KEY (j) REFERENCES pkt(i))
+
+statement ok
+INSERT INTO pkt VALUES (1)
+
+statement ok
+INSERT INTO fkt VALUES (1)
+
+# delete a tuple in the referencing table and then delete that tuple in the main table
+statement ok
+DELETE FROM fkt WHERE j=1
+
+statement ok
+DELETE FROM pkt WHERE i=1
+
+statement ok
+DROP TABLE fkt;
+
+statement ok
+DROP TABLE pkt;
+
+# insert NULL into the foreign key column
+statement ok
+CREATE TABLE pkt(i INTEGER UNIQUE)
+
+statement ok
+CREATE TABLE fkt(j INTEGER, FOREIGN KEY (j) REFERENCES pkt(i))
+
+statement ok
+INSERT INTO fkt VALUES (NULL)

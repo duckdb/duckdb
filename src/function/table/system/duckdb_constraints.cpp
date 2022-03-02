@@ -174,7 +174,7 @@ void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_
 			}
 			case ConstraintType::FOREIGN_KEY: {
 				auto &bound_foreign_key = (BoundForeignKeyConstraint &)bound_constraint;
-				for (auto &col_idx : bound_foreign_key.fk_keys) {
+				for (auto &col_idx : bound_foreign_key.info.fk_keys) {
 					column_index_list.push_back(column_t(col_idx));
 				}
 				break;

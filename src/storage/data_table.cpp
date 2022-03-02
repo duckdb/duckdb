@@ -437,11 +437,11 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	}
 }
 
-static TableIndexList &GetForeignKeyConstraintIndicesAndChunk(const string &table_name, const vector<idx_t> &src_keys,
+static TableIndexList &GetForeignKeyConstraintIndicesAndChunk(const string &schema, const string &table_name,
+                                                              const vector<idx_t> &src_keys,
                                                               const vector<idx_t> &dst_keys, ClientContext &context,
                                                               DataChunk &src_chunk, DataChunk &dst_chunk) {
-	auto table_entry_ptr =
-	    Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, INVALID_SCHEMA, table_name);
+	auto table_entry_ptr = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, schema, table_name);
 	if (table_entry_ptr == nullptr) {
 		throw ParserException("Can't find table \"%s\" in foreign key constraint", table_name);
 	}
@@ -461,28 +461,49 @@ static TableIndexList &GetForeignKeyConstraintIndicesAndChunk(const string &tabl
 	return indices;
 }
 
-static void VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &foreign_key, ClientContext &context,
+static bool FindColumnIndex(const vector<idx_t> &keys, const vector<column_t> &index_column_ids) {
+	for (idx_t i = 0; i < keys.size(); i++) {
+		bool is_found = false;
+		for (idx_t j = 0; j < index_column_ids.size(); j++) {
+			if (keys[i] == index_column_ids[j]) {
+				is_found = true;
+				break;
+			}
+		}
+		if (!is_found) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+static void VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
                                              DataChunk &chunk) {
 	DataChunk pk_chunk;
-	TableIndexList &indices = GetForeignKeyConstraintIndicesAndChunk(foreign_key.table, foreign_key.fk_keys,
-	                                                                 foreign_key.pk_keys, context, chunk, pk_chunk);
+	TableIndexList &indices = GetForeignKeyConstraintIndicesAndChunk(bfk.info.schema, bfk.info.table, bfk.info.fk_keys,
+	                                                                 bfk.info.pk_keys, context, chunk, pk_chunk);
 
 	//! check whether or not the chunk can be inserted into the referenced table
 	indices.Scan([&](Index &index) {
-		index.VerifyAppendForeignKey(pk_chunk);
+		if (FindColumnIndex(bfk.info.pk_keys, index.column_ids)) {
+			index.VerifyAppendForeignKey(pk_chunk);
+		}
 		return false;
 	});
 }
 
-static void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &foreign_key, ClientContext &context,
+static void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
                                              DataChunk &chunk) {
 	DataChunk fk_chunk;
-	TableIndexList &indices = GetForeignKeyConstraintIndicesAndChunk(foreign_key.table, foreign_key.pk_keys,
-	                                                                 foreign_key.fk_keys, context, chunk, fk_chunk);
+	TableIndexList &indices = GetForeignKeyConstraintIndicesAndChunk(bfk.info.schema, bfk.info.table, bfk.info.pk_keys,
+	                                                                 bfk.info.fk_keys, context, chunk, fk_chunk);
 
 	//! check whether or not the chunk can be deleted from the table has foreign keys
 	indices.Scan([&](Index &index) {
-		index.VerifyDeleteForeignKey(fk_chunk);
+		if (FindColumnIndex(bfk.info.fk_keys, index.column_ids)) {
+			index.VerifyDeleteForeignKey(fk_chunk);
+		}
 		return false;
 	});
 }
@@ -510,9 +531,10 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY: {
-			auto &foreign_key = *reinterpret_cast<BoundForeignKeyConstraint *>(constraint.get());
-			if (foreign_key.is_fk_table) {
-				VerifyAppendForeignKeyConstraint(foreign_key, context, chunk);
+			auto &bfk = *reinterpret_cast<BoundForeignKeyConstraint *>(constraint.get());
+			if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
+			    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+				VerifyAppendForeignKeyConstraint(bfk, context, chunk);
 			}
 			break;
 		}
@@ -836,15 +858,35 @@ void DataTable::VerifyDeleteConstraints(TableCatalogEntry &table, ClientContext 
 		case ConstraintType::UNIQUE:
 			break;
 		case ConstraintType::FOREIGN_KEY: {
-			auto &foreign_key = *reinterpret_cast<BoundForeignKeyConstraint *>(constraint.get());
-			if (!foreign_key.is_fk_table) {
-				VerifyDeleteForeignKeyConstraint(foreign_key, context, chunk);
+			auto &bfk = *reinterpret_cast<BoundForeignKeyConstraint *>(constraint.get());
+			if (bfk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ||
+			    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+				VerifyDeleteForeignKeyConstraint(bfk, context, chunk);
 			}
 			break;
 		}
 		default:
 			throw NotImplementedException("Constraint type not implemented!");
 		}
+	}
+}
+
+void DataTable::GatherVerifyChunk(ClientContext &context, Vector &row_identifiers, idx_t count, DataChunk &chunk) {
+	auto &transaction = Transaction::GetTransaction(context);
+	auto ids = FlatVector::GetData<row_t>(row_identifiers);
+	auto first_id = ids[0];
+	if (first_id >= MAX_ROW_ID) {
+		transaction.storage.FetchChunk(this, row_identifiers, count, chunk);
+	} else {
+		ColumnFetchState fetch_state;
+		vector<column_t> col_ids;
+		vector<LogicalType> types;
+		for (idx_t i = 0; i < column_definitions.size(); i++) {
+			col_ids.push_back(column_definitions[i].oid);
+			types.emplace_back(column_definitions[i].type);
+		}
+		chunk.Initialize(types);
+		Fetch(transaction, chunk, col_ids, row_identifiers, count, fetch_state);
 	}
 }
 
@@ -863,12 +905,11 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 	auto ids = FlatVector::GetData<row_t>(row_identifiers);
 	auto first_id = ids[0];
 
+	// verify any constraints on the delete rows
+	DataChunk verify_chunk;
 	if (first_id >= MAX_ROW_ID) {
-		// deletion is in transaction-local storage: push delete into local chunk collection
-		return transaction.storage.Delete(this, row_identifiers, count);
+		transaction.storage.FetchChunk(this, row_identifiers, count, verify_chunk);
 	} else {
-		// verify any constraints on the delete rows
-		DataChunk chunk;
 		ColumnFetchState fetch_state;
 		vector<column_t> col_ids;
 		vector<LogicalType> types;
@@ -876,10 +917,15 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 			col_ids.push_back(column_definitions[i].oid);
 			types.emplace_back(column_definitions[i].type);
 		}
-		chunk.Initialize(types);
-		Fetch(transaction, chunk, col_ids, row_identifiers, count, fetch_state);
-		VerifyDeleteConstraints(table, context, chunk);
+		verify_chunk.Initialize(types);
+		Fetch(transaction, verify_chunk, col_ids, row_identifiers, count, fetch_state);
+	}
+	VerifyDeleteConstraints(table, context, verify_chunk);
 
+	if (first_id >= MAX_ROW_ID) {
+		// deletion is in transaction-local storage: push delete into local chunk collection
+		return transaction.storage.Delete(this, row_identifiers, count);
+	} else {
 		idx_t delete_count = 0;
 		// delete is in the row groups
 		// we need to figure out for each id to which row group it belongs
@@ -945,7 +991,10 @@ static bool CreateMockChunk(TableCatalogEntry &table, const vector<column_t> &co
 }
 
 void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-                                        const vector<column_t> &column_ids) {
+                                        const vector<column_t> &column_ids, Vector &row_ids, idx_t count) {
+#ifdef DEBUG
+	bool is_self_referencing_fk = false;
+#endif
 	for (auto &constraint : table.bound_constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
@@ -970,8 +1019,36 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, ClientContext 
 			break;
 		}
 		case ConstraintType::UNIQUE:
-		case ConstraintType::FOREIGN_KEY:
 			break;
+		case ConstraintType::FOREIGN_KEY: {
+			auto &bfk = *reinterpret_cast<BoundForeignKeyConstraint *>(constraint.get());
+			if (bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+#ifdef DEBUG
+				is_self_referencing_fk = true;
+#endif
+				bool is_verify_append = false, is_verify_delete = false;
+				for (idx_t i = 0; i < column_ids.size(); i++) {
+					if (bfk.fk_key_set.find(column_ids[i]) != bfk.fk_key_set.end()) {
+						is_verify_append = true;
+					}
+					if (bfk.pk_key_set.find(column_ids[i]) != bfk.pk_key_set.end()) {
+						is_verify_delete = true;
+					}
+				}
+				if (is_verify_append) {
+					DataChunk mock_chunk;
+					auto types = table.GetTypes();
+					CreateMockChunk(types, column_ids, chunk, mock_chunk);
+					VerifyAppendForeignKeyConstraint(bfk, context, mock_chunk);
+				}
+				if (is_verify_delete) {
+					DataChunk verify_chunk;
+					GatherVerifyChunk(context, row_ids, count, verify_chunk);
+					VerifyDeleteForeignKeyConstraint(bfk, context, verify_chunk);
+				}
+			}
+			break;
+		}
 		default:
 			throw NotImplementedException("Constraint type not implemented!");
 		}
@@ -979,10 +1056,12 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, ClientContext 
 	// update should not be called for indexed columns!
 	// instead update should have been rewritten to delete + update on higher layer
 #ifdef DEBUG
-	info->indexes.Scan([&](Index &index) {
-		D_ASSERT(!index.IndexIsUpdated(column_ids));
-		return false;
-	});
+	if (!is_self_referencing_fk) {
+		info->indexes.Scan([&](Index &index) {
+			D_ASSERT(!index.IndexIsUpdated(column_ids));
+			return false;
+		});
+	}
 
 #endif
 }
@@ -1002,7 +1081,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	}
 
 	// first verify that no constraints are violated
-	VerifyUpdateConstraints(table, context, updates, column_ids);
+	VerifyUpdateConstraints(table, context, updates, column_ids, row_ids, count);
 
 	// now perform the actual update
 	auto &transaction = Transaction::GetTransaction(context);

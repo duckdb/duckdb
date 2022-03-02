@@ -196,12 +196,12 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
-// ForeignKeyConstraintInfo
+// AlterForeignKeyInfo
 //===--------------------------------------------------------------------===//
-struct ForeignKeyConstraintInfo : public AlterTableInfo {
-	ForeignKeyConstraintInfo(string schema, string table, string fk_table, vector<string> pk_columns,
-	                         vector<string> fk_columns, vector<idx_t> pk_keys, vector<idx_t> fk_keys, bool is_fk_add);
-	~ForeignKeyConstraintInfo() override;
+struct AlterForeignKeyInfo : public AlterTableInfo {
+	AlterForeignKeyInfo(string schema, string table, string fk_table, vector<string> pk_columns,
+	                    vector<string> fk_columns, vector<idx_t> pk_keys, vector<idx_t> fk_keys, bool is_fk_add);
+	~AlterForeignKeyInfo() override;
 
 	string fk_table;
 	vector<string> pk_columns;

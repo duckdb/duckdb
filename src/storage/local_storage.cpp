@@ -466,4 +466,22 @@ void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t change
 	throw NotImplementedException("FIXME: ALTER TYPE with transaction local data not currently supported");
 }
 
+void LocalStorage::FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &dst_chunk) {
+	auto storage = GetStorage(table);
+	idx_t chunk_idx = GetChunk(row_ids);
+	auto &chunk = storage->collection.GetChunk(chunk_idx);
+
+	VectorData row_ids_data;
+	row_ids.Orrify(count, row_ids_data);
+	auto row_identifiers = (const row_t *)row_ids_data.data;
+	SelectionVector sel(count);
+	for (idx_t i = 0; i < count; ++i) {
+		const auto idx = row_ids_data.sel->get_index(i);
+		sel.set_index(i, row_identifiers[idx] - MAX_ROW_ID);
+	}
+
+	dst_chunk.InitializeEmpty(chunk.GetTypes());
+	dst_chunk.Slice(chunk, sel, count);
+}
+
 } // namespace duckdb

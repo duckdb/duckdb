@@ -108,14 +108,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			break;
 		}
 		case duckdb_libpgquery::T_PGConstraint: {
-			auto cond = TransformConstraint(c);
-			if (cond->type == ConstraintType::FOREIGN_KEY) {
-				auto &fk = (ForeignKeyConstraint &)*cond;
-				if (fk.pk_table == info->table) {
-					throw ParserException("Main key Table must be different with foreign key table");
-				}
-			}
-			info->constraints.push_back(move(cond));
+			info->constraints.push_back(TransformConstraint(c));
 			break;
 		}
 		default:

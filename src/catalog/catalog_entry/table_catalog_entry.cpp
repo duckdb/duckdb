@@ -94,14 +94,15 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				storage->AddIndex(move(art), bound_expressions);
 			} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
 				// foreign key constraint: create a foreign key index
-				auto &foreign_key = (BoundForeignKeyConstraint &)*constraint;
-				if (foreign_key.is_fk_table) {
+				auto &bfk = (BoundForeignKeyConstraint &)*constraint;
+				if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
+				    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
 					// fetch types and create expressions for the index from the columns
 					vector<column_t> column_ids;
 					vector<unique_ptr<Expression>> unbound_expressions;
 					vector<unique_ptr<Expression>> bound_expressions;
 					idx_t key_nr = 0;
-					for (auto &key : foreign_key.fk_keys) {
+					for (auto &key : bfk.info.fk_keys) {
 						D_ASSERT(key < columns.size());
 
 						unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(
@@ -157,7 +158,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		return ChangeColumnType(context, *change_type_info);
 	}
 	case AlterTableType::FOREIGN_KEY_CONSTRAINT: {
-		auto foreign_key_constraint_info = (ForeignKeyConstraintInfo *)table_info;
+		auto foreign_key_constraint_info = (AlterForeignKeyInfo *)table_info;
 		return SetForeignKeyConstraint(context, *foreign_key_constraint_info);
 	}
 	default:
@@ -212,10 +213,14 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		}
 		case ConstraintType::FOREIGN_KEY: {
 			// FOREIGN KEY constraint: possibly need to rename columns
-			auto &foreign_key = (ForeignKeyConstraint &)*copy;
-			vector<string> &columns = foreign_key.pk_columns;
-			if (foreign_key.is_fk_table) {
-				columns = foreign_key.fk_columns;
+			auto &fk = (ForeignKeyConstraint &)*copy;
+			vector<string> columns = fk.pk_columns;
+			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+				columns = fk.fk_columns;
+			} else if (fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+				for (idx_t i = 0; i < fk.fk_columns.size(); i++) {
+					columns.push_back(fk.fk_columns[i]);
+				}
 			}
 			for (idx_t i = 0; i < columns.size(); i++) {
 				if (columns[i] == info.old_name) {
@@ -324,10 +329,14 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		}
 		case ConstraintType::FOREIGN_KEY: {
 			auto copy = constraint->Copy();
-			auto &foreign_key = (ForeignKeyConstraint &)*copy;
-			vector<string> &columns = foreign_key.pk_columns;
-			if (foreign_key.is_fk_table) {
-				columns = foreign_key.fk_columns;
+			auto &fk = (ForeignKeyConstraint &)*copy;
+			vector<string> columns = fk.pk_columns;
+			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+				columns = fk.fk_columns;
+			} else if (fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+				for (idx_t i = 0; i < fk.fk_columns.size(); i++) {
+					columns.push_back(fk.fk_columns[i]);
+				}
 			}
 			for (idx_t i = 0; i < columns.size(); i++) {
 				if (columns[i] == info.removed_column) {
@@ -406,10 +415,14 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY: {
-			auto &bound_foreign_key = (BoundForeignKeyConstraint &)*bound_constraints[i];
-			unordered_set<idx_t> &key_set = bound_foreign_key.pk_key_set;
-			if (bound_foreign_key.is_fk_table) {
-				key_set = bound_foreign_key.fk_key_set;
+			auto &bfk = (BoundForeignKeyConstraint &)*bound_constraints[i];
+			unordered_set<idx_t> key_set = bfk.pk_key_set;
+			if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+				key_set = bfk.fk_key_set;
+			} else if (bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+				for (idx_t i = 0; i < bfk.info.fk_keys.size(); i++) {
+					key_set.insert(bfk.info.fk_keys[i]);
+				}
 			}
 			if (key_set.find(change_idx) != key_set.end()) {
 				throw BinderException("Cannot change the type of a column that has a FOREIGN KEY constraint specified");
@@ -439,8 +452,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	                                      new_storage);
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContext &context,
-                                                                    ForeignKeyConstraintInfo &info) {
+unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -449,16 +461,22 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContex
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
 		if (constraint->type == ConstraintType::FOREIGN_KEY) {
-			ForeignKeyConstraint &fk_cond = (ForeignKeyConstraint &)*constraint;
-			if (fk_cond.is_fk_table == false && fk_cond.pk_table == info.fk_table) {
+			ForeignKeyConstraint &fk = (ForeignKeyConstraint &)*constraint;
+			if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && fk.info.table == info.fk_table) {
 				continue;
 			}
 		}
 		create_info->constraints.push_back(move(constraint));
 	}
 	if (info.is_fk_add) {
-		create_info->constraints.push_back(make_unique<ForeignKeyConstraint>(
-		    info.fk_table, info.pk_columns, info.pk_keys, info.fk_columns, info.fk_keys, false));
+		ForeignKeyInfo fk_info;
+		fk_info.type = ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE;
+		fk_info.schema = info.schema;
+		fk_info.table = info.fk_table;
+		fk_info.pk_keys = info.pk_keys;
+		fk_info.fk_keys = info.fk_keys;
+		create_info->constraints.push_back(
+		    make_unique<ForeignKeyConstraint>(info.pk_columns, info.fk_columns, move(fk_info)));
 	}
 
 	auto binder = Binder::CreateBinder(context);
@@ -550,7 +568,8 @@ string TableCatalogEntry::ToSQL() {
 			}
 		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
 			auto &fk = (ForeignKeyConstraint &)*constraint;
-			if (fk.is_fk_table) {
+			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
+			    fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
 				extra_constraints.push_back(constraint->ToString());
 			}
 		} else {

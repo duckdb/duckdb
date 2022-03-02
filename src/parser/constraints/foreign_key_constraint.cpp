@@ -6,14 +6,12 @@
 
 namespace duckdb {
 
-ForeignKeyConstraint::ForeignKeyConstraint(string pk_table, vector<string> pk_columns, vector<idx_t> pk_keys,
-                                           vector<string> fk_columns, vector<idx_t> fk_keys, bool is_fk_table)
-    : Constraint(ConstraintType::FOREIGN_KEY), pk_table(move(pk_table)), pk_columns(move(pk_columns)),
-      pk_keys(move(pk_keys)), fk_columns(move(fk_columns)), fk_keys(move(fk_keys)), is_fk_table(is_fk_table) {
+ForeignKeyConstraint::ForeignKeyConstraint(vector<string> pk_columns, vector<string> fk_columns, ForeignKeyInfo info)
+    : Constraint(ConstraintType::FOREIGN_KEY), pk_columns(pk_columns), fk_columns(fk_columns), info(move(info)) {
 }
 
 string ForeignKeyConstraint::ToString() const {
-	if (is_fk_table) {
+	if (info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 		string base = "FOREIGN KEY (";
 
 		for (idx_t i = 0; i < fk_columns.size(); i++) {
@@ -23,7 +21,11 @@ string ForeignKeyConstraint::ToString() const {
 			base += KeywordHelper::WriteOptionallyQuoted(fk_columns[i]);
 		}
 		base += ") REFERENCES ";
-		base += pk_table;
+		if (!info.schema.empty()) {
+			base += info.schema;
+			base += ".";
+		}
+		base += info.table;
 		base += "(";
 
 		for (idx_t i = 0; i < pk_columns.size(); i++) {
@@ -41,31 +43,33 @@ string ForeignKeyConstraint::ToString() const {
 }
 
 unique_ptr<Constraint> ForeignKeyConstraint::Copy() const {
-	return make_unique<ForeignKeyConstraint>(pk_table, pk_columns, pk_keys, fk_columns, fk_keys, is_fk_table);
+	return make_unique<ForeignKeyConstraint>(pk_columns, fk_columns, info);
 }
 
 void ForeignKeyConstraint::Serialize(FieldWriter &writer) const {
-	writer.WriteString(pk_table);
 	D_ASSERT(pk_columns.size() <= NumericLimits<uint32_t>::Maximum());
 	writer.WriteList<string>(pk_columns);
-	writer.WriteList<idx_t>(pk_keys);
 	D_ASSERT(fk_columns.size() <= NumericLimits<uint32_t>::Maximum());
 	writer.WriteList<string>(fk_columns);
-	writer.WriteList<idx_t>(fk_keys);
-	writer.WriteField<bool>(is_fk_table);
+	writer.WriteField<ForeignKeyType>(info.type);
+	writer.WriteString(info.schema);
+	writer.WriteString(info.table);
+	writer.WriteList<idx_t>(info.pk_keys);
+	writer.WriteList<idx_t>(info.fk_keys);
 }
 
 unique_ptr<Constraint> ForeignKeyConstraint::Deserialize(FieldReader &source) {
-	auto pk_table = source.ReadRequired<string>();
+	ForeignKeyInfo read_info;
 	auto pk_columns = source.ReadRequiredList<string>();
-	auto pk_keys = source.ReadRequiredList<idx_t>();
 	auto fk_columns = source.ReadRequiredList<string>();
-	auto fk_keys = source.ReadRequiredList<idx_t>();
-	auto is_fk_table = source.ReadRequired<bool>();
+	read_info.type = source.ReadRequired<ForeignKeyType>();
+	read_info.schema = source.ReadRequired<string>();
+	read_info.table = source.ReadRequired<string>();
+	read_info.pk_keys = source.ReadRequiredList<idx_t>();
+	read_info.fk_keys = source.ReadRequiredList<idx_t>();
 
 	// column list parsed constraint
-	return make_unique<ForeignKeyConstraint>(pk_table, move(pk_columns), move(pk_keys), move(fk_columns), move(fk_keys),
-	                                         is_fk_table);
+	return make_unique<ForeignKeyConstraint>(pk_columns, fk_columns, move(read_info));
 }
 
 } // namespace duckdb

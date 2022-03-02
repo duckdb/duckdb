@@ -97,7 +97,7 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(FieldReader &reader) {
 	case AlterTableType::SET_DEFAULT:
 		return SetDefaultInfo::Deserialize(reader, schema, table);
 	case AlterTableType::FOREIGN_KEY_CONSTRAINT:
-		return ForeignKeyConstraintInfo::Deserialize(reader, schema, table);
+		return AlterForeignKeyInfo::Deserialize(reader, schema, table);
 	default:
 		throw SerializationException("Unknown alter table type for deserialization!");
 	}
@@ -255,24 +255,24 @@ unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(FieldReader &reader, string sc
 }
 
 //===--------------------------------------------------------------------===//
-// ForeignKeyConstraintInfo
+// AlterForeignKeyInfo
 //===--------------------------------------------------------------------===//
-ForeignKeyConstraintInfo::ForeignKeyConstraintInfo(string schema_p, string table_p, string fk_table,
-                                                   vector<string> pk_columns, vector<string> fk_columns,
-                                                   vector<idx_t> pk_keys, vector<idx_t> fk_keys, bool is_fk_add)
+AlterForeignKeyInfo::AlterForeignKeyInfo(string schema_p, string table_p, string fk_table, vector<string> pk_columns,
+                                         vector<string> fk_columns, vector<idx_t> pk_keys, vector<idx_t> fk_keys,
+                                         bool is_fk_add)
     : AlterTableInfo(AlterTableType::FOREIGN_KEY_CONSTRAINT, move(schema_p), move(table_p)), fk_table(move(fk_table)),
       pk_columns(move(pk_columns)), fk_columns(move(fk_columns)), pk_keys(move(pk_keys)), fk_keys(move(fk_keys)),
       is_fk_add(is_fk_add) {
 }
-ForeignKeyConstraintInfo::~ForeignKeyConstraintInfo() {
+AlterForeignKeyInfo::~AlterForeignKeyInfo() {
 }
 
-unique_ptr<AlterInfo> ForeignKeyConstraintInfo::Copy() const {
-	return make_unique_base<AlterInfo, ForeignKeyConstraintInfo>(schema, name, fk_table, pk_columns, fk_columns,
-	                                                             pk_keys, fk_keys, is_fk_add);
+unique_ptr<AlterInfo> AlterForeignKeyInfo::Copy() const {
+	return make_unique_base<AlterInfo, AlterForeignKeyInfo>(schema, name, fk_table, pk_columns, fk_columns, pk_keys,
+	                                                        fk_keys, is_fk_add);
 }
 
-void ForeignKeyConstraintInfo::SerializeAlterTable(FieldWriter &writer) const {
+void AlterForeignKeyInfo::SerializeAlterTable(FieldWriter &writer) const {
 	writer.WriteString(fk_table);
 	writer.WriteList<string>(pk_columns);
 	writer.WriteList<string>(fk_columns);
@@ -281,15 +281,15 @@ void ForeignKeyConstraintInfo::SerializeAlterTable(FieldWriter &writer) const {
 	writer.WriteField<bool>(is_fk_add);
 }
 
-unique_ptr<AlterInfo> ForeignKeyConstraintInfo::Deserialize(FieldReader &reader, string schema, string table) {
+unique_ptr<AlterInfo> AlterForeignKeyInfo::Deserialize(FieldReader &reader, string schema, string table) {
 	auto fk_table = reader.ReadRequired<string>();
 	auto pk_columns = reader.ReadRequiredList<string>();
 	auto fk_columns = reader.ReadRequiredList<string>();
 	auto pk_keys = reader.ReadRequiredList<idx_t>();
 	auto fk_keys = reader.ReadRequiredList<idx_t>();
 	auto is_fk_add = reader.ReadRequired<bool>();
-	return make_unique<ForeignKeyConstraintInfo>(move(schema), move(table), move(fk_table), move(pk_columns),
-	                                             move(fk_columns), move(pk_keys), move(fk_keys), is_fk_add);
+	return make_unique<AlterForeignKeyInfo>(move(schema), move(table), move(fk_table), move(pk_columns),
+	                                        move(fk_columns), move(pk_keys), move(fk_keys), is_fk_add);
 }
 
 //===--------------------------------------------------------------------===//

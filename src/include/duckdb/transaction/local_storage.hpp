@@ -88,6 +88,8 @@ public:
 	void ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, const LogicalType &target_type,
 	                const vector<column_t> &bound_columns, Expression &cast_expr);
 
+	void FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &chunk);
+
 private:
 	LocalTableStorage *GetStorage(DataTable *table);
 
