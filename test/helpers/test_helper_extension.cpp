@@ -4,6 +4,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -29,9 +30,10 @@ void TestHelperExtension::Load(DuckDB &db) {
 
 	Connection conn(db);
 	conn.BeginTransaction();
-	auto &catalog = Catalog::GetCatalog(*conn.context);
-	catalog.CreateFunction(*conn.context, &hello_info);
-	catalog.CreateFunction(*conn.context, &last_error_info);
+	auto &client_context = *conn.context;
+	auto &catalog = Catalog::GetCatalog(client_context);
+	catalog.CreateFunction(client_context, &hello_info);
+	catalog.CreateFunction(client_context, &last_error_info);
 	conn.Commit();
 }
 

@@ -41,6 +41,11 @@ SELECT 4>ALL([1, 2, 3, NULL]);
 ----
 NULL
 
+query I
+SELECT 1=ANY(NULL);
+----
+false
+
 # non-scalar list
 statement ok
 CREATE VIEW v1 AS SELECT LIST(i) l FROM RANGE(5) tbl(i)
