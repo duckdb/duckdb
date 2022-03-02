@@ -191,3 +191,5 @@ end
 function DBInterface.execute(con::Connection, sql::AbstractString)
     return execute(Stmt(con, sql))
 end
+
+Base.show(io::IO, result::DuckDB.QueryResult) = print(io, DataFrame(result))

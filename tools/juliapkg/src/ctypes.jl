@@ -1,6 +1,3 @@
-struct DuckDBException <: Exception
-    msg::AbstractString
-end
 
 const duckdb_database = Ptr{Cvoid}
 const duckdb_config = Ptr{Cvoid}
