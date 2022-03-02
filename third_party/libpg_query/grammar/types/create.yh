@@ -35,7 +35,7 @@
 %type <list> ColQualList
 %type <ival> key_delete
 %type <defelt> reloption_elem
-%type <list> columnList
+%type <list> columnList columnList_opt_comma
 %type <typnam> func_type
 %type <node> ConstraintElem
 %type <list> TableElementList
