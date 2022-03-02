@@ -44,6 +44,7 @@ struct AppenderWrapper {
 };
 
 duckdb_type ConvertCPPTypeToC(const LogicalType &type);
+LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type);
 idx_t GetCTypeSize(duckdb_type type);
 duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_result *out);
 

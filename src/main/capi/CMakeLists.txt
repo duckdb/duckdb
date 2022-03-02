@@ -4,10 +4,12 @@ add_library_unity(
   appender-c.cpp
   arrow-c.cpp
   config-c.cpp
+  data_chunk-c.cpp
   datetime-c.cpp
   duckdb-c.cpp
   helper-c.cpp
   hugeint-c.cpp
+  logical_types-c.cpp
   prepared-c.cpp
   result-c.cpp
   value-c.cpp)

@@ -203,6 +203,8 @@ typedef void *duckdb_arrow;
 typedef void *duckdb_config;
 typedef void *duckdb_arrow_schema;
 typedef void *duckdb_arrow_array;
+typedef void *duckdb_logical_type;
+typedef void *duckdb_data_chunk;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 
@@ -582,6 +584,14 @@ Free a value returned from `duckdb_malloc`, `duckdb_value_varchar` or `duckdb_va
 */
 DUCKDB_API void duckdb_free(void *ptr);
 
+/*!
+The internal vector size used by DuckDB.
+This is the amount of tuples that will fit into a data chunk created by `duckdb_create_data_chunk`.
+
+* returns: The vector size.
+*/
+DUCKDB_API idx_t duckdb_vector_size();
+
 //===--------------------------------------------------------------------===//
 // Date/Time/Timestamp Helpers
 //===--------------------------------------------------------------------===//
@@ -695,7 +705,7 @@ DUCKDB_API duckdb_state duckdb_prepare(duckdb_connection connection, const char 
                                        duckdb_prepared_statement *out_prepared_statement);
 
 /*!
-Closes the prepared statement and de-allocates all memory allocated for that connection.
+Closes the prepared statement and de-allocates all memory allocated for the statement.
 
 * prepared_statement: The prepared statement to destroy.
 */
@@ -864,6 +874,144 @@ DUCKDB_API duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement 
                                                       duckdb_arrow *out_result);
 
 //===--------------------------------------------------------------------===//
+// Logical Type Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Creates a `duckdb_logical_type` from a standard primitive type.
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+This should not be used with `DUCKDB_TYPE_DECIMAL`.
+
+* type: The primitive type to create.
+* returns: The logical type type.
+*/
+DUCKDB_API duckdb_logical_type duckdb_create_logical_type(duckdb_type type);
+
+/*!
+Retrieves the type class of a `duckdb_logical_type`.
+
+* type: The logical type object
+* returns: The type id
+*/
+DUCKDB_API duckdb_type duckdb_get_type_id(duckdb_logical_type type);
+
+/*!
+Destroys the logical type and de-allocates all memory allocated for that type.
+
+* type: The logical type to destroy.
+*/
+DUCKDB_API void duckdb_destroy_logical_type(duckdb_logical_type *type);
+
+//===--------------------------------------------------------------------===//
+// Data Chunk Interface
+//===--------------------------------------------------------------------===//
+/*!
+Creates an empty DataChunk with the specified set of types.
+
+* types: An array of types of the data chunk.
+* column_count: The number of columns.
+* returns: The data chunk.
+*/
+DUCKDB_API duckdb_data_chunk duckdb_create_data_chunk(duckdb_logical_type *types, idx_t column_count);
+
+/*!
+Destroys the data chunk and de-allocates all memory allocated for that chunk.
+
+* chunk: The data chunk to destroy.
+*/
+DUCKDB_API void duckdb_destroy_data_chunk(duckdb_data_chunk *chunk);
+
+/*!
+Resets a data chunk, clearing the validity masks and setting the cardinality of the data chunk to 0.
+
+* chunk: The data chunk to reset.
+*/
+DUCKDB_API void duckdb_data_chunk_reset(duckdb_data_chunk chunk);
+
+/*!
+Retrieves the number of columns in a data chunk.
+
+* chunk: The data chunk to get the data from
+* returns: The number of columns in the data chunk
+*/
+DUCKDB_API idx_t duckdb_data_chunk_get_column_count(duckdb_data_chunk chunk);
+
+/*!
+Retrieves the current number of tuples in a data chunk.
+
+* chunk: The data chunk to get the data from
+* returns: The number of tuples in the data chunk
+*/
+DUCKDB_API idx_t duckdb_data_chunk_get_size(duckdb_data_chunk chunk);
+
+/*!
+Sets the current number of tuples in a data chunk.
+
+* chunk: The data chunk to set the size in
+* size: The number of tuples in the data chunk
+*/
+DUCKDB_API void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size);
+
+/*!
+Retrieves the column type of the specified column in the data chunk.
+
+The result must be destroyed with `duckdb_destroy_logical_type`.
+
+* chunk: The data chunk to get the data from
+* returns: The type of the column
+*/
+DUCKDB_API duckdb_logical_type duckdb_data_chunk_get_column_type(duckdb_data_chunk chunk, idx_t col_idx);
+
+/*!
+Retrieves the data pointer of the specified column in the data chunk.
+
+The data pointer can be used to read or write values from the data chunk.
+How to read or write values depends on the type of the column.
+The pointer represents a dense array of `duckdb_data_chunk_get_size(size)` values.
+
+* chunk: The data chunk to get the data from
+* returns: The data pointer
+*/
+DUCKDB_API void *duckdb_data_chunk_get_data(duckdb_data_chunk chunk, idx_t col_idx);
+
+/*!
+Retrieves the validity mask pointer of the specified column in the data chunk.
+
+If all values are valid, this function MIGHT return NULL!
+
+The validity mask is a bitset that signifies null-ness within the data chunk.
+It is a series of uint64_t values, where each uint64_t value contains validity for 64 tuples.
+The bit is set to 1 if the value is valid (i.e. not NULL) or 0 if the value is invalid (i.e. NULL).
+
+Validity of a specific value can be obtained like this:
+
+idx_t entry_idx = row_idx / 64;
+idx_t idx_in_entry = row_idx % 64;
+bool is_valid = validity_mask[entry_idx] & (1 << idx_in_entry);
+
+* chunk: The data chunk to get the data from
+* returns: The pointer to the validity mask, or NULL if no validity mask is present
+*/
+DUCKDB_API uint64_t *duckdb_data_chunk_get_validity(duckdb_data_chunk chunk, idx_t col_idx);
+
+/*!
+Ensures the validity mask is writable by allocating it.
+
+After this function is called, `duckdb_data_chunk_get_validity` will ALWAYS return non-NULL.
+This allows null values to be written to the data chunk, regardless of whether a validity mask was present before.
+
+* chunk: The data chunk to alter
+*/
+DUCKDB_API void duckdb_data_chunk_ensure_validity_writable(duckdb_data_chunk chunk, idx_t col_idx);
+
+// print
+// to string
+// appender -> append chunk
+// result -> fetch chunk
+//
+
+//===--------------------------------------------------------------------===//
 // Appender
 //===--------------------------------------------------------------------===//
 
@@ -1029,6 +1177,19 @@ DUCKDB_API duckdb_state duckdb_append_blob(duckdb_appender appender, const void 
 Append a NULL value to the appender (of any type).
 */
 DUCKDB_API duckdb_state duckdb_append_null(duckdb_appender appender);
+
+/*!
+Appends a pre-filled data chunk to the specified appender.
+
+The types of the data chunk must exactly match the types of the table, no casting is performed.
+If the types do not match or the appender is in an invalid state, DuckDBError is returned.
+If the append is successful, DuckDBSuccess is returned.
+
+* appender: The appender to append to.
+* chunk: The data chunk to append.
+* returns: The return state.
+*/
+DUCKDB_API duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckdb_data_chunk chunk);
 
 //===--------------------------------------------------------------------===//
 // Arrow Interface

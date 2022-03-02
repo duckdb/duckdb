@@ -2,6 +2,52 @@
 
 namespace duckdb {
 
+LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
+	switch (c_type) {
+	case DUCKDB_TYPE_BOOLEAN:
+		return LogicalTypeId::BOOLEAN;
+	case DUCKDB_TYPE_TINYINT:
+		return LogicalTypeId::TINYINT;
+	case DUCKDB_TYPE_SMALLINT:
+		return LogicalTypeId::SMALLINT;
+	case DUCKDB_TYPE_INTEGER:
+		return LogicalTypeId::INTEGER;
+	case DUCKDB_TYPE_BIGINT:
+		return LogicalTypeId::BIGINT;
+	case DUCKDB_TYPE_UTINYINT:
+		return LogicalTypeId::UTINYINT;
+	case DUCKDB_TYPE_USMALLINT:
+		return LogicalTypeId::USMALLINT;
+	case DUCKDB_TYPE_UINTEGER:
+		return LogicalTypeId::UINTEGER;
+	case DUCKDB_TYPE_UBIGINT:
+		return LogicalTypeId::UBIGINT;
+	case DUCKDB_TYPE_HUGEINT:
+		return LogicalTypeId::HUGEINT;
+	case DUCKDB_TYPE_FLOAT:
+		return LogicalTypeId::FLOAT;
+	case DUCKDB_TYPE_DOUBLE:
+		return LogicalTypeId::DOUBLE;
+	case DUCKDB_TYPE_TIMESTAMP:
+		return LogicalTypeId::TIMESTAMP;
+	case DUCKDB_TYPE_DATE:
+		return LogicalTypeId::DATE;
+	case DUCKDB_TYPE_TIME:
+		return LogicalTypeId::TIME;
+	case DUCKDB_TYPE_VARCHAR:
+		return LogicalTypeId::VARCHAR;
+	case DUCKDB_TYPE_BLOB:
+		return LogicalTypeId::BLOB;
+	case DUCKDB_TYPE_INTERVAL:
+		return LogicalTypeId::INTERVAL;
+	case DUCKDB_TYPE_DECIMAL:
+		return LogicalTypeId::DECIMAL;
+	default: // LCOV_EXCL_START
+		D_ASSERT(0);
+		return LogicalTypeId::INVALID;
+	} // LCOV_EXCL_STOP
+}
+
 duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 	switch (sql_type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -52,6 +98,7 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_INVALID;
 	} // LCOV_EXCL_STOP
 }
+
 idx_t GetCTypeSize(duckdb_type type) {
 	switch (type) {
 	case DUCKDB_TYPE_BOOLEAN:
@@ -107,4 +154,8 @@ void *duckdb_malloc(size_t size) {
 
 void duckdb_free(void *ptr) {
 	free(ptr);
+}
+
+idx_t duckdb_vector_size() {
+	return STANDARD_VECTOR_SIZE;
 }
