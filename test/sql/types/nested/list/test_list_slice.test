@@ -255,3 +255,21 @@ NULL
 NULL
 NULL
 NULL
+
+# pop back
+query T
+SELECT ARRAY_POP_BACK(s) FROM lists;
+----
+[h, e, l, l]
+[w, o, r, l]
+[]
+NULL
+
+# pop front
+query T
+SELECT ARRAY_POP_FRONT(s) FROM lists;
+----
+[e, l, l, o]
+[o, r, l, d]
+[]
+NULL
