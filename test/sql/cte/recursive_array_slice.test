@@ -65,7 +65,7 @@ WITH RECURSIVE t(arr) AS
 (
   SELECT array[1,2,3,4,5,6]
     UNION ALL
-  SELECT  arr[arr[0]:6]
+  SELECT  arr[arr[0]+1:6]
   FROM   t
   WHERE arr[0] < 6
 ) SELECT * FROM t;

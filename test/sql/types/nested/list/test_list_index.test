@@ -53,9 +53,14 @@ SELECT LIST_VALUE(42)[0]
 
 # slicing
 query T
-SELECT a[1:] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
+SELECT a[2:] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
 ----
 [43, 44]
+
+query T
+SELECT a[1:] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
+----
+[42, 43, 44]
 
 query T
 SELECT a[:1] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
@@ -77,6 +82,7 @@ SELECT a[-3:-1] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
 ----
 [42, 43]
 
+# TODO: why do we use null instead of an empty list for negative indexes that go below len(list)?
 query T
 SELECT a[-5:] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
 ----
