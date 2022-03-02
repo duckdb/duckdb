@@ -45,11 +45,17 @@ VariableShowStmt:
 		| show_or_describe ALL
 			{
 				PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
-				n->name = (char*) "all";
+				n->name = (char*) "__show_tables_expanded";
 				n->is_summary = 0;
 				$$ = (PGNode *) n;
 			}
-
+		| show_or_describe
+			{
+				PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
+				n->name = (char*) "__show_tables_expanded";
+				n->is_summary = 0;
+				$$ = (PGNode *) n;
+			}
 		;
 
 show_or_describe: SHOW | DESCRIBE
