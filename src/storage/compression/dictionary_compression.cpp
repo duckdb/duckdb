@@ -11,24 +11,24 @@
 namespace duckdb {
 
 // https://github.com/martinus/robin-hood-hashing/releases/tag/3.11.5
-inline size_t hash_bytes(void const *ptr, size_t len) noexcept {
-	static constexpr uint64_t m = UINT64_C(0xc6a4a7935bd1e995);
-	static constexpr uint64_t seed = UINT64_C(0xe17a1465);
-	static constexpr unsigned int r = 47;
+inline size_t HashBytes(void const *ptr, size_t len) noexcept {
+	static constexpr uint64_t M = UINT64_C(0xc6a4a7935bd1e995);
+	static constexpr uint64_t SEED = UINT64_C(0xe17a1465);
+	static constexpr unsigned int R = 47;
 
 	auto const *const data64 = static_cast<uint64_t const *>(ptr);
-	uint64_t h = seed ^ (len * m);
+	uint64_t h = SEED ^ (len * M);
 
 	size_t const n_blocks = len / 8;
 	for (size_t i = 0; i < n_blocks; ++i) {
 		auto k = Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(data64 + i));
 
-		k *= m;
-		k ^= k >> r;
-		k *= m;
+		k *= M;
+		k ^= k >> R;
+		k *= M;
 
 		h ^= k;
-		h *= m;
+		h *= M;
 	}
 
 	auto const *const data8 = reinterpret_cast<uint8_t const *>(data64 + n_blocks);
@@ -47,19 +47,19 @@ inline size_t hash_bytes(void const *ptr, size_t len) noexcept {
 		h ^= static_cast<uint64_t>(data8[1]) << 8U;
 	case 1:
 		h ^= static_cast<uint64_t>(data8[0]);
-		h *= m;
+		h *= M;
 	default:
 		break;
 	}
-	h ^= h >> r;
-	h *= m;
-	h ^= h >> r;
+	h ^= h >> R;
+	h *= M;
+	h ^= h >> R;
 	return static_cast<size_t>(h);
 }
 
 struct StringHash {
 	std::size_t operator()(const string_t &k) const {
-		return hash_bytes(k.GetDataUnsafe(), k.GetSize());
+		return HashBytes(k.GetDataUnsafe(), k.GetSize());
 	}
 };
 
