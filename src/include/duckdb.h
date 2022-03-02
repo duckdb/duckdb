@@ -938,6 +938,16 @@ Retrieves the number of columns in a data chunk.
 DUCKDB_API idx_t duckdb_data_chunk_get_column_count(duckdb_data_chunk chunk);
 
 /*!
+Retrieves the column type of the specified column in the data chunk.
+
+The result must be destroyed with `duckdb_destroy_logical_type`.
+
+* chunk: The data chunk to get the data from
+* returns: The type of the column
+*/
+DUCKDB_API duckdb_logical_type duckdb_data_chunk_get_column_type(duckdb_data_chunk chunk, idx_t col_idx);
+
+/*!
 Retrieves the current number of tuples in a data chunk.
 
 * chunk: The data chunk to get the data from
@@ -952,16 +962,6 @@ Sets the current number of tuples in a data chunk.
 * size: The number of tuples in the data chunk
 */
 DUCKDB_API void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size);
-
-/*!
-Retrieves the column type of the specified column in the data chunk.
-
-The result must be destroyed with `duckdb_destroy_logical_type`.
-
-* chunk: The data chunk to get the data from
-* returns: The type of the column
-*/
-DUCKDB_API duckdb_logical_type duckdb_data_chunk_get_column_type(duckdb_data_chunk chunk, idx_t col_idx);
 
 /*!
 Retrieves the data pointer of the specified column in the data chunk.

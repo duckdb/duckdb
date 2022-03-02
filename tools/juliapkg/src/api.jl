@@ -1159,383 +1159,565 @@ end
 #         out_result,
 #     )
 # end
-#
-# #=
-# //===--------------------------------------------------------------------===//
-# // Appender
-# //===--------------------------------------------------------------------===//
-# // Appenders are the most efficient way of loading data into DuckDB from within the C interface, and are recommended for
-# // fast data loading. The appender is much faster than using prepared statements or individual `INSERT INTO` statements.
-# // Appends are made in row-wise format. For every column, a `duckdb_append_[type]` call should be made, after which
-# // the row should be finished by calling `duckdb_appender_end_row`. After all rows have been appended,
-# // `duckdb_appender_destroy` should be used to finalize the appender and clean up the resulting memory.
-# // Note that `duckdb_appender_destroy` should always be called on the resulting appender, even if the function returns
-# // `DuckDBError`.
-# =#
-#
-# """
-# Creates an appender object.
-# * connection: The connection context to create the appender in.
-# * schema: The schema of the table to append to, or `nullptr` for the default schema.
-# * table: The table name to append to.
-# * out_appender: The resulting appender object.
-# * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-# DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
-#                                                duckdb_appender *out_appender);
-# """
-# function duckdb_appender_create(connection, schema, table, out_appender)
-#     return ccall(
-#         (:duckdb_appender_create, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid}),
-#         connection[],
-#         schema,
-#         table,
-#         out_appender,
-#     )
-# end
-#
-# """
-# Returns the error message associated with the given appender.
-# If the appender has no error message, this returns `nullptr` instead.
-# The error message should not be freed. It will be de-allocated when `duckdb_appender_destroy` is called.
-# * appender: The appender to get the error from.
-# * returns: The error message, or `nullptr` if there is none.
-# DUCKDB_API const char *duckdb_appender_error(duckdb_appender appender);
-# """
-# function duckdb_appender_error(appender)
-#     return ccall((:duckdb_appender_error, libduckdb), Ptr{UInt8}, (Ptr{Cvoid},), appender[])
-# end
-#
-# """
-# Flush the appender to the table, forcing the cache of the appender to be cleared and the data to be appended to the
-# base table.
-# This should generally not be used unless you know what you are doing. Instead, call `duckdb_appender_destroy` when you
-# are done with the appender.
-# * appender: The appender to flush.
-# * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-# DUCKDB_API duckdb_state duckdb_appender_flush(duckdb_appender appender);
-# """
-# function duckdb_appender_flush(appender)
-#     return ccall((:duckdb_appender_flush, libduckdb), Int32, (Ptr{Cvoid},), appender[])
-# end
-#
-# """
-# Close the appender, flushing all intermediate state in the appender to the table and closing it for further appends.
-# This is generally not necessary. Call `duckdb_appender_destroy` instead.
-# * appender: The appender to flush and close.
-# * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-# DUCKDB_API duckdb_state duckdb_appender_close(duckdb_appender appender);
-# """
-# function duckdb_appender_close(appender)
-#     return ccall((:duckdb_appender_close, libduckdb), Int32, (Ptr{Cvoid},), appender[])
-# end
-#
-# """
-# Close the appender and destroy it. Flushing all intermediate state in the appender to the table, and de-allocating
-# all memory associated with the appender.
-# * appender: The appender to flush, close and destroy.
-# * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-# DUCKDB_API duckdb_state duckdb_appender_destroy(duckdb_appender *appender);
-# """
-# function duckdb_appender_destroy(appender)
-#     return ccall((:duckdb_appender_destroy, libduckdb), Int32, (Ptr{Ptr{Cvoid}},), appender)
-# end
-#
-# """
-# A nop function, provided for backwards compatibility reasons. Does nothing. Only `duckdb_appender_end_row` is required.
-# DUCKDB_API duckdb_state duckdb_appender_begin_row(duckdb_appender appender);
-# """
-# function duckdb_appender_begin_row(appender)
-#     return ccall((:duckdb_appender_begin_row, libduckdb), Int32, (Ptr{Cvoid},), appender[])
-# end
-#
-# """
-# Finish the current row of appends. After end_row is called, the next row can be appended.
-# * appender: The appender.
-# * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-# DUCKDB_API duckdb_state duckdb_appender_end_row(duckdb_appender appender);
-# """
-# function duckdb_appender_end_row(appender)
-#     return ccall((:duckdb_appender_end_row, libduckdb), Int32, (Ptr{Cvoid},), appender[])
-# end
-#
-# """
-# Append a bool value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_bool(duckdb_appender appender, bool value);
-# """
-# function duckdb_append_bool(appender, value)
-#     return ccall(
-#         (:duckdb_append_bool, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append an int8_t value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_int8(duckdb_appender appender, int8_t value);
-# """
-# function duckdb_append_int8(appender, value)
-#     return ccall(
-#         (:duckdb_append_int8, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int16),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append an int16_t value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_int16(duckdb_appender appender, int16_t value);
-# """
-# function duckdb_append_int16(appender, value)
-#     return ccall(
-#         (:duckdb_append_int16, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int16),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append an int32_t value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_int32(duckdb_appender appender, int32_t value);
-# """
-# function duckdb_append_int32(appender, value)
-#     return ccall(
-#         (:duckdb_append_int16, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append an int64_t value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_int64(duckdb_appender appender, int64_t value);
-# """
-# function duckdb_append_int64(appender, value)
-#     return ccall(
-#         (:duckdb_append_int64, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int64),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append a duckdb_hugeint value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_hugeint(duckdb_appender appender, duckdb_hugeint value);
-# """
-# function duckdb_append_hugeint(appender, value)
-#     return ccall(
-#         (:duckdb_append_hugeint, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int64),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append a uint8_t value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_uint8(duckdb_appender appender, uint8_t value);
-# """
-# function duckdb_append_uint8(appender, value)
-#     return ccall(
-#         (:duckdb_append_uint8, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, UInt16),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append a uint16_t value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_uint16(duckdb_appender appender, uint16_t value);
-# """
-# function duckdb_append_uint16(appender, value)
-#     return ccall(
-#         (:duckdb_append_uint16, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, UInt16),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append a uint32_t value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_uint32(duckdb_appender appender, uint32_t value);
-# """
-# function duckdb_append_uint32(appender, value)
-#     return ccall(
-#         (:duckdb_append_uint32, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, UInt32),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append a uint64_t value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_uint64(duckdb_appender appender, uint64_t value);
-# """
-# function duckdb_append_uint64(appender, value)
-#     return ccall(
-#         (:duckdb_append_uint64, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, UInt64),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append a float value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_float(duckdb_appender appender, float value);
-# """
-# function duckdb_append_float(appender, value)
-#     return ccall(
-#         (:duckdb_append_float, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Float32),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append a double value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_double(duckdb_appender appender, double value);
-# """
-# function duckdb_append_double(appender, value)
-#     return ccall(
-#         (:duckdb_append_double, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Float64),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append a duckdb_date value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_date(duckdb_appender appender, duckdb_date value);
-# """
-# function duckdb_append_date(appender, value)
-#     return ccall(
-#         (:duckdb_append_date, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append a duckdb_time value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_time(duckdb_appender appender, duckdb_time value);
-# """
-# function duckdb_append_time(appender, value)
-#     return ccall(
-#         (:duckdb_append_time, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append a duckdb_timestamp value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value);
-# """
-# function duckdb_append_timestamp(appender, value)
-#     return ccall(
-#         (:duckdb_append_timestamp, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append a duckdb_interval value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_interval(duckdb_appender appender, duckdb_interval value);
-# """
-# function duckdb_append_interval(appender, value)
-#     return ccall(
-#         (:duckdb_append_interval, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Int32),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append a varchar value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val);
-# """
-# function duckdb_append_varchar(appender, value)
-#     return ccall(
-#         (:duckdb_append_varchar, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Ptr{UInt8}),
-#         appender[],
-#         value,
-#     )
-# end
-#
-# """
-# Append a varchar value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_varchar_length(duckdb_appender appender, const char *val, idx_t length);
-# """
-# function duckdb_append_varchar_length(appender, value, length)
-#     return ccall(
-#         (:duckdb_append_varchar_length, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Ptr{UInt8}, Int32),
-#         appender[],
-#         value,
-#         length,
-#     )
-# end
-#
-# """
-# Append a blob value to the appender.
-# DUCKDB_API duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length);
-# """
-# function duckdb_append_blob(appender, data, length)
-#     return ccall(
-#         (:duckdb_append_blob, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Ptr{Cvoid}, Int32),
-#         appender[],
-#         data,
-#         length,
-#     )
-# end
-#
-# """
-# Append a NULL value to the appender (of any type).
-# DUCKDB_API duckdb_state duckdb_append_null(duckdb_appender appender);
-# """
-# function duckdb_append_null(appender)
-#     return ccall((:duckdb_append_null, libduckdb), Int32, (Ptr{Cvoid},), appender[])
-# end
-#
+
+
+#=
+//===--------------------------------------------------------------------===//
+// Data Chunk Interface
+//===--------------------------------------------------------------------===//
+=#
+"""
+Creates an empty DataChunk with the specified set of types.
+
+* types: An array of types of the data chunk.
+* column_count: The number of columns.
+* returns: The data chunk.
+"""
+function duckdb_create_data_chunk(types, column_count)
+    return ccall(
+        (:duckdb_create_data_chunk, libduckdb),
+        duckdb_data_chunk,
+        (Ptr{duckdb_logical_type}, UInt64),
+        types,
+        column_count,
+    )
+end
+
+"""
+Destroys the data chunk and de-allocates all memory allocated for that chunk.
+
+* chunk: The data chunk to destroy.
+"""
+function duckdb_destroy_data_chunk(chunk)
+    return ccall(
+        (:duckdb_destroy_data_chunk, libduckdb),
+        Cvoid,
+        (Ref{duckdb_data_chunk},),
+        chunk,
+    )
+end
+
+"""
+Resets a data chunk, clearing the validity masks and setting the cardinality of the data chunk to 0.
+
+* chunk: The data chunk to reset.
+"""
+function duckdb_data_chunk_reset(chunk)
+    return ccall(
+        (:duckdb_data_chunk_reset, libduckdb),
+        Cvoid,
+        (duckdb_data_chunk,),
+        chunk,
+    )
+end
+
+"""
+Retrieves the number of columns in a data chunk.
+
+* chunk: The data chunk to get the data from
+* returns: The number of columns in the data chunk
+"""
+function duckdb_data_chunk_get_column_count(chunk)
+    return ccall(
+        (:duckdb_data_chunk_get_column_count, libduckdb),
+        UInt64,
+        (duckdb_data_chunk,),
+        chunk,
+    )
+end
+
+
+"""
+Retrieves the current number of tuples in a data chunk.
+
+* chunk: The data chunk to get the data from
+* returns: The number of tuples in the data chunk
+"""
+function duckdb_data_chunk_get_size(chunk)
+    return ccall(
+        (:duckdb_data_chunk_get_size, libduckdb),
+        UInt64,
+        (duckdb_data_chunk,),
+        chunk,
+    )
+end
+
+"""
+Sets the current number of tuples in a data chunk.
+
+* chunk: The data chunk to set the size in
+* size: The number of tuples in the data chunk
+"""
+function duckdb_data_chunk_set_size(chunk, size)
+    return ccall(
+        (:duckdb_data_chunk_set_size, libduckdb),
+        Cvoid,
+        (duckdb_data_chunk, UInt64),
+        chunk,
+        size
+    )
+end
+
+"""
+Retrieves the column type of the specified column in the data chunk.
+
+The result must be destroyed with `duckdb_destroy_logical_type`.
+
+* chunk: The data chunk to get the data from
+* returns: The type of the column
+"""
+function duckdb_data_chunk_get_column_type(chunk, col_idx)
+    return ccall(
+        (:duckdb_data_chunk_get_column_type, libduckdb),
+        duckdb_logical_type,
+        (duckdb_data_chunk, UInt64),
+        chunk,
+        col_idx
+    )
+end
+
+"""
+Retrieves the data pointer of the specified column in the data chunk.
+
+The data pointer can be used to read or write values from the data chunk.
+How to read or write values depends on the type of the column.
+The pointer represents a dense array of `duckdb_data_chunk_get_size(size)` values.
+
+* chunk: The data chunk to get the data from
+* returns: The data pointer
+"""
+function duckdb_data_chunk_get_data(chunk, col_idx)
+    return ccall(
+        (:duckdb_data_chunk_get_data, libduckdb),
+        Ptr{Cvoid},
+        (duckdb_data_chunk, UInt64),
+        chunk,
+        col_idx
+    )
+end
+
+"""
+Retrieves the validity mask pointer of the specified column in the data chunk.
+
+If all values are valid, this function MIGHT return NULL!
+
+The validity mask is a bitset that signifies null-ness within the data chunk.
+It is a series of uint64_t values, where each uint64_t value contains validity for 64 tuples.
+The bit is set to 1 if the value is valid (i.e. not NULL) or 0 if the value is invalid (i.e. NULL).
+
+Validity of a specific value can be obtained like this:
+
+idx_t entry_idx = row_idx / 64;
+idx_t idx_in_entry = row_idx % 64;
+bool is_valid = validity_mask[entry_idx] & (1 << idx_in_entry);
+
+* chunk: The data chunk to get the data from
+* returns: The pointer to the validity mask, or NULL if no validity mask is present
+"""
+function duckdb_data_chunk_get_validity(chunk, col_idx)
+    return ccall(
+        (:duckdb_data_chunk_get_validity, libduckdb),
+        Ptr{UInt64},
+        (duckdb_data_chunk, UInt64),
+        chunk,
+        col_idx
+    )
+end
+
+"""
+Ensures the validity mask is writable by allocating it.
+
+After this function is called, `duckdb_data_chunk_get_validity` will ALWAYS return non-NULL.
+This allows null values to be written to the data chunk, regardless of whether a validity mask was present before.
+
+* chunk: The data chunk to alter
+"""
+function duckdb_data_chunk_ensure_validity_writable(chunk, col_idx)
+    return ccall(
+        (:duckdb_data_chunk_ensure_validity_writable, libduckdb),
+        Cvoid,
+        (duckdb_data_chunk, UInt64),
+        chunk,
+        col_idx
+    )
+end
+
+#=
+//===--------------------------------------------------------------------===//
+// Appender
+//===--------------------------------------------------------------------===//
+// Appenders are the most efficient way of loading data into DuckDB from within the C interface, and are recommended for
+// fast data loading. The appender is much faster than using prepared statements or individual `INSERT INTO` statements.
+// Appends are made in row-wise format. For every column, a `duckdb_append_[type]` call should be made, after which
+// the row should be finished by calling `duckdb_appender_end_row`. After all rows have been appended,
+// `duckdb_appender_destroy` should be used to finalize the appender and clean up the resulting memory.
+// Note that `duckdb_appender_destroy` should always be called on the resulting appender, even if the function returns
+// `DuckDBError`.
+=#
+
+"""
+Creates an appender object.
+* connection: The connection context to create the appender in.
+* schema: The schema of the table to append to, or `nullptr` for the default schema.
+* table: The table name to append to.
+* out_appender: The resulting appender object.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
+                                               duckdb_appender *out_appender);
+"""
+function duckdb_appender_create(connection, schema, table, out_appender)
+    return ccall(
+        (:duckdb_appender_create, libduckdb),
+        Int32,
+        (duckdb_connection, Ptr{UInt8}, Ptr{UInt8}, Ref{duckdb_appender}),
+        connection,
+        schema,
+        table,
+        out_appender,
+    )
+end
+
+"""
+Returns the error message associated with the given appender.
+If the appender has no error message, this returns `nullptr` instead.
+The error message should not be freed. It will be de-allocated when `duckdb_appender_destroy` is called.
+* appender: The appender to get the error from.
+* returns: The error message, or `nullptr` if there is none.
+DUCKDB_API const char *duckdb_appender_error(duckdb_appender appender);
+"""
+function duckdb_appender_error(appender)
+    return ccall((:duckdb_appender_error, libduckdb), Ptr{UInt8}, (duckdb_appender,), appender)
+end
+
+"""
+Flush the appender to the table, forcing the cache of the appender to be cleared and the data to be appended to the
+base table.
+This should generally not be used unless you know what you are doing. Instead, call `duckdb_appender_destroy` when you
+are done with the appender.
+* appender: The appender to flush.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+DUCKDB_API duckdb_state duckdb_appender_flush(duckdb_appender appender);
+"""
+function duckdb_appender_flush(appender)
+    return ccall((:duckdb_appender_flush, libduckdb), Int32, (duckdb_appender,), appender)
+end
+
+"""
+Close the appender, flushing all intermediate state in the appender to the table and closing it for further appends.
+This is generally not necessary. Call `duckdb_appender_destroy` instead.
+* appender: The appender to flush and close.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+DUCKDB_API duckdb_state duckdb_appender_close(duckdb_appender appender);
+"""
+function duckdb_appender_close(appender)
+    return ccall((:duckdb_appender_close, libduckdb), Int32, (duckdb_appender,), appender)
+end
+
+"""
+Close the appender and destroy it. Flushing all intermediate state in the appender to the table, and de-allocating
+all memory associated with the appender.
+* appender: The appender to flush, close and destroy.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+DUCKDB_API duckdb_state duckdb_appender_destroy(duckdb_appender *appender);
+"""
+function duckdb_appender_destroy(appender)
+    return ccall((:duckdb_appender_destroy, libduckdb), Int32, (Ref{duckdb_appender},), appender)
+end
+
+"""
+A nop function, provided for backwards compatibility reasons. Does nothing. Only `duckdb_appender_end_row` is required.
+DUCKDB_API duckdb_state duckdb_appender_begin_row(duckdb_appender appender);
+"""
+function duckdb_appender_begin_row(appender)
+    return ccall((:duckdb_appender_begin_row, libduckdb), Int32, (duckdb_appender,), appender)
+end
+
+"""
+Finish the current row of appends. After end_row is called, the next row can be appended.
+* appender: The appender.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+DUCKDB_API duckdb_state duckdb_appender_end_row(duckdb_appender appender);
+"""
+function duckdb_appender_end_row(appender)
+    return ccall((:duckdb_appender_end_row, libduckdb), Int32, (duckdb_appender,), appender)
+end
+
+"""
+Append a bool value to the appender.
+DUCKDB_API duckdb_state duckdb_append_bool(duckdb_appender appender, bool value);
+"""
+function duckdb_append_bool(appender, value)
+    return ccall(
+        (:duckdb_append_bool, libduckdb),
+        Int32,
+        (duckdb_appender, Int32),
+        appender,
+        value,
+    )
+end
+
+"""
+Append an int8_t value to the appender.
+DUCKDB_API duckdb_state duckdb_append_int8(duckdb_appender appender, int8_t value);
+"""
+function duckdb_append_int8(appender, value)
+    return ccall(
+        (:duckdb_append_int8, libduckdb),
+        Int32,
+        (duckdb_appender, Int16),
+        appender,
+        value,
+    )
+end
+
+"""
+Append an int16_t value to the appender.
+DUCKDB_API duckdb_state duckdb_append_int16(duckdb_appender appender, int16_t value);
+"""
+function duckdb_append_int16(appender, value)
+    return ccall(
+        (:duckdb_append_int16, libduckdb),
+        Int32,
+        (duckdb_appender, Int16),
+        appender,
+        value,
+    )
+end
+
+"""
+Append an int32_t value to the appender.
+DUCKDB_API duckdb_state duckdb_append_int32(duckdb_appender appender, int32_t value);
+"""
+function duckdb_append_int32(appender, value)
+    return ccall(
+        (:duckdb_append_int16, libduckdb),
+        Int32,
+        (duckdb_appender, Int32),
+        appender,
+        value,
+    )
+end
+
+"""
+Append an int64_t value to the appender.
+DUCKDB_API duckdb_state duckdb_append_int64(duckdb_appender appender, int64_t value);
+"""
+function duckdb_append_int64(appender, value)
+    return ccall(
+        (:duckdb_append_int64, libduckdb),
+        Int32,
+        (duckdb_appender, Int64),
+        appender,
+        value,
+    )
+end
+
+"""
+Append a duckdb_hugeint value to the appender.
+DUCKDB_API duckdb_state duckdb_append_hugeint(duckdb_appender appender, duckdb_hugeint value);
+"""
+function duckdb_append_hugeint(appender, value)
+    return ccall(
+        (:duckdb_append_hugeint, libduckdb),
+        Int32,
+        (duckdb_appender, Int64),
+        appender,
+        value,
+    )
+end
+
+"""
+Append a uint8_t value to the appender.
+DUCKDB_API duckdb_state duckdb_append_uint8(duckdb_appender appender, uint8_t value);
+"""
+function duckdb_append_uint8(appender, value)
+    return ccall(
+        (:duckdb_append_uint8, libduckdb),
+        Int32,
+        (duckdb_appender, UInt16),
+        appender,
+        value,
+    )
+end
+
+"""
+Append a uint16_t value to the appender.
+DUCKDB_API duckdb_state duckdb_append_uint16(duckdb_appender appender, uint16_t value);
+"""
+function duckdb_append_uint16(appender, value)
+    return ccall(
+        (:duckdb_append_uint16, libduckdb),
+        Int32,
+        (duckdb_appender, UInt16),
+        appender,
+        value,
+    )
+end
+
+"""
+Append a uint32_t value to the appender.
+DUCKDB_API duckdb_state duckdb_append_uint32(duckdb_appender appender, uint32_t value);
+"""
+function duckdb_append_uint32(appender, value)
+    return ccall(
+        (:duckdb_append_uint32, libduckdb),
+        Int32,
+        (duckdb_appender, UInt32),
+        appender,
+        value,
+    )
+end
+
+"""
+Append a uint64_t value to the appender.
+DUCKDB_API duckdb_state duckdb_append_uint64(duckdb_appender appender, uint64_t value);
+"""
+function duckdb_append_uint64(appender, value)
+    return ccall(
+        (:duckdb_append_uint64, libduckdb),
+        Int32,
+        (duckdb_appender, UInt64),
+        appender,
+        value,
+    )
+end
+
+"""
+Append a float value to the appender.
+DUCKDB_API duckdb_state duckdb_append_float(duckdb_appender appender, float value);
+"""
+function duckdb_append_float(appender, value)
+    return ccall(
+        (:duckdb_append_float, libduckdb),
+        Int32,
+        (duckdb_appender, Float32),
+        appender,
+        value,
+    )
+end
+
+"""
+Append a double value to the appender.
+DUCKDB_API duckdb_state duckdb_append_double(duckdb_appender appender, double value);
+"""
+function duckdb_append_double(appender, value)
+    return ccall(
+        (:duckdb_append_double, libduckdb),
+        Int32,
+        (duckdb_appender, Float64),
+        appender,
+        value,
+    )
+end
+
+"""
+Append a duckdb_date value to the appender.
+DUCKDB_API duckdb_state duckdb_append_date(duckdb_appender appender, duckdb_date value);
+"""
+function duckdb_append_date(appender, value)
+    return ccall(
+        (:duckdb_append_date, libduckdb),
+        Int32,
+        (duckdb_appender, Int32),
+        appender,
+        value,
+    )
+end
+
+"""
+Append a duckdb_time value to the appender.
+DUCKDB_API duckdb_state duckdb_append_time(duckdb_appender appender, duckdb_time value);
+"""
+function duckdb_append_time(appender, value)
+    return ccall(
+        (:duckdb_append_time, libduckdb),
+        Int32,
+        (duckdb_appender, Int32),
+        appender,
+        value,
+    )
+end
+
+"""
+Append a duckdb_timestamp value to the appender.
+DUCKDB_API duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value);
+"""
+function duckdb_append_timestamp(appender, value)
+    return ccall(
+        (:duckdb_append_timestamp, libduckdb),
+        Int32,
+        (duckdb_appender, Int32),
+        appender,
+        value,
+    )
+end
+
+"""
+Append a duckdb_interval value to the appender.
+DUCKDB_API duckdb_state duckdb_append_interval(duckdb_appender appender, duckdb_interval value);
+"""
+function duckdb_append_interval(appender, value)
+    return ccall(
+        (:duckdb_append_interval, libduckdb),
+        Int32,
+        (duckdb_appender, Int32),
+        appender,
+        value,
+    )
+end
+
+"""
+Append a varchar value to the appender.
+DUCKDB_API duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val);
+"""
+function duckdb_append_varchar(appender, value)
+    return ccall(
+        (:duckdb_append_varchar, libduckdb),
+        Int32,
+        (duckdb_appender, Ptr{UInt8}),
+        appender,
+        value,
+    )
+end
+
+"""
+Append a varchar value to the appender.
+DUCKDB_API duckdb_state duckdb_append_varchar_length(duckdb_appender appender, const char *val, idx_t length);
+"""
+function duckdb_append_varchar_length(appender, value, length)
+    return ccall(
+        (:duckdb_append_varchar_length, libduckdb),
+        Int32,
+        (duckdb_appender, Ptr{UInt8}, Int32),
+        appender,
+        value,
+        length,
+    )
+end
+
+"""
+Append a blob value to the appender.
+DUCKDB_API duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length);
+"""
+function duckdb_append_blob(appender, data, length)
+    return ccall(
+        (:duckdb_append_blob, libduckdb),
+        Int32,
+        (duckdb_appender, Ptr{Cvoid}, Int32),
+        appender,
+        data,
+        length,
+    )
+end
+
+"""
+Append a NULL value to the appender (of any type).
+DUCKDB_API duckdb_state duckdb_append_null(duckdb_appender appender);
+"""
+function duckdb_append_null(appender)
+    return ccall((:duckdb_append_null, libduckdb), Int32, (duckdb_appender,), appender)
+end
+
 # #=
 # //===--------------------------------------------------------------------===//
 # // Arrow Interface

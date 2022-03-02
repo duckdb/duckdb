@@ -12,7 +12,7 @@ mutable struct QueryResult
 
         handle = Ref{duckdb_result}()
         if duckdb_execute_prepared(stmt.handle, handle) != DuckDBSuccess
-            error_ptr = duckdb_result_error(handle)
+            error_ptr = duckdb_appender_error(handle)
             if error_ptr == C_NULL
                 error_message = string("Execute of query \"", stmt.sql, "\" failed: unknown error")
             else

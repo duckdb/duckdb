@@ -60,7 +60,6 @@ function _close_connection(con::Connection)
         duckdb_disconnect(con.handle)
     end
     con.handle = C_NULL
-    return
 end
 
 """
