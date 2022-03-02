@@ -11,9 +11,6 @@ CALL dbgen(sf=10)
 statement ok
 PRAGMA disable_optimizer
 
-statement ok
-PRAGMA enable_profiling
-
 query III
 SELECT
     nation,
