@@ -132,6 +132,7 @@ void DataChunk::Split(DataChunk &other, idx_t split_idx) {
 		vector_caches.pop_back();
 	}
 	other.SetCardinality(*this);
+	other.SetCapacity(*this);
 }
 
 void DataChunk::Fuse(DataChunk &other) {

@@ -92,19 +92,18 @@ PhysicalIEJoin::PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator>
 //===--------------------------------------------------------------------===//
 class IEJoinLocalState : public LocalSinkState {
 public:
-	explicit IEJoinLocalState(const vector<BoundOrderByNode> &orders, const vector<JoinCondition> &conditions)
-	    : has_null(0), count(0) {
-		// Initialize order clause expression executor and DataChunk
+	explicit IEJoinLocalState(const vector<JoinCondition> &conditions, const idx_t child) : has_null(0), count(0) {
+		// Initialize order clause expression executor and key DataChunk
 		vector<LogicalType> types;
-		for (const auto &order : orders) {
-			types.push_back(order.expression->return_type);
-			executor.AddExpression(*order.expression);
-		}
-		keys.Initialize(types);
-
 		for (const auto &cond : conditions) {
 			comparisons.emplace_back(cond.comparison);
+
+			const auto &expr = child ? cond.right : cond.left;
+			executor.AddExpression(*expr);
+
+			types.push_back(expr->return_type);
 		}
+		keys.Initialize(types);
 	}
 
 	//! The local sort state
@@ -214,7 +213,7 @@ idx_t IEJoinLocalState::MergeKeyNulls() {
 }
 
 unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<IEJoinLocalState>(rhs_orders[0], conditions);
+	return make_unique<IEJoinLocalState>(conditions, 1);
 }
 
 class IEJoinGlobalState : public GlobalSinkState {
@@ -250,6 +249,11 @@ public:
 		global_sort_state.AddLocalState(lstate.local_sort_state);
 		has_null += lstate.has_null;
 		count += lstate.count;
+	}
+
+	inline void IntializeMatches() {
+		found_match = unique_ptr<bool[]>(new bool[Count()]);
+		memset(found_match.get(), 0, sizeof(bool) * Count());
 	}
 
 	void Print() {
@@ -388,8 +392,7 @@ SinkFinalizeType PhysicalIEJoin::Finalize(Pipeline &pipeline, Event &event, Clie
 
 	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER JOIN, initialize found_match to false for every tuple
-		gstate.found_match = unique_ptr<bool[]>(new bool[gstate.Count()]);
-		memset(gstate.found_match.get(), 0, sizeof(bool) * gstate.Count());
+		gstate.IntializeMatches();
 	}
 	if (global_sort_state.sorted_blocks.empty() && EmptyResultIfRHSIsEmpty()) {
 		// Empty input!
@@ -794,6 +797,7 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 			if (j >= n) {
 				break;
 			}
+			off1->SetIndex(j + 1);
 
 			// Filter out tuples with the same sign (they come from the same table)
 			const auto rrid = li[j];
@@ -808,8 +812,6 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 					return result_count;
 				}
 			}
-
-			off1->SetIndex(j + 1);
 		}
 		++i;
 
@@ -854,40 +856,45 @@ static idx_t SliceSortedPayload(DataChunk &payload, GlobalSortState &state, cons
 	read_state.sb = state.sorted_blocks[0].get();
 	auto &sorted_data = *read_state.sb->payload_data;
 
-	// We have to create pointers for the entire block
+	// We have to create pointers for the entire range
 	// because unswizzle works on ranges not selections.
-	const auto first_idx = result.get_index(0);
-	read_state.SetIndices(block_idx, first_idx);
+	auto min_idx = result.get_index(0);
+	auto max_idx = min_idx;
+	for (idx_t i = 1; i < result_count; ++i) {
+		const auto row_idx = result.get_index(i);
+		min_idx = MinValue(min_idx, row_idx);
+		max_idx = MaxValue(max_idx, row_idx);
+	}
+	++max_idx;
+
+	read_state.SetIndices(block_idx, min_idx);
 	read_state.PinData(sorted_data);
 	const auto data_ptr = read_state.DataPtr(sorted_data);
 
 	// Set up a batch of pointers to scan data from
-	Vector addresses(LogicalType::POINTER, result_count);
+	const auto addr_count = max_idx - min_idx;
+	Vector addresses(LogicalType::POINTER, addr_count);
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
 	// Set up the data pointers for the values that are actually referenced
-	// and normalise the selection vector to zero
+	// Note these must be dense because UnswizzlePointers assumes they are unique and dense
 	data_ptr_t row_ptr = data_ptr;
 	const idx_t &row_width = sorted_data.layout.GetRowWidth();
 
-	auto prev_idx = first_idx;
-	result.set_index(0, 0);
-	idx_t addr_count = 0;
-	data_pointers[addr_count++] = row_ptr;
-	for (idx_t i = 1; i < result_count; ++i) {
-		const auto row_idx = result.get_index(i);
-		result.set_index(i, row_idx - first_idx);
-		if (row_idx == prev_idx) {
-			continue;
-		}
-		row_ptr += (row_idx - prev_idx) * row_width;
-		data_pointers[addr_count++] = row_ptr;
-		prev_idx = row_idx;
+	for (idx_t i = 0; i < addr_count; ++i) {
+		data_pointers[i] = row_ptr;
+		row_ptr += row_width;
 	}
+
 	// Unswizzle the offsets back to pointers (if needed)
 	if (!sorted_data.layout.AllConstant() && state.external) {
-		const auto next = prev_idx + 1;
-		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(), next);
+		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(),
+		                                 addr_count);
+	}
+
+	// Normalise the slicing selection
+	for (idx_t i = 0; i < result_count; ++i) {
+		result.set_index(i, result.get_index(i) - min_idx);
 	}
 
 	// Deserialize the payload data
@@ -899,7 +906,7 @@ static idx_t SliceSortedPayload(DataChunk &payload, GlobalSortState &state, cons
 		col.Slice(result, result_count);
 	}
 
-	return first_idx;
+	return min_idx;
 }
 
 void PhysicalIEJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -920,11 +927,14 @@ OperatorResultType PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context,
 			state.left_table = make_unique<IEJoinGlobalState>(context.client, lhs_orders[0], lhs_layout);
 			auto &gss = state.left_table->global_sort_state;
 
-			auto local_left = make_unique<IEJoinLocalState>(lhs_orders[0], conditions);
+			auto local_left = make_unique<IEJoinLocalState>(conditions, 0);
 			local_left->Sink(input, gss);
 			local_left->Sort(gss);
 			state.left_table->Combine(*local_left);
 			IEJoinUnion::Sort(*state.left_table);
+			if (IsLeftOuterJoin(join_type)) {
+				state.left_table->IntializeMatches();
+			}
 
 			// Extract the sorted LHS
 			PayloadScanner scanner(gss, false);
@@ -943,7 +953,6 @@ OperatorResultType PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context,
 				// left join: before we move to the next chunk, see if we need to output any vectors that didn't
 				// have a match found
 				PhysicalJoin::ConstructLeftJoinResult(state.left_payload, chunk, state.left_table->found_match.get());
-				memset(state.left_table->found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 			}
 			state.first_fetch = true;
 			state.finished = false;
