@@ -1,0 +1,17 @@
+# name: test/sql/show_select/test_describe_all.test
+# description: Test describe all
+# group: [show_select]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER, a INTEGER);
+
+statement ok
+DESCRIBE;
+
+query IIII
+DESCRIBE
+----
+integers	[a, i, j]	[INTEGER, INTEGER, INTEGER]	False
