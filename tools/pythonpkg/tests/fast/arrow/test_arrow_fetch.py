@@ -84,3 +84,15 @@ class TestArrowFetch(object):
             duckdb_conn.execute("EXECUTE s1("+str(value) + "," + str(value*2)+  ");")
 
         check_equal(duckdb_conn)
+
+    def test_to_arrow_chunk_size(self, duckdb_cursor):
+        if not can_run:
+            return
+
+        duckdb_cursor = duckdb.connect()
+        duckdb_cursor.execute("CREATE table t as select range a from range(3000);")
+        relation = duckdb_cursor.table('t')
+        arrow_tbl = relation.arrow()
+        assert arrow_tbl['a'].num_chunks == 1
+        arrow_tbl = relation.arrow(1024)
+        assert arrow_tbl['a'].num_chunks == 3

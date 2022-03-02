@@ -123,6 +123,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         py::arg("replace") = true)
 	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Transforms the relation object into a Arrow table", py::arg("batch_size")=1000000 )
 	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Transforms the relation object into a Arrow table", py::arg("batch_size")=1000000)
+	    .def("record_batch", &DuckDBPyRelation::ToRecordBatch, "Transforms the relation object into a Arrow Record Batch Reader", py::arg("batch_size")=1000000)
 	    .def("to_df", &DuckDBPyRelation::ToDF, "Transforms the relation object into a Data.Frame")
 	    .def("df", &DuckDBPyRelation::ToDF, "Transforms the relation object into a Data.Frame")
 	    .def("fetchone", &DuckDBPyRelation::Fetchone, "Execute and fetch a single row")
@@ -436,6 +437,18 @@ py::object DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 		throw std::runtime_error(res->result->error);
 	}
 	return res->FetchArrowTable(batch_size);
+}
+
+py::object DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
+	auto res = make_unique<DuckDBPyResult>();
+	{
+		py::gil_scoped_release release;
+		res->result = rel->Execute();
+	}
+	if (!res->result->success) {
+		throw std::runtime_error(res->result->error);
+	}
+	return res->FetchRecordBatchReader(batch_size);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Union(DuckDBPyRelation *other) {

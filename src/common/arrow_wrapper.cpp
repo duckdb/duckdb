@@ -75,6 +75,11 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		return -1;
 	}
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
+	if (!my_stream->column_types.empty()){
+		QueryResult::ToArrowSchema(out, my_stream->column_types, my_stream->column_names);
+		return 0;
+	}
+
 	auto &result = *my_stream->result;
 	if (!result.success) {
 		my_stream->last_error = "Query Failed";
@@ -87,7 +92,11 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 			return -1;
 		}
 	}
-	result.ToArrowSchema(out);
+	if (my_stream->column_types.empty()){
+		my_stream->column_types = result.types;
+		my_stream->column_names = result.names;
+	}
+	QueryResult::ToArrowSchema(out, my_stream->column_types, my_stream->column_names);
 	return 0;
 }
 
@@ -109,13 +118,17 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 			return 0;
 		}
 	}
+	if (my_stream->column_types.empty()){
+		my_stream->column_types = result.types;
+		my_stream->column_names = result.names;
+	}
 	unique_ptr<DataChunk> chunk_result = result.Fetch();
 	if (!chunk_result) {
 		// Nothing to output
 		out->release = nullptr;
 		return 0;
 	}
-	for (idx_t i = 1; i < my_stream->vectors_per_chunk; i++) {
+	while (chunk_result->size() < my_stream->batch_size){
 		auto new_chunk = result.Fetch();
 		if (!new_chunk) {
 			break;
@@ -143,15 +156,15 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
 	return my_stream->last_error.c_str();
 }
-ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t approx_batch_size)
+ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t batch_size_p)
     : result(move(result_p)) {
 	//! We first initialize the private data of the stream
 	stream.private_data = this;
 	//! Ceil Approx_Batch_Size/STANDARD_VECTOR_SIZE
-	if (approx_batch_size == 0) {
+	if (batch_size_p == 0) {
 		throw std::runtime_error("Approximate Batch Size of Record Batch MUST be higher than 0");
 	}
-	vectors_per_chunk = (approx_batch_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+	batch_size = batch_size_p;
 	//! We initialize the stream functions
 	stream.get_schema = ResultArrowArrayStreamWrapper::MyStreamGetSchema;
 	stream.get_next = ResultArrowArrayStreamWrapper::MyStreamGetNext;

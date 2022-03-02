@@ -42,7 +42,7 @@ public:
 
 	py::object FetchDFChunk(idx_t vectors_per_chunk);
 
-	py::object FetchRecordBatchReader(idx_t vectors_per_chunk);
+	py::object FetchRecordBatchReader(idx_t chunk_size);
 
 	py::list Description();
 
@@ -52,8 +52,8 @@ public:
 
 private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
-	py::object  FetchAllArrowChunks(bool stream, idx_t chunk_size);
-	py::object FetchArrowObject(idx_t chunk_size, bool return_arrow_stream);
+
+	py::object  FetchAllArrowChunks(idx_t chunk_size);
 };
 
 } // namespace duckdb

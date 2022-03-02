@@ -321,7 +321,7 @@ unique_ptr<DataChunk> FetchChunk(QueryResult *result, py::list &batches, idx_t c
 	if (!data_chunk){
 		return data_chunk;
 	}
-	while (data_chunk->size() <= chunk_size){
+	while (data_chunk->size() < chunk_size){
 		auto next_chunk = FetchNext(*result);
 		if (!next_chunk || next_chunk->size() == 0) {
 			break;
@@ -331,7 +331,7 @@ unique_ptr<DataChunk> FetchChunk(QueryResult *result, py::list &batches, idx_t c
 	return data_chunk;
 }
 
-bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size, bool is_result_stream = false) {
+bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size) {
 	if (!IfStreamResultIsOpen(result)){
 		return false;
 	}
@@ -339,20 +339,13 @@ bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size, b
 	if (!data_chunk || data_chunk->size() == 0) {
 		return false;
 	}
-	// If the query result and the arrow result are both streams we must perform a copy of the data chunk.
-	if (result->type == QueryResultType::STREAM_RESULT && is_result_stream) {
-		auto new_chunk = make_unique<DataChunk>();
-		new_chunk->Initialize(data_chunk->GetTypes());
-		data_chunk->Copy(*new_chunk);
-		data_chunk = move(new_chunk);
-	}
 	ArrowSchema arrow_schema;
-	result->ToArrowSchema(&arrow_schema);
+	QueryResult::ToArrowSchema(&arrow_schema,result->types,result->names);
 	TransformDuckToArrowChunk(arrow_schema,*data_chunk,batches);
 	return true;
 }
 
-py::object  DuckDBPyResult::FetchAllArrowChunks(bool stream, idx_t chunk_size) {
+py::object  DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("result closed");
 	}
@@ -363,37 +356,30 @@ py::object  DuckDBPyResult::FetchAllArrowChunks(bool stream, idx_t chunk_size) {
 	if (result->type == QueryResultType::STREAM_RESULT) {
 		result = ((StreamQueryResult *)result.get())->Materialize();
 	}
-	while (FetchArrowChunk(result.get(), batches, chunk_size,stream)) {
+	while (FetchArrowChunk(result.get(), batches, chunk_size)) {
 	}
 	return std::move(batches);
 }
 
 
-py::object DuckDBPyResult::FetchArrowObject(idx_t chunk_size, bool return_arrow_stream) {
+py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
+	py::gil_scoped_acquire acquire;
 
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto from_batches_func = pyarrow_lib_module.attr("Table").attr("from_batches");
 
 	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
 	ArrowSchema schema;
-	result->ToArrowSchema(&schema);
+	QueryResult::ToArrowSchema(&schema,result->types,result->names);
 	auto schema_obj = schema_import_func((uint64_t)&schema);
 
-	py::list batches = FetchAllArrowChunks(return_arrow_stream, chunk_size);
-	if (return_arrow_stream){
-		return std::move(batches);
-	} else{
-		// We return an Arrow Table
-		return from_batches_func(batches, schema_obj);
-	}
+	py::list batches = FetchAllArrowChunks(chunk_size);
+
+	// We return an Arrow Table
+	return from_batches_func(batches, schema_obj);
 }
 
-py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size){
-	py::gil_scoped_acquire acquire;
-	return FetchArrowObject(chunk_size,false);
-}
-
-py::object DuckDBPyResult::FetchRecordBatchReader(idx_t approx_batch_size) {
+py::object DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("There is no query result");
 	}
@@ -401,7 +387,7 @@ py::object DuckDBPyResult::FetchRecordBatchReader(idx_t approx_batch_size) {
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto record_batch_reader_func = pyarrow_lib_module.attr("RecordBatchReader").attr("_import_from_c");
 	//! We have to construct an Arrow Array Stream
-	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(result), approx_batch_size);
+	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(result), chunk_size);
 	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream);
 	return record_batch_reader;
 }

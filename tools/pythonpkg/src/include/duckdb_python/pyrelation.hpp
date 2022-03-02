@@ -146,6 +146,8 @@ public:
 
 	py::object ToArrowTable(idx_t batch_size);
 
+	py::object ToRecordBatch(idx_t batch_size);
+
 	unique_ptr<DuckDBPyRelation> Union(DuckDBPyRelation *other);
 
 	unique_ptr<DuckDBPyRelation> Except(DuckDBPyRelation *other);
