@@ -103,14 +103,8 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
 	vector<LogicalType> returning_types;
-	if (returning_values.empty()) {
-		// TODO: maybe just have an overloaded constructor that doesn't even include
-		// TODO: room for a returning type here.
-		return make_unique<InsertGlobalState>(table->GetTypes(), bound_defaults);
-	} else {
-		for (idx_t i = 0; i < returning_values.size(); i++) {
-			returning_types.push_back(returning_values[i]->return_type);
-		}
+	for (idx_t i = 0; i < returning_values.size(); i++) {
+		returning_types.push_back(returning_values[i]->return_type);
 	}
 	return make_unique<InsertGlobalState>(returning_types, bound_defaults);
 }

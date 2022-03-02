@@ -3,38 +3,73 @@
 # group: [returning]
 
 statement ok
-CREATE TABLE table1 (a INTEGER, b INTEGER, c INTEGER);
+CREATE TABLE table1 (a INTEGER DEFAULT 0, b INTEGER DEFAULT 1, c INTEGER);
 
-# returning expression not in select statement
-statement ok
-INSERT INTO table1 VALUES (10, 20, 30), (40, 50, 60), (70, 80, 90);
 
-statement ok
-SELECT b, c FROM table1 WHERE b != 20;
-
-# returning expression not in select statement
-query I
-INSERT INTO table1 VALUES (10, 20, 30), (40, 50, 60), (70, 80, 90) RETURNING a, b, c, c NOT BETWEEN 35 AND 65;
+# returning only subset of inserted columns
+query II
+INSERT INTO table1 (a, b, c) VALUES (1, 2, 3) RETURNING a, c;
 ----
-10  20  30  1
-40  50  60  0
-70  80  90  1
+1	3
 
-# returning expression not in select statement
-query I
-SELECT a, b, c FROM table1;
+# returning only subset of inserted columns
+query II
+INSERT INTO table1 (a, b, c) VALUES (1, 2, 3) RETURNING c, a;
 ----
-10  20  30  1
-40  50  60  0
-70  80  90  1
+3	1
 
 
-# returning specific column
-# not getting the return column name. but the result is in the stmt at this point (because of the insert).
+# no returning statement
+query I
+INSERT INTO table1 VALUES (10, 20, 30);
+----
+1
+
+# returning with two of the same expression
+query III
+INSERT INTO table1 VALUES (10, 20, 30), (40, 50, 60), (70, 80, 90) RETURNING a, b, b;
+----
+10	20	20
+40	50	50
+70	80	80
+
+
+# returning * expressions
+query III
+INSERT INTO table1 VALUES (10, 20, 30), (40, 50, 60), (70, 80, 90) RETURNING *;
+----
+10	20	30
+40	50	60
+70	80	90
+
+# returning with boolean expressions
+query III
+INSERT INTO table1 VALUES (10, 20, 30), (40, 50, 60), (70, 80, 90) RETURNING c, b, a NOT IN (10);
+----
+30	20	0
+60	50	1
+90	80	1
+
+# returning literals
+query I
+INSERT INTO table1 VALUES (10, 20, 30) RETURNING 100;
+----
+100
+
 statement ok
-INSERT INTO table1 VALUES (1, 2, 3) returning a, b, c;
+INSERT INTO table1 VALUES (3, 3, 3);
+
+query III
+INSERT INTO table1 SELECT * from table1 WHERE a = 3 AND b = 3 AND c=3 returning *;
+----
+3	3	3
+
+
+statement ok
+CREATE TABLE t2(a INT, b VARCHAR(10));
+
 
 query I
-Select * from table1;
+INSERT INTO t2 VALUES (10, 'duck db') RETURNING b;
 ----
-1, 2, 3
+duck db

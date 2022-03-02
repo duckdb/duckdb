@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression_binder/update_binder.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -23,6 +24,20 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 		throw BinderException(msg);
 	}
 }
+
+
+static unique_ptr<Expression> PushDownProjectionBinding(LogicalProjection &proj, unique_ptr<Expression> expr) {
+	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = (BoundColumnRefExpression &)*expr;
+		colref.binding.table_index = proj.table_index;
+		// replace the binding with a copy to the expression at the referenced index
+		return expr;
+	}
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { child = PushDownProjectionBinding(proj, move(child)); });
+	return expr;
+}
+
 
 BoundStatement Binder::Bind(InsertStatement &stmt) {
 	BoundStatement result;
@@ -165,6 +180,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		unique_ptr<Expression> expr = select_binder.Bind(stmt.returning_list[i], &result_type);
 
 
+//      TODO: should I push down the projection bindings to the expressions here?
+// 		TODO: take a look at ReplaceProjectionBindings in pushdown_projection
 //		root_select.plan->children[0];
 //		if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
 //			// https://stackoverflow.com/questions/36120424/alternatives-of-static-pointer-cast-for-unique-ptr
@@ -192,21 +209,23 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	insert->AddChild(move(root));
 
-	if (insert->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-		auto &proj = (LogicalProjection &)*(insert->children[0]);
+//	if (insert->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+//		auto &proj = (LogicalProjection &)*(insert->children[0]);
+//
+//		proj.table_index = 7;
+//	}
 
-		proj.table_index = 7;
+
+	for (auto i = 0; i < (int)returning_stmt->select_list.size(); i++) {
+		auto expr = move(returning_stmt->select_list[i]);
+		if (insert->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			auto &proj = (LogicalProjection&)*(insert->children[0]);
+			insert->returning_list.push_back(PushDownProjectionBinding(proj, move(expr)));
+		}
+//		insert->returning_list.push_back(move(*i));
 	}
 
-
-	for (auto i = returning_stmt->select_list.begin(); i != returning_stmt->select_list.end(); i++) {
-		insert->returning_list.push_back(move(*i));
-	}
-
-	// TODO: check either that you are returning the RETURNING statements or the effected rows.
-	//	D_ASSERT(insert->returning_list.size() == result.names.size());
-	//	D_ASSERT(insert->returning_list.size() == result.types.size());
-
+	D_ASSERT(result.types.size() == result.names.size());
 	if (!insert->returning_list.empty()) {
 		this->allow_stream_result = true;
 	} else {

@@ -3,29 +3,43 @@
 # group: [returning]
 
 statement ok
-CREATE TABLE table1 (a INTEGER, b INTEGER, c INTEGER);
+CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAULT -3);
 
 # returning 1 column
 query I
 INSERT INTO table1 VALUES (1, 2, 3) RETURNING a;
 ----
-1   2   3
+1
 
-# returning all columns
+# returning all columns with *
 query I
 INSERT INTO table1 VALUES (1, 2, 3) RETURNING *;
 ----
-1   2   3
+1	2	3
 
-# returning constant expression
+# returning all columns with column names
 query I
-INSERT INTO table1 VALUES (1, 2, 3) RETURNING 100, "hello duckdb";
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING a, b, c;
 ----
-100 "hello duckdb"
+1	2	3
+
+
+# returning column names out of order
+query I
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING c, a, b;
+----
+1	2	3
+
 
 # returning using a column alias
 query I
-INSERT INTO table1 VALUES (1, 2, 3) RETURNING 100 AS aliascol;
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING a AS aliascol;
+----
+100
+
+# returning using a column alias
+query I
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING a AS aliascol;
 ----
 100
 
@@ -37,17 +51,22 @@ INSERT INTO table1 VALUES (1, 2, 3), (4, 5, 6), (7, 8, 9) RETURNING *;
 4   5   6
 7   8   9
 
-# returning expression not in select statement
+# returning expression with function
 query I
-INSERT INTO table1 VALUES (10, 20, 30), (40, 50, 60), (70, 80, 90) RETURNING a, b, c, c NOT BETWEEN 35 AND 65;
+INSERT INTO table1 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3) RETURNING SUM(a);
 ----
-10  20  30  1
-40  50  60  0
-70  80  90  1
+6
+
+# returning * while inserting only a subset of columns
+query I
+INSERT INTO table1(a) VALUES (10) RETURNING *;
+----
+10	-2	-3
 
 
-# insert only a subset of columns, returning * = don't know what this would be yet
-# insert only a subset of columns, return just the subset of columns
-# insert only a subset of columns, return other columns, should be error
-# insert into table using select, return all columns
-# insert into a table, return the columns in a different order
+query I
+INSERT INTO table1 (SELECT * from table1 WHERE a = 3, b = 3, c=3) returning *;
+----
+3	3	3
+
+# returing
