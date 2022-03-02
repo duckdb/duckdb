@@ -81,6 +81,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("sem", &DuckDBPyRelation::SEM, "Returns the standard error of the mean of the aggregate column.",
 	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
 	    .def("unique", &DuckDBPyRelation::Unique, "Number of distinct values in a column.", py::arg("unique_aggr"))
+	    .def("union", &DuckDBPyRelation::Union, py::arg("union_rel"),
+	         "Create the set union of this relation object with another relation object in other_rel")
 	    .def("cumsum", &DuckDBPyRelation::CumSum, "Returns the cumulative sum of the aggregate column.",
 	         py::arg("aggregation_columns"))
 	    .def("cumprod", &DuckDBPyRelation::CumProd, "Returns the cumulative product of the aggregate column.",

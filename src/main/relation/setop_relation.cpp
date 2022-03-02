@@ -7,11 +7,11 @@ namespace duckdb {
 SetOpRelation::SetOpRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p, SetOperationType setop_type_p)
     : Relation(left_p->context, RelationType::SET_OPERATION_RELATION), left(move(left_p)), right(move(right_p)),
       setop_type(setop_type_p) {
-	if (&left->context != &right->context) {
+	if (left->context.GetContext() != right->context.GetContext()) {
 		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
 	vector<ColumnDefinition> dummy_columns;
-	context.TryBindRelation(*this, dummy_columns);
+	context.GetContext()->TryBindRelation(*this, dummy_columns);
 }
 
 unique_ptr<QueryNode> SetOpRelation::GetQueryNode() {
