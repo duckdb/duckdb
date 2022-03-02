@@ -219,7 +219,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
                                     SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 
 	return duckdb::WithStatementResult(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
-		if (!target_value_ptr && !IsSQLVariableLengthType(target_type)) {
+		if (!target_value_ptr && !OdbcUtils::IsCharType(target_type)) {
 			return SQL_ERROR;
 		}
 

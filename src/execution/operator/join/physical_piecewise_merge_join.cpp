@@ -18,8 +18,28 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
                                                        JoinType join_type, idx_t estimated_cardinality)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, move(cond), join_type,
                              estimated_cardinality) {
-	// for now we only support one condition!
-	D_ASSERT(conditions.size() == 1);
+	// Reorder the conditions so that ranges are at the front.
+	// TODO: use stats to improve the choice?
+	if (conditions.size() > 1) {
+		auto conditions_p = std::move(conditions);
+		conditions.resize(conditions_p.size());
+		idx_t range_position = 0;
+		idx_t other_position = conditions_p.size();
+		for (idx_t i = 0; i < conditions_p.size(); ++i) {
+			switch (conditions_p[i].comparison) {
+			case ExpressionType::COMPARE_LESSTHAN:
+			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			case ExpressionType::COMPARE_GREATERTHAN:
+			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+				conditions[range_position++] = std::move(conditions_p[i]);
+				break;
+			default:
+				conditions[--other_position] = std::move(conditions_p[i]);
+				break;
+			}
+		}
+	}
+
 	for (auto &cond : conditions) {
 		D_ASSERT(cond.left->return_type == cond.right->return_type);
 		join_key_types.push_back(cond.left->return_type);
@@ -38,8 +58,16 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
 			lhs_orders.emplace_back(BoundOrderByNode(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, move(left)));
 			rhs_orders.emplace_back(BoundOrderByNode(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, move(right)));
 			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			// Allowed in multi-predicate joins, but can't be first/sort.
+			D_ASSERT(!lhs_orders.empty());
+			lhs_orders.emplace_back(BoundOrderByNode(OrderType::INVALID, OrderByNullType::NULLS_LAST, move(left)));
+			rhs_orders.emplace_back(BoundOrderByNode(OrderType::INVALID, OrderByNullType::NULLS_LAST, move(right)));
+			break;
+
 		default:
-			// COMPARE NOT EQUAL not supported with merge join
+			// COMPARE EQUAL not supported with merge join
 			throw NotImplementedException("Unimplemented join type for merge join");
 		}
 	}
@@ -55,6 +83,7 @@ public:
 	MergeJoinGlobalState(BufferManager &buffer_manager, const vector<BoundOrderByNode> &orders, RowLayout &rhs_layout)
 	    : rhs_global_sort_state(buffer_manager, orders, rhs_layout), rhs_has_null(0), rhs_count(0),
 	      memory_per_thread(0) {
+		D_ASSERT(orders.size() == 1);
 	}
 
 	inline idx_t Count() const {
@@ -76,11 +105,12 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(ClientContext &context) const {
-	// Get the payload layout from the rhs types
+	// Get the payload layout from the rhs types and tail predicates
 	RowLayout rhs_layout;
-	auto types = children[1]->types;
-	rhs_layout.Initialize(types);
-	auto state = make_unique<MergeJoinGlobalState>(BufferManager::GetBufferManager(context), rhs_orders, rhs_layout);
+	rhs_layout.Initialize(children[1]->types);
+	vector<BoundOrderByNode> rhs_order;
+	rhs_order.emplace_back(rhs_orders[0].Copy());
+	auto state = make_unique<MergeJoinGlobalState>(BufferManager::GetBufferManager(context), rhs_order, rhs_layout);
 	// Set external (can be force with the PRAGMA)
 	auto &config = ClientConfig::GetConfig(context);
 	state->rhs_global_sort_state.external = config.force_external;
@@ -147,6 +177,94 @@ unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(Executi
 	return move(result);
 }
 
+static idx_t PiecewiseMergeNulls(DataChunk &keys, const vector<JoinCondition> &conditions) {
+	// Merge the validity masks of the comparison keys into the primary
+	// Return the number of NULLs in the resulting chunk
+	D_ASSERT(keys.ColumnCount() > 0);
+	const auto count = keys.size();
+
+	size_t all_constant = 0;
+	for (auto &v : keys.data) {
+		if (v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			++all_constant;
+		}
+	}
+
+	auto &primary = keys.data[0];
+	if (all_constant == keys.data.size()) {
+		//	Either all NULL or no NULLs
+		for (auto &v : keys.data) {
+			if (ConstantVector::IsNull(v)) {
+				ConstantVector::SetNull(primary, true);
+				return count;
+			}
+		}
+		return 0;
+	} else if (keys.ColumnCount() > 1) {
+		//	Normalify the primary, as it will need to merge arbitrary validity masks
+		primary.Normalify(count);
+		auto &pvalidity = FlatVector::Validity(primary);
+		for (size_t c = 1; c < keys.data.size(); ++c) {
+			// Skip comparisons that accept NULLs
+			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+				continue;
+			}
+			//	Orrify the rest, as the sort code will do this anyway.
+			auto &v = keys.data[c];
+			VectorData vdata;
+			v.Orrify(count, vdata);
+			auto &vvalidity = vdata.validity;
+			if (vvalidity.AllValid()) {
+				continue;
+			}
+			pvalidity.EnsureWritable();
+			switch (v.GetVectorType()) {
+			case VectorType::FLAT_VECTOR: {
+				// Merge entire entries
+				auto pmask = pvalidity.GetData();
+				const auto entry_count = pvalidity.EntryCount(count);
+				for (idx_t entry_idx = 0; entry_idx < entry_count; ++entry_idx) {
+					pmask[entry_idx] &= vvalidity.GetValidityEntry(entry_idx);
+				}
+				break;
+			}
+			case VectorType::CONSTANT_VECTOR:
+				// All or nothing
+				if (ConstantVector::IsNull(v)) {
+					pvalidity.SetAllInvalid(count);
+					return count;
+				}
+				break;
+			default:
+				// One by one
+				for (idx_t i = 0; i < count; ++i) {
+					const auto idx = vdata.sel->get_index(i);
+					if (!vvalidity.RowIsValidUnsafe(idx)) {
+						pvalidity.SetInvalidUnsafe(i);
+					}
+				}
+				break;
+			}
+		}
+		return count - pvalidity.CountValid(count);
+	} else {
+		return count - CountValid(primary, count);
+	}
+}
+
+static inline void SinkPiecewiseMergeChunk(LocalSortState &sort_state, DataChunk &join_keys, DataChunk &input) {
+	if (join_keys.ColumnCount() > 1) {
+		//	Only sort the first key
+		DataChunk join_head;
+		join_head.data.emplace_back(Vector(join_keys.data[0]));
+		join_head.SetCardinality(join_keys.size());
+
+		sort_state.SinkChunk(join_head, input);
+	} else {
+		sort_state.SinkChunk(join_keys, input);
+	}
+}
+
 SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p,
                                                 LocalSinkState &lstate_p, DataChunk &input) const {
 	auto &gstate = (MergeJoinGlobalState &)gstate_p;
@@ -166,15 +284,11 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, Globa
 	lstate.rhs_executor.Execute(input, join_keys);
 
 	// Count the NULLs so we can exclude them later
-	// TODO: Sort any comparison NULLs to the end using an initial sort column
-	const auto count = join_keys.size();
-	for (auto &key : join_keys.data) {
-		lstate.rhs_has_null += (count - CountValid(key, count));
-	}
-	lstate.rhs_count += count;
+	lstate.rhs_has_null += PiecewiseMergeNulls(join_keys, conditions);
+	lstate.rhs_count += join_keys.size();
 
 	// Sink the data into the local sort state
-	local_sort_state.SinkChunk(join_keys, input);
+	SinkPiecewiseMergeChunk(local_sort_state, join_keys, input);
 
 	// When sorting data reaches a certain size, we sort it
 	if (local_sort_state.SizeInBytes() >= gstate.memory_per_thread) {
@@ -299,9 +413,9 @@ public:
 	    : op(op), buffer_manager(buffer_manager), force_external(force_external), left_position(0), first_fetch(true),
 	      finished(true), right_position(0), right_chunk_index(0) {
 		vector<LogicalType> condition_types;
-		for (auto &cond : op.conditions) {
-			lhs_executor.AddExpression(*cond.left);
-			condition_types.push_back(cond.left->return_type);
+		for (auto &order : op.lhs_orders) {
+			lhs_executor.AddExpression(*order.expression);
+			condition_types.push_back(order.expression->return_type);
 		}
 		lhs_keys.Initialize(condition_types);
 		if (IsLeftOuterJoin(op.join_type)) {
@@ -309,6 +423,18 @@ public:
 			memset(lhs_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 		}
 		lhs_layout.Initialize(op.children[0]->types);
+		lhs_payload.Initialize(op.children[0]->types);
+
+		lhs_order.emplace_back(op.lhs_orders[0].Copy());
+
+		// Set up shared data for multiple predicates
+		sel.Initialize(STANDARD_VECTOR_SIZE);
+		condition_types.clear();
+		for (auto &order : op.rhs_orders) {
+			rhs_executor.AddExpression(*order.expression);
+			condition_types.push_back(order.expression->return_type);
+		}
+		rhs_keys.Initialize(condition_types);
 	}
 
 	const PhysicalPiecewiseMergeJoin &op;
@@ -317,8 +443,10 @@ public:
 
 	// Block sorting
 	DataChunk lhs_keys;
+	DataChunk lhs_payload;
 	ExpressionExecutor lhs_executor;
 	unique_ptr<bool[]> lhs_found_match;
+	vector<BoundOrderByNode> lhs_order;
 	RowLayout lhs_layout;
 	unique_ptr<LocalSortState> lhs_local_state;
 	unique_ptr<GlobalSortState> lhs_global_state;
@@ -335,6 +463,12 @@ public:
 	idx_t right_chunk_index;
 	idx_t right_base;
 
+	// Secondary predicate shared data
+	SelectionVector sel;
+	DataChunk rhs_keys;
+	DataChunk rhs_input;
+	ExpressionExecutor rhs_executor;
+
 public:
 	void ResolveJoinKeys(DataChunk &input) {
 		// resolve the join keys for the input
@@ -342,18 +476,14 @@ public:
 		lhs_executor.Execute(input, lhs_keys);
 
 		// Count the NULLs so we can exclude them later
-		// TODO: Sort any multi-comparison NULLs to the end using an initial sort column
 		lhs_count = lhs_keys.size();
-		for (auto &key : lhs_keys.data) {
-			lhs_has_null = lhs_count - CountValid(key, lhs_count);
-			break;
-		}
+		lhs_has_null = PiecewiseMergeNulls(lhs_keys, op.conditions);
 
 		// sort by join key
-		lhs_global_state = make_unique<GlobalSortState>(buffer_manager, op.lhs_orders, lhs_layout);
+		lhs_global_state = make_unique<GlobalSortState>(buffer_manager, lhs_order, lhs_layout);
 		lhs_local_state = make_unique<LocalSortState>();
 		lhs_local_state->Initialize(*lhs_global_state, buffer_manager);
-		lhs_local_state->SinkChunk(lhs_keys, input);
+		SinkPiecewiseMergeChunk(*lhs_local_state, lhs_keys, input);
 
 		// Set external (can be force with the PRAGMA)
 		lhs_global_state->external = force_external;
@@ -364,6 +494,17 @@ public:
 			merge_sorter.PerformInMergeRound();
 			lhs_global_state->CompleteMergeRound();
 		}
+
+		// Scan the sorted payload
+		D_ASSERT(lhs_global_state->sorted_blocks.size() == 1);
+
+		PayloadScanner scanner(*lhs_global_state->sorted_blocks[0]->payload_data, *lhs_global_state);
+		lhs_payload.Reset();
+		scanner.Scan(lhs_payload);
+
+		// Recompute the sorted keys from the sorted input
+		lhs_keys.Reset();
+		lhs_executor.Execute(lhs_payload, lhs_keys);
 	}
 
 	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
@@ -412,8 +553,8 @@ struct BlockMergeInfo {
 	}
 };
 
-static void SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const idx_t result_count, const idx_t vcount,
-                               const idx_t left_cols = 0) {
+static idx_t SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const idx_t result_count,
+                                const idx_t left_cols = 0) {
 	// There should only be one sorted block if they have been sorted
 	D_ASSERT(info.state.sorted_blocks.size() == 1);
 	SBScanState read_state(info.state.buffer_manager, info.state);
@@ -422,33 +563,50 @@ static void SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const i
 
 	// We have to create pointers for the entire block
 	// because unswizzle works on ranges not selections.
-	read_state.SetIndices(info.block_idx, info.base_idx);
+	const auto first_idx = info.result.get_index(0);
+	read_state.SetIndices(info.block_idx, info.base_idx + first_idx);
 	read_state.PinData(sorted_data);
 	const auto data_ptr = read_state.DataPtr(sorted_data);
-	const auto next = vcount - info.base_idx;
 
 	// Set up a batch of pointers to scan data from
-	Vector addresses(LogicalType::POINTER, next);
+	Vector addresses(LogicalType::POINTER, result_count);
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
-	// Set up the data pointers
+	// Set up the data pointers for the values that are actually referenced
+	// and normalise the selection vector to zero
 	data_ptr_t row_ptr = data_ptr;
 	const idx_t &row_width = sorted_data.layout.GetRowWidth();
-	for (idx_t i = 0; i < next; ++i) {
-		data_pointers[i] = row_ptr;
-		row_ptr += row_width;
+
+	auto prev_idx = first_idx;
+	info.result.set_index(0, 0);
+	idx_t addr_count = 0;
+	data_pointers[addr_count++] = row_ptr;
+	for (idx_t i = 1; i < result_count; ++i) {
+		const auto row_idx = info.result.get_index(i);
+		info.result.set_index(i, row_idx - first_idx);
+		if (row_idx == prev_idx) {
+			continue;
+		}
+		row_ptr += (row_idx - prev_idx) * row_width;
+		data_pointers[addr_count++] = row_ptr;
+		prev_idx = row_idx;
 	}
 	// Unswizzle the offsets back to pointers (if needed)
 	if (!sorted_data.layout.AllConstant() && info.state.external) {
+		const auto next = prev_idx + 1;
 		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(), next);
 	}
 
 	// Deserialize the payload data
+	auto sel = FlatVector::IncrementalSelectionVector();
 	for (idx_t col_idx = 0; col_idx < sorted_data.layout.ColumnCount(); col_idx++) {
 		const auto col_offset = sorted_data.layout.GetOffsets()[col_idx];
-		RowOperations::Gather(addresses, info.result, payload.data[left_cols + col_idx],
-		                      *FlatVector::IncrementalSelectionVector(), result_count, col_offset, col_idx);
+		auto &col = payload.data[left_cols + col_idx];
+		RowOperations::Gather(addresses, *sel, col, *sel, addr_count, col_offset, col_idx);
+		col.Slice(info.result, result_count);
 	}
+
+	return first_idx;
 }
 
 static void MergeJoinPinSortingBlock(SBScanState &scan, const idx_t block_idx) {
@@ -556,16 +714,9 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 	memset(found_match, 0, sizeof(found_match));
 	MergeJoinSimpleBlocks(state, gstate, found_match, conditions[0].comparison);
 
-	// extract the sorted payload
-	idx_t left_position = 0;
+	// use the sorted payload
 	const auto lhs_not_null = state.lhs_count - state.lhs_has_null;
-	BlockMergeInfo left_info(*state.lhs_global_state, 0, 0, left_position, lhs_not_null);
-	left_info.result.Initialize(nullptr);
-
-	DataChunk payload;
-	payload.Initialize(input.GetTypes());
-	SliceSortedPayload(payload, left_info, state.lhs_count, state.lhs_count);
-	payload.SetCardinality(state.lhs_count);
+	auto &payload = state.lhs_payload;
 
 	// now construct the result based on the join result
 	switch (join_type) {
@@ -672,11 +823,37 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 	return result_count;
 }
 
+static idx_t SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right, const SelectionVector *sel,
+                            idx_t count, SelectionVector *true_sel) {
+	switch (condition) {
+	case ExpressionType::COMPARE_NOTEQUAL:
+		return VectorOperations::NotEquals(left, right, sel, count, true_sel, nullptr);
+	case ExpressionType::COMPARE_LESSTHAN:
+		return VectorOperations::LessThan(left, right, sel, count, true_sel, nullptr);
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return VectorOperations::GreaterThan(left, right, sel, count, true_sel, nullptr);
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, nullptr);
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, nullptr);
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		return VectorOperations::DistinctFrom(left, right, sel, count, true_sel, nullptr);
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+	case ExpressionType::COMPARE_EQUAL:
+	default:
+		throw InternalException("Unsupported comparison type for PhysicalPiecewiseMergeJoin");
+	}
+
+	return count;
+}
+
 OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input,
                                                                   DataChunk &chunk, OperatorState &state_p) const {
 	auto &state = (PiecewiseMergeJoinState &)state_p;
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 	auto &rsorted = *gstate.rhs_global_sort_state.sorted_blocks[0];
+	const auto left_cols = input.ColumnCount();
+	const auto tail_cols = conditions.size() - 1;
 	do {
 		if (state.first_fetch) {
 			state.ResolveJoinKeys(input);
@@ -692,7 +869,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			if (IsLeftOuterJoin(join_type)) {
 				// left join: before we move to the next chunk, see if we need to output any vectors that didn't
 				// have a match found
-				PhysicalJoin::ConstructLeftJoinResult(input, chunk, state.lhs_found_match.get());
+				PhysicalJoin::ConstructLeftJoinResult(state.lhs_payload, chunk, state.lhs_found_match.get());
 				memset(state.lhs_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 			}
 			state.first_fetch = true;
@@ -721,22 +898,60 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 				state.finished = true;
 			}
 		} else {
+			// found matches: extract them
+			chunk.Reset();
+			for (idx_t c = 0; c < state.lhs_payload.ColumnCount(); ++c) {
+				chunk.data[c].Slice(state.lhs_payload.data[c], left_info.result, result_count);
+			}
+			const auto first_idx = SliceSortedPayload(chunk, right_info, result_count, left_cols);
+			chunk.SetCardinality(result_count);
+
+			auto sel = FlatVector::IncrementalSelectionVector();
+			if (tail_cols) {
+				// If there are more expressions to compute,
+				// split the result chunk into the left and right halves
+				// so we can compute the values for comparison.
+				chunk.Split(state.rhs_input, left_cols);
+				state.rhs_executor.SetChunk(state.rhs_input);
+				state.rhs_keys.Reset();
+
+				auto tail_count = result_count;
+				for (size_t cmp_idx = 1; cmp_idx < conditions.size(); ++cmp_idx) {
+					Vector left(state.lhs_keys.data[cmp_idx]);
+					left.Slice(left_info.result, result_count);
+
+					auto &right = state.rhs_keys.data[cmp_idx];
+					state.rhs_executor.ExecuteExpression(cmp_idx, right);
+
+					if (tail_count < result_count) {
+						left.Slice(*sel, tail_count);
+						right.Slice(*sel, tail_count);
+					}
+					tail_count =
+					    SelectJoinTail(conditions[cmp_idx].comparison, left, right, sel, tail_count, &state.sel);
+					sel = &state.sel;
+				}
+				chunk.Fuse(state.rhs_input);
+
+				if (tail_count < result_count) {
+					result_count = tail_count;
+					chunk.Slice(*sel, result_count);
+				}
+			}
+
 			// found matches: mark the found matches if required
 			if (state.lhs_found_match) {
 				for (idx_t i = 0; i < result_count; i++) {
-					state.lhs_found_match[left_info.result[i]] = true;
+					state.lhs_found_match[left_info.result[sel->get_index(i)]] = true;
 				}
 			}
 			if (gstate.rhs_found_match) {
 				//	Absolute position of the block + start position inside that block
-				const idx_t base_index = state.right_base + right_info.base_idx;
+				const idx_t base_index = right_info.base_idx + first_idx;
 				for (idx_t i = 0; i < result_count; i++) {
-					gstate.rhs_found_match[base_index + right_info.result[i]] = true;
+					gstate.rhs_found_match[base_index + right_info.result[sel->get_index(i)]] = true;
 				}
 			}
-			// found matches: output them
-			SliceSortedPayload(chunk, left_info, result_count, input.size());
-			SliceSortedPayload(chunk, right_info, result_count, right_info.entry_idx + 1, input.ColumnCount());
 			chunk.SetCardinality(result_count);
 			chunk.Verify();
 		}
@@ -822,7 +1037,7 @@ void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &r
 
 	// ConstructFullOuterJoinResult(sink.rhs_found_match.get(), sink.right_chunks, chunk, state.right_outer_position);
 	DataChunk rhs_chunk;
-	rhs_chunk.Initialize(children[1]->types);
+	rhs_chunk.Initialize(sink.rhs_global_sort_state.payload_layout.GetTypes());
 	SelectionVector rsel(STANDARD_VECTOR_SIZE);
 	for (;;) {
 		// Read the next sorted chunk
@@ -844,12 +1059,14 @@ void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &r
 
 		if (result_count > 0) {
 			// if there were any tuples that didn't find a match, output them
-			const idx_t left_column_count = result.ColumnCount() - rhs_chunk.ColumnCount();
+			const idx_t left_column_count = children[0]->types.size();
 			for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
 				result.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
 				ConstantVector::SetNull(result.data[col_idx], true);
 			}
-			for (idx_t col_idx = 0; col_idx < rhs_chunk.ColumnCount(); ++col_idx) {
+			const idx_t right_column_count = children[1]->types.size();
+			;
+			for (idx_t col_idx = 0; col_idx < right_column_count; ++col_idx) {
 				result.data[left_column_count + col_idx].Slice(rhs_chunk.data[col_idx], rsel, result_count);
 			}
 			result.SetCardinality(result_count);

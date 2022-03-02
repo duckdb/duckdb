@@ -2,7 +2,7 @@ add_library_unity(
   duckdb_func_list
   OBJECT
   list_concat.cpp
-  list_contains.cpp
+  contains_or_position.cpp
   array_slice.cpp
   list_extract.cpp
   list_value.cpp
