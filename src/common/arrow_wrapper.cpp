@@ -7,6 +7,7 @@
 
 #include "duckdb/common/result_arrow_wrapper.hpp"
 
+#include "duckdb/main/query_result.hpp"
 namespace duckdb {
 
 ArrowSchemaWrapper::~ArrowSchemaWrapper() {
@@ -75,7 +76,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		return -1;
 	}
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
-	if (!my_stream->column_types.empty()){
+	if (!my_stream->column_types.empty()) {
 		QueryResult::ToArrowSchema(out, my_stream->column_types, my_stream->column_names);
 		return 0;
 	}
@@ -92,7 +93,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 			return -1;
 		}
 	}
-	if (my_stream->column_types.empty()){
+	if (my_stream->column_types.empty()) {
 		my_stream->column_types = result.types;
 		my_stream->column_names = result.names;
 	}
@@ -118,7 +119,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 			return 0;
 		}
 	}
-	if (my_stream->column_types.empty()){
+	if (my_stream->column_types.empty()) {
 		my_stream->column_types = result.types;
 		my_stream->column_names = result.names;
 	}
@@ -128,7 +129,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 		out->release = nullptr;
 		return 0;
 	}
-	while (chunk_result->size() < my_stream->batch_size){
+	while (chunk_result->size() < my_stream->batch_size) {
 		auto new_chunk = result.Fetch();
 		if (!new_chunk) {
 			break;
@@ -170,6 +171,40 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.get_next = ResultArrowArrayStreamWrapper::MyStreamGetNext;
 	stream.release = ResultArrowArrayStreamWrapper::MyStreamRelease;
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
+}
+
+unique_ptr<DataChunk> ArrowUtil::FetchNext(QueryResult &result) {
+	auto chunk = result.Fetch();
+	if (!result.success) {
+		throw std::runtime_error(result.error);
+	}
+	return chunk;
+}
+
+bool ArrowUtil::IfStreamResultIsOpen(QueryResult *result) {
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		auto stream_result = (StreamQueryResult *)result;
+		if (!stream_result->IsOpen()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+unique_ptr<DataChunk> ArrowUtil::FetchChunk(QueryResult *result, idx_t chunk_size) {
+
+	auto data_chunk = FetchNext(*result);
+	if (!data_chunk) {
+		return data_chunk;
+	}
+	while (data_chunk->size() < chunk_size) {
+		auto next_chunk = FetchNext(*result);
+		if (!next_chunk || next_chunk->size() == 0) {
+			break;
+		}
+		data_chunk->Append(*next_chunk, true);
+	}
+	return data_chunk;
 }
 
 } // namespace duckdb

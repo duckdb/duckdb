@@ -335,9 +335,9 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	}
 }
 
-void QueryResult::ToArrowSchema(ArrowSchema *out_schema,vector<LogicalType> &types,vector<string> &names) {
+void QueryResult::ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> &types, vector<string> &names) {
 	D_ASSERT(out_schema);
-	D_ASSERT (types.size() == names.size());
+	D_ASSERT(types.size() == names.size());
 	idx_t column_count = types.size();
 	// Allocate as unique_ptr first to cleanup properly on error
 	auto root_holder = make_unique<DuckDBArrowSchemaHolder>();

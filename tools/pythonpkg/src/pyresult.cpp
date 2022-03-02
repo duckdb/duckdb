@@ -23,7 +23,8 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	    .def("fetchdf", &DuckDBPyResult::FetchDF)
 	    .def("fetch_df", &DuckDBPyResult::FetchDF)
 	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk)
-	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch Result as an Arrow Table", py::arg("chunk_size") = 1000000)
+	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch Result as an Arrow Table",
+	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader,
 	         "Fetch Result as an Arrow Record Batch Reader", py::arg("approx_batch_size"))
 	    .def("arrow", &DuckDBPyResult::FetchArrowTable, py::arg("chunk_size") = 1000000)
@@ -306,46 +307,21 @@ void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, DataChunk &duck_chunk,
 	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
 }
 
-bool IfStreamResultIsOpen(QueryResult *result){
-	if (result->type == QueryResultType::STREAM_RESULT) {
-		auto stream_result = (StreamQueryResult *)result;
-		if (!stream_result->IsOpen()) {
-			return false;
-		}
-	}
-	return true;
-}
-
-unique_ptr<DataChunk> FetchChunk(QueryResult *result, py::list &batches, idx_t chunk_size) {
-	auto data_chunk = FetchNext(*result);
-	if (!data_chunk){
-		return data_chunk;
-	}
-	while (data_chunk->size() < chunk_size){
-		auto next_chunk = FetchNext(*result);
-		if (!next_chunk || next_chunk->size() == 0) {
-			break;
-		}
-		data_chunk->Append(*next_chunk,true);
-	}
-	return data_chunk;
-}
-
 bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size) {
-	if (!IfStreamResultIsOpen(result)){
+	if (!ArrowUtil::IfStreamResultIsOpen(result)) {
 		return false;
 	}
-	auto data_chunk = FetchChunk(result,batches,chunk_size);
+	auto data_chunk = ArrowUtil::FetchChunk(result, chunk_size);
 	if (!data_chunk || data_chunk->size() == 0) {
 		return false;
 	}
 	ArrowSchema arrow_schema;
-	QueryResult::ToArrowSchema(&arrow_schema,result->types,result->names);
-	TransformDuckToArrowChunk(arrow_schema,*data_chunk,batches);
+	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names);
+	TransformDuckToArrowChunk(arrow_schema, *data_chunk, batches);
 	return true;
 }
 
-py::object  DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
+py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("result closed");
 	}
@@ -361,7 +337,6 @@ py::object  DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 	return std::move(batches);
 }
 
-
 py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	py::gil_scoped_acquire acquire;
 
@@ -370,7 +345,7 @@ py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 
 	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
 	ArrowSchema schema;
-	QueryResult::ToArrowSchema(&schema,result->types,result->names);
+	QueryResult::ToArrowSchema(&schema, result->types, result->names);
 	auto schema_obj = schema_import_func((uint64_t)&schema);
 
 	py::list batches = FetchAllArrowChunks(chunk_size);

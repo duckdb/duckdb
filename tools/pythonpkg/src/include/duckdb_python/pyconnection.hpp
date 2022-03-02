@@ -111,7 +111,6 @@ public:
 
 	py::object FetchArrow(idx_t chunk_size);
 
-
 	py::object FetchRecordBatchReader(const idx_t chunk_size) const;
 
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);

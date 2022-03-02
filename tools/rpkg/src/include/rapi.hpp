@@ -136,7 +136,7 @@ void rapi_register_arrow(duckdb::conn_eptr_t, SEXP namesexp, SEXP export_funsexp
 
 void rapi_unregister_arrow(duckdb::conn_eptr_t, SEXP namesexp);
 
-SEXP rapi_execute_arrow(duckdb::rqry_eptr_t, bool, int, bool);
+SEXP rapi_execute_arrow(duckdb::rqry_eptr_t, int);
 
 SEXP rapi_record_batch(duckdb::rqry_eptr_t, int);
 

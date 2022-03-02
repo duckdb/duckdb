@@ -44,7 +44,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
 	         "Fetch a chunk of the result as Data.Frame following execute()", py::arg("vectors_per_chunk") = 1)
 	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
-	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()", py::arg("chunk_size") = 1000000)
+	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
+	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
 	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("chunk_size") = 1000000)
 	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
@@ -420,7 +421,6 @@ py::object DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 	}
 	return result->FetchArrowTable(chunk_size);
 }
-
 
 py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
 	if (!result) {

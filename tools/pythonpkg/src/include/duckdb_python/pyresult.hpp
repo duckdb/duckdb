@@ -53,7 +53,7 @@ public:
 private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
 
-	py::object  FetchAllArrowChunks(idx_t chunk_size);
+	py::object FetchAllArrowChunks(idx_t chunk_size);
 };
 
 } // namespace duckdb
