@@ -35,14 +35,9 @@
 \alias{show,duckdb_result-method}
 \title{DuckDB Result Set}
 \usage{
-duckdb_fetch_arrow(
-  res,
-  stream = FALSE,
-  vector_per_chunk = 1,
-  return_table = FALSE
-)
+duckdb_fetch_arrow(res, chunk_size = 1000000)
 
-duckdb_fetch_record_batch(res, approx_batch_size = 1)
+duckdb_fetch_record_batch(res, chunk_size = 1000000)
 
 \S4method{dbBind}{duckdb_result}(res, params, ...)
 
