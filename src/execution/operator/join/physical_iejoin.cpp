@@ -779,6 +779,43 @@ bool IEJoinUnion::NextRow() {
 	return false;
 }
 
+static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
+	// In the paper, they used a Bloom filter of 4096:1,
+	// We can do a first approximation by checking entries one at a time
+	// which gives 64:1.
+	idx_t entry_idx, idx_in_entry;
+	bits.GetEntryIndex(j, entry_idx, idx_in_entry);
+	auto entry = bits.GetValidityEntry(entry_idx++);
+
+	// Trim the bits before the start position
+	entry &= (ValidityMask::ValidityBuffer::MAX_ENTRY << idx_in_entry);
+
+	// Check the non-ragged entries
+	for (const auto entry_count = bits.EntryCount(n); entry_idx < entry_count; ++entry_idx) {
+		if (entry) {
+			for (; idx_in_entry < bits.BITS_PER_VALUE; ++idx_in_entry, ++j) {
+				if (bits.RowIsValid(entry, idx_in_entry)) {
+					return j;
+				}
+			}
+		} else {
+			j += bits.BITS_PER_VALUE - idx_in_entry;
+		}
+
+		entry = bits.GetValidityEntry(entry_idx);
+		idx_in_entry = 0;
+	}
+
+	// Check the final entry
+	for (; j < n; ++idx_in_entry, ++j) {
+		if (bits.RowIsValid(entry, idx_in_entry)) {
+			return j;
+		}
+	}
+
+	return j;
+}
+
 idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rsel) {
 	// 8. initialize join result as an empty list for tuple pairs
 	idx_t result_count = 0;
@@ -788,12 +825,7 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 		// 13. for (j ← pos+eqOff to n) do
 		for (;;) {
 			// 14. if B[j] = 1 then
-			auto j = off1->GetIndex();
-			for (; j < n; ++j) {
-				if (bit_mask.RowIsValidUnsafe(j)) {
-					break;
-				}
-			}
+			auto j = NextValid(bit_mask, off1->GetIndex(), n);
 			if (j >= n) {
 				break;
 			}
