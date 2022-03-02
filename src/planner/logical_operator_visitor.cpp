@@ -116,12 +116,6 @@ void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *child) { VisitExpression(child); });
 }
 
-void LogicalOperatorVisitor::VisitReturningListExpression(LogicalInsert &op) {
-	for (auto &child : op.returning_list) {
-		VisitExpression(&child);
-	}
-}
-
 void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression) {
 	auto &expr = **expression;
 	unique_ptr<Expression> result;

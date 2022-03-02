@@ -125,22 +125,20 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	// parse select statement and add to logical plan
 	auto root_select = Bind(*stmt.select_statement);
-	// ------------------------------------------------------------------------------------------------------------
-	// This is to bind the returning list
-	// visit the retuning list and expand any "*" statements
+
+	// Bind the returning list expand any "*" statements if necessary
 	vector<unique_ptr<ParsedExpression>> new_returning_list;
-	auto returning_result = make_unique<BoundSelectNode>();;
-	for (auto &returning_element : stmt.returning_list) {
-		if (returning_element->GetExpressionType() == ExpressionType::STAR) {
+	auto returning_stmt = make_unique<BoundSelectNode>();;
+	for (auto &returning_expr : stmt.returning_list) {
+		if (returning_expr->GetExpressionType() == ExpressionType::STAR) {
 			// * statement, expand to all columns from the FROM clause
-			bind_context.GenerateAllColumnExpressions((StarExpression &)*returning_element, new_returning_list);
+			bind_context.GenerateAllColumnExpressions((StarExpression &)*returning_expr, new_returning_list);
 		} else {
 			// regular statement, add it to the list
-			new_returning_list.push_back(move(returning_element));
+			new_returning_list.push_back(move(returning_expr));
 		}
 	}
 	stmt.returning_list = move(new_returning_list);
-
 
 	// create a mapping of (alias -> index) and a mapping of (Expression -> index) for the RETURNING list
 	case_insensitive_map_t<idx_t> alias_map;
@@ -154,26 +152,28 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			result.names[i] = expr->alias;
 		}
 		projection_map[expr.get()] = i;
-		returning_result->original_expressions.push_back(expr->Copy());
+		returning_stmt->original_expressions.push_back(expr->Copy());
 	}
 
-	returning_result->column_count = stmt.returning_list.size();
+	returning_stmt->column_count = stmt.returning_list.size();
 
 	// after that, bind the returning statement to the context of the INSERT statement
 	BoundGroupInformation info;
-	SelectBinder select_binder(*this, context, *returning_result, info);
+	SelectBinder select_binder(*this, context, *returning_stmt, info);
 	for (idx_t i = 0; i < stmt.returning_list.size(); i++) {
 		LogicalType result_type;
 		unique_ptr<Expression> expr = select_binder.Bind(stmt.returning_list[i], &result_type);
 
-		if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-			// https://stackoverflow.com/questions/36120424/alternatives-of-static-pointer-cast-for-unique-ptr
-			auto& expr2 = (BoundColumnRefExpression &)*expr;
-//			BoundColumnRefExpression& expr2 = *(static_cast<BoundColumnRefExpression*>(expr.get()));
-			expr2.binding.table_index = 0;
-		}
 
-		returning_result->select_list.push_back(move(expr));
+//		root_select.plan->children[0];
+//		if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+//			// https://stackoverflow.com/questions/36120424/alternatives-of-static-pointer-cast-for-unique-ptr
+//			auto& expr2 = (BoundColumnRefExpression &)*expr;
+//			BoundColumnRefExpression& expr2 = *(static_cast<BoundColumnRefExpression*>(expr.get()));
+//			expr2.binding.table_index = 0;
+//		}
+
+		returning_stmt->select_list.push_back(move(expr));
 		if (i < result.names.size()) {
 			result.types.push_back(result_type);
 		}
@@ -189,14 +189,17 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	                               table->name.c_str());
 
 	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, move(root_select.plan));
-	// TODO: what is this root pointer? how should I use my bound returning list to make sure it's properly updated?
-	// TODO: the root variable is a logical plan. So eventually it should ideally contain the return info in some way so
-	// TODO: that it the return plan can be executed properly. Why do we need the plan? Because the returning statement
-	// TODO: may also need special executing functions.
 
 	insert->AddChild(move(root));
 
-	for (auto i = returning_result->select_list.begin(); i != returning_result->select_list.end(); i++) {
+	if (insert->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		auto &proj = (LogicalProjection &)*(insert->children[0]);
+
+		proj.table_index = 7;
+	}
+
+
+	for (auto i = returning_stmt->select_list.begin(); i != returning_stmt->select_list.end(); i++) {
 		insert->returning_list.push_back(move(*i));
 	}
 
