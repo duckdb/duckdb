@@ -18,6 +18,10 @@ string JoinTypeToString(JoinType type) {
 		return "ANTI";
 	case JoinType::SINGLE:
 		return "SINGLE";
+	case JoinType::UNIQUE:
+		return "UNIQUE";
+	case JoinType::PERFECT:
+		return "PERFECT";
 	case JoinType::MARK:
 		return "MARK";
 	case JoinType::INVALID: // LCOV_EXCL_START

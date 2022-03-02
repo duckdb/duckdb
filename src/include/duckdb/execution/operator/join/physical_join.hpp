@@ -19,6 +19,7 @@ public:
 	PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, JoinType join_type, idx_t estimated_cardinality);
 
 	JoinType join_type;
+	string join_subtype_name;
 
 public:
 	bool EmptyResultIfRHSIsEmpty() const;

@@ -185,6 +185,14 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			sink.hash_table->Finalize();
 		}
 	}
+	// Add this info to show in the profile
+	if (sink.hash_table->has_unique_keys) {
+		// Unique keys JOIN
+		const_cast<string &>(join_subtype_name) = JoinTypeToString(JoinType::UNIQUE);
+	} else if (sink.perfect_join_executor) {
+		// Perfect JOIN
+		const_cast<string &>(join_subtype_name) = JoinTypeToString(JoinType::PERFECT);
+	}
 	sink.finalized = true;
 	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;

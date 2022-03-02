@@ -26,7 +26,9 @@ PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOper
 
 string PhysicalComparisonJoin::ParamsToString() const {
 	string extra_info = JoinTypeToString(join_type) + "\n";
-
+	if (!join_subtype_name.empty()) {
+		extra_info += join_subtype_name + "\n";
+	}
 	for (auto &it : conditions) {
 		string op = ExpressionTypeToOperator(it.comparison);
 		extra_info += it.left->GetName() + op + it.right->GetName() + "\n";

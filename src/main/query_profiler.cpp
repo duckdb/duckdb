@@ -18,7 +18,6 @@
 
 #include <algorithm>
 #include <utility>
-
 namespace duckdb {
 
 QueryProfiler::QueryProfiler(ClientContext &context_p)
@@ -256,9 +255,10 @@ void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t 
 }
 void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor *expression_executor,
                              const string &name, int id) {
-	if (phys_op->type == PhysicalOperatorType::HASH_JOIN) {
-		auto &sink = (HashJoinGlobalState &)phys_op->sink_state;
-	}
+	/* if (phys_op->type == PhysicalOperatorType::HASH_JOIN) {
+	    auto sink = (HashJoinGlobalState *)phys_op->sink_state.get();
+	    std::cout << sink->finalized << std::endl;
+	} */
 	auto entry = timings.find(phys_op);
 	if (entry == timings.end()) {
 		return;
@@ -279,7 +279,10 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	for (auto &node : profiler.timings) {
 		auto entry = tree_map.find(node.first);
 		D_ASSERT(entry != tree_map.end());
-
+		if (entry->first->type == PhysicalOperatorType::HASH_JOIN) {
+			auto p_join = (PhysicalJoin *)entry->first;
+			entry->second->extra_info += p_join->join_subtype_name;
+		}
 		entry->second->info.time += node.second.time;
 		entry->second->info.elements += node.second.elements;
 		if (!IsDetailedEnabled()) {
