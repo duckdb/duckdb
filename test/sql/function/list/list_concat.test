@@ -162,3 +162,25 @@ query T
 SELECT array_prepend(1, [2, 3])
 ----
 [1, 2, 3]
+
+# push back
+query T
+SELECT array_push_back([1, 2], 3);
+----
+[1, 2, 3]
+
+query T
+SELECT array_push_back(NULL, 3);
+----
+[3]
+
+# push front
+query T
+SELECT array_push_front([2, 3], 1);
+----
+[1, 2, 3]
+
+query T
+SELECT array_push_front(NULL, 1);
+----
+[1]
