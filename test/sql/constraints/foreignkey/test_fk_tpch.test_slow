@@ -1,4 +1,4 @@
-# name: test/sql/constraints/foreignkey/test_fk_tpch.test
+# name: test/sql/constraints/foreignkey/test_fk_tpch.test_slow
 # description: enable foreign keys in the TPC-H schema
 # group: [foreignkey]
 
