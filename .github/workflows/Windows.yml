@@ -177,7 +177,7 @@ jobs:
     - name: Install psqlodbc
       run: |
         git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout 6bb98d29183d426a9d3c6d6b677062f145604004 && make release)
+        (cd psqlodbc && git checkout 54713b2af5911f1f1ba57c79025a6ebf378a2c5a && make release)
 
     - name: Test psqlodbc
       run: |
