@@ -289,7 +289,7 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
 		auto rec_idx = rec_number - 1;
 		auto &diag_record = odbc_handle->odbc_diagnostic->GetDiagRecord(rec_idx);
 
-		if (sql_state && strlen((char *)sql_state) == 5) {
+		if (sql_state && strlen((char *)sql_state) >= 5) {
 			OdbcUtils::WriteString(diag_record.sql_diag_sqlstate, sql_state, 6);
 		}
 		if (native_error_ptr) {
@@ -301,7 +301,6 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
 
 		if (text_length_ptr) {
 			SQLSMALLINT remaining_chars = msg.size() - buffer_length;
-			duckdb::Store<SQLSMALLINT>(remaining_chars, (duckdb::data_ptr_t)text_length_ptr);
 			if (remaining_chars > 0) {
 				// TODO needs to split the diagnostic message
 				odbc_handle->odbc_diagnostic->AddNewRecIdx(rec_idx);

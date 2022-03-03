@@ -441,7 +441,7 @@ jobs:
     - name: Install psqlodbc
       run: |
         git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout e84accdb9feaf526e04e69ecb8d58fb304bcc282 && make debug)
+        (cd psqlodbc && git checkout 383298c52f079d5b5b0def27ff87884ce6e56a98 && make debug)
 
     - name: Build
       run: DISABLE_SANITIZER=1 make debug
