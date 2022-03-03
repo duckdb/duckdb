@@ -1,0 +1,17 @@
+# name: test/sql/function/enum/test_enum_random.test
+# description: Enum Random Function
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE rainbow AS ENUM ('red');
+
+query I
+SELECT enum_random(null::rainbow)
+----
+red
+
+statement error
+SELECT enum_random('bla')

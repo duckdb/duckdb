@@ -29,4 +29,8 @@ struct EnumRangeBoundary {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct EnumRandom {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

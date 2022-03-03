@@ -7,6 +7,7 @@ void BuiltinFunctions::RegisterEnumFunctions() {
 	Register<EnumLast>();
 	Register<EnumRange>();
 	Register<EnumRangeBoundary>();
+	Register<EnumRandom>();
 }
 
 } // namespace duckdb

@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/enum_functions.hpp"
+#include <random>
 
 namespace duckdb {
 
@@ -14,6 +15,18 @@ static void EnumLastFunction(DataChunk &input, ExpressionState &state, Vector &r
 	auto enum_size = EnumType::GetSize(input.GetTypes()[0]);
 	auto &enum_vector = EnumType::GetValuesInsertOrder(input.GetTypes()[0]);
 	auto val = Value(enum_vector.GetValue(enum_size - 1));
+	result.Reference(val);
+}
+
+static void EnumRandomFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	D_ASSERT(input.GetTypes().size() == 1);
+	auto enum_size = EnumType::GetSize(input.GetTypes()[0]);
+	auto &enum_vector = EnumType::GetValuesInsertOrder(input.GetTypes()[0]);
+	std::random_device dev;
+	std::mt19937 rng(dev());
+	std::uniform_int_distribution<std::mt19937::result_type> dist(0, enum_size - 1);
+
+	auto val = Value(enum_vector.GetValue(dist(rng)));
 	result.Reference(val);
 }
 
@@ -108,6 +121,11 @@ void EnumRangeBoundary::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("enum_range_boundary", {LogicalType::ANY, LogicalType::ANY},
 	                               LogicalType::LIST(LogicalType::VARCHAR), EnumRangeBoundaryFunction, false,
 	                               BindEnumRangeBoundaryFunction));
+}
+
+void EnumRandom::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("enum_random", {LogicalType::ANY}, LogicalType::VARCHAR, EnumRandomFunction, false,
+	                               BindEnumFunction));
 }
 
 } // namespace duckdb
