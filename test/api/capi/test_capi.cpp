@@ -967,10 +967,15 @@ void my_function(duckdb_function_info info, duckdb_data_chunk output) {
 	auto bind_data = (my_bind_data_struct *)duckdb_function_get_bind_data(info);
 	auto init_data = (my_init_data_struct *)duckdb_function_get_init_data(info);
 	auto ptr = (int64_t *)duckdb_data_chunk_get_data(output, 0);
-	for (idx_t i = 0; init_data->pos < bind_data->size && i < duckdb_vector_size(); init_data->pos++, i++) {
+	idx_t i;
+	for(i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+		if (init_data->pos >= bind_data->size) {
+			break;
+		}
 		ptr[i] = init_data->pos % 2 == 0 ? 42 : 84;
-		duckdb_data_chunk_set_size(output, duckdb_data_chunk_get_size(output) + 1);
+		init_data->pos++;
 	}
+	duckdb_data_chunk_set_size(output, i);
 }
 
 TEST_CASE("Test Table Functions C API", "[capi]") {

@@ -18,7 +18,7 @@ function SetSize(chunk::DataChunk, size::Int64)
 	duckdb_data_chunk_set_size(chunk.handle, size)
 end
 
-function GetArray(chunk::DataChunk, col_idx::Int64, ::Type{T}) where {T}
+function GetArray(chunk::DataChunk, col_idx::Int64, ::Type{T})::Vector{T} where {T}
 	raw_ptr = duckdb_data_chunk_get_data(chunk.handle, col_idx)
 	ptr = Base.unsafe_convert(Ptr{T}, raw_ptr)
 	return unsafe_wrap(Vector{T}, ptr, VECTOR_SIZE, own=false)
