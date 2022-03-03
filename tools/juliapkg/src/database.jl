@@ -4,6 +4,7 @@ Internal DuckDB database handle.
 mutable struct DuckDBHandle
     file::String
     handle::duckdb_database
+    functions::Vector{Any}
 
     function DuckDBHandle(f::AbstractString)
         f = String(isempty(f) ? f : expanduser(f))
@@ -15,7 +16,7 @@ mutable struct DuckDBHandle
             throw(ConnectionException(error_message))
         end
 
-        db = new(f, handle[])
+        db = new(f, handle[], Vector())
         finalizer(_close_database, db)
         return db
     end
@@ -27,7 +28,6 @@ function _close_database(db::DuckDBHandle)
         duckdb_close(db.handle)
     end
     db.handle = C_NULL
-    return
 end
 
 """
@@ -86,6 +86,8 @@ function close_database(db::DB)
     _close_connection(db.main_connection)
     return _close_database(db.handle)
 end
+
+const VECTOR_SIZE = duckdb_vector_size()
 
 DB() = DB(":memory:")
 DBInterface.connect(::Type{DB}) = DB()

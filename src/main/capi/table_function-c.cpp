@@ -7,12 +7,19 @@
 namespace duckdb {
 
 struct CTableFunctionInfo : public TableFunctionInfo {
-	CTableFunctionInfo() : bind(nullptr), function(nullptr) {
+	~CTableFunctionInfo() {
+		if (extra_info && delete_callback) {
+			delete_callback(extra_info);
+		}
+		extra_info = nullptr;
+		delete_callback = nullptr;
 	}
 
-	duckdb_table_function_bind_t bind;
-	duckdb_table_function_init_t init;
-	duckdb_table_function_t function;
+	duckdb_table_function_bind_t bind = nullptr;
+	duckdb_table_function_init_t init = nullptr;
+	duckdb_table_function_t function = nullptr;
+	void *extra_info = nullptr;
+	duckdb_delete_callback_t delete_callback = nullptr;
 };
 
 struct CTableBindData : public FunctionData {
@@ -24,15 +31,16 @@ struct CTableBindData : public FunctionData {
 		delete_callback = nullptr;
 	}
 
-	CTableFunctionInfo *info;
-	void *bind_data;
-	duckdb_delete_callback_t delete_callback;
+	CTableFunctionInfo *info = nullptr;
+	void *bind_data = nullptr;
+	duckdb_delete_callback_t delete_callback = nullptr;
 };
 
 struct CTableInternalBindInfo {
 	CTableInternalBindInfo(ClientContext &context, TableFunctionBindInput &input, vector<LogicalType> &return_types,
-	                       vector<string> &names, CTableBindData &bind_data)
-	    : context(context), input(input), return_types(return_types), names(names), bind_data(bind_data) {
+	                       vector<string> &names, CTableBindData &bind_data, CTableFunctionInfo &function_info)
+	    : context(context), input(input), return_types(return_types), names(names), bind_data(bind_data),
+	      function_info(function_info) {
 	}
 
 	ClientContext &context;
@@ -40,6 +48,7 @@ struct CTableInternalBindInfo {
 	vector<LogicalType> &return_types;
 	vector<string> &names;
 	CTableBindData &bind_data;
+	CTableFunctionInfo &function_info;
 };
 
 struct CTableInitData : public FunctionOperatorData {
@@ -51,8 +60,8 @@ struct CTableInitData : public FunctionOperatorData {
 		delete_callback = nullptr;
 	}
 
-	void *init_data;
-	duckdb_delete_callback_t delete_callback;
+	void *init_data = nullptr;
+	duckdb_delete_callback_t delete_callback = nullptr;
 };
 
 struct CTableInternalInitInfo {
@@ -78,7 +87,7 @@ unique_ptr<FunctionData> CTableFunctionBind(ClientContext &context, TableFunctio
 	auto info = (CTableFunctionInfo *)input.info;
 	D_ASSERT(info->bind && info->function && info->init);
 	auto result = make_unique<CTableBindData>();
-	CTableInternalBindInfo internal_info(context, input, return_types, names, *result);
+	CTableInternalBindInfo internal_info(context, input, return_types, names, *result, *info);
 	info->bind(&internal_info);
 
 	result->info = info;
@@ -141,6 +150,17 @@ void duckdb_table_function_add_parameter(duckdb_table_function function, duckdb_
 	tf->arguments.push_back(*logical_type);
 }
 
+void duckdb_table_function_set_extra_info(duckdb_table_function function, void *extra_info,
+                                          duckdb_delete_callback_t destroy) {
+	if (!function) {
+		return;
+	}
+	auto tf = (duckdb::TableFunction *)function;
+	auto info = (duckdb::CTableFunctionInfo *)tf->function_info.get();
+	info->extra_info = extra_info;
+	info->delete_callback = destroy;
+}
+
 void duckdb_table_function_set_bind(duckdb_table_function function, duckdb_table_function_bind_t bind) {
 	if (!function || !bind) {
 		return;
@@ -191,6 +211,14 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 //===--------------------------------------------------------------------===//
 // Bind Interface
 //===--------------------------------------------------------------------===//
+void *duckdb_bind_get_extra_info(duckdb_bind_info info) {
+	if (!info) {
+		return nullptr;
+	}
+	auto bind_info = (duckdb::CTableInternalBindInfo *)info;
+	return bind_info->function_info.extra_info;
+}
+
 void duckdb_bind_add_result_column(duckdb_bind_info info, const char *name, duckdb_logical_type type) {
 	if (!info || !name || !type) {
 		return;
@@ -228,6 +256,14 @@ void duckdb_bind_set_bind_data(duckdb_bind_info info, void *bind_data, duckdb_de
 //===--------------------------------------------------------------------===//
 // Init Interface
 //===--------------------------------------------------------------------===//
+void *duckdb_init_get_extra_info(duckdb_init_info info) {
+	if (!info) {
+		return nullptr;
+	}
+	auto init_info = (duckdb::CTableInternalInitInfo *)info;
+	return init_info->bind_data.info->extra_info;
+}
+
 void *duckdb_init_get_bind_data(duckdb_init_info info) {
 	if (!info) {
 		return nullptr;
@@ -248,6 +284,14 @@ void duckdb_init_set_init_data(duckdb_init_info info, void *init_data, duckdb_de
 //===--------------------------------------------------------------------===//
 // Function Interface
 //===--------------------------------------------------------------------===//
+void *duckdb_function_get_extra_info(duckdb_function_info info) {
+	if (!info) {
+		return nullptr;
+	}
+	auto function_info = (duckdb::CTableInternalFunctionInfo *)info;
+	return function_info->bind_data.info->extra_info;
+}
+
 void *duckdb_function_get_bind_data(duckdb_function_info info) {
 	if (!info) {
 		return nullptr;

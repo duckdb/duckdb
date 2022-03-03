@@ -620,6 +620,18 @@ function duckdb_free(ptr)
     return ccall((:duckdb_malloc, libduckdb), Cvoid, (Ptr{Cvoid},), ptr)
 end
 
+"""
+The internal vector size used by DuckDB.
+This is the amount of tuples that will fit into a data chunk created by `duckdb_create_data_chunk`.
+
+* returns: The vector size.
+"""
+function duckdb_vector_size()
+    return ccall((:duckdb_vector_size, libduckdb), UInt64, ())
+end
+
+
+duckdb_vector_size
 # #=
 # //===--------------------------------------------------------------------===//
 # // Date/Time/Timestamp Helpers
@@ -1163,6 +1175,108 @@ end
 
 #=
 //===--------------------------------------------------------------------===//
+// Value Interface
+//===--------------------------------------------------------------------===//
+=#
+"""
+Destroys the value and de-allocates all memory allocated for that type.
+
+* value: The value to destroy.
+"""
+function duckdb_destroy_value(handle)
+    return ccall(
+        (:duckdb_destroy_value, libduckdb),
+        Cvoid,
+        (Ref{duckdb_value},),
+        handle,
+    )
+end
+
+"""
+Obtains a string representation of the given value.
+The result must be destroyed with `duckdb_free`.
+
+* value: The value
+* returns: The string value. This must be destroyed with `duckdb_free`.
+"""
+function duckdb_get_varchar(handle)
+    return ccall(
+        (:duckdb_get_varchar, libduckdb),
+        Ptr{UInt8},
+        (duckdb_value,),
+        handle,
+    )
+end
+
+"""
+Obtains an int64 of the given value.
+
+* value: The value
+* returns: The int64 value, or 0 if no conversion is possible
+"""
+function duckdb_get_int64(handle)
+    return ccall(
+        (:duckdb_get_int64, libduckdb),
+        Int64,
+        (duckdb_value,),
+        handle,
+    )
+end
+
+#=
+//===--------------------------------------------------------------------===//
+// Logical Type Interface
+//===--------------------------------------------------------------------===//
+=#
+"""
+Creates a `duckdb_logical_type` from a standard primitive type.
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+This should not be used with `DUCKDB_TYPE_DECIMAL`.
+
+* type: The primitive type to create.
+* returns: The logical type type.
+"""
+function duckdb_create_logical_type(type)
+    return ccall(
+        (:duckdb_create_logical_type, libduckdb),
+        duckdb_logical_type,
+        (Int32,),
+        type,
+    )
+end
+
+"""
+Retrieves the type class of a `duckdb_logical_type`.
+
+* type: The logical type object
+* returns: The type id
+"""
+function duckdb_get_type_id(handle)
+    return ccall(
+        (:duckdb_get_type_id, libduckdb),
+        Int32,
+        (duckdb_logical_type,),
+        handle,
+    )
+end
+
+"""
+Destroys the logical type and de-allocates all memory allocated for that type.
+
+* type: The logical type to destroy.
+"""
+function duckdb_destroy_logical_type(handle)
+    return ccall(
+        (:duckdb_destroy_logical_type, libduckdb),
+        Cvoid,
+        (Ref{duckdb_logical_type},),
+        handle,
+    )
+end
+
+#=
+//===--------------------------------------------------------------------===//
 // Data Chunk Interface
 //===--------------------------------------------------------------------===//
 =#
@@ -1339,6 +1453,363 @@ function duckdb_data_chunk_ensure_validity_writable(chunk, col_idx)
         (duckdb_data_chunk, UInt64),
         chunk,
         col_idx
+    )
+end
+
+#=
+//===--------------------------------------------------------------------===//
+// Table Functions
+//===--------------------------------------------------------------------===//
+=#
+"""
+Creates a new empty table function.
+
+The return value should be destroyed with `duckdb_destroy_table_function`.
+
+* returns: The table function object.
+"""
+function duckdb_create_table_function()
+    return ccall(
+        (:duckdb_create_table_function, libduckdb),
+        duckdb_table_function,
+        (),
+    )
+end
+
+"""
+Destroys the given table function object.
+
+* table_function: The table function to destroy
+"""
+function duckdb_destroy_table_function(func)
+    return ccall(
+        (:duckdb_destroy_table_function, libduckdb),
+        Cvoid,
+        (Ref{duckdb_table_function},),
+        func,
+    )
+end
+
+"""
+Sets the name of the given table function.
+
+* table_function: The table function
+* name: The name of the table function
+"""
+function duckdb_table_function_set_name(func, name)
+    return ccall(
+        (:duckdb_table_function_set_name, libduckdb),
+        Cvoid,
+        (duckdb_table_function, Ptr{UInt8}),
+        func,
+        name,
+    )
+end
+
+"""
+Adds a parameter to the table function.
+
+* table_function: The table function
+* type: The type of the parameter to add.
+"""
+function duckdb_table_function_add_parameter(func, type)
+    return ccall(
+        (:duckdb_table_function_add_parameter, libduckdb),
+        Cvoid,
+        (duckdb_table_function, duckdb_logical_type),
+        func,
+        type,
+    )
+end
+
+"""
+Assigns extra information to the table function that can be fetched during binding, etc.
+
+* table_function: The table function
+* extra_info: The extra information
+* destroy: The callback that will be called to destroy the bind data (if any)
+"""
+function duckdb_table_function_set_extra_info(table_func, extra_data)
+    return ccall(
+        (:duckdb_table_function_set_extra_info, libduckdb),
+        Cvoid,
+        (duckdb_table_function, Ptr{Cvoid}, Ptr{Cvoid}),
+        table_func,
+        extra_data,
+        C_NULL
+    )
+end
+
+"""
+Sets the bind function of the table function
+
+* table_function: The table function
+* bind: The bind function
+"""
+function duckdb_table_function_set_bind(table_func, bind_func)
+    return ccall(
+        (:duckdb_table_function_set_bind, libduckdb),
+        Cvoid,
+        (duckdb_table_function, Ptr{Cvoid}),
+        table_func,
+        bind_func,
+    )
+end
+
+"""
+Sets the init function of the table function
+
+* table_function: The table function
+* init: The init function
+"""
+function duckdb_table_function_set_init(table_func, init_func)
+    return ccall(
+        (:duckdb_table_function_set_init, libduckdb),
+        Cvoid,
+        (duckdb_table_function, Ptr{Cvoid}),
+        table_func,
+        init_func,
+    )
+end
+
+
+"""
+Sets the main function of the table function
+
+* table_function: The table function
+* function: The function
+"""
+function duckdb_table_function_set_function(table_func, func)
+    return ccall(
+        (:duckdb_table_function_set_function, libduckdb),
+        Cvoid,
+        (duckdb_table_function, Ptr{Cvoid}),
+        table_func,
+        func,
+    )
+end
+
+
+"""
+Register the table function object within the given connection.
+
+The function requires at least a name, a bind function, an init function and a main function.
+
+If the function is incomplete or a function with this name already exists DuckDBError is returned.
+
+* con: The connection to register it in.
+* function: The function pointer
+* returns: Whether or not the registration was successful.
+"""
+function duckdb_register_table_function(con, func)
+    return ccall(
+        (:duckdb_register_table_function, libduckdb),
+        Int32,
+        (duckdb_connection, duckdb_table_function),
+        con,
+        func,
+    )
+end
+
+#=
+//===--------------------------------------------------------------------===//
+// Table Function Bind
+//===--------------------------------------------------------------------===//
+=#
+
+"""
+Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`
+
+* info: The info object
+* returns: The extra info
+"""
+function duckdb_bind_get_extra_info(bind_info)
+    return ccall(
+        (:duckdb_bind_get_extra_info, libduckdb),
+        Ptr{Cvoid},
+        (duckdb_bind_info, ),
+        bind_info,
+    )
+end
+
+"""
+Adds a result column to the output of the table function.
+
+* info: The info object
+* name: The name of the column
+* type: The logical type of the column
+"""
+function duckdb_bind_add_result_column(bind_info, name, type)
+    return ccall(
+        (:duckdb_bind_add_result_column, libduckdb),
+        Cvoid,
+        (duckdb_bind_info, Ptr{UInt8}, duckdb_logical_type),
+        bind_info,
+        name,
+        type
+    )
+end
+
+"""
+Retrieves the number of regular (non-named) parameters to the function.
+
+* info: The info object
+* returns: The number of parameters
+"""
+function duckdb_bind_get_parameter_count(bind_info)
+    return ccall(
+        (:duckdb_bind_get_parameter_count, libduckdb),
+        Int32,
+        (duckdb_bind_info,),
+        bind_info
+    )
+end
+
+"""
+Retrieves the parameter at the given index.
+
+The result must be destroyed with `duckdb_destroy_value`.
+
+* info: The info object
+* index: The index of the parameter to get
+* returns: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
+"""
+function duckdb_bind_get_parameter(bind_info, index)
+    return ccall(
+        (:duckdb_bind_get_parameter, libduckdb),
+        duckdb_value,
+        (duckdb_bind_info, Int32),
+        bind_info,
+        index
+    )
+end
+
+"""
+Retrieves the parameter at the given index.
+
+The result must be destroyed with `duckdb_destroy_value`.
+
+* info: The info object
+* index: The index of the parameter to get
+* returns: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
+"""
+function duckdb_bind_set_bind_data(bind_info, bind_data, delete_callback)
+    return ccall(
+        (:duckdb_bind_set_bind_data, libduckdb),
+        Cvoid,
+        (duckdb_bind_info, Ptr{Cvoid}, Ptr{Cvoid}),
+        bind_info,
+        bind_data,
+        delete_callback
+    )
+end
+
+#=
+//===--------------------------------------------------------------------===//
+// Table Function Init
+//===--------------------------------------------------------------------===//
+=#
+"""
+Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`
+
+* info: The info object
+* returns: The extra info
+"""
+function duckdb_init_get_extra_info(info)
+    return ccall(
+        (:duckdb_init_get_extra_info, libduckdb),
+        Ptr{Cvoid},
+        (duckdb_init_info, ),
+        info,
+    )
+end
+
+"""
+Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.
+
+Note that the bind data should be considered as read-only.
+For tracking state, use the init data instead.
+
+* info: The info object
+* returns: The bind data object
+"""
+function duckdb_init_get_bind_data(info)
+    return ccall(
+        (:duckdb_init_get_bind_data, libduckdb),
+        Ptr{Cvoid},
+        (duckdb_init_info, ),
+        info,
+    )
+end
+
+"""
+Sets the user-provided init data in the init object. This object can be retrieved again during execution.
+
+* info: The info object
+* extra_data: The init data object.
+* destroy: The callback that will be called to destroy the init data (if any)
+"""
+function duckdb_init_set_init_data(init_info, init_data, delete_callback)
+    return ccall(
+        (:duckdb_init_set_init_data, libduckdb),
+        Cvoid,
+        (duckdb_init_info, Ptr{Cvoid}, Ptr{Cvoid}),
+        init_info,
+        init_data,
+        delete_callback
+    )
+end
+
+#=
+//===--------------------------------------------------------------------===//
+// Table Function
+//===--------------------------------------------------------------------===//
+=#
+"""
+Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`
+
+* info: The info object
+* returns: The extra info
+"""
+function duckdb_function_get_extra_info(info)
+    return ccall(
+        (:duckdb_function_get_extra_info, libduckdb),
+        Ptr{Cvoid},
+        (duckdb_function_info, ),
+        info,
+    )
+end
+
+"""
+Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.
+
+Note that the bind data should be considered as read-only.
+For tracking state, use the init data instead.
+
+* info: The info object
+* returns: The bind data object
+"""
+function duckdb_function_get_bind_data(info)
+    return ccall(
+        (:duckdb_function_get_bind_data, libduckdb),
+        Ptr{Cvoid},
+        (duckdb_function_info, ),
+        info,
+    )
+end
+
+"""
+Gets the init data set by `duckdb_bind_set_init_data` during the bind.
+
+* info: The info object
+* returns: The init data object
+"""
+function duckdb_function_get_init_data(info)
+    return ccall(
+        (:duckdb_function_get_init_data, libduckdb),
+        Ptr{Cvoid},
+        (duckdb_function_info, ),
+        info,
     )
 end
 

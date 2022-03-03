@@ -1079,6 +1079,16 @@ Adds a parameter to the table function.
 DUCKDB_API void duckdb_table_function_add_parameter(duckdb_table_function table_function, duckdb_logical_type type);
 
 /*!
+Assigns extra information to the table function that can be fetched during binding, etc.
+
+* table_function: The table function
+* extra_info: The extra information
+* destroy: The callback that will be called to destroy the bind data (if any)
+*/
+DUCKDB_API void duckdb_table_function_set_extra_info(duckdb_table_function table_function, void *extra_info,
+                                                     duckdb_delete_callback_t destroy);
+
+/*!
 Sets the bind function of the table function
 
 * table_function: The table function
@@ -1120,6 +1130,14 @@ DUCKDB_API duckdb_state duckdb_register_table_function(duckdb_connection con, du
 // Table Function Bind
 //===--------------------------------------------------------------------===//
 /*!
+Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`
+
+* info: The info object
+* returns: The extra info
+*/
+DUCKDB_API void *duckdb_bind_get_extra_info(duckdb_bind_info info);
+
+/*!
 Adds a result column to the output of the table function.
 
 * info: The info object
@@ -1159,6 +1177,15 @@ DUCKDB_API void duckdb_bind_set_bind_data(duckdb_bind_info info, void *bind_data
 //===--------------------------------------------------------------------===//
 // Table Function Init
 //===--------------------------------------------------------------------===//
+
+/*!
+Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`
+
+* info: The info object
+* returns: The extra info
+*/
+DUCKDB_API void *duckdb_init_get_extra_info(duckdb_init_info info);
+
 /*!
 Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.
 
@@ -1183,6 +1210,13 @@ DUCKDB_API void duckdb_init_set_init_data(duckdb_init_info info, void *init_data
 // Table Function
 //===--------------------------------------------------------------------===//
 
+/*!
+Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`
+
+* info: The info object
+* returns: The extra info
+*/
+DUCKDB_API void *duckdb_function_get_extra_info(duckdb_function_info info);
 /*!
 Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.
 

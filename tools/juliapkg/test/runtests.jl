@@ -9,6 +9,7 @@ test_files = [
     "test_prepare.jl",
     "test_transaction.jl",
     "test_sqlite.jl",
+    "test_table_function.jl",
     "test_old_interface.jl"
 ]
 
