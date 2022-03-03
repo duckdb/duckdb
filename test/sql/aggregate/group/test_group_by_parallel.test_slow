@@ -1,4 +1,4 @@
-# name: test/sql/aggregate/group/test_group_by_parallel.test_coverage
+# name: test/sql/aggregate/group/test_group_by_parallel.test_slow
 # description: Test parallel group by
 # group: [group]
 

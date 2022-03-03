@@ -13,6 +13,21 @@ string PragmaShowTables(ClientContext &context, const FunctionParameters &parame
 	return "SELECT name FROM sqlite_master ORDER BY name";
 }
 
+string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters &parameters) {
+	return R"(
+			SELECT
+				t.table_name,
+				LIST(c.column_name order by c.column_name) AS column_names,
+				LIST(c.data_type order by c.column_name) AS column_types,
+				FIRST(t.temporary) AS temporary
+			FROM duckdb_tables t
+			JOIN duckdb_columns c
+			USING (table_oid)
+			GROUP BY t.table_name
+			ORDER BY t.table_name;
+	)";
+}
+
 string PragmaAllProfiling(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_last_profiling_output() JOIN pragma_detailed_profiling_output() ON "
 	       "(pragma_last_profiling_output.operator_id);";
@@ -78,6 +93,7 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaCall("table_info", PragmaTableInfo, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaCall("storage_info", PragmaStorageInfo, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("show_tables", PragmaShowTables));
+	set.AddFunction(PragmaFunction::PragmaStatement("show_tables_expanded", PragmaShowTablesExpanded));
 	set.AddFunction(PragmaFunction::PragmaStatement("database_list", PragmaDatabaseList));
 	set.AddFunction(PragmaFunction::PragmaStatement("collations", PragmaCollations));
 	set.AddFunction(PragmaFunction::PragmaCall("show", PragmaShow, {LogicalType::VARCHAR}));
