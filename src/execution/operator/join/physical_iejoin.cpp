@@ -767,10 +767,10 @@ bool IEJoinUnion::NextRow() {
 		// Scan the neighborhood instead
 		op1->SetIndex(pos);
 		off1->SetIndex(pos);
-		for (; off1->GetIndex() > 0 and op1->Compare(*off1); --(*off1)) {
+		for (; off1->GetIndex() > 0 && op1->Compare(*off1); --(*off1)) {
 			continue;
 		}
-		for (; off1->GetIndex() < n and !op1->Compare(*off1); ++(*off1)) {
+		for (; off1->GetIndex() < n && !op1->Compare(*off1); ++(*off1)) {
 			continue;
 		}
 
@@ -835,7 +835,7 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 			const auto rrid = li[j];
 
 			// 15. add tuples w.r.t. (L1[j], L1[i]) to join result
-			if (lrid > 0 and rrid < 0) {
+			if (lrid > 0 && rrid < 0) {
 				lsel.set_index(result_count, sel_t(+lrid - 1));
 				rsel.set_index(result_count, sel_t(-rrid - 1));
 				++result_count;
