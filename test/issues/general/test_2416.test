@@ -98,7 +98,7 @@ statement ok
 CREATE MACRO my_extract(my_nested_type, index_or_field) AS my_nested_type[index_or_field]
 
 query T
-SELECT my_extract('1234', 1)
+SELECT my_extract('1234', 2)
 ----
 2
 
@@ -118,7 +118,7 @@ CREATE MACRO my_list_or_string_extract_2(my_list_or_string) AS my_list_or_string
 query T
 SELECT my_list_or_string_extract_2('1234')
 ----
-4
+3
 
 query T
 SELECT my_list_or_string_extract_2('12')
@@ -177,7 +177,7 @@ CREATE MACRO my_specific_string_extract(index) AS '1234'[index]
 query T
 SELECT my_specific_string_extract(2)
 ----
-3
+2
 
 statement error
 SELECT my_specific_string_extract('c')
