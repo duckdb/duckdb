@@ -27,7 +27,7 @@ function _close_database(db::DuckDBHandle)
     if db.handle != C_NULL
         duckdb_close(db.handle)
     end
-    db.handle = C_NULL
+    return db.handle = C_NULL
 end
 
 """
@@ -60,6 +60,7 @@ function _close_connection(con::Connection)
         duckdb_disconnect(con.handle)
     end
     con.handle = C_NULL
+    return
 end
 
 """
@@ -84,7 +85,8 @@ end
 
 function close_database(db::DB)
     _close_connection(db.main_connection)
-    return _close_database(db.handle)
+    _close_database(db.handle)
+    return
 end
 
 const VECTOR_SIZE = duckdb_vector_size()

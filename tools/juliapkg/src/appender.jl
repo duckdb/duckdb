@@ -22,7 +22,7 @@ mutable struct Appender
         return con
     end
     function Appender(db::DB, table::AbstractString)
-    	return Appender(db.main_connection, table);
+        return Appender(db.main_connection, table)
     end
 end
 
@@ -30,12 +30,13 @@ function _close_appender(appender::Appender)
     if appender.handle != C_NULL
         duckdb_appender_destroy(appender.handle)
     end
-
     appender.handle = C_NULL
+    return
 end
 
 function close(appender::Appender)
-	_close_appender(appender)
+    _close_appender(appender)
+    return
 end
 
 Append(appender::Appender, val::AbstractFloat) = duckdb_append_double(appender.handle, Float64(val));
@@ -54,8 +55,7 @@ Append(appender::Appender, val::Missing) = duckdb_append_null(appender.handle);
 Append(appender::Appender, val::Nothing) = duckdb_append_null(appender.handle);
 Append(appender::Appender, val::AbstractString) = duckdb_append_varchar(appender.handle, val);
 Append(appender::Appender, val::Vector{UInt8}) = duckdb_append_blob(appender.handle, val, sizeof(val));
-Append(appender::Appender, val::WeakRefString{UInt8}) =
-    duckdb_append_varchar(stmt.handle, i, val.ptr, val.len);
+Append(appender::Appender, val::WeakRefString{UInt8}) = duckdb_append_varchar(stmt.handle, i, val.ptr, val.len);
 
 function Append(appender::Appender, val::Any)
     println(val)
@@ -63,11 +63,13 @@ function Append(appender::Appender, val::Any)
 end
 
 function EndRow(appender::Appender)
-	duckdb_appender_end_row(appender.handle)
+    duckdb_appender_end_row(appender.handle)
+    return
 end
 
 function Flush(appender::Appender)
-	duckdb_appender_flush(appender.handle)
+    duckdb_appender_flush(appender.handle)
+    return
 end
 
 DBInterface.close!(appender::Appender) = _close_appender(db)

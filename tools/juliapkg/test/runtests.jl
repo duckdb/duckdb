@@ -3,7 +3,7 @@ using DuckDB
 using Test
 
 test_files = [
-	"test_appender.jl",
+    "test_appender.jl",
     "test_connection.jl",
     "test_basic_queries.jl",
     "test_prepare.jl",
