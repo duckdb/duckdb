@@ -7,7 +7,7 @@
 namespace duckdb {
 
 ForeignKeyConstraint::ForeignKeyConstraint(vector<string> pk_columns, vector<string> fk_columns, ForeignKeyInfo info)
-    : Constraint(ConstraintType::FOREIGN_KEY), pk_columns(pk_columns), fk_columns(fk_columns), info(move(info)) {
+    : Constraint(ConstraintType::FOREIGN_KEY), pk_columns(move(pk_columns)), fk_columns(move(fk_columns)), info(move(info)) {
 }
 
 string ForeignKeyConstraint::ToString() const {
