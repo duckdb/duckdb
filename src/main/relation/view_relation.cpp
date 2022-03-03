@@ -7,9 +7,9 @@
 
 namespace duckdb {
 
-ViewRelation::ViewRelation(ClientContext &context, string schema_name_p, string view_name_p)
+ViewRelation::ViewRelation(const std::shared_ptr<ClientContext> &context, string schema_name_p, string view_name_p)
     : Relation(context, RelationType::VIEW_RELATION), schema_name(move(schema_name_p)), view_name(move(view_name_p)) {
-	context.TryBindRelation(*this, this->columns);
+	context->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> ViewRelation::GetQueryNode() {

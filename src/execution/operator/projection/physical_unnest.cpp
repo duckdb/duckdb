@@ -179,9 +179,15 @@ OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk 
 				auto &list_vector = state.list_data.data[col_idx];
 				list_vector.Orrify(state.list_data.size(), state.list_vector_data[col_idx]);
 
-				auto &child_vector = ListVector::GetEntry(list_vector);
-				auto list_size = ListVector::GetListSize(list_vector);
-				child_vector.Orrify(list_size, state.list_child_data[col_idx]);
+				if (list_vector.GetType() == LogicalType::SQLNULL) {
+					// UNNEST(NULL)
+					auto &child_vector = list_vector;
+					child_vector.Orrify(0, state.list_child_data[col_idx]);
+				} else {
+					auto list_size = ListVector::GetListSize(list_vector);
+					auto &child_vector = ListVector::GetEntry(list_vector);
+					child_vector.Orrify(list_size, state.list_child_data[col_idx]);
+				}
 			}
 			state.first_fetch = false;
 		}
@@ -230,34 +236,40 @@ OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk 
 		for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
 			auto &result_vector = chunk.data[col_idx + input.ColumnCount()];
 
-			auto &vdata = state.list_vector_data[col_idx];
-			auto &child_data = state.list_child_data[col_idx];
-			auto current_idx = vdata.sel->get_index(state.parent_position);
-
-			auto list_data = (list_entry_t *)vdata.data;
-			auto list_entry = list_data[current_idx];
-
-			idx_t list_count;
-			if (state.list_position >= list_entry.length) {
-				list_count = 0;
+			if (state.list_data.data[col_idx].GetType() == LogicalType::SQLNULL) {
+				// UNNEST(NULL)
+				chunk.SetCardinality(0);
 			} else {
-				list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state.list_position);
-			}
+				auto &vdata = state.list_vector_data[col_idx];
+				auto &child_data = state.list_child_data[col_idx];
+				auto current_idx = vdata.sel->get_index(state.parent_position);
 
-			if (list_entry.length > state.list_position) {
-				if (!vdata.validity.RowIsValid(current_idx)) {
-					UnnestNull(0, list_count, result_vector);
+				auto list_data = (list_entry_t *)vdata.data;
+				auto list_entry = list_data[current_idx];
+
+				idx_t list_count;
+				if (state.list_position >= list_entry.length) {
+					list_count = 0;
 				} else {
-					auto &list_vector = state.list_data.data[col_idx];
-					auto &child_vector = ListVector::GetEntry(list_vector);
-					auto list_size = ListVector::GetListSize(list_vector);
-
-					auto base_offset = list_entry.offset + state.list_position;
-					UnnestVector(child_data, child_vector, list_size, base_offset, base_offset + list_count,
-					             result_vector);
+					list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state.list_position);
 				}
+
+				if (list_entry.length > state.list_position) {
+					if (!vdata.validity.RowIsValid(current_idx)) {
+						UnnestNull(0, list_count, result_vector);
+					} else {
+						auto &list_vector = state.list_data.data[col_idx];
+						auto &child_vector = ListVector::GetEntry(list_vector);
+						auto list_size = ListVector::GetListSize(list_vector);
+
+						auto base_offset = list_entry.offset + state.list_position;
+						UnnestVector(child_data, child_vector, list_size, base_offset, base_offset + list_count,
+						             result_vector);
+					}
+				}
+
+				UnnestNull(list_count, this_chunk_len, result_vector);
 			}
-			UnnestNull(list_count, this_chunk_len, result_vector);
 		}
 
 		state.list_position += this_chunk_len;

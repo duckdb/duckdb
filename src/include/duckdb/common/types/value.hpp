@@ -183,6 +183,8 @@ public:
 	DUCKDB_API hash_t Hash() const;
 	//! Convert this value to a string
 	DUCKDB_API string ToString() const;
+	//! Convert this value to a SQL-parseable string
+	DUCKDB_API string ToSQLString() const;
 
 	DUCKDB_API uintptr_t GetPointer() const;
 

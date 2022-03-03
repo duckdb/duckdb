@@ -5,7 +5,7 @@
  *
  *****************************************************************************/
 UpdateStmt: opt_with_clause UPDATE relation_expr_opt_alias
-			SET set_clause_list
+			SET set_clause_list_opt_comma
 			from_clause
 			where_or_current_clause
 			returning_clause

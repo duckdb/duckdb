@@ -47,12 +47,15 @@ public:
 	//! Recursively remove a directory and all files in it
 	void RemoveDirectory(const string &directory) override;
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
-	bool ListFiles(const string &directory, const std::function<void(string, bool)> &callback) override;
+	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) override;
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	void MoveFile(const string &source, const string &target) override;
 	//! Check if a file exists
 	bool FileExists(const string &filename) override;
+
+	//! Check if path is a pipe
+	bool IsPipe(const string &filename) override;
 	//! Remove a file from disk
 	void RemoveFile(const string &filename) override;
 	//! Sync a file handle to disk

@@ -1,0 +1,51 @@
+# name: test/sql/aggregate/aggregates/test_sem.test
+# description: Test SEM operator
+# group: [aggregates]
+
+#Corner cases
+statement error
+select sem()
+
+query I
+select sem(NULL)
+----
+NULL
+
+query I
+select sem(1)
+----
+0.000000
+
+statement error
+select sem(*)
+
+statement ok
+create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
+
+statement ok
+insert into aggr values(1, 10, null),(2, 10, 11), (2, 20, 22), (2, 25, null), (2, 30, 35);
+
+query III
+select k, sem(v),sem(v2)  from aggr group by k;
+----
+1	0.000000	NULL
+2	3.697550	5.663398
+
+query II
+select  sem(v),sem(v2) from aggr
+----
+3.577709	5.663398
+
+# Window Function
+require vector_size 512
+
+query I rowsort
+select  sem(v) over (partition by k)
+    from aggr;
+----
+0.000000
+3.697550
+3.697550
+3.697550
+3.697550
+

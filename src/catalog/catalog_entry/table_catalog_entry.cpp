@@ -23,6 +23,8 @@
 #include "duckdb/planner/expression_binder/alter_binder.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -314,6 +316,15 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
+	if (info.target_type.id() == LogicalTypeId::USER) {
+		auto &user_type_name = UserType::GetTypeName(info.target_type);
+		auto user_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(
+		    context, CatalogType::TYPE_ENTRY, schema->name, user_type_name, true);
+		if (!user_type_catalog) {
+			throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
+		}
+		info.target_type = user_type_catalog->user_type;
+	}
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	idx_t change_idx = GetColumnIndex(info.column_name);
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -460,14 +471,7 @@ string TableCatalogEntry::ToSQL() {
 		}
 		auto &column = columns[i];
 		ss << KeywordHelper::WriteOptionallyQuoted(column.name) << " ";
-		switch (column.type.id()) {
-		case LogicalTypeId::ENUM:
-			ss << KeywordHelper::WriteOptionallyQuoted(column.type.ToString());
-			break;
-		default:
-			ss << column.type.ToString();
-			break;
-		}
+		ss << column.type.ToString();
 		bool not_null = not_null_columns.find(column.oid) != not_null_columns.end();
 		bool is_single_key_pk = pk_columns.find(column.oid) != pk_columns.end();
 		bool is_multi_key_pk = multi_key_pks.find(column.name) != multi_key_pks.end();

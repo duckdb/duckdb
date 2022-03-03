@@ -79,6 +79,9 @@ endif
 ifeq (${BUILD_TPCE}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_TPCE=1
 endif
+ifeq (${BUILD_SUBSTRAIT_EXTENSION}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_SUBSTRAIT_EXTENSION=1
+endif
 ifeq (${BUILD_JDBC}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DJDBC_DRIVER=1
 endif
@@ -203,6 +206,7 @@ format-check-silent:
 	python3 scripts/format.py --all --check --silent
 
 format-fix:
+	rm -rf src/amalgamation/*
 	python3 scripts/format.py --all --fix --noconfirm
 
 format-head:
