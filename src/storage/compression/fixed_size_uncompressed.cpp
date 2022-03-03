@@ -1,14 +1,14 @@
-#include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
+#include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
 
@@ -138,7 +138,12 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 
 template <class T>
 void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	// FIXME: we should be able to do a zero-copy here
+	// auto &scan_state = (FixedSizeScanState &)*state.scan_state;
+	// auto source_data = scan_state.handle->node->buffer + segment.GetBlockOffset();
+
+	// copy the data from the base table
+	// result.SetVectorType(VectorType::FLAT_VECTOR);
+	// FlatVector::SetData(result, source_data);
 	FixedSizeScanPartial<T>(segment, state, scan_count, result, 0);
 }
 

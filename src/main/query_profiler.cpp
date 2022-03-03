@@ -279,6 +279,8 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	for (auto &node : profiler.timings) {
 		auto entry = tree_map.find(node.first);
 		D_ASSERT(entry != tree_map.end());
+		// TODO: remove this hack and change join type during execution time
+		// This shows PERFECT and UNIQUE joins in the profiler
 		if (entry->first->type == PhysicalOperatorType::HASH_JOIN) {
 			auto p_join = (PhysicalJoin *)entry->first;
 			entry->second->extra_info += p_join->join_subtype_name;
