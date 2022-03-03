@@ -12,6 +12,7 @@
 #include "httplib.hpp"
 
 #include <chrono>
+#include <duckdb/function/scalar/string_functions.hpp>
 #include <duckdb/storage/buffer_manager.hpp>
 #include <iostream>
 #include <thread>
@@ -121,7 +122,7 @@ static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(Heade
 
 // Supports * and ?
 static bool is_glob_match(string s, string p) {
-	int i=0,j=0,star=-1,si=0;
+	uint i=0,j=0,star=-1,si=0;
 	while(i<s.size()) {
 		if(p[j]=='?'||s[i]==p[j]) {
 			i++;
@@ -138,35 +139,21 @@ static bool is_glob_match(string s, string p) {
 	return 1;
 }
 
-vector<string> S3FileSystem::Glob(const string &path, ClientContext *context) {
-	auto first_star_pos = path.find_first_of("*?");
-	if (first_star_pos == string::npos) {
-		return {path};
-	}
-	if (path.find_first_of("*?", first_star_pos+1) != string::npos) {
-		throw NotImplementedException("Multiple wildcards in file path not supported");
-	}
-	string shared_path = path.substr(0, first_star_pos);
-	string match_path = path.substr(first_star_pos+1);
-
-	auto opener = FileSystem::GetFileOpener(*context);
-	auto s3_auth_params = S3AuthParams::ReadFrom(opener);
-	auto http_params = HTTPParams::ReadFrom(opener);
+static string listobjectsv2_request(string path, HTTPParams& http_params, S3AuthParams& s3_auth_params) {
 
 	// Parse the query shared_path
 	string shared_path_host, shared_path_http_proto, shared_path_path, shared_path_query_param;
-	S3UrlParse(shared_path, s3_auth_params.endpoint,shared_path_host, shared_path_http_proto, shared_path_path, shared_path_query_param);
+	S3FileSystem::S3UrlParse(path, s3_auth_params.endpoint,shared_path_host, shared_path_http_proto, shared_path_path, shared_path_query_param);
 
 	// Construct the ListObjectsV2 call
 	auto result_offset = 0;
 	auto req_path = "/";
-	auto req_params = "?delimiter=%2F&encoding-type=url&list-type=2&prefix=" + UrlEncode(shared_path_path.substr(1), true);
+	auto req_params = "?delimiter=%2F&encoding-type=url&list-type=2&prefix=" + S3FileSystem::UrlEncode(shared_path_path.substr(1), true);
 	string listobjectv2_url = /*shared_path_http_proto*/ "http://" + shared_path_host + req_path + req_params;
 	auto header_map = create_s3_get_header(req_path, req_params.substr(1), shared_path_host, "s3", "GET", s3_auth_params, "", "", "", "");
 	auto headers = initialize_http_headers(header_map);
 
-	// Do the actual request TODO make paged
-	auto client = GetClient(http_params, (shared_path_http_proto + shared_path_host).c_str()); // Get requests use fresh connection
+	auto client = S3FileSystem::GetClient(http_params, (shared_path_http_proto + shared_path_host).c_str()); // Get requests use fresh connection
 	std::stringstream response;
 	auto res = client->Get(
 	    listobjectv2_url.c_str(), *headers,
@@ -187,41 +174,113 @@ vector<string> S3FileSystem::Glob(const string &path, ClientContext *context) {
 		                         ")");
 	}
 
-	// Parse result TODO remove directories?
-	string response_str = response.str();
+	return response.str();
+}
+
+// Parse the s3 keys from the ListObjectsV2 call
+static vector<string> parse_keys(string aws_response) {
+	// Gather keys
 	vector<string> s3_keys;
 	idx_t cur_pos = 0;
 	while (true) {
-		auto next_open_tag_pos = response_str.find("<Key>", cur_pos);
+		auto next_open_tag_pos = aws_response.find("<Key>", cur_pos);
 		if (next_open_tag_pos == string::npos) {
 			break;
 		} else {
-			auto next_close_tag_pos = response_str.find("</Key>", next_open_tag_pos+5);
+			auto next_close_tag_pos = aws_response.find("</Key>", next_open_tag_pos+5);
 			if (next_close_tag_pos == string::npos) {
 				throw InternalException("Failed to parse S3 result");
 			}
-			s3_keys.push_back(response_str.substr(next_open_tag_pos+5, next_close_tag_pos - next_open_tag_pos - 5));
+			auto parsed_path = aws_response.substr(next_open_tag_pos+5, next_close_tag_pos - next_open_tag_pos - 5);
+			if (parsed_path.back() != '/') {
+				s3_keys.push_back(parsed_path);
+			}
 			cur_pos = next_close_tag_pos + 6;
 		}
 	}
-	// * was at end of path, all keys match
-	if (match_path == "") {
-		return s3_keys;
-	} else {
-		// we need to do some matching ourself
-		string full_path_host, full_path_http_proto, full_path_path, full_path_query_param;
-		S3UrlParse(path, s3_auth_params.endpoint,full_path_host, full_path_http_proto, full_path_path, full_path_query_param);
-		auto bucket = full_path_host.substr(0, full_path_host.find('.'));
+	return s3_keys;
+}
 
-		vector<string> result;
-		for (const auto & path : s3_keys) {
-			if (is_glob_match(path, full_path_path.substr(1))) {
-				auto result_full_url = "s3://" + bucket + "/" + path + full_path_query_param;
-				result.push_back(result_full_url);
-			}
+// Parse the common prefixes from the ListObjectsV2 call
+static vector<string> parse_common_prefixes(string aws_response) {
+	vector<string> s3_prefixes;
+	idx_t cur_pos = 0;
+	while (true) {
+		cur_pos = aws_response.find("<CommonPrefixes>", cur_pos);
+		if (cur_pos == string::npos) {
+			break;
 		}
-		return result;
+		auto next_open_tag_pos = aws_response.find("<Prefix>", cur_pos);
+		if (next_open_tag_pos == string::npos) {
+			throw InternalException("Parsing error while parsing s3 listobject result");
+		} else {
+			auto next_close_tag_pos = aws_response.find("</Prefix>", next_open_tag_pos+8);
+			if (next_close_tag_pos == string::npos) {
+				throw InternalException("Failed to parse S3 result");
+			}
+			auto parsed_path = aws_response.substr(next_open_tag_pos+8, next_close_tag_pos - next_open_tag_pos - 8);
+			s3_prefixes.push_back(parsed_path);
+			cur_pos = next_close_tag_pos + 6;
+		}
 	}
+	return s3_prefixes;
+}
+
+
+vector<string> S3FileSystem::Glob(const string &path, ClientContext *context) {
+	if (context == nullptr) {
+		throw InternalException("Cannot S3 Glob without context");
+	}
+	auto first_star_pos = path.find_first_of("*?[\\");
+	if (first_star_pos == string::npos) {
+		return {path};
+	}
+	string shared_path = path.substr(0, first_star_pos);
+	string match_path = path.substr(first_star_pos+1);
+
+	auto opener = FileSystem::GetFileOpener(*context);
+	auto s3_auth_params = S3AuthParams::ReadFrom(opener);
+	auto http_params = HTTPParams::ReadFrom(opener);
+
+	// Parse request
+	string full_path_host, full_path_http_proto, full_path_path, full_path_query_param;
+	S3UrlParse(path, s3_auth_params.endpoint,full_path_host, full_path_http_proto, full_path_path, full_path_query_param);
+	auto bucket = full_path_host.substr(0, full_path_host.find('.'));
+
+	// Do main listobjectsv2 request
+	string response_str = listobjectsv2_request(shared_path, http_params, s3_auth_params);
+	auto s3_keys = parse_keys(response_str);
+
+	// Repeat requests untill all keys are fetched
+	vector<string> common_prefixes = parse_common_prefixes(response_str);
+	while (common_prefixes.size() > 0) {
+		auto prefix_path = "s3://" + bucket + '/' + common_prefixes.back();
+		common_prefixes.pop_back();
+
+		// TODO match common prefix before continueing?
+
+		auto prefix_res = listobjectsv2_request(prefix_path, http_params, s3_auth_params);
+		auto more_keys = parse_keys(prefix_res);
+		s3_keys.insert(s3_keys.end(), more_keys.begin(), more_keys.end());
+
+		auto more_prefixes = parse_common_prefixes(prefix_res);
+		common_prefixes.insert(common_prefixes.end(), more_prefixes.begin(), more_prefixes.end());
+
+	}
+
+	vector<string> result;
+	for (const auto &s3_key : s3_keys) {
+
+		auto pattern_trimmed = full_path_path.substr(1);
+		auto is_match = LikeFun::Glob(s3_key.data(), s3_key.length(), pattern_trimmed.data(), pattern_trimmed.length());
+//		auto is_match = is_glob_match(s3_key, pattern_trimmed);
+
+		if (is_match) {
+			auto result_full_url = "s3://" + bucket + "/" + s3_key + full_path_query_param;
+			result.push_back(result_full_url);
+		}
+	}
+	return result;
 }
 
 S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {

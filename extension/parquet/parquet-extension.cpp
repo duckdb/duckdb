@@ -100,7 +100,7 @@ public:
 		auto result = make_unique<ParquetReadBindData>();
 
 		FileSystem &fs = FileSystem::GetFileSystem(context);
-		result->files = fs.Glob(info.file_path);
+		result->files = fs.Glob(info.file_path, &context);
 		if (result->files.empty()) {
 			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
 		}
