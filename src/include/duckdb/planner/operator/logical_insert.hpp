@@ -19,6 +19,9 @@ public:
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table) {
 	}
 
+	idx_t table_index;
+	//! if returning option is used, return actual chunk to projection
+	idx_t return_chunk;
 	vector<vector<unique_ptr<Expression>>> insert_values;
 	//! The insertion map ([table_index -> index in result, or DConstants::INVALID_INDEX if not specified])
 	vector<idx_t> column_index_map;
@@ -28,31 +31,21 @@ public:
 	TableCatalogEntry *table;
 	//! The default statements used by the table
 	vector<unique_ptr<Expression>> bound_defaults;
-	//! The list of returning expressions
-	vector<unique_ptr<Expression>> returning_list;
+
 
 protected:
 	vector<ColumnBinding> GetColumnBindings() override {
-		vector<ColumnBinding> bindings;
-		// TODO: what if it isn't a column but rather a literal (i.e RETURNING 50, "duckdb")?
-		if (returning_list.empty()) {
-			bindings.push_back({0, 0});
-		} else {
-			for (idx_t i = 0; i != returning_list.size(); i++) {
-				bindings.push_back({0, i});
-			}
+		if (return_chunk) {
+			return GenerateColumnBindings(table_index, table->columns.size());
 		}
-		return bindings;
+		return {ColumnBinding(0, 0)};
 	}
 
 	void ResolveTypes() override {
-		if (returning_list.empty()) {
+		if (return_chunk) {
+			types = table->GetTypes();
+		} else {
 			types.emplace_back(LogicalType::BIGINT);
-		}
-		else {
-			for(idx_t i = 0; i != returning_list.size(); i++) {
-				types.emplace_back(returning_list[i]->return_type);
-			}
 		}
 	}
 };

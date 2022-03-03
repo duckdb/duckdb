@@ -6,17 +6,21 @@ statement ok
 CREATE TABLE table1 (a INTEGER DEFAULT 0, b INTEGER DEFAULT 1, c INTEGER);
 
 
-# returning only subset of inserted columns
-query II
-INSERT INTO table1 (a, b, c) VALUES (1, 2, 3) RETURNING a, c;
+query I
+INSERT INTO table1 (a, b, c) VALUES (1, 2, 3);
 ----
-1	3
+1
 
 # returning only subset of inserted columns
 query II
-INSERT INTO table1 (a, b, c) VALUES (1, 2, 3) RETURNING c, a;
+INSERT INTO table1 (c, b, a) VALUES (3, 2, 1) RETURNING a, b, c;
 ----
-3	1
+1	2	3
+
+query II
+INSERT INTO table1 (c, a) VALUES (3, 1) RETURNING a, b, c;
+----
+1	1	3
 
 
 # no returning statement

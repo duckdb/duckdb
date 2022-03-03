@@ -25,27 +25,12 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 	}
 }
 
-
-static unique_ptr<Expression> PushDownProjectionBinding(LogicalProjection &proj, unique_ptr<Expression> expr) {
-	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)*expr;
-		colref.binding.table_index = proj.table_index;
-		// replace the binding with a copy to the expression at the referenced index
-		return expr;
-	}
-	ExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<Expression> &child) { child = PushDownProjectionBinding(proj, move(child)); });
-	return expr;
-}
-
-
 BoundStatement Binder::Bind(InsertStatement &stmt) {
 	BoundStatement result;
 	if (stmt.returning_list.empty()) {
 		result.names = {"Count"};
 		result.types = {LogicalType::BIGINT};
 	}
-
 
 	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.schema, stmt.table);
 	D_ASSERT(table);
@@ -55,7 +40,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	auto insert = make_unique<LogicalInsert>(table);
-
 
 	vector<idx_t> named_column_map;
 	if (!stmt.columns.empty()) {
@@ -141,67 +125,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// parse select statement and add to logical plan
 	auto root_select = Bind(*stmt.select_statement);
 
-	// Bind the returning list expand any "*" statements if necessary
-	vector<unique_ptr<ParsedExpression>> new_returning_list;
-	auto returning_stmt = make_unique<BoundSelectNode>();;
-	for (auto &returning_expr : stmt.returning_list) {
-		if (returning_expr->GetExpressionType() == ExpressionType::STAR) {
-			// * statement, expand to all columns from the FROM clause
-			bind_context.GenerateAllColumnExpressions((StarExpression &)*returning_expr, new_returning_list);
-		} else {
-			// regular statement, add it to the list
-			new_returning_list.push_back(move(returning_expr));
-		}
-	}
-	stmt.returning_list = move(new_returning_list);
-
-	// create a mapping of (alias -> index) and a mapping of (Expression -> index) for the RETURNING list
-	case_insensitive_map_t<idx_t> alias_map;
-	expression_map_t<idx_t> projection_map;
-	for (idx_t i = 0; i < stmt.returning_list.size(); i++) {
-		auto &expr = stmt.returning_list[i];
-		result.names.push_back(expr->GetName());
-		ExpressionBinder::QualifyColumnNames(*this, expr);
-		if (!expr->alias.empty()) {
-			alias_map[expr->alias] = i;
-			result.names[i] = expr->alias;
-		}
-		projection_map[expr.get()] = i;
-		returning_stmt->original_expressions.push_back(expr->Copy());
-	}
-
-	returning_stmt->column_count = stmt.returning_list.size();
-
-	// after that, bind the returning statement to the context of the INSERT statement
-	BoundGroupInformation info;
-	SelectBinder select_binder(*this, context, *returning_stmt, info);
-	for (idx_t i = 0; i < stmt.returning_list.size(); i++) {
-		LogicalType result_type;
-		unique_ptr<Expression> expr = select_binder.Bind(stmt.returning_list[i], &result_type);
-
-
-//      TODO: should I push down the projection bindings to the expressions here?
-// 		TODO: take a look at ReplaceProjectionBindings in pushdown_projection
-//		root_select.plan->children[0];
-//		if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-//			// https://stackoverflow.com/questions/36120424/alternatives-of-static-pointer-cast-for-unique-ptr
-//			auto& expr2 = (BoundColumnRefExpression &)*expr;
-//			BoundColumnRefExpression& expr2 = *(static_cast<BoundColumnRefExpression*>(expr.get()));
-//			expr2.binding.table_index = 0;
-//		}
-
-		returning_stmt->select_list.push_back(move(expr));
-		if (i < result.names.size()) {
-			result.types.push_back(result_type);
-		}
-	}
-
 	// ------------------------------------------------------------------------------------------------------------
-	// TODO: bind the returning values similar to how select values are bound in Bind selectStatement.
-	// TODO: once the returning values are bound, update the result.names and result.types
-	// TODO (maybe?): update the plan to return the returning_list values.
-	// TODO:          the value_map in the planner uses those expressions.
-	// TODO: here you need to change result.types.size()
 	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
 	                               table->name.c_str());
 
@@ -209,32 +133,50 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	insert->AddChild(move(root));
 
-//	if (insert->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-//		auto &proj = (LogicalProjection &)*(insert->children[0]);
-//
-//		proj.table_index = 7;
-//	}
-
-
-	for (auto i = 0; i < (int)returning_stmt->select_list.size(); i++) {
-		auto expr = move(returning_stmt->select_list[i]);
-		if (insert->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			auto &proj = (LogicalProjection&)*(insert->children[0]);
-			insert->returning_list.push_back(PushDownProjectionBinding(proj, move(expr)));
+	// TODO: add this back in where necessary.
+	//	if (!insert->returning_list.empty()) {
+	//		this->allow_stream_result = true;
+	//	} else {
+	//		this->allow_stream_result = false;
+	//	}
+	// if there is a returning list, add a projection on top of the insert
+	if (!stmt.returning_list.empty()) {
+		insert->return_chunk = true;
+		auto insert_table_index = GenerateTableIndex();
+		insert->table_index = insert_table_index;
+		auto binder = Binder::CreateBinder(context);
+		auto types = table->GetTypes();
+		auto names = vector<std::string>();
+		for(auto &col : table->columns) {
+			names.push_back(col.name);
 		}
-//		insert->returning_list.push_back(move(*i));
-	}
+		binder->bind_context.AddGenericBinding(insert->table_index, stmt.table, names, types);
+		InsertBinder insert_binder(*binder, context);
 
-	D_ASSERT(result.types.size() == result.names.size());
-	if (!insert->returning_list.empty()) {
-		this->allow_stream_result = true;
+		auto projection_expressions = vector<unique_ptr<Expression>>();
+		for (idx_t i = 0; i < stmt.returning_list.size(); i++) {
+			LogicalType result_type;
+			auto expr = insert_binder.Bind(stmt.returning_list[i], &result_type);
+			result.types.push_back(result_type);
+			result.names.push_back(expr->ToString());
+			projection_expressions.push_back(move(expr));
+		}
+		auto projection = make_unique<LogicalProjection>(insert_table_index, move(projection_expressions));
+		projection->AddChild(move(insert));
+		result.plan = move(projection);
+		D_ASSERT(result.types.size() == result.names.size());
+
+		return result;
 	} else {
-		this->allow_stream_result = false;
+		insert->table_index = 0;
+		insert->return_chunk = false;
+		D_ASSERT(result.types.size() == result.names.size());
+		result.plan = move(insert);
+
+		return result;
 	}
 
-	result.plan = move(insert);
 
-	return result;
 }
 
 } // namespace duckdb

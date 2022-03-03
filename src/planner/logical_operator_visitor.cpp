@@ -97,13 +97,6 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		}
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_INSERT: {
-		auto &insert = (LogicalInsert &)op;
-		for (auto &expr : insert.returning_list) {
-			callback(&expr);
-		}
-		break;
-	}
 	default:
 		break;
 	}
