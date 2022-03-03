@@ -25,24 +25,34 @@ static inline yyjson_mut_val *GetConsistentArrayStructureArray(const vector<yyjs
 
 static inline yyjson_mut_val *GetConsistentArrayStructureObject(const vector<yyjson_mut_val *> &elem_structures,
                                                                 yyjson_mut_doc *structure_doc) {
-	yyjson_mut_val *key, *val;
-	yyjson_mut_obj_iter iter;
 	vector<string> key_insert_order;
 	unordered_map<string, vector<yyjson_mut_val *>> key_values;
+
+	yyjson_mut_val *key, *val;
+	yyjson_mut_obj_iter iter;
 	for (const auto &elem_structure : elem_structures) {
+		unordered_set<string> elem_keys;
+
 		yyjson_mut_obj_iter_init(elem_structure, &iter);
 		while ((key = yyjson_mut_obj_iter_next(&iter))) {
-			auto key_string = yyjson_mut_get_str(key);
+			auto key_string = string(yyjson_mut_get_str(key), yyjson_mut_get_len(key));
+			if (elem_keys.find(key_string) != elem_keys.end()) {
+				throw InvalidInputException("Duplicate key \"%s\" in object", string(key_string));
+			} else {
+				elem_keys.insert(key_string);
+			}
+
 			val = yyjson_mut_obj_iter_get_val(key);
 			if (key_values.find(key_string) == key_values.end()) {
-				key_insert_order.emplace_back(key_string);
+				key_insert_order.push_back(key_string);
 			}
 			key_values[key_string].push_back(val);
 		}
 	}
+
 	auto result = yyjson_mut_obj(structure_doc);
 	for (const auto &key_string : key_insert_order) {
-		key = yyjson_mut_strncpy(structure_doc, key_string.c_str(), key_string.size());
+		key = yyjson_mut_strcpy(structure_doc, key_string.c_str());
 		val = GetConsistentArrayStructure(key_values.at(key_string), structure_doc);
 		yyjson_mut_obj_add(result, key, val);
 	}
@@ -126,6 +136,7 @@ static inline yyjson_mut_val *BuildStructureArray(yyjson_val *arr, yyjson_mut_do
 }
 
 static inline yyjson_mut_val *BuildStructureObject(yyjson_val *obj, yyjson_mut_doc *structure_doc) {
+	yyjson_mut_val *mut_key, *mut_val;
 	auto result = yyjson_mut_obj(structure_doc);
 	// Iterate over object
 	yyjson_val *key, *val;
@@ -133,7 +144,10 @@ static inline yyjson_mut_val *BuildStructureObject(yyjson_val *obj, yyjson_mut_d
 	yyjson_obj_iter_init(obj, &iter);
 	while ((key = yyjson_obj_iter_next(&iter))) {
 		val = yyjson_obj_iter_get_val(key);
-		yyjson_mut_obj_add(result, yyjson_val_mut_copy(structure_doc, key), BuildStructure(val, structure_doc));
+
+		mut_key = yyjson_mut_strn(structure_doc, yyjson_get_str(key), yyjson_get_len(key));
+		mut_val = BuildStructure(val, structure_doc);
+		yyjson_mut_obj_add(result, mut_key, mut_val);
 	}
 	return result;
 }
@@ -154,18 +168,20 @@ static inline yyjson_mut_val *ConvertStructure(yyjson_mut_val *val, yyjson_mut_d
 
 static inline yyjson_mut_val *ConvertStructureArray(yyjson_mut_val *arr, yyjson_mut_doc *structure_doc) {
 	D_ASSERT(yyjson_mut_arr_size(arr) == 1);
-	yyjson_mut_arr_insert(arr, ConvertStructure(yyjson_mut_arr_remove_first(arr), structure_doc), 0);
-	return arr;
+	auto result = yyjson_mut_arr(structure_doc);
+	yyjson_mut_arr_append(result, ConvertStructure(yyjson_mut_arr_get_first(arr), structure_doc));
+	return result;
 }
 
 static inline yyjson_mut_val *ConvertStructureObject(yyjson_mut_val *obj, yyjson_mut_doc *structure_doc) {
+	auto result = yyjson_mut_obj(structure_doc);
 	yyjson_mut_val *key;
 	yyjson_mut_obj_iter iter;
 	yyjson_mut_obj_iter_init(obj, &iter);
 	while ((key = yyjson_mut_obj_iter_next(&iter))) {
-		yyjson_mut_obj_replace(obj, key, ConvertStructure(yyjson_mut_obj_iter_get_val(key), structure_doc));
+		yyjson_mut_obj_add(result, key, ConvertStructure(yyjson_mut_obj_iter_get_val(key), structure_doc));
 	}
-	return obj;
+	return result;
 }
 
 //! Convert structure to contain type strings

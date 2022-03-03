@@ -102,7 +102,7 @@ static unique_ptr<FunctionData> JSONArrayBind(ClientContext &context, ScalarFunc
 static unique_ptr<FunctionData> ToJSONBind(ClientContext &context, ScalarFunction &bound_function,
                                            vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.size() != 1) {
-		throw InvalidInputException("json() takes exactly one argument");
+		throw InvalidInputException("to_json() takes exactly one argument");
 	}
 	return JSONCreateBindParams(bound_function, arguments, false);
 }
