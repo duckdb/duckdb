@@ -161,10 +161,10 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			}
 		}
 
-//		if (insert->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-//			auto& insert_proj = (LogicalProjection&)*(insert->children[0]);
-//			insert_proj.table_index = insert_table_index;
-//		}
+		if (insert->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			auto& insert_proj = (LogicalProjection&)*(insert->children[0]);
+			insert_proj.child_of_returning_DMS = true;
+		}
 
 		auto projection = make_unique<LogicalProjection>(insert_table_index, move(projection_expressions));
 		projection->AddChild(move(insert));

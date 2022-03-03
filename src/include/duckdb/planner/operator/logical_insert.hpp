@@ -43,8 +43,9 @@ protected:
 	void ResolveTypes() override {
 		if (return_chunk) {
 			types = table->GetTypes();
+		} else {
+			types.emplace_back(LogicalType::BIGINT);
 		}
-		types.emplace_back(LogicalType::BIGINT);
 	}
 };
 } // namespace duckdb

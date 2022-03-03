@@ -18,6 +18,7 @@ public:
 	LogicalProjection(idx_t table_index, vector<unique_ptr<Expression>> select_list);
 
 	idx_t table_index;
+	idx_t child_of_returning_DMS;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

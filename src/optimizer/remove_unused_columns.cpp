@@ -163,7 +163,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		if (!everything_referenced) {
 			auto &proj = (LogicalProjection &)op;
-//			ClearUnusedExpressions(proj.expressions, proj.table_index);
+			if (!proj.child_of_returning_DMS) {
+			    ClearUnusedExpressions(proj.expressions, proj.table_index);
+		    }
 
 			if (proj.expressions.empty()) {
 				// nothing references the projected expressions
