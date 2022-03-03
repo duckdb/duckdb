@@ -74,7 +74,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	// bind the default values
 	BindDefaultValues(table->columns, insert->bound_defaults);
-
 	if (!stmt.select_statement) {
 		result.plan = move(insert);
 		return result;
@@ -120,7 +119,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	// parse select statement and add to logical plan
 	auto root_select = Bind(*stmt.select_statement);
-
 	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
 	                               table->name.c_str());
 

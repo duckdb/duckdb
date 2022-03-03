@@ -32,7 +32,6 @@ public:
 	//! The default statements used by the table
 	vector<unique_ptr<Expression>> bound_defaults;
 
-
 protected:
 	vector<ColumnBinding> GetColumnBindings() override {
 		if (return_chunk) {
@@ -44,9 +43,8 @@ protected:
 	void ResolveTypes() override {
 		if (return_chunk) {
 			types = table->GetTypes();
-		} else {
-			types.emplace_back(LogicalType::BIGINT);
 		}
+		types.emplace_back(LogicalType::BIGINT);
 	}
 };
 } // namespace duckdb

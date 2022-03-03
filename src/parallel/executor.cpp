@@ -268,7 +268,6 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		this->producer = scheduler.CreateProducer();
 
 		auto root_pipeline = make_shared<Pipeline>(*this);
-
 		root_pipeline->sink = nullptr;
 		BuildPipelines(physical_plan, root_pipeline.get());
 

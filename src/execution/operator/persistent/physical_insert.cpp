@@ -14,18 +14,13 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class InsertGlobalState : public GlobalSinkState {
 public:
-	InsertGlobalState(const vector<unique_ptr<Expression>> &bound_defaults)
-		: default_executor(bound_defaults) {
-		insert_count = 0;
-		returned_chunk_count = 0;
-		return_chunk_collection = ChunkCollection();
+	InsertGlobalState() : insert_count(0) {
 	}
 
 	mutex lock;
 	idx_t insert_count;
 	ChunkCollection return_chunk_collection;
 	idx_t returned_chunk_count;
-	ExpressionExecutor default_executor;
 };
 
 class InsertLocalState : public LocalSinkState {
@@ -40,7 +35,7 @@ public:
 };
 
 PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
-                               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality, bool return_chunk)
+                               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality, idx_t return_chunk)
     : PhysicalOperator(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
       column_index_map(std::move(column_index_map)),
       table(table),
@@ -92,7 +87,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<InsertGlobalState>( bound_defaults);
+	return make_unique<InsertGlobalState>();
 }
 
 unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
