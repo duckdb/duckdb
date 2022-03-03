@@ -16,8 +16,4 @@ void LogicalProjection::ResolveTypes() {
 	}
 }
 
-void LogicalProjection::set_table_index(idx_t set_index) {
-	table_index = set_index;
-}
-
 } // namespace duckdb
