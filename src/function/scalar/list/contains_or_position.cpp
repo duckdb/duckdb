@@ -5,12 +5,12 @@
 namespace duckdb {
 
 template <class T>
-static inline bool ValueCompare(const T &left, const T &right) {
+static inline bool ValueEqualsOrNot(const T &left, const T &right) {
 	return left == right;
 }
 
 template <>
-inline bool ValueCompare(const string_t &left, const string_t &right) {
+inline bool ValueEqualsOrNot(const string_t &left, const string_t &right) {
 	return StringComparisonOperators::EqualsOrNot<false>(left, right);
 }
 
@@ -88,12 +88,15 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 			}
 
 			if (!is_nested) {
-				if (ValueCompare<CHILD_TYPE>(child_value[child_value_idx], values[value_index])) {
+				if (ValueEqualsOrNot<CHILD_TYPE>(child_value[child_value_idx], values[value_index])) {
 					result_entries[list_index] = OP::UpdateResultEntries(child_idx);
 					break; // Found value in list, no need to look further
 				}
 			} else {
-				if (ValueCompare<Value>(child_vector.GetValue(child_value_idx), value_vector.GetValue(value_index))) {
+				// FIXME: using Value is less efficient than modifying the vector comparison code
+				// to more efficiently compare nested types
+				if (ValueEqualsOrNot<Value>(child_vector.GetValue(child_value_idx),
+				                            value_vector.GetValue(value_index))) {
 					result_entries[list_index] = OP::UpdateResultEntries(child_idx);
 					break; // Found value in list, no need to look further
 				}

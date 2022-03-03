@@ -3,6 +3,7 @@ package org.duckdb;
 import java.sql.Timestamp;
 import java.time.ZoneOffset;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 
 public class DuckDBTimestamp {
@@ -20,6 +21,11 @@ public class DuckDBTimestamp {
 	public DuckDBTimestamp(LocalDateTime localDateTime) {
 		this.timeMicros = DuckDBTimestamp.RefLocalDateTime.until(
 			localDateTime, ChronoUnit.MICROS);
+	}
+
+	public DuckDBTimestamp(OffsetDateTime offsetDateTime) {
+		this.timeMicros = DuckDBTimestamp.RefLocalDateTime.until(
+			offsetDateTime.withOffsetSameInstant(ZoneOffset.UTC), ChronoUnit.MICROS);
 	}
 
 	public DuckDBTimestamp(Timestamp sqlTimestamp) {
@@ -41,6 +47,10 @@ public class DuckDBTimestamp {
 				, nanosPartMicros(timeMicros), ZoneOffset.UTC);
 	}
 
+	public static OffsetDateTime toOffsetDateTime(long timeMicros) {
+		return OffsetDateTime.of(toLocalDateTime(timeMicros), ZoneOffset.UTC);
+	}
+
 	public Timestamp toSqlTimestamp() {
 		return Timestamp.valueOf(this.toLocalDateTime());
 	}
@@ -48,6 +58,11 @@ public class DuckDBTimestamp {
 	public LocalDateTime toLocalDateTime() {
 		return LocalDateTime.ofEpochSecond(micros2seconds(timeMicros)
 				, nanosPartMicros(timeMicros), ZoneOffset.UTC);
+	}
+
+	public OffsetDateTime toOffsetDateTime() {
+		return OffsetDateTime.of(toLocalDateTime(this.timeMicros)
+				, ZoneOffset.UTC);
 	}
 
 	public static long getMicroseconds(Timestamp sqlTimestamp) {
@@ -64,10 +79,19 @@ public class DuckDBTimestamp {
 	}
 
 	private static long micros2seconds(long micros) {
-		return micros / 1000_000L;
+		if ((micros % 1000_000L) >= 0) {
+			return micros / 1000_000L;
+		} else {
+			return (micros / 1000_000L) -1;
+		}
 	}
 
 	private static int nanosPartMicros(long micros) {
-		return (int) ((micros % 1000_000L) * 1000);
+		if ((micros % 1000_000L) >= 0) {
+			return (int) ((micros % 1000_000L) * 1000);
+		}
+		else {
+			return (int) ((1000_000L + (micros % 1000_000L)) * 1000);
+		}
 	}
 }

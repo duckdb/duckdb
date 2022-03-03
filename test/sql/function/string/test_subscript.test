@@ -9,39 +9,39 @@ statement ok
 CREATE TABLE strings(s VARCHAR, off INTEGER);
 
 statement ok
-INSERT INTO strings VALUES ('hello', 0), ('world', 1), ('b', 0), (NULL, 1)
+INSERT INTO strings VALUES ('hello', 1), ('world', 2), ('b', 1), (NULL, 2)
 
 # test direct subscript
 query TT
-SELECT '🦆ab'[0], 'abc'[1]
+SELECT '🦆ab'[1], 'abc'[2]
 ----
 🦆	b
 
 # test grapheme clusters
 query I
-SELECT '🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️'[3]
+SELECT '🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️'[4]
 ----
 🤦🏼‍♂️
 
 query I
 SELECT 'S̈a'[1]
 ----
-a
+S̈
 
 query I
-SELECT 'MotörHead'[3]
+SELECT 'MotörHead'[4]
 ----
 ö
 
 query I
-SELECT 'Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍A̴̵̜̰͔ͫ͗͢'[1]
+SELECT 'Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍A̴̵̜̰͔ͫ͗͢'[2]
 ----
 A̴̵̜̰͔ͫ͗͢
 
 # constant offset/length
 # normal array_extract
 query T
-SELECT s[1] FROM strings
+SELECT s[2] FROM strings
 ----
 e
 o
@@ -50,7 +50,7 @@ NULL
 
 # array_extract out of range
 query T
-SELECT s[2] FROM strings
+SELECT s[3] FROM strings
 ----
 l
 r
@@ -67,7 +67,7 @@ b
 NULL
 
 query T
-SELECT s[1] FROM strings
+SELECT s[2] FROM strings
 ----
 e
 o
@@ -114,7 +114,7 @@ NULL
 
 # zero offset
 query T
-SELECT s[0] FROM strings
+SELECT s[1] FROM strings
 ----
 h
 w
@@ -123,7 +123,7 @@ NULL
 
 # length 0
 query T
-SELECT s[5] FROM strings
+SELECT s[6] FROM strings
 ----
 (empty)
 (empty)
