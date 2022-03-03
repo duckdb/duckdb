@@ -3,7 +3,6 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
-#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 
 namespace duckdb {
 
