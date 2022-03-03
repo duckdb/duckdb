@@ -1,7 +1,7 @@
 # test_config.jl
 
 @testset "Test configuration parameters" begin
-	# by default NULLs come first
+    # by default NULLs come first
     con = DBInterface.connect(DuckDB.DB, ":memory:")
 
     results = DBInterface.execute(con, "SELECT 42 a UNION ALL SELECT NULL ORDER BY a")
@@ -12,14 +12,14 @@
 
     DBInterface.close!(con)
 
-	# if we add this configuration flag, nulls should come last
-	config = DuckDB.Config()
-	DuckDB.SetConfig(config, "default_null_order", "nulls_last")
-	@test_throws DuckDB.QueryException DuckDB.SetConfig(config, "unrecognized option", "aaa")
+    # if we add this configuration flag, nulls should come last
+    config = DuckDB.Config()
+    DuckDB.SetConfig(config, "default_null_order", "nulls_last")
+    @test_throws DuckDB.QueryException DuckDB.SetConfig(config, "unrecognized option", "aaa")
 
     con = DBInterface.connect(DuckDB.DB, ":memory:", config)
 
-	# NULL should come last now
+    # NULL should come last now
     results = DBInterface.execute(con, "SELECT 42 a UNION ALL SELECT NULL ORDER BY a")
     df = DataFrame(results)
     @test names(df) == ["a"]

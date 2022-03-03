@@ -4,9 +4,10 @@ using Test
 
 test_files = [
     "test_appender.jl",
+    "test_basic_queries.jl",
     "test_config.jl",
     "test_connection.jl",
-    "test_basic_queries.jl",
+    "test_df_scan.jl",
     "test_prepare.jl",
     "test_transaction.jl",
     "test_sqlite.jl",

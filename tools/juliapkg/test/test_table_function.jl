@@ -42,7 +42,8 @@ function MyMainFunction(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
         init_info.pos += 1
     end
 
-    return DuckDB.SetSize(output, count)
+    DuckDB.SetSize(output, count)
+    return
 end
 
 @testset "Test custom table functions" begin
@@ -51,7 +52,7 @@ end
     types = [DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_BIGINT)]
     DuckDB.CreateTableFunction(con.main_connection, "forty_two", types, MyBindFunction, MyInitFunction, MyMainFunction)
 
-	GC.enable(false);
+    GC.enable(false)
 
     # 3 elements
     results = DBInterface.execute(con, "SELECT * FROM forty_two(3)")
@@ -67,12 +68,12 @@ end
     df = DataFrame(results)
     @test df.cnt == [10000]
 
-	GC.enable(true);
-	GC.gc()
+    GC.enable(true)
+    GC.gc()
 
-#     @time begin
-#         results = DBInterface.execute(con, "SELECT SUM(forty_two) cnt FROM forty_two(10000000)")
-#     end
-#     df = DataFrame(results)
-#     println(df)
+    #     @time begin
+    #         results = DBInterface.execute(con, "SELECT SUM(forty_two) cnt FROM forty_two(10000000)")
+    #     end
+    #     df = DataFrame(results)
+    #     println(df)
 end

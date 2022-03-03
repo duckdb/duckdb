@@ -126,7 +126,7 @@ function duckdb_get_config_flag(index, out_name, out_description)
         (Int32, Ptr{Ptr{UInt8}}, Ptr{Ptr{UInt8}}),
         index,
         out_name,
-        out_description,
+        out_description
     )
 end
 
@@ -142,14 +142,7 @@ This can fail if either the name is invalid, or if the value provided for the op
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_set_config(config, name, option)
-    return ccall(
-        (:duckdb_set_config, libduckdb),
-        Int32,
-        (duckdb_config, Ptr{UInt8}, Ptr{UInt8}),
-        config,
-        name,
-        option,
-    )
+    return ccall((:duckdb_set_config, libduckdb), Int32, (duckdb_config, Ptr{UInt8}, Ptr{UInt8}), config, name, option)
 end
 
 """

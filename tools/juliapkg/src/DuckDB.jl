@@ -22,6 +22,7 @@ include("transaction.jl")
 include("ddl.jl")
 include("appender.jl")
 include("table_function.jl")
+include("data_frame_scan.jl")
 include("old_interface.jl")
 
 end # module

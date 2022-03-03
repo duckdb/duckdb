@@ -5,6 +5,7 @@ mutable struct DuckDBHandle
     file::String
     handle::duckdb_database
     functions::Vector{Any}
+    data_frames::Dict{Any, Any}
 
     function DuckDBHandle(f::AbstractString, config::Config)
         f = String(isempty(f) ? f : expanduser(f))
@@ -16,7 +17,7 @@ mutable struct DuckDBHandle
             throw(ConnectionException(error_message))
         end
 
-        db = new(f, handle[], Vector())
+        db = new(f, handle[], Vector(), Dict())
         finalizer(_close_database, db)
         return db
     end
@@ -78,11 +79,13 @@ mutable struct DB <: DBInterface.Connection
     function DB(f::AbstractString, config::Config)
         handle = DuckDBHandle(f, config)
         main_connection = Connection(handle)
+
         db = new(handle, main_connection)
+        AddDataFrameScan(db)
         return db
     end
     function DB(f::AbstractString)
-    	return DB(f, Config())
+        return DB(f, Config())
     end
 end
 

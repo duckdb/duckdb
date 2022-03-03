@@ -6,7 +6,7 @@ mutable struct Config
 
     function Config()
         handle = Ref{duckdb_connection}()
-    	duckdb_create_config(handle)
+        duckdb_create_config(handle)
 
         result = new(handle[])
         finalizer(_destroy_config, result)
@@ -23,9 +23,9 @@ function _destroy_config(config::Config)
 end
 
 function SetConfig(config::Config, name::AbstractString, option::AbstractString)
-	if duckdb_set_config(config.handle, name, option) != DuckDBSuccess
-		throw(QueryException(string("Unrecognized configuration option \"", name, "\"")))
-	end
+    if duckdb_set_config(config.handle, name, option) != DuckDBSuccess
+        throw(QueryException(string("Unrecognized configuration option \"", name, "\"")))
+    end
 end
 
 DBInterface.close!(config::Config) = _destroy_config(config)
