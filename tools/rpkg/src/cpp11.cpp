@@ -124,7 +124,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_connect",          (DL_FUNC) &_duckdb_rapi_connect,          1},
     {"_duckdb_rapi_disconnect",       (DL_FUNC) &_duckdb_rapi_disconnect,       1},
     {"_duckdb_rapi_execute",          (DL_FUNC) &_duckdb_rapi_execute,          2},
-    {"_duckdb_rapi_execute_arrow",    (DL_FUNC) &_duckdb_rapi_execute_arrow,    4},
+    {"_duckdb_rapi_execute_arrow",    (DL_FUNC) &_duckdb_rapi_execute_arrow,    2},
     {"_duckdb_rapi_prepare",          (DL_FUNC) &_duckdb_rapi_prepare,          2},
     {"_duckdb_rapi_ptr_to_str",       (DL_FUNC) &_duckdb_rapi_ptr_to_str,       1},
     {"_duckdb_rapi_record_batch",     (DL_FUNC) &_duckdb_rapi_record_batch,     2},
