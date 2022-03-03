@@ -178,6 +178,16 @@ public:
 		auto result = WriteVal(*mut_doc, vector);
 		return result;
 	}
+	//! Throw an error with the printed yyjson_val
+	static void ThrowValFormatError(string error_string, yyjson_val *val) {
+		auto mut_doc = JSONCommon::CreateDocument();
+		auto *mut_val = yyjson_val_mut_copy(*mut_doc, val);
+		yyjson_mut_doc_set_root(*mut_doc, mut_val);
+		idx_t len;
+		auto data = JSONCommon::MutWrite(*mut_doc, len);
+		error_string = StringUtil::Format(error_string, string(data.get(), len));
+		throw InvalidInputException(error_string);
+	}
 
 public:
 	//! Validate path with $ syntax

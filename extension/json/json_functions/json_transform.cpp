@@ -5,16 +5,6 @@
 
 namespace duckdb {
 
-static void ThrowValFormatError(string error_string, yyjson_val *val) {
-	auto mut_doc = JSONCommon::CreateDocument();
-	auto *mut_val = yyjson_val_mut_copy(*mut_doc, val);
-	yyjson_mut_doc_set_root(*mut_doc, mut_val);
-	idx_t len;
-	auto data = JSONCommon::MutWrite(*mut_doc, len);
-	error_string = StringUtil::Format(error_string, string(data.get(), len));
-	throw InvalidInputException(error_string);
-}
-
 //! Forward declaration for recursion
 static LogicalType StructureToType(yyjson_val *val);
 
@@ -28,18 +18,18 @@ static LogicalType StructureToTypeArray(yyjson_val *arr) {
 static LogicalType StructureToTypeObject(yyjson_val *obj) {
 	unordered_set<string> names;
 	child_list_t<LogicalType> child_types;
+	size_t idx, max;
 	yyjson_val *key, *val;
-	yyjson_obj_iter iter;
-	yyjson_obj_iter_init(obj, &iter);
-	while ((key = yyjson_obj_iter_next(&iter))) {
+	yyjson_obj_foreach(obj, idx, max, key, val) {
 		val = yyjson_obj_iter_get_val(key);
 		auto key_str = yyjson_get_str(key);
 		if (names.find(key_str) != names.end()) {
-			ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
+			JSONCommon::ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
 		}
 		names.insert(key_str);
 		child_types.emplace_back(key_str, StructureToType(val));
 	}
+	D_ASSERT(yyjson_obj_size(obj) == names.size());
 	return LogicalType::STRUCT(child_types);
 }
 
@@ -112,7 +102,7 @@ static inline bool GetValueNumerical(yyjson_val *val, T &result, bool strict) {
 		throw InternalException("Unknown yyjson tag in GetValueNumerical");
 	}
 	if (!success && strict) {
-		ThrowValFormatError("Failed to cast value to numerical: %s", val);
+		JSONCommon::ThrowValFormatError("Failed to cast value to numerical: %s", val);
 	}
 	return success;
 }
@@ -148,7 +138,7 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 		throw InternalException("Unknown yyjson tag in GetValueString");
 	}
 	if (!success && strict) {
-		ThrowValFormatError("Failed to cast value to numerical: %s", val);
+		JSONCommon::ThrowValFormatError("Failed to cast value to numerical: %s", val);
 	}
 	return success;
 }
@@ -221,7 +211,7 @@ static void TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 		if (!val || yyjson_is_null(val)) {
 			validity.SetInvalid(i);
 		} else if (strict && !yyjson_is_str(val)) {
-			ThrowValFormatError("Unable to cast '%s' to " + LogicalTypeIdToString(target.id()), val);
+			JSONCommon::ThrowValFormatError("Unable to cast '%s' to " + LogicalTypeIdToString(target.id()), val);
 		} else {
 			data[i] = StringVector::AddString(string_vector, yyjson_get_str(val), yyjson_get_len(val));
 		}
@@ -283,16 +273,15 @@ static void TransformArray(yyjson_val *vals[], Vector &result, const idx_t count
 	auto nested_vals_ptr = unique_ptr<yyjson_val *[]>(new yyjson_val *[offset]);
 	auto nested_vals = nested_vals_ptr.get();
 	// Get array values
+	size_t idx, max;
 	yyjson_val *val;
-	yyjson_arr_iter iter;
 	idx_t list_i = 0;
 	for (idx_t i = 0; i < count; i++) {
 		if (!list_validity.RowIsValid(i)) {
 			// We already marked this as invalid
 			continue;
 		}
-		yyjson_arr_iter_init(vals[i], &iter);
-		while ((val = yyjson_arr_iter_next(&iter))) {
+		yyjson_arr_foreach(vals[i], idx, max, val) {
 			nested_vals[list_i] = val;
 			list_i++;
 		}
