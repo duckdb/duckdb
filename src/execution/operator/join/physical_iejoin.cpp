@@ -1008,10 +1008,9 @@ OperatorResultType PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context,
 		} else {
 			// found matches: extract them
 			chunk.Reset();
-			for (idx_t c = 0; c < state.left_payload.ColumnCount(); ++c) {
-				chunk.data[c].Slice(state.left_payload.data[c], lsel, result_count);
-			}
-			const auto first_idx = SliceSortedPayload(chunk, right_table.global_sort_state, state.right_block_index, 0,
+			auto &left_table = *state.left_table;
+			const auto left_idx = SliceSortedPayload(chunk, left_table.global_sort_state, 0, 0, lsel, result_count, 0);
+			const auto right_idx = SliceSortedPayload(chunk, right_table.global_sort_state, state.right_block_index, 0,
 			                                          rsel, result_count, left_cols);
 			chunk.SetCardinality(result_count);
 
@@ -1019,15 +1018,15 @@ OperatorResultType PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context,
 			// TODO: extra predicates
 
 			// found matches: mark the found matches if required
-			auto &left_table = *state.left_table;
 			if (left_table.found_match) {
+				const idx_t base_index = left_idx;
 				for (idx_t i = 0; i < result_count; i++) {
-					left_table.found_match[lsel[sel->get_index(i)]] = true;
+					left_table.found_match[base_index + lsel[sel->get_index(i)]] = true;
 				}
 			}
 			if (right_table.found_match) {
 				//	Absolute position of the block + start position inside that block
-				const idx_t base_index = state.right_base + first_idx;
+				const idx_t base_index = state.right_base + right_idx;
 				for (idx_t i = 0; i < result_count; i++) {
 					right_table.found_match[base_index + rsel[sel->get_index(i)]] = true;
 				}

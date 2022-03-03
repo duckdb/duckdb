@@ -137,6 +137,16 @@ public:
 		return sorted_data.layout.GetTypes();
 	}
 
+	//! The number of rows scanned so far
+	inline idx_t Scanned() const {
+		return total_scanned;
+	}
+
+	//! The number of remaining rows
+	inline idx_t Remaining() const {
+		return total_count - total_scanned;
+	}
+
 	//! Scans the next data chunk from the sorted data
 	void Scan(DataChunk &chunk);
 
