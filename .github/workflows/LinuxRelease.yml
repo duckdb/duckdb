@@ -127,6 +127,9 @@ jobs:
       BUILD_SUBSTRAIT_EXTENSION: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
+      STATIC_OPENSSL: 1
+      DISABLE_BUILTIN_EXTENSIONS: 1
+      OPENSSL_ROOT_DIR: /usr/local/ssl
       AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
       AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
       AWS_DEFAULT_REGION: us-east-1
@@ -152,6 +155,18 @@ jobs:
         python3.7 --version
         python3.7 -m pip install pip
         python3.7 -m pip install requests awscli
+
+    - name: Install OpenSSL 1.1.1
+      run: |
+        apt-get install build-essential checkinstall zlib1g-dev -y -qq
+        wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
+        tar -xf openssl-1.1.1c.tar.gz
+        cd openssl-1.1.1c
+        ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl -static zlib
+        make
+        make install
+        echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
+        ldconfig -v
 
     - uses: actions/checkout@v2
       with:
