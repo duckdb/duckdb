@@ -384,9 +384,7 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 }
 
 template <bool SCHEMA>
-unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, vector<Value> &inputs,
-                                             named_parameter_map_t &named_parameters,
-                                             vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.enable_external_access) {
@@ -398,7 +396,7 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, vector<Valu
 		ParquetMetaDataOperatorData::BindMetaData(return_types, names);
 	}
 
-	auto file_name = inputs[0].GetValue<string>();
+	auto file_name = input.inputs[0].GetValue<string>();
 	auto result = make_unique<ParquetMetaDataBindData>();
 
 	FileSystem &fs = FileSystem::GetFileSystem(context);

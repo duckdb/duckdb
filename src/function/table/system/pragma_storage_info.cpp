@@ -30,10 +30,7 @@ struct PragmaStorageOperatorData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, vector<Value> &inputs,
-                                                      named_parameter_map_t &named_parameters,
-                                                      vector<LogicalType> &input_table_types,
-                                                      vector<string> &input_table_names,
+static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, TableFunctionBindInput &input,
                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("row_group_id");
 	return_types.emplace_back(LogicalType::BIGINT);
@@ -77,7 +74,7 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, ve
 	names.emplace_back("block_offset");
 	return_types.emplace_back(LogicalType::BIGINT);
 
-	auto qname = QualifiedName::Parse(inputs[0].GetValue<string>());
+	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
 	auto &catalog = Catalog::GetCatalog(context);
