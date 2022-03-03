@@ -7,11 +7,13 @@ add_library_unity(
   data_chunk-c.cpp
   datetime-c.cpp
   duckdb-c.cpp
+  duckdb_value-c.cpp
   helper-c.cpp
   hugeint-c.cpp
   logical_types-c.cpp
   prepared-c.cpp
   result-c.cpp
+  table_function-c.cpp
   value-c.cpp)
 
 set(ALL_OBJECT_FILES

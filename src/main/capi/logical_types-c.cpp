@@ -9,7 +9,6 @@ duckdb_type duckdb_get_type_id(duckdb_logical_type type) {
 		return DUCKDB_TYPE_INVALID;
 	}
 	auto ltype = (duckdb::LogicalType *)type;
-	;
 	return duckdb::ConvertCPPTypeToC(ltype->id());
 }
 

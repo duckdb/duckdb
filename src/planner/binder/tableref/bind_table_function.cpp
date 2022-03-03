@@ -125,7 +125,8 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	vector<LogicalType> return_types;
 	vector<string> return_names;
 	if (table_function.bind) {
-		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names);
+		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
+		                                  table_function.function_info.get());
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 	}
 	D_ASSERT(return_types.size() == return_names.size());

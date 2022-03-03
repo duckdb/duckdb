@@ -205,6 +205,7 @@ typedef void *duckdb_arrow_schema;
 typedef void *duckdb_arrow_array;
 typedef void *duckdb_logical_type;
 typedef void *duckdb_data_chunk;
+typedef void *duckdb_value;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 
@@ -874,6 +875,33 @@ DUCKDB_API duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement 
                                                       duckdb_arrow *out_result);
 
 //===--------------------------------------------------------------------===//
+// Value Interface
+//===--------------------------------------------------------------------===//
+/*!
+Destroys the value and de-allocates all memory allocated for that type.
+
+* value: The value to destroy.
+*/
+DUCKDB_API void duckdb_destroy_value(duckdb_value *value);
+
+/*!
+Obtains a string representation of the given value.
+The result must be destroyed with `duckdb_free`.
+
+* value: The value
+* returns: The string value. This must be destroyed with `duckdb_free`.
+*/
+DUCKDB_API char *duckdb_get_varchar(duckdb_value value);
+
+/*!
+Obtains an int64 of the given value.
+
+* value: The value
+* returns: The int64 value, or 0 if no conversion is possible
+*/
+DUCKDB_API int64_t duckdb_get_int64(duckdb_value value);
+
+//===--------------------------------------------------------------------===//
 // Logical Type Interface
 //===--------------------------------------------------------------------===//
 
@@ -1005,11 +1033,174 @@ This allows null values to be written to the data chunk, regardless of whether a
 */
 DUCKDB_API void duckdb_data_chunk_ensure_validity_writable(duckdb_data_chunk chunk, idx_t col_idx);
 
-// print
-// to string
-// appender -> append chunk
-// result -> fetch chunk
-//
+//===--------------------------------------------------------------------===//
+// Table Functions
+//===--------------------------------------------------------------------===//
+typedef void *duckdb_table_function;
+typedef void *duckdb_bind_info;
+typedef void *duckdb_init_info;
+typedef void *duckdb_function_info;
+
+typedef void (*duckdb_delete_callback_t)(void *data);
+typedef void (*duckdb_table_function_bind_t)(duckdb_bind_info info);
+typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
+typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
+
+/*!
+Creates a new empty table function.
+
+The return value should be destroyed with `duckdb_destroy_table_function`.
+
+* returns: The table function object.
+*/
+DUCKDB_API duckdb_table_function duckdb_create_table_function();
+
+/*!
+Destroys the given table function object.
+
+* table_function: The table function to destroy
+*/
+DUCKDB_API void duckdb_destroy_table_function(duckdb_table_function *table_function);
+
+/*!
+Sets the name of the given table function.
+
+* table_function: The table function
+* name: The name of the table function
+*/
+DUCKDB_API void duckdb_table_function_set_name(duckdb_table_function table_function, const char *name);
+
+/*!
+Adds a parameter to the table function.
+
+* table_function: The table function
+* type: The type of the parameter to add.
+*/
+DUCKDB_API void duckdb_table_function_add_parameter(duckdb_table_function table_function, duckdb_logical_type type);
+
+/*!
+Sets the bind function of the table function
+
+* table_function: The table function
+* bind: The bind function
+*/
+DUCKDB_API void duckdb_table_function_set_bind(duckdb_table_function table_function, duckdb_table_function_bind_t bind);
+
+/*!
+Sets the init function of the table function
+
+* table_function: The table function
+* init: The init function
+*/
+DUCKDB_API void duckdb_table_function_set_init(duckdb_table_function table_function, duckdb_table_function_init_t init);
+
+/*!
+Sets the main function of the table function
+
+* table_function: The table function
+* function: The function
+*/
+DUCKDB_API void duckdb_table_function_set_function(duckdb_table_function table_function,
+                                                   duckdb_table_function_t function);
+
+/*!
+Register the table function object within the given connection.
+
+The function requires at least a name, a bind function, an init function and a main function.
+
+If the function is incomplete or a function with this name already exists DuckDBError is returned.
+
+* con: The connection to register it in.
+* function: The function pointer
+* returns: Whether or not the registration was successful.
+*/
+DUCKDB_API duckdb_state duckdb_register_table_function(duckdb_connection con, duckdb_table_function function);
+
+//===--------------------------------------------------------------------===//
+// Table Function Bind
+//===--------------------------------------------------------------------===//
+/*!
+Adds a result column to the output of the table function.
+
+* info: The info object
+* name: The name of the column
+* type: The logical type of the column
+*/
+DUCKDB_API void duckdb_bind_add_result_column(duckdb_bind_info info, const char *name, duckdb_logical_type type);
+
+/*!
+Retrieves the number of regular (non-named) parameters to the function.
+
+* info: The info object
+* returns: The number of parameters
+*/
+DUCKDB_API idx_t duckdb_bind_get_parameter_count(duckdb_bind_info info);
+
+/*!
+Retrieves the parameter at the given index.
+
+The result must be destroyed with `duckdb_destroy_value`.
+
+* info: The info object
+* index: The index of the parameter to get
+* returns: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_bind_get_parameter(duckdb_bind_info info, idx_t index);
+
+/*!
+Sets the user-provided bind data in the bind object. This object can be retrieved again during execution.
+
+* info: The info object
+* extra_data: The bind data object.
+* destroy: The callback that will be called to destroy the bind data (if any)
+*/
+DUCKDB_API void duckdb_bind_set_bind_data(duckdb_bind_info info, void *bind_data, duckdb_delete_callback_t destroy);
+
+//===--------------------------------------------------------------------===//
+// Table Function Init
+//===--------------------------------------------------------------------===//
+/*!
+Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.
+
+Note that the bind data should be considered as read-only.
+For tracking state, use the init data instead.
+
+* info: The info object
+* returns: The bind data object
+*/
+DUCKDB_API void *duckdb_init_get_bind_data(duckdb_init_info info);
+
+/*!
+Sets the user-provided init data in the init object. This object can be retrieved again during execution.
+
+* info: The info object
+* extra_data: The init data object.
+* destroy: The callback that will be called to destroy the init data (if any)
+*/
+DUCKDB_API void duckdb_init_set_init_data(duckdb_init_info info, void *init_data, duckdb_delete_callback_t destroy);
+
+//===--------------------------------------------------------------------===//
+// Table Function
+//===--------------------------------------------------------------------===//
+
+/*!
+Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.
+
+Note that the bind data should be considered as read-only.
+For tracking state, use the init data instead.
+
+* info: The info object
+* returns: The bind data object
+*/
+DUCKDB_API void *duckdb_function_get_bind_data(duckdb_function_info info);
+
+/*!
+Gets the init data set by `duckdb_bind_set_init_data` during the bind.
+
+* info: The info object
+* returns: The init data object
+*/
+DUCKDB_API void *duckdb_function_get_init_data(duckdb_function_info info);
 
 //===--------------------------------------------------------------------===//
 // Appender

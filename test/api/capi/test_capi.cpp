@@ -932,6 +932,98 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 	duckdb_destroy_logical_type(&types[1]);
 }
 
+struct my_bind_data_struct {
+	int64_t size;
+};
+
+void my_bind(duckdb_bind_info info) {
+	REQUIRE(duckdb_bind_get_parameter_count(info) == 1);
+
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	duckdb_bind_add_result_column(info, "forty_two", type);
+	duckdb_destroy_logical_type(&type);
+
+	auto my_bind_data = (my_bind_data_struct *)malloc(sizeof(my_bind_data_struct));
+	auto param = duckdb_bind_get_parameter(info, 0);
+	my_bind_data->size = duckdb_get_int64(param);
+
+	duckdb_bind_set_bind_data(info, my_bind_data, free);
+}
+
+struct my_init_data_struct {
+	int64_t pos;
+};
+
+void my_init(duckdb_init_info info) {
+	REQUIRE(duckdb_init_get_bind_data(info) != nullptr);
+	REQUIRE(duckdb_init_get_bind_data(nullptr) == nullptr);
+
+	auto my_init_data = (my_init_data_struct *)malloc(sizeof(my_init_data_struct));
+	my_init_data->pos = 0;
+	duckdb_init_set_init_data(info, my_init_data, free);
+}
+
+void my_function(duckdb_function_info info, duckdb_data_chunk output) {
+	auto bind_data = (my_bind_data_struct *)duckdb_function_get_bind_data(info);
+	auto init_data = (my_init_data_struct *)duckdb_function_get_init_data(info);
+	auto ptr = (int64_t *)duckdb_data_chunk_get_data(output, 0);
+	for (idx_t i = 0; init_data->pos < bind_data->size && i < duckdb_vector_size(); init_data->pos++, i++) {
+		ptr[i] = init_data->pos % 2 == 0 ? 42 : 84;
+		duckdb_data_chunk_set_size(output, duckdb_data_chunk_get_size(output) + 1);
+	}
+}
+
+TEST_CASE("Test Table Functions C API", "[capi]") {
+	CAPITester tester;
+	unique_ptr<CAPIResult> result;
+	duckdb_state status;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	// create a table function
+	auto function = duckdb_create_table_function();
+	duckdb_table_function_set_name(nullptr, "my_function");
+	duckdb_table_function_set_name(function, nullptr);
+	duckdb_table_function_set_name(function, "my_function");
+	duckdb_table_function_set_name(function, "my_function");
+
+	// add a string parameter
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	duckdb_table_function_add_parameter(function, type);
+	duckdb_destroy_logical_type(&type);
+
+	// set up the function pointers
+	duckdb_table_function_set_bind(function, my_bind);
+	duckdb_table_function_set_init(function, my_init);
+	duckdb_table_function_set_function(function, my_function);
+
+	// register and cleanup
+	status = duckdb_register_table_function(tester.connection, function);
+	REQUIRE(status == DuckDBSuccess);
+
+	duckdb_destroy_table_function(&function);
+	duckdb_destroy_table_function(&function);
+	duckdb_destroy_table_function(nullptr);
+
+	// now call it
+	result = tester.Query("SELECT * FROM my_function(1)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
+
+	result = tester.Query("SELECT * FROM my_function(3)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
+	REQUIRE(result->Fetch<int64_t>(0, 1) == 84);
+	REQUIRE(result->Fetch<int64_t>(0, 2) == 42);
+
+	result = tester.Query("SELECT forty_two, COUNT(*) FROM my_function(10000) GROUP BY 1 ORDER BY 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
+	REQUIRE(result->Fetch<int64_t>(0, 1) == 84);
+	REQUIRE(result->Fetch<int64_t>(1, 0) == 5000);
+	REQUIRE(result->Fetch<int64_t>(1, 1) == 5000);
+}
+
 TEST_CASE("Test appender statements in C API", "[capi]") {
 	CAPITester tester;
 	unique_ptr<CAPIResult> result;

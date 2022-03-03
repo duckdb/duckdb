@@ -34,15 +34,17 @@ struct TableFilterCollection {
 
 struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
-	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names)
+	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+	                       TableFunctionInfo *info)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
-	      input_table_names(input_table_names) {
+	      input_table_names(input_table_names), info(info) {
 	}
 
 	vector<Value> &inputs;
 	named_parameter_map_t &named_parameters;
 	vector<LogicalType> &input_table_types;
 	vector<string> &input_table_names;
+	TableFunctionInfo *info;
 };
 
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,
@@ -156,6 +158,8 @@ public:
 	//! Whether or not the table function supports filter pushdown. If not supported a filter will be added
 	//! that applies the table filter directly.
 	bool filter_pushdown;
+	//! Additional function info, passed to the bind
+	shared_ptr<TableFunctionInfo> function_info;
 };
 
 } // namespace duckdb
