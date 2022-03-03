@@ -121,7 +121,6 @@ SELECT hello[off:length+off] FROM lists, hello
 [h]
 [h, e]
 
-# test substrings with constant nulls in different places
 query T
 SELECT n[off:length+off] FROM lists, nulltable
 ----
@@ -130,7 +129,6 @@ NULL
 NULL
 NULL
 
-# TODO: differs from postgres (returns 4 null rows)
 query T
 SELECT hello[NULL:length+NULL] FROM lists, hello
 ----
@@ -139,7 +137,6 @@ SELECT hello[NULL:length+NULL] FROM lists, hello
 [h, e, l, l, o]
 [h, e, l, l, o]
 
-# TODO: differs from postgres (returns 4 null rows)
 query T
 SELECT hello[off:NULL+off] FROM lists, hello
 ----
@@ -156,7 +153,6 @@ NULL
 NULL
 NULL
 
-# TODO: differs from postgres (does not allow null+null, returns 4 null rows for [null:null])
 query T
 SELECT hello[NULL:NULL+NULL] FROM lists, hello
 ----
@@ -182,7 +178,6 @@ NULL
 NULL
 
 # fixed slice
-# TODO: why do we use null instead of an empty list for negative indexes that go below len(list)?
 query T
 SELECT s[-2:] FROM lists
 ----
@@ -201,7 +196,6 @@ SELECT s[0:1] FROM lists
 NULL
 
 # negative offset and negative length
-# TODO: why do we use null instead of an empty list for negative indexes that go below len(list)?
 query T
 SELECT s[-4:-2] FROM lists
 ----
@@ -253,7 +247,6 @@ SELECT s[(2147483647-1):-1] FROM lists
 []
 NULL
 
-# TODO: why do we use null instead of an empty list for negative indexes that go below len(list)?
 query T
 SELECT s[(-2147483646-1):-1] FROM lists
 ----
@@ -262,7 +255,6 @@ NULL
 NULL
 NULL
 
-# TODO: why do we use null instead of an empty list for negative indexes that go below len(list)?
 query T
 SELECT s[(-2147483646-1):-2147483647] FROM lists
 ----

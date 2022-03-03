@@ -82,7 +82,6 @@ SELECT a[-3:-1] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
 ----
 [42, 43]
 
-# TODO: why do we use null instead of an empty list for negative indexes that go below len(list)?
 query T
 SELECT a[-5:] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
 ----

@@ -134,7 +134,6 @@ NULL
 NULL
 NULL
 
-# TODO: differs from postgres (returns 4 null rows)
 query T
 SELECT 'hello'[NULL:length+NULL] FROM strings
 ----
@@ -143,7 +142,6 @@ hello
 hello
 hello
 
-# TODO: differs from postgres (returns 4 null rows)
 query T
 SELECT 'hello'[off:NULL+off] FROM strings
 ----
@@ -152,7 +150,6 @@ hello
 hello
 hello
 
-# TODO: differs from postgres (returns 4 null rows)
 query T
 SELECT 'hello'[off+1:NULL+off] FROM strings
 ----
@@ -169,7 +166,6 @@ NULL
 NULL
 NULL
 
-# TODO: differs from postgres (returns 4 null rows)
 query T
 SELECT 'hello'[NULL:NULL+NULL] FROM strings
 ----
@@ -195,7 +191,6 @@ NULL
 NULL
 
 # fixed slice
-# TODO: why do we use null instead of an empty string for negative indexes that go below len(string)?
 query T
 SELECT s[-2:] FROM strings
 ----
@@ -214,7 +209,6 @@ b
 NULL
 
 # negative offset and negative length
-# TODO: why do we use null instead of an empty string for negative indexes that go below len(string)?
 query T
 SELECT s[-4:-2] FROM strings
 ----
@@ -258,7 +252,6 @@ SELECT s[(2147483647-1):-1] FROM strings
 (empty)
 NULL
 
-# TODO: why do we use null instead of an empty string for negative indexes that go below len(string)?
 query T
 SELECT s[(-2147483646-1):-1] FROM strings
 ----
@@ -267,7 +260,6 @@ NULL
 NULL
 NULL
 
-# TODO: why do we use null instead of an empty string for negative indexes that go below len(string)?
 query T
 SELECT s[(-2147483646-1):-2147483647] FROM strings
 ----
