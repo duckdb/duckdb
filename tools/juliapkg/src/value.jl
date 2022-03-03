@@ -16,10 +16,10 @@ function _destroy_value(val::Value)
         duckdb_destroy_value(val.handle)
     end
     val.handle = C_NULL
+    return
 end
 
-GetValue(val::Value, ::Type{T}) where {T <: Int64} =
-    duckdb_get_int64(val.handle)
+GetValue(val::Value, ::Type{T}) where {T <: Int64} = duckdb_get_int64(val.handle)
 function GetValue(val::Value, ::Type{T}) where {T}
-	throw(NotImplementedException("Unsupported type for GetValue"))
+    throw(NotImplementedException("Unsupported type for GetValue"))
 end

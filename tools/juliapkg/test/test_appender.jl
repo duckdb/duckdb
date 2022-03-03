@@ -1,29 +1,29 @@
 
 @testset "Appender Error" begin
-	db = DBInterface.connect(DuckDB.DB)
-	con = DBInterface.connect(db)
+    db = DBInterface.connect(DuckDB.DB)
+    con = DBInterface.connect(db)
 
-	@test_throws DuckDB.QueryException DuckDB.Appender(db, "nonexistanttable")
-	@test_throws DuckDB.QueryException DuckDB.Appender(con, "t")
+    @test_throws DuckDB.QueryException DuckDB.Appender(db, "nonexistanttable")
+    @test_throws DuckDB.QueryException DuckDB.Appender(con, "t")
 end
 
 @testset "Appender Usage" begin
-	db = DBInterface.connect(DuckDB.DB)
+    db = DBInterface.connect(DuckDB.DB)
 
-	DBInterface.execute(db, "CREATE TABLE integers(i INTEGER)")
+    DBInterface.execute(db, "CREATE TABLE integers(i INTEGER)")
 
-	appender = DuckDB.Appender(db, "integers")
-	DuckDB.close(appender)
-	DuckDB.close(appender)
+    appender = DuckDB.Appender(db, "integers")
+    DuckDB.close(appender)
+    DuckDB.close(appender)
 
-	appender = DuckDB.Appender(db, "integers")
-	for i in 0:9
-		DuckDB.Append(appender, i)
-		DuckDB.EndRow(appender)
-	end
-	DuckDB.Flush(appender)
+    appender = DuckDB.Appender(db, "integers")
+    for i in 0:9
+        DuckDB.Append(appender, i)
+        DuckDB.EndRow(appender)
+    end
+    DuckDB.Flush(appender)
 
-	results = DBInterface.execute(db, "SELECT * FROM integers")
+    results = DBInterface.execute(db, "SELECT * FROM integers")
     df = DataFrame(results)
     @test names(df) == ["i"]
     @test size(df, 1) == 10

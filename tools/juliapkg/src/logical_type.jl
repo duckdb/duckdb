@@ -5,7 +5,7 @@ mutable struct LogicalType
     handle::duckdb_logical_type
 
     function LogicalType(type::DUCKDB_TYPE)
-    	handle = duckdb_create_logical_type(type)
+        handle = duckdb_create_logical_type(type)
         result = new(handle)
         finalizer(_destroy_type, result)
         return result
@@ -17,4 +17,5 @@ function _destroy_type(type::LogicalType)
         duckdb_destroy_logical_type(type.handle)
     end
     type.handle = C_NULL
+    return
 end

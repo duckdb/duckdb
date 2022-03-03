@@ -81,86 +81,86 @@ function duckdb_disconnect(connection)
     return ccall((:duckdb_disconnect, libduckdb), Cvoid, (Ref{duckdb_connection},), connection)
 end
 
-# #=
-# //===--------------------------------------------------------------------===//
-# // Configuration
-# //===--------------------------------------------------------------------===//
-# =#
-#
-# """
-# 	duckdb_create_config(config)
-# Initializes an empty configuration object that can be used to provide start-up options for the DuckDB instance
-# through `duckdb_open_ext`.
-# This will always succeed unless there is a malloc failure.
-# * `out_config`: The result configuration object.
-# * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-# """
-# function duckdb_create_config(config)
-#     return ccall((:duckdb_create_config, libduckdb), Int32, (Ptr{Cvoid},), config)
-# end
-#
-# """
-# 	duckdb_config_count()
-# This returns the total amount of configuration options available for usage with `duckdb_get_config_flag`.
-# This should not be called in a loop as it internally loops over all the options.
-# * returns: The amount of config options available.
-# """
-# function duckdb_config_count()
-#     return ccall((:duckdb_config_count, libduckdb), Int32, ())
-# end
-#
-# """
-# 	duckdb_get_config_flag(index,out_name,out_description)
-# Obtains a human-readable name and description of a specific configuration option. This can be used to e.g.
-# display configuration options. This will succeed unless `index` is out of range (i.e. `>= duckdb_config_count`).
-# The result name or description MUST NOT be freed.
-# * `index`: The index of the configuration option (between 0 and `duckdb_config_count`)
-# * `out_name`: A name of the configuration flag.
-# * `out_description`: A description of the configuration flag.
-# * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-# """
-# function duckdb_get_config_flag(index, out_name, out_description)
-#     return ccall(
-#         (:duckdb_get_config_flag, libduckdb),
-#         Int32,
-#         (Int32, Ptr{Ptr{UInt8}}, Ptr{Ptr{UInt8}}),
-#         index,
-#         out_name,
-#         out_description,
-#     )
-# end
-#
-# """
-# 	duckdb_set_config(config,name,option)
-# Sets the specified option for the specified configuration. The configuration option is indicated by name.
-# To obtain a list of config options, see `duckdb_get_config_flag`.
-# In the source code, configuration options are defined in `config.cpp`.
-# This can fail if either the name is invalid, or if the value provided for the option is invalid.
-# * `duckdb_config`: The configuration object to set the option on.
-# * `name`: The name of the configuration flag to set.
-# * `option`: The value to set the configuration flag to.
-# * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-# """
-# function duckdb_set_config(duckdb_config, name, option)
-#     return ccall(
-#         (:duckdb_set_config, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Ptr{UInt8}, Ptr{UInt8}),
-#         duckdb_config,
-#         name,
-#         option,
-#     )
-# end
-#
-# """
-# 	duckdb_destroy_config(config)
-# Destroys the specified configuration option and de-allocates all memory allocated for the object.
-# * `config`: The configuration object to destroy.
-# """
-# function duckdb_destroy_config(config)
-#     return ccall((:duckdb_destroy_config, libduckdb), Cvoid, (Ptr{Cvoid},), config)
-# end
-#
+#=
+//===--------------------------------------------------------------------===//
+// Configuration
+//===--------------------------------------------------------------------===//
+=#
+
+"""
+	duckdb_create_config(config)
+Initializes an empty configuration object that can be used to provide start-up options for the DuckDB instance
+through `duckdb_open_ext`.
+This will always succeed unless there is a malloc failure.
+* `out_config`: The result configuration object.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_create_config(config)
+    return ccall((:duckdb_create_config, libduckdb), Int32, (Ref{duckdb_config},), config)
+end
+
+"""
+	duckdb_config_count()
+This returns the total amount of configuration options available for usage with `duckdb_get_config_flag`.
+This should not be called in a loop as it internally loops over all the options.
+* returns: The amount of config options available.
+"""
+function duckdb_config_count()
+    return ccall((:duckdb_config_count, libduckdb), Int32, ())
+end
+
+"""
+	duckdb_get_config_flag(index,out_name,out_description)
+Obtains a human-readable name and description of a specific configuration option. This can be used to e.g.
+display configuration options. This will succeed unless `index` is out of range (i.e. `>= duckdb_config_count`).
+The result name or description MUST NOT be freed.
+* `index`: The index of the configuration option (between 0 and `duckdb_config_count`)
+* `out_name`: A name of the configuration flag.
+* `out_description`: A description of the configuration flag.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_get_config_flag(index, out_name, out_description)
+    return ccall(
+        (:duckdb_get_config_flag, libduckdb),
+        Int32,
+        (Int32, Ptr{Ptr{UInt8}}, Ptr{Ptr{UInt8}}),
+        index,
+        out_name,
+        out_description,
+    )
+end
+
+"""
+	duckdb_set_config(config,name,option)
+Sets the specified option for the specified configuration. The configuration option is indicated by name.
+To obtain a list of config options, see `duckdb_get_config_flag`.
+In the source code, configuration options are defined in `config.cpp`.
+This can fail if either the name is invalid, or if the value provided for the option is invalid.
+* `duckdb_config`: The configuration object to set the option on.
+* `name`: The name of the configuration flag to set.
+* `option`: The value to set the configuration flag to.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_set_config(config, name, option)
+    return ccall(
+        (:duckdb_set_config, libduckdb),
+        Int32,
+        (duckdb_config, Ptr{UInt8}, Ptr{UInt8}),
+        config,
+        name,
+        option,
+    )
+end
+
+"""
+	duckdb_destroy_config(config)
+Destroys the specified configuration option and de-allocates all memory allocated for the object.
+* `config`: The configuration object to destroy.
+"""
+function duckdb_destroy_config(config)
+    return ccall((:duckdb_destroy_config, libduckdb), Cvoid, (Ref{duckdb_config},), config)
+end
+
 # #=
 # //===--------------------------------------------------------------------===//
 # // Query Execution
@@ -1184,12 +1184,7 @@ Destroys the value and de-allocates all memory allocated for that type.
 * value: The value to destroy.
 """
 function duckdb_destroy_value(handle)
-    return ccall(
-        (:duckdb_destroy_value, libduckdb),
-        Cvoid,
-        (Ref{duckdb_value},),
-        handle,
-    )
+    return ccall((:duckdb_destroy_value, libduckdb), Cvoid, (Ref{duckdb_value},), handle)
 end
 
 """
@@ -1200,12 +1195,7 @@ The result must be destroyed with `duckdb_free`.
 * returns: The string value. This must be destroyed with `duckdb_free`.
 """
 function duckdb_get_varchar(handle)
-    return ccall(
-        (:duckdb_get_varchar, libduckdb),
-        Ptr{UInt8},
-        (duckdb_value,),
-        handle,
-    )
+    return ccall((:duckdb_get_varchar, libduckdb), Ptr{UInt8}, (duckdb_value,), handle)
 end
 
 """
@@ -1215,12 +1205,7 @@ Obtains an int64 of the given value.
 * returns: The int64 value, or 0 if no conversion is possible
 """
 function duckdb_get_int64(handle)
-    return ccall(
-        (:duckdb_get_int64, libduckdb),
-        Int64,
-        (duckdb_value,),
-        handle,
-    )
+    return ccall((:duckdb_get_int64, libduckdb), Int64, (duckdb_value,), handle)
 end
 
 #=
@@ -1238,12 +1223,7 @@ This should not be used with `DUCKDB_TYPE_DECIMAL`.
 * returns: The logical type type.
 """
 function duckdb_create_logical_type(type)
-    return ccall(
-        (:duckdb_create_logical_type, libduckdb),
-        duckdb_logical_type,
-        (Int32,),
-        type,
-    )
+    return ccall((:duckdb_create_logical_type, libduckdb), duckdb_logical_type, (Int32,), type)
 end
 
 """
@@ -1253,12 +1233,7 @@ Retrieves the type class of a `duckdb_logical_type`.
 * returns: The type id
 """
 function duckdb_get_type_id(handle)
-    return ccall(
-        (:duckdb_get_type_id, libduckdb),
-        Int32,
-        (duckdb_logical_type,),
-        handle,
-    )
+    return ccall((:duckdb_get_type_id, libduckdb), Int32, (duckdb_logical_type,), handle)
 end
 
 """
@@ -1267,12 +1242,7 @@ Destroys the logical type and de-allocates all memory allocated for that type.
 * type: The logical type to destroy.
 """
 function duckdb_destroy_logical_type(handle)
-    return ccall(
-        (:duckdb_destroy_logical_type, libduckdb),
-        Cvoid,
-        (Ref{duckdb_logical_type},),
-        handle,
-    )
+    return ccall((:duckdb_destroy_logical_type, libduckdb), Cvoid, (Ref{duckdb_logical_type},), handle)
 end
 
 #=
@@ -1293,7 +1263,7 @@ function duckdb_create_data_chunk(types, column_count)
         duckdb_data_chunk,
         (Ptr{duckdb_logical_type}, UInt64),
         types,
-        column_count,
+        column_count
     )
 end
 
@@ -1303,12 +1273,7 @@ Destroys the data chunk and de-allocates all memory allocated for that chunk.
 * chunk: The data chunk to destroy.
 """
 function duckdb_destroy_data_chunk(chunk)
-    return ccall(
-        (:duckdb_destroy_data_chunk, libduckdb),
-        Cvoid,
-        (Ref{duckdb_data_chunk},),
-        chunk,
-    )
+    return ccall((:duckdb_destroy_data_chunk, libduckdb), Cvoid, (Ref{duckdb_data_chunk},), chunk)
 end
 
 """
@@ -1317,12 +1282,7 @@ Resets a data chunk, clearing the validity masks and setting the cardinality of 
 * chunk: The data chunk to reset.
 """
 function duckdb_data_chunk_reset(chunk)
-    return ccall(
-        (:duckdb_data_chunk_reset, libduckdb),
-        Cvoid,
-        (duckdb_data_chunk,),
-        chunk,
-    )
+    return ccall((:duckdb_data_chunk_reset, libduckdb), Cvoid, (duckdb_data_chunk,), chunk)
 end
 
 """
@@ -1332,12 +1292,7 @@ Retrieves the number of columns in a data chunk.
 * returns: The number of columns in the data chunk
 """
 function duckdb_data_chunk_get_column_count(chunk)
-    return ccall(
-        (:duckdb_data_chunk_get_column_count, libduckdb),
-        UInt64,
-        (duckdb_data_chunk,),
-        chunk,
-    )
+    return ccall((:duckdb_data_chunk_get_column_count, libduckdb), UInt64, (duckdb_data_chunk,), chunk)
 end
 
 
@@ -1348,12 +1303,7 @@ Retrieves the current number of tuples in a data chunk.
 * returns: The number of tuples in the data chunk
 """
 function duckdb_data_chunk_get_size(chunk)
-    return ccall(
-        (:duckdb_data_chunk_get_size, libduckdb),
-        UInt64,
-        (duckdb_data_chunk,),
-        chunk,
-    )
+    return ccall((:duckdb_data_chunk_get_size, libduckdb), UInt64, (duckdb_data_chunk,), chunk)
 end
 
 """
@@ -1363,13 +1313,7 @@ Sets the current number of tuples in a data chunk.
 * size: The number of tuples in the data chunk
 """
 function duckdb_data_chunk_set_size(chunk, size)
-    return ccall(
-        (:duckdb_data_chunk_set_size, libduckdb),
-        Cvoid,
-        (duckdb_data_chunk, UInt64),
-        chunk,
-        size
-    )
+    return ccall((:duckdb_data_chunk_set_size, libduckdb), Cvoid, (duckdb_data_chunk, UInt64), chunk, size)
 end
 
 """
@@ -1401,13 +1345,7 @@ The pointer represents a dense array of `duckdb_data_chunk_get_size(size)` value
 * returns: The data pointer
 """
 function duckdb_data_chunk_get_data(chunk, col_idx)
-    return ccall(
-        (:duckdb_data_chunk_get_data, libduckdb),
-        Ptr{Cvoid},
-        (duckdb_data_chunk, UInt64),
-        chunk,
-        col_idx
-    )
+    return ccall((:duckdb_data_chunk_get_data, libduckdb), Ptr{Cvoid}, (duckdb_data_chunk, UInt64), chunk, col_idx)
 end
 
 """
@@ -1429,13 +1367,7 @@ bool is_valid = validity_mask[entry_idx] & (1 << idx_in_entry);
 * returns: The pointer to the validity mask, or NULL if no validity mask is present
 """
 function duckdb_data_chunk_get_validity(chunk, col_idx)
-    return ccall(
-        (:duckdb_data_chunk_get_validity, libduckdb),
-        Ptr{UInt64},
-        (duckdb_data_chunk, UInt64),
-        chunk,
-        col_idx
-    )
+    return ccall((:duckdb_data_chunk_get_validity, libduckdb), Ptr{UInt64}, (duckdb_data_chunk, UInt64), chunk, col_idx)
 end
 
 """
@@ -1469,11 +1401,7 @@ The return value should be destroyed with `duckdb_destroy_table_function`.
 * returns: The table function object.
 """
 function duckdb_create_table_function()
-    return ccall(
-        (:duckdb_create_table_function, libduckdb),
-        duckdb_table_function,
-        (),
-    )
+    return ccall((:duckdb_create_table_function, libduckdb), duckdb_table_function, ())
 end
 
 """
@@ -1482,12 +1410,7 @@ Destroys the given table function object.
 * table_function: The table function to destroy
 """
 function duckdb_destroy_table_function(func)
-    return ccall(
-        (:duckdb_destroy_table_function, libduckdb),
-        Cvoid,
-        (Ref{duckdb_table_function},),
-        func,
-    )
+    return ccall((:duckdb_destroy_table_function, libduckdb), Cvoid, (Ref{duckdb_table_function},), func)
 end
 
 """
@@ -1497,13 +1420,7 @@ Sets the name of the given table function.
 * name: The name of the table function
 """
 function duckdb_table_function_set_name(func, name)
-    return ccall(
-        (:duckdb_table_function_set_name, libduckdb),
-        Cvoid,
-        (duckdb_table_function, Ptr{UInt8}),
-        func,
-        name,
-    )
+    return ccall((:duckdb_table_function_set_name, libduckdb), Cvoid, (duckdb_table_function, Ptr{UInt8}), func, name)
 end
 
 """
@@ -1518,7 +1435,7 @@ function duckdb_table_function_add_parameter(func, type)
         Cvoid,
         (duckdb_table_function, duckdb_logical_type),
         func,
-        type,
+        type
     )
 end
 
@@ -1552,7 +1469,7 @@ function duckdb_table_function_set_bind(table_func, bind_func)
         Cvoid,
         (duckdb_table_function, Ptr{Cvoid}),
         table_func,
-        bind_func,
+        bind_func
     )
 end
 
@@ -1568,7 +1485,7 @@ function duckdb_table_function_set_init(table_func, init_func)
         Cvoid,
         (duckdb_table_function, Ptr{Cvoid}),
         table_func,
-        init_func,
+        init_func
     )
 end
 
@@ -1585,7 +1502,7 @@ function duckdb_table_function_set_function(table_func, func)
         Cvoid,
         (duckdb_table_function, Ptr{Cvoid}),
         table_func,
-        func,
+        func
     )
 end
 
@@ -1607,7 +1524,7 @@ function duckdb_register_table_function(con, func)
         Int32,
         (duckdb_connection, duckdb_table_function),
         con,
-        func,
+        func
     )
 end
 
@@ -1624,12 +1541,7 @@ Retrieves the extra info of the function as set in `duckdb_table_function_set_ex
 * returns: The extra info
 """
 function duckdb_bind_get_extra_info(bind_info)
-    return ccall(
-        (:duckdb_bind_get_extra_info, libduckdb),
-        Ptr{Cvoid},
-        (duckdb_bind_info, ),
-        bind_info,
-    )
+    return ccall((:duckdb_bind_get_extra_info, libduckdb), Ptr{Cvoid}, (duckdb_bind_info,), bind_info)
 end
 
 """
@@ -1657,12 +1569,7 @@ Retrieves the number of regular (non-named) parameters to the function.
 * returns: The number of parameters
 """
 function duckdb_bind_get_parameter_count(bind_info)
-    return ccall(
-        (:duckdb_bind_get_parameter_count, libduckdb),
-        Int32,
-        (duckdb_bind_info,),
-        bind_info
-    )
+    return ccall((:duckdb_bind_get_parameter_count, libduckdb), Int32, (duckdb_bind_info,), bind_info)
 end
 
 """
@@ -1675,13 +1582,7 @@ The result must be destroyed with `duckdb_destroy_value`.
 * returns: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
 """
 function duckdb_bind_get_parameter(bind_info, index)
-    return ccall(
-        (:duckdb_bind_get_parameter, libduckdb),
-        duckdb_value,
-        (duckdb_bind_info, Int32),
-        bind_info,
-        index
-    )
+    return ccall((:duckdb_bind_get_parameter, libduckdb), duckdb_value, (duckdb_bind_info, Int32), bind_info, index)
 end
 
 """
@@ -1716,12 +1617,7 @@ Retrieves the extra info of the function as set in `duckdb_table_function_set_ex
 * returns: The extra info
 """
 function duckdb_init_get_extra_info(info)
-    return ccall(
-        (:duckdb_init_get_extra_info, libduckdb),
-        Ptr{Cvoid},
-        (duckdb_init_info, ),
-        info,
-    )
+    return ccall((:duckdb_init_get_extra_info, libduckdb), Ptr{Cvoid}, (duckdb_init_info,), info)
 end
 
 """
@@ -1734,12 +1630,7 @@ For tracking state, use the init data instead.
 * returns: The bind data object
 """
 function duckdb_init_get_bind_data(info)
-    return ccall(
-        (:duckdb_init_get_bind_data, libduckdb),
-        Ptr{Cvoid},
-        (duckdb_init_info, ),
-        info,
-    )
+    return ccall((:duckdb_init_get_bind_data, libduckdb), Ptr{Cvoid}, (duckdb_init_info,), info)
 end
 
 """
@@ -1772,12 +1663,7 @@ Retrieves the extra info of the function as set in `duckdb_table_function_set_ex
 * returns: The extra info
 """
 function duckdb_function_get_extra_info(info)
-    return ccall(
-        (:duckdb_function_get_extra_info, libduckdb),
-        Ptr{Cvoid},
-        (duckdb_function_info, ),
-        info,
-    )
+    return ccall((:duckdb_function_get_extra_info, libduckdb), Ptr{Cvoid}, (duckdb_function_info,), info)
 end
 
 """
@@ -1790,12 +1676,7 @@ For tracking state, use the init data instead.
 * returns: The bind data object
 """
 function duckdb_function_get_bind_data(info)
-    return ccall(
-        (:duckdb_function_get_bind_data, libduckdb),
-        Ptr{Cvoid},
-        (duckdb_function_info, ),
-        info,
-    )
+    return ccall((:duckdb_function_get_bind_data, libduckdb), Ptr{Cvoid}, (duckdb_function_info,), info)
 end
 
 """
@@ -1805,12 +1686,7 @@ Gets the init data set by `duckdb_bind_set_init_data` during the bind.
 * returns: The init data object
 """
 function duckdb_function_get_init_data(info)
-    return ccall(
-        (:duckdb_function_get_init_data, libduckdb),
-        Ptr{Cvoid},
-        (duckdb_function_info, ),
-        info,
-    )
+    return ccall((:duckdb_function_get_init_data, libduckdb), Ptr{Cvoid}, (duckdb_function_info,), info)
 end
 
 #=
@@ -1844,7 +1720,7 @@ function duckdb_appender_create(connection, schema, table, out_appender)
         connection,
         schema,
         table,
-        out_appender,
+        out_appender
     )
 end
 
@@ -1918,13 +1794,7 @@ Append a bool value to the appender.
 DUCKDB_API duckdb_state duckdb_append_bool(duckdb_appender appender, bool value);
 """
 function duckdb_append_bool(appender, value)
-    return ccall(
-        (:duckdb_append_bool, libduckdb),
-        Int32,
-        (duckdb_appender, Int32),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_bool, libduckdb), Int32, (duckdb_appender, Int32), appender, value)
 end
 
 """
@@ -1932,13 +1802,7 @@ Append an int8_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_int8(duckdb_appender appender, int8_t value);
 """
 function duckdb_append_int8(appender, value)
-    return ccall(
-        (:duckdb_append_int8, libduckdb),
-        Int32,
-        (duckdb_appender, Int16),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_int8, libduckdb), Int32, (duckdb_appender, Int16), appender, value)
 end
 
 """
@@ -1946,13 +1810,7 @@ Append an int16_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_int16(duckdb_appender appender, int16_t value);
 """
 function duckdb_append_int16(appender, value)
-    return ccall(
-        (:duckdb_append_int16, libduckdb),
-        Int32,
-        (duckdb_appender, Int16),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_int16, libduckdb), Int32, (duckdb_appender, Int16), appender, value)
 end
 
 """
@@ -1960,13 +1818,7 @@ Append an int32_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_int32(duckdb_appender appender, int32_t value);
 """
 function duckdb_append_int32(appender, value)
-    return ccall(
-        (:duckdb_append_int16, libduckdb),
-        Int32,
-        (duckdb_appender, Int32),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_int16, libduckdb), Int32, (duckdb_appender, Int32), appender, value)
 end
 
 """
@@ -1974,13 +1826,7 @@ Append an int64_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_int64(duckdb_appender appender, int64_t value);
 """
 function duckdb_append_int64(appender, value)
-    return ccall(
-        (:duckdb_append_int64, libduckdb),
-        Int32,
-        (duckdb_appender, Int64),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_int64, libduckdb), Int32, (duckdb_appender, Int64), appender, value)
 end
 
 """
@@ -1988,13 +1834,7 @@ Append a duckdb_hugeint value to the appender.
 DUCKDB_API duckdb_state duckdb_append_hugeint(duckdb_appender appender, duckdb_hugeint value);
 """
 function duckdb_append_hugeint(appender, value)
-    return ccall(
-        (:duckdb_append_hugeint, libduckdb),
-        Int32,
-        (duckdb_appender, Int64),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_hugeint, libduckdb), Int32, (duckdb_appender, Int64), appender, value)
 end
 
 """
@@ -2002,13 +1842,7 @@ Append a uint8_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_uint8(duckdb_appender appender, uint8_t value);
 """
 function duckdb_append_uint8(appender, value)
-    return ccall(
-        (:duckdb_append_uint8, libduckdb),
-        Int32,
-        (duckdb_appender, UInt16),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_uint8, libduckdb), Int32, (duckdb_appender, UInt16), appender, value)
 end
 
 """
@@ -2016,13 +1850,7 @@ Append a uint16_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_uint16(duckdb_appender appender, uint16_t value);
 """
 function duckdb_append_uint16(appender, value)
-    return ccall(
-        (:duckdb_append_uint16, libduckdb),
-        Int32,
-        (duckdb_appender, UInt16),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_uint16, libduckdb), Int32, (duckdb_appender, UInt16), appender, value)
 end
 
 """
@@ -2030,13 +1858,7 @@ Append a uint32_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_uint32(duckdb_appender appender, uint32_t value);
 """
 function duckdb_append_uint32(appender, value)
-    return ccall(
-        (:duckdb_append_uint32, libduckdb),
-        Int32,
-        (duckdb_appender, UInt32),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_uint32, libduckdb), Int32, (duckdb_appender, UInt32), appender, value)
 end
 
 """
@@ -2044,13 +1866,7 @@ Append a uint64_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_uint64(duckdb_appender appender, uint64_t value);
 """
 function duckdb_append_uint64(appender, value)
-    return ccall(
-        (:duckdb_append_uint64, libduckdb),
-        Int32,
-        (duckdb_appender, UInt64),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_uint64, libduckdb), Int32, (duckdb_appender, UInt64), appender, value)
 end
 
 """
@@ -2058,13 +1874,7 @@ Append a float value to the appender.
 DUCKDB_API duckdb_state duckdb_append_float(duckdb_appender appender, float value);
 """
 function duckdb_append_float(appender, value)
-    return ccall(
-        (:duckdb_append_float, libduckdb),
-        Int32,
-        (duckdb_appender, Float32),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_float, libduckdb), Int32, (duckdb_appender, Float32), appender, value)
 end
 
 """
@@ -2072,13 +1882,7 @@ Append a double value to the appender.
 DUCKDB_API duckdb_state duckdb_append_double(duckdb_appender appender, double value);
 """
 function duckdb_append_double(appender, value)
-    return ccall(
-        (:duckdb_append_double, libduckdb),
-        Int32,
-        (duckdb_appender, Float64),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_double, libduckdb), Int32, (duckdb_appender, Float64), appender, value)
 end
 
 """
@@ -2086,13 +1890,7 @@ Append a duckdb_date value to the appender.
 DUCKDB_API duckdb_state duckdb_append_date(duckdb_appender appender, duckdb_date value);
 """
 function duckdb_append_date(appender, value)
-    return ccall(
-        (:duckdb_append_date, libduckdb),
-        Int32,
-        (duckdb_appender, Int32),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_date, libduckdb), Int32, (duckdb_appender, Int32), appender, value)
 end
 
 """
@@ -2100,13 +1898,7 @@ Append a duckdb_time value to the appender.
 DUCKDB_API duckdb_state duckdb_append_time(duckdb_appender appender, duckdb_time value);
 """
 function duckdb_append_time(appender, value)
-    return ccall(
-        (:duckdb_append_time, libduckdb),
-        Int32,
-        (duckdb_appender, Int32),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_time, libduckdb), Int32, (duckdb_appender, Int32), appender, value)
 end
 
 """
@@ -2114,13 +1906,7 @@ Append a duckdb_timestamp value to the appender.
 DUCKDB_API duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value);
 """
 function duckdb_append_timestamp(appender, value)
-    return ccall(
-        (:duckdb_append_timestamp, libduckdb),
-        Int32,
-        (duckdb_appender, Int32),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_timestamp, libduckdb), Int32, (duckdb_appender, Int32), appender, value)
 end
 
 """
@@ -2128,13 +1914,7 @@ Append a duckdb_interval value to the appender.
 DUCKDB_API duckdb_state duckdb_append_interval(duckdb_appender appender, duckdb_interval value);
 """
 function duckdb_append_interval(appender, value)
-    return ccall(
-        (:duckdb_append_interval, libduckdb),
-        Int32,
-        (duckdb_appender, Int32),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_interval, libduckdb), Int32, (duckdb_appender, Int32), appender, value)
 end
 
 """
@@ -2142,13 +1922,7 @@ Append a varchar value to the appender.
 DUCKDB_API duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val);
 """
 function duckdb_append_varchar(appender, value)
-    return ccall(
-        (:duckdb_append_varchar, libduckdb),
-        Int32,
-        (duckdb_appender, Ptr{UInt8}),
-        appender,
-        value,
-    )
+    return ccall((:duckdb_append_varchar, libduckdb), Int32, (duckdb_appender, Ptr{UInt8}), appender, value)
 end
 
 """
@@ -2162,7 +1936,7 @@ function duckdb_append_varchar_length(appender, value, length)
         (duckdb_appender, Ptr{UInt8}, Int32),
         appender,
         value,
-        length,
+        length
     )
 end
 
@@ -2171,14 +1945,7 @@ Append a blob value to the appender.
 DUCKDB_API duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length);
 """
 function duckdb_append_blob(appender, data, length)
-    return ccall(
-        (:duckdb_append_blob, libduckdb),
-        Int32,
-        (duckdb_appender, Ptr{Cvoid}, Int32),
-        appender,
-        data,
-        length,
-    )
+    return ccall((:duckdb_append_blob, libduckdb), Int32, (duckdb_appender, Ptr{Cvoid}, Int32), appender, data, length)
 end
 
 """

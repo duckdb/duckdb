@@ -23,8 +23,9 @@ end
 function _close_stmt(stmt::Stmt)
     if stmt.handle != C_NULL
         duckdb_destroy_prepare(stmt.handle)
-        stmt.handle = C_NULL
     end
+    stmt.handle = C_NULL
+    return
 end
 
 DBInterface.getconnection(stmt::Stmt) = stmt.con

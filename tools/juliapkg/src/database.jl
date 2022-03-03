@@ -6,11 +6,11 @@ mutable struct DuckDBHandle
     handle::duckdb_database
     functions::Vector{Any}
 
-    function DuckDBHandle(f::AbstractString)
+    function DuckDBHandle(f::AbstractString, config::Config)
         f = String(isempty(f) ? f : expanduser(f))
         handle = Ref{duckdb_database}()
         error = Ref{Ptr{UInt8}}()
-        if duckdb_open_ext(f, handle, C_NULL, error) != DuckDBSuccess
+        if duckdb_open_ext(f, handle, config.handle, error) != DuckDBSuccess
             error_message = unsafe_string(error[])
             duckdb_free(error[])
             throw(ConnectionException(error_message))
@@ -27,7 +27,7 @@ function _close_database(db::DuckDBHandle)
     if db.handle != C_NULL
         duckdb_close(db.handle)
     end
-    db.handle = C_NULL
+    return db.handle = C_NULL
 end
 
 """
@@ -60,6 +60,7 @@ function _close_connection(con::Connection)
         duckdb_disconnect(con.handle)
     end
     con.handle = C_NULL
+    return
 end
 
 """
@@ -74,17 +75,21 @@ mutable struct DB <: DBInterface.Connection
     handle::DuckDBHandle
     main_connection::Connection
 
-    function DB(f::AbstractString)
-        handle = DuckDBHandle(f)
+    function DB(f::AbstractString, config::Config)
+        handle = DuckDBHandle(f, config)
         main_connection = Connection(handle)
         db = new(handle, main_connection)
         return db
+    end
+    function DB(f::AbstractString)
+    	return DB(f, Config())
     end
 end
 
 function close_database(db::DB)
     _close_connection(db.main_connection)
-    return _close_database(db.handle)
+    _close_database(db.handle)
+    return
 end
 
 const VECTOR_SIZE = duckdb_vector_size()
@@ -92,6 +97,7 @@ const VECTOR_SIZE = duckdb_vector_size()
 DB() = DB(":memory:")
 DBInterface.connect(::Type{DB}) = DB()
 DBInterface.connect(::Type{DB}, f::AbstractString) = DB(f)
+DBInterface.connect(::Type{DB}, f::AbstractString, config::Config) = DB(f, config)
 DBInterface.connect(db::DB) = Connection(db.handle)
 DBInterface.close!(db::DB) = close_database(db)
 DBInterface.close!(con::Connection) = _close_connection(con)
