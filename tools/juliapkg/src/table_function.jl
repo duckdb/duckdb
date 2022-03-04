@@ -3,7 +3,7 @@
 // Table Function Bind
 //===--------------------------------------------------------------------===//
 =#
-mutable struct BindInfo
+struct BindInfo
     handle::duckdb_bind_info
     main_function::Any
 
@@ -19,6 +19,10 @@ end
 
 function GetParameter(bind_info::BindInfo, index::Int64)
     return Value(duckdb_bind_get_parameter(bind_info.handle, index))
+end
+
+function AddResultColumn(bind_info::BindInfo, name::AbstractString, type::DataType)
+	AddResultColumn(bind_info, name, CreateLogicalType(type))
 end
 
 function AddResultColumn(bind_info::BindInfo, name::AbstractString, type::LogicalType)
@@ -75,11 +79,11 @@ mutable struct FunctionInfo
     end
 end
 
-function GetBindInfo(info::FunctionInfo)
+function GetBindInfo(info::FunctionInfo, ::Type{T})::T where {T}
     return unsafe_pointer_to_objref(duckdb_function_get_bind_data(info.handle))
 end
 
-function GetInitInfo(info::FunctionInfo)
+function GetInitInfo(info::FunctionInfo, ::Type{T})::T where {T}
     return unsafe_pointer_to_objref(duckdb_function_get_init_data(info.handle))
 end
 
@@ -159,9 +163,37 @@ function CreateTableFunction(
 end
 
 function CreateTableFunction(
+    con::Connection,
+    name::AbstractString,
+    parameters::Vector{DataType},
+    bind_func::Function,
+    init_func::Function,
+    main_func::Function,
+    extra_data::Any = missing
+)
+	parameter_types::Vector{LogicalType} = Vector()
+	for parameter_type in parameters
+		push!(parameter_types, CreateLogicalType(parameter_type))
+	end
+	CreateTableFunction(con, name, parameter_types, bind_func, init_func, main_func, extra_data)
+end
+
+function CreateTableFunction(
     db::DB,
     name::AbstractString,
     parameters::Vector{LogicalType},
+    bind_func::Function,
+    init_func::Function,
+    main_func::Function,
+    extra_data::Any = missing
+)
+    return CreateTableFunction(db.main_connection, name, parameters, bind_func, init_func, main_func)
+end
+
+function CreateTableFunction(
+    db::DB,
+    name::AbstractString,
+    parameters::Vector{DataType},
     bind_func::Function,
     init_func::Function,
     main_func::Function,

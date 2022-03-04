@@ -18,7 +18,7 @@ function DFBindFunction(info::DuckDB.BindInfo)
     # register the result columns
     for entry in names(df)
         # FIXME; actually get the type of the data frame
-        DuckDB.AddResultColumn(info, entry, DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_BIGINT))
+        DuckDB.AddResultColumn(info, entry, Int64)
     end
     return DFBindInfo(df)
 end
@@ -68,11 +68,10 @@ function RegisterDataFrame(db::DB, df::DataFrame, name::AbstractString)
 end
 
 function AddDataFrameScan(db::DB)
-    types = [DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_VARCHAR)]
     return DuckDB.CreateTableFunction(
         db.main_connection,
         "julia_df_scan",
-        types,
+        [String],
         DFBindFunction,
         DFInitFunction,
         DFScanFunction,

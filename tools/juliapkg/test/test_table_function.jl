@@ -8,7 +8,7 @@ mutable struct MyBindStruct
 end
 
 function MyBindFunction(info::DuckDB.BindInfo)
-    DuckDB.AddResultColumn(info, "forty_two", DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_BIGINT))
+    DuckDB.AddResultColumn(info, "forty_two", Int64)
 
     parameter = DuckDB.GetParameter(info, 0)
     number = DuckDB.GetValue(parameter, Int64)
@@ -24,15 +24,17 @@ mutable struct MyInitStruct
 end
 
 function MyInitFunction(info::DuckDB.InitInfo)
+#     GC.gc()
     return MyInitStruct()
 end
 
 function MyMainFunction(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
-    bind_info::MyBindStruct = DuckDB.GetBindInfo(info)
-    init_info::MyInitStruct = DuckDB.GetInitInfo(info)
+#     GC.gc()
+    bind_info = DuckDB.GetBindInfo(info, MyBindStruct)
+    init_info = DuckDB.GetInitInfo(info, MyInitStruct)
 
-    result_array::Vector{Int64} = DuckDB.GetArray(output, 0, Int64)
-    count::Int64 = 0
+    result_array = DuckDB.GetArray(output, 0, Int64)
+    count = 0
     for i in 1:(DuckDB.VECTOR_SIZE)
         if init_info.pos >= bind_info.count
             break
@@ -49,11 +51,9 @@ end
 @testset "Test custom table functions" begin
     con = DBInterface.connect(DuckDB.DB)
 
-    types = [DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_BIGINT)]
-    DuckDB.CreateTableFunction(con.main_connection, "forty_two", types, MyBindFunction, MyInitFunction, MyMainFunction)
+    DuckDB.CreateTableFunction(con, "forty_two", [Int64], MyBindFunction, MyInitFunction, MyMainFunction)
 
-    GC.enable(false)
-
+	GC.enable(false)
     # 3 elements
     results = DBInterface.execute(con, "SELECT * FROM forty_two(3)")
 
@@ -68,12 +68,9 @@ end
     df = DataFrame(results)
     @test df.cnt == [10000]
 
-    GC.enable(true)
-    GC.gc()
-
-    #     @time begin
-    #         results = DBInterface.execute(con, "SELECT SUM(forty_two) cnt FROM forty_two(10000000)")
-    #     end
-    #     df = DataFrame(results)
-    #     println(df)
+# 	@time begin
+# 		results = DBInterface.execute(con, "SELECT SUM(forty_two) cnt FROM forty_two(10000000)")
+# 	end
+# 	df = DataFrame(results)
+# 	println(df)
 end

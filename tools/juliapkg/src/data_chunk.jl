@@ -24,7 +24,7 @@ function GetArray(chunk::DataChunk, col_idx::Int64, ::Type{T})::Vector{T} where 
     return unsafe_wrap(Vector{T}, ptr, VECTOR_SIZE, own = false)
 end
 
-#
+# this is only required when we own the data chunk
 # function _destroy_data_chunk(chunk::DataChunk)
 #     if chunk.handle != C_NULL
 #         duckdb_destroy_data_chunk(chunk.handle)
