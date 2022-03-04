@@ -155,11 +155,10 @@ struct SQLState {
 };
 
 struct EnumClassHash {
-    template <typename T>
-    std::size_t operator()(T t) const
-    {
-        return static_cast<std::size_t>(t);
-    }
+	template <typename T>
+	std::size_t operator()(T t) const {
+		return static_cast<std::size_t>(t);
+	}
 };
 
 struct DiagRecord {
@@ -186,12 +185,8 @@ public:
 	std::string sql_diag_sqlstate;
 	// std::string sql_diag_subclass_origin;
 	// default id_diag
-	SQLSMALLINT rec_idx = -1;
 	std::string sql_diag_message_text;
 	std::stack<duckdb::idx_t> stack_msg_offset;
-
-private:
-	SQLSMALLINT number_chars_read = 0;
 };
 
 struct DiagHeader {

@@ -322,8 +322,6 @@ DiagRecord &DiagRecord::operator=(const DiagRecord &other) {
 		sql_diag_column_number = other.sql_diag_column_number;
 		sql_diag_native = other.sql_diag_native;
 		sql_diag_row_number = other.sql_diag_row_number;
-		rec_idx = other.rec_idx;
-		number_chars_read = other.number_chars_read;
 		stack_msg_offset = other.stack_msg_offset;
 	}
 	return *this;
@@ -347,7 +345,6 @@ std::string DiagRecord::GetMessage(SQLSMALLINT buff_length) {
 void DiagRecord::SetMessage(const std::string &new_msg) {
 	D_ASSERT(!new_msg.empty());
 	sql_diag_message_text = new_msg;
-	number_chars_read = 0;
 	ClearStackMsgOffset();
 }
 
