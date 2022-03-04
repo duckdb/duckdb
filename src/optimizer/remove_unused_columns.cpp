@@ -163,9 +163,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		if (!everything_referenced) {
 			auto &proj = (LogicalProjection &)op;
-			if (!proj.child_of_returning_DMS) {
-			    ClearUnusedExpressions(proj.expressions, proj.table_index);
-		    }
+			ClearUnusedExpressions(proj.expressions, proj.table_index);
 
 			if (proj.expressions.empty()) {
 				// nothing references the projected expressions
@@ -176,6 +174,15 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		}
 		// then recurse into the children of this projection
 		RemoveUnusedColumns remove(binder, context);
+		remove.VisitOperatorExpressions(op);
+		remove.VisitOperator(*op.children[0]);
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_INSERT: {
+		//! When RETURNING is used, a PROJECTION is the top level OPERATOR
+		//! We still need to project all values from the insert so the projection
+		//! on top of the INSERT can select from only that table values being inserted
+		RemoveUnusedColumns remove(binder, context, true);
 		remove.VisitOperatorExpressions(op);
 		remove.VisitOperator(*op.children[0]);
 		return;
