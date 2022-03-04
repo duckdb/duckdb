@@ -107,11 +107,11 @@ static void PragmaDisableUniqueJoin(ClientContext &context, const FunctionParame
 }
 
 static void PragmaEnablePerfectJoin(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).enable_unique_join = true;
+	ClientConfig::GetConfig(context).enable_perfect_join = true;
 }
 
 static void PragmaDisablePerfectJoin(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).enable_unique_join = false;
+	ClientConfig::GetConfig(context).enable_perfect_join = false;
 }
 
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
