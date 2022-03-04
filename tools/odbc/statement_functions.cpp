@@ -31,6 +31,7 @@ using duckdb::LogicalTypeId;
 using duckdb::OdbcDiagnostic;
 using duckdb::OdbcInterval;
 using duckdb::OdbcUtils;
+using duckdb::SQLStateType;
 using duckdb::Store;
 using duckdb::string_t;
 using duckdb::timestamp_t;
@@ -52,7 +53,8 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 		auto query = duckdb::OdbcUtils::ReadString(statement_text, text_length);
 		stmt->stmt = stmt->dbc->conn->Prepare(query);
 		if (!stmt->stmt->success) {
-			DiagRecord diag_rec(stmt->stmt->error, "42000", stmt->dbc->GetDataSourceName());
+			DiagRecord diag_rec(stmt->stmt->error, SQLStateType::SYNTAX_ERROR_OR_ACCESS_VIOLATION,
+			                    stmt->dbc->GetDataSourceName());
 			throw OdbcException("PrepareStmt", SQL_ERROR, diag_rec);
 		}
 		stmt->param_desc->ResetParams(stmt->stmt->n_param);
@@ -135,7 +137,7 @@ static void ValidateType(LogicalTypeId input, LogicalTypeId expected, duckdb::Od
 	if (input != expected) {
 		string msg = "Type mismatch error: received " + LogicalTypeIdToString(input) + ", but expected " +
 		             LogicalTypeIdToString(expected);
-		duckdb::DiagRecord diag_rec(msg, "07006", stmt->dbc->GetDataSourceName());
+		duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE, stmt->dbc->GetDataSourceName());
 		throw duckdb::OdbcException("ValidateType", SQL_ERROR, diag_rec);
 	}
 }
@@ -145,7 +147,7 @@ static void ThrowInvalidCast(const string &component, const LogicalType &from_ty
 	string msg = "Not implemented Error: Unimplemented type for cast (" + from_type.ToString() + " -> " +
 	             to_type.ToString() + ")";
 
-	duckdb::DiagRecord diag_rec(msg, "22007", stmt->dbc->GetDataSourceName());
+	duckdb::DiagRecord diag_rec(msg, SQLStateType::INVALID_DATATIME_FORMAT, stmt->dbc->GetDataSourceName());
 	throw duckdb::OdbcException(component, SQL_ERROR, diag_rec);
 }
 
@@ -163,7 +165,8 @@ static SQLRETURN GetInternalValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Va
 		}
 		return SQL_SUCCESS;
 	} catch (duckdb::Exception &ex) {
-		duckdb::DiagRecord diag_rec(std::string(ex.what()), "07006", stmt->dbc->GetDataSourceName());
+		duckdb::DiagRecord diag_rec(std::string(ex.what()), SQLStateType::RESTRICTED_DATA_TYPE,
+		                            stmt->dbc->GetDataSourceName());
 		throw duckdb::OdbcException("GetInternalValue", SQL_ERROR, diag_rec);
 	}
 }
@@ -176,7 +179,8 @@ static bool CastTimestampValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value
 		target = CAST_OP::template Operation<timestamp_t, TARGET_TYPE>(timestamp);
 		return true;
 	} catch (duckdb::Exception &ex) {
-		duckdb::DiagRecord diag_rec(std::string(ex.what()), "22007", stmt->dbc->GetDataSourceName());
+		duckdb::DiagRecord diag_rec(std::string(ex.what()), SQLStateType::INVALID_DATATIME_FORMAT,
+		                            stmt->dbc->GetDataSourceName());
 		throw duckdb::OdbcException("CastTimestampValue", SQL_ERROR, diag_rec);
 	}
 }
@@ -414,7 +418,8 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				auto str_input = string_t(val_str);
 				if (!TryCast::Operation<string_t, date_t>(str_input, date)) {
 					auto msg = CastExceptionText<string_t, date_t>(str_input);
-					duckdb::DiagRecord diag_rec(msg, "07006", stmt->dbc->GetDataSourceName());
+					duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE,
+					                            stmt->dbc->GetDataSourceName());
 					throw duckdb::OdbcException("GetDataStmtResult", SQL_ERROR, diag_rec);
 				}
 				break;
@@ -471,7 +476,8 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				auto str_input = string_t(val_str);
 				if (!TryCast::Operation<string_t, dtime_t>(str_input, time)) {
 					auto msg = CastExceptionText<string_t, dtime_t>(str_input);
-					duckdb::DiagRecord diag_rec(msg, "07006", stmt->dbc->GetDataSourceName());
+					duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE,
+					                            stmt->dbc->GetDataSourceName());
 					throw duckdb::OdbcException("GetDataStmtResult", SQL_ERROR, diag_rec);
 				}
 				break;
@@ -511,7 +517,8 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				auto date_input = val.GetValue<date_t>();
 				if (!TryCast::Operation<date_t, timestamp_t>(date_input, timestamp)) {
 					auto msg = CastExceptionText<date_t, timestamp_t>(date_input);
-					duckdb::DiagRecord diag_rec(msg, "07006", stmt->dbc->GetDataSourceName());
+					duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE,
+					                            stmt->dbc->GetDataSourceName());
 					throw duckdb::OdbcException("GetDataStmtResult", SQL_ERROR, diag_rec);
 				}
 				break;
@@ -521,7 +528,8 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				auto str_input = string_t(val_str);
 				if (!TryCast::Operation<string_t, timestamp_t>(str_input, timestamp)) {
 					auto msg = CastExceptionText<string_t, timestamp_t>(str_input);
-					duckdb::DiagRecord diag_rec(msg, "07006", stmt->dbc->GetDataSourceName());
+					duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE,
+					                            stmt->dbc->GetDataSourceName());
 					throw duckdb::OdbcException("GetDataStmtResult", SQL_ERROR, diag_rec);
 				}
 				break;
@@ -765,7 +773,8 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		}
 		// TODO other types
 		default:
-			duckdb::DiagRecord diag_rec("Unsupported type", "07006", stmt->dbc->GetDataSourceName());
+			duckdb::DiagRecord diag_rec("Unsupported type", SQLStateType::RESTRICTED_DATA_TYPE,
+			                            stmt->dbc->GetDataSourceName());
 			throw duckdb::OdbcException("GetDataStmtResult", SQL_ERROR, diag_rec);
 		} // end switch "(target_type)": SQL_C_TYPE_TIMESTAMP
 	});

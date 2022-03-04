@@ -8,6 +8,7 @@
 #include "duckdb/common/helper.hpp"
 
 using duckdb::OdbcUtils;
+using duckdb::SQLStateType;
 using std::ptrdiff_t;
 
 SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
@@ -959,7 +960,8 @@ SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALL
 				dbc->conn->Rollback();
 				return SQL_SUCCESS;
 			} catch (duckdb::Exception &ex) {
-				duckdb::DiagRecord diag_rec(std::string(ex.what()), "HY115", dbc->GetDataSourceName());
+				duckdb::DiagRecord diag_rec(std::string(ex.what()), SQLStateType::SQLENDTRAN_ASYNC_FUNCT_EXECUTION,
+				                            dbc->GetDataSourceName());
 				throw duckdb::OdbcException("SQLEndTran", SQL_ERROR, diag_rec);
 			}
 		default:
