@@ -172,18 +172,19 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
                                             GlobalSinkState &gstate) const {
 	auto &sink = (HashJoinGlobalState &)gstate;
 	// check for possible perfect hash table
+	bool use_perfect_hash = false;
 	if (sink.perfect_join_executor) {
-		auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin();
+		use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin();
 		if (use_perfect_hash) {
 			D_ASSERT(sink.hash_table->equality_types.size() == 1);
 			auto key_type = sink.hash_table->equality_types[0];
 			use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable(key_type);
 		}
-		// In case of a large build side or duplicates, abort to a regular hash join
-		if (!use_perfect_hash) {
-			sink.perfect_join_executor.reset();
-			sink.hash_table->Finalize();
-		}
+	}
+	// In case of a large build side or duplicates, abort to a regular hash join
+	if (!use_perfect_hash) {
+		sink.perfect_join_executor.reset();
+		sink.hash_table->Finalize();
 	}
 	// Add this info to show in the profile
 	if (sink.hash_table->has_unique_keys) {
