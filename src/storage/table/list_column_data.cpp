@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/list_column_data.hpp"
+
 #include "duckdb/storage/statistics/list_statistics.hpp"
 
 namespace duckdb {

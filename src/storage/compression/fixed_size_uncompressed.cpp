@@ -138,13 +138,20 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 
 template <class T>
 void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	// auto &scan_state = (FixedSizeScanState &)*state.scan_state;
-	// auto source_data = scan_state.handle->node->buffer + segment.GetBlockOffset();
+	auto &scan_state = (FixedSizeScanState &)*state.scan_state;
+	auto start = segment.GetRelativeIndex(state.row_index);
 
-	// copy the data from the base table
-	// result.SetVectorType(VectorType::FLAT_VECTOR);
-	// FlatVector::SetData(result, source_data);
-	FixedSizeScanPartial<T>(segment, state, scan_count, result, 0);
+	auto data = scan_state.handle->node->buffer + segment.GetBlockOffset();
+	auto source_data = data + start * sizeof(T);
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	if (std::is_same<T, list_entry_t>()) {
+		// lists require a copy to be made
+		FixedSizeScanPartial<T>(segment, state, scan_count, result, 0);
+	} else {
+		// zero-copy scan
+		FlatVector::SetData(result, source_data);
+	}
 }
 
 //===--------------------------------------------------------------------===//
