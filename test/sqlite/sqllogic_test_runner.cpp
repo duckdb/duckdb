@@ -160,6 +160,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("uncompressed");
 		result.push_back("rle");
 		result.push_back("bitpacking");
+		result.push_back("dictionary");
 		collection = true;
 	}
 	return collection;
