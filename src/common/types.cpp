@@ -470,13 +470,13 @@ string LogicalType::ToString() const {
 		}
 		auto &child_types = StructType::GetChildTypes(*this);
 		if (child_types.empty()) {
-			return "MAP<?>";
+			return "MAP(?)";
 		}
 		if (child_types.size() != 2) {
 			throw InternalException("Map needs exactly two child elements");
 		}
-		return "MAP<" + ListType::GetChildType(child_types[0].second).ToString() + ", " +
-		       ListType::GetChildType(child_types[1].second).ToString() + ">";
+		return "MAP(" + ListType::GetChildType(child_types[0].second).ToString() + ", " +
+		       ListType::GetChildType(child_types[1].second).ToString() + ")";
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (!type_info_) {
