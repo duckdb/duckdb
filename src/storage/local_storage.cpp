@@ -484,4 +484,10 @@ void LocalStorage::FetchChunk(DataTable *table, Vector &row_ids, idx_t count, Da
 	dst_chunk.Slice(chunk, sel, count);
 }
 
+vector<unique_ptr<Index>> &LocalStorage::GetIndexes(DataTable *table) {
+	auto storage = GetStorage(table);
+
+	return storage->indexes;
+}
+
 } // namespace duckdb

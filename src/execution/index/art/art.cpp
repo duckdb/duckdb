@@ -269,12 +269,12 @@ void ART::VerifyAppend(DataChunk &chunk) {
 	VerifyExistence(chunk, VerifyExistenceType::APPEND);
 }
 
-void ART::VerifyAppendForeignKey(DataChunk &chunk) {
-	VerifyExistence(chunk, VerifyExistenceType::APPEND_FK);
+void ART::VerifyAppendForeignKey(DataChunk &chunk, string *err_msg_ptr) {
+	VerifyExistence(chunk, VerifyExistenceType::APPEND_FK, err_msg_ptr);
 }
 
-void ART::VerifyDeleteForeignKey(DataChunk &chunk) {
-	VerifyExistence(chunk, VerifyExistenceType::DELETE_FK);
+void ART::VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) {
+	VerifyExistence(chunk, VerifyExistenceType::DELETE_FK, err_msg_ptr);
 }
 
 bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
@@ -853,7 +853,7 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 	return true;
 }
 
-void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type) {
+void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr) {
 	if (verify_type != VerifyExistenceType::DELETE_FK && !is_unique) {
 		return;
 	}
@@ -893,13 +893,19 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type) {
 			}
 			case VerifyExistenceType::APPEND_FK: {
 				// found node no exists in tree
-				throw ConstraintException(
-				    "violates foreign key constraint because key \"%s\" no exist in referenced table", key_name);
+				if (err_msg_ptr) {
+					err_msg_ptr[i] =
+					    "violates foreign key constraint because key \"" + key_name + "\" no exist in referenced table";
+				}
+				break;
 			}
 			case VerifyExistenceType::DELETE_FK: {
 				// found node exists in tree
-				throw ConstraintException(
-				    "violates foreign key constraint because key \"%s\" exist in table has foreign key", key_name);
+				if (err_msg_ptr) {
+					err_msg_ptr[i] = "violates foreign key constraint because key \"" + key_name +
+					                 "\" exist in table has foreign key";
+				}
+				break;
 			}
 			}
 		}

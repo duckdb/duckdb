@@ -2,6 +2,9 @@
 # description: Test self referencing foreign key constraint
 # group: [foreignkey]
 
+statement error
+CREATE TABLE employee(id INTEGER PRIMARY KEY, managerid INTEGER, name VARCHAR, FOREIGN KEY(managerid) REFERENCES employee(emp_id));
+
 statement ok
 CREATE TABLE employee(id INTEGER PRIMARY KEY, managerid INTEGER, name VARCHAR, FOREIGN KEY(managerid) REFERENCES employee(id));
 

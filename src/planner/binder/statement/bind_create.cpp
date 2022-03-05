@@ -227,9 +227,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 						// have to resolve referenced table
 						auto pk_table_entry_ptr =
 						    catalog.GetEntry<TableCatalogEntry>(context, fk.info.schema, fk.info.table);
-						if (!pk_table_entry_ptr) {
-							throw ParserException("Can't find table \"%s\" in foreign key constraint", fk.info.table);
-						}
 						D_ASSERT(!fk.pk_columns.empty() && fk.info.pk_keys.empty());
 						for (auto &keyname : fk.pk_columns) {
 							auto entry = pk_table_entry_ptr->name_map.find(keyname);

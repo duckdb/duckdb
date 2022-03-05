@@ -99,9 +99,9 @@ public:
 	//! Verify that data can be appended to the index
 	void VerifyAppend(DataChunk &chunk) override;
 	//! Verify that data can be appended to the index for foreign key constraint
-	void VerifyAppendForeignKey(DataChunk &chunk) override;
+	void VerifyAppendForeignKey(DataChunk &chunk, string *err_msg_ptr) override;
 	//! Verify that data can be delete from the index for foreign key constraint
-	void VerifyDeleteForeignKey(DataChunk &chunk) override;
+	void VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) override;
 	//! Delete entries in the index
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert data into the index.
@@ -147,7 +147,7 @@ private:
 
 	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);
 
-	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type);
+	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = NULL);
 };
 
 } // namespace duckdb

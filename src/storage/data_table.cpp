@@ -437,35 +437,11 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	}
 }
 
-static TableIndexList &GetForeignKeyConstraintIndicesAndChunk(const string &schema, const string &table_name,
-                                                              const vector<idx_t> &src_keys,
-                                                              const vector<idx_t> &dst_keys, ClientContext &context,
-                                                              DataChunk &src_chunk, DataChunk &dst_chunk) {
-	auto table_entry_ptr = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, schema, table_name);
-	if (table_entry_ptr == nullptr) {
-		throw ParserException("Can't find table \"%s\" in foreign key constraint", table_name);
-	}
-	TableIndexList &indices = table_entry_ptr->storage->info->indexes;
-
-	// make the data chunk to check
-	vector<LogicalType> types;
-	for (idx_t i = 0; i < table_entry_ptr->columns.size(); i++) {
-		types.emplace_back(table_entry_ptr->columns[i].type);
-	}
-	dst_chunk.InitializeEmpty(types);
-	for (idx_t i = 0; i < src_keys.size(); i++) {
-		dst_chunk.data[dst_keys[i]].Reference(src_chunk.data[src_keys[i]]);
-	}
-	dst_chunk.SetCardinality(src_chunk.size());
-
-	return indices;
-}
-
-static bool FindColumnIndex(const vector<idx_t> &keys, const vector<column_t> &index_column_ids) {
-	for (idx_t i = 0; i < keys.size(); i++) {
+static bool FindColumnIndex(const vector<idx_t> *keys_ptr, const vector<column_t> &index_column_ids) {
+	for (idx_t i = 0; i < keys_ptr->size(); i++) {
 		bool is_found = false;
 		for (idx_t j = 0; j < index_column_ids.size(); j++) {
-			if (keys[i] == index_column_ids[j]) {
+			if ((*keys_ptr)[i] == index_column_ids[j]) {
 				is_found = true;
 				break;
 			}
@@ -478,34 +454,86 @@ static bool FindColumnIndex(const vector<idx_t> &keys, const vector<column_t> &i
 	return true;
 }
 
-static void VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
-                                             DataChunk &chunk) {
-	DataChunk pk_chunk;
-	TableIndexList &indices = GetForeignKeyConstraintIndicesAndChunk(bfk.info.schema, bfk.info.table, bfk.info.fk_keys,
-	                                                                 bfk.info.pk_keys, context, chunk, pk_chunk);
+static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context, DataChunk &chunk,
+                                       bool is_append) {
+	const vector<idx_t> *src_keys_ptr = &bfk.info.fk_keys;
+	const vector<idx_t> *dst_keys_ptr = &bfk.info.pk_keys;
+	if (!is_append) {
+		src_keys_ptr = &bfk.info.pk_keys;
+		dst_keys_ptr = &bfk.info.fk_keys;
+	}
+
+	auto table_entry_ptr =
+	    Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, bfk.info.schema, bfk.info.table);
+	if (table_entry_ptr == nullptr) {
+		throw InternalException("Can't find table \"%s\" in foreign key constraint", bfk.info.table);
+	}
+
+	// make the data chunk to check
+	vector<LogicalType> types;
+	for (idx_t i = 0; i < table_entry_ptr->columns.size(); i++) {
+		types.emplace_back(table_entry_ptr->columns[i].type);
+	}
+	DataChunk dst_chunk;
+	dst_chunk.InitializeEmpty(types);
+	for (idx_t i = 0; i < src_keys_ptr->size(); i++) {
+		dst_chunk.data[(*dst_keys_ptr)[i]].Reference(chunk.data[(*src_keys_ptr)[i]]);
+	}
+	dst_chunk.SetCardinality(chunk.size());
+	std::shared_ptr<DataTable> data_table = table_entry_ptr->storage;
+
+	idx_t count = dst_chunk.size();
+	if (count <= 0) {
+		return;
+	}
+
+	vector<string> err_msgs;
+	err_msgs.resize(count * 2);
 
 	//! check whether or not the chunk can be inserted into the referenced table
-	indices.Scan([&](Index &index) {
-		if (FindColumnIndex(bfk.info.pk_keys, index.column_ids)) {
-			index.VerifyAppendForeignKey(pk_chunk);
+	TableIndexList &table_indices = data_table->info->indexes;
+	table_indices.Scan([&](Index &index) {
+		if (FindColumnIndex(dst_keys_ptr, index.column_ids)) {
+			if (is_append) {
+				index.VerifyAppendForeignKey(dst_chunk, err_msgs.data());
+			} else {
+				index.VerifyDeleteForeignKey(dst_chunk, err_msgs.data());
+			}
 		}
 		return false;
 	});
+
+	auto &transaction = Transaction::GetTransaction(context);
+	bool transaction_check = transaction.storage.Find(data_table.get());
+	if (transaction_check) {
+		vector<unique_ptr<Index>> &transact_index_vec = transaction.storage.GetIndexes(data_table.get());
+		for (idx_t i = 0; i < transact_index_vec.size(); i++) {
+			if (FindColumnIndex(dst_keys_ptr, transact_index_vec[i]->column_ids)) {
+				if (is_append) {
+					transact_index_vec[i]->VerifyAppendForeignKey(dst_chunk, err_msgs.data() + count);
+				} else {
+					transact_index_vec[i]->VerifyDeleteForeignKey(dst_chunk, err_msgs.data() + count);
+				}
+			}
+		}
+	}
+
+	for (idx_t i = 0; i < count; i++) {
+		if ((!transaction_check && !err_msgs[i].empty()) ||
+		    (transaction_check && !err_msgs[i].empty() && !err_msgs[i + count].empty())) {
+			throw ConstraintException(err_msgs[i]);
+		}
+	}
+}
+
+static void VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
+                                             DataChunk &chunk) {
+	VerifyForeignKeyConstraint(bfk, context, chunk, true);
 }
 
 static void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
                                              DataChunk &chunk) {
-	DataChunk fk_chunk;
-	TableIndexList &indices = GetForeignKeyConstraintIndicesAndChunk(bfk.info.schema, bfk.info.table, bfk.info.pk_keys,
-	                                                                 bfk.info.fk_keys, context, chunk, fk_chunk);
-
-	//! check whether or not the chunk can be deleted from the table has foreign keys
-	indices.Scan([&](Index &index) {
-		if (FindColumnIndex(bfk.info.fk_keys, index.column_ids)) {
-			index.VerifyDeleteForeignKey(fk_chunk);
-		}
-		return false;
-	});
+	VerifyForeignKeyConstraint(bfk, context, chunk, false);
 }
 
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {

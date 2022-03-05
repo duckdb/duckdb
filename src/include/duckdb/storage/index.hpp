@@ -70,9 +70,9 @@ public:
 	//! Verify that data can be appended to the index
 	virtual void VerifyAppend(DataChunk &chunk) = 0;
 	//! Verify that data can be appended to the index for foreign key constraint
-	virtual void VerifyAppendForeignKey(DataChunk &chunk) = 0;
+	virtual void VerifyAppendForeignKey(DataChunk &chunk, string *err_msg_ptr) = 0;
 	//! Verify that data can be delete from the index for foreign key constraint
-	virtual void VerifyDeleteForeignKey(DataChunk &chunk) = 0;
+	virtual void VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) = 0;
 
 	//! Called when data inside the index is Deleted
 	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
