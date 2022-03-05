@@ -26,11 +26,33 @@ DELETE FROM employee WHERE id=2;
 statement ok
 DELETE FROM employee WHERE id=4;
 
+statement ok
+UPDATE employee SET name='Juliet' WHERE id=3;
+
+# update the indexed column
 statement error
-UPDATE employee SET managerid=5 WHERE id=3;
+UPDATE employee SET id=2 WHERE id=3;
 
 statement ok
-UPDATE employee SET managerid=2 WHERE id=3;
+UPDATE employee SET id=4 WHERE id=3;
+
+query IIT
+SELECT * FROM employee;
+----
+1	NULL	Smith	
+2	NULL	Jhon	
+4	NULL	Juliet	
+
+statement error
+UPDATE employee SET managerid=5 WHERE id=4;
+
+statement ok
+UPDATE employee SET managerid=2 WHERE id=4;
+
+query IIT
+SELECT * FROM employee WHERE id=4;
+----
+4	2	Juliet	
 
 statement error
 ALTER TABLE employee RENAME COLUMN managerid TO managerid_new;
