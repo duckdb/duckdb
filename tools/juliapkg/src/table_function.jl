@@ -1,3 +1,5 @@
+global_objects = Set()
+
 #=
 //===--------------------------------------------------------------------===//
 // Table Function Bind
@@ -11,6 +13,14 @@ struct BindInfo
         result = new(handle, main_function)
         return result
     end
+end
+
+mutable struct InfoWrapper
+	info::Any
+
+	function InfoWrapper(info)
+		return new(info)
+	end
 end
 
 function ParameterCount(bind_info::BindInfo)
@@ -33,11 +43,19 @@ function GetExtraData(bind_info::BindInfo)
     return bind_info.main_function.extra_data
 end
 
+function _table_bind_cleanup(data::Ptr{Cvoid})
+	info::InfoWrapper = unsafe_pointer_to_objref(data)
+	delete!(global_objects, info)
+	return
+end
+
 function _table_bind_function(info::duckdb_bind_info)
     main_function = unsafe_pointer_to_objref(duckdb_bind_get_extra_info(info))
     binfo = BindInfo(info, main_function)
-    bind_data = main_function.bind_func(binfo)
-    duckdb_bind_set_bind_data(info, pointer_from_objref(bind_data), C_NULL)
+    bind_data = InfoWrapper(main_function.bind_func(binfo))
+    bind_data_pointer = pointer_from_objref(bind_data)
+    push!(global_objects, bind_data)
+    duckdb_bind_set_bind_data(info, bind_data_pointer, @cfunction(_table_bind_cleanup, Cvoid, (Ptr{Cvoid},)))
     return
 end
 
@@ -59,8 +77,10 @@ end
 function _table_init_function(info::duckdb_init_info)
     main_function = unsafe_pointer_to_objref(duckdb_init_get_extra_info(info))
     binfo = InitInfo(info, main_function)
-    init_data = main_function.init_func(binfo)
-    duckdb_init_set_init_data(info, pointer_from_objref(init_data), C_NULL)
+    init_data = InfoWrapper(main_function.init_func(binfo))
+    init_data_pointer = pointer_from_objref(init_data)
+    push!(global_objects, init_data)
+    duckdb_init_set_init_data(info, init_data_pointer, @cfunction(_table_bind_cleanup, Cvoid, (Ptr{Cvoid},)))
     return
 end
 
@@ -80,11 +100,11 @@ mutable struct FunctionInfo
 end
 
 function GetBindInfo(info::FunctionInfo, ::Type{T})::T where {T}
-    return unsafe_pointer_to_objref(duckdb_function_get_bind_data(info.handle))
+    return unsafe_pointer_to_objref(duckdb_function_get_bind_data(info.handle)).info
 end
 
 function GetInitInfo(info::FunctionInfo, ::Type{T})::T where {T}
-    return unsafe_pointer_to_objref(duckdb_function_get_init_data(info.handle))
+    return unsafe_pointer_to_objref(duckdb_function_get_init_data(info.handle)).info
 end
 
 function _table_main_function(info::duckdb_function_info, chunk::duckdb_data_chunk)

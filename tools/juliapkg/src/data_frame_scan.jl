@@ -36,8 +36,8 @@ function DFInitFunction(info::DuckDB.InitInfo)
 end
 
 function DFScanFunction(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
-    bind_info::DFBindInfo = DuckDB.GetBindInfo(info)
-    init_info::DFInitInfo = DuckDB.GetInitInfo(info)
+    bind_info = DuckDB.GetBindInfo(info, DFBindInfo)
+    init_info = DuckDB.GetInitInfo(info, DFInitInfo)
 
     column_count = size(names(bind_info.df), 1)
     row_count = size(bind_info.df, 1)

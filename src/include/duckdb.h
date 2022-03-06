@@ -1041,10 +1041,10 @@ typedef void *duckdb_bind_info;
 typedef void *duckdb_init_info;
 typedef void *duckdb_function_info;
 
-typedef void (*duckdb_delete_callback_t)(void *data);
 typedef void (*duckdb_table_function_bind_t)(duckdb_bind_info info);
 typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
 typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
+typedef void (*duckdb_delete_callback_t)(void *data);
 
 /*!
 Creates a new empty table function.
