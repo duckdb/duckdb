@@ -978,19 +978,15 @@ void my_function(duckdb_function_info info, duckdb_data_chunk output) {
 	duckdb_data_chunk_set_size(output, i);
 }
 
-TEST_CASE("Test Table Functions C API", "[capi]") {
-	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+static void capi_register_table_function(duckdb_connection connection, const char *name, duckdb_table_function_bind_t bind, duckdb_table_function_init_t init, duckdb_table_function_t f) {
 	duckdb_state status;
-
-	REQUIRE(tester.OpenDatabase(nullptr));
 
 	// create a table function
 	auto function = duckdb_create_table_function();
-	duckdb_table_function_set_name(nullptr, "my_function");
+	duckdb_table_function_set_name(nullptr, name);
 	duckdb_table_function_set_name(function, nullptr);
-	duckdb_table_function_set_name(function, "my_function");
-	duckdb_table_function_set_name(function, "my_function");
+	duckdb_table_function_set_name(function, name);
+	duckdb_table_function_set_name(function, name);
 
 	// add a string parameter
 	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
@@ -998,17 +994,25 @@ TEST_CASE("Test Table Functions C API", "[capi]") {
 	duckdb_destroy_logical_type(&type);
 
 	// set up the function pointers
-	duckdb_table_function_set_bind(function, my_bind);
-	duckdb_table_function_set_init(function, my_init);
-	duckdb_table_function_set_function(function, my_function);
+	duckdb_table_function_set_bind(function, bind);
+	duckdb_table_function_set_init(function, init);
+	duckdb_table_function_set_function(function, f);
 
 	// register and cleanup
-	status = duckdb_register_table_function(tester.connection, function);
+	status = duckdb_register_table_function(connection, function);
 	REQUIRE(status == DuckDBSuccess);
 
 	duckdb_destroy_table_function(&function);
 	duckdb_destroy_table_function(&function);
 	duckdb_destroy_table_function(nullptr);
+}
+
+TEST_CASE("Test Table Functions C API", "[capi]") {
+	CAPITester tester;
+	unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	capi_register_table_function(tester.connection, "my_function", my_bind, my_init, my_function);
 
 	// now call it
 	result = tester.Query("SELECT * FROM my_function(1)");
@@ -1027,6 +1031,38 @@ TEST_CASE("Test Table Functions C API", "[capi]") {
 	REQUIRE(result->Fetch<int64_t>(0, 1) == 84);
 	REQUIRE(result->Fetch<int64_t>(1, 0) == 5000);
 	REQUIRE(result->Fetch<int64_t>(1, 1) == 5000);
+}
+
+void my_error_bind(duckdb_bind_info info) {
+	duckdb_bind_set_error(nullptr, nullptr);
+	duckdb_bind_set_error(info, "My error message");
+}
+
+void my_error_init(duckdb_init_info info) {
+	duckdb_init_set_error(nullptr, nullptr);
+	duckdb_init_set_error(info, "My error message");
+}
+
+void my_error_function(duckdb_function_info info, duckdb_data_chunk output) {
+	duckdb_function_set_error(nullptr, nullptr);
+	duckdb_function_set_error(info, "My error message");
+}
+
+TEST_CASE("Test Table Function errors in C API", "[capi]") {
+	CAPITester tester;
+	unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	capi_register_table_function(tester.connection, "my_error_bind", my_error_bind, my_init, my_function);
+	capi_register_table_function(tester.connection, "my_error_init", my_bind, my_error_init, my_function);
+	capi_register_table_function(tester.connection, "my_error_function", my_bind, my_init, my_error_function);
+
+	result = tester.Query("SELECT * FROM my_error_bind(1)");
+	REQUIRE(!result->success);
+	result = tester.Query("SELECT * FROM my_error_init(1)");
+	REQUIRE(!result->success);
+	result = tester.Query("SELECT * FROM my_error_function(1)");
+	REQUIRE(!result->success);
 }
 
 TEST_CASE("Test appender statements in C API", "[capi]") {

@@ -40,7 +40,7 @@ struct CTableInternalBindInfo {
 	CTableInternalBindInfo(ClientContext &context, TableFunctionBindInput &input, vector<LogicalType> &return_types,
 	                       vector<string> &names, CTableBindData &bind_data, CTableFunctionInfo &function_info)
 	    : context(context), input(input), return_types(return_types), names(names), bind_data(bind_data),
-	      function_info(function_info) {
+	      function_info(function_info), success(true) {
 	}
 
 	ClientContext &context;
@@ -49,6 +49,8 @@ struct CTableInternalBindInfo {
 	vector<string> &names;
 	CTableBindData &bind_data;
 	CTableFunctionInfo &function_info;
+	bool success;
+	string error;
 };
 
 struct CTableInitData : public FunctionOperatorData {
@@ -66,20 +68,24 @@ struct CTableInitData : public FunctionOperatorData {
 
 struct CTableInternalInitInfo {
 	CTableInternalInitInfo(CTableBindData &bind_data, CTableInitData &init_data)
-	    : bind_data(bind_data), init_data(init_data) {
+	    : bind_data(bind_data), init_data(init_data), success(true) {
 	}
 
 	CTableBindData &bind_data;
 	CTableInitData &init_data;
+	bool success;
+	string error;
 };
 
 struct CTableInternalFunctionInfo {
 	CTableInternalFunctionInfo(CTableBindData &bind_data, CTableInitData &init_data)
-	    : bind_data(bind_data), init_data(init_data) {
+	    : bind_data(bind_data), init_data(init_data), success(true) {
 	}
 
 	CTableBindData &bind_data;
 	CTableInitData &init_data;
+	bool success;
+	string error;
 };
 
 unique_ptr<FunctionData> CTableFunctionBind(ClientContext &context, TableFunctionBindInput &input,
@@ -87,8 +93,11 @@ unique_ptr<FunctionData> CTableFunctionBind(ClientContext &context, TableFunctio
 	auto info = (CTableFunctionInfo *)input.info;
 	D_ASSERT(info->bind && info->function && info->init);
 	auto result = make_unique<CTableBindData>();
-	CTableInternalBindInfo internal_info(context, input, return_types, names, *result, *info);
-	info->bind(&internal_info);
+	CTableInternalBindInfo bind_info(context, input, return_types, names, *result, *info);
+	info->bind(&bind_info);
+	if (!bind_info.success) {
+		throw Exception(bind_info.error);
+	}
 
 	result->info = info;
 	return result;
@@ -102,6 +111,9 @@ unique_ptr<FunctionOperatorData> CTableFunctionInit(ClientContext &context, cons
 
 	CTableInternalInitInfo init_info(bind_data, *result);
 	bind_data.info->init(&init_info);
+	if (!init_info.success) {
+		throw Exception(init_info.error);
+	}
 	return result;
 }
 
@@ -111,6 +123,9 @@ void CTableFunction(ClientContext &context, const FunctionData *bind_data_p, Fun
 	auto &init_data = (CTableInitData &)*operator_state;
 	CTableInternalFunctionInfo function_info(bind_data, init_data);
 	bind_data.info->function(&function_info, &output);
+	if (!function_info.success) {
+		throw Exception(function_info.error);
+	}
 }
 
 } // namespace duckdb
@@ -253,6 +268,15 @@ void duckdb_bind_set_bind_data(duckdb_bind_info info, void *bind_data, duckdb_de
 	bind_info->bind_data.delete_callback = destroy;
 }
 
+void duckdb_bind_set_error(duckdb_bind_info info, const char *error) {
+	if (!info || !error) {
+		return;
+	}
+	auto function_info = (duckdb::CTableInternalBindInfo *)info;
+	function_info->error = error;
+	function_info->success = false;
+}
+
 //===--------------------------------------------------------------------===//
 // Init Interface
 //===--------------------------------------------------------------------===//
@@ -281,6 +305,15 @@ void duckdb_init_set_init_data(duckdb_init_info info, void *init_data, duckdb_de
 	init_info->init_data.delete_callback = destroy;
 }
 
+void duckdb_init_set_error(duckdb_init_info info, const char *error) {
+	if (!info || !error) {
+		return;
+	}
+	auto function_info = (duckdb::CTableInternalInitInfo *)info;
+	function_info->error = error;
+	function_info->success = false;
+}
+
 //===--------------------------------------------------------------------===//
 // Function Interface
 //===--------------------------------------------------------------------===//
@@ -306,4 +339,13 @@ void *duckdb_function_get_init_data(duckdb_function_info info) {
 	}
 	auto function_info = (duckdb::CTableInternalFunctionInfo *)info;
 	return function_info->init_data.init_data;
+}
+
+void duckdb_function_set_error(duckdb_function_info info, const char *error) {
+	if (!info || !error) {
+		return;
+	}
+	auto function_info = (duckdb::CTableInternalFunctionInfo *)info;
+	function_info->error = error;
+	function_info->success = false;
 }

@@ -1,3 +1,4 @@
+# test_table_function.jl
 
 struct MyBindStruct
     count::Int64
@@ -12,7 +13,6 @@ function MyBindFunction(info::DuckDB.BindInfo)
 
     parameter = DuckDB.GetParameter(info, 0)
     number = DuckDB.GetValue(parameter, Int64)
-    GC.gc()
     return MyBindStruct(number)
 end
 
@@ -25,12 +25,10 @@ mutable struct MyInitStruct
 end
 
 function MyInitFunction(info::DuckDB.InitInfo)
-	GC.gc()
     return MyInitStruct()
 end
 
 function MyMainFunction(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
-	GC.gc()
     bind_info = DuckDB.GetBindInfo(info, MyBindStruct)
     init_info = DuckDB.GetInitInfo(info, MyInitStruct)
 
@@ -71,9 +69,34 @@ end
     df = DataFrame(results)
     @test df.cnt == [10000]
 
-# 	@time begin
-# 		results = DBInterface.execute(con, "SELECT SUM(forty_two) cnt FROM forty_two(10000000)")
-# 	end
-# 	df = DataFrame(results)
-# 	println(df)
+    # 	@time begin
+    # 		results = DBInterface.execute(con, "SELECT SUM(forty_two) cnt FROM forty_two(10000000)")
+    # 	end
+    # 	df = DataFrame(results)
+    # 	println(df)
+end
+
+function MyBindErrorFunction(info::DuckDB.BindInfo)
+    throw("bind error")
+end
+
+function MyInitErrorFunction(info::DuckDB.InitInfo)
+    throw("init error")
+end
+
+function MyMainErrorFunction(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
+    throw("runtime error")
+end
+
+@testset "Test table function errors" begin
+    con = DBInterface.connect(DuckDB.DB)
+
+    DuckDB.CreateTableFunction(con, "bind_error_function", [Int64], MyBindErrorFunction, MyInitFunction, MyMainFunction)
+    DuckDB.CreateTableFunction(con, "init_error_function", [Int64], MyBindFunction, MyInitErrorFunction, MyMainFunction)
+    DuckDB.CreateTableFunction(con, "main_error_function", [Int64], MyBindFunction, MyInitFunction, MyMainErrorFunction)
+
+    @test_throws DuckDB.QueryException DBInterface.execute(con, "SELECT * FROM bind_error_function(3)")
+    @test_throws DuckDB.QueryException DBInterface.execute(con, "SELECT * FROM init_error_function(3)")
+    @test_throws DuckDB.QueryException DBInterface.execute(con, "SELECT * FROM main_error_function(3)")
+
 end

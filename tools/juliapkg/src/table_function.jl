@@ -16,11 +16,11 @@ struct BindInfo
 end
 
 mutable struct InfoWrapper
-	info::Any
+    info::Any
 
-	function InfoWrapper(info)
-		return new(info)
-	end
+    function InfoWrapper(info)
+        return new(info)
+    end
 end
 
 function ParameterCount(bind_info::BindInfo)
@@ -32,7 +32,7 @@ function GetParameter(bind_info::BindInfo, index::Int64)
 end
 
 function AddResultColumn(bind_info::BindInfo, name::AbstractString, type::DataType)
-	AddResultColumn(bind_info, name, CreateLogicalType(type))
+    return AddResultColumn(bind_info, name, CreateLogicalType(type))
 end
 
 function AddResultColumn(bind_info::BindInfo, name::AbstractString, type::LogicalType)
@@ -44,18 +44,23 @@ function GetExtraData(bind_info::BindInfo)
 end
 
 function _table_bind_cleanup(data::Ptr{Cvoid})
-	info::InfoWrapper = unsafe_pointer_to_objref(data)
-	delete!(global_objects, info)
-	return
+    info::InfoWrapper = unsafe_pointer_to_objref(data)
+    delete!(global_objects, info)
+    return
 end
 
 function _table_bind_function(info::duckdb_bind_info)
-    main_function = unsafe_pointer_to_objref(duckdb_bind_get_extra_info(info))
-    binfo = BindInfo(info, main_function)
-    bind_data = InfoWrapper(main_function.bind_func(binfo))
-    bind_data_pointer = pointer_from_objref(bind_data)
-    push!(global_objects, bind_data)
-    duckdb_bind_set_bind_data(info, bind_data_pointer, @cfunction(_table_bind_cleanup, Cvoid, (Ptr{Cvoid},)))
+    try
+        main_function = unsafe_pointer_to_objref(duckdb_bind_get_extra_info(info))
+        binfo = BindInfo(info, main_function)
+        bind_data = InfoWrapper(main_function.bind_func(binfo))
+        bind_data_pointer = pointer_from_objref(bind_data)
+        push!(global_objects, bind_data)
+        duckdb_bind_set_bind_data(info, bind_data_pointer, @cfunction(_table_bind_cleanup, Cvoid, (Ptr{Cvoid},)))
+    catch ex
+        duckdb_bind_set_error(info, sprint(showerror, ex))
+        return
+    end
     return
 end
 
@@ -75,12 +80,17 @@ mutable struct InitInfo
 end
 
 function _table_init_function(info::duckdb_init_info)
-    main_function = unsafe_pointer_to_objref(duckdb_init_get_extra_info(info))
-    binfo = InitInfo(info, main_function)
-    init_data = InfoWrapper(main_function.init_func(binfo))
-    init_data_pointer = pointer_from_objref(init_data)
-    push!(global_objects, init_data)
-    duckdb_init_set_init_data(info, init_data_pointer, @cfunction(_table_bind_cleanup, Cvoid, (Ptr{Cvoid},)))
+    try
+        main_function = unsafe_pointer_to_objref(duckdb_init_get_extra_info(info))
+        binfo = InitInfo(info, main_function)
+        init_data = InfoWrapper(main_function.init_func(binfo))
+        init_data_pointer = pointer_from_objref(init_data)
+        push!(global_objects, init_data)
+        duckdb_init_set_init_data(info, init_data_pointer, @cfunction(_table_bind_cleanup, Cvoid, (Ptr{Cvoid},)))
+    catch ex
+        duckdb_init_set_error(info, sprint(showerror, ex))
+        return
+    end
     return
 end
 
@@ -110,7 +120,11 @@ end
 function _table_main_function(info::duckdb_function_info, chunk::duckdb_data_chunk)
     main_function = unsafe_pointer_to_objref(duckdb_function_get_extra_info(info))
     binfo = FunctionInfo(info, main_function)
-    main_function.main_func(binfo, DataChunk(chunk))
+    try
+        main_function.main_func(binfo, DataChunk(chunk))
+    catch ex
+        duckdb_function_set_error(info, sprint(showerror, ex))
+    end
     return
 end
 
@@ -191,11 +205,11 @@ function CreateTableFunction(
     main_func::Function,
     extra_data::Any = missing
 )
-	parameter_types::Vector{LogicalType} = Vector()
-	for parameter_type in parameters
-		push!(parameter_types, CreateLogicalType(parameter_type))
-	end
-	CreateTableFunction(con, name, parameter_types, bind_func, init_func, main_func, extra_data)
+    parameter_types::Vector{LogicalType} = Vector()
+    for parameter_type in parameters
+        push!(parameter_types, CreateLogicalType(parameter_type))
+    end
+    return CreateTableFunction(con, name, parameter_types, bind_func, init_func, main_func, extra_data)
 end
 
 function CreateTableFunction(

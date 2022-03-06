@@ -16,7 +16,7 @@ CreateLogicalType(::Type{T}) where {T <: String} = DuckDB.LogicalType(DuckDB.DUC
 CreateLogicalType(::Type{T}) where {T <: Int64} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_BIGINT)
 
 function CreateLogicalType(::Type{T}) where {T}
-	throw(NotImplementedException("Unsupported type for CreateLogicalType"))
+    throw(NotImplementedException("Unsupported type for CreateLogicalType"))
 end
 
 function _destroy_type(type::LogicalType)

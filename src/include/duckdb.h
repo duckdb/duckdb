@@ -1174,6 +1174,14 @@ Sets the user-provided bind data in the bind object. This object can be retrieve
 */
 DUCKDB_API void duckdb_bind_set_bind_data(duckdb_bind_info info, void *bind_data, duckdb_delete_callback_t destroy);
 
+/*!
+Report that an error has occurred while calling bind.
+
+* info: The info object
+* error: The error message
+*/
+DUCKDB_API void duckdb_bind_set_error(duckdb_bind_info info, const char *error);
+
 //===--------------------------------------------------------------------===//
 // Table Function Init
 //===--------------------------------------------------------------------===//
@@ -1206,6 +1214,14 @@ Sets the user-provided init data in the init object. This object can be retrieve
 */
 DUCKDB_API void duckdb_init_set_init_data(duckdb_init_info info, void *init_data, duckdb_delete_callback_t destroy);
 
+/*!
+Report that an error has occurred while calling init.
+
+* info: The info object
+* error: The error message
+*/
+DUCKDB_API void duckdb_init_set_error(duckdb_init_info info, const char *error);
+
 //===--------------------------------------------------------------------===//
 // Table Function
 //===--------------------------------------------------------------------===//
@@ -1235,6 +1251,14 @@ Gets the init data set by `duckdb_bind_set_init_data` during the bind.
 * returns: The init data object
 */
 DUCKDB_API void *duckdb_function_get_init_data(duckdb_function_info info);
+
+/*!
+Report that an error has occurred while executing the function.
+
+* info: The info object
+* error: The error message
+*/
+DUCKDB_API void duckdb_function_set_error(duckdb_function_info info, const char *error);
 
 //===--------------------------------------------------------------------===//
 // Appender

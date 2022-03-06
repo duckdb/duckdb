@@ -1598,6 +1598,16 @@ function duckdb_bind_set_bind_data(bind_info, bind_data, delete_callback)
     )
 end
 
+"""
+Report that an error has occurred during bind.
+
+* info: The info object
+* error: The error message
+"""
+function duckdb_bind_set_error(info, error_message)
+    return ccall((:duckdb_bind_set_error, libduckdb), Cvoid, (duckdb_bind_info, Ptr{UInt8}), info, error_message)
+end
+
 #=
 //===--------------------------------------------------------------------===//
 // Table Function Init
@@ -1644,6 +1654,16 @@ function duckdb_init_set_init_data(init_info, init_data, delete_callback)
     )
 end
 
+"""
+Report that an error has occurred during init.
+
+* info: The info object
+* error: The error message
+"""
+function duckdb_init_set_error(info, error_message)
+    return ccall((:duckdb_init_set_error, libduckdb), Cvoid, (duckdb_init_info, Ptr{UInt8}), info, error_message)
+end
+
 #=
 //===--------------------------------------------------------------------===//
 // Table Function
@@ -1680,6 +1700,22 @@ Gets the init data set by `duckdb_bind_set_init_data` during the bind.
 """
 function duckdb_function_get_init_data(info)
     return ccall((:duckdb_function_get_init_data, libduckdb), Ptr{Cvoid}, (duckdb_function_info,), info)
+end
+
+"""
+Report that an error has occurred while executing the function.
+
+* info: The info object
+* error: The error message
+"""
+function duckdb_function_set_error(info, error_message)
+    return ccall(
+        (:duckdb_function_set_error, libduckdb),
+        Cvoid,
+        (duckdb_function_info, Ptr{UInt8}),
+        info,
+        error_message
+    )
 end
 
 #=
