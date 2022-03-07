@@ -4,8 +4,7 @@
  *
   *****************************************************************************/
  CreateFunctionStmt:
-                /* the OptTemp is present but not used - to avoid conflicts with other CREATE_P stPGCreateFunctionStmtatements */ 
-		//CREATE_P OptTemp TABLE MACRO qualified_name param_list AS SelectStmt
+                /* the OptTemp is present but not used - to avoid conflicts with other CREATE_P Stmtatements */ 
 		CREATE_P OptTemp macro_alias qualified_name param_list AS TABLE SelectStmt
 			{
 				PGCreateFunctionStmt *n = makeNode(PGCreateFunctionStmt);
@@ -18,21 +17,6 @@
 				
 			}
  		|
-
-        /*
- 		CREATE_P  macro_alias SCALAR qualified_name param_list AS b_expr
-
-
-                	{
-				PGCreateFunctionStmt *n = makeNode(PGCreateFunctionStmt);
-				n->name = $4;
-				n->params = $5;
-				n->function = $7;
-				n->query = NULL;
-				$$ = (PGNode *)n;
-                	}
-                 |
-          */
 		CREATE_P OptTemp macro_alias qualified_name param_list AS a_expr
                          {
 				PGCreateFunctionStmt *n = makeNode(PGCreateFunctionStmt);
