@@ -292,7 +292,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 	        // For inner/right joins we check whether the build is composed of unique keys
 	        InsertHashesAndCheckUniqueness(count_tuples, indices, key_locations, pointers); // inlined
 	    } else { */
-	has_unique_keys = true;
+	// has_unique_keys = true;
 	for (idx_t i = 0; i < count_tuples; i++) {
 		// For each tuple, the hash_value will be replaced by a pointer to the next_entry in the hash_map
 		auto index = indices[i];
