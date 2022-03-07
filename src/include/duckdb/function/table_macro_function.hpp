@@ -27,7 +27,6 @@ public:
 	unique_ptr<QueryNode> query_node;
 
 public:
-	~TableMacroFunction();
 	unique_ptr<MacroFunction> Copy() override;
 };
 

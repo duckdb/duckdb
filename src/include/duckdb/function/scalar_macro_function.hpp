@@ -27,7 +27,6 @@ public:
 	unique_ptr<ParsedExpression> expression;
 
 public:
-	~ScalarMacroFunction() override;
 	unique_ptr<MacroFunction> Copy() override;
 };
 

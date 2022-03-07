@@ -33,8 +33,6 @@ public:
 	unordered_map<string, unique_ptr<ParsedExpression>> default_parameters;
 
 public:
-	virtual ~MacroFunction() {};
-
 	void CopyProperties(MacroFunction &other);
 
 	virtual unique_ptr<MacroFunction> Copy() = 0;

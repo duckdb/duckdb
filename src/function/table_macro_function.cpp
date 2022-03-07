@@ -19,9 +19,6 @@ TableMacroFunction::TableMacroFunction(unique_ptr<QueryNode> query_node)
 TableMacroFunction::TableMacroFunction(void) : MacroFunction(MacroType::TABLE_MACRO) {
 }
 
-TableMacroFunction::~TableMacroFunction() {
-}
-
 unique_ptr<MacroFunction> TableMacroFunction::Copy() {
 	auto result = make_unique<TableMacroFunction>();
 	result->query_node = query_node->Copy();

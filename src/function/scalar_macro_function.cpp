@@ -32,12 +32,5 @@ unique_ptr<MacroFunction> ScalarMacroFunction::Copy() {
 	return move(result);
 }
 
-ScalarMacroFunction::~ScalarMacroFunction() {
-	/*
-	if (expression) {
-	    (void)expression.release();
-	}
-	 */
-}
 
 } // namespace duckdb
