@@ -182,8 +182,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		//! When RETURNING is used, a PROJECTION is the top level operator
 		//! We still need to project all values from the insert so the projection
 		//! on top of the INSERT can select from only that table values being inserted
-		//! If the insert is a subquery, returning isn't allowed, so don't project
-		//! the everything_referenced should be false in this case.
 		RemoveUnusedColumns remove(binder, context, true);
 		remove.VisitOperatorExpressions(op);
 		remove.VisitOperator(*op.children[0]);
