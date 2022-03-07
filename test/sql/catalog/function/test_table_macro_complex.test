@@ -2,7 +2,6 @@
 # description: Test SELECT Macro
 # group: [function]
 
-
 statement ok
 CREATE MACRO my_values(m,s) as TABLE select * from (values  (1.0*m+s,'adam'), (2.0*m+s,'ben'),
 (3.0*m+s,'cris'), (4.0*m+s,'desmond'),(5.0*m+s, 'eric'));
