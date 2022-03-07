@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/exception.hpp"
@@ -565,6 +567,25 @@ Value Value::BLOB(const string &data) {
 	result.str_value = Blob::ToBlob(string_t(data));
 	return result;
 }
+
+Value Value::JSON(const char *val) {
+	auto result = Value(val);
+	result.type_ = LogicalTypeId::JSON;
+	return result;
+}
+
+Value Value::JSON(string_t val) {
+	auto result = Value(val);
+	result.type_ = LogicalTypeId::JSON;
+	return result;
+}
+
+Value Value::JSON(string val) {
+	auto result = Value(move(val));
+	result.type_ = LogicalTypeId::JSON;
+	return result;
+}
+
 Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 	D_ASSERT(original_type.id() == LogicalTypeId::ENUM);
 	Value result(original_type);
@@ -1274,6 +1295,7 @@ string Value::ToString() const {
 		return Timestamp::ToString(Timestamp::FromEpochNanoSeconds(value_.timestamp.value));
 	case LogicalTypeId::INTERVAL:
 		return Interval::ToString(value_.interval);
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		return str_value;
 	case LogicalTypeId::BLOB:
@@ -1362,7 +1384,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::BLOB:
 		return "'" + ToString() + "'::" + type_.ToString();
 	case LogicalTypeId::VARCHAR:
-		return "'" + ToString() + "'";
+		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	case LogicalTypeId::STRUCT: {
 		string ret = "{";
 		auto &child_types = StructType::GetChildTypes(type_);

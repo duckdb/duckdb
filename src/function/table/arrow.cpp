@@ -618,6 +618,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		}
 		break;
 	}
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.first++];
 		auto cdata = (char *)array.buffers[2];
@@ -630,7 +631,6 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 				offsets = (uint64_t *)array.buffers[1] + array.offset + nested_offset;
 			}
 			SetVectorString(vector, size, cdata, offsets);
-
 		} else {
 			auto offsets = (uint32_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 			if (nested_offset != -1) {
@@ -638,7 +638,6 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			}
 			SetVectorString(vector, size, cdata, offsets);
 		}
-
 		break;
 	}
 	case LogicalTypeId::DATE: {
