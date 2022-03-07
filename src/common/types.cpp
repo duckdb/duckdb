@@ -1,21 +1,21 @@
 #include "duckdb/common/types.hpp"
 
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
-
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/parser.hpp"
 
 #include <cmath>
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
@@ -98,6 +98,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::JSON:
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
@@ -171,6 +172,7 @@ constexpr const LogicalTypeId LogicalType::HASH;
 constexpr const LogicalTypeId LogicalType::POINTER;
 
 constexpr const LogicalTypeId LogicalType::VARCHAR;
+constexpr const LogicalTypeId LogicalType::JSON;
 
 constexpr const LogicalTypeId LogicalType::BLOB;
 constexpr const LogicalTypeId LogicalType::INTERVAL;
@@ -204,7 +206,7 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,     LogicalType::USMALLINT,
 	    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,         LogicalTypeId::LIST,
 	    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,
-	    LogicalType::UUID};
+	    LogicalType::UUID,     LogicalType::JSON};
 	return types;
 }
 
@@ -433,6 +435,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "AGGREGATE_STATE<?>";
 	case LogicalTypeId::USER:
 		return "USER";
+	case LogicalTypeId::JSON:
+		return "JSON";
 	}
 	return "UNDEFINED";
 }
@@ -466,13 +470,13 @@ string LogicalType::ToString() const {
 		}
 		auto &child_types = StructType::GetChildTypes(*this);
 		if (child_types.empty()) {
-			return "MAP<?>";
+			return "MAP(?)";
 		}
 		if (child_types.size() != 2) {
 			throw InternalException("Map needs exactly two child elements");
 		}
-		return "MAP<" + ListType::GetChildType(child_types[0].second).ToString() + ", " +
-		       ListType::GetChildType(child_types[1].second).ToString() + ">";
+		return "MAP(" + ListType::GetChildType(child_types[0].second).ToString() + ", " +
+		       ListType::GetChildType(child_types[1].second).ToString() + ")";
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (!type_info_) {
@@ -500,7 +504,7 @@ string LogicalType::ToString() const {
 }
 // LCOV_EXCL_STOP
 
-LogicalTypeId TransformStringToLogicalType(const string &str) {
+LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
 	auto lower_str = StringUtil::Lower(str);
 	// Transform column type
 	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed" || lower_str == "integer" ||
@@ -560,11 +564,22 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		return LogicalTypeId::TIMESTAMP_TZ;
 	} else if (lower_str == "timetz") {
 		return LogicalTypeId::TIME_TZ;
+	} else if (lower_str == "json") {
+		return LogicalTypeId::JSON;
+	} else if (lower_str == "null") {
+		return LogicalTypeId::SQLNULL;
 	} else {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder
 		return LogicalTypeId::USER;
 	}
+}
+
+LogicalType TransformStringToLogicalType(const string &str) {
+	if (StringUtil::Lower(str) == "null") {
+		return LogicalType::SQLNULL;
+	}
+	return Parser::ParseColumnList("dummy " + str)[0].type;
 }
 
 bool LogicalType::IsIntegral() const {
@@ -1073,12 +1088,12 @@ LogicalType LogicalType::MAP(LogicalType key, LogicalType value) {
 
 const LogicalType &MapType::KeyType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::MAP);
-	return StructType::GetChildTypes(type)[0].second;
+	return ListType::GetChildType(StructType::GetChildTypes(type)[0].second);
 }
 
 const LogicalType &MapType::ValueType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::MAP);
-	return StructType::GetChildTypes(type)[1].second;
+	return ListType::GetChildType(StructType::GetChildTypes(type)[1].second);
 }
 
 //===--------------------------------------------------------------------===//

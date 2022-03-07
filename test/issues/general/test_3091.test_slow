@@ -1,0 +1,59 @@
+# name: test/issues/general/test_3091.test_slow
+# description: Issue 3091: Double to Decimal rounding error
+# group: [general]
+
+query T
+select 39981.70::DOUBLE::DECIMAL(15,2)
+----
+39981.70
+
+query T
+select (-39981.70)::DOUBLE::DECIMAL(15,2)
+----
+-39981.70
+
+query T
+select 100::DOUBLE::DECIMAL(3,0);
+----
+100
+
+query T
+select (-100)::DOUBLE::DECIMAL(3,0);
+----
+-100
+
+require tpch
+
+statement ok
+call dbgen(sf=0.1)
+
+statement ok
+pragma threads=1
+
+query III nosort q0
+select l_extendedprice, l_discount, l_tax from lineitem
+----
+
+loop i 7 38
+
+statement ok
+begin transaction
+
+statement ok
+create table doubles as
+    select l_extendedprice::double as l_extendedprice,
+           l_discount::double as l_discount,
+           l_tax::double as l_tax
+    from lineitem
+
+query III nosort q0
+select l_extendedprice::decimal(${i},2) as l_extendedprice,
+       l_discount::decimal(${i},2) as l_discount,
+       l_tax::decimal(${i},2) as l_tax
+from doubles
+----
+
+statement ok
+rollback
+
+endloop

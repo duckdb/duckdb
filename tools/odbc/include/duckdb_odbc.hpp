@@ -6,6 +6,8 @@
 
 #include "duckdb/common/windows.hpp"
 #include "descriptor.hpp"
+#include "odbc_diagnostic.hpp"
+#include "odbc_exception.hpp"
 #include "odbc_utils.hpp"
 
 #include <sqltypes.h>
@@ -21,18 +23,21 @@ namespace duckdb {
 class OdbcFetch;
 class ParameterDescriptor;
 class RowDescriptor;
+class OdbcDiagnostic;
 
 enum OdbcHandleType { ENV, DBC, STMT, DESC };
 std::string OdbcHandleTypeToString(OdbcHandleType type);
 
 struct OdbcHandle {
-	explicit OdbcHandle(OdbcHandleType type_p) : type(type_p) {};
+	explicit OdbcHandle(OdbcHandleType type_p);
 	OdbcHandle(const OdbcHandle &other);
 	OdbcHandle &operator=(const OdbcHandle &other);
 
 	OdbcHandleType type;
 	// appending all error messages into it
 	std::vector<std::string> error_messages;
+
+	unique_ptr<OdbcDiagnostic> odbc_diagnostic;
 };
 
 struct OdbcHandleEnv : public OdbcHandle {
@@ -57,6 +62,7 @@ public:
 
 	void SetDatabaseName(const string &db_name);
 	std::string GetDatabaseName();
+	std::string GetDataSourceName();
 
 public:
 	OdbcHandleEnv *env;
@@ -164,6 +170,35 @@ public:
 };
 
 template <class T>
+SQLRETURN WithHandle(SQLHANDLE &handle, T &&lambda) {
+	if (!handle) {
+		return SQL_INVALID_HANDLE;
+	}
+	auto *hdl = (OdbcHandle *)handle;
+	if (!hdl->odbc_diagnostic) {
+		return SQL_ERROR;
+	}
+
+	return lambda(hdl);
+}
+
+template <class T>
+SQLRETURN WithEnvironment(SQLHANDLE &enviroment_handle, T &&lambda) {
+	if (!enviroment_handle) {
+		return SQL_ERROR;
+	}
+	auto *env = (OdbcHandleEnv *)enviroment_handle;
+	if (env->type != OdbcHandleType::ENV) {
+		return SQL_ERROR;
+	}
+	if (!env->db) {
+		return SQL_ERROR;
+	}
+
+	return lambda(env);
+}
+
+template <class T>
 SQLRETURN WithConnection(SQLHANDLE &connection_handle, T &&lambda) {
 	if (!connection_handle) {
 		return SQL_ERROR;
@@ -176,7 +211,19 @@ SQLRETURN WithConnection(SQLHANDLE &connection_handle, T &&lambda) {
 		return SQL_ERROR;
 	}
 
-	return lambda(hdl);
+	// ODBC requires to clean up the diagnostic for every ODBC function call
+	hdl->odbc_diagnostic->Clean();
+
+	try {
+		return lambda(hdl);
+	} catch (OdbcException &ex) {
+		auto diag_record = ex.GetDiagRecord();
+		auto component = ex.GetComponent();
+		auto data_source = hdl->GetDataSourceName();
+		hdl->odbc_diagnostic->FormatDiagnosticMessage(diag_record, data_source, component);
+		hdl->odbc_diagnostic->AddDiagRecord(diag_record);
+		return ex.GetSqlReturn();
+	}
 }
 
 template <class T>
@@ -184,14 +231,27 @@ SQLRETURN WithStatement(SQLHANDLE &statement_handle, T &&lambda) {
 	if (!statement_handle) {
 		return SQL_ERROR;
 	}
-	auto *hdl = (OdbcHandleStmt *)statement_handle;
-	if (hdl->type != OdbcHandleType::STMT) {
+	auto *hdl_stmt = (OdbcHandleStmt *)statement_handle;
+	if (hdl_stmt->type != OdbcHandleType::STMT) {
 		return SQL_ERROR;
 	}
-	if (!hdl->dbc || !hdl->dbc->conn) {
+	if (!hdl_stmt->dbc || !hdl_stmt->dbc->conn) {
 		return SQL_ERROR;
 	}
-	return lambda(hdl);
+
+	// ODBC requires to clean up the diagnostic for every ODBC function call
+	hdl_stmt->odbc_diagnostic->Clean();
+
+	try {
+		return lambda(hdl_stmt);
+	} catch (OdbcException &ex) {
+		auto diag_record = ex.GetDiagRecord();
+		auto component = ex.GetComponent();
+		auto data_source = hdl_stmt->dbc->GetDataSourceName();
+		hdl_stmt->odbc_diagnostic->FormatDiagnosticMessage(diag_record, data_source, component);
+		hdl_stmt->odbc_diagnostic->AddDiagRecord(diag_record);
+		return ex.GetSqlReturn();
+	}
 }
 
 template <class T>
@@ -203,7 +263,11 @@ SQLRETURN WithStatementPrepared(SQLHANDLE &statement_handle, T &&lambda) {
 		if (!stmt->stmt->success) {
 			return SQL_ERROR;
 		}
-		return lambda(stmt);
+		try {
+			return lambda(stmt);
+		} catch (OdbcException &ex) {
+			throw ex;
+		}
 	});
 }
 
@@ -216,7 +280,11 @@ SQLRETURN WithStatementResult(SQLHANDLE &statement_handle, T &&lambda) {
 		if (!stmt->res->success) {
 			return SQL_ERROR;
 		}
-		return lambda(stmt);
+		try {
+			return lambda(stmt);
+		} catch (OdbcException &ex) {
+			throw ex;
+		}
 	});
 }
 

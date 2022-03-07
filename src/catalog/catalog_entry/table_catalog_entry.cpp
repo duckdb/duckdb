@@ -114,7 +114,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 						column_ids.push_back(key);
 					}
 					// create an adaptive radix tree around the expressions
-					auto art = make_unique<ART>(column_ids, move(unbound_expressions));
+					auto art = make_unique<ART>(column_ids, move(unbound_expressions), false, false, true);
 					storage->AddIndex(move(art), bound_expressions);
 				}
 			}

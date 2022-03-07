@@ -175,7 +175,7 @@ static unique_ptr<FunctionOperatorData> ICUTimeZoneInit(ClientContext &context, 
 static void ICUTimeZoneCleanup(ClientContext &context, const FunctionData *bind_data,
                                FunctionOperatorData *operator_state) {
 	auto &data = (ICUTimeZoneData &)*operator_state;
-	(void)data.tzs.release();
+	(void)data.tzs.reset();
 }
 
 static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind_data,
@@ -280,7 +280,7 @@ static void ICUCalendarFunction(ClientContext &context, const FunctionData *bind
 static void ICUCalendarCleanup(ClientContext &context, const FunctionData *bind_data,
                                FunctionOperatorData *operator_state) {
 	auto &data = (ICUCalendarData &)*operator_state;
-	(void)data.calendars.release();
+	(void)data.calendars.reset();
 }
 
 static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parameter) {
@@ -376,3 +376,7 @@ DUCKDB_EXTENSION_API const char *icu_version() { // NOLINT
 	return duckdb::DuckDB::LibraryVersion();
 }
 }
+
+#ifndef DUCKDB_EXTENSION_MAIN
+#error DUCKDB_EXTENSION_MAIN not defined
+#endif

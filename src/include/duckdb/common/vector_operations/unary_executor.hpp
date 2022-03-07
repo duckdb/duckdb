@@ -38,6 +38,14 @@ struct GenericUnaryWrapper {
 	}
 };
 
+struct UnaryLambdaWrapperWithNulls {
+	template <class FUNC, class INPUT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
+		auto fun = (FUNC *)dataptr;
+		return (*fun)(input, mask, idx);
+	}
+};
+
 template <class OP>
 struct UnaryStringOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
@@ -190,6 +198,13 @@ public:
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static void GenericExecute(Vector &input, Vector &result, idx_t count, void *dataptr, bool adds_nulls = false) {
 		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, GenericUnaryWrapper, OP>(input, result, count, dataptr, adds_nulls);
+	}
+
+	template <class INPUT_TYPE, class RESULT_TYPE,
+	          class FUNC = std::function<RESULT_TYPE(INPUT_TYPE, ValidityMask &, idx_t)>>
+	static void ExecuteWithNulls(Vector &input, Vector &result, idx_t count, FUNC fun) {
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapperWithNulls, FUNC>(input, result, count, (void *)&fun,
+		                                                                            true);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>

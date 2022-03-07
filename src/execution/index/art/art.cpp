@@ -11,11 +11,12 @@
 namespace duckdb {
 
 ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions, bool is_unique,
-         bool is_primary)
+         bool is_primary, bool is_foreign_key_p)
     : Index(IndexType::ART, column_ids, unbound_expressions, is_unique, is_primary) {
 	tree = nullptr;
 	expression_result.Initialize(logical_types);
 	is_little_endian = IsLittleEndian();
+	is_foreign_key = is_foreign_key_p;
 	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
 		case PhysicalType::BOOL:

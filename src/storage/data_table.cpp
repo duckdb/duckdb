@@ -487,8 +487,9 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 		return;
 	}
 
-	vector<string> err_msgs;
-	err_msgs.resize(count * 2);
+	vector<string> err_msgs, tran_err_msgs;
+	err_msgs.resize(count);
+	tran_err_msgs.resize(count);
 
 	//! check whether or not the chunk can be inserted into the referenced table
 	TableIndexList &table_indices = data_table->info->indexes;
@@ -510,9 +511,9 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 		for (idx_t i = 0; i < transact_index_vec.size(); i++) {
 			if (FindColumnIndex(dst_keys_ptr, transact_index_vec[i]->column_ids)) {
 				if (is_append) {
-					transact_index_vec[i]->VerifyAppendForeignKey(dst_chunk, err_msgs.data() + count);
+					transact_index_vec[i]->VerifyAppendForeignKey(dst_chunk, tran_err_msgs.data());
 				} else {
-					transact_index_vec[i]->VerifyDeleteForeignKey(dst_chunk, err_msgs.data() + count);
+					transact_index_vec[i]->VerifyDeleteForeignKey(dst_chunk, tran_err_msgs.data());
 				}
 			}
 		}
@@ -520,8 +521,13 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 
 	for (idx_t i = 0; i < count; i++) {
 		if ((!transaction_check && !err_msgs[i].empty()) ||
-		    (transaction_check && !err_msgs[i].empty() && !err_msgs[i + count].empty())) {
-			throw ConstraintException(err_msgs[i]);
+		    (transaction_check && ((is_append && !err_msgs[i].empty() && !tran_err_msgs[i].empty()) ||
+		                           (!is_append && (!err_msgs[i].empty() || !tran_err_msgs[i].empty()))))) {
+			string &err_msg = err_msgs[i];
+			if (err_msg.empty()) {
+				err_msg = tran_err_msgs[i];
+			}
+			throw ConstraintException(err_msg);
 		}
 	}
 }
