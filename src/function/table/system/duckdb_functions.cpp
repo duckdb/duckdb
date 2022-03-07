@@ -443,8 +443,8 @@ void DuckDBFunctionsFunction(ClientContext &context, const FunctionData *bind_da
 			break;
 
 		case CatalogType::MACRO_ENTRY:
-			finished = ExtractFunctionData<ScalarMacroCatalogEntry, MacroExtractor>(standard_entry, data.offset_in_entry,
-			                                                                  output, count);
+			finished = ExtractFunctionData<ScalarMacroCatalogEntry, MacroExtractor>(
+			    standard_entry, data.offset_in_entry, output, count);
 			break;
 		case CatalogType::TABLE_FUNCTION_ENTRY:
 			finished = ExtractFunctionData<TableFunctionCatalogEntry, TableFunctionExtractor>(
