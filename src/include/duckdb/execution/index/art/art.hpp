@@ -62,16 +62,24 @@ struct ARTIndexScanState : public IndexScanState {
 	idx_t result_index = 0;
 };
 
+enum VerifyExistenceType : uint8_t {
+	APPEND = 0,    // for purpose to append into table
+	APPEND_FK = 1, // for purpose to append into table has foreign key
+	DELETE_FK = 2  // for purpose to delete from table related to foreign key
+};
+
 class ART : public Index {
 public:
 	ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
-	    bool is_unique = false, bool is_primary = false);
+	    bool is_unique = false, bool is_primary = false, bool is_foreign_key = false);
 	~ART() override;
 
 	//! Root of the tree
 	unique_ptr<Node> tree;
 	//! True if machine is little endian
 	bool is_little_endian;
+	//! True if it is made by foreign key
+	bool is_foreign_key;
 
 public:
 	//! Initialize a scan on the index with the given expression and column ids
@@ -92,6 +100,10 @@ public:
 	bool Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index
 	void VerifyAppend(DataChunk &chunk) override;
+	//! Verify that data can be appended to the index for foreign key constraint
+	void VerifyAppendForeignKey(DataChunk &chunk, string *err_msg_ptr) override;
+	//! Verify that data can be delete from the index for foreign key constraint
+	void VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) override;
 	//! Delete entries in the index
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert data into the index.
@@ -136,6 +148,8 @@ private:
 	                  vector<row_t> &result_ids);
 
 	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);
+
+	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = NULL);
 };
 
 } // namespace duckdb

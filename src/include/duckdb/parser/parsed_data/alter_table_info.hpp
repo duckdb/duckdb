@@ -71,7 +71,8 @@ enum class AlterTableType : uint8_t {
 	ADD_COLUMN = 3,
 	REMOVE_COLUMN = 4,
 	ALTER_COLUMN_TYPE = 5,
-	SET_DEFAULT = 6
+	SET_DEFAULT = 6,
+	FOREIGN_KEY_CONSTRAINT = 7
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -187,6 +188,27 @@ struct SetDefaultInfo : public AlterTableInfo {
 	string column_name;
 	//! The expression used for data conversion
 	unique_ptr<ParsedExpression> expression;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	void SerializeAlterTable(FieldWriter &writer) const override;
+	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, string schema, string table);
+};
+
+//===--------------------------------------------------------------------===//
+// AlterForeignKeyInfo
+//===--------------------------------------------------------------------===//
+struct AlterForeignKeyInfo : public AlterTableInfo {
+	AlterForeignKeyInfo(string schema, string table, string fk_table, vector<string> pk_columns,
+	                    vector<string> fk_columns, vector<idx_t> pk_keys, vector<idx_t> fk_keys, bool is_fk_add);
+	~AlterForeignKeyInfo() override;
+
+	string fk_table;
+	vector<string> pk_columns;
+	vector<string> fk_columns;
+	vector<idx_t> pk_keys;
+	vector<idx_t> fk_keys;
+	bool is_fk_add; // if this is true, add fk constraint, if this is false, delete fk constraint
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
