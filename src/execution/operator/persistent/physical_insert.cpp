@@ -38,11 +38,10 @@ public:
 };
 
 PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
-                               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality, idx_t return_chunk)
+                               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
+                               idx_t return_chunk)
     : PhysicalOperator(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
-      column_index_map(std::move(column_index_map)),
-      table(table),
-      bound_defaults(move(bound_defaults)),
+      column_index_map(std::move(column_index_map)), table(table), bound_defaults(move(bound_defaults)),
       return_chunk(return_chunk) {
 }
 
@@ -139,8 +138,6 @@ void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, Global
 			insert_gstate.returned_chunk_count += 1;
 			if (insert_gstate.returned_chunk_count >= insert_gstate.return_chunk_collection.Chunks().size()) {
 				state.finished = true;
-			} else {
-				int a = 0;
 			}
 		} else {
 			//! it's possible nothing was inserted because of a bad subquery in select.
@@ -148,7 +145,6 @@ void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, Global
 			chunk.Reset();
 			state.finished = true;
 		}
-
 	}
 }
 

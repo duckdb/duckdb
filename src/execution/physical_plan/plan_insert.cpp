@@ -13,8 +13,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 	}
 
 	dependencies.insert(op.table);
-	auto insert = make_unique<PhysicalInsert>(op.types, op.table, op.column_index_map,
-	                                          move(op.bound_defaults), op.estimated_cardinality, op.return_chunk);
+	auto insert = make_unique<PhysicalInsert>(op.types, op.table, op.column_index_map, move(op.bound_defaults),
+	                                          op.estimated_cardinality, op.return_chunk);
 	if (plan) {
 		insert->children.push_back(move(plan));
 	}

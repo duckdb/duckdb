@@ -39,8 +39,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 		}
 	}
 
-	// Grab the returning columns from the parser.
-	// Use the expressionList Transformer.
+	// Grab and transform the returning columns from the parser.
 	if (stmt->returningList) {
 		Transformer::TransformExpressionList(*(stmt->returningList), result->returning_list);
 	}

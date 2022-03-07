@@ -135,7 +135,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		auto binder = Binder::CreateBinder(context);
 		auto types = table->GetTypes();
 		auto names = vector<std::string>();
-		for(auto &col : table->columns) {
+		for (auto &col : table->columns) {
 			names.push_back(col.name);
 		}
 
@@ -145,13 +145,14 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		unique_ptr<LogicalOperator> insert_as_logicaloperator = move(insert);
 
 		auto projection_expressions = vector<unique_ptr<Expression>>();
-		for (auto &returning_expr: stmt.returning_list) {
+		for (auto &returning_expr : stmt.returning_list) {
 			auto expr_type = returning_expr->GetExpressionType();
 			if (expr_type == ExpressionType::STAR) {
 				auto generated_star_list = vector<unique_ptr<ParsedExpression>>();
-				binder->bind_context.GenerateAllColumnExpressions((StarExpression &)*returning_expr, generated_star_list);
+				binder->bind_context.GenerateAllColumnExpressions((StarExpression &)*returning_expr,
+				                                                  generated_star_list);
 				LogicalType result_type;
-				for (auto &star_column: generated_star_list) {
+				for (auto &star_column : generated_star_list) {
 					auto star_expr = insert_binder.Bind(star_column, &result_type);
 					result.types.push_back(result_type);
 					result.names.push_back(star_expr->ToString());
@@ -185,8 +186,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		this->allow_stream_result = false;
 		return result;
 	}
-
-
 }
 
 } // namespace duckdb

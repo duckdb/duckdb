@@ -1,4 +1,4 @@
-# name: test/sql/returning/returning_query.test
+# name: test/sql/returning/returning_delete.test
 # description: Test returning with top level insert statement
 # group: [returning]
 
