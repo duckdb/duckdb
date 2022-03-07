@@ -627,6 +627,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		// no statements, return empty successful result
 		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT);
 	}
+
 	unique_ptr<QueryResult> result;
 	QueryResult *last_result = nullptr;
 	for (idx_t i = 0; i < statements.size(); i++) {

@@ -42,14 +42,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 	// Grab the returning columns from the parser.
 	// Use the expressionList Transformer.
 	if (stmt->returningList) {
-		// TODO: can I use Transformer::TransformExpressionList? I couldn't get the casting right.
-		// TODO: Transformer::TransformExpressionList(stmt->returningList, result->returningList);
-		for (auto node = stmt->returningList->head; node != nullptr; node = node->next) {
-			auto target = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
-			unique_ptr<ParsedExpression> expr = Transformer::TransformExpression(target);
-			result->returning_list.push_back(move(expr));
-		}
-
+		Transformer::TransformExpressionList(*(stmt->returningList), result->returning_list);
 	}
 	result->select_statement = TransformSelect(stmt->selectStmt, false);
 

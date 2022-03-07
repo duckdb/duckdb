@@ -139,6 +139,8 @@ void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, Global
 			insert_gstate.returned_chunk_count += 1;
 			if (insert_gstate.returned_chunk_count >= insert_gstate.return_chunk_collection.Chunks().size()) {
 				state.finished = true;
+			} else {
+				int a = 0;
 			}
 		} else {
 			//! it's possible nothing was inserted because of a bad subquery in select.
