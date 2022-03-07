@@ -63,20 +63,6 @@ unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, Table
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	    *node, [&](unique_ptr<ParsedExpression> &child) { eb.ReplaceMacroParametersRecursive(child); });
 
-	/* from clause
-	switch ( select_node.from_table->type ) {
-
-	    case TableReferenceType::EXPRESSION_LIST:
-	    case TableReferenceType::SUBQUERY:
-	            ParsedExpressionIterator::EnumerateTableRefChildren(
-	               *select_node.from_table, [&](unique_ptr<ParsedExpression> &child) {
-	eb.ReplaceMacroParametersRecursive(child); }); break;
-
-	    default:
-	       break;
-	  }
-	  */
-
 	return node;
 }
 
