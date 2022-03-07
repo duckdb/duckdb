@@ -132,12 +132,21 @@ void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		state.finished = true;
 	} else {
 		idx_t chunk_return = insert_gstate.returned_chunk_count;
-		(insert_gstate.return_chunk_collection.Chunks().at(chunk_return))->Copy(chunk);
-		chunk.SetCardinality((insert_gstate.return_chunk_collection.Chunks().at(chunk_return))->size());
-		insert_gstate.returned_chunk_count += 1;
-		if (insert_gstate.returned_chunk_count >= insert_gstate.return_chunk_collection.Chunks().size()) {
+
+		if (insert_gstate.return_chunk_collection.Chunks().size() > chunk_return) {
+			(insert_gstate.return_chunk_collection.Chunks().at(chunk_return))->Copy(chunk);
+			chunk.SetCardinality((insert_gstate.return_chunk_collection.Chunks().at(chunk_return))->size());
+			insert_gstate.returned_chunk_count += 1;
+			if (insert_gstate.returned_chunk_count >= insert_gstate.return_chunk_collection.Chunks().size()) {
+				state.finished = true;
+			}
+		} else {
+			//! it's possible nothing was inserted because of a bad subquery in select.
+			//! in this case reset the result chunk just set state.finished = true
+			chunk.Reset();
 			state.finished = true;
 		}
+
 	}
 }
 

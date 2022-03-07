@@ -128,21 +128,26 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	if (!stmt.returning_list.empty()) {
 		insert->return_chunk = true;
+
 		auto insert_table_index = GenerateTableIndex();
 		insert->table_index = insert_table_index;
+
 		auto binder = Binder::CreateBinder(context);
 		auto types = table->GetTypes();
 		auto names = vector<std::string>();
 		for(auto &col : table->columns) {
 			names.push_back(col.name);
-			insert->types.push_back(col.type);
 		}
+
 		binder->bind_context.AddGenericBinding(insert->table_index, stmt.table, names, types);
 		InsertBinder insert_binder(*binder, context);
 
+		unique_ptr<LogicalOperator> insert_as_logicaloperator = move(insert);
+
 		auto projection_expressions = vector<unique_ptr<Expression>>();
 		for (auto &returning_expr: stmt.returning_list) {
-			if (returning_expr->GetExpressionType() == ExpressionType::STAR) {
+			auto expr_type = returning_expr->GetExpressionType();
+			if (expr_type == ExpressionType::STAR) {
 				auto generated_star_list = vector<unique_ptr<ParsedExpression>>();
 				binder->bind_context.GenerateAllColumnExpressions((StarExpression &)*returning_expr, generated_star_list);
 				LogicalType result_type;
@@ -155,20 +160,17 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			} else {
 				LogicalType result_type;
 				auto expr = insert_binder.Bind(returning_expr, &result_type);
-				result.types.push_back(result_type);
 				result.names.push_back(expr->ToString());
+				result.types.push_back(result_type);
+				if (expr_type != ExpressionType::BOUND_COLUMN_REF) {
+					PlanSubqueries(&expr, &insert_as_logicaloperator);
+				}
 				projection_expressions.push_back(move(expr));
 			}
 		}
 
-//		if (insert->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-//			auto& insert_proj = (LogicalProjection&)*(insert->children[0]);
-//			insert_proj.child_of_returning_DMS = true;
-//			insert_proj.table_index = insert_table_index;
-//		}
-
 		auto projection = make_unique<LogicalProjection>(insert_table_index, move(projection_expressions));
-		projection->AddChild(move(insert));
+		projection->AddChild(move(insert_as_logicaloperator));
 		result.plan = move(projection);
 		D_ASSERT(result.types.size() == result.names.size());
 		this->allow_stream_result = true;

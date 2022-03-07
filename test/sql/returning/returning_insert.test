@@ -5,28 +5,42 @@
 statement ok
 CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAULT -3);
 
-# returning 1 column
+
+# returning 1 named column
 query I
 INSERT INTO table1 VALUES (1, 2, 3) RETURNING a;
 ----
 1
 
 # returning all columns with *
-query I
+query III
 INSERT INTO table1 VALUES (1, 2, 3) RETURNING *;
 ----
 1	2	3
 
-# returning all columns with column names
-query I
+# returning * expression with more named columns
+query IIIIII
+INSERT INTO table1 VALUES (10, 20, 30), (40, 50, 60), (70, 80, 90) RETURNING *, c, b, a;
+----
+10	20	30	30	20	10
+40	50	60	60	50	40
+70	80	90	90	80	70
+
+# returning all columns using column names
+query III
 INSERT INTO table1 VALUES (1, 2, 3) RETURNING a, b, c;
 ----
 1	2	3
 
-
 # returning column names out of order
-query I
+query III
 INSERT INTO table1 VALUES (1, 2, 3) RETURNING c, a, b;
+----
+3	1	2
+
+# inserting column names out of order, then returning them in order
+query III
+INSERT INTO table1 (c, b, a) VALUES (3, 2, 1) RETURNING a, b, c;
 ----
 1	2	3
 
@@ -35,38 +49,77 @@ INSERT INTO table1 VALUES (1, 2, 3) RETURNING c, a, b;
 query I
 INSERT INTO table1 VALUES (1, 2, 3) RETURNING a AS aliascol;
 ----
-100
-
-# returning using a column alias
-query I
-INSERT INTO table1 VALUES (1, 2, 3) RETURNING a AS aliascol;
-----
-100
+1
 
 # returning the result of inserting multiple columns
-query I
+query III
 INSERT INTO table1 VALUES (1, 2, 3), (4, 5, 6), (7, 8, 9) RETURNING *;
 ----
-1   2   3
-4   5   6
-7   8   9
+1	2	3
+4	5	6
+7	8	9
 
-# returning expression with function
-query I
+# returning expression with function is not allowed
+statement error
 INSERT INTO table1 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3) RETURNING SUM(a);
-----
-6
+
 
 # returning * while inserting only a subset of columns
-query I
+query III
 INSERT INTO table1(a) VALUES (10) RETURNING *;
 ----
 10	-2	-3
 
 
-query I
-INSERT INTO table1 (SELECT * from table1 WHERE a = 3, b = 3, c=3) returning *;
+# returning while insert uses a subquery
+query III
+INSERT INTO table1 (a, b, c) SELECT * from table1 WHERE a = 10 and b=-2 and c=-3 RETURNING *;
 ----
-3	3	3
+10	-2	-3
 
-# returing
+
+# returning with bound subquery
+query I
+INSERT INTO table1(a, b, c) SELECT * FROM table1 WHERE a = 10 and b=-2 and c=-3 LIMIT 1 RETURNING a IN (SELECT a FROM table1);
+----
+1
+
+
+# insert empty subquery returns nothing
+query III
+INSERT INTO table1 (a, b, c) SELECT * from table1 WHERE a = 100000 and b = 10000 and c=100000 RETURNING a, b, c;
+----
+
+statement ok
+----
+DELETE FROM table1;
+
+
+loop i 0 4000
+
+statement ok
+insert into table1 values (${i},${i}%10, ${i}*10);
+
+endloop
+
+query I
+SELECT count(*) FROM table1;
+----
+4000
+
+query I
+INSERT INTO table1(a, b, c) SELECT * FROM table1 WHERE a in (1, 2, 3, 4, 5) RETURNING a IN (SELECT a FROM table1 WHERE a=5);
+----
+0
+0
+0
+0
+1
+
+# test that all inserts get streamed back, and the insert amount is more than one chunk
+# subquery should not returng what is already in the table either
+# sum([0..3999]) = 7998000
+query I
+INSERT INTO table1(a, b, c) SELECT * FROM table1 RETURNING 7998015 IN (SELECT SUM(a) from table1);
+----
+1
