@@ -17,6 +17,8 @@ class LogicalInsert : public LogicalOperator {
 public:
 	explicit LogicalInsert(TableCatalogEntry *table)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table) {
+		table_index = 0;
+		return_chunk = false;
 	}
 
 	idx_t table_index;

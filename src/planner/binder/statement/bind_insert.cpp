@@ -75,6 +75,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// bind the default values
 	BindDefaultValues(table->columns, insert->bound_defaults);
 	if (!stmt.select_statement) {
+		result.names = {"Count"};
+		result.types = {LogicalType::BIGINT};
 		result.plan = move(insert);
 		return result;
 	}
