@@ -99,7 +99,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(De
 	auto expressions = Parser::ParseExpressionList(default_macro.macro);
 	D_ASSERT(expressions.size() == 1);
 
-	auto result = make_unique<MacroFunction>(move(expressions[0]));
+	auto result = make_unique<ScalarMacroFunction>(move(expressions[0]));
 	for (idx_t param_idx = 0; default_macro.parameters[param_idx] != nullptr; param_idx++) {
 		result->parameters.push_back(
 		    make_unique<ColumnRefExpression>(default_macro.parameters[param_idx]));
