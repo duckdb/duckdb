@@ -18,6 +18,7 @@ public:
 
 	unique_ptr<Expression> left;
 	unique_ptr<Expression> right;
+	bool null_values_are_equal = false;
 
 public:
 	string ToString() const override;

@@ -35,6 +35,7 @@ static bool CreateJoinCondition(Expression &expr, unordered_set<idx_t> &left_bin
 		}
 		condition.left = move(left);
 		condition.right = move(right);
+		condition.null_values_are_equal = comparison.null_values_are_equal;
 		conditions.push_back(move(condition));
 		return true;
 	}

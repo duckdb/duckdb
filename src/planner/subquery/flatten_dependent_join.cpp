@@ -13,8 +13,9 @@
 
 namespace duckdb {
 
-FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<CorrelatedColumnInfo> &correlated)
-    : binder(binder), correlated_columns(correlated) {
+FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<CorrelatedColumnInfo> &correlated,
+                                             bool any_join)
+    : binder(binder), correlated_columns(correlated), any_join(any_join) {
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		correlated_map[col.binding] = i;
@@ -52,7 +53,22 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_
 	return result;
 }
 
-unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan) {
+bool SubqueryDependentFilter(Expression *expr) {
+	if (expr->expression_class == ExpressionClass::BOUND_CONJUNCTION) {
+		auto bound_conjuction = (BoundConjunctionExpression *)expr;
+		for (auto &child : bound_conjuction->children) {
+			if (SubqueryDependentFilter(child.get())) {
+				return true;
+			}
+		}
+	}
+	if (expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
+		return true;
+	}
+	return false;
+}
+unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan,
+                                                                                 bool null_matters) {
 	// first check if the logical operator has correlated expressions
 	auto entry = has_correlated_expressions.find(plan.get());
 	D_ASSERT(entry != has_correlated_expressions.end());
@@ -73,7 +89,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_FILTER: {
 		// filter
 		// first we flatten the dependent join in the child of the filter
+		for (auto &expr : plan->expressions) {
+			any_join |= SubqueryDependentFilter(expr.get());
+		}
 		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
+
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
 		rewriter.VisitOperator(*plan);
@@ -82,7 +102,13 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		// projection
 		// first we flatten the dependent join in the child of the projection
-		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
+		for (auto &expr : plan->expressions) {
+			if (expr->type == ExpressionType::OPERATOR_IS_NULL || expr->type == ExpressionType::OPERATOR_IS_NULL) {
+				null_matters = true;
+			}
+		}
+		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]), null_matters);
+
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
 		rewriter.VisitOperator(*plan);
@@ -120,11 +146,19 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// we have to perform a LEFT OUTER JOIN between the result of this aggregate and the delim scan
 			// FIXME: this does not always have to be a LEFT OUTER JOIN, depending on whether aggr.expressions return
 			// NULL or a value
-			auto left_outer_join = make_unique<LogicalComparisonJoin>(JoinType::LEFT);
+			unique_ptr<LogicalComparisonJoin> join = make_unique<LogicalComparisonJoin>(JoinType::INNER);
+			for (auto &aggr_exp : aggr.expressions) {
+				auto b_aggr_exp = (BoundAggregateExpression *)aggr_exp.get();
+				if (b_aggr_exp->function.name == "count" || b_aggr_exp->function.name == "count_star" || null_matters ||
+				    any_join) {
+					join = make_unique<LogicalComparisonJoin>(JoinType::LEFT);
+					break;
+				}
+			}
 			auto left_index = binder.GenerateTableIndex();
 			auto delim_scan = make_unique<LogicalDelimGet>(left_index, delim_types);
-			left_outer_join->children.push_back(move(delim_scan));
-			left_outer_join->children.push_back(move(plan));
+			join->children.push_back(move(delim_scan));
+			join->children.push_back(move(plan));
 			for (idx_t i = 0; i < correlated_columns.size(); i++) {
 				JoinCondition cond;
 				cond.left =
@@ -134,7 +168,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				    ColumnBinding(aggr.group_index, (aggr.groups.size() - correlated_columns.size()) + i));
 				cond.comparison = ExpressionType::COMPARE_EQUAL;
 				cond.null_values_are_equal = true;
-				left_outer_join->conditions.push_back(move(cond));
+				join->conditions.push_back(move(cond));
 			}
 			// for any COUNT aggregate we replace references to the column with: CASE WHEN COUNT(*) IS NULL THEN 0
 			// ELSE COUNT(*) END
@@ -152,7 +186,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			base_binding.table_index = left_index;
 			this->delim_offset = base_binding.column_index = 0;
 			this->data_offset = 0;
-			return move(left_outer_join);
+			return move(join);
 		} else {
 			// update the delim_index
 			base_binding.table_index = aggr.group_index;

@@ -8,7 +8,9 @@
 namespace duckdb {
 
 unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
-	return make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
+	auto bound_comparison = make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
+	bound_comparison->null_values_are_equal = cond.null_values_are_equal;
+	return move(bound_comparison);
 }
 
 JoinSide JoinSide::CombineJoinSide(JoinSide left, JoinSide right) {

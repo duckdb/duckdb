@@ -243,7 +243,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// LHS
 		delim_join->AddChild(move(root));
 		// RHS
-		FlattenDependentJoins flatten(binder, correlated_columns);
+		FlattenDependentJoins flatten(binder, correlated_columns, true);
 		flatten.DetectCorrelatedExpressions(plan.get());
 		auto dependent_join = flatten.PushDownDependentJoin(move(plan));
 

@@ -100,6 +100,7 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 	// now loop over the equivalence sets
 	for (auto &entry : equivalence_map) {
 		auto equivalence_set = entry.first;
+		// somewhere here
 		auto &entries = entry.second;
 		auto &constant_list = constant_values.find(equivalence_set)->second;
 		// for each entry generate an equality expression comparing to each other
