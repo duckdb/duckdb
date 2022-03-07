@@ -70,7 +70,8 @@ void PragmaDatabaseSizeFunction(ClientContext &context, const FunctionData *bind
 		auto free_blocks = block_manager.FreeBlocks();
 		auto used_blocks = total_blocks - free_blocks;
 		auto bytes = (total_blocks * block_size);
-		auto wal_size = storage.GetWriteAheadLog()->GetWALSize();
+		auto wal = storage.GetWriteAheadLog();
+		auto wal_size = wal ? wal->GetWALSize() : 0;
 		output.data[0].SetValue(0, Value(StringUtil::BytesToHumanReadableString(bytes)));
 		output.data[1].SetValue(0, Value::BIGINT(block_size));
 		output.data[2].SetValue(0, Value::BIGINT(total_blocks));

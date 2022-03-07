@@ -608,6 +608,7 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		break;
 	}
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		SetVarchar<ArrowVarcharConversion, string_t>(child_holder, type, data, size);
 		break;

@@ -21,13 +21,13 @@ INSERT INTO qt VALUES (1, 'A', 1), (2, 'A', 2), (3, 'B', 1), (4, 'B', 2)
 
 # basic test
 query ITI
-SELECT * from qt QUALIFY row_number() over (PARTITION BY b ORDER BY c) = 1
+SELECT * from qt QUALIFY row_number() over (PARTITION BY b ORDER BY c) = 1 ORDER BY b
 ----
 1	A	1
 3	B	1
 
 query ITII
-SELECT a, b, c, row_number() over (PARTITION BY b ORDER BY c) as row_num FROM qt QUALIFY row_num = 1
+SELECT a, b, c, row_number() over (PARTITION BY b ORDER BY c) as row_num FROM qt QUALIFY row_num = 1 ORDER BY b
 ----
 1	A	1	1
 3	B	1	1
@@ -111,14 +111,14 @@ INSERT INTO power VALUES
 
 # qualify with ORDER
 query TTI
-SELECT * FROM power QUALIFY rank() OVER (PARTITION BY plant ORDER BY date DESC) = 2 ORDER BY plant DESC
+SELECT * FROM power QUALIFY rank() OVER (PARTITION BY plant ORDER BY date DESC) = 2 ORDER BY plant
 ----
-Worcester	2019-01-12	98963
 Boston		2019-01-12	486134
+Worcester	2019-01-12	98963
 
 query TTR
 SELECT * FROM (SELECT plant, date, avg(mwh) OVER (PARTITION BY plant ORDER BY date ASC RANGE BETWEEN INTERVAL 3 DAYS PRECEDING AND INTERVAL 3 DAYS FOLLOWING) AS avgmwh FROM power 
-ORDER BY plant, avgmwh DESC) QUALIFY row_number() OVER (PARTITION BY plant ORDER BY avgmwh DESC) = 1
+ORDER BY plant, avgmwh DESC) QUALIFY row_number() OVER (PARTITION BY plant ORDER BY avgmwh DESC) = 1 ORDER BY plant
 ----
 Boston		2019-01-11	532466.666667
 Worcester	2019-01-11	104823.833333
@@ -135,7 +135,7 @@ SELECT b, SUM(a) AS sum FROM test GROUP BY b QUALIFY row_number() OVER (PARTITIO
 ----
 
 query ITI
-SELECT * FROM qt QUALIFY row_number() OVER (PARTITION BY b ORDER BY c) = (SELECT max(c) FROM qt)
+SELECT * FROM qt QUALIFY row_number() OVER (PARTITION BY b ORDER BY c) = (SELECT max(c) FROM qt) ORDER BY b;
 ----
 2	A	2
 4	B	2
@@ -182,7 +182,7 @@ SELECT * FROM (SELECT b FROM test as t GROUP BY b QUALIFY rank() OVER (PARTITION
 22
 
 query II
-SELECT * FROM test QUALIFY row_number() OVER (PARTITION BY test.b) = (SELECT max(a) FROM qt GROUP BY qt.b QUALIFY rank() OVER (PARTITION BY qt.b) = 1)
+SELECT * FROM test QUALIFY row_number() OVER (PARTITION BY test.b) = (SELECT max(a) FROM qt GROUP BY qt.b QUALIFY rank() OVER (PARTITION BY qt.b) = 1 order by qt.b)
 ----
 13	22
 
