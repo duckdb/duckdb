@@ -47,7 +47,7 @@ PhysicalIEJoin::PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator>
 	D_ASSERT(range_position > 1);
 
 	// 1. let L1 (resp. L2) be the array of column X (resp. Y)
-	D_ASSERT(conditions.size() == 2);
+	D_ASSERT(conditions.size() >= 2);
 	lhs_orders.resize(2);
 	rhs_orders.resize(2);
 	for (idx_t i = 0; i < 2; ++i) {
@@ -971,7 +971,7 @@ public:
 			left_executor.AddExpression(*cond.left);
 
 			right_types.push_back(cond.left->return_type);
-			right_executor.AddExpression(*cond.left);
+			right_executor.AddExpression(*cond.right);
 		}
 
 		left_keys.Initialize(left_types);
@@ -1060,9 +1060,10 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &ch
 				// so we can compute the values for comparison.
 				const auto tail_cols = conditions.size() - 2;
 
-				chunk.Split(state.right_payload, left_cols);
+				DataChunk right_chunk;
+				chunk.Split(right_chunk, left_cols);
 				state.left_executor.SetChunk(chunk);
-				state.right_executor.SetChunk(state.right_payload);
+				state.right_executor.SetChunk(right_chunk);
 
 				auto tail_count = result_count;
 				for (size_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
@@ -1079,7 +1080,7 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &ch
 					tail_count = state.SelectJoinTail(conditions[cmp_idx + 2].comparison, left, right, sel, tail_count);
 					sel = &state.true_sel;
 				}
-				chunk.Fuse(state.right_payload);
+				chunk.Fuse(right_chunk);
 
 				if (tail_count < result_count) {
 					result_count = tail_count;
