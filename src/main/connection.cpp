@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientContext>(database.shared_from_this())) {
+Connection::Connection(DatabaseInstance &database) : database(database.shared_from_this()), context(make_shared<ClientContext>(database.shared_from_this())) {
 	ConnectionManager::Get(database).AddConnection(*context);
 #ifdef DEBUG
 	EnableProfiling();
@@ -24,6 +24,10 @@ Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientC
 }
 
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
+}
+
+Connection::~Connection() {
+	ConnectionManager::Get(*database).RemoveConnection(*context);
 }
 
 string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
