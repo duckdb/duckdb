@@ -14,6 +14,8 @@
 #include "duckdb_python/pyconnection.hpp"
 
 namespace duckdb {
+#pragma GCC visibility push(hidden)
+
 struct DuckDBPyResult;
 
 struct DuckDBPyRelation {
@@ -191,5 +193,6 @@ private:
 	                              const string &projected_columns = "", const string &window_function = "");
 	py::object map_function;
 };
+#pragma GCC visibility pop
 
 } // namespace duckdb

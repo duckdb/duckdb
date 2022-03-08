@@ -48,7 +48,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
 	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("chunk_size") = 1000000)
-	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
+	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
+	         py::arg("chunk_size") = 1000000)
 	    .def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
 	    .def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
 	    .def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction")

@@ -12,7 +12,7 @@
 #include "duckdb.hpp"
 
 namespace duckdb {
-
+#pragma GCC visibility push(hidden)
 struct RawArrayWrapper {
 	explicit RawArrayWrapper(const LogicalType &type);
 
@@ -27,7 +27,6 @@ public:
 	void Resize(idx_t new_capacity);
 	void Append(idx_t current_offset, Vector &input, idx_t count);
 };
-
 struct ArrayWrapper {
 	explicit ArrayWrapper(const LogicalType &type);
 
@@ -60,5 +59,6 @@ private:
 	idx_t count;
 	idx_t capacity;
 };
+#pragma GCC visibility pop
 
 } // namespace duckdb

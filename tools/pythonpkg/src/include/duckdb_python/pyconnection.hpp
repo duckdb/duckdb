@@ -17,9 +17,9 @@
 
 namespace duckdb {
 
+#pragma GCC visibility push(hidden)
 struct DuckDBPyRelation;
 struct DuckDBPyResult;
-
 class RegisteredObject {
 public:
 	explicit RegisteredObject(py::object obj_p) : obj(move(obj_p)) {
@@ -120,5 +120,6 @@ public:
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;
 };
+#pragma GCC visibility pop
 
 } // namespace duckdb

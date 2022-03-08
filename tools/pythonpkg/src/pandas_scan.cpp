@@ -9,6 +9,7 @@
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
+#pragma GCC visibility push(hidden)
 
 struct PandasScanFunctionData : public TableFunctionData {
 	PandasScanFunctionData(py::handle df, idx_t row_count, vector<PandasColumnBindData> pandas_bind_data,
@@ -27,6 +28,7 @@ struct PandasScanFunctionData : public TableFunctionData {
 		pandas_bind_data.clear();
 	}
 };
+#pragma GCC visibility pop
 
 struct PandasScanState : public FunctionOperatorData {
 	PandasScanState(idx_t start, idx_t end) : start(start), end(end) {

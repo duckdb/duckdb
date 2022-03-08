@@ -146,14 +146,6 @@ def fetch_arrow_query(duckdb_conn, queue):
     except:
         queue.put(False) 
 
-def fetch_arrow_chunk_query(duckdb_conn, queue):
-    # Get a new connection
-    duckdb_conn = duckdb.connect()
-    try:
-        duckdb_conn.execute('select i from (values (42), (84), (NULL), (128)) tbl(i)').fetch_arrow_chunk()
-        queue.put(True)
-    except:
-        queue.put(False) 
 
 def fetch_record_batch_query(duckdb_conn, queue):
     # Get a new connection
@@ -363,12 +355,6 @@ class TestDuckMultithread(object):
         if not can_run:
             return
         duck_threads = DuckDBThreaded(10,fetch_arrow_query)
-        duck_threads.multithread_test()
-
-    def test_fetch_arrow_chunk(self, duckdb_cursor):
-        if not can_run:
-            return
-        duck_threads = DuckDBThreaded(10,fetch_arrow_chunk_query)
         duck_threads.multithread_test()
 
     def test_fetch_record_batch(self, duckdb_cursor):

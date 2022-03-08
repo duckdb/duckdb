@@ -338,6 +338,9 @@ py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 }
 
 py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
+	if (!result) {
+		throw std::runtime_error("There is no query result");
+	}
 	py::gil_scoped_acquire acquire;
 
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");

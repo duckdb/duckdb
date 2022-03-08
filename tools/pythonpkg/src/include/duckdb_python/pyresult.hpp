@@ -13,6 +13,7 @@
 #include "duckdb_python/pybind_wrapper.hpp"
 
 namespace duckdb {
+#pragma GCC visibility push(hidden)
 
 struct DuckDBPyResult {
 public:
@@ -55,5 +56,6 @@ private:
 
 	py::object FetchAllArrowChunks(idx_t chunk_size);
 };
+#pragma GCC visibility pop
 
 } // namespace duckdb
