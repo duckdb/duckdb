@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/persistent/physical_update.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -15,11 +16,15 @@ namespace duckdb {
 class UpdateGlobalState : public GlobalSinkState {
 public:
 	UpdateGlobalState() : updated_count(0) {
+		return_chunk_collection = ChunkCollection();
+		returned_chunk_count = 0;
 	}
 
 	mutex lock;
 	idx_t updated_count;
 	unordered_set<row_t> updated_columns;
+	ChunkCollection return_chunk_collection;
+	idx_t returned_chunk_count;
 };
 
 class UpdateLocalState : public LocalSinkState {
@@ -102,6 +107,10 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 		table.Update(tableref, context.client, row_ids, columns, update_chunk);
 	}
 	gstate.updated_count += chunk.size();
+
+	if (return_chunk) {
+		gstate.return_chunk_collection.Append(update_chunk);
+	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -142,10 +151,29 @@ void PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	if (state.finished) {
 		return;
 	}
+	if (!return_chunk) {
+		chunk.SetCardinality(1);
+		chunk.SetValue(0, 0, Value::BIGINT(g.updated_count));
+		state.finished = true;
+	} else {
+		idx_t chunk_return = g.returned_chunk_count;
 
-	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(g.updated_count));
-	state.finished = true;
+		if (g.return_chunk_collection.Chunks().size() > chunk_return) {
+			(g.return_chunk_collection.Chunks().at(chunk_return))->Copy(chunk);
+			chunk.SetCardinality((g.return_chunk_collection.Chunks().at(chunk_return))->size());
+			g.returned_chunk_count += 1;
+			if (g.returned_chunk_count >= g.return_chunk_collection.Chunks().size()) {
+				state.finished = true;
+			}
+		} else {
+			//! it's possible nothing was updated.
+			//! in this case reset the returning chunk and set state.finished = true
+			chunk.Reset();
+			state.finished = true;
+		}
+	}
+
+
 }
 
 } // namespace duckdb

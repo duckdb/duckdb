@@ -18,6 +18,7 @@ public:
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_DELETE), table(table) {
 	}
 
+	//! The base table to delete
 	TableCatalogEntry *table;
 
 protected:

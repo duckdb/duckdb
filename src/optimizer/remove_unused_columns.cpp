@@ -187,6 +187,15 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		remove.VisitOperator(*op.children[0]);
 		return;
 	}
+	case LogicalOperatorType::LOGICAL_UPDATE: {
+		//! When RETURNING is used, a PROJECTION is the top level operator
+		//! We still need to project all values from the insert so the projection
+		//! on top of the INSERT can select from only that table values being inserted
+		RemoveUnusedColumns remove(binder, context, true);
+		remove.VisitOperatorExpressions(op);
+		remove.VisitOperator(*op.children[0]);
+		return;
+	}
 	case LogicalOperatorType::LOGICAL_GET:
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		if (!everything_referenced) {

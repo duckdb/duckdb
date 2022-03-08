@@ -202,10 +202,60 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	// set the projection as child of the update node and finalize the result
 	update->AddChild(move(proj));
 
-	result.names = {"Count"};
-	result.types = {LogicalType::BIGINT};
-	result.plan = move(update);
-	this->allow_stream_result = false;
+	if (!stmt.returning_list.empty()) {
+		update->return_chunk = true;
+		auto update_table_index = GenerateTableIndex();
+		update->table_index = update_table_index;
+
+		auto binder = Binder::CreateBinder(context);
+		auto types = table->GetTypes();
+		auto names = vector<std::string>();
+		for (auto &col : table->columns) {
+			names.push_back(col.name);
+		}
+
+		binder->bind_context.AddGenericBinding(update->table_index, table->name, names, types);
+		UpdateBinder update_binder(*binder, context);
+
+		unique_ptr<LogicalOperator> update_as_logicaloperator = move(update);
+
+		auto projection_expressions = vector<unique_ptr<Expression>>();
+		LogicalType result_type;
+		for (auto &returning_expr : stmt.returning_list) {
+			auto expr_type = returning_expr->GetExpressionType();
+			if (expr_type == ExpressionType::STAR) {
+				auto generated_star_list = vector<unique_ptr<ParsedExpression>>();
+				binder->bind_context.GenerateAllColumnExpressions((StarExpression &)*returning_expr,
+				                                                  generated_star_list);
+
+				for (auto &star_column : generated_star_list) {
+					auto star_expr = update_binder.Bind(star_column, &result_type);
+					result.types.push_back(result_type);
+					result.names.push_back(star_expr->ToString());
+					projection_expressions.push_back(move(star_expr));
+				}
+			} else {
+				auto expr = update_binder.Bind(returning_expr, &result_type);
+				result.names.push_back(expr->ToString());
+				result.types.push_back(result_type);
+				if (expr_type != ExpressionType::BOUND_COLUMN_REF) {
+					PlanSubqueries(&expr, &update_as_logicaloperator);
+				}
+				projection_expressions.push_back(move(expr));
+			}
+		}
+
+		auto projection = make_unique<LogicalProjection>(update_table_index, move(projection_expressions));
+		projection->AddChild(move(update_as_logicaloperator));
+		result.plan = move(projection);
+		D_ASSERT(result.types.size() == result.names.size());
+		this->allow_stream_result = true;
+	} else {
+		result.names = {"Count"};
+		result.types = {LogicalType::BIGINT};
+		result.plan = move(update);
+		this->allow_stream_result = false;
+	}
 	return result;
 }
 
