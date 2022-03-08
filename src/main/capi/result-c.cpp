@@ -450,5 +450,18 @@ const char *duckdb_result_error(duckdb_result *result) {
 		return nullptr;
 	}
 	auto &result_data = *((duckdb::DuckDBResultData *) result->internal_data);
-	return result_data.result->error.c_str();
+	return result_data.result->success ? nullptr : result_data.result->error.c_str();
+}
+
+duckdb_data_chunk duckdb_result_fetch_chunk(duckdb_result result) {
+	if (!result.internal_data) {
+		return nullptr;
+	}
+	auto &result_data = *((duckdb::DuckDBResultData *) result.internal_data);
+	if (result_data.result_set_type == duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
+		return nullptr;
+	}
+	result_data.result_set_type = duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_NEW;
+	auto chunk = result_data.result->Fetch();
+	return chunk.release();
 }

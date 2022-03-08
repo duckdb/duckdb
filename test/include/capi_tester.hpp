@@ -8,6 +8,31 @@
 
 namespace duckdb {
 
+class CAPIDataChunk {
+public:
+	CAPIDataChunk(duckdb_data_chunk chunk_p) :
+ 		chunk(chunk_p) {}
+	~CAPIDataChunk() {
+	    duckdb_destroy_data_chunk(&chunk);
+	}
+
+	idx_t ColumnCount() {
+		return duckdb_data_chunk_get_column_count(chunk);
+	}
+	idx_t size() {
+		return duckdb_data_chunk_get_size(chunk);
+	}
+	void *GetData(idx_t col) {
+		return duckdb_data_chunk_get_data(chunk, col);
+	}
+	uint64_t *GetValidity(idx_t col) {
+		return duckdb_data_chunk_get_validity(chunk, col);
+	}
+
+private:
+	duckdb_data_chunk chunk;
+};
+
 class CAPIResult {
 public:
 	~CAPIResult() {
@@ -22,6 +47,14 @@ public:
 
 	duckdb_type ColumnType(idx_t col) {
 		return duckdb_column_type(&result, col);
+	}
+
+	unique_ptr<CAPIDataChunk> FetchChunk() {
+		auto chunk = duckdb_result_fetch_chunk(result);
+		if (!chunk) {
+			return nullptr;
+		}
+		return make_unique<CAPIDataChunk>(chunk);
 	}
 
 	template <class T>

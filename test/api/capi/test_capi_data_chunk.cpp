@@ -76,11 +76,15 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 	duckdb_data_chunk_ensure_validity_writable(data_chunk, 0);
 	duckdb_data_chunk_ensure_validity_writable(data_chunk, 1);
 	auto col1_validity = duckdb_data_chunk_get_validity(data_chunk, 0);
-	REQUIRE(col1_validity);
+	REQUIRE(duckdb_validity_row_is_valid(col1_validity, 0));
+	duckdb_validity_set_row_validity(col1_validity, 0, false);
+	REQUIRE(!duckdb_validity_row_is_valid(col1_validity, 0));
+
 	auto col2_validity = duckdb_data_chunk_get_validity(data_chunk, 1);
 	REQUIRE(col2_validity);
-	*col1_validity = 0;
-	*col2_validity = 0;
+	REQUIRE(duckdb_validity_row_is_valid(col2_validity, 0));
+	duckdb_validity_set_row_validity(col2_validity, 0, false);
+	REQUIRE(!duckdb_validity_row_is_valid(col2_validity, 0));
 
 	duckdb_data_chunk_set_size(data_chunk, 1);
 	REQUIRE(duckdb_data_chunk_get_size(data_chunk) == 1);
@@ -120,5 +124,33 @@ TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 
+	// fetch a small result set
+	result = tester.Query("SELECT CASE WHEN i=1 THEN NULL ELSE i::INTEGER END i FROM range(3) tbl(i)");
+	REQUIRE(NO_FAIL(*result));
+	REQUIRE(result->ColumnCount() == 1);
+	REQUIRE(result->ErrorMessage() == nullptr);
 
+	// fetch the first chunk
+	auto chunk = result->FetchChunk();
+	REQUIRE(chunk);
+
+	REQUIRE(chunk->ColumnCount() == 1);
+	REQUIRE(chunk->size() == 3);
+
+	auto data = (int32_t *) chunk->GetData(0);
+	auto validity = chunk->GetValidity(0);
+	REQUIRE(data[0] == 0);
+	REQUIRE(data[2] == 2);
+	REQUIRE(duckdb_validity_row_is_valid(validity, 0));
+	REQUIRE(!duckdb_validity_row_is_valid(validity, 1));
+	REQUIRE(duckdb_validity_row_is_valid(validity, 2));
+
+	// after fetching a chunk, we cannot use the old API anymore
+	REQUIRE(result->ColumnData<int32_t>(0) == nullptr);
+	REQUIRE(result->row_count() == 0);
+	REQUIRE(result->Fetch<int32_t>(0, 1) == 0);
+
+	// result set is exhausted!
+	chunk = result->FetchChunk();
+	REQUIRE(!chunk);
 }

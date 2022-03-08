@@ -22,6 +22,8 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	// out of range fetch
 	REQUIRE(result->Fetch<int64_t>(1, 0) == 0);
 	REQUIRE(result->Fetch<int64_t>(0, 1) == 0);
+	// cannot fetch data chunk after using the value API
+	REQUIRE(result->FetchChunk() == nullptr);
 
 	// select scalar NULL
 	result = tester.Query("SELECT NULL");

@@ -88,3 +88,38 @@ void duckdb_data_chunk_ensure_validity_writable(duckdb_data_chunk chunk, idx_t c
 	auto &validity = duckdb::FlatVector::Validity(dchunk->data[col_idx]);
 	validity.EnsureWritable();
 }
+
+bool duckdb_validity_row_is_valid(uint64_t *validity, idx_t row) {
+	if (!validity) {
+		return true;
+	}
+	idx_t entry_idx = row / 64;
+	idx_t idx_in_entry = row % 64;
+	return validity[entry_idx] & (1 << idx_in_entry);
+}
+
+void duckdb_validity_set_row_validity(uint64_t *validity, idx_t row, bool valid) {
+	if (valid) {
+		duckdb_validity_set_row_valid(validity, row);
+	} else {
+		duckdb_validity_set_row_invalid(validity, row);
+	}
+}
+
+void duckdb_validity_set_row_invalid(uint64_t *validity, idx_t row) {
+	if (!validity) {
+		return;
+	}
+	idx_t entry_idx = row / 64;
+	idx_t idx_in_entry = row % 64;
+	validity[entry_idx] &= ~(1 << idx_in_entry);
+}
+
+void duckdb_validity_set_row_valid(uint64_t *validity, idx_t row) {
+	if (!validity) {
+		return;
+	}
+	idx_t entry_idx = row / 64;
+	idx_t idx_in_entry = row % 64;
+	validity[entry_idx] |= 1 << idx_in_entry;
+}

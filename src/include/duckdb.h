@@ -1050,6 +1050,8 @@ idx_t entry_idx = row_idx / 64;
 idx_t idx_in_entry = row_idx % 64;
 bool is_valid = validity_mask[entry_idx] & (1 << idx_in_entry);
 
+Alternatively, the (slower) duckdb_validity_row_is_valid function can be used.
+
 * chunk: The data chunk to get the data from
 * returns: The pointer to the validity mask, or NULL if no validity mask is present
 */
@@ -1064,6 +1066,50 @@ This allows null values to be written to the data chunk, regardless of whether a
 * chunk: The data chunk to alter
 */
 DUCKDB_API void duckdb_data_chunk_ensure_validity_writable(duckdb_data_chunk chunk, idx_t col_idx);
+
+//===--------------------------------------------------------------------===//
+// Validity Mask Functions
+//===--------------------------------------------------------------------===//
+/*!
+Returns whether or not a row is valid (i.e. not NULL) in the given validity mask.
+
+* validity: The validity mask, as obtained through `duckdb_data_chunk_get_validity`
+* row: The row index
+* returns: true if the row is valid, false otherwise
+*/
+DUCKDB_API bool duckdb_validity_row_is_valid(uint64_t *validity, idx_t row);
+
+/*!
+In a validity mask, sets a specific row to either valid or invalid.
+
+Note that `duckdb_data_chunk_ensure_validity_writable` should be called before calling `duckdb_data_chunk_get_validity`,
+to ensure that there is a validity mask to write to.
+
+* validity: The validity mask, as obtained through `duckdb_data_chunk_get_validity`.
+* row: The row index
+* valid: Whether or not to set the row to valid, or invalid
+*/
+DUCKDB_API void duckdb_validity_set_row_validity(uint64_t *validity, idx_t row, bool valid);
+
+/*!
+In a validity mask, sets a specific row to invalid.
+
+Equivalent to `duckdb_validity_set_row_validity` with valid set to false.
+
+* validity: The validity mask
+* row: The row index
+*/
+DUCKDB_API void duckdb_validity_set_row_invalid(uint64_t *validity, idx_t row);
+
+/*!
+In a validity mask, sets a specific row to valid.
+
+Equivalent to `duckdb_validity_set_row_validity` with valid set to true.
+
+* validity: The validity mask
+* row: The row index
+*/
+DUCKDB_API void duckdb_validity_set_row_valid(uint64_t *validity, idx_t row);
 
 //===--------------------------------------------------------------------===//
 // Table Functions
