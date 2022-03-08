@@ -9,6 +9,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
@@ -79,11 +80,24 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	// suppose we have a constraint CHECK(i + j < 10); now we need both i and j to check the constraint
 	// if we are only updating one of the two columns we add the other one to the UPDATE set
 	// with a "useless" update (i.e. i=i) so we can verify that the CHECK constraint is not violated
+	bool is_must_update = false;
 	for (auto &constraint : table.bound_constraints) {
 		if (constraint->type == ConstraintType::CHECK) {
 			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
 			// check constraint! check if we need to add any extra columns to the UPDATE clause
 			BindExtraColumns(table, get, proj, update, check.bound_columns);
+		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
+			auto &bfk = *reinterpret_cast<BoundForeignKeyConstraint *>(constraint.get());
+			if (bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+				// if there is a column don't be contained in fk_key_set, set flag to false
+				is_must_update = true;
+				for (idx_t i = 0; i < update.columns.size(); i++) {
+					if (bfk.fk_key_set.find(update.columns[i]) == bfk.fk_key_set.end()) {
+						is_must_update = false;
+						break;
+					}
+				}
+			}
 		}
 	}
 	// for index updates we always turn any update into an insert and a delete
@@ -103,6 +117,11 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 			update.update_is_del_and_insert = true;
 			break;
 		}
+	}
+
+	// if there is a self referencing foreign key constraint, update_is_del_and_insert sets to false
+	if (is_must_update) {
+		update.update_is_del_and_insert = false;
 	}
 
 	if (update.update_is_del_and_insert) {

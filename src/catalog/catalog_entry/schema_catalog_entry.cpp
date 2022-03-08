@@ -31,11 +31,39 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 
 #include <algorithm>
 #include <sstream>
 
 namespace duckdb {
+
+bool FindForeignKeyInformation(CatalogEntry *entry, vector<string> &pk_columns, vector<string> &fk_columns,
+                               ForeignKeyInfo &info, bool is_drop) {
+	bool is_found = false;
+	if (entry->type != CatalogType::TABLE_ENTRY) {
+		return false;
+	}
+	auto *table_entry = (TableCatalogEntry *)entry;
+	for (idx_t i = 0; i < table_entry->constraints.size(); i++) {
+		auto &cond = table_entry->constraints[i];
+		if (cond->type == ConstraintType::FOREIGN_KEY) {
+			auto &fk = (ForeignKeyConstraint &)*cond;
+			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+				pk_columns = fk.pk_columns;
+				fk_columns = fk.fk_columns;
+				info = fk.info;
+				is_found = true;
+			} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && is_drop) {
+				throw CatalogException(
+				    "Could not drop the table because this table is main key table of the table \"%s\"", fk.info.table);
+			}
+		}
+	}
+
+	return is_found;
+}
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name_p, bool internal)
     : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, move(name_p)),
@@ -102,7 +130,30 @@ CatalogEntry *SchemaCatalogEntry::CreateType(ClientContext &context, CreateTypeI
 CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
 	auto table = make_unique<TableCatalogEntry>(catalog, this, info);
 	table->storage->info->cardinality = table->storage->GetTotalRows();
-	return AddEntry(context, move(table), info->Base().on_conflict, info->dependencies);
+	CatalogEntry *entry = AddEntry(context, move(table), info->Base().on_conflict, info->dependencies);
+	if (!entry) {
+		return nullptr;
+	}
+	// add a foreign key constraint in main key table if there is a foreign key constraint
+	vector<string> pk_columns, fk_columns;
+	ForeignKeyInfo fk_info;
+	if (FindForeignKeyInformation(entry, pk_columns, fk_columns, fk_info, false)) {
+		D_ASSERT(!fk_info.pk_keys.empty() && !fk_info.fk_keys.empty());
+		// alter primary key table
+		auto alter_info = make_unique<AlterForeignKeyInfo>(fk_info.schema, fk_info.table, entry->name, pk_columns,
+		                                                   fk_columns, fk_info.pk_keys, fk_info.fk_keys, true);
+		catalog->Alter(context, alter_info.get());
+
+		// make a dependency between this table and referenced table
+		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
+		auto pk_table_entry_ptr = set.GetEntry(context, fk_info.table);
+		if (pk_table_entry_ptr) {
+			info->dependencies.insert(pk_table_entry_ptr);
+		} else {
+			throw ParserException("Can't find table \"%s\" in foreign key constraint", fk_info.table);
+		}
+	}
+	return entry;
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateView(ClientContext &context, CreateViewInfo *info) {
@@ -206,8 +257,23 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info->name,
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info->type));
 	}
+
+	// if there is a foreign key constraint, get that information
+	vector<string> pk_columns, fk_columns;
+	ForeignKeyInfo fk_info;
+	bool is_found = FindForeignKeyInformation(existing_entry, pk_columns, fk_columns, fk_info, true);
+
 	if (!set.DropEntry(context, info->name, info->cascade)) {
 		throw InternalException("Could not drop element because of an internal error");
+	}
+
+	// remove the foreign key constraint in main key table if main key table's name is valid
+	if (is_found) {
+		// alter primary key tablee
+		auto &catalog = Catalog::GetCatalog(context);
+		auto info = make_unique<AlterForeignKeyInfo>(fk_info.schema, fk_info.table, existing_entry->name, pk_columns,
+		                                             fk_columns, fk_info.pk_keys, fk_info.fk_keys, false);
+		catalog.Alter(context, info.get());
 	}
 }
 
