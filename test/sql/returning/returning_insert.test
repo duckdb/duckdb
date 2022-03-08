@@ -49,7 +49,7 @@ INSERT INTO table1 VALUES (1, 2, 3) RETURNING a AS alias1, b AS alias2;
 ----
 1	2
 
-# returning expression with aggregation function is not allowed
+# returning expression with aggregate function at top level is not allowed
 statement error
 INSERT INTO table1 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3) RETURNING SUM(a);
 
@@ -94,22 +94,100 @@ INSERT INTO table1 VALUES (1, 2, 3) RETURNING CASE WHEN b=3 THEN a ELSE b END;
 ----
 2
 
-statement ok
+# returning combination of columns
+query I
+INSERT INTO table1 VALUES (1, 1, -3) RETURNING a + b + c;
 ----
-DELETE FROM table1;
-
-statement ok
-insert into table1(a) select * from range (0, 4000, 1) t1(a);
+-1
 
 query I
-SELECT count(*) FROM table1;
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING 'hello';
 ----
-4000
+hello
 
-mode output_hash
-
-# the following two tests test that all inserts get streamed back to the returning statement
 query I
-INSERT INTO table1(a, b, c) SELECT a, b, c FROM table1  RETURNING a;
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING [a, b, c];
 ----
-4000 values hashing to b28a0440a7c3898c88617db0673db740
+[1, 2, 3]
+
+query I
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING {'a':a, 'b':b, 'c':c};
+----
+{'a': 1, 'b': 2, 'c': 3}
+
+# uncorrelated scalar subqueries
+query III
+INSERT INTO table1(a) (SELECT 42) RETURNING a, b, (select 10);
+----
+42	-2	10
+
+# insert with VALUES (scalar) throws error
+statement error
+INSERT INTO table1(a) VALUES (SELECT 42) RETURNING a, b, (select 10);
+
+# uncorrelated scalar subquery
+query I
+INSERT INTO table1(a) (SELECT 42) RETURNING (SELECT 10);
+----
+10
+
+mode skip
+# scalar subquery
+query III
+INSERT INTO table1(a, b) VALUES (42, 43) RETURNING (SELECT a), (SELECT b), (SELECT c where c = -10);
+----
+42	43	NULL
+mode unskip
+
+# unknown columns
+statement error
+INSERT INTO table1 VALUES (1,2,3) RETURNING d, e, f
+
+# Top level statement cannot contain a window function
+statement error
+INSERT INTO table1 SELECT * from table1 RETURNING row_number() OVER (ORDER BY a) as row_number, a, b FROM table1;
+
+# Window function in subquery
+query I
+INSERT INTO table1 VALUES (-10, -20, -30), (-50, -60, -70) RETURNING (1, -60, -70) IN (SELECT row_number() OVER (ORDER BY b) AS row_number, b, c  FROM table1;
+
+# new table with multiple types
+statement ok
+CREATE TABLE table2 (a VARCHAR DEFAULT 'hello world', b INT);
+
+query II
+INSERT INTO table2(a,b) VALUES ('hello duckdb', 1) RETURNING b, a;
+----
+1	hello duckdb
+
+query I
+INSERT INTO table2(b) VALUES (97) RETURNING b::VARCHAR;
+----
+97
+
+
+### SEQUENCES
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE TABLE table3 (a INTEGER DEFAULT nextval('seq'), b INTEGER);
+
+query II
+INSERT INTO table3(b) VALUES (4), (5) RETURNING a, b;
+----
+0	4
+1	5
+
+query I
+INSERT INTO table2(a, b) VALUES ('duckdb', 97) RETURNING {'a': a, 'b': b};
+----
+{'a': duckdb, 'b': 97}
+
+# window functions
+statement ok
+CREATE TABLE table4(x INTEGER PRIMARY KEY, y TEXT);
+
+statement ok
+INSERT INTO table4 VALUES (1, 'aaa'), (2, 'ccc'), (3, 'bbb') returning (SELECT ;
+

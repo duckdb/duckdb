@@ -139,7 +139,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 		auto binder = Binder::CreateBinder(context);
 		auto types = table->GetTypes();
-		auto names = vector<std::string>();
+		 vector<std::string> names;
 		for (auto &col : table->columns) {
 			names.push_back(col.name);
 		}
@@ -149,7 +149,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 		unique_ptr<LogicalOperator> insert_as_logicaloperator = move(insert);
 
-		auto projection_expressions = vector<unique_ptr<Expression>>();
+		vector<unique_ptr<Expression>> projection_expressions;
 		LogicalType result_type;
 		for (auto &returning_expr : stmt.returning_list) {
 			auto expr_type = returning_expr->GetExpressionType();
@@ -161,16 +161,14 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 				for (auto &star_column : generated_star_list) {
 					auto star_expr = insert_binder.Bind(star_column, &result_type);
 					result.types.push_back(result_type);
-					result.names.push_back(star_expr->ToString());
+					result.names.push_back(star_expr->GetName());
 					projection_expressions.push_back(move(star_expr));
 				}
 			} else {
 				auto expr = insert_binder.Bind(returning_expr, &result_type);
-				result.names.push_back(expr->ToString());
+				result.names.push_back(expr->GetName());
 				result.types.push_back(result_type);
-				if (expr_type != ExpressionType::BOUND_COLUMN_REF) {
-					PlanSubqueries(&expr, &insert_as_logicaloperator);
-				}
+				PlanSubqueries(&expr, &insert_as_logicaloperator);
 				projection_expressions.push_back(move(expr));
 			}
 		}

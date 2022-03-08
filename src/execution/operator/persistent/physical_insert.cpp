@@ -39,7 +39,7 @@ public:
 
 PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
                                vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
-                               idx_t return_chunk)
+                               bool return_chunk)
     : PhysicalOperator(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
       column_index_map(std::move(column_index_map)), table(table), bound_defaults(move(bound_defaults)),
       return_chunk(return_chunk) {
@@ -129,22 +129,18 @@ void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		chunk.SetCardinality(1);
 		chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
 		state.finished = true;
-	} else {
-		idx_t chunk_return = insert_gstate.returned_chunk_count;
+	}
 
-		if (insert_gstate.return_chunk_collection.Chunks().size() > chunk_return) {
-			(insert_gstate.return_chunk_collection.Chunks().at(chunk_return))->Copy(chunk);
-			chunk.SetCardinality((insert_gstate.return_chunk_collection.Chunks().at(chunk_return))->size());
-			insert_gstate.returned_chunk_count += 1;
-			if (insert_gstate.returned_chunk_count >= insert_gstate.return_chunk_collection.Chunks().size()) {
-				state.finished = true;
-			}
-		} else {
-			//! it's possible nothing was inserted because of a bad subquery in select.
-			//! in this case reset the result chunk just set state.finished = true
-			chunk.Reset();
-			state.finished = true;
-		}
+	idx_t chunk_return = insert_gstate.returned_chunk_count;
+	if (chunk_return >= insert_gstate.return_chunk_collection.Chunks().size()) {
+		return;
+	}
+
+	(insert_gstate.return_chunk_collection.Chunks().at(chunk_return))->Copy(chunk);
+	chunk.SetCardinality((insert_gstate.return_chunk_collection.Chunks().at(chunk_return))->size());
+	insert_gstate.returned_chunk_count += 1;
+	if (insert_gstate.returned_chunk_count >= insert_gstate.return_chunk_collection.Chunks().size()) {
+		state.finished = true;
 	}
 }
 
