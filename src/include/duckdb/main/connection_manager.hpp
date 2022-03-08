@@ -27,6 +27,17 @@ public:
 		connections.push_back(weak_ptr<ClientContext>(context.shared_from_this()));
 	}
 
+	void RemoveConnection(ClientContext &context) {
+		lock_guard<mutex> lock(connections_lock);
+		for (size_t i = 0; i < connections.size(); i++) {
+			auto connection = connections[i].lock();
+			if (connection == context.shared_from_this()) {
+				connections.erase(connections.begin() + i);
+				return;
+			}
+		}
+	}
+
 	vector<shared_ptr<ClientContext>> GetConnectionList() {
 		vector<shared_ptr<ClientContext>> result;
 		for (size_t i = 0; i < connections.size(); i++) {
