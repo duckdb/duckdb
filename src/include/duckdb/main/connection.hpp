@@ -41,7 +41,6 @@ public:
 	DUCKDB_API explicit Connection(DatabaseInstance &database);
 	DUCKDB_API ~Connection();
 
-	shared_ptr<DatabaseInstance> database;
 	shared_ptr<ClientContext> context;
 	warning_callback warning_cb;
 
