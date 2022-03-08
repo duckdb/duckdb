@@ -32,6 +32,27 @@ SELECT id, b[1][1] FROM a ORDER BY id
 2	4
 
 query II
+SELECT id, b[0][0] FROM a ORDER BY id
+----
+0	NULL
+1	NULL
+2	NULL
+
+query II
+SELECT id, b[0][1] FROM a ORDER BY id
+----
+0	NULL
+1	NULL
+2	NULL
+
+query II
+SELECT id, b[1][0] FROM a ORDER BY id
+----
+0	NULL
+1	NULL
+2	NULL
+
+query II
 SELECT id, b[1][4] FROM a ORDER BY id
 ----
 0	NULL

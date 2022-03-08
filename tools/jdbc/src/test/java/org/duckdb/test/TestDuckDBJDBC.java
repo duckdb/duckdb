@@ -144,6 +144,56 @@ public class TestDuckDBJDBC {
 
 	}
 
+	public static void test_timestamp_tz() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs;
+		
+		stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMPTZ)");
+		stmt.execute("INSERT INTO t (id, t1) VALUES (1, '2022-01-01T12:11:10+02')");
+		stmt.execute("INSERT INTO t (id, t1) VALUES (2, '2022-01-01T12:11:10')");
+
+		PreparedStatement ps = conn.prepareStatement(
+				"INSERT INTO T (id, t1) VALUES (?, ?)");
+
+		OffsetDateTime odt1 = OffsetDateTime.of(2020, 10, 7, 13, 15, 7, 12345, ZoneOffset.ofHours(7));
+		OffsetDateTime odt1Rounded = OffsetDateTime.of(2020, 10, 7, 13, 15, 7, 12000, ZoneOffset.ofHours(7));
+		OffsetDateTime odt2 = OffsetDateTime.of(1878, 10, 2, 1, 15, 7, 12345, ZoneOffset.ofHours(-5));
+		OffsetDateTime odt2Rounded = OffsetDateTime.of(1878, 10, 2, 1, 15, 7, 13000, ZoneOffset.ofHours(-5));
+		OffsetDateTime odt3 = OffsetDateTime.of(2022, 1, 1, 12, 11, 10, 0, ZoneOffset.ofHours(2));
+		OffsetDateTime odt4 = OffsetDateTime.of(2022, 1, 1, 12, 11, 10, 0, ZoneOffset.ofHours(0));
+		OffsetDateTime odt5 = OffsetDateTime.of(1900, 11, 27, 23, 59, 59, 0, ZoneOffset.ofHours(1));
+
+		ps.setObject(1, 3);
+		ps.setObject(2, odt1);
+		ps.execute();
+		ps.setObject(1, 4);
+		ps.setObject(2, odt5, Types.TIMESTAMP_WITH_TIMEZONE);
+		ps.execute();
+		ps.setObject(1, 5);
+		ps.setObject(2, odt2);
+		ps.execute();
+
+		rs = stmt.executeQuery("SELECT * FROM t ORDER BY id");
+		ResultSetMetaData meta = rs.getMetaData();
+		rs.next();
+		assertTrue(rs.getObject(2, OffsetDateTime.class).isEqual(odt3));
+		rs.next();
+		assertEquals(rs.getObject(2, OffsetDateTime.class), odt4);
+		rs.next();
+		assertTrue(rs.getObject(2, OffsetDateTime.class).isEqual(odt1Rounded));
+		rs.next();
+		assertTrue(rs.getObject(2, OffsetDateTime.class).isEqual(odt5));
+		rs.next();
+		assertTrue(rs.getObject(2, OffsetDateTime.class).isEqual(odt2Rounded));
+		assertTrue(((OffsetDateTime)rs.getObject(2)).isEqual(odt2Rounded));
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
 	public static void test_result() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();

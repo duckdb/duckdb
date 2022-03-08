@@ -5,6 +5,7 @@
 #include "parameter_descriptor.hpp"
 #include "row_descriptor.hpp"
 
+using duckdb::OdbcDiagnostic;
 using duckdb::OdbcHandle;
 using duckdb::OdbcHandleDbc;
 using duckdb::OdbcHandleDesc;
@@ -26,6 +27,10 @@ std::string duckdb::OdbcHandleTypeToString(OdbcHandleType type) {
 }
 
 //! OdbcHandle functions ***************************************************
+OdbcHandle::OdbcHandle(OdbcHandleType type_p) : type(type_p) {
+	odbc_diagnostic = make_unique<OdbcDiagnostic>();
+}
+
 OdbcHandle::OdbcHandle(const OdbcHandle &other) {
 	// calling copy assigment opetator;
 	*this = other;
@@ -82,6 +87,10 @@ void OdbcHandleDbc::SetDatabaseName(const string &db_name) {
 
 std::string OdbcHandleDbc::GetDatabaseName() {
 	return sql_attr_current_catalog;
+}
+
+std::string OdbcHandleDbc::GetDataSourceName() {
+	return dsn;
 }
 
 //! OdbcHandleStmt functions **************************************************

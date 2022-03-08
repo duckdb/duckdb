@@ -10,6 +10,8 @@
 
 #include "duckdb/common/types/data_chunk.hpp"
 
+#include <functional>
+
 namespace duckdb {
 
 struct SenaryExecutor {

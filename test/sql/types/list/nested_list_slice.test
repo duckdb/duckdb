@@ -30,3 +30,38 @@ SELECT id, b[0:2] FROM a ORDER BY id
 0	[[1, 2], NULL]
 1	NULL
 2	[[4, 5, 6, 7], [NULL]]
+
+query II
+SELECT id, b[1:1] FROM a ORDER BY id
+----
+0	[[1, 2]]
+1	NULL
+2	[[4, 5, 6, 7]]
+
+query II
+SELECT id, b[1:2] FROM a ORDER BY id
+----
+0	[[1, 2], NULL]
+1	NULL
+2	[[4, 5, 6, 7], [NULL]]
+
+query II
+SELECT id, b[0:0] FROM a ORDER BY id
+----
+0	[]
+1	NULL
+2	[]
+
+query II
+SELECT id, b[:] FROM a ORDER BY id
+----
+0	[[1, 2], NULL, [3, NULL]]
+1	NULL
+2	[[4, 5, 6, 7], [NULL]]
+
+query II
+SELECT id, list_extract(b[:], 0) FROM a ORDER BY id
+----
+0	NULL
+1	NULL
+2	NULL
