@@ -52,7 +52,7 @@ public:
 		return nullmask_ptr[row];
 	}
 
-	char *ErrorMessage() {
+	const char *ErrorMessage() {
 		return duckdb_result_error(&result);
 	}
 

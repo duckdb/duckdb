@@ -166,9 +166,7 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 		return DuckDBError;
 	}
 	auto result = wrapper->statement->Execute(wrapper->values, false);
-	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
-	auto mat_res = (MaterializedQueryResult *)result.get();
-	return duckdb_translate_result(mat_res, out_result);
+	return duckdb_translate_result(move(result), out_result);
 }
 
 void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement) {

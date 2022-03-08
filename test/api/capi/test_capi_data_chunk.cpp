@@ -111,3 +111,14 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 	duckdb_destroy_logical_type(&types[0]);
 	duckdb_destroy_logical_type(&types[1]);
 }
+
+
+TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
+	CAPITester tester;
+	unique_ptr<CAPIResult> result;
+	duckdb_state status;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+
+}

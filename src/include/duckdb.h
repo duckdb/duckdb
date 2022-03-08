@@ -370,6 +370,19 @@ Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
 DUCKDB_API duckdb_type duckdb_column_type(duckdb_result *result, idx_t col);
 
 /*!
+Returns the logical column type of the specified column.
+
+The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+
+Returns `NULL` if the column is out of range.
+
+* result: The result object to fetch the column type from.
+* col: The column index.
+* returns: The logical column type of the specified column.
+*/
+DUCKDB_API duckdb_logical_type duckdb_column_logical_type(duckdb_result *result, idx_t col);
+
+/*!
 Returns the number of columns present in a the result object.
 
 * result: The result object.
@@ -395,6 +408,8 @@ queries. For other queries the rows_changed will be 0.
 DUCKDB_API idx_t duckdb_rows_changed(duckdb_result *result);
 
 /*!
+**DEPRECATED**: Prefer using `duckdb_result_fetch_chunk` instead.
+
 Returns the data of a specific column of a result in columnar format. This is the fastest way of accessing data in a
 query result, as no conversion or type checking must be performed (outside of the original switch). If performance
 is a concern, it is recommended to use this API over the `duckdb_value` functions.
@@ -416,6 +431,8 @@ printf("Data for row %d: %d\n", row, data[row]);
 DUCKDB_API void *duckdb_column_data(duckdb_result *result, idx_t col);
 
 /*!
+**DEPRECATED**: Prefer using `duckdb_result_fetch_chunk` instead.
+
 Returns the nullmask of a specific column of a result in columnar format. The nullmask indicates for every row
 whether or not the corresponding row is `NULL`. If a row is `NULL`, the values present in the array provided
 by `duckdb_column_data` are undefined.
@@ -444,17 +461,32 @@ The result of this function must not be freed. It will be cleaned up when `duckd
 * result: The result object to fetch the nullmask from.
 * returns: The error of the result.
 */
-DUCKDB_API char *duckdb_result_error(duckdb_result *result);
+DUCKDB_API const char *duckdb_result_error(duckdb_result *result);
 
 //===--------------------------------------------------------------------===//
 // Result Functions
 //===--------------------------------------------------------------------===//
 
+
+/*!
+Fetches a data chunk from the duckdb_result. This function should be called repeatedly until the result is exhausted.
+
+This function supersedes all `duckdb_value` functions, as well as the `duckdb_column_data` and `duckdb_nullmask_data` functions.
+It results in significantly better performance, and should be preferred in newer code-bases.
+
+If this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be mixed with the legacy result functions).
+
+* result: The result object to fetch the data chunk from.
+* returns: The resulting data chunk. Returns `NULL` if no more data chunks exist in the result.
+*/
+DUCKDB_API duckdb_data_chunk duckdb_result_fetch_chunk(duckdb_result result);
+
+
 // Safe fetch functions
 // These functions will perform conversions if necessary.
 // On failure (e.g. if conversion cannot be performed or if the value is NULL) a default value is returned.
 // Note that these functions are slow since they perform bounds checking and conversion
-// For fast access of values prefer using duckdb_column_data and duckdb_nullmask_data
+// For fast access of values prefer using `duckdb_result_fetch_chunk`
 
 /*!
  * returns: The boolean value at the specified location, or false if the value cannot be converted.
