@@ -100,44 +100,34 @@ INSERT INTO table1 VALUES (1, 1, -3) RETURNING a + b + c;
 ----
 -1
 
+# returning string literal
 query I
 INSERT INTO table1 VALUES (1, 2, 3) RETURNING 'hello';
 ----
 hello
 
+# returning a list
 query I
 INSERT INTO table1 VALUES (1, 2, 3) RETURNING [a, b, c];
 ----
 [1, 2, 3]
 
+# returning a structure
 query I
 INSERT INTO table1 VALUES (1, 2, 3) RETURNING {'a':a, 'b':b, 'c':c};
 ----
 {'a': 1, 'b': 2, 'c': 3}
 
-# uncorrelated scalar subqueries
+# uncorrelated scalar subqueries in returning statement
 query III
 INSERT INTO table1(a) (SELECT 42) RETURNING a, b, (select 10);
 ----
 42	-2	10
 
-# insert with VALUES (scalar) throws error
+# insert VALUES (scalar) throws error
 statement error
 INSERT INTO table1(a) VALUES (SELECT 42) RETURNING a, b, (select 10);
 
-# uncorrelated scalar subquery
-query I
-INSERT INTO table1(a) (SELECT 42) RETURNING (SELECT 10);
-----
-10
-
-mode skip
-# scalar subquery
-query III
-INSERT INTO table1(a, b) VALUES (42, 43) RETURNING (SELECT a), (SELECT b), (SELECT c where c = -10);
-----
-42	43	NULL
-mode unskip
 
 # unknown columns
 statement error
@@ -147,9 +137,27 @@ INSERT INTO table1 VALUES (1,2,3) RETURNING d, e, f
 statement error
 INSERT INTO table1 SELECT * from table1 RETURNING row_number() OVER (ORDER BY a) as row_number, a, b FROM table1;
 
+query I
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING [1, 2] IN (SELECT [a, b] from table1);
+----
+1
+
+
+mode skip
+# scalar subquery
+query III
+INSERT INTO table1(a, b) VALUES (42, 43) RETURNING (SELECT a), (SELECT b), (SELECT c where c = -10);
+----
+42	43	NULL
+
 # Window function in subquery
 query I
-INSERT INTO table1 VALUES (-10, -20, -30), (-50, -60, -70) RETURNING (1, -60, -70) IN (SELECT row_number() OVER (ORDER BY b) AS row_number, b, c  FROM table1;
+INSERT INTO table1 VALUES (-10, -20, -30), (-50, -60, -70)
+    RETURNING (1, -60, -70) IN (SELECT row_number() OVER (ORDER BY b) AS row_number, b, c  FROM table1);
+----
+1
+
+mode unskip
 
 # new table with multiple types
 statement ok
@@ -165,6 +173,11 @@ INSERT INTO table2(b) VALUES (97) RETURNING b::VARCHAR;
 ----
 97
 
+query I
+INSERT INTO table2(a, b) VALUES ('duckdb', 97) RETURNING {'a': a, 'b': b};
+----
+{'a': duckdb, 'b': 97}
+
 
 ### SEQUENCES
 statement ok
@@ -176,18 +189,9 @@ CREATE TABLE table3 (a INTEGER DEFAULT nextval('seq'), b INTEGER);
 query II
 INSERT INTO table3(b) VALUES (4), (5) RETURNING a, b;
 ----
-0	4
-1	5
+1	4
+2	5
 
-query I
-INSERT INTO table2(a, b) VALUES ('duckdb', 97) RETURNING {'a': a, 'b': b};
-----
-{'a': duckdb, 'b': 97}
 
-# window functions
-statement ok
-CREATE TABLE table4(x INTEGER PRIMARY KEY, y TEXT);
 
-statement ok
-INSERT INTO table4 VALUES (1, 'aaa'), (2, 'ccc'), (3, 'bbb') returning (SELECT ;
 
