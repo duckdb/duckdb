@@ -112,8 +112,8 @@ sql_translation.duckdb_connection <- function(con) {
     sql_translator(
       .parent = base_scalar,
       as.raw = sql_cast("VARBINARY"),
-      `%%` = function(a, b) sql_expr(FMOD(!!a,!!b)),
-      `%/%` = function(a, b) sql_expr(FDIV(!!a,!!b)),
+      `%%` = function(a, b) sql_expr(FMOD(!!a, !!b)),
+      `%/%` = function(a, b) sql_expr(FDIV(!!a, !!b)),
       `^` = sql_prefix("POW", 2),
       bitwOr = function(a, b) sql_expr((CAST((!!a) %AS% INTEGER)) | (CAST((!!b) %AS% INTEGER))),
       bitwAnd = function(a, b) sql_expr((CAST((!!a) %AS% INTEGER)) & (CAST((!!b) %AS% INTEGER))),
@@ -145,7 +145,7 @@ sql_translation.duckdb_connection <- function(con) {
       # is.nan() 	    FALSE FALSE TRUE 	FALSE
       # is.na() 	    FALSE FALSE TRUE 	TRUE
       # https://github.com/duckdb/duckdb/issues/3019
-      is.na = function(a) build_sql("(", a, " IS NULL OR PRINTF('%f', ", a, ") = 'nan')"),
+      #      is.na = function(a) build_sql("(", a, " IS NULL OR PRINTF('%f', ", a, ") = 'nan')"),
       is.nan = function(a) build_sql("(", a, " IS NOT NULL AND PRINTF('%f', ", a, ") = 'nan')"),
       is.infinite = function(a) build_sql("(", a, " IS NOT NULL AND REGEXP_MATCHES(PRINTF('%f', ", a, "), 'inf'))"),
       is.finite = function(a) build_sql("(NOT (", a, " IS NULL OR REGEXP_MATCHES(PRINTF('%f', ", a, "), 'inf|nan')))"),
@@ -153,7 +153,7 @@ sql_translation.duckdb_connection <- function(con) {
 
       # Return index where the first match starts,-1 if no match
       regexpr = function(p, x) {
-        build_sql("(CASE WHEN REGEXP_MATCHES(", x,", ", p, ") THEN (LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX(", x, ", ", p,"), 0))+1) ELSE -1 END)")
+        build_sql("(CASE WHEN REGEXP_MATCHES(", x, ", ", p, ") THEN (LENGTH(LIST_EXTRACT(STRING_SPLIT_REGEX(", x, ", ", p, "), 0))+1) ELSE -1 END)")
       },
       round = function(x, digits) sql_expr(ROUND(!!x, CAST(ROUND((!!digits), 0L) %AS% INTEGER))),
       as.Date = sql_cast("DATE"),
@@ -286,9 +286,9 @@ sql_translation.duckdb_connection <- function(con) {
       str_remove_all = function(string, pattern) {
         sql_expr(REGEXP_REPLACE(!!string, !!pattern, "", "g"))
       },
-#      str_to_title = function(string) {
-#        sql_expr(INITCAP(!!string))
-#      },
+      #      str_to_title = function(string) {
+      #        sql_expr(INITCAP(!!string))
+      #      },
       str_to_sentence = function(string) {
         build_sql("(UPPER(", string, "[0]) || ", string, "[1:NULL])")
       },
@@ -393,4 +393,4 @@ dbplyr_fill0.duckdb_connection <- function(.con, .data, cols_to_fill, order_by_c
 }
 
 # Needed to suppress the R CHECK notes (due to the use of sql_expr)
-globalVariables(c("REGEXP_MATCHES", "CAST", "%AS%", "INTEGER", "XOR", "%<<%", "%>>%", "LN", "LOG", "ROUND", "EXTRACT", "%FROM%", "MONTH", "STRFTIME", "QUARTER", "YEAR", "DATE_TRUNC", "DATE", "DOY", "TO_SECONDS", "BIGINT", "TO_MINUTES", "TO_HOURS", "TO_DAYS", "TO_WEEKS", "TO_MONTHS", "TO_YEARS", "STRPOS", "NOT", "REGEXP_REPLACE", "TRIM", "LPAD", "RPAD", "%||%", "REPEAT", "LENGTH", "STRING_AGG", "GREATEST", "LIST_EXTRACT", "LOG10", "LOG2", "STRING_SPLIT_REGEX","FLOOR"))
+globalVariables(c("REGEXP_MATCHES", "CAST", "%AS%", "INTEGER", "XOR", "%<<%", "%>>%", "LN", "LOG", "ROUND", "EXTRACT", "%FROM%", "MONTH", "STRFTIME", "QUARTER", "YEAR", "DATE_TRUNC", "DATE", "DOY", "TO_SECONDS", "BIGINT", "TO_MINUTES", "TO_HOURS", "TO_DAYS", "TO_WEEKS", "TO_MONTHS", "TO_YEARS", "STRPOS", "NOT", "REGEXP_REPLACE", "TRIM", "LPAD", "RPAD", "%||%", "REPEAT", "LENGTH", "STRING_AGG", "GREATEST", "LIST_EXTRACT", "LOG10", "LOG2", "STRING_SPLIT_REGEX", "FLOOR"))
