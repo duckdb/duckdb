@@ -34,7 +34,7 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 	// get the aggregate function
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (ListAggregatesBindData &)*func_expr.bind_info;
-	auto aggr_function = info.aggr_function;
+	auto &aggr = (BoundAggregateExpression &)info.aggr_function;
 
 	// set the result vector
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -56,7 +56,7 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto list_entries = (list_entry_t *)lists_data.data;
 
 	// state_buffer holds the state for each list of this chunk
-	idx_t size = aggr_function.state_size();
+	idx_t size = aggr.function.state_size();
 	auto state_buffer = unique_ptr<data_t[]>(new data_t[size * count]);
 
 	// state_vector holds the pointers to the states
@@ -68,7 +68,7 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 
 		// initialize the aggregate state for this list
 		states[i] = state_buffer.get() + size * i;
-		aggr_function.initialize(states[i]);
+		aggr.function.initialize(states[i]);
 
 		if (!lists_data.validity.RowIsValid(lists_index)) {
 			result_validity.SetInvalid(i);
@@ -80,11 +80,11 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 
 		// update the aggregate state
 		Vector list_slice = Vector(child_vector, source_idx);
-		aggr_function.simple_update(&list_slice, &info, 1, states[i], list_entry.length);
+		aggr.function.simple_update(&list_slice, aggr.bind_info.get(), 1, states[i], list_entry.length);
 	}
 
 	// finalize all the aggregate states
-	aggr_function.finalize(state_vector, &info, result, count, 0);
+	aggr.function.finalize(state_vector, aggr.bind_info.get(), result, count, 0);
 }
 
 static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, ScalarFunction &bound_function,
@@ -126,8 +126,7 @@ static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, Scalar
 
 	// found a matching function, bind it as an aggregate
 	auto &best_bound_function = func->functions[best_function];
-	vector<unique_ptr<Expression>> children;
-	auto bound_aggr_function = AggregateFunction::BindAggregateFunction(context, best_bound_function, move(children));
+	unique_ptr<BoundAggregateExpression> bound_aggr_function = AggregateFunction::BindAggregateFunction(context, best_bound_function, {});
 	unique_ptr<AggregateFunction> aggr_function = make_unique<AggregateFunction>(bound_aggr_function->function);
 
 	bound_function.return_type = aggr_function->return_type;
