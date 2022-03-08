@@ -97,7 +97,9 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, "unnest(generate_series(1, array_length(arr, dim)))"},
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, "floor(x/y)"},
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
-	{nullptr, nullptr, {nullptr}, nullptr}};
+	{DEFAULT_SCHEMA, "list_min", {"l", nullptr}, "list_aggr(l, 'min')"},
+	{nullptr, nullptr, {nullptr}, nullptr}
+	};
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &input_schema, const string &input_name) {
 	auto schema = StringUtil::Lower(input_schema);

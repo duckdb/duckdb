@@ -72,12 +72,7 @@ struct ListPositionFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ListMaxFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ListMinFun {
+struct ListAggregateFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };

@@ -16,8 +16,8 @@ struct ListAggregatesBindData : public FunctionData {
 	ListAggregatesBindData(const LogicalType &stype_p, AggregateFunction aggr_functio_p);
 	~ListAggregatesBindData() override;
 
-    LogicalType stype;
-    AggregateFunction aggr_function;
+	LogicalType stype;
+	AggregateFunction aggr_function;
 
 	unique_ptr<FunctionData> Copy() override;
 };
