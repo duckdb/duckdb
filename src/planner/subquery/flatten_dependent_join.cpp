@@ -166,8 +166,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				cond.right = make_unique<BoundColumnRefExpression>(
 				    correlated_columns[i].type,
 				    ColumnBinding(aggr.group_index, (aggr.groups.size() - correlated_columns.size()) + i));
-				cond.comparison = ExpressionType::COMPARE_EQUAL;
-				cond.null_values_are_equal = true;
+				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 				join->conditions.push_back(move(cond));
 			}
 			// for any COUNT aggregate we replace references to the column with: CASE WHEN COUNT(*) IS NULL THEN 0
@@ -223,8 +222,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
 			cond.right = make_unique<BoundColumnRefExpression>(
 			    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
-			cond.comparison = ExpressionType::COMPARE_EQUAL;
-			cond.null_values_are_equal = true;
+			cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 			join->conditions.push_back(move(cond));
 		}
 		join->children.push_back(move(plan->children[0]));
@@ -303,8 +301,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				JoinCondition cond;
 				cond.left = move(left);
 				cond.right = move(right);
-				cond.comparison = ExpressionType::COMPARE_EQUAL;
-				cond.null_values_are_equal = true;
+				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 
 				auto &comparison_join = (LogicalComparisonJoin &)join;
 				comparison_join.conditions.push_back(move(cond));

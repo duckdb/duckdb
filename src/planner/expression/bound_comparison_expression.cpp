@@ -23,15 +23,12 @@ bool BoundComparisonExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(right.get(), other->right.get())) {
 		return false;
 	}
-	if (null_values_are_equal != other->null_values_are_equal) {
-		return false;
-	}
+
 	return true;
 }
 
 unique_ptr<Expression> BoundComparisonExpression::Copy() {
 	auto copy = make_unique<BoundComparisonExpression>(type, left->Copy(), right->Copy());
-	copy->null_values_are_equal = null_values_are_equal;
 	copy->CopyProperties(*this);
 	return move(copy);
 }

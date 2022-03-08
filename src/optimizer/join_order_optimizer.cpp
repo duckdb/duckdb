@@ -522,15 +522,8 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				bool invert = !JoinRelationSet::IsSubset(left.first, f->left_set);
 				cond.left = !invert ? move(comparison.left) : move(comparison.right);
 				cond.right = !invert ? move(comparison.right) : move(comparison.left);
-				if (condition->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-					cond.comparison = ExpressionType::COMPARE_EQUAL;
-					cond.null_values_are_equal = true;
-				} else if (condition->type == ExpressionType::COMPARE_DISTINCT_FROM) {
-					cond.comparison = condition->type;
-					cond.null_values_are_equal = true;
-				} else {
-					cond.comparison = condition->type;
-				}
+				cond.comparison = condition->type;
+
 				if (invert) {
 					// reverse comparison expression if we reverse the order of the children
 					cond.comparison = FlipComparisionExpression(cond.comparison);

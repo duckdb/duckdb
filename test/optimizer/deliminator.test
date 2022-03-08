@@ -17,10 +17,10 @@ explain SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone,
 logical_opt	<!REGEX>:.*DELIM_JOIN.*
 
 # Q 17
-query II
-explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'MED BOX' AND l_quantity < ( SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
-----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
+#query II
+#explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'MED BOX' AND l_quantity < ( SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
+#----
+#logical_opt	<!REGEX>:.*DELIM_JOIN.*
 
 # Q 20
 #query II

@@ -19,10 +19,6 @@ public:
 	void VisitExpression(unique_ptr<Expression> *expression) override;
 	//! Whether the operator has one or more children of type DELIM_GET
 	bool HasChildDelimGet(LogicalOperator &op);
-	//! Transforms Delim Join to Comparison Join if the dependent DELIM_GET is child of a equality join
-	void RemoveIfDelimGetChildOfEqualJoin(LogicalDelimJoin &delim_join);
-	LogicalOperator *IsDelimGetEqualJoin(LogicalDelimJoin &delim_join, LogicalOperator *cur_op,
-	                                     vector<LogicalOperator *> &parent_ops);
 	expression_map_t<Expression *> expr_map;
 	column_binding_map_t<bool> projection_map;
 	unique_ptr<LogicalOperator> temp_ptr;
@@ -31,16 +27,12 @@ public:
 void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
 	VisitOperatorExpressions(op);
-	// now check if this is a delim join that can be removed
-	//	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN){
-	//		auto &delim_join = (LogicalDelimJoin &)op;
-	//		RemoveIfDelimGetChildOfEqualJoin(delim_join);
-	//	}
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN && !HasChildDelimGet(op)) {
 		auto &delim_join = (LogicalDelimJoin &)op;
 		auto decs = &delim_join.duplicate_eliminated_columns;
 		for (auto &cond : delim_join.conditions) {
-			if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
+			if (cond.comparison != ExpressionType::COMPARE_EQUAL &&
+			    cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 				continue;
 			}
 			auto &colref = (BoundColumnRefExpression &)*cond.right;
@@ -54,7 +46,7 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 					}
 				}
 				// whether we applied an IS NOT NULL filter
-				cond.null_values_are_equal = true; // projection_map[colref.binding];
+				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 			}
 		}
 		// change type if there are no more duplicate-eliminated columns
@@ -82,67 +74,6 @@ bool DeliminatorPlanUpdater::HasChildDelimGet(LogicalOperator &op) {
 		}
 	}
 	return false;
-}
-
-void DeliminatorPlanUpdater::RemoveIfDelimGetChildOfEqualJoin(LogicalDelimJoin &delim_join) {
-	vector<LogicalOperator *> parent_ops {&delim_join, &delim_join};
-	auto equality_comparison_parent = IsDelimGetEqualJoin(delim_join, &delim_join, {parent_ops});
-	if (equality_comparison_parent) {
-		unique_ptr<LogicalOperator> logical_get_sibling;
-		// We can change the delimiter join to a logical comparison join
-		delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
-		// We need to make the parent of the comparison join replace it with the sibling of the delimiter join
-		for (auto &child : equality_comparison_parent->children) {
-			if (child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-				for (auto &join_child : child->children) {
-					if (join_child->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
-						logical_get_sibling = child->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET
-						                          ? move(child->children[1])
-						                          : move(child->children[0]);
-						break;
-					}
-				}
-				if (logical_get_sibling && parent_ops[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-					auto *projection = (LogicalProjection *)parent_ops[0];
-					auto *aggregation = (LogicalAggregate *)logical_get_sibling.get();
-					// We replace the logical comparison join with the sibling of the logical delim get.
-					projection->table_index = aggregation->group_index;
-
-					child = move(logical_get_sibling);
-
-					break;
-				}
-			}
-		}
-	}
-}
-
-bool IsEqualityComparison(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		auto &join = (LogicalComparisonJoin &)op;
-		if (join.conditions.size() == 1 && join.conditions[0].comparison == ExpressionType::COMPARE_EQUAL) {
-			return true;
-		}
-	}
-	return false;
-}
-LogicalOperator *DeliminatorPlanUpdater::IsDelimGetEqualJoin(LogicalDelimJoin &delim_join, LogicalOperator *cur_op,
-                                                             vector<LogicalOperator *> &parent_ops) {
-	if (cur_op->type == LogicalOperatorType::LOGICAL_DELIM_GET && IsEqualityComparison(*parent_ops[1])) {
-		return parent_ops[0];
-	}
-	if (parent_ops[0] != parent_ops[1]) {
-		parent_ops[0] = parent_ops[1];
-	}
-	parent_ops[1] = cur_op;
-
-	for (auto &child : cur_op->children) {
-		auto child_ptr = IsDelimGetEqualJoin(delim_join, child.get(), parent_ops);
-		if (child_ptr) {
-			return child_ptr;
-		}
-	}
-	return nullptr;
 }
 
 unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op) {
@@ -229,7 +160,8 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, Deliminat
 	// check if joining with the DelimGet is redundant, and collect relevant column information
 	vector<Expression *> nulls_are_not_equal_exprs;
 	for (auto &cond : join.conditions) {
-		if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
+		if (cond.comparison != ExpressionType::COMPARE_EQUAL &&
+		    cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// non-equality join condition
 			return false;
 		}
@@ -241,7 +173,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, Deliminat
 			return false;
 		}
 		updater.expr_map[delim_side] = other_side;
-		if (!cond.null_values_are_equal) {
+		if (cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			nulls_are_not_equal_exprs.push_back(other_side);
 		}
 	}
