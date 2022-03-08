@@ -1,6 +1,7 @@
 #include "duckdb/main/config.hpp"
-#include "duckdb/common/string_util.hpp"
+
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
@@ -43,6 +44,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
                                                  DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
                                                  DUCKDB_LOCAL(PerfectHashThresholdSetting),
+                                                 DUCKDB_LOCAL(PerfectJoinThresholdSetting),
                                                  DUCKDB_LOCAL(PreserveIdentifierCase),
                                                  DUCKDB_LOCAL(ProfilerHistorySize),
                                                  DUCKDB_LOCAL(ProfileOutputSetting),

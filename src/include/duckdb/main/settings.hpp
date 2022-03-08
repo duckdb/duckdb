@@ -177,6 +177,15 @@ struct PerfectHashThresholdSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct PerfectJoinThresholdSetting {
+	static constexpr const char *Name = "perfect_join_threshold";
+	static constexpr const char *Description =
+	    "Threshold for when to use a perfect hash join for the build side(default: 1000000)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct PreserveIdentifierCase {
 	static constexpr const char *Name = "preserve_identifier_case";
 	static constexpr const char *Description =

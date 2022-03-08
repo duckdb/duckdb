@@ -22,12 +22,13 @@ SELECT
 FROM (
         SELECT
             n_name AS nation,
-            extract(year FROM o_orderdate) AS o_year, amount
+            extract(year FROM o_orderdate) AS o_year,
+            l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity AS amount
         FROM
-            (select l_suppkey, amount, o_orderdate from orders JOIN
-            (select l_orderkey, l_suppkey, l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity AS amount from partsupp JOIN 
-            (select l_orderkey, l_partkey, l_suppkey, l_discount, l_extendedprice, l_quantity from lineitem
-            JOIN (SELECT p_partkey FROM part WHERE p_name LIKE '%green%') as temp ON p_partkey = l_partkey ) as temp2 ON ps_partkey = l_partkey AND ps_suppkey = l_suppkey) as temp3 ON o_orderkey = l_orderkey) as temp4
+            lineitem 
+            JOIN (SELECT p_partkey FROM part) as temp ON p_partkey = l_partkey 
+            JOIN partsupp ON ps_partkey = l_partkey AND ps_suppkey = l_suppkey
+            JOIN orders ON o_orderkey = l_orderkey
             JOIN supplier ON s_suppkey = l_suppkey
             JOIN nation ON s_nationkey = n_nationkey
  ) as profit

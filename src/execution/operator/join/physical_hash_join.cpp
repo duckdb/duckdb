@@ -110,11 +110,10 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 			info.result_chunk.Initialize(payload_types);
 		}
 	}
-	// for perfect hash join enabling/disabling
-	if (context.config.enable_perfect_join) {
-		state->perfect_join_executor =
-		    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, perfect_join_statistics);
-	}
+	// for perfect hash join
+	state->perfect_join_executor =
+	    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, perfect_join_statistics);
+
 	return move(state);
 }
 
@@ -187,10 +186,10 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		sink.hash_table->Finalize();
 	}
 	// Add this info to show in the profile
-	if (sink.hash_table->has_unique_keys) {
+	if (sink.hash_table->has_unique_keys && !use_perfect_hash) {
 		// Unique keys JOIN
 		const_cast<string &>(join_subtype_name) = JoinTypeToString(JoinType::UNIQUE);
-	} else if (sink.perfect_join_executor) {
+	} else if (use_perfect_hash) {
 		// Perfect JOIN
 		const_cast<string &>(join_subtype_name) = JoinTypeToString(JoinType::PERFECT);
 	}

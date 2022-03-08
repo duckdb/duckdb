@@ -1,3 +1,4 @@
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 #include "duckdb/execution/operator/join/physical_cross_product.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
@@ -11,8 +12,6 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "duckdb/execution/operator/join/physical_hash_join.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
 
@@ -57,7 +56,7 @@ bool ExtractNumericValue(Value val, int64_t &result) {
 	return true;
 }
 
-void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &join_state) {
+void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &join_state, ClientContext &context) {
 	// we only do this optimization for inner joins
 	if (op.join_type != JoinType::INNER) {
 		return;
@@ -102,14 +101,14 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	auto stats_probe = reinterpret_cast<NumericStatistics *>(op.join_stats[1].get()); // rhs stats
 
 	// The max size our build must have to run the perfect HJ
-	const idx_t MAX_BUILD_SIZE = 1000000;
 	join_state.probe_min = stats_probe->min;
 	join_state.probe_max = stats_probe->max;
 	join_state.build_min = stats_build->min;
 	join_state.build_max = stats_build->max;
 	join_state.estimated_cardinality = op.estimated_cardinality;
 	join_state.build_range = build_range;
-	if (join_state.build_range > MAX_BUILD_SIZE || stats_probe->max.IsNull() || stats_probe->min.IsNull()) {
+	if (join_state.build_range > ClientConfig::GetConfig(context).perfect_join_threshold || stats_probe->max.IsNull() ||
+	    stats_probe->min.IsNull()) {
 		return;
 	}
 	if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
@@ -223,7 +222,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		}
 		// Equality join with small number of keys : possible perfect join optimization
 		PerfectHashJoinStats perfect_join_stats;
-		CheckForPerfectJoinOpt(op, perfect_join_stats);
+		CheckForPerfectJoinOpt(op, perfect_join_stats, context);
 		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 		                                     op.left_projection_map, op.right_projection_map, move(op.delim_types),
 		                                     op.estimated_cardinality, perfect_join_stats);

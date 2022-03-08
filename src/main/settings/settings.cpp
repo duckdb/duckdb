@@ -1,14 +1,15 @@
 #include "duckdb/main/settings.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/client_context.hpp"
+
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
-#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -405,6 +406,21 @@ void PerfectHashThresholdSetting::SetLocal(ClientContext &context, const Value &
 
 Value PerfectHashThresholdSetting::GetSetting(ClientContext &context) {
 	return Value::BIGINT(ClientConfig::GetConfig(context).perfect_ht_threshold);
+}
+
+//===--------------------------------------------------------------------===//
+// Perfect Join Threshold
+//===--------------------------------------------------------------------===//
+void PerfectJoinThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto threshold = input.GetValue<idx_t>();
+	if (threshold < 0) {
+		throw ParserException("Perfect Join threshold out of range: should be bigger than 0");
+	}
+	ClientConfig::GetConfig(context).perfect_join_threshold = threshold;
+}
+
+Value PerfectJoinThresholdSetting::GetSetting(ClientContext &context) {
+	return Value::BIGINT(ClientConfig::GetConfig(context).perfect_join_threshold);
 }
 
 //===--------------------------------------------------------------------===//
