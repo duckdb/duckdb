@@ -27,6 +27,7 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.Calendar;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 public class DuckDBPreparedStatement implements PreparedStatement {
 	private DuckDBConnection conn;
@@ -170,6 +171,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			x = new DuckDBTimestamp((Timestamp)x);
 		} else if (x instanceof LocalDateTime) {
 			x = new DuckDBTimestamp((LocalDateTime) x);
+		} else if (x instanceof OffsetDateTime) {
+			x = new DuckDBTimestamp((OffsetDateTime) x);
 		}
 		params[parameterIndex - 1] = x;
 	}
@@ -614,9 +617,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			}
 			break;
 		case Types.TIMESTAMP:
+		case Types.TIMESTAMP_WITH_TIMEZONE:
 			if (x instanceof Timestamp) {
 				setObject(parameterIndex, x);
 			} else if (x instanceof LocalDateTime) {
+				setObject(parameterIndex, x);
+			} else if (x instanceof OffsetDateTime) {
 				setObject(parameterIndex, x);
 			} else {
 				throw new SQLException("Can't convert value to timestamp " + x.getClass().toString());

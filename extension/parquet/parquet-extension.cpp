@@ -553,3 +553,7 @@ std::string ParquetExtension::Name() {
 }
 
 } // namespace duckdb
+
+#ifndef DUCKDB_EXTENSION_MAIN
+#error DUCKDB_EXTENSION_MAIN not defined
+#endif
