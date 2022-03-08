@@ -152,6 +152,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("bool");
 		result.push_back("interval");
 		result.push_back("varchar");
+		result.push_back("json");
 		collection = true;
 	}
 	if (is_compression) {
@@ -159,6 +160,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("uncompressed");
 		result.push_back("rle");
 		result.push_back("bitpacking");
+		result.push_back("dictionary");
 		collection = true;
 	}
 	return collection;

@@ -87,6 +87,7 @@ std::string EXCELExtension::Name() {
 } // namespace duckdb
 
 extern "C" {
+
 DUCKDB_EXTENSION_API void excel_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
 	db_wrapper.LoadExtension<duckdb::EXCELExtension>();
@@ -96,3 +97,7 @@ DUCKDB_EXTENSION_API const char *excel_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
 }
+
+#ifndef DUCKDB_EXTENSION_MAIN
+#error DUCKDB_EXTENSION_MAIN not defined
+#endif
