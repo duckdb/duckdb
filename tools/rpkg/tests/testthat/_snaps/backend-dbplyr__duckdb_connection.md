@@ -68,10 +68,6 @@
       translate(substr("test", 2, 3))
     Output
       <SQL> SUBSTR('test', 2, 2)
-    Code
-      translate(is.na(var1))
-    Output
-      <SQL> ("var1" IS NULL)
 
 # snapshots of duckdb custom scalars translations
 

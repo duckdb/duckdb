@@ -27,7 +27,6 @@ test_that("dbplyr generic scalars translated correctly", {
   expect_equal(translate(iris[[1]]), sql(r"{"iris"[1]}"))
   expect_equal(translate(cot(x)), sql(r"{COT("x")}"))
   expect_equal(translate(substr("test", 2, 3)), sql(r"{SUBSTR('test', 2, 2)}"))
-  expect_equal(translate(is.na(var1)), sql(r"{("var1" IS NULL)}"))
 })
 
 test_that("duckdb custom scalars translated correctly", {
@@ -209,7 +208,6 @@ test_that("snapshots of dbplyr generic scalar translation", {
     translate(iris[[1]])
     translate(cot(x))
     translate(substr("test", 2, 3))
-    translate(is.na(var1))
   })
 })
 
