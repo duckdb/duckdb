@@ -172,6 +172,7 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 	skip.emplace_back("bug687_nulls.parquet");         //! This is just crazy slow
 	skip.emplace_back("nullbyte.parquet");             //! Null byte in file
 	skip.emplace_back("nullbyte_multiple.parquet");    //! Null byte in file
+	skip.emplace_back("uuid-arrow.parquet");           //! UUID is not a builtin type for arrow
 	// arrow does not like (some of) these files
 	skip.emplace_back("7-set.snappy.arrow2.parquet");
 	skip.emplace_back("complex.parquet");
