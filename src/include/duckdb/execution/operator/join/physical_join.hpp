@@ -28,6 +28,7 @@ public:
 	static void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[],
 	                                    bool has_null);
 	static void ConstructLeftJoinResult(DataChunk &left, DataChunk &result, bool found_match[]);
+	static void ConstructRightJoinResult(DataChunk &right, DataChunk &result, bool found_match[]);
 };
 
 } // namespace duckdb

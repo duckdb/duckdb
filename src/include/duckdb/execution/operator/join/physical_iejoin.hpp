@@ -13,9 +13,9 @@
 
 namespace duckdb {
 
-class IEJoinGlobalState;
+class IEJoinSortedTable;
 
-//! PhysicalIEJoin represents a piecewise merge loop join between
+//! PhysicalIEJoin represents a two inequality range join between
 //! two tables
 class PhysicalIEJoin : public PhysicalComparisonJoin {
 public:
@@ -28,29 +28,22 @@ public:
 
 public:
 	// Operator Interface
-	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           OperatorState &state) const override;
 
-	bool ParallelOperator() const override {
-		return true;
-	}
-
-	bool RequiresCache() const override {
-		return true;
-	}
-
 public:
 	// Source interface
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
+	                                                 GlobalSourceState &gstate) const override;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
 	bool IsSource() const override {
-		return IsRightOuterJoin(join_type);
+		return true;
 	}
 	bool ParallelSource() const override {
-		return true;
+		return false;
 	}
 
 public:
@@ -63,8 +56,8 @@ public:
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          GlobalSinkState &gstate) const override;
 
-	//! Schedules tasks to merge sort the RHS data during the Finalize phase
-	static void ScheduleMergeTasks(Pipeline &pipeline, Event &event, IEJoinGlobalState &state);
+	//! Schedules tasks to merge sort the current child's data during a Finalize phase
+	static void ScheduleMergeTasks(Pipeline &pipeline, Event &event, IEJoinSortedTable &table);
 
 	bool IsSink() const override {
 		return true;
@@ -74,11 +67,8 @@ public:
 	}
 
 private:
-	// resolve joins that output max N elements (SEMI, ANTI, MARK)
-	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
-	OperatorResultType ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                                      OperatorState &state) const;
+	void ResolveComplexJoin(ExecutionContext &context, DataChunk &result, LocalSourceState &state) const;
 };
 
 } // namespace duckdb
