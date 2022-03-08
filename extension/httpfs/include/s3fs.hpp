@@ -17,6 +17,7 @@ struct S3AuthParams {
 	const std::string secret_access_key;
 	const std::string session_token;
 	const std::string endpoint;
+	const bool use_ssl;
 
 	static S3AuthParams ReadFrom(FileOpener *opener);
 };
@@ -144,7 +145,7 @@ public:
 
 	void FlushAllBuffers(S3FileHandle &handle);
 
-	static void S3UrlParse(string url, string endpoint, string &host_out, string &http_proto_out, string &path_out,
+	static void S3UrlParse(string url, string endpoint, bool use_ssl, string &host_out, string &http_proto_out, string &path_out,
 	                       string &query_param);
 	static std::string UrlEncode(const std::string &input, bool encode_slash = false);
 

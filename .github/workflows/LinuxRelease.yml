@@ -472,9 +472,8 @@ jobs:
 
     - name: Start S3/HTTP test server
       run: |
-        npm install -g s3rver
-        mkdir -p /tmp/s3rver
-        s3rver -d "/tmp/s3rver" -p "4923" -a "localhost" --configure-bucket "test-bucket" &> /tmp/s3rver/access_log.txt &
+        ./scripts/install_s3_test_server.sh
+        ./scripts/run_s3_test_server.sh &> /tmp/s3rver/access_log.txt &
 
     - name: Test
       run: make allunit

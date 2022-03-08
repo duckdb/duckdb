@@ -12,7 +12,7 @@ require-env S3_TEST_SERVER_AVAILABLE 1
 set ignore_error_messages
 
 statement ok
-SET s3_secret_access_key='S3RVER';SET s3_access_key_id='S3RVER';SET s3_region='eu-west-1'; SET s3_endpoint='http://localhost:4923';
+SET s3_secret_access_key='S3RVER';SET s3_access_key_id='S3RVER';SET s3_region='eu-west-1'; SET s3_endpoint='s3.s3rver-endpoint.com:4923';SET s3_use_ssl=false;
 
 statement ok
 CREATE TABLE web_page as (SELECT * FROM "test/sql/copy/csv/data/real/web_page.csv");
@@ -54,7 +54,7 @@ statement ok
 COPY web_page TO 's3://test-bucket/multipart/web_page.csv' WITH (HEADER 1);
 
 query IIIIIIIIIIIIII
-SELECT * FROM "s3://test-bucket/multipart/web_page.parquet" LIMIT 10;
+SELECT * FROM "s3://test-bucket/multipart/web_page.csv" LIMIT 10;
 ----
 1	AAAAAAAABAAAAAAA	1997-09-03	NULL	2450810	2452620	Y	98539	http://www.foo.com	welcome	2531	8	3	4
 2	AAAAAAAACAAAAAAA	1997-09-03	2000-09-02	2450814	2452580	N	NULL	http://www.foo.com	protected	1564	4	3	1
