@@ -120,7 +120,6 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
 	CAPITester tester;
 	unique_ptr<CAPIResult> result;
-	duckdb_state status;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 
@@ -131,7 +130,8 @@ TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
 	REQUIRE(result->ErrorMessage() == nullptr);
 
 	// fetch the first chunk
-	auto chunk = result->FetchChunk();
+	REQUIRE(result->ChunkCount() == 1);
+	auto chunk = result->FetchChunk(0);
 	REQUIRE(chunk);
 
 	REQUIRE(chunk->ColumnCount() == 1);
@@ -151,6 +151,6 @@ TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
 	REQUIRE(result->Fetch<int32_t>(0, 1) == 0);
 
 	// result set is exhausted!
-	chunk = result->FetchChunk();
+	chunk = result->FetchChunk(1);
 	REQUIRE(!chunk);
 }

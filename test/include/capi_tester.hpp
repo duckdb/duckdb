@@ -49,8 +49,12 @@ public:
 		return duckdb_column_type(&result, col);
 	}
 
-	unique_ptr<CAPIDataChunk> FetchChunk() {
-		auto chunk = duckdb_result_fetch_chunk(result);
+	idx_t ChunkCount() {
+		return duckdb_result_chunk_count(result);
+	}
+
+	unique_ptr<CAPIDataChunk> FetchChunk(idx_t chunk_idx) {
+		auto chunk = duckdb_result_get_chunk(result, chunk_idx);
 		if (!chunk) {
 			return nullptr;
 		}

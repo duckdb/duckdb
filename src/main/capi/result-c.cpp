@@ -286,7 +286,7 @@ bool deprecated_materialize_result(duckdb_result *result) {
 		// already materialized into deprecated result format
 		return true;
 	}
-	if (result_data->result_set_type == CAPIResultSetType::CAPI_RESULT_TYPE_NEW) {
+	if (result_data->result_set_type == CAPIResultSetType::CAPI_RESULT_TYPE_MATERIALIZED) {
 		// already used as a new result set
 		return false;
 	}
@@ -453,7 +453,20 @@ const char *duckdb_result_error(duckdb_result *result) {
 	return result_data.result->success ? nullptr : result_data.result->error.c_str();
 }
 
-duckdb_data_chunk duckdb_result_fetch_chunk(duckdb_result result) {
+idx_t duckdb_result_chunk_count(duckdb_result result) {
+    if (!result.internal_data) {
+		return 0;
+	}
+	auto &result_data = *((duckdb::DuckDBResultData *) result.internal_data);
+	if (result_data.result_set_type == duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
+		return 0;
+	}
+	D_ASSERT(result_data.result->type == QueryResultType::MATERIALIZED_RESULT);
+    auto &materialized = (MaterializedQueryResult &) *result_data.result;
+	return materialized.collection.ChunkCount();
+}
+
+duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx) {
 	if (!result.internal_data) {
 		return nullptr;
 	}
@@ -461,7 +474,14 @@ duckdb_data_chunk duckdb_result_fetch_chunk(duckdb_result result) {
 	if (result_data.result_set_type == duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
 		return nullptr;
 	}
-	result_data.result_set_type = duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_NEW;
-	auto chunk = result_data.result->Fetch();
+	result_data.result_set_type = duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_MATERIALIZED;
+    auto &materialized = (MaterializedQueryResult &) *result_data.result;
+	if (chunk_idx >= materialized.collection.ChunkCount()) {
+		return nullptr;
+	}
+	auto chunk = duckdb::make_unique<duckdb::DataChunk>();
+	chunk->InitializeEmpty(materialized.collection.Types());
+	chunk->Reference(*materialized.collection.Chunks()[chunk_idx]);
 	return chunk.release();
 }
+

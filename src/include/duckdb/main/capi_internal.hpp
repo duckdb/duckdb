@@ -45,7 +45,7 @@ struct AppenderWrapper {
 
 enum class CAPIResultSetType : uint8_t {
 	CAPI_RESULT_TYPE_NONE = 0,
-	CAPI_RESULT_TYPE_NEW,
+	CAPI_RESULT_TYPE_MATERIALIZED,
 	CAPI_RESULT_TYPE_DEPRECATED
 };
 

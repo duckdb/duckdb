@@ -467,7 +467,6 @@ DUCKDB_API const char *duckdb_result_error(duckdb_result *result);
 // Result Functions
 //===--------------------------------------------------------------------===//
 
-
 /*!
 Fetches a data chunk from the duckdb_result. This function should be called repeatedly until the result is exhausted.
 
@@ -476,11 +475,21 @@ It results in significantly better performance, and should be preferred in newer
 
 If this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be mixed with the legacy result functions).
 
-* result: The result object to fetch the data chunk from.
-* returns: The resulting data chunk. Returns `NULL` if no more data chunks exist in the result.
-*/
-DUCKDB_API duckdb_data_chunk duckdb_result_fetch_chunk(duckdb_result result);
+Use `duckdb_result_chunk_count` to figure out how many chunks there are in the result.
 
+* result: The result object to fetch the data chunk from.
+* chunk_index: The chunk index to fetch from.
+* returns: The resulting data chunk. Returns `NULL` if the chunk index is out of bounds.
+*/
+DUCKDB_API duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_index);
+
+/*!
+Returns the number of data chunks present in the result.
+
+* result: The result object
+* returns: The resulting data chunk. Returns `NULL` if the chunk index is out of bounds.
+*/
+DUCKDB_API idx_t duckdb_result_chunk_count(duckdb_result result);
 
 // Safe fetch functions
 // These functions will perform conversions if necessary.

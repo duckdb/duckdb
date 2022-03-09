@@ -77,6 +77,9 @@ uint64_t *duckdb_data_chunk_get_validity(duckdb_data_chunk chunk, idx_t col_idx)
 		return nullptr;
 	}
 	auto dchunk = (duckdb::DataChunk *)chunk;
+	if (col_idx >= dchunk->ColumnCount()) {
+		return nullptr;
+	}
 	return duckdb::FlatVector::Validity(dchunk->data[col_idx]).GetData();
 }
 
@@ -85,6 +88,9 @@ void duckdb_data_chunk_ensure_validity_writable(duckdb_data_chunk chunk, idx_t c
 		return;
 	}
 	auto dchunk = (duckdb::DataChunk *)chunk;
+	if (col_idx >= dchunk->ColumnCount()) {
+		return;
+	}
 	auto &validity = duckdb::FlatVector::Validity(dchunk->data[col_idx]);
 	validity.EnsureWritable();
 }
