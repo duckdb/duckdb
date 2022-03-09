@@ -836,6 +836,10 @@ bool IEJoinUnion::NextRow() {
 }
 
 static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
+	if (j >= n) {
+		return n;
+	}
+
 	// In the paper, they used a Bloom filter of 4096:1,
 	// We can do a first approximation by checking entries one at a time
 	// which gives 64:1.
@@ -1309,7 +1313,7 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 	}
 
 	// Process INNER results
-	if (ie_lstate.joiner) {
+	while (ie_lstate.joiner) {
 		ResolveComplexJoin(context, result, ie_lstate);
 
 		if (result.size()) {

@@ -43,7 +43,7 @@ public:
 		return true;
 	}
 	bool ParallelSource() const override {
-		return false;
+		return true;
 	}
 
 public:
