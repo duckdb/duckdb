@@ -22,3 +22,6 @@ Specific test files can be run by adding the name of the file as an argument:
 ```
 ./test.sh test_connection.jl
 ```
+
+#### Original Julia Connector
+Credits to kimmolinna for the [original DuckDB Julia connector](https://github.com/kimmolinna/DuckDB.jl).

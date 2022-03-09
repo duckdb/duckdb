@@ -1,6 +1,6 @@
 name = "DuckDB"
 uuid = "dc41c802-e0d0-4f5a-8bba-22eb8b17d8a4"
-authors = ["Mark Raasveldt <mark@duckdblabs.com", "Hannes Mühleisen <hannes@duckdblabs.com>", "Kimmo Linna <kimmo.linna@gmail.com>"]
+authors = ["Mark Raasveldt <mark@duckdblabs.com", "Hannes Mühleisen <hannes@duckdblabs.com>"]
 version = "0.3.2"
 
 [deps]
