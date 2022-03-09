@@ -412,7 +412,7 @@ Value PerfectHashThresholdSetting::GetSetting(ClientContext &context) {
 // Perfect Join Threshold
 //===--------------------------------------------------------------------===//
 void PerfectJoinThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto threshold = input.GetValue<idx_t>();
+	auto threshold = input.GetValue<int32_t>();
 	if (threshold < 0) {
 		throw ParserException("Perfect Join threshold out of range: should be bigger than 0");
 	}
