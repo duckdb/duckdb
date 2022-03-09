@@ -218,6 +218,21 @@ function duckdb_column_type(result, col)
 end
 
 """
+Returns the logical column type of the specified column.
+
+The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+
+Returns `NULL` if the column is out of range.
+
+* result: The result object to fetch the column type from.
+* col: The column index.
+* returns: The logical column type of the specified column.
+"""
+function duckdb_column_logical_type(result, col)
+    return ccall((:duckdb_column_logical_type, libduckdb), duckdb_logical_type, (Ref{duckdb_result}, Int32), result, col - 1)
+end
+
+"""
 	duckdb_column_count(result)
 Returns the number of columns present in a the result object.
 * `result`: The result object.
@@ -335,7 +350,7 @@ Use `duckdb_result_chunk_count` to figure out how many chunks there are in the r
 * returns: The resulting data chunk. Returns `NULL` if the chunk index is out of bounds.
 """
 function duckdb_result_get_chunk(result, chunk_index)
-    return ccall((:duckdb_result_get_chunk, libduckdb), duckdb_data_chunk, (duckdb_result, UInt64), result, chunk_index)
+    return ccall((:duckdb_result_get_chunk, libduckdb), duckdb_data_chunk, (duckdb_result, UInt64), result, chunk_index - 1)
 end
 
 """
@@ -1249,7 +1264,7 @@ Retrieves the type class of a `duckdb_logical_type`.
 * returns: The type id
 """
 function duckdb_get_type_id(handle)
-    return ccall((:duckdb_get_type_id, libduckdb), Int32, (duckdb_logical_type,), handle)
+    return ccall((:duckdb_get_type_id, libduckdb), DUCKDB_TYPE, (duckdb_logical_type,), handle)
 end
 
 """

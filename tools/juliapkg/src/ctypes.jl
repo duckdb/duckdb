@@ -107,6 +107,13 @@ struct duckdb_blob
     size::UInt64
 end
 
+struct duckdb_string_t
+	length::UInt32
+	data::NTuple{12, UInt8}
+end
+
+STRING_INLINE_LENGTH = 12
+
 struct duckdb_column
     __deprecated_data::Ptr{Cvoid}
     __deprecated_nullmask::Ptr{UInt8}
@@ -125,7 +132,7 @@ struct duckdb_result
 end
 
 INTERNAL_TYPE_MAP = Dict(
-    DUCKDB_TYPE_BOOLEAN => UInt8,
+    DUCKDB_TYPE_BOOLEAN => Bool,
     DUCKDB_TYPE_TINYINT => Int8,
     DUCKDB_TYPE_SMALLINT => Int16,
     DUCKDB_TYPE_INTEGER => Int32,

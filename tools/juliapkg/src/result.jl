@@ -18,9 +18,115 @@ function _close_result(result::QueryResult)
     return duckdb_destroy_result(result.handle)
 end
 
+function nop_convert(val)
+	return val
+end
+
+function convert_string(val::duckdb_string_t)
+	length = val.length;
+	if length <= STRING_INLINE_LENGTH
+		return String(collect(val.data[1:length]))
+	else
+		array = reinterpret(Ptr{UInt8}, collect(val.data[5:12]))[1]
+		return unsafe_string(array, length)
+	end
+end
+
+function convert_date(val::Int32)::Date
+	return Dates.epochdays2date(val + 719528)
+end
+
+function convert_time(val::Int64)::Time
+	return Dates.Time(Dates.Nanosecond(val * 1000))
+end
+
+function convert_timestamp(val::Int64)::DateTime
+	return Dates.epochms2datetime((val / 1000) + 62167219200000)
+end
+
+function convert_interval(val::duckdb_interval)::Dates.CompoundPeriod
+	return Dates.CompoundPeriod(
+		Dates.Month(val.months),
+		Dates.Day(val.days),
+		Dates.Microsecond(val.micros),
+	)
+end
+
+function convert_hugeint(val::duckdb_hugeint)::Int128
+	return Int128(val.lower) + Int128(val.upper) << 64;
+end
+
+function convert_column_loop(chunks::Vector{DataChunk}, col_idx::Int64, convert_func::Function, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
+	# first check if there are null values in any chunks
+	has_missing = false
+	row_count = 0
+	for chunk in chunks
+		if !AllValid(chunk, col_idx)
+			has_missing = true
+		end
+		row_count += GetSize(chunk)
+	end
+	if has_missing
+		# missing values
+		result = Array{Union{Missing,DST}}(missing, row_count)
+		position = 1
+		for chunk in chunks
+			size = GetSize(chunk)
+			array = GetArray(chunk, col_idx, SRC)
+			all_valid = AllValid(chunk, col_idx)
+			if !all_valid
+				validity = GetValidity(chunk, col_idx)
+			end
+			for i in 1:size
+				if all_valid || IsValid(validity, i)
+					result[position] = convert_func(array[i])
+				end
+				position += 1
+			end
+		end
+	else
+		# no missing values
+		result = Array{DST}(undef, row_count)
+		position = 1
+		for chunk in chunks
+			size = GetSize(chunk)
+			array = GetArray(chunk, col_idx, SRC)
+			for i in 1:size
+				result[position] = convert_func(array[i])
+				position += 1
+			end
+		end
+	end
+	return result
+end
+
+function standard_convert(chunks::Vector{DataChunk}, col_idx::Int64, ::Type{T}) where {T}
+	return convert_column_loop(chunks, col_idx, nop_convert, T, T)
+end
+
+function convert_column(chunks::Vector{DataChunk}, col_idx::Int64, type::LogicalType)
+	type = GetInternalType(type)
+	internal_type = duckdb_type_to_internal_type(type)
+
+	if type == DUCKDB_TYPE_VARCHAR
+		return convert_column_loop(chunks, col_idx, convert_string, duckdb_string_t, AbstractString)
+	elseif type == DUCKDB_TYPE_DATE
+		return convert_column_loop(chunks, col_idx, convert_date, internal_type, Date)
+	elseif type == DUCKDB_TYPE_TIME
+		return convert_column_loop(chunks, col_idx, convert_time, internal_type, Time)
+	elseif type == DUCKDB_TYPE_TIMESTAMP
+		return convert_column_loop(chunks, col_idx, convert_timestamp, internal_type, DateTime)
+	elseif type == DUCKDB_TYPE_INTERVAL
+		return convert_column_loop(chunks, col_idx, convert_interval, internal_type, Dates.CompoundPeriod)
+	elseif type == DUCKDB_TYPE_HUGEINT
+		return convert_column_loop(chunks, col_idx, convert_hugeint, internal_type, Int128)
+	else
+		return standard_convert(chunks, col_idx, internal_type)
+	end
+end
+
 function toDataFrame(result::Ref{duckdb_result})::DataFrame
     column_count = duckdb_column_count(result)
-    row_count = duckdb_row_count(result)
 	# duplicate eliminate the names
 	names = Vector{Symbol}(undef, column_count)
 	for i in 1:column_count
@@ -36,50 +142,62 @@ function toDataFrame(result::Ref{duckdb_result})::DataFrame
 	  end
 	  names[i] = name
 	end
+	# gather all the data chunks
+	chunk_count = duckdb_result_chunk_count(result[])
+	chunks::Vector{DataChunk} = []
+	for i = 1:chunk_count
+		push!(chunks, DataChunk(duckdb_result_get_chunk(result[], i), true))
+	end
+
+
     df = DataFrame()
     for i = 1:column_count
         name = names[i]
-        type = duckdb_column_type(result, i)
-        internal_type = duckdb_type_to_internal_type(type)
-        data = unsafe_wrap(Array, Ptr{internal_type}(duckdb_column_data(result, i)), row_count)
-        nullmask = unsafe_wrap(Array, Ptr{Bool}(duckdb_nullmask_data(result, i)), row_count)
-        bmask = reinterpret(Bool, nullmask)
+        logical_type = LogicalType(duckdb_column_logical_type(result, i))
+        df[!, name] = convert_column(chunks, i, logical_type)
 
-        if 0 != sum(nullmask)
-            data = data[.!bmask]
-        end
+#
+#         type = duckdb_column_type(result, i)
+#         internal_type = duckdb_type_to_internal_type(type)
+#
+#         data = unsafe_wrap(Array, Ptr{internal_type}(duckdb_column_data(result, i)), row_count)
+#         nullmask = unsafe_wrap(Array, Ptr{Bool}(duckdb_nullmask_data(result, i)), row_count)
+#         bmask = reinterpret(Bool, nullmask)
+#
+#         if 0 != sum(nullmask)
+#             data = data[.!bmask]
+#         end
+#
+#         # Format the different datatypes for DataFrame
+#         if type == DUCKDB_TYPE_BOOLEAN
+#             data = Bool.(data)
+#         elseif type == DUCKDB_TYPE_DATE
+#             data = Dates.epochdays2date.(data .+ 719528)
+#         elseif type == DUCKDB_TYPE_TIME
+#             data = Dates.Time.(Dates.Nanosecond.(data .* 1000))
+#         elseif type == DUCKDB_TYPE_TIMESTAMP
+#             data = Dates.epochms2datetime.((data ./ 1000) .+ 62167219200000)
+#         elseif type == DUCKDB_TYPE_INTERVAL
+#             data = map(
+#                 x -> Dates.CompoundPeriod(
+#                     Dates.Month(x.months),
+#                     Dates.Day(x.days),
+#                     Dates.Microsecond(x.micros),
+#                 ),
+#                 data,
+#             )
+#         elseif type == DUCKDB_TYPE_HUGEINT
+#             data = map(x -> x.upper < 1 ? (x.lower::UInt64)%Int64 : x, data)
+#         elseif type == DUCKDB_TYPE_VARCHAR
+#             data = unsafe_string.(data)
+#         end
+#
+#         if 0 != sum(nullmask)
+#             fulldata = Array{Union{Missing,eltype(data)}}(missing, row_count)
+#             fulldata[.!bmask] = data
+#             data = fulldata
+#         end
 
-        # Format the different datatypes for DataFrame
-        if type == DUCKDB_TYPE_BOOLEAN
-            data = Bool.(data)
-        elseif type == DUCKDB_TYPE_DATE
-            data = Dates.epochdays2date.(data .+ 719528)
-        elseif type == DUCKDB_TYPE_TIME
-            data = Dates.Time.(Dates.Nanosecond.(data .* 1000))
-        elseif type == DUCKDB_TYPE_TIMESTAMP
-            data = Dates.epochms2datetime.((data ./ 1000) .+ 62167219200000)
-        elseif type == DUCKDB_TYPE_INTERVAL
-            data = map(
-                x -> Dates.CompoundPeriod(
-                    Dates.Month(x.months),
-                    Dates.Day(x.days),
-                    Dates.Microsecond(x.micros),
-                ),
-                data,
-            )
-        elseif type == DUCKDB_TYPE_HUGEINT
-            data = map(x -> x.upper < 1 ? (x.lower::UInt64)%Int64 : x, data)
-        elseif type == DUCKDB_TYPE_VARCHAR
-            data = unsafe_string.(data)
-        end
-
-        if 0 != sum(nullmask)
-            fulldata = Array{Union{Missing,eltype(data)}}(missing, row_count)
-            fulldata[.!bmask] = data
-            data = fulldata
-        end
-
-        df[!, name] = data
     end
     return df
 end

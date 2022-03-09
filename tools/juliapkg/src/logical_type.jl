@@ -10,6 +10,11 @@ mutable struct LogicalType
         finalizer(_destroy_type, result)
         return result
     end
+    function LogicalType(handle::duckdb_logical_type)
+        result = new(handle)
+        finalizer(_destroy_type, result)
+        return result
+    end
 end
 
 CreateLogicalType(::Type{T}) where {T <: String} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_VARCHAR)
@@ -17,6 +22,10 @@ CreateLogicalType(::Type{T}) where {T <: Int64} = DuckDB.LogicalType(DuckDB.DUCK
 
 function CreateLogicalType(::Type{T}) where {T}
     throw(NotImplementedException("Unsupported type for CreateLogicalType"))
+end
+
+function GetInternalType(type::LogicalType)
+	return duckdb_get_type_id(type.handle)
 end
 
 function _destroy_type(type::LogicalType)
