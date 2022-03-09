@@ -1,0 +1,78 @@
+# name: test/sql/storage/catalog/test_table_macro_storage.test
+# description: Create and drop a table macro over different runs
+# group: [catalog]
+
+# load the DB from disk
+load __TEST_DIR__/macro_storage.db
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE test_tbl (id INT, name string, height double);
+
+statement ok
+INSERT INTO  test_tbl values (1,'tom', 1.1), (2,'dick',1.2),(3,'harry', 1.2),
+                             (4,'mary',0.9), (5,'mungo', 0.8), (6,'midge', 0.5);
+
+
+# create a table macro
+statement ok
+CREATE MACRO xt(a, _name) as TABLE SELECT * FROM test_tbl WHERE id<=a or name = _name;
+
+
+# use the macro
+query III
+SELECT * FROM xt(10, '*') ORDER BY  height limit 1;
+----
+6	midge	0.5   
+
+
+statement ok
+DROP MACRO TABLE xt;
+
+loop i 0 2
+
+# restart the system
+restart
+
+statement error
+SELECT * FROM xt(10, 'midge');
+
+# after recreating the macro we can use it again
+statement ok
+CREATE MACRO xt(a, _name) as TABLE SELECT * FROM test_tbl WHERE id<=a or name = _name;
+
+
+query T
+SELECT max(height) from xt(20,'*');
+----
+1.2
+
+# drop the macro again
+statement ok
+DROP MACRO TABLE xt;
+
+endloop
+
+# create a macro but don't drop
+
+statement ok
+CREATE MACRO yt(a) as TABLE SELECT * FROM test_tbl WHERE id<=a;
+
+loop i 0 2
+
+query T
+SELECT min(height) FROM yt(10); 
+----
+0.5
+
+restart
+
+query III
+SELECT * FROM yt(2) ORDER BY  id limit 1;
+----
+1	tom	1.1
+
+
+endloop
