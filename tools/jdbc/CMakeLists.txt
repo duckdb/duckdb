@@ -27,7 +27,7 @@ if(OS_NAME STREQUAL "linux")
   target_link_libraries(duckdb_java -static-libgcc -static-libstdc++
   )# static link to libstdc++ to target more linux distro
 endif()
-if (APPLE)
+if(APPLE)
   set(OS_ARCH universal)
 endif()
 string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${OS_ARCH})
