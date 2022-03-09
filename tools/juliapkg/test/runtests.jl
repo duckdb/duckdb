@@ -1,6 +1,7 @@
 using DataFrames
 using DuckDB
 using Test
+using Dates
 
 test_files = [
     "test_appender.jl",

@@ -237,71 +237,71 @@ function duckdb_row_count(result)
     return ccall((:duckdb_row_count, libduckdb), Int64, (Ref{duckdb_result},), result)
 end
 
-# """
-# 	duckdb_rows_changed(result)
-# Returns the number of rows changed by the query stored in the result. This is relevant only for INSERT/UPDATE/DELETE
-# queries. For other queries the rows_changed will be 0.
-# * `result`: The result object.
-# * returns: The number of rows changed.
-# """
-# function duckdb_rows_changed(result)
-#     return ccall((:duckdb_rows_changed, libduckdb), Int64, (Ptr{Cvoid},), result)
-# end
-#
-# """
-# 	duckdb_column_data(result,col)
-# Returns the data of a specific column of a result in columnar format. This is the fastest way of accessing data in a
-# query result, as no conversion or type checking must be performed (outside of the original switch). If performance
-# is a concern, it is recommended to use this API over the `duckdb_value` functions.
-# The function returns a dense array which contains the result data. The exact type stored in the array depends on the
-# corresponding duckdb_type (as provided by `duckdb_column_type`). For the exact type by which the data should be
-# accessed, see the comments in [the types section](types) or the `DUCKDB_TYPE` enum.
-# For example, for a column of type `DUCKDB_TYPE_INTEGER`, rows can be accessed in the following manner:
-# ```c
-# int32_t *data = (int32_t *) duckdb_column_data(&result, 0);
-# printf("Data for row %d: %d\\n", row, data[row]);
-# ```
-# * `result`: The result object to fetch the column data from.
-# * `col`: The column index.
-# * returns: The column data of the specified column.
-# """
-# function duckdb_column_data(result, col)
-#     return ccall(
-#         (:duckdb_column_data, libduckdb),
-#         Ptr{Cvoid},
-#         (Ptr{Cvoid}, Int32),
-#         result,
-#         col - 1,
-#     )
-# end
-#
-# """
-# 	duckdb_nullmask_data(result,col)
-# Returns the nullmask of a specific column of a result in columnar format. The nullmask indicates for every row
-# whether or not the corresponding row is `NULL`. If a row is `NULL`, the values present in the array provided
-# by `duckdb_column_data` are undefined.
-# ```c
-# int32_t *data = (int32_t *) duckdb_column_data(&result, 0);
-# bool *nullmask = duckdb_nullmask_data(&result, 0);
-# if (nullmask[row]) {
-#     printf("Data for row %d: NULL\n", row);
-# } else {
-#     printf("Data for row %d: %d\n", row, data[row]);
-# }
-# ```
-# * `result`: The result object to fetch the nullmask from.
-# * `col`: The column index.
-# * returns: The nullmask of the specified column.
-# """
-# function duckdb_nullmask_data(result, col)
-#     return ccall(
-#         (:duckdb_nullmask_data, libduckdb),
-#         Ptr{Int32},
-#         (Ptr{Cvoid}, Int32),
-#         result,
-#         col - 1,
-#     )
-# end
+"""
+	duckdb_rows_changed(result)
+Returns the number of rows changed by the query stored in the result. This is relevant only for INSERT/UPDATE/DELETE
+queries. For other queries the rows_changed will be 0.
+* `result`: The result object.
+* returns: The number of rows changed.
+"""
+function duckdb_rows_changed(result)
+    return ccall((:duckdb_rows_changed, libduckdb), Int64, (Ptr{Cvoid},), result)
+end
+
+"""
+	duckdb_column_data(result,col)
+Returns the data of a specific column of a result in columnar format. This is the fastest way of accessing data in a
+query result, as no conversion or type checking must be performed (outside of the original switch). If performance
+is a concern, it is recommended to use this API over the `duckdb_value` functions.
+The function returns a dense array which contains the result data. The exact type stored in the array depends on the
+corresponding duckdb_type (as provided by `duckdb_column_type`). For the exact type by which the data should be
+accessed, see the comments in [the types section](types) or the `DUCKDB_TYPE` enum.
+For example, for a column of type `DUCKDB_TYPE_INTEGER`, rows can be accessed in the following manner:
+```c
+int32_t *data = (int32_t *) duckdb_column_data(&result, 0);
+printf("Data for row %d: %d\\n", row, data[row]);
+```
+* `result`: The result object to fetch the column data from.
+* `col`: The column index.
+* returns: The column data of the specified column.
+"""
+function duckdb_column_data(result, col)
+    return ccall(
+        (:duckdb_column_data, libduckdb),
+        Ptr{Cvoid},
+        (Ref{duckdb_result}, Int32),
+        result,
+        col - 1,
+    )
+end
+
+"""
+	duckdb_nullmask_data(result,col)
+Returns the nullmask of a specific column of a result in columnar format. The nullmask indicates for every row
+whether or not the corresponding row is `NULL`. If a row is `NULL`, the values present in the array provided
+by `duckdb_column_data` are undefined.
+```c
+int32_t *data = (int32_t *) duckdb_column_data(&result, 0);
+bool *nullmask = duckdb_nullmask_data(&result, 0);
+if (nullmask[row]) {
+    printf("Data for row %d: NULL\n", row);
+} else {
+    printf("Data for row %d: %d\n", row, data[row]);
+}
+```
+* `result`: The result object to fetch the nullmask from.
+* `col`: The column index.
+* returns: The nullmask of the specified column.
+"""
+function duckdb_nullmask_data(result, col)
+    return ccall(
+        (:duckdb_nullmask_data, libduckdb),
+        Ptr{Int32},
+        (Ref{duckdb_result}, Int32),
+        result,
+        col - 1,
+    )
+end
 
 """
 	duckdb_result_error(result)

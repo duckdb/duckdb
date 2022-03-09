@@ -40,22 +40,6 @@ end
 
 const DUCKDB_TYPE = DUCKDB_TYPE_
 
-# convert a DuckDB type into Julia equivalent
-duckdb_type_to_julia_type(x::DUCKDB_TYPE) =
-    x == DUCKDB_TYPE_INVALID ? Missing :
-    x == DUCKDB_TYPE_BOOLEAN ? Bool :
-    x == DUCKDB_TYPE_TINYINT ? Int8 :
-    x == DUCKDB_TYPE_SMALLINT ? Int16 :
-    x == DUCKDB_TYPE_INTEGER ? Int32 :
-    x == DUCKDB_TYPE_BIGINT ? Int64 :
-    x == DUCKDB_TYPE_HUGEINT ? Int128 :
-    x == DUCKDB_TYPE_UTINYINT ? UInt8 :
-    x == DUCKDB_TYPE_USMALLINT ? UInt16 :
-    x == DUCKDB_TYPE_UINTEGER ? UInt32 :
-    x == DUCKDB_TYPE_UBIGINT ? UInt64 :
-    x == DUCKDB_TYPE_FLOAT ? Float32 :
-    x == DUCKDB_TYPE_DOUBLE ? Float64 : x == DUCKDB_TYPE_DECIMAL ? Float64 : x == DUCKDB_TYPE_VARCHAR ? String : Any
-
 """
 Days are stored as days since 1970-01-01\n
 Use the duckdb_from_date/duckdb_to_date function to extract individual information
@@ -124,23 +108,23 @@ struct duckdb_blob
 end
 
 struct duckdb_column
-    data::Ptr{Cvoid}
-    nullmask::Ptr{UInt8}
-    type::Ptr{DUCKDB_TYPE}
-    name::Ptr{UInt8}
+    __deprecated_data::Ptr{Cvoid}
+    __deprecated_nullmask::Ptr{UInt8}
+    __deprecated_type::Ptr{DUCKDB_TYPE}
+    __deprecated_name::Ptr{UInt8}
     internal_data::Ptr{Cvoid}
 end
 
 struct duckdb_result
-    column_count::Ptr{UInt64}
-    row_count::Ptr{UInt64}
-    rows_changed::Ptr{UInt64}
-    columns::Ptr{duckdb_column}
-    error_message::Ptr{UInt8}
+    __deprecated_column_count::Ptr{UInt64}
+    __deprecated_row_count::Ptr{UInt64}
+    __deprecated_rows_changed::Ptr{UInt64}
+    __deprecated_columns::Ptr{duckdb_column}
+    __deprecated_error_message::Ptr{UInt8}
     internal_data::Ptr{Cvoid}
 end
 
-DUCKDB_TYPES = Dict(
+INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_BOOLEAN => UInt8,
     DUCKDB_TYPE_TINYINT => Int8,
     DUCKDB_TYPE_SMALLINT => Int16,
@@ -160,5 +144,41 @@ DUCKDB_TYPES = Dict(
     DUCKDB_TYPE_VARCHAR => Ptr{UInt8},
     DUCKDB_TYPE_BLOB => duckdb_blob
 )
+
+DUCKDB_TYPE_MAP = Dict(
+	DUCKDB_TYPE_INVALID => Missing,
+	DUCKDB_TYPE_BOOLEAN => Bool,
+	DUCKDB_TYPE_TINYINT => Int8,
+	DUCKDB_TYPE_SMALLINT => Int16,
+	DUCKDB_TYPE_INTEGER => Int32,
+	DUCKDB_TYPE_BIGINT => Int64,
+	DUCKDB_TYPE_HUGEINT => Int128,
+	DUCKDB_TYPE_UTINYINT => UInt8,
+	DUCKDB_TYPE_USMALLINT => UInt16,
+	DUCKDB_TYPE_UINTEGER => UInt32,
+	DUCKDB_TYPE_UBIGINT => UInt64,
+	DUCKDB_TYPE_FLOAT => Float32,
+	DUCKDB_TYPE_DOUBLE => Float64,
+	DUCKDB_TYPE_DECIMAL => Float64,
+	DUCKDB_TYPE_DATE => Date,
+	DUCKDB_TYPE_TIME => Time,
+	DUCKDB_TYPE_TIMESTAMP => DateTime,
+	DUCKDB_TYPE_VARCHAR => String
+)
+
+# convert a DuckDB type into Julia equivalent
+function duckdb_type_to_internal_type(x::DUCKDB_TYPE)
+	if !haskey(INTERNAL_TYPE_MAP, x)
+		throw(NotImplementedException(string("Unsupported type for duckdb_type_to_internal_type", x)))
+	end
+	return INTERNAL_TYPE_MAP[x]
+end
+
+function duckdb_type_to_julia_type(x::DUCKDB_TYPE)
+	if !haskey(DUCKDB_TYPE_MAP, x)
+		throw(NotImplementedException(string("Unsupported type for duckdb_type_to_julia_type", x)))
+	end
+	return DUCKDB_TYPE_MAP[x]
+end
 
 sym(ptr) = ccall(:jl_symbol, Ref{Symbol}, (Ptr{UInt8},), ptr)

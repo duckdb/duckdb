@@ -8,5 +8,4 @@ connect(db::DB) = DBInterface.connect(db)
 disconnect(con::Connection) = DBInterface.close!(con)
 close(db::DB) = DBInterface.close!(db)
 
-toDataFrame(res::QueryResult) = DataFrame(res)
-toDataFrame(con::Connection, sql::AbstractString) = toDataFrame(DBInterface.execute(con, sql))
+toDataFrame(con::Connection, sql::AbstractString) = DBInterface.execute(con, sql)

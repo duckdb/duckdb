@@ -1,3 +1,4 @@
+# test_old_interface.jl
 
 @testset "DB Connection" begin
     db = DuckDB.open(":memory:")
@@ -105,18 +106,19 @@ end
     DuckDB.disconnect(con)
 end
 
-# @testset "Integers and dates table" begin
-#     db = DuckDB.DB()
-#     res = DBInterface.execute(db, "CREATE TABLE integers(date DATE, data INTEGER);")
-#     res = DBInterface.execute(
-#         db,
-#         "INSERT INTO integers VALUES ('2021-09-27', 4), ('2021-09-28', 6), ('2021-09-29', 8);",
-#     )
-#     res = DBInterface.execute(db, "SELECT * FROM integers;")
-#     res = DuckDB.toDataFrame(res)
-#     @test isa(res, DataFrame)
-#     DBInterface.close!(db)
-# end
+@testset "Integers and dates table" begin
+    db = DuckDB.DB()
+    res = DBInterface.execute(db, "CREATE TABLE integers(date DATE, data INTEGER);")
+    res = DBInterface.execute(
+        db,
+        "INSERT INTO integers VALUES ('2021-09-27', 4), ('2021-09-28', 6), ('2021-09-29', 8);",
+    )
+    res = DBInterface.execute(db, "SELECT * FROM integers;")
+    res = DuckDB.toDataFrame(res)
+    @test res.date == [Date(2021, 9, 27), Date(2021, 9, 28), Date(2021, 9, 29)]
+    @test isa(res, DataFrame)
+    DBInterface.close!(db)
+end
 #
 # @testset "Query CSV and output DataFrame" begin
 #     df = DataFrame(a=1:100, b=1:100)
