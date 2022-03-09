@@ -140,6 +140,7 @@ jobs:
           export OPENSSL_ROOT_DIR=`brew --prefix openssl`
           echo $OPENSSL_ROOT_DIR
           make
+          rm build/release/src/libduckdb*
 
       - name: Deploy
         run: |
