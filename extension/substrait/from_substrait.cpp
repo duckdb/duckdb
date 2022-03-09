@@ -70,11 +70,12 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformSelectionExpr(const sub
 }
 
 unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(const substrait::Expression &sexpr) {
+	auto function_name = FindFunction(sexpr.scalar_function().function_reference());
 	vector<unique_ptr<ParsedExpression>> children;
 	for (auto &sarg : sexpr.scalar_function().args()) {
 		children.push_back(TransformExpr(sarg));
 	}
-	auto function_name = FindFunction(sexpr.scalar_function().function_reference());
+
 	// string compare galore
 	// TODO simplify this
 	if (function_name == "and") {
@@ -106,6 +107,9 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 		                                         move(children[1]));
 	} else if (function_name == "is_not_null") {
 		return make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, move(children[0]));
+	} else if (function_name == "notdistinctfrom") {
+		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, move(children[0]),
+		                                         move(children[1]));
 	}
 
 	return make_unique<FunctionExpression>(function_name, move(children));

@@ -1,0 +1,48 @@
+# name: test/sql/substrait/test_substrait_topn.test
+# description: Test get_substrait with top-n queries
+# group: [substrait]
+
+require substrait
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (i integer,j VARCHAR, k varchar );
+
+statement ok
+insert into test values (10,'a','a'), (20,'a','b');
+
+#statement ok
+#CALL get_substrait('select k,i from test order by k limit 1')
+#
+#statement ok
+#CALL get_substrait('select k,i from test order by i limit 1')
+#
+#statement ok
+#CALL get_substrait('select k from test order by i limit 1')
+#
+#statement ok
+#CALL get_substrait('select k,i from test order by j limit 1')
+
+statement ok
+CALL get_substrait('select j,i from test where k < ''f'' order by i limit 1')
+
+#Limit 1
+#  Order [CAST(-(#2, 10) AS UTINYINT) ASC]
+#    Projection [#1 as j, #2 as i]
+#      Projection [#2 as expr_0, #1 as expr_1]
+#        Scan Table [test]
+
+#//Order [CAST(-(#2, 10) AS UTINYINT) ASC]
+#//  Projection [#2 as j, #3 as i]
+#//    Projection [#3 as expr_0, #2 as expr_1, #1 as expr_2]
+#//      Filter [#3 < 'f' AND (#3 IS NOT NULL)]
+#//        Scan Table [test]
+
+#Limit 1
+#  Order [CAST((i - 10) AS UTINYINT) ASC]
+#    Projection [j as , i as ]
+#      Projection [k as , j as , i as ]
+#        Filter [k < 'f' AND (k IS NOT NULL)]
+#          Scan Table [test]

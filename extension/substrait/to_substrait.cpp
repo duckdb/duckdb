@@ -59,6 +59,11 @@ void DuckDBToSubstrait::TransformInteger(Value &dval, substrait::Expression &sex
 	sval.set_i32(dval.GetValue<int32_t>());
 }
 
+void DuckDBToSubstrait::TransformDouble(Value &dval, substrait::Expression &sexpr) {
+	auto &sval = *sexpr.mutable_literal();
+	sval.set_fp64(dval.GetValue<double>());
+}
+
 void DuckDBToSubstrait::TransformBigInt(Value &dval, substrait::Expression &sexpr) {
 	auto &sval = *sexpr.mutable_literal();
 	sval.set_i64(dval.GetValue<int64_t>());
@@ -120,6 +125,9 @@ void DuckDBToSubstrait::TransformConstant(Value &dval, substrait::Expression &se
 		break;
 	case LogicalTypeId::BOOLEAN:
 		TransformBoolean(dval, sexpr);
+		break;
+	case LogicalTypeId::DOUBLE:
+		TransformDouble(dval, sexpr);
 		break;
 	default:
 		throw InternalException(duckdb_type.ToString());
@@ -355,8 +363,11 @@ substrait::Expression *DuckDBToSubstrait::TransformJoinCond(JoinCondition &dcond
 	case ExpressionType::COMPARE_GREATERTHAN:
 		join_comparision = "greaterthan";
 		break;
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		join_comparision = "notdistinctfrom";
+		break;
 	default:
-		throw InternalException("Unsupported join comparision");
+		throw InternalException("Unsupported join comparison");
 	}
 	auto scalar_fun = expr->mutable_scalar_function();
 	scalar_fun->set_function_reference(RegisterFunction(join_comparision));
@@ -579,29 +590,40 @@ substrait::Rel *DuckDBToSubstrait::TransformAggregateGroup(LogicalOperator &dop)
 }
 
 substrait::Rel *DuckDBToSubstrait::TransformGet(LogicalOperator &dop) {
-	auto res = new substrait::Rel();
+	auto get_rel = new substrait::Rel();
+	substrait::Rel *rel = get_rel;
 	auto &dget = (LogicalGet &)dop;
 	auto &table_scan_bind_data = (TableScanBindData &)*dget.bind_data;
-	auto sget = res->mutable_read();
+	auto sget = get_rel->mutable_read();
 
+	// Turn Filter pushdown into Filter
 	if (!dget.table_filters.filters.empty()) {
-		sget->unsafe_arena_set_allocated_filter(
+		auto filter = new substrait::Rel();
+		filter->mutable_filter()->set_allocated_input(get_rel);
+
+		filter->mutable_filter()->set_allocated_condition(
 		    CreateConjunction(dget.table_filters.filters, [&](std::pair<const idx_t, unique_ptr<TableFilter>> &in) {
 			    auto col_idx = in.first;
 			    auto &filter = *in.second;
 			    return TransformFilter(col_idx, filter);
 		    }));
+		rel = filter;
 	}
 
-	for (auto column_index : dget.column_ids) {
-		sget->mutable_projection()->mutable_select()->add_struct_items()->set_field((int32_t)column_index);
+	// Turn Projection Pushdown into Projection
+	if (!dget.column_ids.empty()) {
+		auto projection_rel = new substrait::Rel();
+		projection_rel->mutable_project()->set_allocated_input(rel);
+		for (auto col_idx : dget.column_ids) {
+			CreateFieldRef(projection_rel->mutable_project()->add_expressions(), col_idx);
+		}
+		rel = projection_rel;
 	}
 
 	// TODO add schema
 	sget->mutable_named_table()->add_names(table_scan_bind_data.table->name);
-	//		sget->mutable_common()->mutable_direct();
 
-	return res;
+	return rel;
 }
 
 substrait::Rel *DuckDBToSubstrait::TransformCrossProduct(LogicalOperator &dop) {
@@ -656,6 +678,13 @@ substrait::Rel *DuckDBToSubstrait::TransformOp(LogicalOperator &dop) {
 substrait::RelRoot *DuckDBToSubstrait::TransformRootOp(LogicalOperator &dop) {
 	auto root_rel = new substrait::RelRoot();
 	LogicalOperator *current_op = &dop;
+	bool weird_scenario = current_op->type == LogicalOperatorType::LOGICAL_PROJECTION &&
+	                      current_op->children[0]->type == LogicalOperatorType::LOGICAL_TOP_N;
+	if (weird_scenario) {
+		// This is a weird scenario where a projection is put on top of a top-k but the actual aliases are on the
+		// projection below the top-k still.
+		current_op = current_op->children[0].get();
+	}
 	// If the root operator is not a projection, we must go down until we find the first projection to get the aliases
 	while (current_op->type != LogicalOperatorType::LOGICAL_PROJECTION) {
 		if (current_op->children.size() != 1) {
@@ -665,9 +694,18 @@ substrait::RelRoot *DuckDBToSubstrait::TransformRootOp(LogicalOperator &dop) {
 	}
 	root_rel->set_allocated_input(TransformOp(dop));
 	auto &dproj = (LogicalProjection &)*current_op;
-	for (auto &expression : dproj.expressions) {
-		root_rel->add_names(expression->GetName());
+	if (!weird_scenario) {
+		for (auto &expression : dproj.expressions) {
+			root_rel->add_names(expression->GetName());
+		}
+	} else {
+		for (auto &expression : dop.expressions) {
+			D_ASSERT(expression->type == ExpressionType::BOUND_REF);
+			auto b_expr = (BoundReferenceExpression *)expression.get();
+			root_rel->add_names(dproj.expressions[b_expr->index]->GetName());
+		}
 	}
+
 	return root_rel;
 }
 
