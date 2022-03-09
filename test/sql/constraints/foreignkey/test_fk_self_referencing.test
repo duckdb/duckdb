@@ -46,13 +46,17 @@ SELECT * FROM employee;
 statement error
 UPDATE employee SET managerid=5 WHERE id=4;
 
-statement ok
+# this is failed because the update is transformed into a delete and an insert
+statement error
 UPDATE employee SET managerid=2 WHERE id=4;
 
+statement ok
+UPDATE employee SET id=5, managerid=2 WHERE id=4;
+
 query IIT
-SELECT * FROM employee WHERE id=4;
+SELECT * FROM employee WHERE managerid=2;
 ----
-4	2	Juliet	
+5	2	Juliet	
 
 statement error
 ALTER TABLE employee RENAME COLUMN managerid TO managerid_new;
