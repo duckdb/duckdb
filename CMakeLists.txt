@@ -154,6 +154,10 @@ if(${EXPLICIT_EXCEPTIONS})
   set(CXX_EXTRA "${CXX_EXTRA} -fexceptions")
 endif()
 
+if (APPLE)
+  SET(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for Mac OS X" FORCE)
+endif()
+
 set(SUN FALSE)
 if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(CXX_EXTRA "${CXX_EXTRA} -mimpure-text")
