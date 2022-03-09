@@ -160,8 +160,6 @@ public:
 
 	//! Append a DataChunk to the table. Throws an exception if the columns don't match the tables' columns.
 	void Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
-	//! Gather the chunk for delete verify
-	void GatherVerifyChunk(ClientContext &context, Vector &row_identifiers, idx_t count, DataChunk &chunk);
 	//! Delete the entries with the specified row identifier from the table
 	idx_t Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);
 	//! Update the entries with the specified row identifier from the table

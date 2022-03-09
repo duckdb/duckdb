@@ -48,17 +48,18 @@ bool FindForeignKeyInformation(CatalogEntry *entry, vector<string> &pk_columns, 
 	auto *table_entry = (TableCatalogEntry *)entry;
 	for (idx_t i = 0; i < table_entry->constraints.size(); i++) {
 		auto &cond = table_entry->constraints[i];
-		if (cond->type == ConstraintType::FOREIGN_KEY) {
-			auto &fk = (ForeignKeyConstraint &)*cond;
-			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-				pk_columns = fk.pk_columns;
-				fk_columns = fk.fk_columns;
-				info = fk.info;
-				is_found = true;
-			} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && is_drop) {
-				throw CatalogException(
-				    "Could not drop the table because this table is main key table of the table \"%s\"", fk.info.table);
-			}
+		if (cond->type != ConstraintType::FOREIGN_KEY) {
+			continue;
+		}
+		auto &fk = (ForeignKeyConstraint &)*cond;
+		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+			pk_columns = fk.pk_columns;
+			fk_columns = fk.fk_columns;
+			info = fk.info;
+			is_found = true;
+		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && is_drop) {
+			throw CatalogException("Could not drop the table because this table is main key table of the table \"%s\"",
+			                       fk.info.table);
 		}
 	}
 

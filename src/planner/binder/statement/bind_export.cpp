@@ -51,7 +51,7 @@ bool IsExistMainKeyTable(string &table_name, vector<TableCatalogEntry *> &unorde
 
 void ScanForeignKeyTable(vector<TableCatalogEntry *> &ordered, vector<TableCatalogEntry *> &unordered,
                          bool move_only_pk_table) {
-	for (vector<TableCatalogEntry *>::iterator i = unordered.begin(); i != unordered.end();) {
+	for (auto i = unordered.begin(); i != unordered.end();) {
 		auto table_entry = *i;
 		bool move_to_ordered = true;
 		for (idx_t j = 0; j < table_entry->constraints.size(); j++) {
