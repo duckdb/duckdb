@@ -691,11 +691,28 @@ idx_t IEJoinUnion::AppendKey(SortedTable &table, ExpressionExecutor &executor, S
 }
 
 IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, SortedTable &t1, const idx_t b1,
-                         SortedTable &t2, const idx_t b2) {
+                         SortedTable &t2, const idx_t b2)
+    : n(0), i(0) {
 	// input : query Q with 2 join predicates t1.X op1 t2.X' and t1.Y op2 t2.Y', tables T, T' of sizes m and n resp.
 	// output: a list of tuple pairs (ti , tj)
 	// Note that T/T' are already sorted on X/X' and contain the payload data
 	// We only join the two block numbers and use the sizes of the blocks as the counts
+
+	// 0. Filter out tables with no overlap
+	if (!t1.BlockSize(b1) || !t2.BlockSize(b2)) {
+		return;
+	}
+
+	const auto &cmp1 = op.conditions[0].comparison;
+	SBIterator bounds1(t1.global_sort_state, cmp1);
+	SBIterator bounds2(t2.global_sort_state, cmp1);
+
+	// t1.X[0] op1 t2.X'[-1]
+	bounds1.SetIndex(bounds1.block_capacity * b1);
+	bounds2.SetIndex(bounds2.block_capacity * b2 + t2.BlockSize(b2) - 1);
+	if (!bounds1.Compare(bounds2)) {
+		return;
+	}
 
 	// 1. let L1 (resp. L2) be the array of column X (resp. Y )
 	const auto &order1 = op.lhs_orders[0][0];
@@ -734,7 +751,6 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 
 	Sort(*l1);
 
-	const auto &cmp1 = op.conditions[0].comparison;
 	op1 = make_unique<SBIterator>(l1->global_sort_state, cmp1);
 	off1 = make_unique<SBIterator>(l1->global_sort_state, cmp1);
 
@@ -861,7 +877,7 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 	idx_t result_count = 0;
 
 	// 11. for(i←1 to n) do
-	for (;;) {
+	while (i < n) {
 		// 13. for (j ← pos+eqOff to n) do
 		for (;;) {
 			// 14. if B[j] = 1 then
