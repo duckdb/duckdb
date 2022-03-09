@@ -1005,11 +1005,8 @@ static bool CreateMockChunk(TableCatalogEntry &table, const vector<column_t> &co
 	return true;
 }
 
-void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-                                        const vector<column_t> &column_ids, Vector &row_ids, idx_t count) {
-#ifdef DEBUG
-	bool is_self_referencing_fk = false;
-#endif
+void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk,
+                                        const vector<column_t> &column_ids) {
 	for (auto &constraint : table.bound_constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
@@ -1034,28 +1031,8 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, ClientContext 
 			break;
 		}
 		case ConstraintType::UNIQUE:
+		case ConstraintType::FOREIGN_KEY:
 			break;
-		case ConstraintType::FOREIGN_KEY: {
-			auto &bfk = *reinterpret_cast<BoundForeignKeyConstraint *>(constraint.get());
-			if (bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
-#ifdef DEBUG
-				is_self_referencing_fk = true;
-#endif
-				bool is_verify_append = false;
-				for (idx_t i = 0; i < column_ids.size(); i++) {
-					if (bfk.fk_key_set.find(column_ids[i]) != bfk.fk_key_set.end()) {
-						is_verify_append = true;
-					}
-				}
-				if (is_verify_append) {
-					DataChunk mock_chunk;
-					auto types = table.GetTypes();
-					CreateMockChunk(types, column_ids, chunk, mock_chunk);
-					VerifyAppendForeignKeyConstraint(bfk, context, mock_chunk);
-				}
-			}
-			break;
-		}
 		default:
 			throw NotImplementedException("Constraint type not implemented!");
 		}
@@ -1063,12 +1040,10 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, ClientContext 
 	// update should not be called for indexed columns!
 	// instead update should have been rewritten to delete + update on higher layer
 #ifdef DEBUG
-	if (!is_self_referencing_fk) {
-		info->indexes.Scan([&](Index &index) {
-			D_ASSERT(!index.IndexIsUpdated(column_ids));
-			return false;
-		});
-	}
+	info->indexes.Scan([&](Index &index) {
+		D_ASSERT(!index.IndexIsUpdated(column_ids));
+		return false;
+	});
 
 #endif
 }
@@ -1088,7 +1063,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	}
 
 	// first verify that no constraints are violated
-	VerifyUpdateConstraints(table, context, updates, column_ids, row_ids, count);
+	VerifyUpdateConstraints(table, updates, column_ids);
 
 	// now perform the actual update
 	auto &transaction = Transaction::GetTransaction(context);
