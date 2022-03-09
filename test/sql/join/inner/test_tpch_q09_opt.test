@@ -6,7 +6,7 @@
 require tpch
 
 statement ok
-CALL dbgen(sf=10)
+CALL dbgen(sf=0.1)
 
 statement ok
 PRAGMA disable_optimizer
@@ -36,4 +36,4 @@ ORDER BY
     nation,
     o_year DESC;
 ----
-525 values hashing to b6eb36f42bf3c928bb53c81116a6379a
+525 values hashing to 7c1675c102bc27f328bc6f40512bc9c7
