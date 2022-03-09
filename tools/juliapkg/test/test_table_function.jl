@@ -32,7 +32,7 @@ function MyMainFunction(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
     bind_info = DuckDB.GetBindInfo(info, MyBindStruct)
     init_info = DuckDB.GetInitInfo(info, MyInitStruct)
 
-    result_array = DuckDB.GetArray(output, 0, Int64)
+    result_array = DuckDB.GetArray(output, 1, Int64)
     count = 0
     for i in 1:(DuckDB.VECTOR_SIZE)
         if init_info.pos >= bind_info.count
@@ -51,8 +51,8 @@ function MyMainFunctionNulls(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk
     bind_info = DuckDB.GetBindInfo(info, MyBindStruct)
     init_info = DuckDB.GetInitInfo(info, MyInitStruct)
 
-    result_array = DuckDB.GetArray(output, 0, Int64)
-    validity = DuckDB.GetValidity(output, 0)
+    result_array = DuckDB.GetArray(output, 1, Int64)
+    validity = DuckDB.GetValidity(output, 1)
     count = 0
     for i in 1:(DuckDB.VECTOR_SIZE)
         if init_info.pos >= bind_info.count
@@ -93,11 +93,11 @@ end
     df = DataFrame(results)
     @test df.cnt == [10000]
 
-# 	@time begin
-# 		results = DBInterface.execute(con, "SELECT SUM(forty_two) cnt FROM forty_two(10000000)")
-# 	end
-# 	df = DataFrame(results)
-# 	println(df)
+    # 	@time begin
+    # 		results = DBInterface.execute(con, "SELECT SUM(forty_two) cnt FROM forty_two(10000000)")
+    # 	end
+    # 	df = DataFrame(results)
+    # 	println(df)
 
     # return null values from a table function
     DuckDB.CreateTableFunction(con, "forty_two_nulls", [Int64], MyBindFunction, MyInitFunction, MyMainFunctionNulls)
@@ -106,11 +106,11 @@ end
     @test df.total_cnt == [10000]
     @test df.cnt == [5000]
 
-# 	@time begin
-# 		results = DBInterface.execute(con, "SELECT SUM(forty_two) cnt FROM forty_two_nulls(10000000)")
-# 	end
-# 	df = DataFrame(results)
-# 	println(df)
+    # 	@time begin
+    # 		results = DBInterface.execute(con, "SELECT SUM(forty_two) cnt FROM forty_two_nulls(10000000)")
+    # 	end
+    # 	df = DataFrame(results)
+    # 	println(df)
 end
 
 function MyBindErrorFunction(info::DuckDB.BindInfo)

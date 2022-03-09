@@ -121,7 +121,7 @@ function _table_main_function(info::duckdb_function_info, chunk::duckdb_data_chu
     main_function = unsafe_pointer_to_objref(duckdb_function_get_extra_info(info))
     binfo = FunctionInfo(info, main_function)
     try
-        main_function.main_func(binfo, DataChunk(chunk))
+        main_function.main_func(binfo, DataChunk(chunk, false))
     catch ex
         duckdb_function_set_error(info, sprint(showerror, ex))
     end

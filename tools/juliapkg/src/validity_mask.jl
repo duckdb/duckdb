@@ -26,3 +26,9 @@ function SetInvalid(mask::ValidityMask, index::Int64)
     mask.data[entry_idx] &= ~(1 << index_in_entry)
     return
 end
+
+function IsValid(mask::ValidityMask, index::Int64)::Bool
+    entry_idx = GetEntryIndex(index)
+    index_in_entry = GetIndexInEntry(index)
+    return (mask.data[entry_idx] & (1 << index_in_entry)) != 0
+end

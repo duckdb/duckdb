@@ -47,7 +47,7 @@ function DFScanFunction(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
     end
 
     for col_idx in 1:column_count
-        result_array::Vector{Int64} = DuckDB.GetArray(output, col_idx - 1, Int64)
+        result_array::Vector{Int64} = DuckDB.GetArray(output, col_idx, Int64)
         input_column = bind_info.df[!, col_idx]
         for i in 1:scan_count
             result_array[i] = input_column[init_info.pos + i]

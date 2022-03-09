@@ -318,12 +318,35 @@ end
 //===--------------------------------------------------------------------===//
 // Result Functions
 //===--------------------------------------------------------------------===//
-// Safe fetch functions
-// These functions will perform conversions if necessary.
-// On failure (e.g. if conversion cannot be performed or if the value is NULL) a default value is returned.
-// Note that these functions are slow since they perform bounds checking and conversion
-// For fast access of values prefer using duckdb_column_data and duckdb_nullmask_data
 =#
+
+"""
+Fetches a data chunk from the duckdb_result. This function should be called repeatedly until the result is exhausted.
+
+This function supersedes all `duckdb_value` functions, as well as the `duckdb_column_data` and `duckdb_nullmask_data` functions.
+It results in significantly better performance, and should be preferred in newer code-bases.
+
+If this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be mixed with the legacy result functions).
+
+Use `duckdb_result_chunk_count` to figure out how many chunks there are in the result.
+
+* result: The result object to fetch the data chunk from.
+* chunk_index: The chunk index to fetch from.
+* returns: The resulting data chunk. Returns `NULL` if the chunk index is out of bounds.
+"""
+function duckdb_result_get_chunk(result, chunk_index)
+    return ccall((:duckdb_result_get_chunk, libduckdb), duckdb_data_chunk, (duckdb_result, UInt64), result, chunk_index)
+end
+
+"""
+Returns the number of data chunks present in the result.
+
+* result: The result object
+* returns: The resulting data chunk. Returns `NULL` if the chunk index is out of bounds.
+"""
+function duckdb_result_chunk_count(result)
+    return ccall((:duckdb_result_chunk_count, libduckdb), UInt64, (duckdb_result,), result)
+end
 
 
 """
