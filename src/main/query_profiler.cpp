@@ -255,10 +255,6 @@ void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t 
 }
 void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor *expression_executor,
                              const string &name, int id) {
-	/* if (phys_op->type == PhysicalOperatorType::HASH_JOIN) {
-	    auto sink = (HashJoinGlobalState *)phys_op->sink_state.get();
-	    std::cout << sink->finalized << std::endl;
-	} */
 	auto entry = timings.find(phys_op);
 	if (entry == timings.end()) {
 		return;
