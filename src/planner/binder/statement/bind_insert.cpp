@@ -7,10 +7,10 @@
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/planner/expression_binder/update_binder.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_binder/returning_binder.hpp"
 
 namespace duckdb {
 
@@ -139,13 +139,13 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 		auto binder = Binder::CreateBinder(context);
 		auto types = table->GetTypes();
-		 vector<std::string> names;
+		vector<std::string> names;
 		for (auto &col : table->columns) {
 			names.push_back(col.name);
 		}
 
 		binder->bind_context.AddGenericBinding(insert->table_index, stmt.table, names, types);
-		InsertBinder insert_binder(*binder, context);
+		ReturningBinder returning_binder(*binder, context);
 
 		unique_ptr<LogicalOperator> insert_as_logicaloperator = move(insert);
 
@@ -159,21 +159,24 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 				                                                  generated_star_list);
 
 				for (auto &star_column : generated_star_list) {
-					auto star_expr = insert_binder.Bind(star_column, &result_type);
+					auto star_expr = returning_binder.Bind(star_column, &result_type);
 					result.types.push_back(result_type);
 					result.names.push_back(star_expr->GetName());
 					projection_expressions.push_back(move(star_expr));
 				}
 			} else {
-				auto expr = insert_binder.Bind(returning_expr, &result_type);
+				auto expr = returning_binder.Bind(returning_expr, &result_type);
 				result.names.push_back(expr->GetName());
 				result.types.push_back(result_type);
-				PlanSubqueries(&expr, &insert_as_logicaloperator);
 				projection_expressions.push_back(move(expr));
 			}
 		}
+		for (auto &expr : projection_expressions) {
+			binder->PlanSubqueries(&expr, &insert_as_logicaloperator);
+		}
+		MoveCorrelatedExpressions(*binder);
 
-		auto projection = make_unique<LogicalProjection>(insert_table_index, move(projection_expressions));
+		auto projection = make_unique<LogicalProjection>(GenerateTableIndex(), move(projection_expressions));
 		projection->AddChild(move(insert_as_logicaloperator));
 		result.plan = move(projection);
 		D_ASSERT(result.types.size() == result.names.size());

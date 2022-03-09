@@ -5,6 +5,7 @@
 statement ok
 CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAULT -3);
 
+
 # standard insert still works
 query I
 INSERT INTO table1 VALUES (1, 2, 3);
@@ -65,11 +66,6 @@ INSERT INTO table1 (a, b, c) SELECT * from table1 WHERE a = 10 and b=-2 and c=-3
 ----
 10	-2	-3
 
-# returning with bound subquery
-query I
-INSERT INTO table1(a, b, c) SELECT * FROM table1 WHERE a = 10 and b=-2 and c=-3 LIMIT 1 RETURNING a IN (SELECT a FROM table1);
-----
-1
 
 # inserting empty subquery returns nothing
 query III
@@ -77,7 +73,7 @@ INSERT INTO table1 (a, b, c) SELECT * from table1 WHERE a = 100000 and b = 10000
 ----
 
 # returning subquery should still query table1, not just returning rows.
-query I
+statement error
 INSERT INTO table1 (a, b, c) VALUES (10, 1000, 1000) RETURNING a IN (SELECT a from table1 where b = -2);
 ----
 1
@@ -119,15 +115,14 @@ INSERT INTO table1 VALUES (1, 2, 3) RETURNING {'a':a, 'b':b, 'c':c};
 {'a': 1, 'b': 2, 'c': 3}
 
 # uncorrelated scalar subqueries in returning statement
-query III
-INSERT INTO table1(a) (SELECT 42) RETURNING a, b, (select 10);
+query II
+INSERT INTO table1(a) (SELECT 42) RETURNING a, b;
 ----
-42	-2	10
+42	-2
 
 # insert VALUES (scalar) throws error
 statement error
 INSERT INTO table1(a) VALUES (SELECT 42) RETURNING a, b, (select 10);
-
 
 # unknown columns
 statement error
@@ -137,27 +132,20 @@ INSERT INTO table1 VALUES (1,2,3) RETURNING d, e, f
 statement error
 INSERT INTO table1 SELECT * from table1 RETURNING row_number() OVER (ORDER BY a) as row_number, a, b FROM table1;
 
-query I
+statement error
 INSERT INTO table1 VALUES (1, 2, 3) RETURNING [1, 2] IN (SELECT [a, b] from table1);
 ----
 1
 
-
-mode skip
 # scalar subquery
-query III
-INSERT INTO table1(a, b) VALUES (42, 43) RETURNING (SELECT a), (SELECT b), (SELECT c where c = -10);
-----
-42	43	NULL
+statement error
+INSERT INTO table1(a, b) VALUES (42, 43) RETURNING (SELECT a), (SELECT b), NULL;
 
 # Window function in subquery
-query I
-INSERT INTO table1 VALUES (-10, -20, -30), (-50, -60, -70)
-    RETURNING (1, -60, -70) IN (SELECT row_number() OVER (ORDER BY b) AS row_number, b, c  FROM table1);
-----
-1
+statement error
+INSERT INTO table1 VALUES (-10, -20, -30)
+    RETURNING '-10.-20' IN (SELECT group_concat(a) OVER (ORDER BY b) as GC FROM table1);
 
-mode unskip
 
 # new table with multiple types
 statement ok
@@ -191,7 +179,6 @@ INSERT INTO table3(b) VALUES (4), (5) RETURNING a, b;
 ----
 1	4
 2	5
-
 
 
 

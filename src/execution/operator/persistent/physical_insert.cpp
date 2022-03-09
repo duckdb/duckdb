@@ -134,8 +134,8 @@ void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		return;
 	}
 
-	(insert_gstate.return_chunk_collection.Chunks().at(chunk_return))->Copy(chunk);
-	chunk.SetCardinality((insert_gstate.return_chunk_collection.Chunks().at(chunk_return))->size());
+	chunk.Reference(insert_gstate.return_chunk_collection.GetChunk(chunk_return));
+	chunk.SetCardinality((insert_gstate.return_chunk_collection.GetChunk(chunk_return)).size());
 	insert_gstate.returned_chunk_count += 1;
 	if (insert_gstate.returned_chunk_count >= insert_gstate.return_chunk_collection.Chunks().size()) {
 		state.finished = true;
