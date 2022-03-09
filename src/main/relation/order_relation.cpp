@@ -12,13 +12,15 @@ OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> o
 }
 
 unique_ptr<QueryNode> OrderRelation::GetQueryNode() {
-	auto child_node = child->GetQueryNode();
+	auto select = make_unique<SelectNode>();
+	select->from_table = child->GetTableRef();
+	select->select_list.push_back(make_unique<StarExpression>());
 	auto order_node = make_unique<OrderModifier>();
 	for (idx_t i = 0; i < orders.size(); i++) {
 		order_node->orders.emplace_back(orders[i].type, orders[i].null_order, orders[i].expression->Copy());
 	}
-	child_node->modifiers.push_back(move(order_node));
-	return child_node;
+	select->modifiers.push_back(move(order_node));
+	return move(select);
 }
 
 string OrderRelation::GetAlias() {

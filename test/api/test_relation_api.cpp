@@ -874,8 +874,8 @@ TEST_CASE("Test TopK relation", "[relation_api]") {
 
 	REQUIRE_NOTHROW(tbl = con.Table("test"));
 	REQUIRE_NOTHROW(tbl = tbl->Filter("k < 'f' and k is not null")
-	                          ->Project("k,j,i")
-	                          ->Project("j,i")
-	                          ->Order("(i-10)::UTINYINT ASC")
+	                          ->Project("#3,#2,#1")
+	                          ->Project("#2,#3")
+	                          ->Order("(#2-10)::UTINYINT ASC")
 	                          ->Limit(1));
 }
