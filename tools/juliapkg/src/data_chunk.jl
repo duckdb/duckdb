@@ -44,29 +44,23 @@ function GetArray(chunk::DataChunk, col_idx::Int64, ::Type{T})::Vector{T} where 
 end
 
 function GetValidity(chunk::DataChunk, col_idx::Int64)::ValidityMask
-    duckdb_data_chunk_ensure_validity_writable(chunk.handle, col_idx)
-    validity_ptr = duckdb_data_chunk_get_validity(chunk.handle, col_idx)
+    if col_idx < 1 || col_idx > GetColumnCount(chunk)
+        throw(
+            InvalidInputException(
+                string(
+                    "GetValidity column index ",
+                    col_idx,
+                    " out of range, expected value between 1 and ",
+                    GetColumnCount(chunk)
+                )
+            )
+        )
+    end
+    duckdb_data_chunk_ensure_validity_writable(chunk.handle, col_idx - 1)
+    validity_ptr = duckdb_data_chunk_get_validity(chunk.handle, col_idx - 1)
     ptr = Base.unsafe_convert(Ptr{UInt64}, validity_ptr)
     validity_vector = unsafe_wrap(Vector{UInt64}, ptr, VECTOR_SIZE ÷ BITS_PER_VALUE, own = false)
     return ValidityMask(validity_vector)
-end
-
-function GetArrays(types::Vector{Type}, chunk::DataChunk)::Vector{Ptr{Cvoid}}
-    column_count = GetColumnCount(chunk)
-    result::Vector{Ptr{Cvoid}} = []
-    for i::Int64 in 1:column_count
-        push!(result, duckdb_data_chunk_get_data(chunk.handle, i - 1))
-    end
-    return result
-end
-
-function GetValidityMasks(chunk::DataChunk)::Vector{ValidityMask}
-    column_count = GetColumnCount(chunk)
-    result::Vector{ValidityMask} = []
-    for i::Int64 in 1:column_count
-        push!(result, GetValidity(chunk, i - 1))
-    end
-    return result
 end
 
 # this is only required when we own the data chunk

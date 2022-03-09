@@ -4,6 +4,7 @@ using DBInterface
 using WeakRefStrings
 using Tables
 using Base.Libc
+using Dates
 
 export DBInterface, DuckDBException
 
