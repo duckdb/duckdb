@@ -33,16 +33,17 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 
 	REQUIRE(duckdb_data_chunk_get_column_count(data_chunk) == 2);
 
-	auto first_type = duckdb_data_chunk_get_column_type(data_chunk, 0);
+	auto first_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(data_chunk, 0));
 	REQUIRE(duckdb_get_type_id(first_type) == DUCKDB_TYPE_BIGINT);
 	duckdb_destroy_logical_type(&first_type);
 
-	auto second_type = duckdb_data_chunk_get_column_type(data_chunk, 1);
+	auto second_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(data_chunk, 1));
 	REQUIRE(duckdb_get_type_id(second_type) == DUCKDB_TYPE_SMALLINT);
 	duckdb_destroy_logical_type(&second_type);
 
-	REQUIRE(duckdb_data_chunk_get_column_type(data_chunk, 999) == nullptr);
-	REQUIRE(duckdb_data_chunk_get_column_type(nullptr, 0) == nullptr);
+	REQUIRE(duckdb_data_chunk_get_vector(data_chunk, 999) == nullptr);
+	REQUIRE(duckdb_data_chunk_get_vector(nullptr, 0) == nullptr);
+	REQUIRE(duckdb_vector_get_column_type(nullptr) == nullptr);
 
 	REQUIRE(duckdb_data_chunk_get_size(data_chunk) == 0);
 	REQUIRE(duckdb_data_chunk_get_size(nullptr) == 0);
@@ -54,13 +55,12 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 
 	// append standard primitive values
-	auto col1_ptr = (int64_t *)duckdb_data_chunk_get_data(data_chunk, 0);
+	auto col1_ptr = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 0));
 	*col1_ptr = 42;
-	auto col2_ptr = (int16_t *)duckdb_data_chunk_get_data(data_chunk, 1);
+	auto col2_ptr = (int16_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 1));
 	*col2_ptr = 84;
 
-	REQUIRE(duckdb_data_chunk_get_data(nullptr, 0) == nullptr);
-	REQUIRE(duckdb_data_chunk_get_data(data_chunk, 999) == nullptr);
+	REQUIRE(duckdb_vector_get_data(nullptr) == nullptr);
 
 	duckdb_data_chunk_set_size(data_chunk, 1);
 	REQUIRE(duckdb_data_chunk_get_size(data_chunk) == 1);
@@ -73,14 +73,14 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 	duckdb_data_chunk_reset(data_chunk);
 	REQUIRE(duckdb_data_chunk_get_size(data_chunk) == 0);
 
-	duckdb_data_chunk_ensure_validity_writable(data_chunk, 0);
-	duckdb_data_chunk_ensure_validity_writable(data_chunk, 1);
-	auto col1_validity = duckdb_data_chunk_get_validity(data_chunk, 0);
+	duckdb_vector_ensure_validity_writable(duckdb_data_chunk_get_vector(data_chunk, 0));
+	duckdb_vector_ensure_validity_writable(duckdb_data_chunk_get_vector(data_chunk, 1));
+	auto col1_validity = duckdb_vector_get_validity(duckdb_data_chunk_get_vector(data_chunk, 0));
 	REQUIRE(duckdb_validity_row_is_valid(col1_validity, 0));
 	duckdb_validity_set_row_validity(col1_validity, 0, false);
 	REQUIRE(!duckdb_validity_row_is_valid(col1_validity, 0));
 
-	auto col2_validity = duckdb_data_chunk_get_validity(data_chunk, 1);
+	auto col2_validity = duckdb_vector_get_validity(duckdb_data_chunk_get_vector(data_chunk, 1));
 	REQUIRE(col2_validity);
 	REQUIRE(duckdb_validity_row_is_valid(col2_validity, 0));
 	duckdb_validity_set_row_validity(col2_validity, 0, false);
@@ -91,8 +91,7 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 
 	REQUIRE(duckdb_append_data_chunk(appender, data_chunk) == DuckDBSuccess);
 
-	REQUIRE(duckdb_data_chunk_get_validity(nullptr, 0) == nullptr);
-	REQUIRE(duckdb_data_chunk_get_validity(data_chunk, 999) == nullptr);
+	REQUIRE(duckdb_vector_get_validity(nullptr) == nullptr);
 
 	duckdb_appender_destroy(&appender);
 

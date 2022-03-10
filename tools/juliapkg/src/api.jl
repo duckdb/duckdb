@@ -1410,39 +1410,55 @@ function duckdb_data_chunk_set_size(chunk, size)
 end
 
 """
-Retrieves the column type of the specified column in the data chunk.
+Retrieves the vector at the specified column index in the data chunk.
+
+The pointer to the vector is valid for as long as the chunk is alive.
+It does NOT need to be destroyed.
+
+* chunk: The data chunk to get the data from
+* returns: The vector
+"""
+function duckdb_data_chunk_get_vector(chunk, col_idx)
+    return ccall((:duckdb_data_chunk_get_vector, libduckdb), duckdb_vector, (duckdb_data_chunk, UInt64), chunk, col_idx - 1)
+end
+
+#=
+//===--------------------------------------------------------------------===//
+// Vector Functions
+//===--------------------------------------------------------------------===//
+=#
+"""
+Retrieves the column type of the specified vector.
 
 The result must be destroyed with `duckdb_destroy_logical_type`.
 
-* chunk: The data chunk to get the data from
-* returns: The type of the column
+* vector: The vector get the data from
+* returns: The type of the vector
 """
-function duckdb_data_chunk_get_column_type(chunk, col_idx)
+function duckdb_vector_get_column_type(vector)
     return ccall(
-        (:duckdb_data_chunk_get_column_type, libduckdb),
+        (:duckdb_vector_get_column_type, libduckdb),
         duckdb_logical_type,
-        (duckdb_data_chunk, UInt64),
-        chunk,
-        col_idx
+        (duckdb_vector,),
+        vector
     )
 end
 
 """
-Retrieves the data pointer of the specified column in the data chunk.
+Retrieves the data pointer of the vector.
 
-The data pointer can be used to read or write values from the data chunk.
-How to read or write values depends on the type of the column.
-The pointer represents a dense array of `duckdb_data_chunk_get_size(size)` values.
+The data pointer can be used to read or write values from the vector.
+How to read or write values depends on the type of the vector.
 
-* chunk: The data chunk to get the data from
+* vector: The vector to get the data from
 * returns: The data pointer
 """
-function duckdb_data_chunk_get_data(chunk, col_idx)
-    return ccall((:duckdb_data_chunk_get_data, libduckdb), Ptr{Cvoid}, (duckdb_data_chunk, UInt64), chunk, col_idx - 1)
+function duckdb_vector_get_data(vector)
+    return ccall((:duckdb_vector_get_data, libduckdb), Ptr{Cvoid}, (duckdb_vector,), vector)
 end
 
 """
-Retrieves the validity mask pointer of the specified column in the data chunk.
+Retrieves the validity mask pointer of the specified vector.
 
 If all values are valid, this function MIGHT return NULL!
 
@@ -1456,28 +1472,29 @@ idx_t entry_idx = row_idx / 64;
 idx_t idx_in_entry = row_idx % 64;
 bool is_valid = validity_mask[entry_idx] & (1 << idx_in_entry);
 
-* chunk: The data chunk to get the data from
+Alternatively, the (slower) duckdb_validity_row_is_valid function can be used.
+
+* vector: The vector to get the data from
 * returns: The pointer to the validity mask, or NULL if no validity mask is present
 """
-function duckdb_data_chunk_get_validity(chunk, col_idx)
-    return ccall((:duckdb_data_chunk_get_validity, libduckdb), Ptr{UInt64}, (duckdb_data_chunk, UInt64), chunk, col_idx - 1)
+function duckdb_vector_get_validity(vector)
+    return ccall((:duckdb_vector_get_validity, libduckdb), Ptr{UInt64}, (duckdb_vector,), vector)
 end
 
 """
 Ensures the validity mask is writable by allocating it.
 
-After this function is called, `duckdb_data_chunk_get_validity` will ALWAYS return non-NULL.
-This allows null values to be written to the data chunk, regardless of whether a validity mask was present before.
+After this function is called, `duckdb_vector_get_validity` will ALWAYS return non-NULL.
+This allows null values to be written to the vector, regardless of whether a validity mask was present before.
 
-* chunk: The data chunk to alter
+* vector: The vector to alter
 """
-function duckdb_data_chunk_ensure_validity_writable(chunk, col_idx)
+function duckdb_vector_ensure_validity_writable(vector)
     return ccall(
-        (:duckdb_data_chunk_ensure_validity_writable, libduckdb),
+        (:duckdb_vector_ensure_validity_writable, libduckdb),
         Cvoid,
-        (duckdb_data_chunk, UInt64),
-        chunk,
-        col_idx - 1
+        (duckdb_vector,),
+        vector
     )
 end
 

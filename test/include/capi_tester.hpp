@@ -22,11 +22,14 @@ public:
 	idx_t size() {
 		return duckdb_data_chunk_get_size(chunk);
 	}
+	duckdb_vector GetVector(idx_t col) {
+		return duckdb_data_chunk_get_vector(chunk, col);
+	}
 	void *GetData(idx_t col) {
-		return duckdb_data_chunk_get_data(chunk, col);
+		return duckdb_vector_get_data(GetVector(col));
 	}
 	uint64_t *GetValidity(idx_t col) {
-		return duckdb_data_chunk_get_validity(chunk, col);
+		return duckdb_vector_get_validity(GetVector(col));
 	}
 	duckdb_data_chunk GetChunk() {
 		return chunk;

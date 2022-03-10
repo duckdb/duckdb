@@ -197,33 +197,6 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(date.day == 20);
 	REQUIRE(result->Fetch<string>(0, 2) == Value::DATE(30000, 9, 20).ToString());
 
-	// timestamp columns
-	REQUIRE_NO_FAIL(tester.Query(
-	    "CREATE TABLE timestamp (sec TIMESTAMP_S, milli TIMESTAMP_MS,micro TIMESTAMP_US, nano TIMESTAMP_NS );"));
-	REQUIRE_NO_FAIL(tester.Query("INSERT INTO timestamp VALUES (NULL,NULL,NULL,NULL )"));
-	REQUIRE_NO_FAIL(tester.Query("INSERT INTO timestamp VALUES ('1992-09-20 12:01:30','1992-09-20 "
-	                             "12:01:30','1992-09-20 12:01:30','1992-09-20 12:01:30')"));
-
-	result = tester.Query("SELECT * FROM timestamp ORDER BY sec");
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->IsNull(0, 0));
-	REQUIRE(result->IsNull(1, 0));
-	REQUIRE(result->IsNull(2, 0));
-	REQUIRE(result->IsNull(3, 0));
-	for (idx_t i = 0; i < 4; i++) {
-		duckdb_timestamp_struct stamp = duckdb_from_timestamp(result->Fetch<duckdb_timestamp>(i, 1));
-		REQUIRE(stamp.date.year == 1992);
-		REQUIRE(stamp.date.month == 9);
-		REQUIRE(stamp.date.day == 20);
-		REQUIRE(stamp.time.hour == 12);
-		REQUIRE(stamp.time.min == 1);
-		REQUIRE(stamp.time.sec == 30);
-		REQUIRE(stamp.time.micros == 0);
-		auto result_string = result->Fetch<string>(i, 1);
-		auto timestamp_string = Value::TIMESTAMP(1992, 9, 20, 12, 1, 30, 0).ToString();
-		REQUIRE(result->Fetch<string>(i, 1) == timestamp_string);
-	}
-
 	// time columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE times(d TIME)"));
 	REQUIRE_NO_FAIL(tester.Query("INSERT INTO times VALUES ('12:00:30.1234'), (NULL), ('02:30:01')"));

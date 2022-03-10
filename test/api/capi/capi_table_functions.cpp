@@ -37,7 +37,7 @@ void my_init(duckdb_init_info info) {
 void my_function(duckdb_function_info info, duckdb_data_chunk output) {
 	auto bind_data = (my_bind_data_struct *)duckdb_function_get_bind_data(info);
 	auto init_data = (my_init_data_struct *)duckdb_function_get_init_data(info);
-	auto ptr = (int64_t *)duckdb_data_chunk_get_data(output, 0);
+	auto ptr = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(output, 0));
 	idx_t i;
 	for(i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		if (init_data->pos >= bind_data->size) {

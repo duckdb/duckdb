@@ -38,7 +38,7 @@ function GetArray(chunk::DataChunk, col_idx::Int64, ::Type{T})::Vector{T} where 
             )
         )
     end
-    raw_ptr = duckdb_data_chunk_get_data(chunk.handle, col_idx)
+    raw_ptr = duckdb_vector_get_data(duckdb_data_chunk_get_vector(chunk.handle, col_idx))
     ptr = Base.unsafe_convert(Ptr{T}, raw_ptr)
     return unsafe_wrap(Vector{T}, ptr, VECTOR_SIZE, own = false)
 end
@@ -56,15 +56,15 @@ function GetValidity(chunk::DataChunk, col_idx::Int64)::ValidityMask
             )
         )
     end
-    duckdb_data_chunk_ensure_validity_writable(chunk.handle, col_idx)
-    validity_ptr = duckdb_data_chunk_get_validity(chunk.handle, col_idx)
+    duckdb_vector_ensure_validity_writable(duckdb_data_chunk_get_vector(chunk.handle, col_idx))
+    validity_ptr = duckdb_vector_get_validity(duckdb_data_chunk_get_vector(chunk.handle, col_idx))
     ptr = Base.unsafe_convert(Ptr{UInt64}, validity_ptr)
     validity_vector = unsafe_wrap(Vector{UInt64}, ptr, VECTOR_SIZE ÷ BITS_PER_VALUE, own = false)
     return ValidityMask(validity_vector)
 end
 
 function AllValid(chunk::DataChunk, col_idx::Int64)
-	return duckdb_data_chunk_get_validity(chunk.handle, col_idx) == C_NULL
+	return duckdb_vector_get_validity(duckdb_data_chunk_get_vector(chunk.handle, col_idx)) == C_NULL
 end
 
 # this is only required when we own the data chunk

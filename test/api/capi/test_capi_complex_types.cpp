@@ -25,7 +25,7 @@ TEST_CASE("Test decimal types C API", "[capi]") {
 	vector<duckdb_type> types = {DUCKDB_TYPE_DECIMAL, DUCKDB_TYPE_DECIMAL, DUCKDB_TYPE_DECIMAL, DUCKDB_TYPE_DECIMAL, DUCKDB_TYPE_INTEGER};
 	vector<duckdb_type> internal_types = {DUCKDB_TYPE_SMALLINT, DUCKDB_TYPE_INTEGER, DUCKDB_TYPE_BIGINT, DUCKDB_TYPE_HUGEINT, DUCKDB_TYPE_INVALID};
 	for(idx_t i = 0; i < result->ColumnCount(); i++) {
-		auto logical_type = duckdb_data_chunk_get_column_type(chunk->GetChunk(), i);
+		auto logical_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(chunk->GetChunk(), i));
 		REQUIRE(logical_type);
 		REQUIRE(duckdb_get_type_id(logical_type) == types[i]);
 		REQUIRE(duckdb_decimal_width(logical_type) == widths[i]);
@@ -59,7 +59,7 @@ TEST_CASE("Test enum types C API", "[capi]") {
 	vector<uint32_t> dictionary_sizes = {2, 300, 70000, 0};
 	vector<string> dictionary_strings = {"DUCK_DUCK_ENUM", "enum_0", "enum_0", string()};
 	for(idx_t i = 0; i < result->ColumnCount(); i++) {
-		auto logical_type = duckdb_data_chunk_get_column_type(chunk->GetChunk(), i);
+		auto logical_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(chunk->GetChunk(), i));
 		REQUIRE(logical_type);
 		REQUIRE(duckdb_get_type_id(logical_type) == types[i]);
 		REQUIRE(duckdb_enum_internal_type(logical_type) == internal_types[i]);
@@ -97,7 +97,7 @@ TEST_CASE("Test list types C API", "[capi]") {
 	vector<duckdb_type> child_types_1 = {DUCKDB_TYPE_INTEGER, DUCKDB_TYPE_VARCHAR, DUCKDB_TYPE_LIST, DUCKDB_TYPE_INVALID};
 	vector<duckdb_type> child_types_2 = {DUCKDB_TYPE_INVALID, DUCKDB_TYPE_INVALID, DUCKDB_TYPE_INTEGER, DUCKDB_TYPE_INVALID};
 	for(idx_t i = 0; i < result->ColumnCount(); i++) {
-		auto logical_type = duckdb_data_chunk_get_column_type(chunk->GetChunk(), i);
+		auto logical_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(chunk->GetChunk(), i));
 		REQUIRE(logical_type);
 		REQUIRE(duckdb_get_type_id(logical_type) == types[i]);
 
@@ -134,7 +134,7 @@ TEST_CASE("Test struct types C API", "[capi]") {
 	vector<vector<string>> child_names = {{"a"}, {"b", "c"}, {"d"}, {}};
 	vector<vector<duckdb_type>> child_types = {{DUCKDB_TYPE_INTEGER}, {DUCKDB_TYPE_VARCHAR, DUCKDB_TYPE_LIST}, {DUCKDB_TYPE_STRUCT}, {}};
 	for(idx_t i = 0; i < result->ColumnCount(); i++) {
-		auto logical_type = duckdb_data_chunk_get_column_type(chunk->GetChunk(), i);
+		auto logical_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(chunk->GetChunk(), i));
 		REQUIRE(logical_type);
 		REQUIRE(duckdb_get_type_id(logical_type) == types[i]);
 

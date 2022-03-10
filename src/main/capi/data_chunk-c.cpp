@@ -40,6 +40,14 @@ idx_t duckdb_data_chunk_get_column_count(duckdb_data_chunk chunk) {
 	return dchunk->ColumnCount();
 }
 
+duckdb_vector duckdb_data_chunk_get_vector(duckdb_data_chunk chunk, idx_t col_idx) {
+	if (!chunk || col_idx >= duckdb_data_chunk_get_column_count(chunk)) {
+		return nullptr;
+	}
+	auto dchunk = (duckdb::DataChunk *)chunk;
+	return &dchunk->data[col_idx];
+}
+
 idx_t duckdb_data_chunk_get_size(duckdb_data_chunk chunk) {
 	if (!chunk) {
 		return 0;
@@ -56,42 +64,36 @@ void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size) {
 	dchunk->SetCardinality(size);
 }
 
-duckdb_logical_type duckdb_data_chunk_get_column_type(duckdb_data_chunk chunk, idx_t col_idx) {
-	if (!chunk || col_idx >= duckdb_data_chunk_get_column_count(chunk)) {
+duckdb_logical_type duckdb_vector_get_column_type(duckdb_vector vector) {
+	if (!vector) {
 		return nullptr;
 	}
-	auto dchunk = (duckdb::DataChunk *)chunk;
-	return new duckdb::LogicalType(dchunk->data[col_idx].GetType());
+	auto v = (duckdb::Vector *)vector;
+	return new duckdb::LogicalType(v->GetType());
 }
 
-void *duckdb_data_chunk_get_data(duckdb_data_chunk chunk, idx_t col_idx) {
-	if (!chunk || col_idx >= duckdb_data_chunk_get_column_count(chunk)) {
+void *duckdb_vector_get_data(duckdb_vector vector) {
+	if (!vector) {
 		return nullptr;
 	}
-	auto dchunk = (duckdb::DataChunk *)chunk;
-	return duckdb::FlatVector::GetData(dchunk->data[col_idx]);
+	auto v = (duckdb::Vector *)vector;
+	return duckdb::FlatVector::GetData(*v);
 }
 
-uint64_t *duckdb_data_chunk_get_validity(duckdb_data_chunk chunk, idx_t col_idx) {
-	if (!chunk || col_idx >= duckdb_data_chunk_get_column_count(chunk)) {
+uint64_t *duckdb_vector_get_validity(duckdb_vector vector) {
+	if (!vector) {
 		return nullptr;
 	}
-	auto dchunk = (duckdb::DataChunk *)chunk;
-	if (col_idx >= dchunk->ColumnCount()) {
-		return nullptr;
-	}
-	return duckdb::FlatVector::Validity(dchunk->data[col_idx]).GetData();
+	auto v = (duckdb::Vector *)vector;
+	return duckdb::FlatVector::Validity(*v).GetData();
 }
 
-void duckdb_data_chunk_ensure_validity_writable(duckdb_data_chunk chunk, idx_t col_idx) {
-	if (!chunk) {
+void duckdb_vector_ensure_validity_writable(duckdb_vector vector) {
+	if (!vector) {
 		return;
 	}
-	auto dchunk = (duckdb::DataChunk *)chunk;
-	if (col_idx >= dchunk->ColumnCount()) {
-		return;
-	}
-	auto &validity = duckdb::FlatVector::Validity(dchunk->data[col_idx]);
+	auto v = (duckdb::Vector *)vector;
+	auto &validity = duckdb::FlatVector::Validity(*v);
 	validity.EnsureWritable();
 }
 

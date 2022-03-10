@@ -221,6 +221,7 @@ typedef void *duckdb_arrow_schema;
 typedef void *duckdb_arrow_array;
 typedef void *duckdb_logical_type;
 typedef void *duckdb_data_chunk;
+typedef void *duckdb_vector;
 typedef void *duckdb_value;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
@@ -1115,14 +1116,15 @@ Retrieves the number of columns in a data chunk.
 DUCKDB_API idx_t duckdb_data_chunk_get_column_count(duckdb_data_chunk chunk);
 
 /*!
-Retrieves the column type of the specified column in the data chunk.
+Retrieves the vector at the specified column index in the data chunk.
 
-The result must be destroyed with `duckdb_destroy_logical_type`.
+The pointer to the vector is valid for as long as the chunk is alive.
+It does NOT need to be destroyed.
 
 * chunk: The data chunk to get the data from
-* returns: The type of the column
+* returns: The vector
 */
-DUCKDB_API duckdb_logical_type duckdb_data_chunk_get_column_type(duckdb_data_chunk chunk, idx_t col_idx);
+DUCKDB_API duckdb_vector duckdb_data_chunk_get_vector(duckdb_data_chunk chunk, idx_t col_idx);
 
 /*!
 Retrieves the current number of tuples in a data chunk.
@@ -1140,20 +1142,32 @@ Sets the current number of tuples in a data chunk.
 */
 DUCKDB_API void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size);
 
+//===--------------------------------------------------------------------===//
+// Vector Interface
+//===--------------------------------------------------------------------===//
 /*!
-Retrieves the data pointer of the specified column in the data chunk.
+Retrieves the column type of the specified vector.
 
-The data pointer can be used to read or write values from the data chunk.
-How to read or write values depends on the type of the column.
-The pointer represents a dense array of `duckdb_data_chunk_get_size(size)` values.
+The result must be destroyed with `duckdb_destroy_logical_type`.
 
-* chunk: The data chunk to get the data from
+* vector: The vector get the data from
+* returns: The type of the vector
+*/
+DUCKDB_API duckdb_logical_type duckdb_vector_get_column_type(duckdb_vector vector);
+
+/*!
+Retrieves the data pointer of the vector.
+
+The data pointer can be used to read or write values from the vector.
+How to read or write values depends on the type of the vector.
+
+* vector: The vector to get the data from
 * returns: The data pointer
 */
-DUCKDB_API void *duckdb_data_chunk_get_data(duckdb_data_chunk chunk, idx_t col_idx);
+DUCKDB_API void *duckdb_vector_get_data(duckdb_vector vector);
 
 /*!
-Retrieves the validity mask pointer of the specified column in the data chunk.
+Retrieves the validity mask pointer of the specified vector.
 
 If all values are valid, this function MIGHT return NULL!
 
@@ -1169,20 +1183,21 @@ bool is_valid = validity_mask[entry_idx] & (1 << idx_in_entry);
 
 Alternatively, the (slower) duckdb_validity_row_is_valid function can be used.
 
-* chunk: The data chunk to get the data from
+* vector: The vector to get the data from
 * returns: The pointer to the validity mask, or NULL if no validity mask is present
 */
-DUCKDB_API uint64_t *duckdb_data_chunk_get_validity(duckdb_data_chunk chunk, idx_t col_idx);
+DUCKDB_API uint64_t *duckdb_vector_get_validity(duckdb_vector vector);
 
 /*!
 Ensures the validity mask is writable by allocating it.
 
-After this function is called, `duckdb_data_chunk_get_validity` will ALWAYS return non-NULL.
-This allows null values to be written to the data chunk, regardless of whether a validity mask was present before.
+After this function is called, `duckdb_vector_get_validity` will ALWAYS return non-NULL.
+This allows null values to be written to the vector, regardless of whether a validity mask was present before.
 
-* chunk: The data chunk to alter
+* vector: The vector to alter
 */
-DUCKDB_API void duckdb_data_chunk_ensure_validity_writable(duckdb_data_chunk chunk, idx_t col_idx);
+DUCKDB_API void duckdb_vector_ensure_validity_writable(duckdb_vector vector);
+
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions

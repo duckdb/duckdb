@@ -120,7 +120,7 @@ end
 
 function convert_chunk_string(column_data::ColumnConversionData, chunk::DataChunk, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
 	size = GetSize(chunk)
-    raw_ptr = duckdb_data_chunk_get_data(chunk.handle, column_data.col_idx)
+    raw_ptr = duckdb_vector_get_data(duckdb_data_chunk_get_vector(chunk.handle, column_data.col_idx))
     ptr = Base.unsafe_convert(Ptr{duckdb_string_t}, raw_ptr)
     if !all_valid
 		validity = GetValidity(chunk, column_data.col_idx)
