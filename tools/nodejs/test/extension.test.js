@@ -4,14 +4,12 @@ var assert = require('assert');
 var path = require('path');
 
 const extension_base_path = "../../../build/release/extension";
-const extension_paths = [];
-
-// Detect which extension have been built
-const extension_full_path = path.resolve(__dirname, extension_base_path);
 
 // Look for extensions that we can load and test
+let extension_paths = [];
+const extension_full_path = path.resolve(__dirname, extension_base_path);
 if (fs.existsSync(extension_full_path)) {
-    extension_paths.concat(fs.readdirSync(extension_full_path).map(function (file) {
+    extension_paths = extension_paths.concat(fs.readdirSync(extension_full_path).map(function (file) {
         if (!fs.statSync(extension_full_path+'/'+file).isDirectory())
             return undefined;
         const potential_extension_path = extension_full_path+`/${file}/${file}.duckdb_extension`;
