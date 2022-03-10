@@ -32,12 +32,26 @@ function GetInternalTypeId(type::LogicalType)
 	type_id = GetTypeId(type)
 	if type_id == DUCKDB_TYPE_DECIMAL
 		type_id = duckdb_decimal_internal_type(type.handle)
+	elseif type_id == DUCKDB_TYPE_ENUM
+		type_id = duckdb_enum_internal_type(type.handle)
 	end
 	return type_id
 end
 
 function GetDecimalScale(type::LogicalType)
 	return duckdb_decimal_scale(type.handle)
+end
+
+function GetEnumDictionary(type::LogicalType)
+	dict::Vector{String} = Vector{String}()
+	dict_size = duckdb_enum_dictionary_size(type.handle)
+	for i in 1:dict_size
+		val = duckdb_enum_dictionary_value(type.handle, i)
+		str_val = String(unsafe_string(val))
+		push!(dict, str_val)
+		duckdb_free(val)
+	end
+	return dict
 end
 
 function _destroy_type(type::LogicalType)

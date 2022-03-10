@@ -1297,6 +1297,39 @@ function duckdb_decimal_internal_type(handle)
 end
 
 """
+Retrieves the internal storage type of an enum type.
+
+* type: The logical type object
+* returns: The internal type of the enum type
+"""
+function duckdb_enum_internal_type(handle)
+    return ccall((:duckdb_enum_internal_type, libduckdb), DUCKDB_TYPE, (duckdb_logical_type,), handle)
+end
+
+"""
+Retrieves the dictionary size of the enum type
+
+* type: The logical type object
+* returns: The dictionary size of the enum type
+"""
+function duckdb_enum_dictionary_size(handle)
+    return ccall((:duckdb_enum_dictionary_size, libduckdb), UInt32, (duckdb_logical_type,), handle)
+end
+
+"""
+Retrieves the dictionary value at the specified position from the enum.
+
+The result must be freed with `duckdb_free`
+
+* type: The logical type object
+* index: The index in the dictionary
+* returns: The string value of the enum type. Must be freed with `duckdb_free`.
+"""
+function duckdb_enum_dictionary_value(handle, index)
+    return ccall((:duckdb_enum_dictionary_value, libduckdb), Ptr{UInt8}, (duckdb_logical_type,UInt64), handle, index - 1)
+end
+
+"""
 Destroys the logical type and de-allocates all memory allocated for that type.
 
 * type: The logical type to destroy.

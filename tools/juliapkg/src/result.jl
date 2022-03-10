@@ -167,6 +167,10 @@ function convert_column(chunks::Vector{DataChunk}, col_idx::Int64, logical_type:
 		scale = 10 ^ GetDecimalScale(logical_type)
 		column = column ./ scale
 		return column
+	elseif type == DUCKDB_TYPE_ENUM
+		column = standard_convert(chunks, col_idx, internal_type)
+		dictionary = GetEnumDictionary(logical_type)
+		return map(x -> x === missing ? missing : dictionary[x + 1], column)
 	else
 		return standard_convert(chunks, col_idx, internal_type)
 	end
