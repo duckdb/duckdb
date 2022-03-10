@@ -25,7 +25,7 @@ function SetSize(chunk::DataChunk, size::Int64)
     return duckdb_data_chunk_set_size(chunk.handle, size)
 end
 
-function GetArray(chunk::DataChunk, col_idx::Int64, ::Type{T})::Vector{T} where {T}
+function GetVector(chunk::DataChunk, col_idx::Int64)::Vec
     if col_idx < 1 || col_idx > GetColumnCount(chunk)
         throw(
             InvalidInputException(
@@ -38,33 +38,19 @@ function GetArray(chunk::DataChunk, col_idx::Int64, ::Type{T})::Vector{T} where 
             )
         )
     end
-    raw_ptr = duckdb_vector_get_data(duckdb_data_chunk_get_vector(chunk.handle, col_idx))
-    ptr = Base.unsafe_convert(Ptr{T}, raw_ptr)
-    return unsafe_wrap(Vector{T}, ptr, VECTOR_SIZE, own = false)
+	return Vec(duckdb_data_chunk_get_vector(chunk.handle, col_idx))
+end
+
+function GetArray(chunk::DataChunk, col_idx::Int64, ::Type{T})::Vector{T} where {T}
+	return GetArray(GetVector(chunk, col_idx), T)
 end
 
 function GetValidity(chunk::DataChunk, col_idx::Int64)::ValidityMask
-    if col_idx < 1 || col_idx > GetColumnCount(chunk)
-        throw(
-            InvalidInputException(
-                string(
-                    "GetValidity column index ",
-                    col_idx,
-                    " out of range, expected value between 1 and ",
-                    GetColumnCount(chunk)
-                )
-            )
-        )
-    end
-    duckdb_vector_ensure_validity_writable(duckdb_data_chunk_get_vector(chunk.handle, col_idx))
-    validity_ptr = duckdb_vector_get_validity(duckdb_data_chunk_get_vector(chunk.handle, col_idx))
-    ptr = Base.unsafe_convert(Ptr{UInt64}, validity_ptr)
-    validity_vector = unsafe_wrap(Vector{UInt64}, ptr, VECTOR_SIZE ÷ BITS_PER_VALUE, own = false)
-    return ValidityMask(validity_vector)
+	return GetValidity(GetVector(chunk, col_idx))
 end
 
 function AllValid(chunk::DataChunk, col_idx::Int64)
-	return duckdb_vector_get_validity(duckdb_data_chunk_get_vector(chunk.handle, col_idx)) == C_NULL
+	return AllValid(GetVector(chunk, col_idx))
 end
 
 # this is only required when we own the data chunk

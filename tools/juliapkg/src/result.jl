@@ -103,11 +103,10 @@ function convert_decimal(column_data::ColumnConversionData, val)::Float64
 	return val / column_data.conversion_data
 end
 
-function convert_chunk(column_data::ColumnConversionData, chunk::DataChunk, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
-	size = GetSize(chunk)
-	array = GetArray(chunk, column_data.col_idx, SRC)
+function convert_vector(column_data::ColumnConversionData, vector::Vec, size::UInt64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
+	array = GetArray(vector, SRC)
 	if !all_valid
-		validity = GetValidity(chunk, column_data.col_idx)
+		validity = GetValidity(vector)
 	end
 	for i in 1:size
 		if all_valid || IsValid(validity, i)
@@ -118,12 +117,11 @@ function convert_chunk(column_data::ColumnConversionData, chunk::DataChunk, conv
 	return size
 end
 
-function convert_chunk_string(column_data::ColumnConversionData, chunk::DataChunk, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
-	size = GetSize(chunk)
-    raw_ptr = duckdb_vector_get_data(duckdb_data_chunk_get_vector(chunk.handle, column_data.col_idx))
+function convert_vector_string(column_data::ColumnConversionData, vector::Vec, size::UInt64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
+    raw_ptr = duckdb_vector_get_data(vector.handle)
     ptr = Base.unsafe_convert(Ptr{duckdb_string_t}, raw_ptr)
     if !all_valid
-		validity = GetValidity(chunk, column_data.col_idx)
+		validity = GetValidity(vector)
 	end
 	for i in 1:size
 		if all_valid || IsValid(validity, i)
@@ -134,7 +132,7 @@ function convert_chunk_string(column_data::ColumnConversionData, chunk::DataChun
 	return size
 end
 
-function convert_column_loop(column_data::ColumnConversionData, convert_func::Function, ::Type{SRC}, ::Type{DST}, convert_chunk_func::Function = convert_chunk) where {SRC, DST}
+function convert_column_loop(column_data::ColumnConversionData, convert_func::Function, ::Type{SRC}, ::Type{DST}, convert_vector_func::Function) where {SRC, DST}
 	# first check if there are null values in any chunks
 	has_missing = false
 	row_count = 0
@@ -149,14 +147,14 @@ function convert_column_loop(column_data::ColumnConversionData, convert_func::Fu
 		result = Array{Union{Missing,DST}}(missing, row_count)
 		position = 1
 		for chunk in column_data.chunks
-			position += convert_chunk_func(column_data, chunk, convert_func, result, position, AllValid(chunk, column_data.col_idx), SRC, DST)
+			position += convert_vector_func(column_data, GetVector(chunk, column_data.col_idx), GetSize(chunk), convert_func, result, position, AllValid(chunk, column_data.col_idx), SRC, DST)
 		end
 	else
 		# no missing values
 		result = Array{DST}(undef, row_count)
 		position = 1
 		for chunk in column_data.chunks
-			position += convert_chunk_func(column_data, chunk, convert_func, result, position, true, SRC, DST)
+			position += convert_vector_func(column_data, GetVector(chunk, column_data.col_idx), GetSize(chunk), convert_func, result, position, true, SRC, DST)
 		end
 	end
 	return result
@@ -214,9 +212,9 @@ end
 function get_conversion_loop_function(logical_type::LogicalType)::Function
 	type = GetTypeId(logical_type)
 	if type == DUCKDB_TYPE_VARCHAR || type == DUCKDB_TYPE_BLOB
-		return convert_chunk_string
+		return convert_vector_string
 	else
-		return convert_chunk
+		return convert_vector
 	end
 end
 
