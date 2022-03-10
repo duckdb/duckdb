@@ -100,3 +100,58 @@ duckdb_unregister_arrow <- function(conn, name) {
 duckdb_list_arrow <- function(conn) {
   sort(gsub("_registered_arrow_", "", names(attributes(conn@driver@database_ref)), fixed = TRUE))
 }
+
+#' Register Parquet file(s) as a virtual table
+#'
+#' `duckdb_register_parquet()` registers Parquet file(s) as a virtual table (view)
+#'  in a DuckDB connection.
+#'  No data is copied.
+#'
+#' `duckdb_unregister_parquet()` drops a view from the catalog.
+#' @param conn A DuckDB connection, created by `dbConnect()`.
+#' @param name The name for the virtual table that is registered
+#' @param path A (vector of) strings pointing to the files to be registered
+#' @param replace A boolean indicating whether a view should be replaced if existing
+#' @param binary_as_string Convert binary data to strings
+#' @return This function is called for its side effect.
+#' @export
+duckdb_register_parquet <- function(conn, name, path, replace = FALSE, binary_as_string = FALSE) {
+  stopifnot(DBI::dbIsValid(conn))
+  cre <- "CREATE"
+  if (replace) cre <- paste(cre, "OR REPLACE")
+  if (binary_as_string) {
+    bin <- ", binary_as_string=True"
+  } else {
+    bin <- ""
+  }
+  query <- paste0(
+    cre,
+    " VIEW ",
+    enc2utf8(as.character(name)),
+    " AS SELECT * FROM parquet_scan([",
+    paste(DBI::dbQuoteString(duckdb::translate_duckdb(), path), collapse = ", "),
+    "]",
+    bin,
+    ");"
+  )
+  DBI::dbExecute(conn, query)
+  rs <- c(TRUE)
+  attr(rs, "query") <- query
+  invisible(rs)
+}
+
+#' @rdname duckdb_register_parquet
+#' @export
+duckdb_unregister_parquet <- function(conn, name) {
+  stopifnot(dbIsValid(conn))
+  query <- paste0(
+    "DROP VIEW IF EXISTS ",
+    enc2utf8(as.character(name)),
+    ";",
+    collapse = " "
+  )
+  DBI::dbExecute(conn, query)
+  rs <- c(TRUE)
+  attr(rs, "query") <- query
+  invisible(rs)
+}
