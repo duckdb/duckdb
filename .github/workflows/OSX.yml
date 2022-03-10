@@ -148,6 +148,7 @@ jobs:
 
       - name: Build
         run: |
+          export OPENSSL_ROOT_DIR=`pwd`/build/openssl/build
           echo $OPENSSL_ROOT_DIR
           make
 
