@@ -1376,7 +1376,7 @@ The pointer represents a dense array of `duckdb_data_chunk_get_size(size)` value
 * returns: The data pointer
 """
 function duckdb_data_chunk_get_data(chunk, col_idx)
-    return ccall((:duckdb_data_chunk_get_data, libduckdb), Ptr{Cvoid}, (duckdb_data_chunk, UInt64), chunk, col_idx)
+    return ccall((:duckdb_data_chunk_get_data, libduckdb), Ptr{Cvoid}, (duckdb_data_chunk, UInt64), chunk, col_idx - 1)
 end
 
 """
@@ -1398,7 +1398,7 @@ bool is_valid = validity_mask[entry_idx] & (1 << idx_in_entry);
 * returns: The pointer to the validity mask, or NULL if no validity mask is present
 """
 function duckdb_data_chunk_get_validity(chunk, col_idx)
-    return ccall((:duckdb_data_chunk_get_validity, libduckdb), Ptr{UInt64}, (duckdb_data_chunk, UInt64), chunk, col_idx)
+    return ccall((:duckdb_data_chunk_get_validity, libduckdb), Ptr{UInt64}, (duckdb_data_chunk, UInt64), chunk, col_idx - 1)
 end
 
 """
@@ -1415,7 +1415,7 @@ function duckdb_data_chunk_ensure_validity_writable(chunk, col_idx)
         Cvoid,
         (duckdb_data_chunk, UInt64),
         chunk,
-        col_idx
+        col_idx - 1
     )
 end
 

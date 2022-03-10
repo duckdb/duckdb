@@ -28,6 +28,9 @@ public:
 	uint64_t *GetValidity(idx_t col) {
 		return duckdb_data_chunk_get_validity(chunk, col);
 	}
+	duckdb_data_chunk GetChunk() {
+		return chunk;
+	}
 
 private:
 	duckdb_data_chunk chunk;

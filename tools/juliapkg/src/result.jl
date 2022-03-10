@@ -22,13 +22,17 @@ function nop_convert(val)
 	return val
 end
 
-function convert_string(val::duckdb_string_t)
-	length = val.length;
+function convert_string(val::Ptr{Cvoid}, idx::UInt64)
+	base_ptr = val + (idx - 1) * sizeof(duckdb_string_t)
+    length_ptr = Base.unsafe_convert(Ptr{Int32}, base_ptr)
+	length = unsafe_load(length_ptr)
 	if length <= STRING_INLINE_LENGTH
-		return String(collect(val.data[1:length]))
+		prefix_ptr = Base.unsafe_convert(Ptr{UInt8}, base_ptr + sizeof(Int32))
+		return unsafe_string(prefix_ptr, length)
 	else
-		array = reinterpret(Ptr{UInt8}, collect(val.data[5:12]))[1]
-		return unsafe_string(array, length)
+		ptr_ptr = Base.unsafe_convert(Ptr{Ptr{UInt8}}, base_ptr + sizeof(Int32) * 2)
+		data_ptr = Base.unsafe_load(ptr_ptr)
+		return unsafe_string(data_ptr, length)
 	end
 end
 
@@ -56,7 +60,38 @@ function convert_hugeint(val::duckdb_hugeint)::Int128
 	return Int128(val.lower) + Int128(val.upper) << 64;
 end
 
-function convert_column_loop(chunks::Vector{DataChunk}, col_idx::Int64, convert_func::Function, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
+function convert_chunk(chunk::DataChunk, col_idx::Int64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
+	size = GetSize(chunk)
+	array = GetArray(chunk, col_idx, SRC)
+	if !all_valid
+		validity = GetValidity(chunk, col_idx)
+	end
+	for i in 1:size
+		if all_valid || IsValid(validity, i)
+			result[position] = convert_func(array[i])
+		end
+		position += 1
+	end
+	return size
+end
+
+function convert_chunk_string(chunk::DataChunk, col_idx::Int64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
+	size = GetSize(chunk)
+    raw_ptr = duckdb_data_chunk_get_data(chunk.handle, col_idx)
+    ptr = Base.unsafe_convert(Ptr{duckdb_string_t}, raw_ptr)
+    if !all_valid
+		validity = GetValidity(chunk, col_idx)
+	end
+	for i in 1:size
+		if all_valid || IsValid(validity, i)
+ 			result[position] = convert_func(raw_ptr, i)
+		end
+		position += 1
+	end
+	return size
+end
+
+function convert_column_loop(chunks::Vector{DataChunk}, col_idx::Int64, convert_func::Function, ::Type{SRC}, ::Type{DST}, convert_chunk_func::Function = convert_chunk) where {SRC, DST}
 	# first check if there are null values in any chunks
 	has_missing = false
 	row_count = 0
@@ -71,30 +106,14 @@ function convert_column_loop(chunks::Vector{DataChunk}, col_idx::Int64, convert_
 		result = Array{Union{Missing,DST}}(missing, row_count)
 		position = 1
 		for chunk in chunks
-			size = GetSize(chunk)
-			array = GetArray(chunk, col_idx, SRC)
-			all_valid = AllValid(chunk, col_idx)
-			if !all_valid
-				validity = GetValidity(chunk, col_idx)
-			end
-			for i in 1:size
-				if all_valid || IsValid(validity, i)
-					result[position] = convert_func(array[i])
-				end
-				position += 1
-			end
+			position += convert_chunk_func(chunk, col_idx, convert_func, result, position, AllValid(chunk, col_idx), SRC, DST)
 		end
 	else
 		# no missing values
 		result = Array{DST}(undef, row_count)
 		position = 1
 		for chunk in chunks
-			size = GetSize(chunk)
-			array = GetArray(chunk, col_idx, SRC)
-			for i in 1:size
-				result[position] = convert_func(array[i])
-				position += 1
-			end
+			position += convert_chunk_func(chunk, col_idx, convert_func, result, position, true, SRC, DST)
 		end
 	end
 	return result
@@ -109,7 +128,7 @@ function convert_column(chunks::Vector{DataChunk}, col_idx::Int64, type::Logical
 	internal_type = duckdb_type_to_internal_type(type)
 
 	if type == DUCKDB_TYPE_VARCHAR
-		return convert_column_loop(chunks, col_idx, convert_string, duckdb_string_t, AbstractString)
+		return convert_column_loop(chunks, col_idx, convert_string, duckdb_string_t, AbstractString, convert_chunk_string)
 	elseif type == DUCKDB_TYPE_DATE
 		return convert_column_loop(chunks, col_idx, convert_date, internal_type, Date)
 	elseif type == DUCKDB_TYPE_TIME
@@ -149,55 +168,11 @@ function toDataFrame(result::Ref{duckdb_result})::DataFrame
 		push!(chunks, DataChunk(duckdb_result_get_chunk(result[], i), true))
 	end
 
-
     df = DataFrame()
     for i = 1:column_count
         name = names[i]
         logical_type = LogicalType(duckdb_column_logical_type(result, i))
         df[!, name] = convert_column(chunks, i, logical_type)
-
-#
-#         type = duckdb_column_type(result, i)
-#         internal_type = duckdb_type_to_internal_type(type)
-#
-#         data = unsafe_wrap(Array, Ptr{internal_type}(duckdb_column_data(result, i)), row_count)
-#         nullmask = unsafe_wrap(Array, Ptr{Bool}(duckdb_nullmask_data(result, i)), row_count)
-#         bmask = reinterpret(Bool, nullmask)
-#
-#         if 0 != sum(nullmask)
-#             data = data[.!bmask]
-#         end
-#
-#         # Format the different datatypes for DataFrame
-#         if type == DUCKDB_TYPE_BOOLEAN
-#             data = Bool.(data)
-#         elseif type == DUCKDB_TYPE_DATE
-#             data = Dates.epochdays2date.(data .+ 719528)
-#         elseif type == DUCKDB_TYPE_TIME
-#             data = Dates.Time.(Dates.Nanosecond.(data .* 1000))
-#         elseif type == DUCKDB_TYPE_TIMESTAMP
-#             data = Dates.epochms2datetime.((data ./ 1000) .+ 62167219200000)
-#         elseif type == DUCKDB_TYPE_INTERVAL
-#             data = map(
-#                 x -> Dates.CompoundPeriod(
-#                     Dates.Month(x.months),
-#                     Dates.Day(x.days),
-#                     Dates.Microsecond(x.micros),
-#                 ),
-#                 data,
-#             )
-#         elseif type == DUCKDB_TYPE_HUGEINT
-#             data = map(x -> x.upper < 1 ? (x.lower::UInt64)%Int64 : x, data)
-#         elseif type == DUCKDB_TYPE_VARCHAR
-#             data = unsafe_string.(data)
-#         end
-#
-#         if 0 != sum(nullmask)
-#             fulldata = Array{Union{Missing,eltype(data)}}(missing, row_count)
-#             fulldata[.!bmask] = data
-#             data = fulldata
-#         end
-
     end
     return df
 end

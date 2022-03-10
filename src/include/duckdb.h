@@ -74,7 +74,7 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_FLOAT,
 	// double
 	DUCKDB_TYPE_DOUBLE,
-	// duckdb_timestamp
+	// duckdb_timestamp, in microseconds
 	DUCKDB_TYPE_TIMESTAMP,
 	// duckdb_date
 	DUCKDB_TYPE_DATE,
@@ -89,7 +89,23 @@ typedef enum DUCKDB_TYPE {
 	// duckdb_blob
 	DUCKDB_TYPE_BLOB,
 	// decimal
-	DUCKDB_TYPE_DECIMAL
+	DUCKDB_TYPE_DECIMAL,
+	// duckdb_timestamp, in seconds
+	DUCKDB_TYPE_TIMESTAMP_S,
+	// duckdb_timestamp, in milliseconds
+	DUCKDB_TYPE_TIMESTAMP_MS,
+	// duckdb_timestamp, in nanoseconds
+	DUCKDB_TYPE_TIMESTAMP_NS,
+	// enum type, only useful as logical type
+	DUCKDB_TYPE_ENUM,
+	// list type, only useful as logical type
+	DUCKDB_TYPE_LIST,
+	// struct type, only useful as logical type
+	DUCKDB_TYPE_STRUCT,
+	// map type, only useful as logical type
+	DUCKDB_TYPE_MAP,
+	// duckdb_hugeint
+	DUCKDB_TYPE_UUID,
 } duckdb_type;
 
 //! Days are stored as days since 1970-01-01
@@ -964,6 +980,98 @@ Retrieves the type class of a `duckdb_logical_type`.
 * returns: The type id
 */
 DUCKDB_API duckdb_type duckdb_get_type_id(duckdb_logical_type type);
+
+/*!
+Retrieves the width of a decimal type.
+
+* type: The logical type object
+* returns: The width of the decimal type
+*/
+DUCKDB_API uint8_t duckdb_decimal_width(duckdb_logical_type type);
+
+/*!
+Retrieves the scale of a decimal type.
+
+* type: The logical type object
+* returns: The scale of the decimal type
+*/
+DUCKDB_API uint8_t duckdb_decimal_scale(duckdb_logical_type type);
+
+/*!
+Retrieves the internal storage type of a decimal type.
+
+* type: The logical type object
+* returns: The internal type of the decimal type
+*/
+DUCKDB_API duckdb_type duckdb_decimal_internal_type(duckdb_logical_type type);
+
+/*!
+Retrieves the internal storage type of an enum type.
+
+* type: The logical type object
+* returns: The internal type of the enum type
+*/
+DUCKDB_API duckdb_type duckdb_enum_internal_type(duckdb_logical_type type);
+
+/*!
+Retrieves the dictionary size of the enum type
+
+* type: The logical type object
+* returns: The dictionary size of the enum type
+*/
+DUCKDB_API uint32_t duckdb_enum_dictionary_size(duckdb_logical_type type);
+
+/*!
+Retrieves the dictionary value at the specified position from the enum.
+
+The result must be freed with `duckdb_free`
+
+* type: The logical type object
+* index: The index in the dictionary
+* returns: The string value of the enum type. Must be freed with `duckdb_free`.
+*/
+DUCKDB_API char *duckdb_enum_dictionary_value(duckdb_logical_type type, idx_t index);
+
+
+/*!
+Retrieves the child type of the given list type.
+
+The result must be freed with `duckdb_destroy_logical_type`
+
+* type: The logical type object
+* returns: The child type of the list type. Must be destroyed with `duckdb_destroy_logical_type`.
+*/
+DUCKDB_API duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type);
+
+/*!
+Returns the number of children of a struct type.
+
+* type: The logical type object
+* returns: The number of children of a struct type.
+*/
+DUCKDB_API idx_t duckdb_struct_type_child_count(duckdb_logical_type type);
+
+/*!
+Retrieves the name of the struct child.
+
+The result must be freed with `duckdb_free`
+
+* type: The logical type object
+* index: The child index
+* returns: The name of the struct type. Must be freed with `duckdb_free`.
+*/
+DUCKDB_API char* duckdb_struct_type_child_name(duckdb_logical_type type, idx_t index);
+
+/*!
+Retrieves the child type of the given struct type at the specified index.
+
+The result must be freed with `duckdb_destroy_logical_type`
+
+* type: The logical type object
+* index: The child index
+* returns: The child type of the struct type. Must be destroyed with `duckdb_destroy_logical_type`.
+*/
+DUCKDB_API duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_t index);
 
 /*!
 Destroys the logical type and de-allocates all memory allocated for that type.

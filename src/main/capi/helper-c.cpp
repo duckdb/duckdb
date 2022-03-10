@@ -40,8 +40,14 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 		return LogicalTypeId::BLOB;
 	case DUCKDB_TYPE_INTERVAL:
 		return LogicalTypeId::INTERVAL;
-	case DUCKDB_TYPE_DECIMAL:
-		return LogicalTypeId::DECIMAL;
+	case DUCKDB_TYPE_TIMESTAMP_S:
+		return LogicalTypeId::TIMESTAMP_SEC;
+	case DUCKDB_TYPE_TIMESTAMP_MS:
+		return LogicalTypeId::TIMESTAMP_MS;
+	case DUCKDB_TYPE_TIMESTAMP_NS:
+		return LogicalTypeId::TIMESTAMP_NS;
+	case DUCKDB_TYPE_UUID:
+		return LogicalTypeId::UUID;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return LogicalTypeId::INVALID;
@@ -75,11 +81,14 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 	case LogicalTypeId::DOUBLE:
 		return DUCKDB_TYPE_DOUBLE;
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return DUCKDB_TYPE_TIMESTAMP;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return DUCKDB_TYPE_TIMESTAMP_S;
+	case LogicalTypeId::TIMESTAMP_MS:
+		return DUCKDB_TYPE_TIMESTAMP_MS;
+	case LogicalTypeId::TIMESTAMP_NS:
+		return DUCKDB_TYPE_TIMESTAMP_NS;
 	case LogicalTypeId::DATE:
 		return DUCKDB_TYPE_DATE;
 	case LogicalTypeId::TIME:
@@ -93,6 +102,16 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_INTERVAL;
 	case LogicalTypeId::DECIMAL:
 		return DUCKDB_TYPE_DECIMAL;
+	case LogicalTypeId::ENUM:
+		return DUCKDB_TYPE_ENUM;
+	case LogicalTypeId::LIST:
+		return DUCKDB_TYPE_LIST;
+	case LogicalTypeId::STRUCT:
+		return DUCKDB_TYPE_STRUCT;
+	case LogicalTypeId::MAP:
+		return DUCKDB_TYPE_MAP;
+	case LogicalTypeId::UUID:
+		return DUCKDB_TYPE_UUID;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return DUCKDB_TYPE_INVALID;
@@ -120,6 +139,7 @@ idx_t GetCTypeSize(duckdb_type type) {
 	case DUCKDB_TYPE_UBIGINT:
 		return sizeof(uint64_t);
 	case DUCKDB_TYPE_HUGEINT:
+	case DUCKDB_TYPE_UUID:
 		return sizeof(duckdb_hugeint);
 	case DUCKDB_TYPE_FLOAT:
 		return sizeof(float);
@@ -130,6 +150,9 @@ idx_t GetCTypeSize(duckdb_type type) {
 	case DUCKDB_TYPE_TIME:
 		return sizeof(duckdb_time);
 	case DUCKDB_TYPE_TIMESTAMP:
+	case DUCKDB_TYPE_TIMESTAMP_S:
+	case DUCKDB_TYPE_TIMESTAMP_MS:
+	case DUCKDB_TYPE_TIMESTAMP_NS:
 		return sizeof(duckdb_timestamp);
 	case DUCKDB_TYPE_VARCHAR:
 		return sizeof(const char *);
