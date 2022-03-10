@@ -80,7 +80,7 @@ CALL get_substrait('SELECT s_suppkey, s_name, s_address, s_phone, total_revenue 
 statement ok
 CALL get_substrait('SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = ''Brand#23'' AND p_container = ''MED BOX'' AND l_quantity < ( SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);')
 
-#Q 18
+##Q 18
 statement ok
 CALL get_substrait('SELECT c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) FROM customer, orders, lineitem WHERE o_orderkey IN ( SELECT l_orderkey FROM lineitem GROUP BY l_orderkey HAVING sum(l_quantity) > 300) AND c_custkey = o_custkey AND o_orderkey = l_orderkey GROUP BY c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice ORDER BY o_totalprice DESC, o_orderdate LIMIT 100;')
 
@@ -89,8 +89,8 @@ statement ok
 CALL get_substrait('SELECT sum(l_extendedprice * (1 - l_discount)) AS revenue FROM lineitem, part WHERE (p_partkey = l_partkey AND p_brand = ''Brand#12'' AND p_container IN (''SM CASE'', ''SM BOX'', ''SM PACK'', ''SM PKG'') AND l_quantity >= 1 AND l_quantity <= 1 + 10 AND p_size BETWEEN 1 AND 5 AND l_shipmode IN (''AIR'', ''AIR REG'') AND l_shipinstruct = ''DELIVER IN PERSON'') OR (p_partkey = l_partkey AND p_brand = ''Brand#23'' AND p_container IN (''MED BAG'', ''MED BOX'', ''MED PKG'', ''MED PACK'') AND l_quantity >= 10 AND l_quantity <= 10 + 10 AND p_size BETWEEN 1 AND 10 AND l_shipmode IN (''AIR'', ''AIR REG'') AND l_shipinstruct = ''DELIVER IN PERSON'') OR (p_partkey = l_partkey AND p_brand = ''Brand#34'' AND p_container IN (''LG CASE'', ''LG BOX'', ''LG PACK'', ''LG PKG'') AND l_quantity >= 20 AND l_quantity <= 20 + 10 AND p_size BETWEEN 1 AND 15 AND l_shipmode IN (''AIR'', ''AIR REG'') AND l_shipinstruct = ''DELIVER IN PERSON'');')
 
 #Q 20
-#statement ok
-#CALL get_substrait('SELECT s_name, s_address FROM supplier, nation WHERE s_suppkey IN ( SELECT ps_suppkey FROM partsupp WHERE ps_partkey IN ( SELECT p_partkey FROM part WHERE p_name LIKE ''forest%'') AND ps_availqty > ( SELECT 0.5 * sum(l_quantity) FROM lineitem WHERE l_partkey = ps_partkey AND l_suppkey = ps_suppkey AND l_shipdate >= CAST(''1994-01-01'' AS date) AND l_shipdate < CAST(''1995-01-01'' AS date))) AND s_nationkey = n_nationkey AND n_name = ''CANADA'' ORDER BY s_name;')
+statement ok
+CALL get_substrait('SELECT s_name, s_address FROM supplier, nation WHERE s_suppkey IN ( SELECT ps_suppkey FROM partsupp WHERE ps_partkey IN ( SELECT p_partkey FROM part WHERE p_name LIKE ''forest%'') AND ps_availqty > ( SELECT 0.5 * sum(l_quantity) FROM lineitem WHERE l_partkey = ps_partkey AND l_suppkey = ps_suppkey AND l_shipdate >= CAST(''1994-01-01'' AS date) AND l_shipdate < CAST(''1995-01-01'' AS date))) AND s_nationkey = n_nationkey AND n_name = ''CANADA'' ORDER BY s_name;')
 
 #Q 21 Delim Join
 #statement ok

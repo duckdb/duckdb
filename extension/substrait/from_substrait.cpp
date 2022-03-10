@@ -110,8 +110,13 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 	} else if (function_name == "notdistinctfrom") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, move(children[0]),
 		                                         move(children[1]));
+	} else if (function_name == "greaterthanorequalto") {
+		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, move(children[0]),
+		                                         move(children[1]));
+	} else if (function_name == "lessthanorequalto") {
+		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, move(children[0]),
+		                                         move(children[1]));
 	}
-
 	return make_unique<FunctionExpression>(function_name, move(children));
 }
 
@@ -193,9 +198,6 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformJoinOp(const substrait::Rel &so
 	case substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_RIGHT:
 		djointype = JoinType::RIGHT;
 		break;
-		//		case substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_MARK:
-		//			djointype = JoinType::MARK;
-		//			break;
 	case substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_SINGLE:
 		djointype = JoinType::SINGLE;
 		break;
@@ -206,9 +208,6 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformJoinOp(const substrait::Rel &so
 		throw InternalException("Unsupported join type");
 	}
 	vector<unique_ptr<ParsedExpression>> expressions;
-	//		for (auto &sexpr : sjoin.duplicate_eliminated_columns()) {
-	//			expressions.push_back(TransformExpr(sexpr));
-	//		}
 	return make_shared<JoinRelation>(TransformOp(sjoin.left())->Alias("left"),
 	                                 TransformOp(sjoin.right())->Alias("right"), TransformExpr(sjoin.expression()),
 	                                 djointype);

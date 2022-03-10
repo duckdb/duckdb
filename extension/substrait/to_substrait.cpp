@@ -366,6 +366,12 @@ substrait::Expression *DuckDBToSubstrait::TransformJoinCond(JoinCondition &dcond
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		join_comparision = "notdistinctfrom";
 		break;
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		join_comparision = "greaterthanorequalto";
+		break;
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		join_comparision = "lessthanorequalto";
+		break;
 	default:
 		throw InternalException("Unsupported join comparison");
 	}
@@ -507,7 +513,10 @@ substrait::Rel *DuckDBToSubstrait::TransformComparisonJoin(LogicalOperator &dop)
 	sjoin->set_allocated_right(TransformOp(*dop.children[1]));
 
 	auto left_col_count = dop.children[0]->types.size();
-
+	if (dop.children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto child_join = (LogicalComparisonJoin *)dop.children[0].get();
+		left_col_count = child_join->left_projection_map.size() + child_join->right_projection_map.size();
+	}
 	sjoin->set_allocated_expression(
 	    CreateConjunction(djoin.conditions, [&](JoinCondition &in) { return TransformJoinCond(in, left_col_count); }));
 
@@ -527,10 +536,6 @@ substrait::Rel *DuckDBToSubstrait::TransformComparisonJoin(LogicalOperator &dop)
 	case JoinType::SEMI:
 		sjoin->set_type(substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_SEMI);
 		break;
-		//	case JoinType::MARK:
-		//		sjoin->set_type(substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_MARK);
-		//		sjoin->set_mark_index(djoin.mark_index);
-		//		break;
 	default:
 		throw InternalException("Unsupported join type " + JoinTypeToString(djoin.join_type));
 	}
@@ -650,23 +655,10 @@ substrait::Rel *DuckDBToSubstrait::TransformOp(LogicalOperator &dop) {
 		return TransformProjection(dop);
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		return TransformComparisonJoin(dop);
-		//	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-		//		auto &djoin = (LogicalDelimJoin &)dop;
-		//		auto sjoin_rel = new substrait::Rel();
-		//		auto sjoin = sjoin_rel->mutable_join();
-		//		sjoin->set_delim_join(true);
-		//		for (auto &dexpr : djoin.duplicate_eliminated_columns) {
-		//			TransformExpr(*dexpr, *sjoin->add_duplicate_eliminated_columns());
-		//		}
-		//		ComparisonJoinTransform(dop, sop, sjoin, sjoin_rel);
-		//		return;
-		//	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		return TransformAggregateGroup(dop);
-
 	case LogicalOperatorType::LOGICAL_GET:
 		return TransformGet(dop);
-
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		return TransformCrossProduct(dop);
 
