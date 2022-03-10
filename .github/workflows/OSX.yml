@@ -106,7 +106,7 @@ jobs:
   xcode-extensions:
     name: OSX Extensions Release
     runs-on: macos-latest
-#    needs: xcode-debug
+    needs: xcode-debug
     env:
       BUILD_VISUALIZER: 1
       BUILD_ICU: 1
