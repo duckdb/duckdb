@@ -142,7 +142,7 @@ jobs:
           export OPENSSL_ROOT_DIR=`pwd`/build
           cd sources
           export CC="clang -arch x86_64 -arch arm64"
-          perl ./Configure --prefix=$OPENSSL_ROOT_DIR darwin64-x86_64-cc no-asm
+          perl ./Configure --prefix=$OPENSSL_ROOT_DIR darwin64-x86_64-cc no-asm -static
           make -j
           make install_sw
 
@@ -154,6 +154,7 @@ jobs:
 
       - name: Deploy
         run: |
+          zip -j httpfs.duckdb_extension.zip build/release/extension/httpfs/httpfs.duckdb_extension
           if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
             ./scripts/extension-upload.sh osx_amd64
@@ -162,3 +163,9 @@ jobs:
           else
             ./scripts/extension-upload-test.sh local
           fi
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: duckdb-binaries-osx
+          path: |
+            httpfs.duckdb_extension.zip
