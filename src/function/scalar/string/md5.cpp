@@ -78,15 +78,15 @@ void MD5Fun::RegisterFunction(BuiltinFunctions &set) {
 	                               LogicalType::HUGEINT,   // return type
 	                               MD5NumberFunction));    // pointer to function implementation
 
-	set.AddFunction(ScalarFunction("md5_number_upper",     // name of the function
-	                               {LogicalType::VARCHAR}, // argument list
-	                               LogicalType::UBIGINT,   // return type
-	                               MD5NumberUpperFunction));     // pointer to function implementation
+	set.AddFunction(ScalarFunction("md5_number_upper",       // name of the function
+	                               {LogicalType::VARCHAR},   // argument list
+	                               LogicalType::UBIGINT,     // return type
+	                               MD5NumberUpperFunction)); // pointer to function implementation
 
-	set.AddFunction(ScalarFunction("md5_number_lower",     // name of the function
-	                               {LogicalType::VARCHAR}, // argument list
-	                               LogicalType::UBIGINT,   // return type
-	                               MD5NumberLowerFunction));     // pointer to function implementation
+	set.AddFunction(ScalarFunction("md5_number_lower",       // name of the function
+	                               {LogicalType::VARCHAR},   // argument list
+	                               LogicalType::UBIGINT,     // return type
+	                               MD5NumberLowerFunction)); // pointer to function implementation
 }
 
 } // namespace duckdb
