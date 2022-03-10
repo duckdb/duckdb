@@ -1198,6 +1198,23 @@ This allows null values to be written to the vector, regardless of whether a val
 */
 DUCKDB_API void duckdb_vector_ensure_validity_writable(duckdb_vector vector);
 
+/*!
+Retrieves the child vector of a list vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+
+* vector: The vector
+* returns: The child vector
+*/
+DUCKDB_API duckdb_vector duckdb_list_vector_get_child(duckdb_vector vector);
+
+/*!
+Returns the size of the child vector of the list
+
+* vector: The vector
+* returns: The size of the child list
+*/
+DUCKDB_API idx_t duckdb_list_vector_get_size(duckdb_vector vector);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions

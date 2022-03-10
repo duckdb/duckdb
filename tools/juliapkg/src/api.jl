@@ -1330,6 +1330,18 @@ function duckdb_enum_dictionary_value(handle, index)
 end
 
 """
+Retrieves the child type of the given list type.
+
+The result must be freed with `duckdb_destroy_logical_type`
+
+* type: The logical type object
+* returns: The child type of the list type. Must be destroyed with `duckdb_destroy_logical_type`.
+"""
+function duckdb_list_type_child_type(handle)
+    return ccall((:duckdb_list_type_child_type, libduckdb), duckdb_logical_type, (duckdb_logical_type,), handle)
+end
+
+"""
 Destroys the logical type and de-allocates all memory allocated for that type.
 
 * type: The logical type to destroy.
@@ -1493,6 +1505,38 @@ function duckdb_vector_ensure_validity_writable(vector)
     return ccall(
         (:duckdb_vector_ensure_validity_writable, libduckdb),
         Cvoid,
+        (duckdb_vector,),
+        vector
+    )
+end
+
+"""
+Retrieves the child vector of a list vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+
+* vector: The vector
+* returns: The child vector
+"""
+function duckdb_list_vector_get_child(vector)
+    return ccall(
+        (:duckdb_list_vector_get_child, libduckdb),
+        duckdb_vector,
+        (duckdb_vector,),
+        vector
+    )
+end
+
+"""
+Returns the size of the child vector of the list
+
+* vector: The vector
+* returns: The size of the child list
+"""
+function duckdb_list_vector_get_size(vector)
+    return ccall(
+        (:duckdb_list_vector_get_size, libduckdb),
+        UInt64,
         (duckdb_vector,),
         vector
     )

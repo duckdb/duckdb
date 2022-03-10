@@ -97,6 +97,22 @@ void duckdb_vector_ensure_validity_writable(duckdb_vector vector) {
 	validity.EnsureWritable();
 }
 
+duckdb_vector duckdb_list_vector_get_child(duckdb_vector vector) {
+	if (!vector) {
+		return nullptr;
+	}
+	auto v = (duckdb::Vector *)vector;
+	return &duckdb::ListVector::GetEntry(*v);
+}
+
+idx_t duckdb_list_vector_get_size(duckdb_vector vector) {
+	if (!vector) {
+		return 0;
+	}
+	auto v = (duckdb::Vector *)vector;
+	return duckdb::ListVector::GetListSize(*v);
+}
+
 bool duckdb_validity_row_is_valid(uint64_t *validity, idx_t row) {
 	if (!validity) {
 		return true;

@@ -132,6 +132,23 @@ function convert_vector_string(column_data::ColumnConversionData, vector::Vec, s
 	return size
 end
 
+function convert_vector_list(column_data::ColumnConversionData, vector::Vec, size::UInt64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
+	child_vector = ListChild(vector)
+	list_size = ListSize(vector)
+	
+	array = GetArray(vector, SRC)
+	if !all_valid
+		validity = GetValidity(vector)
+	end
+	for i in 1:size
+		if all_valid || IsValid(validity, i)
+			result[position] = convert_func(column_data, array[i])
+		end
+		position += 1
+	end
+	return size
+end
+
 function convert_column_loop(column_data::ColumnConversionData, convert_func::Function, ::Type{SRC}, ::Type{DST}, convert_vector_func::Function) where {SRC, DST}
 	# first check if there are null values in any chunks
 	has_missing = false
@@ -213,6 +230,8 @@ function get_conversion_loop_function(logical_type::LogicalType)::Function
 	type = GetTypeId(logical_type)
 	if type == DUCKDB_TYPE_VARCHAR || type == DUCKDB_TYPE_BLOB
 		return convert_vector_string
+	elseif type == DUCKDB_TYPE_LIST
+		return convert_vector_list
 	else
 		return convert_vector
 	end

@@ -61,3 +61,7 @@ function GetEnumDictionary(type::LogicalType)
 	end
 	return dict
 end
+
+function GetListChildType(type::LogicalType)
+	return LogicalType(duckdb_list_type_child_type(type.handle))
+end

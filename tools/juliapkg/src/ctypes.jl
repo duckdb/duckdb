@@ -116,6 +116,11 @@ struct duckdb_string_t
 	data::NTuple{12, UInt8}
 end
 
+struct duckdb_list_entry_t
+	offset::UInt64
+	length::UInt64
+end
+
 STRING_INLINE_LENGTH = 12
 
 struct duckdb_column
@@ -158,7 +163,8 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_UUID => duckdb_hugeint,
     DUCKDB_TYPE_VARCHAR => duckdb_string_t,
     DUCKDB_TYPE_BLOB => duckdb_string_t,
-    DUCKDB_TYPE_UUID => duckdb_hugeint
+    DUCKDB_TYPE_UUID => duckdb_hugeint,
+    DUCKDB_TYPE_LIST => duckdb_list_entry_t
 )
 
 JULIA_TYPE_MAP = Dict(
@@ -192,15 +198,18 @@ JULIA_TYPE_MAP = Dict(
 # convert a DuckDB type into Julia equivalent
 function duckdb_type_to_internal_type(x::DUCKDB_TYPE)
 	if !haskey(INTERNAL_TYPE_MAP, x)
-		throw(NotImplementedException(string("Unsupported type for duckdb_type_to_internal_type", x)))
+		throw(NotImplementedException(string("Unsupported type for duckdb_type_to_internal_type: ", x)))
 	end
 	return INTERNAL_TYPE_MAP[x]
 end
 
 function duckdb_type_to_julia_type(x)
 	type_id = GetTypeId(x)
+	if type_id == DUCKDB_TYPE_LIST
+		return Vector{duckdb_type_to_julia_type(GetListChildType(x))}
+	end
 	if !haskey(JULIA_TYPE_MAP, type_id)
-		throw(NotImplementedException(string("Unsupported type for duckdb_type_to_julia_type", type_id)))
+		throw(NotImplementedException(string("Unsupported type for duckdb_type_to_julia_type: ", type_id)))
 	end
 	return JULIA_TYPE_MAP[type_id]
 end
