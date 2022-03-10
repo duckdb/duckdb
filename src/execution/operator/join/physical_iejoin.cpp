@@ -611,6 +611,12 @@ struct IEJoinUnion {
 	vector<validity_t> bit_array;
 	ValidityMask bit_mask;
 
+	//! Bloom Filter
+	static constexpr idx_t BLOOM_CHUNK_BITS = 1024;
+	idx_t bloom_count;
+	vector<validity_t> bloom_array;
+	ValidityMask bloom_filter;
+
 	//! Iteration state
 	idx_t n;
 	idx_t i;
@@ -791,6 +797,11 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	bit_array.resize(ValidityMask::EntryCount(n), 0);
 	bit_mask.Initialize(bit_array.data());
 
+	// Bloom filter
+	bloom_count = (n + (BLOOM_CHUNK_BITS - 1)) / BLOOM_CHUNK_BITS;
+	bloom_array.resize(ValidityMask::EntryCount(bloom_count), 0);
+	bloom_filter.Initialize(bloom_array.data());
+
 	// 11. for(i←1 to n) do
 	const auto &cmp2 = op.conditions[1].comparison;
 	op2 = make_unique<SBIterator>(l2->global_sort_state, cmp2);
@@ -814,7 +825,9 @@ bool IEJoinUnion::NextRow() {
 			if (!off2->Compare(*op2)) {
 				break;
 			}
-			bit_mask.SetValid(p[off2->GetIndex()]);
+			const auto p2 = p[off2->GetIndex()];
+			bit_mask.SetValid(p2);
+			bloom_filter.SetValid(p2 / BLOOM_CHUNK_BITS);
 		}
 
 		// 9.  if (op1 ∈ {≤,≥} and op2 ∈ {≤,≥}) eqOff = 0
@@ -885,7 +898,20 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 		// 13. for (j ← pos+eqOff to n) do
 		for (;;) {
 			// 14. if B[j] = 1 then
-			auto j = NextValid(bit_mask, off1->GetIndex(), n);
+			auto j = off1->GetIndex();
+
+			//	Use the Bloom filter to find candidate blocks
+			while (j < n) {
+				auto bloom_begin = NextValid(bloom_filter, j / BLOOM_CHUNK_BITS, bloom_count) * BLOOM_CHUNK_BITS;
+				auto bloom_end = MinValue<idx_t>(n, bloom_begin + BLOOM_CHUNK_BITS);
+
+				j = MaxValue<idx_t>(j, bloom_begin);
+				j = NextValid(bit_mask, j, bloom_end);
+				if (j < bloom_end) {
+					break;
+				}
+			}
+
 			if (j >= n) {
 				break;
 			}

@@ -55,7 +55,7 @@ CREATE TABLE employees AS
 			enum_range(NULL::surname_t)[(round(random() * 19))::INTEGER] AS surname,
 			round(random() * 5)::INTEGER  AS dept,
 			100 * id AS salary
-		FROM (SELECT UNNEST(range(1, 1000000))) tbl(id)
+		FROM (SELECT UNNEST(range(1, 10000000))) tbl(id)
 	) facts
 ;
 
@@ -67,4 +67,4 @@ SELECT COUNT(*) FROM (
 ) q1;
 
 result I
-9937
+99296
