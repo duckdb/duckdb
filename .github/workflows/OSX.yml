@@ -60,6 +60,7 @@ jobs:
       BUILD_JDBC: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      OSX_BUILD_UNIVERSAL: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -92,7 +93,7 @@ jobs:
         python scripts/amalgamation.py
         zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
         zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_jdbc-osx-universal.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
     - uses: actions/upload-artifact@v2
       with:
@@ -118,6 +119,7 @@ jobs:
       BUILD_SUBSTRAIT_EXTENSION: 1
       STATIC_OPENSSL: 1
       DISABLE_BUILTIN_EXTENSIONS: 1
+      OSX_BUILD_UNIVERSAL: 1
       AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
       AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
       AWS_DEFAULT_REGION: us-east-1
@@ -146,6 +148,7 @@ jobs:
           if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
             ./scripts/extension-upload.sh osx_amd64
+            ./scripts/extension-upload.sh osx_arm64
             ./scripts/extension-upload-test.sh
           else
             ./scripts/extension-upload-test.sh local
