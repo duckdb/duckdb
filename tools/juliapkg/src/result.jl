@@ -45,7 +45,19 @@ function convert_time(val::Int64)::Time
 end
 
 function convert_timestamp(val::Int64)::DateTime
-	return Dates.epochms2datetime((val / 1000) + 62167219200000)
+	return Dates.epochms2datetime((val ÷ 1000) + 62167219200000)
+end
+
+function convert_timestamp_s(val::Int64)::DateTime
+	return Dates.epochms2datetime((val * 1000) + 62167219200000)
+end
+
+function convert_timestamp_ms(val::Int64)::DateTime
+	return Dates.epochms2datetime((val) + 62167219200000)
+end
+
+function convert_timestamp_ns(val::Int64)::DateTime
+	return Dates.epochms2datetime((val ÷ 1000000) + 62167219200000)
 end
 
 function convert_interval(val::duckdb_interval)::Dates.CompoundPeriod
@@ -123,9 +135,10 @@ function standard_convert(chunks::Vector{DataChunk}, col_idx::Int64, ::Type{T}) 
 	return convert_column_loop(chunks, col_idx, nop_convert, T, T)
 end
 
-function convert_column(chunks::Vector{DataChunk}, col_idx::Int64, type::LogicalType)
-	type = GetInternalType(type)
-	internal_type = duckdb_type_to_internal_type(type)
+function convert_column(chunks::Vector{DataChunk}, col_idx::Int64, logical_type::LogicalType)
+	type = GetTypeId(logical_type)
+	internal_type_id = GetInternalTypeId(logical_type)
+	internal_type = duckdb_type_to_internal_type(internal_type_id)
 
 	if type == DUCKDB_TYPE_VARCHAR
 		return convert_column_loop(chunks, col_idx, convert_string, duckdb_string_t, AbstractString, convert_chunk_string)
@@ -135,10 +148,25 @@ function convert_column(chunks::Vector{DataChunk}, col_idx::Int64, type::Logical
 		return convert_column_loop(chunks, col_idx, convert_time, internal_type, Time)
 	elseif type == DUCKDB_TYPE_TIMESTAMP
 		return convert_column_loop(chunks, col_idx, convert_timestamp, internal_type, DateTime)
+	elseif type == DUCKDB_TYPE_TIMESTAMP_S
+		return convert_column_loop(chunks, col_idx, convert_timestamp_s, internal_type, DateTime)
+	elseif type == DUCKDB_TYPE_TIMESTAMP_MS
+		return convert_column_loop(chunks, col_idx, convert_timestamp_ms, internal_type, DateTime)
+	elseif type == DUCKDB_TYPE_TIMESTAMP_NS
+		return convert_column_loop(chunks, col_idx, convert_timestamp_ns, internal_type, DateTime)
 	elseif type == DUCKDB_TYPE_INTERVAL
 		return convert_column_loop(chunks, col_idx, convert_interval, internal_type, Dates.CompoundPeriod)
 	elseif type == DUCKDB_TYPE_HUGEINT
 		return convert_column_loop(chunks, col_idx, convert_hugeint, internal_type, Int128)
+	elseif type == DUCKDB_TYPE_DECIMAL
+		if internal_type_id == DUCKDB_TYPE_HUGEINT
+			column = convert_column_loop(chunks, col_idx, convert_hugeint, internal_type, Int128)
+		else
+			column = standard_convert(chunks, col_idx, internal_type)
+		end
+		scale = 10 ^ GetDecimalScale(logical_type)
+		column = column ./ scale
+		return column
 	else
 		return standard_convert(chunks, col_idx, internal_type)
 	end

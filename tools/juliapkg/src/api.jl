@@ -1,4 +1,3 @@
-# Let's keep C function calls until Julia function has been tested functional.
 using Base.Libc
 
 if "JULIA_DUCKDB_LIBRARY" in keys(ENV)
@@ -1265,6 +1264,36 @@ Retrieves the type class of a `duckdb_logical_type`.
 """
 function duckdb_get_type_id(handle)
     return ccall((:duckdb_get_type_id, libduckdb), DUCKDB_TYPE, (duckdb_logical_type,), handle)
+end
+
+"""
+Retrieves the width of a decimal type.
+
+* type: The logical type object
+* returns: The width of the decimal type
+"""
+function duckdb_decimal_width(handle)
+    return ccall((:duckdb_decimal_width, libduckdb), UInt8, (duckdb_logical_type,), handle)
+end
+
+"""
+Retrieves the scale of a decimal type.
+
+* type: The logical type object
+* returns: The scale of the decimal type
+"""
+function duckdb_decimal_scale(handle)
+    return ccall((:duckdb_decimal_scale, libduckdb), UInt8, (duckdb_logical_type,), handle)
+end
+
+"""
+Retrieves the internal storage type of a decimal type.
+
+* type: The logical type object
+* returns: The internal type of the decimal type
+"""
+function duckdb_decimal_internal_type(handle)
+    return ccall((:duckdb_decimal_internal_type, libduckdb), DUCKDB_TYPE, (duckdb_logical_type,), handle)
 end
 
 """

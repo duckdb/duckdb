@@ -24,8 +24,20 @@ function CreateLogicalType(::Type{T}) where {T}
     throw(NotImplementedException("Unsupported type for CreateLogicalType"))
 end
 
-function GetInternalType(type::LogicalType)
+function GetTypeId(type::LogicalType)
 	return duckdb_get_type_id(type.handle)
+end
+
+function GetInternalTypeId(type::LogicalType)
+	type_id = GetTypeId(type)
+	if type_id == DUCKDB_TYPE_DECIMAL
+		type_id = duckdb_decimal_internal_type(type.handle)
+	end
+	return type_id
+end
+
+function GetDecimalScale(type::LogicalType)
+	return duckdb_decimal_scale(type.handle)
 end
 
 function _destroy_type(type::LogicalType)
