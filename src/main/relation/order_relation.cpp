@@ -1,6 +1,8 @@
 #include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 
 namespace duckdb {
 
