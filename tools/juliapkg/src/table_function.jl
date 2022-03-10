@@ -94,6 +94,14 @@ function _table_init_function(info::duckdb_init_info)
     return
 end
 
+function GetBindInfo(info::InitInfo, ::Type{T})::T where {T}
+    return unsafe_pointer_to_objref(duckdb_init_get_bind_data(info.handle)).info
+end
+
+function GetExtraData(info::InitInfo)
+    return info.main_function.extra_data
+end
+
 #=
 //===--------------------------------------------------------------------===//
 // Main Table Function
