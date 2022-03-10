@@ -7,8 +7,7 @@ namespace duckdb {
 OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> orders)
     : Relation(child_p->context, RelationType::ORDER_RELATION), orders(move(orders)), child(move(child_p)) {
 	// bind the expressions
-	vector<ColumnDefinition> dummy_columns;
-	context.GetContext()->TryBindRelation(*this, dummy_columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> OrderRelation::GetQueryNode() {
@@ -28,7 +27,7 @@ string OrderRelation::GetAlias() {
 }
 
 const vector<ColumnDefinition> &OrderRelation::Columns() {
-	return child->Columns();
+	return columns;
 }
 
 string OrderRelation::ToString(idx_t depth) {
