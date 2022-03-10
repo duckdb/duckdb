@@ -229,7 +229,7 @@ end
     @test length(rr) == 1
     r = first(rr)
     @test typeof.(Tuple(r)) ==
-          (Missing, Int32, Int32, Float32, Float32, Float64, String, String, String, String, String, String)
+          (Missing, Int32, Int32, Float32, Float32, Float64, String, String, String, String, DateTime, DateTime)
 end
 
 @testset "Issue #158: Missing DB File" begin
@@ -298,7 +298,6 @@ end
     @test Tables.rowaccess(r)
     @test Tables.rows(r) === r
     @test Base.IteratorSize(typeof(r)) == Base.SizeUnknown()
-    @test eltype(r) == DuckDB.Row
     row = first(r)
 end
 

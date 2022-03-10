@@ -110,11 +110,6 @@ struct duckdb_hugeint
     upper::Int64
 end
 
-struct duckdb_blob
-    data::Cvoid
-    size::UInt64
-end
-
 struct duckdb_string_t
 	length::UInt32
 	data::NTuple{12, UInt8}
@@ -160,8 +155,8 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_INTERVAL => duckdb_interval,
     DUCKDB_TYPE_HUGEINT => duckdb_hugeint,
     DUCKDB_TYPE_UUID => duckdb_hugeint,
-    DUCKDB_TYPE_VARCHAR => Ptr{UInt8},
-    DUCKDB_TYPE_BLOB => duckdb_blob
+    DUCKDB_TYPE_VARCHAR => duckdb_string_t,
+    DUCKDB_TYPE_BLOB => duckdb_string_t
 )
 #
 # DUCKDB_TYPE_MAP = Dict(

@@ -36,6 +36,10 @@ function convert_string(val::Ptr{Cvoid}, idx::UInt64)
 	end
 end
 
+function convert_blob(val::Ptr{Cvoid}, idx::UInt64)::Base.CodeUnits{UInt8, String}
+	return Base.codeunits(convert_string(val, idx))
+end
+
 function convert_date(val::Int32)::Date
 	return Dates.epochdays2date(val + 719528)
 end
@@ -142,6 +146,8 @@ function convert_column(chunks::Vector{DataChunk}, col_idx::Int64, logical_type:
 
 	if type == DUCKDB_TYPE_VARCHAR
 		return convert_column_loop(chunks, col_idx, convert_string, duckdb_string_t, AbstractString, convert_chunk_string)
+	elseif type == DUCKDB_TYPE_BLOB
+		return convert_column_loop(chunks, col_idx, convert_blob, internal_type, Base.CodeUnits{UInt8, String}, convert_chunk_string)
 	elseif type == DUCKDB_TYPE_DATE
 		return convert_column_loop(chunks, col_idx, convert_date, internal_type, Date)
 	elseif type == DUCKDB_TYPE_TIME

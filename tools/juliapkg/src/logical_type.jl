@@ -17,6 +17,14 @@ mutable struct LogicalType
     end
 end
 
+function _destroy_type(type::LogicalType)
+    if type.handle != C_NULL
+        duckdb_destroy_logical_type(type.handle)
+    end
+    type.handle = C_NULL
+    return
+end
+
 CreateLogicalType(::Type{T}) where {T <: String} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_VARCHAR)
 CreateLogicalType(::Type{T}) where {T <: Int64} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_BIGINT)
 
@@ -52,12 +60,4 @@ function GetEnumDictionary(type::LogicalType)
 		duckdb_free(val)
 	end
 	return dict
-end
-
-function _destroy_type(type::LogicalType)
-    if type.handle != C_NULL
-        duckdb_destroy_logical_type(type.handle)
-    end
-    type.handle = C_NULL
-    return
 end
