@@ -156,29 +156,37 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_HUGEINT => duckdb_hugeint,
     DUCKDB_TYPE_UUID => duckdb_hugeint,
     DUCKDB_TYPE_VARCHAR => duckdb_string_t,
-    DUCKDB_TYPE_BLOB => duckdb_string_t
+    DUCKDB_TYPE_BLOB => duckdb_string_t,
+    DUCKDB_TYPE_UUID => duckdb_hugeint
 )
-#
-# DUCKDB_TYPE_MAP = Dict(
-# 	DUCKDB_TYPE_INVALID => Missing,
-# 	DUCKDB_TYPE_BOOLEAN => Bool,
-# 	DUCKDB_TYPE_TINYINT => Int8,
-# 	DUCKDB_TYPE_SMALLINT => Int16,
-# 	DUCKDB_TYPE_INTEGER => Int32,
-# 	DUCKDB_TYPE_BIGINT => Int64,
-# 	DUCKDB_TYPE_HUGEINT => Int128,
-# 	DUCKDB_TYPE_UTINYINT => UInt8,
-# 	DUCKDB_TYPE_USMALLINT => UInt16,
-# 	DUCKDB_TYPE_UINTEGER => UInt32,
-# 	DUCKDB_TYPE_UBIGINT => UInt64,
-# 	DUCKDB_TYPE_FLOAT => Float32,
-# 	DUCKDB_TYPE_DOUBLE => Float64,
-# 	DUCKDB_TYPE_DECIMAL => Float64,
-# 	DUCKDB_TYPE_DATE => Date,
-# 	DUCKDB_TYPE_TIME => Time,
-# 	DUCKDB_TYPE_TIMESTAMP => DateTime,
-# 	DUCKDB_TYPE_VARCHAR => String
-# )
+
+JULIA_TYPE_MAP = Dict(
+	DUCKDB_TYPE_INVALID => Missing,
+	DUCKDB_TYPE_BOOLEAN => Bool,
+	DUCKDB_TYPE_TINYINT => Int8,
+	DUCKDB_TYPE_SMALLINT => Int16,
+	DUCKDB_TYPE_INTEGER => Int32,
+	DUCKDB_TYPE_BIGINT => Int64,
+	DUCKDB_TYPE_HUGEINT => Int128,
+	DUCKDB_TYPE_UTINYINT => UInt8,
+	DUCKDB_TYPE_USMALLINT => UInt16,
+	DUCKDB_TYPE_UINTEGER => UInt32,
+	DUCKDB_TYPE_UBIGINT => UInt64,
+	DUCKDB_TYPE_FLOAT => Float32,
+	DUCKDB_TYPE_DOUBLE => Float64,
+	DUCKDB_TYPE_DECIMAL => Float64,
+	DUCKDB_TYPE_DATE => Date,
+	DUCKDB_TYPE_TIME => Time,
+	DUCKDB_TYPE_TIMESTAMP => DateTime,
+	DUCKDB_TYPE_TIMESTAMP_S => DateTime,
+	DUCKDB_TYPE_TIMESTAMP_MS => DateTime,
+	DUCKDB_TYPE_TIMESTAMP_NS => DateTime,
+	DUCKDB_TYPE_INTERVAL => Dates.CompoundPeriod,
+	DUCKDB_TYPE_UUID => UUID,
+	DUCKDB_TYPE_VARCHAR => AbstractString,
+	DUCKDB_TYPE_ENUM => AbstractString,
+	DUCKDB_TYPE_BLOB => Base.CodeUnits{UInt8, String}
+)
 
 # convert a DuckDB type into Julia equivalent
 function duckdb_type_to_internal_type(x::DUCKDB_TYPE)
@@ -188,11 +196,12 @@ function duckdb_type_to_internal_type(x::DUCKDB_TYPE)
 	return INTERNAL_TYPE_MAP[x]
 end
 
-# function duckdb_type_to_julia_type(x::DUCKDB_TYPE)
-# 	if !haskey(DUCKDB_TYPE_MAP, x)
-# 		throw(NotImplementedException(string("Unsupported type for duckdb_type_to_julia_type", x)))
-# 	end
-# 	return DUCKDB_TYPE_MAP[x]
-# end
+function duckdb_type_to_julia_type(x)
+	type_id = GetTypeId(x)
+	if !haskey(JULIA_TYPE_MAP, type_id)
+		throw(NotImplementedException(string("Unsupported type for duckdb_type_to_julia_type", type_id)))
+	end
+	return JULIA_TYPE_MAP[type_id]
+end
 
 sym(ptr) = ccall(:jl_symbol, Ref{Symbol}, (Ptr{UInt8},), ptr)

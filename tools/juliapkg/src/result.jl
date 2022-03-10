@@ -1,5 +1,3 @@
-using DataFrames
-using Tables
 
 mutable struct QueryResult
     handle::Ref{duckdb_result}
@@ -76,6 +74,16 @@ function convert_hugeint(val::duckdb_hugeint)::Int128
 	return Int128(val.lower) + Int128(val.upper) << 64;
 end
 
+function convert_uuid(val::duckdb_hugeint)::UUID
+	hugeint = convert_hugeint(val)
+	base_value = Int128(170141183460469231731687303715884105727)
+	if hugeint < 0
+		return UUID(UInt128(hugeint + base_value) + 1)
+	else
+		return UUID(UInt128(hugeint) + base_value + 1)
+	end
+end
+
 function convert_chunk(chunk::DataChunk, col_idx::Int64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
 	size = GetSize(chunk)
 	array = GetArray(chunk, col_idx, SRC)
@@ -143,27 +151,30 @@ function convert_column(chunks::Vector{DataChunk}, col_idx::Int64, logical_type:
 	type = GetTypeId(logical_type)
 	internal_type_id = GetInternalTypeId(logical_type)
 	internal_type = duckdb_type_to_internal_type(internal_type_id)
+	target_type = duckdb_type_to_julia_type(logical_type)
 
 	if type == DUCKDB_TYPE_VARCHAR
-		return convert_column_loop(chunks, col_idx, convert_string, duckdb_string_t, AbstractString, convert_chunk_string)
+		return convert_column_loop(chunks, col_idx, convert_string, internal_type, target_type, convert_chunk_string)
 	elseif type == DUCKDB_TYPE_BLOB
-		return convert_column_loop(chunks, col_idx, convert_blob, internal_type, Base.CodeUnits{UInt8, String}, convert_chunk_string)
+		return convert_column_loop(chunks, col_idx, convert_blob, internal_type, target_type, convert_chunk_string)
 	elseif type == DUCKDB_TYPE_DATE
-		return convert_column_loop(chunks, col_idx, convert_date, internal_type, Date)
+		return convert_column_loop(chunks, col_idx, convert_date, internal_type, target_type)
 	elseif type == DUCKDB_TYPE_TIME
-		return convert_column_loop(chunks, col_idx, convert_time, internal_type, Time)
+		return convert_column_loop(chunks, col_idx, convert_time, internal_type, target_type)
 	elseif type == DUCKDB_TYPE_TIMESTAMP
-		return convert_column_loop(chunks, col_idx, convert_timestamp, internal_type, DateTime)
+		return convert_column_loop(chunks, col_idx, convert_timestamp, internal_type, target_type)
 	elseif type == DUCKDB_TYPE_TIMESTAMP_S
-		return convert_column_loop(chunks, col_idx, convert_timestamp_s, internal_type, DateTime)
+		return convert_column_loop(chunks, col_idx, convert_timestamp_s, internal_type, target_type)
 	elseif type == DUCKDB_TYPE_TIMESTAMP_MS
-		return convert_column_loop(chunks, col_idx, convert_timestamp_ms, internal_type, DateTime)
+		return convert_column_loop(chunks, col_idx, convert_timestamp_ms, internal_type, target_type)
 	elseif type == DUCKDB_TYPE_TIMESTAMP_NS
-		return convert_column_loop(chunks, col_idx, convert_timestamp_ns, internal_type, DateTime)
+		return convert_column_loop(chunks, col_idx, convert_timestamp_ns, internal_type, target_type)
 	elseif type == DUCKDB_TYPE_INTERVAL
-		return convert_column_loop(chunks, col_idx, convert_interval, internal_type, Dates.CompoundPeriod)
+		return convert_column_loop(chunks, col_idx, convert_interval, internal_type, target_type)
 	elseif type == DUCKDB_TYPE_HUGEINT
-		return convert_column_loop(chunks, col_idx, convert_hugeint, internal_type, Int128)
+		return convert_column_loop(chunks, col_idx, convert_hugeint, internal_type, target_type)
+	elseif type == DUCKDB_TYPE_UUID
+		return convert_column_loop(chunks, col_idx, convert_uuid, internal_type, target_type)
 	elseif type == DUCKDB_TYPE_DECIMAL
 		if internal_type_id == DUCKDB_TYPE_HUGEINT
 			column = convert_column_loop(chunks, col_idx, convert_hugeint, internal_type, Int128)
