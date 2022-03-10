@@ -124,6 +124,7 @@ elseif(${ENABLE_SANITIZER})
   endif()
 endif()
 
+
 if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
   set(DISABLE_VPTR_SANITIZER TRUE)
 endif()
@@ -152,6 +153,14 @@ endif()
 option(EXPLICIT_EXCEPTIONS "Explicitly enable C++ exceptions." FALSE)
 if(${EXPLICIT_EXCEPTIONS})
   set(CXX_EXTRA "${CXX_EXTRA} -fexceptions")
+endif()
+
+option(OSX_BUILD_UNIVERSAL "Build both architectures on OSX and create a single binary containing both." FALSE)
+if (OSX_BUILD_UNIVERSAL)
+  if (NOT APPLE)
+    error("This only makes sense on OSX")
+  endif()
+  SET(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for Mac OS X" FORCE)
 endif()
 
 set(SUN FALSE)
