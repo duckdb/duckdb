@@ -69,6 +69,7 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	}
 	case LogicalTypeId::ENUM:
 		return py::cast(EnumType::GetValue(val));
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		return py::cast(StringValue::Get(val));
 	case LogicalTypeId::BLOB:
@@ -396,6 +397,7 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::DECIMAL: {
 		return py::str("NUMBER");
 	}
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		return py::str("STRING");
 	case LogicalTypeId::BLOB:

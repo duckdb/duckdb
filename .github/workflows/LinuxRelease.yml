@@ -29,6 +29,7 @@ jobs:
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
+      BUILD_JSON: 1
       BUILD_EXCEL: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
@@ -122,10 +123,15 @@ jobs:
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
+      BUILD_HTTPFS: 1
+      BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_SUBSTRAIT_EXTENSION: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
+      STATIC_OPENSSL: 1
+      DISABLE_BUILTIN_EXTENSIONS: 1
+      OPENSSL_ROOT_DIR: /usr/local/ssl
       AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
       AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
       AWS_DEFAULT_REGION: us-east-1
@@ -151,6 +157,18 @@ jobs:
         python3.7 --version
         python3.7 -m pip install pip
         python3.7 -m pip install requests awscli
+
+    - name: Install OpenSSL 1.1.1
+      run: |
+        apt-get install build-essential checkinstall zlib1g-dev -y -qq
+        wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
+        tar -xf openssl-1.1.1c.tar.gz
+        cd openssl-1.1.1c
+        ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl -static zlib
+        make
+        make install
+        echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
+        ldconfig -v
 
     - uses: actions/checkout@v2
       with:
@@ -231,7 +249,7 @@ jobs:
     - name: Build
       run: |
         mkdir -p build/release
-        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
     - name: Test
       run: build/release/test/unittest "*"
@@ -356,6 +374,7 @@ jobs:
       BUILD_FTS: 1
       BUILD_EXCEL: 1
       BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
       DISABLE_SANITIZER: 1
 
     steps:
