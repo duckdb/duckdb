@@ -99,8 +99,8 @@ jobs:
       with:
         name: duckdb-binaries-osx
         path: |
-          libduckdb-osx-amd64.zip
-          duckdb_cli-osx-amd64.zip
+          libduckdb-osx-universal.zip
+          duckdb_cli-osx-universal.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
 
   xcode-extensions:
