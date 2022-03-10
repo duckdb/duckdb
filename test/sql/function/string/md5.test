@@ -12,6 +12,12 @@ select md5('hello'), md5(NULL)
 NULL
 
 query II
+select md5_number('hello'), md5_number_upper(NULL)
+----
+-145191729247072235933599665601768308387
+NULL
+
+query II
 select md5_number_upper('hello'), md5_number_upper(NULL)
 ----
 8514701317032132957

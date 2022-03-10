@@ -18,8 +18,7 @@ struct MD5Operator {
 	}
 };
 
-template <bool lower>
-struct MD5NumberOperator {
+struct MD5Number128Operator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input) {
 		data_t digest[MD5Context::MD5_HASH_LENGTH_BINARY];
@@ -27,7 +26,20 @@ struct MD5NumberOperator {
 		MD5Context context;
 		context.Add(input);
 		context.Finish(digest);
-		return *reinterpret_cast<uint64_t*>(&digest[lower ? 8 : 0]);
+		return *reinterpret_cast<hugeint_t *>(digest);
+	}
+};
+
+template <bool lower>
+struct MD5Number64Operator {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input) {
+		data_t digest[MD5Context::MD5_HASH_LENGTH_BINARY];
+
+		MD5Context context;
+		context.Add(input);
+		context.Finish(digest);
+		return *reinterpret_cast<uint64_t *>(&digest[lower ? 8 : 0]);
 	}
 };
 
@@ -37,16 +49,22 @@ static void MD5Function(DataChunk &args, ExpressionState &state, Vector &result)
 	UnaryExecutor::ExecuteString<string_t, string_t, MD5Operator>(input, result, args.size());
 }
 
-static void MD5UpperFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static void MD5NumberFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 
-	UnaryExecutor::Execute<string_t, uint64_t, MD5NumberOperator<false>>(input, result, args.size());
+	UnaryExecutor::Execute<string_t, hugeint_t, MD5Number128Operator>(input, result, args.size());
 }
 
-static void MD5LowerFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static void MD5NumberUpperFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 
-	UnaryExecutor::Execute<string_t, uint64_t, MD5NumberOperator<true>>(input, result, args.size());
+	UnaryExecutor::Execute<string_t, uint64_t, MD5Number64Operator<false>>(input, result, args.size());
+}
+
+static void MD5NumberLowerFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &input = args.data[0];
+
+	UnaryExecutor::Execute<string_t, uint64_t, MD5Number64Operator<true>>(input, result, args.size());
 }
 
 void MD5Fun::RegisterFunction(BuiltinFunctions &set) {
@@ -55,15 +73,20 @@ void MD5Fun::RegisterFunction(BuiltinFunctions &set) {
 	                               LogicalType::VARCHAR,   // return type
 	                               MD5Function));          // pointer to function implementation
 
-	set.AddFunction(ScalarFunction("md5_number_upper",        // name of the function
+	set.AddFunction(ScalarFunction("md5_number",           // name of the function
 	                               {LogicalType::VARCHAR}, // argument list
-	                               LogicalType::UBIGINT,  // return type
-	                               MD5UpperFunction));          // pointer to function implementation
+	                               LogicalType::HUGEINT,   // return type
+	                               MD5NumberFunction));    // pointer to function implementation
 
-	set.AddFunction(ScalarFunction("md5_number_lower",                  // name of the function
+	set.AddFunction(ScalarFunction("md5_number_upper",     // name of the function
 	                               {LogicalType::VARCHAR}, // argument list
 	                               LogicalType::UBIGINT,   // return type
-	                               MD5LowerFunction));          // pointer to function implementation
+	                               MD5NumberUpperFunction));     // pointer to function implementation
+
+	set.AddFunction(ScalarFunction("md5_number_lower",     // name of the function
+	                               {LogicalType::VARCHAR}, // argument list
+	                               LogicalType::UBIGINT,   // return type
+	                               MD5NumberLowerFunction));     // pointer to function implementation
 }
 
 } // namespace duckdb
