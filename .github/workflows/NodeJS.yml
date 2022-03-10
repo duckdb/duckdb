@@ -26,6 +26,21 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Install requirements
+      run: |
+        apt-get update -y -qq
+        apt-get install -y git ninja-build make gcc-multilib g++-multilib wget
+
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+        chmod +x cmake-3.21.3-linux-x86_64.sh
+        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+
+    - name: Build extensions to test
+      run: |
+        GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=1 BUILD_TPCH=1 make
+
     - name: Setup
       run: ./scripts/node_version.sh upload
 
