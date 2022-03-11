@@ -74,7 +74,7 @@ describe('Extension loading', function() {
         const extension_path = ext;
         const extension_name = ext.replace(/^.*[\\\/]/, '');
 
-        it('load extensions from ' + extension_name, function(done) {
+        it(extension_name, function(done) {
             db.run(`LOAD '${extension_path}';`, function(err) {
                 if (err) {
                     throw err;
