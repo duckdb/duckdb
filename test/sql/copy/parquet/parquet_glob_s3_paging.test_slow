@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/parquet_glob_paging.test_slow
+# name: test/sql/copy/parquet/parquet_glob_s3_paging.test_slow
 # description: Test globbing of a large number of parquet files to test the paging mechanism
 # group: [parquet]
 

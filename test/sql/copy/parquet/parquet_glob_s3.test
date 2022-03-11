@@ -1,5 +1,5 @@
-# name: test/sql/copy/parquet/parquet_glob.test
-# description: Test basic globbing of parquet files
+# name: test/sql/copy/parquet/parquet_glob_s3.test
+# description: Test basic globbing of parquet files over s3
 # group: [parquet]
 
 require parquet
@@ -65,8 +65,8 @@ COPY vals FROM 's3://test-bucket/glob/parquet-testing/glob/t?.parquet' (FORMAT P
 query II
 SELECT * FROM vals ORDER BY 1, 2
 ----
-1	hello
-1	hello
+1	a
+2	b
 
 # failed to copy: incorrect types found in parquet file
 statement ok

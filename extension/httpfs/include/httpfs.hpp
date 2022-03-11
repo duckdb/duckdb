@@ -68,13 +68,14 @@ protected:
 
 class HTTPFileSystem : public FileSystem {
 public:
-	static unique_ptr<duckdb_httplib_openssl::Client> GetClient(const HTTPParams &http_params, const char *proto_host_port);
+	static unique_ptr<duckdb_httplib_openssl::Client> GetClient(const HTTPParams &http_params,
+	                                                            const char *proto_host_port);
 	static void ParseUrl(string &url, string &path_out, string &proto_host_port_out);
 	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
 	                                     FileCompressionType compression = DEFAULT_COMPRESSION,
 	                                     FileOpener *opener = nullptr) final;
 
-	vector<string> Glob(const string &path, ClientContext* context = nullptr) override {
+	vector<string> Glob(const string &path, ClientContext *context = nullptr) override {
 		return {path}; // FIXME
 	}
 
@@ -82,8 +83,6 @@ public:
 	virtual unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map,
 	                                               char *buffer_in, idx_t buffer_in_len);
 	virtual unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url, HeaderMap header_map);
-	virtual unique_ptr<ResponseWrapper> GetRequest(FileHandle &handle, string url, HeaderMap header_map,
-	                                               unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len);
 	// Get Request with range parameter that GETs exactly buffer_out_len bytes from the url
 	virtual unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
 	                                                    idx_t file_offset, char *buffer_out, idx_t buffer_out_len);

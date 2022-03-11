@@ -104,7 +104,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 	auto &hfs = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	auto client = GetClient(hfs.http_params, proto_host_port.c_str()); // Put requests use fresh connection for parallel uploads
+	auto client =
+	    GetClient(hfs.http_params, proto_host_port.c_str()); // Put requests use fresh connection for parallel uploads
 	auto headers = initialize_http_headers(header_map);
 
 	auto res = client->Put(path.c_str(), *headers, buffer_in, buffer_in_len, "application/octet-stream");
@@ -124,44 +125,6 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	auto res = hfs.http_client->Head(path.c_str(), *headers);
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
-		                         ")");
-	}
-	return make_unique<ResponseWrapper>(res.value());
-}
-
-unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, string url, HeaderMap header_map, unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len) {
-	auto &hfs = (HTTPFileHandle &)handle;
-	string path, proto_host_port;
-	ParseUrl(url, path, proto_host_port);
-	auto headers = initialize_http_headers(header_map);
-
-	idx_t out_offset = 0;
-	auto client = GetClient(hfs.http_params, proto_host_port.c_str()); // Get requests use fresh connection
-
-	auto res = client->Get(
-	    path.c_str(), *headers,
-	    [&](const duckdb_httplib_openssl::Response &response) {
-		    if (response.status >= 400) {
-			    throw std::runtime_error("HTTP GET error on '" + url + "' (HTTP " + std::to_string(response.status) +
-			                             ")");
-		    }
-		    if (response.status < 300) { // done redirecting, get content-size and allocate buffer
-			    auto content_length = std::stoll(response.get_header_value("Content-Length", 0));
-			    buffer_out = unique_ptr<char[]> {new char[content_length]};
-			    buffer_out_len = content_length;
-		    }
-		    return true;
-	    },
-	    [&](const char *data, size_t data_length) {
-		    if (!buffer_out || data_length + out_offset > buffer_out_len) {
-			    throw std::runtime_error("HTTP GET error on '" + url + "': failed to allocate correctly sized buffer");
-		    }
-		    memcpy(&buffer_out[0] + out_offset, data, data_length);
-		    out_offset += data_length;
-		    return true;
-	    });
-	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
 		                         ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());

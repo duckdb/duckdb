@@ -135,7 +135,7 @@ static string listobjectsv2_request(string &path, HTTPParams &http_params, S3Aut
 	string req_params = "?encoding-type=url&list-type=2&continuation-token=" + continuation_token + "&prefix=";
 	req_params += S3FileSystem::UrlEncode(shared_path_path.substr(1), true);
 
-	if (use_delimiter){
+	if (use_delimiter) {
 		req_params += "&delimiter=%2F";
 	}
 
@@ -170,7 +170,7 @@ static string listobjectsv2_request(string &path, HTTPParams &http_params, S3Aut
 }
 
 // Parse the s3 keys from the ListObjectsV2 call
-static void parse_keys(string aws_response, vector<string>& result) {
+static void parse_keys(string aws_response, vector<string> &result) {
 	idx_t cur_pos = 0;
 	while (true) {
 		auto next_open_tag_pos = aws_response.find("<Key>", cur_pos);
@@ -273,7 +273,8 @@ vector<string> S3FileSystem::Glob(const string &path, ClientContext *context) {
 			// Paging loop for common prefix requests
 			string common_prefix_continuation_token = "";
 			do {
-				auto prefix_res = listobjectsv2_request(prefix_path, http_params, s3_auth_params, common_prefix_continuation_token);
+				auto prefix_res =
+				    listobjectsv2_request(prefix_path, http_params, s3_auth_params, common_prefix_continuation_token);
 				parse_keys(prefix_res, s3_keys);
 				auto more_prefixes = parse_common_prefixes(prefix_res);
 				common_prefixes.insert(common_prefixes.end(), more_prefixes.begin(), more_prefixes.end());
@@ -729,16 +730,6 @@ unique_ptr<ResponseWrapper> S3FileSystem::HeadRequest(FileHandle &handle, string
 	auto headers = create_s3_get_header(path, query_param, host, "s3", "HEAD",
 	                                    static_cast<S3FileHandle &>(handle).auth_params, "", "", "", "");
 	return HTTPFileSystem::HeadRequest(handle, http_proto + host + path, headers);
-}
-
-unique_ptr<ResponseWrapper> S3FileSystem::GetRequest(FileHandle &handle, string url, HeaderMap header_map,
-                                                     unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len) {
-	string host, http_proto, path, query_param;
-	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
-	S3UrlParse(url, auth_params.endpoint, auth_params.use_ssl, host, http_proto, path, query_param);
-	auto headers = create_s3_get_header(path, query_param, host, "s3", "GET",
-	                                    static_cast<S3FileHandle &>(handle).auth_params, "", "", "", "");
-	return HTTPFileSystem::GetRequest(handle, http_proto + host + path, headers, buffer_out, buffer_out_len);
 }
 
 unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,

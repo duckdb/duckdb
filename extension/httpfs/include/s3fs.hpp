@@ -126,8 +126,6 @@ public:
 	unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map, char *buffer_in,
 	                                       idx_t buffer_in_len) override;
 	unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url, HeaderMap header_map) override;
-	unique_ptr<ResponseWrapper> GetRequest(FileHandle &handle, string url, HeaderMap header_map,
-	                                       unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len) override;
 	unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map, idx_t file_offset,
 	                                            char *buffer_out, idx_t buffer_out_len) override;
 
@@ -145,8 +143,8 @@ public:
 
 	void FlushAllBuffers(S3FileHandle &handle);
 
-	static void S3UrlParse(string url, string endpoint, bool use_ssl, string &host_out, string &http_proto_out, string &path_out,
-	                       string &query_param);
+	static void S3UrlParse(string url, string endpoint, bool use_ssl, string &host_out, string &http_proto_out,
+	                       string &path_out, string &query_param);
 	static std::string UrlEncode(const std::string &input, bool encode_slash = false);
 
 	// Uploads the contents of write_buffer to S3.

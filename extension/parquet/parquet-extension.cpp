@@ -187,7 +187,7 @@ public:
 		return move(result);
 	}
 
-	static vector<string> ParquetGlob(FileSystem &fs, const string &glob, ClientContext* context) {
+	static vector<string> ParquetGlob(FileSystem &fs, const string &glob, ClientContext *context) {
 		auto files = fs.Glob(glob, context);
 		if (files.empty()) {
 			throw IOException("No files found that match the pattern \"%s\"", glob);

@@ -168,7 +168,7 @@ public:
 	DUCKDB_API static string ExtractBaseName(const string &path);
 
 	//! Runs a glob on the file system, returning a list of matching files
-	DUCKDB_API virtual vector<string> Glob(const string &path, ClientContext* context = nullptr);
+	DUCKDB_API virtual vector<string> Glob(const string &path, ClientContext *context = nullptr);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
