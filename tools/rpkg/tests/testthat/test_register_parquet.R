@@ -26,35 +26,6 @@ test_that("binary_as_string flag can be used with duckdb_register_parquet", {
   expect_true(rs1 == rawToChar(unlist(rs2)))
 })
 
-test_that("several files can be used with duckdb_register_parquet", {
-  con <- DBI::dbConnect(duckdb::duckdb())
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
-
-  duckdb::duckdb_register_parquet(con, name = "single", path = c("data/userdata1.parquet"))
-  duckdb::duckdb_register_parquet(con, name = "double", path = c("data/userdata1.parquet", "data/userdata1.parquet"))
-  rs1 <- DBI::dbGetQuery(con, "SELECT count(*) AS n FROM double;")
-  rs2 <- DBI::dbGetQuery(con, "SELECT count(*) AS n FROM single;")
-
-  expect_true(rs1 == 2 * rs2)
-})
-
-test_that("replace works with duckdb_register_parquet", {
-  con <- DBI::dbConnect(duckdb::duckdb())
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
-
-  duckdb::duckdb_register_parquet(con, name = "data", path = c("data/userdata1.parquet"))
-  expect_error(duckdb::duckdb_register_parquet(con, name = "data", path = c("data/userdata1.parquet")))
-  expect_true(duckdb::duckdb_register_parquet(con, name = "data", path = c("data/userdata1.parquet"), replace = TRUE))
-})
-
-test_that("duckdb_register_parquet stores the creation query as an attribute", {
-  con <- DBI::dbConnect(duckdb::duckdb())
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
-
-  rs1 <- duckdb::duckdb_register_parquet(con, name = "data", path = c("data/userdata1.parquet"))
-  expect_true(attr(rs1, "query") == "CREATE VIEW data AS SELECT * FROM parquet_scan(['data/userdata1.parquet']);")
-})
-
 test_that("duckdb_register_parquet gives errors on invalid arguments", {
   con <- DBI::dbConnect(duckdb::duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))

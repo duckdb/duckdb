@@ -5,13 +5,7 @@
 \alias{duckdb_unregister_parquet}
 \title{Register Parquet file(s) as a virtual table}
 \usage{
-duckdb_register_parquet(
-  conn,
-  name,
-  path,
-  replace = FALSE,
-  binary_as_string = FALSE
-)
+duckdb_register_parquet(conn, name, path, binary_as_string = FALSE)
 
 duckdb_unregister_parquet(conn, name)
 }
@@ -22,12 +16,12 @@ duckdb_unregister_parquet(conn, name)
 
 \item{path}{A (vector of) strings pointing to the files to be registered}
 
-\item{replace}{A boolean indicating whether a view should be replaced if existing}
-
 \item{binary_as_string}{Convert binary data to strings}
+
+\item{replace}{A boolean indicating whether a view should be replaced if existing}
 }
 \value{
-This function is called for its side effect.
+These functions are called for their side effect.
 }
 \description{
 \code{duckdb_register_parquet()} registers Parquet file(s) as a virtual table (view)

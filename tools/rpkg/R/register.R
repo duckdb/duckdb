@@ -113,31 +113,12 @@ duckdb_list_arrow <- function(conn) {
 #' @param path A (vector of) strings pointing to the files to be registered
 #' @param replace A boolean indicating whether a view should be replaced if existing
 #' @param binary_as_string Convert binary data to strings
-#' @return This function is called for its side effect.
+#' @return These functions are called for their side effect.
 #' @export
-duckdb_register_parquet <- function(conn, name, path, replace = FALSE, binary_as_string = FALSE) {
+duckdb_register_parquet <- function(conn, name, path, binary_as_string = FALSE) {
   stopifnot(DBI::dbIsValid(conn))
-  cre <- "CREATE"
-  if (replace) cre <- paste(cre, "OR REPLACE")
-  if (binary_as_string) {
-    bin <- ", binary_as_string=True"
-  } else {
-    bin <- ""
-  }
-  query <- paste0(
-    cre,
-    " VIEW ",
-    enc2utf8(as.character(name)),
-    " AS SELECT * FROM parquet_scan([",
-    paste(DBI::dbQuoteString(duckdb::translate_duckdb(), path), collapse = ", "),
-    "]",
-    bin,
-    ");"
-  )
-  DBI::dbExecute(conn, query)
-  rs <- c(TRUE)
-  attr(rs, "query") <- query
-  invisible(rs)
+  rapi_register_parquet(conn@conn_ref, enc2utf8(as.character(name)), path, binary_as_string)
+  invisible(TRUE)
 }
 
 #' @rdname duckdb_register_parquet
