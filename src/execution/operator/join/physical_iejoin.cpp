@@ -1234,8 +1234,8 @@ public:
 		// Regular block
 		const auto i = next_pair++;
 		if (i < pair_count) {
-			const auto b1 = i / left_blocks;
-			const auto b2 = i % left_blocks;
+			const auto b1 = i / right_blocks;
+			const auto b2 = i % right_blocks;
 
 			lstate.left_block_index = b1;
 			lstate.left_base = left_bases[b1];
