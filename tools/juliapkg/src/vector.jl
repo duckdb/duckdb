@@ -29,9 +29,9 @@ function AllValid(vector::Vec)::Bool
 end
 
 function ListChild(vector::Vec)::Vec
-	return Vector(duckdb_list_vector_get_child(vector.handle))
+	return Vec(duckdb_list_vector_get_child(vector.handle))
 end
 
-function ListSize(vector::Vec)::Vec
+function ListSize(vector::Vec)::UInt64
 	return duckdb_list_vector_get_size(vector.handle)
 end

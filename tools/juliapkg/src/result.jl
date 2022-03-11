@@ -23,6 +23,15 @@ mutable struct ColumnConversionData
 	conversion_data::Any
 end
 
+mutable struct ListConversionData
+	conversion_func::Function
+	conversion_loop_func::Function
+	child_type::LogicalType
+	internal_type::Type
+	target_type::Type
+	child_conversion_data::Any
+end
+
 function nop_convert(column_data::ColumnConversionData, val)
 	return val
 end
@@ -135,14 +144,23 @@ end
 function convert_vector_list(column_data::ColumnConversionData, vector::Vec, size::UInt64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
 	child_vector = ListChild(vector)
 	list_size = ListSize(vector)
-	
+
+	# convert the child vector
+	ldata = column_data.conversion_data
+
+	child_column_data = ColumnConversionData(column_data.chunks, column_data.col_idx, ldata.child_type, ldata.child_conversion_data)
+	child_array = Array{Union{Missing,ldata.target_type}}(missing, list_size)
+	ldata.conversion_loop_func(child_column_data, child_vector, list_size, ldata.conversion_func, child_array, 1, false, ldata.internal_type, ldata.target_type)
+
 	array = GetArray(vector, SRC)
 	if !all_valid
 		validity = GetValidity(vector)
 	end
 	for i in 1:size
 		if all_valid || IsValid(validity, i)
-			result[position] = convert_func(column_data, array[i])
+			start_offset::UInt64 = array[i].offset + 1
+			end_offset::UInt64 = array[i].offset + array[i].length
+			result[position] = child_array[start_offset:end_offset]
 		end
 		position += 1
 	end
@@ -183,6 +201,16 @@ function init_conversion_loop(logical_type::LogicalType)
 		return 10 ^ GetDecimalScale(logical_type)
 	elseif type == DUCKDB_TYPE_ENUM
 		return GetEnumDictionary(logical_type)
+	elseif type == DUCKDB_TYPE_LIST
+		child_type = GetListChildType(logical_type)
+		internal_type_id = GetInternalTypeId(child_type)
+		internal_type = duckdb_type_to_internal_type(internal_type_id)
+		target_type = duckdb_type_to_julia_type(child_type)
+
+		conversion_func = get_conversion_function(child_type)
+		conversion_loop_func = get_conversion_loop_function(child_type)
+		child_conversion_data = init_conversion_loop(child_type)
+		return ListConversionData(conversion_func, conversion_loop_func, child_type, internal_type, target_type, child_conversion_data)
 	else
 		return nothing
 	end

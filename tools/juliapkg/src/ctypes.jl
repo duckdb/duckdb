@@ -206,7 +206,7 @@ end
 function duckdb_type_to_julia_type(x)
 	type_id = GetTypeId(x)
 	if type_id == DUCKDB_TYPE_LIST
-		return Vector{duckdb_type_to_julia_type(GetListChildType(x))}
+		return Vector{Union{Missing,duckdb_type_to_julia_type(GetListChildType(x))}}
 	end
 	if !haskey(JULIA_TYPE_MAP, type_id)
 		throw(NotImplementedException(string("Unsupported type for duckdb_type_to_julia_type: ", type_id)))
