@@ -35,3 +35,7 @@ end
 function ListSize(vector::Vec)::UInt64
 	return duckdb_list_vector_get_size(vector.handle)
 end
+
+function StructChild(vector::Vec, index::UInt64)::Vec
+	return Vec(duckdb_struct_vector_get_child(vector.handle, index))
+end

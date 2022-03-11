@@ -113,6 +113,14 @@ idx_t duckdb_list_vector_get_size(duckdb_vector vector) {
 	return duckdb::ListVector::GetListSize(*v);
 }
 
+duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index) {
+	if (!vector) {
+		return nullptr;
+	}
+	auto v = (duckdb::Vector *)vector;
+	return duckdb::StructVector::GetEntries(*v)[index].get();
+}
+
 bool duckdb_validity_row_is_valid(uint64_t *validity, idx_t row) {
 	if (!validity) {
 		return true;

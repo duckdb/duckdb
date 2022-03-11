@@ -65,3 +65,18 @@ end
 function GetListChildType(type::LogicalType)
 	return LogicalType(duckdb_list_type_child_type(type.handle))
 end
+
+function GetStructChildCount(type::LogicalType)
+	return duckdb_struct_type_child_count(type.handle)
+end
+
+function GetStructChildName(type::LogicalType, index::UInt64)
+	val = duckdb_struct_type_child_name(type.handle, index)
+	result = unsafe_string(val)
+	duckdb_free(val)
+	return result
+end
+
+function GetStructChildType(type::LogicalType, index::UInt64)
+	return LogicalType(duckdb_struct_type_child_type(type.handle, index))
+end

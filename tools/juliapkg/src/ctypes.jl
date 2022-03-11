@@ -164,7 +164,8 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_VARCHAR => duckdb_string_t,
     DUCKDB_TYPE_BLOB => duckdb_string_t,
     DUCKDB_TYPE_UUID => duckdb_hugeint,
-    DUCKDB_TYPE_LIST => duckdb_list_entry_t
+    DUCKDB_TYPE_LIST => duckdb_list_entry_t,
+    DUCKDB_TYPE_STRUCT => Cvoid
 )
 
 JULIA_TYPE_MAP = Dict(
@@ -207,6 +208,15 @@ function duckdb_type_to_julia_type(x)
 	type_id = GetTypeId(x)
 	if type_id == DUCKDB_TYPE_LIST
 		return Vector{Union{Missing,duckdb_type_to_julia_type(GetListChildType(x))}}
+	elseif type_id == DUCKDB_TYPE_STRUCT
+		child_count = GetStructChildCount(x)
+		names::Vector{Symbol} = Vector()
+		for i in 1:child_count
+			child_name::Symbol = Symbol(GetStructChildName(x, i))
+			push!(names, child_name)
+		end
+		names_tuple = Tuple(x for x in names)
+		return Union{Missing, NamedTuple{names_tuple}}
 	end
 	if !haskey(JULIA_TYPE_MAP, type_id)
 		throw(NotImplementedException(string("Unsupported type for duckdb_type_to_julia_type: ", type_id)))

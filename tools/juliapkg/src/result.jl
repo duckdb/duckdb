@@ -32,6 +32,11 @@ mutable struct ListConversionData
 	child_conversion_data::Any
 end
 
+mutable struct StructConversionData
+	tuple_type::Any
+	child_conversion_data::Vector{ListConversionData}
+end
+
 function nop_convert(column_data::ColumnConversionData, val)
 	return val
 end
@@ -167,6 +172,37 @@ function convert_vector_list(column_data::ColumnConversionData, vector::Vec, siz
 	return size
 end
 
+function convert_vector_struct(column_data::ColumnConversionData, vector::Vec, size::UInt64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
+	child_count = GetStructChildCount(column_data.logical_type)
+	# convert the child vectors of the struct
+	child_arrays = Vector()
+# 	println(column_data.conversion_data)
+	for i in 1:child_count
+		child_vector = StructChild(vector, i)
+		ldata = column_data.conversion_data.child_conversion_data[i]
+
+		child_column_data = ColumnConversionData(column_data.chunks, column_data.col_idx, ldata.child_type, ldata.child_conversion_data)
+		child_array = Array{Union{Missing,ldata.target_type}}(missing, size)
+		ldata.conversion_loop_func(child_column_data, child_vector, size, ldata.conversion_func, child_array, 1, false, ldata.internal_type, ldata.target_type)
+		push!(child_arrays, child_array)
+	end
+
+	if !all_valid
+		validity = GetValidity(vector)
+	end
+	for i in 1:size
+		if all_valid || IsValid(validity, i)
+			result_tuple = Vector()
+			for child_idx in 1:child_count
+				push!(result_tuple, child_arrays[child_idx][i])
+			end
+			result[position] = NamedTuple{column_data.conversion_data.tuple_type}(result_tuple)
+		end
+		position += 1
+	end
+	return size
+end
+
 function convert_column_loop(column_data::ColumnConversionData, convert_func::Function, ::Type{SRC}, ::Type{DST}, convert_vector_func::Function) where {SRC, DST}
 	# first check if there are null values in any chunks
 	has_missing = false
@@ -195,6 +231,17 @@ function convert_column_loop(column_data::ColumnConversionData, convert_func::Fu
 	return result
 end
 
+function create_child_conversion_data(child_type::LogicalType)
+	internal_type_id = GetInternalTypeId(child_type)
+	internal_type = duckdb_type_to_internal_type(internal_type_id)
+	target_type = duckdb_type_to_julia_type(child_type)
+
+	conversion_func = get_conversion_function(child_type)
+	conversion_loop_func = get_conversion_loop_function(child_type)
+	child_conversion_data = init_conversion_loop(child_type)
+	return ListConversionData(conversion_func, conversion_loop_func, child_type, internal_type, target_type, child_conversion_data)
+end
+
 function init_conversion_loop(logical_type::LogicalType)
 	type = GetTypeId(logical_type)
 	if type == DUCKDB_TYPE_DECIMAL
@@ -203,14 +250,19 @@ function init_conversion_loop(logical_type::LogicalType)
 		return GetEnumDictionary(logical_type)
 	elseif type == DUCKDB_TYPE_LIST
 		child_type = GetListChildType(logical_type)
-		internal_type_id = GetInternalTypeId(child_type)
-		internal_type = duckdb_type_to_internal_type(internal_type_id)
-		target_type = duckdb_type_to_julia_type(child_type)
-
-		conversion_func = get_conversion_function(child_type)
-		conversion_loop_func = get_conversion_loop_function(child_type)
-		child_conversion_data = init_conversion_loop(child_type)
-		return ListConversionData(conversion_func, conversion_loop_func, child_type, internal_type, target_type, child_conversion_data)
+		return create_child_conversion_data(child_type)
+	elseif type == DUCKDB_TYPE_STRUCT
+		child_count = GetStructChildCount(logical_type)
+		child_symbols::Vector{Symbol} = Vector()
+		child_data::Vector{ListConversionData} = Vector()
+		for i in 1:child_count
+			child_symbol = Symbol(GetStructChildName(logical_type, i))
+			child_type = GetStructChildType(logical_type, i)
+			child_conv_data = create_child_conversion_data(child_type)
+			push!(child_symbols, child_symbol)
+			push!(child_data, child_conv_data)
+		end
+		return StructConversionData(Tuple(x for x in child_symbols), child_data)
 	else
 		return nothing
 	end
@@ -260,6 +312,8 @@ function get_conversion_loop_function(logical_type::LogicalType)::Function
 		return convert_vector_string
 	elseif type == DUCKDB_TYPE_LIST
 		return convert_vector_list
+	elseif type == DUCKDB_TYPE_STRUCT
+		return convert_vector_struct
 	else
 		return convert_vector
 	end

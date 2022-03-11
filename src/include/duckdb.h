@@ -1216,6 +1216,18 @@ Returns the size of the child vector of the list
 */
 DUCKDB_API idx_t duckdb_list_vector_get_size(duckdb_vector vector);
 
+/*!
+Retrieves the child vector of a struct vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+
+* vector: The vector
+* index: The child index
+* returns: The child vector
+*/
+DUCKDB_API duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index);
+
+
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
 //===--------------------------------------------------------------------===//

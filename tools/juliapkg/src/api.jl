@@ -660,8 +660,6 @@ function duckdb_vector_size()
     return ccall((:duckdb_vector_size, libduckdb), UInt64, ())
 end
 
-
-duckdb_vector_size
 # #=
 # //===--------------------------------------------------------------------===//
 # // Date/Time/Timestamp Helpers
@@ -1342,6 +1340,42 @@ function duckdb_list_type_child_type(handle)
 end
 
 """
+Returns the number of children of a struct type.
+
+* type: The logical type object
+* returns: The number of children of a struct type.
+"""
+function duckdb_struct_type_child_count(handle)
+    return ccall((:duckdb_struct_type_child_count, libduckdb), UInt64, (duckdb_logical_type,), handle)
+end
+
+"""
+Retrieves the name of the struct child.
+
+The result must be freed with `duckdb_free`
+
+* type: The logical type object
+* index: The child index
+* returns: The name of the struct type. Must be freed with `duckdb_free`.
+"""
+function duckdb_struct_type_child_name(handle, index)
+    return ccall((:duckdb_struct_type_child_name, libduckdb), Ptr{UInt8}, (duckdb_logical_type,UInt64), handle, index - 1)
+end
+
+"""
+Retrieves the child type of the given struct type at the specified index.
+
+The result must be freed with `duckdb_destroy_logical_type`
+
+* type: The logical type object
+* index: The child index
+* returns: The child type of the struct type. Must be destroyed with `duckdb_destroy_logical_type`.
+"""
+function duckdb_struct_type_child_type(handle, index)
+    return ccall((:duckdb_struct_type_child_type, libduckdb), duckdb_logical_type, (duckdb_logical_type,UInt64), handle, index - 1)
+end
+
+"""
 Destroys the logical type and de-allocates all memory allocated for that type.
 
 * type: The logical type to destroy.
@@ -1539,6 +1573,25 @@ function duckdb_list_vector_get_size(vector)
         UInt64,
         (duckdb_vector,),
         vector
+    )
+end
+
+"""
+Retrieves the child vector of a struct vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+
+* vector: The vector
+* index: The child index
+* returns: The child vector
+"""
+function duckdb_struct_vector_get_child(vector, index)
+    return ccall(
+        (:duckdb_struct_vector_get_child, libduckdb),
+        duckdb_vector,
+        (duckdb_vector, UInt64),
+        vector,
+        index - 1
     )
 end
 
