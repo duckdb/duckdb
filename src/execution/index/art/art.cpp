@@ -891,8 +891,9 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 		switch (verify_type) {
 		case VerifyExistenceType::APPEND: {
 			// node already exists in tree
-			string type = IndexConstraintType::PRIMARY ? "primary key" : "unique";
-			exception_msg = "duplicate key \"" + key_name + "\" violates " + type + " constraint";
+			string type = IsPrimary() ? "primary key" : "unique";
+			exception_msg = "duplicate key \"" + key_name + "\" violates ";
+			exception_msg += type + " constraint";
 		}
 		case VerifyExistenceType::APPEND_FK: {
 			// found node no exists in tree
