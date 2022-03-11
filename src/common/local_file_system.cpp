@@ -56,7 +56,7 @@ bool LocalFileSystem::FileExists(const string &filename) {
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
 		struct _stat64i32 status;
-		_wstat(wpath, &status);
+		_wstat64i32(wpath, &status);
 		if (status.st_size > 0) {
 			return true;
 		}
@@ -68,7 +68,7 @@ bool LocalFileSystem::IsPipe(const string &filename) {
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
 		struct _stat64i32 status;
-		_wstat(wpath, &status);
+		_wstat64i32(wpath, &status);
 		if (status.st_size == 0) {
 			return true;
 		}
