@@ -23,11 +23,18 @@ class Transaction;
 
 struct IndexLock;
 
+enum IndexConstraintType : uint8_t {
+	NONE = 0,    // index is an index don't built to any constraint
+	UNIQUE = 1,  // index is an index built to enforce a UNIQUE constraint
+	PRIMARY = 2, // index is an index built to enforce a PRIMARY KEY constraint
+	FOREIGN = 3  // index is an index built to enforce a FOREIGN KEY constraint
+};
+
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
 	Index(IndexType type, const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
-	      bool is_unique, bool is_primary);
+	      bool is_unique, bool is_primary, bool is_foreign_key = false);
 	virtual ~Index() = default;
 
 	//! The type of the index
@@ -42,10 +49,8 @@ public:
 	vector<PhysicalType> types;
 	//! The logical types of the expressions
 	vector<LogicalType> logical_types;
-	//! Whether or not the index is an index built to enforce a UNIQUE or PRIMARY KEY constraint
-	bool is_unique;
-	//! Whether or not the index is an index built to enforce a PRIMARY KEY constraint
-	bool is_primary;
+	// ! constraint type
+	IndexConstraintType constraint_type;
 
 public:
 	//! Initialize a scan on the index with the given expression and column ids
@@ -83,6 +88,19 @@ public:
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
 	bool IndexIsUpdated(const vector<column_t> &column_ids) const;
+
+	//! Returns unique flag
+	bool IsUnique() {
+		return (constraint_type == IndexConstraintType::UNIQUE || constraint_type == IndexConstraintType::PRIMARY);
+	}
+	//! Returns primary flag
+	bool IsPrimary() {
+		return (constraint_type == IndexConstraintType::PRIMARY);
+	}
+	//! Returns foreign flag
+	bool IsForeign() {
+		return (constraint_type == IndexConstraintType::FOREIGN);
+	}
 
 protected:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);

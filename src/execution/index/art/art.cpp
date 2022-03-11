@@ -11,12 +11,11 @@
 namespace duckdb {
 
 ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions, bool is_unique,
-         bool is_primary, bool is_foreign_key_p)
-    : Index(IndexType::ART, column_ids, unbound_expressions, is_unique, is_primary) {
+         bool is_primary, bool is_foreign_key)
+    : Index(IndexType::ART, column_ids, unbound_expressions, is_unique, is_primary, is_foreign_key) {
 	tree = nullptr;
 	expression_result.Initialize(logical_types);
 	is_little_endian = IsLittleEndian();
-	is_foreign_key = is_foreign_key_p;
 	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
 		case PhysicalType::BOOL:
@@ -279,7 +278,7 @@ void ART::VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) {
 }
 
 bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
-	if (is_unique && leaf.num_elements != 0) {
+	if (IsUnique() && leaf.num_elements != 0) {
 		return false;
 	}
 	leaf.Insert(row_id);
@@ -855,7 +854,7 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 }
 
 void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr) {
-	if (verify_type != VerifyExistenceType::DELETE_FK && !is_unique) {
+	if (verify_type != VerifyExistenceType::DELETE_FK && !IsUnique()) {
 		return;
 	}
 
@@ -878,37 +877,40 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 		Node *node_ptr = Lookup(tree, *keys[i], 0);
 		bool throw_exception =
 		    verify_type == VerifyExistenceType::APPEND_FK ? node_ptr == nullptr : node_ptr != nullptr;
-		if (throw_exception) {
-			string key_name;
-			for (idx_t k = 0; k < expression_result.ColumnCount(); k++) {
-				if (k > 0) {
-					key_name += ", ";
-				}
-				key_name += unbound_expressions[k]->GetName() + ": " + expression_result.data[k].GetValue(i).ToString();
+		if (!throw_exception) {
+			continue;
+		}
+		string key_name;
+		for (idx_t k = 0; k < expression_result.ColumnCount(); k++) {
+			if (k > 0) {
+				key_name += ", ";
 			}
-			switch (verify_type) {
-			case VerifyExistenceType::APPEND: {
-				// node already exists in tree
-				throw ConstraintException("duplicate key \"%s\" violates %s constraint", key_name,
-				                          is_primary ? "primary key" : "unique");
-			}
-			case VerifyExistenceType::APPEND_FK: {
-				// found node no exists in tree
-				if (err_msg_ptr) {
-					err_msg_ptr[i] =
-					    "violates foreign key constraint because key \"" + key_name + "\" no exist in referenced table";
-				}
-				break;
-			}
-			case VerifyExistenceType::DELETE_FK: {
-				// found node exists in tree
-				if (err_msg_ptr) {
-					err_msg_ptr[i] = "violates foreign key constraint because key \"" + key_name +
-					                 "\" exist in table has foreign key";
-				}
-				break;
-			}
-			}
+			key_name += unbound_expressions[k]->GetName() + ": " + expression_result.data[k].GetValue(i).ToString();
+		}
+		string exception_msg;
+		switch (verify_type) {
+		case VerifyExistenceType::APPEND: {
+			// node already exists in tree
+			string type = IndexConstraintType::PRIMARY ? "primary key" : "unique";
+			exception_msg = "duplicate key \"" + key_name + "\" violates " + type + " constraint";
+		}
+		case VerifyExistenceType::APPEND_FK: {
+			// found node no exists in tree
+			exception_msg =
+			    "violates foreign key constraint because key \"" + key_name + "\" no exist in referenced table";
+			break;
+		}
+		case VerifyExistenceType::DELETE_FK: {
+			// found node exists in tree
+			exception_msg =
+			    "violates foreign key constraint because key \"" + key_name + "\" exist in table has foreign key";
+			break;
+		}
+		}
+		if (err_msg_ptr) {
+			err_msg_ptr[i] = exception_msg;
+		} else {
+			throw ConstraintException(exception_msg);
 		}
 	}
 }

@@ -66,14 +66,14 @@ void LocalTableStorage::Clear() {
 	table.info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.type == IndexType::ART);
 		auto &art = (ART &)index;
-		if (art.is_unique || art.is_foreign_key) {
+		if (art.constraint_type != IndexConstraintType::NONE) {
 			// unique index: create a local ART index that maintains the same unique constraint
 			vector<unique_ptr<Expression>> unbound_expressions;
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
-			indexes.push_back(
-			    make_unique<ART>(art.column_ids, move(unbound_expressions), art.is_unique, false, art.is_foreign_key));
+			indexes.push_back(make_unique<ART>(art.column_ids, move(unbound_expressions), art.IsUnique(),
+			                                   art.IsPrimary(), art.IsForeign()));
 		}
 		return false;
 	});

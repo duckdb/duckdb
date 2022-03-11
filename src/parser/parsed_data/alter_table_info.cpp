@@ -259,17 +259,17 @@ unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(FieldReader &reader, string sc
 //===--------------------------------------------------------------------===//
 AlterForeignKeyInfo::AlterForeignKeyInfo(string schema_p, string table_p, string fk_table, vector<string> pk_columns,
                                          vector<string> fk_columns, vector<idx_t> pk_keys, vector<idx_t> fk_keys,
-                                         bool is_fk_add)
+                                         AlterForeignKeyType type_p)
     : AlterTableInfo(AlterTableType::FOREIGN_KEY_CONSTRAINT, move(schema_p), move(table_p)), fk_table(move(fk_table)),
       pk_columns(move(pk_columns)), fk_columns(move(fk_columns)), pk_keys(move(pk_keys)), fk_keys(move(fk_keys)),
-      is_fk_add(is_fk_add) {
+      type(type_p) {
 }
 AlterForeignKeyInfo::~AlterForeignKeyInfo() {
 }
 
 unique_ptr<AlterInfo> AlterForeignKeyInfo::Copy() const {
 	return make_unique_base<AlterInfo, AlterForeignKeyInfo>(schema, name, fk_table, pk_columns, fk_columns, pk_keys,
-	                                                        fk_keys, is_fk_add);
+	                                                        fk_keys, type);
 }
 
 void AlterForeignKeyInfo::SerializeAlterTable(FieldWriter &writer) const {
@@ -278,7 +278,7 @@ void AlterForeignKeyInfo::SerializeAlterTable(FieldWriter &writer) const {
 	writer.WriteList<string>(fk_columns);
 	writer.WriteList<idx_t>(pk_keys);
 	writer.WriteList<idx_t>(fk_keys);
-	writer.WriteField<bool>(is_fk_add);
+	writer.WriteField<AlterForeignKeyType>(type);
 }
 
 unique_ptr<AlterInfo> AlterForeignKeyInfo::Deserialize(FieldReader &reader, string schema, string table) {
@@ -287,9 +287,9 @@ unique_ptr<AlterInfo> AlterForeignKeyInfo::Deserialize(FieldReader &reader, stri
 	auto fk_columns = reader.ReadRequiredList<string>();
 	auto pk_keys = reader.ReadRequiredList<idx_t>();
 	auto fk_keys = reader.ReadRequiredList<idx_t>();
-	auto is_fk_add = reader.ReadRequired<bool>();
+	auto type = reader.ReadRequired<AlterForeignKeyType>();
 	return make_unique<AlterForeignKeyInfo>(move(schema), move(table), move(fk_table), move(pk_columns),
-	                                        move(fk_columns), move(pk_keys), move(fk_keys), is_fk_add);
+	                                        move(fk_columns), move(pk_keys), move(fk_keys), type);
 }
 
 //===--------------------------------------------------------------------===//

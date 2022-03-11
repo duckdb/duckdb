@@ -22,6 +22,8 @@ enum class AlterType : uint8_t {
 	CHANGE_OWNERSHIP = 4
 };
 
+enum AlterForeignKeyType : uint8_t { AFT_ADD = 0, AFT_DELETE = 1 };
+
 struct AlterInfo : public ParseInfo {
 	AlterInfo(AlterType type, string schema, string name);
 	~AlterInfo() override;
@@ -200,7 +202,8 @@ public:
 //===--------------------------------------------------------------------===//
 struct AlterForeignKeyInfo : public AlterTableInfo {
 	AlterForeignKeyInfo(string schema, string table, string fk_table, vector<string> pk_columns,
-	                    vector<string> fk_columns, vector<idx_t> pk_keys, vector<idx_t> fk_keys, bool is_fk_add);
+	                    vector<string> fk_columns, vector<idx_t> pk_keys, vector<idx_t> fk_keys,
+	                    AlterForeignKeyType type);
 	~AlterForeignKeyInfo() override;
 
 	string fk_table;
@@ -208,7 +211,7 @@ struct AlterForeignKeyInfo : public AlterTableInfo {
 	vector<string> fk_columns;
 	vector<idx_t> pk_keys;
 	vector<idx_t> fk_keys;
-	bool is_fk_add; // if this is true, add fk constraint, if this is false, delete fk constraint
+	AlterForeignKeyType type;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;

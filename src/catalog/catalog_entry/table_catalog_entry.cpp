@@ -48,6 +48,27 @@ idx_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
 	return idx_t(entry->second);
 }
 
+void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, vector<idx_t> &keys, bool is_unique,
+                       bool is_primary, bool is_foreign) {
+	// fetch types and create expressions for the index from the columns
+	vector<column_t> column_ids;
+	vector<unique_ptr<Expression>> unbound_expressions;
+	vector<unique_ptr<Expression>> bound_expressions;
+	idx_t key_nr = 0;
+	for (auto &key : keys) {
+		D_ASSERT(key < columns.size());
+
+		unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(columns[key].name, columns[key].type,
+		                                                                    ColumnBinding(0, column_ids.size())));
+
+		bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].type, key_nr++));
+		column_ids.push_back(key);
+	}
+	// create an adaptive radix tree around the expressions
+	auto art = make_unique<ART>(column_ids, move(unbound_expressions), is_unique, is_primary, is_foreign);
+	storage->AddIndex(move(art), bound_expressions);
+}
+
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
                                      std::shared_ptr<DataTable> inherited_storage)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table), storage(move(inherited_storage)),
@@ -77,45 +98,13 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 			if (constraint->type == ConstraintType::UNIQUE) {
 				// unique constraint: create a unique index
 				auto &unique = (BoundUniqueConstraint &)*constraint;
-				// fetch types and create expressions for the index from the columns
-				vector<column_t> column_ids;
-				vector<unique_ptr<Expression>> unbound_expressions;
-				vector<unique_ptr<Expression>> bound_expressions;
-				idx_t key_nr = 0;
-				for (auto &key : unique.keys) {
-					D_ASSERT(key < columns.size());
-
-					unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(
-					    columns[key].name, columns[key].type, ColumnBinding(0, column_ids.size())));
-
-					bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].type, key_nr++));
-					column_ids.push_back(key);
-				}
-				// create an adaptive radix tree around the expressions
-				auto art = make_unique<ART>(column_ids, move(unbound_expressions), true, unique.is_primary_key);
-				storage->AddIndex(move(art), bound_expressions);
+				AddDataTableIndex(storage.get(), columns, unique.keys, true, unique.is_primary_key, false);
 			} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
 				// foreign key constraint: create a foreign key index
 				auto &bfk = (BoundForeignKeyConstraint &)*constraint;
 				if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
 				    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
-					// fetch types and create expressions for the index from the columns
-					vector<column_t> column_ids;
-					vector<unique_ptr<Expression>> unbound_expressions;
-					vector<unique_ptr<Expression>> bound_expressions;
-					idx_t key_nr = 0;
-					for (auto &key : bfk.info.fk_keys) {
-						D_ASSERT(key < columns.size());
-
-						unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(
-						    columns[key].name, columns[key].type, ColumnBinding(0, column_ids.size())));
-
-						bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].type, key_nr++));
-						column_ids.push_back(key);
-					}
-					// create an adaptive radix tree around the expressions
-					auto art = make_unique<ART>(column_ids, move(unbound_expressions), false, false, true);
-					storage->AddIndex(move(art), bound_expressions);
+					AddDataTableIndex(storage.get(), columns, bfk.info.fk_keys, false, false, true);
 				}
 			}
 		}
@@ -479,7 +468,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContex
 		}
 		create_info->constraints.push_back(move(constraint));
 	}
-	if (info.is_fk_add) {
+	if (info.type == AlterForeignKeyType::AFT_ADD) {
 		ForeignKeyInfo fk_info;
 		fk_info.type = ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE;
 		fk_info.schema = info.schema;

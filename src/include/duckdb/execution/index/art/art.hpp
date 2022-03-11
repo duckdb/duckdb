@@ -78,8 +78,6 @@ public:
 	unique_ptr<Node> tree;
 	//! True if machine is little endian
 	bool is_little_endian;
-	//! True if it is made by foreign key
-	bool is_foreign_key;
 
 public:
 	//! Initialize a scan on the index with the given expression and column ids
