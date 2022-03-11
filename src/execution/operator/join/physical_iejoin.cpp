@@ -1160,9 +1160,6 @@ OperatorResultType PhysicalIEJoin::Execute(ExecutionContext &context, DataChunk 
 //===--------------------------------------------------------------------===//
 class IEJoinGlobalSourceState : public GlobalSourceState {
 public:
-	using block_pair_t = std::pair<size_t, size_t>;
-	using block_queue_t = vector<block_pair_t>;
-
 	explicit IEJoinGlobalSourceState(const PhysicalIEJoin &op)
 	    : op(op), initialized(false), next_pair(0), left_outers(0), next_left(0), right_outers(0), next_right(0) {
 	}
@@ -1173,25 +1170,20 @@ public:
 			return;
 		}
 
-		// Create join pairs for all the blocks and compute the starting row for reach block
+		// Compute the starting row for reach block
 		// (In theory these are all the same size, but you never know...)
 		auto &left_table = *sink_state.tables[0];
 		const auto left_blocks = left_table.BlockCount();
 		idx_t left_base = 0;
 
-		auto &right_table = *sink_state.tables[1];
-		const auto right_blocks = right_table.BlockCount();
-		idx_t right_base = 0;
-
 		for (size_t lhs = 0; lhs < left_blocks; ++lhs) {
 			left_bases.emplace_back(left_base);
 			left_base += left_table.BlockSize(lhs);
-
-			for (size_t rhs = 0; rhs < right_blocks; ++rhs) {
-				block_pairs.emplace_back(block_pair_t(lhs, rhs));
-			}
 		}
 
+		auto &right_table = *sink_state.tables[1];
+		const auto right_blocks = right_table.BlockCount();
+		idx_t right_base = 0;
 		for (size_t rhs = 0; rhs < right_blocks; ++rhs) {
 			right_bases.emplace_back(right_base);
 			right_base += right_table.BlockSize(rhs);
@@ -1221,18 +1213,23 @@ public:
 		auto &left_table = *gstate.tables[0];
 		auto &right_table = *gstate.tables[1];
 
+		const auto left_blocks = left_table.BlockCount();
+		const auto right_blocks = right_table.BlockCount();
+		const auto pair_count = left_blocks * right_blocks;
+
 		// Regular block
 		const auto i = next_pair++;
-		if (i < block_pairs.size()) {
-			const auto p = block_pairs[i];
+		if (i < pair_count) {
+			const auto b1 = i / left_blocks;
+			const auto b2 = i % left_blocks;
 
-			lstate.left_block_index = p.first;
-			lstate.left_base = left_bases[p.first];
+			lstate.left_block_index = b1;
+			lstate.left_base = left_bases[b1];
 
-			lstate.right_block_index = p.second;
-			lstate.right_base = right_bases[p.second];
+			lstate.right_block_index = b2;
+			lstate.right_base = right_bases[b2];
 
-			lstate.joiner = make_unique<IEJoinUnion>(client, op, left_table, p.first, right_table, p.second);
+			lstate.joiner = make_unique<IEJoinUnion>(client, op, left_table, b1, right_table, b2);
 			return;
 		} else {
 			--next_pair;
@@ -1244,7 +1241,7 @@ public:
 		}
 
 		// Spin wait for regular blocks to finish(!)
-		while (completed < block_pairs.size()) {
+		while (completed < pair_count) {
 			continue;
 		}
 
@@ -1285,7 +1282,6 @@ public:
 	bool initialized;
 
 	// Join queue state
-	block_queue_t block_pairs;
 	std::atomic<size_t> next_pair;
 	std::atomic<size_t> completed;
 
