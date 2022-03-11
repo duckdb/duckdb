@@ -111,7 +111,6 @@ duckdb_list_arrow <- function(conn) {
 #' @param conn A DuckDB connection, created by `dbConnect()`.
 #' @param name The name for the virtual table that is registered
 #' @param path A (vector of) strings pointing to the files to be registered
-#' @param replace A boolean indicating whether a view should be replaced if existing
 #' @param binary_as_string Convert binary data to strings
 #' @return These functions are called for their side effect.
 #' @export

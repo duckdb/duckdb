@@ -17,8 +17,6 @@ duckdb_unregister_parquet(conn, name)
 \item{path}{A (vector of) strings pointing to the files to be registered}
 
 \item{binary_as_string}{Convert binary data to strings}
-
-\item{replace}{A boolean indicating whether a view should be replaced if existing}
 }
 \value{
 These functions are called for their side effect.
