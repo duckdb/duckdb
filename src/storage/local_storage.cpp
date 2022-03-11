@@ -72,8 +72,7 @@ void LocalTableStorage::Clear() {
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
-			indexes.push_back(make_unique<ART>(art.column_ids, move(unbound_expressions), art.IsUnique(),
-			                                   art.IsPrimary(), art.IsForeign()));
+			indexes.push_back(make_unique<ART>(art.column_ids, move(unbound_expressions), art.constraint_type));
 		}
 		return false;
 	});

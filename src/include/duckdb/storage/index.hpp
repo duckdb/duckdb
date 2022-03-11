@@ -34,7 +34,7 @@ enum IndexConstraintType : uint8_t {
 class Index {
 public:
 	Index(IndexType type, const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
-	      bool is_unique, bool is_primary, bool is_foreign_key = false);
+	      IndexConstraintType constraint_type);
 	virtual ~Index() = default;
 
 	//! The type of the index

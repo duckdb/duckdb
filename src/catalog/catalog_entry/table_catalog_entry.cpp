@@ -48,8 +48,8 @@ idx_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
 	return idx_t(entry->second);
 }
 
-void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, vector<idx_t> &keys, bool is_unique,
-                       bool is_primary, bool is_foreign) {
+void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, vector<idx_t> &keys,
+                       IndexConstraintType constraint_type) {
 	// fetch types and create expressions for the index from the columns
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> unbound_expressions;
@@ -65,7 +65,7 @@ void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, ve
 		column_ids.push_back(key);
 	}
 	// create an adaptive radix tree around the expressions
-	auto art = make_unique<ART>(column_ids, move(unbound_expressions), is_unique, is_primary, is_foreign);
+	auto art = make_unique<ART>(column_ids, move(unbound_expressions), constraint_type);
 	storage->AddIndex(move(art), bound_expressions);
 }
 
@@ -98,13 +98,17 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 			if (constraint->type == ConstraintType::UNIQUE) {
 				// unique constraint: create a unique index
 				auto &unique = (BoundUniqueConstraint &)*constraint;
-				AddDataTableIndex(storage.get(), columns, unique.keys, true, unique.is_primary_key, false);
+				IndexConstraintType constraint_type = IndexConstraintType::UNIQUE;
+				if (unique.is_primary_key) {
+					constraint_type = IndexConstraintType::PRIMARY;
+				}
+				AddDataTableIndex(storage.get(), columns, unique.keys, constraint_type);
 			} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
 				// foreign key constraint: create a foreign key index
 				auto &bfk = (BoundForeignKeyConstraint &)*constraint;
 				if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
 				    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
-					AddDataTableIndex(storage.get(), columns, bfk.info.fk_keys, false, false, true);
+					AddDataTableIndex(storage.get(), columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN);
 				}
 			}
 		}
