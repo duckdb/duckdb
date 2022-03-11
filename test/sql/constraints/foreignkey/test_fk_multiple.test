@@ -3,7 +3,7 @@
 # group: [foreignkey]
 
 statement ok
-CREATE TABLE pkt1(i1 INTEGER PRIMARY KEY, j1 INTEGER UNIQUE);
+CREATE TABLE pkt1(i1 INTEGER PRIMARY KEY CHECK(i1 < 3), j1 INTEGER UNIQUE);
 
 statement ok
 CREATE TABLE pkt2(i2 INTEGER PRIMARY KEY, j2 INTEGER UNIQUE);
@@ -13,6 +13,10 @@ CREATE TABLE fkt1(k1 INTEGER, l1 INTEGER, FOREIGN KEY(k1) REFERENCES pkt1(i1), F
 
 statement ok
 CREATE TABLE fkt2(k2 INTEGER, l2 INTEGER, FOREIGN KEY(k2) REFERENCES pkt1(j1), FOREIGN KEY(l2) REFERENCES pkt2(j2));
+
+# ensure the constraints are being correctly copied
+statement error
+INSERT INTO pkt1 VALUES (3, 11);
 
 statement ok
 INSERT INTO pkt1 VALUES (1, 11), (2, 12);
