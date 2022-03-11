@@ -948,7 +948,7 @@ public:
 	IEJoinLocalState local_left;
 };
 
-static void SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx, const idx_t entry_idx,
+static void SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,
                                const SelectionVector &result, const idx_t result_count, const idx_t left_cols = 0) {
 	// There should only be one sorted block if they have been sorted
 	D_ASSERT(state.sorted_blocks.size() == 1);
@@ -1000,9 +1000,8 @@ static void SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const
 
 class IEJoinLocalSourceState : public LocalSourceState {
 public:
-	explicit IEJoinLocalSourceState(const PhysicalIEJoin &op) : op(op) {
-		left_payload.Initialize(op.children[0]->GetTypes());
-		right_payload.Initialize(op.children[1]->GetTypes());
+	explicit IEJoinLocalSourceState(const PhysicalIEJoin &op)
+	    : op(op), true_sel(STANDARD_VECTOR_SIZE), left_matches(nullptr), right_matches(nullptr) {
 
 		if (op.conditions.size() < 3) {
 			return;
@@ -1022,26 +1021,35 @@ public:
 
 		left_keys.Initialize(left_types);
 		right_keys.Initialize(right_types);
-
-		true_sel.Initialize(STANDARD_VECTOR_SIZE);
 	}
 
 	idx_t SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right, const SelectionVector *sel,
 	                     idx_t count);
 
+	idx_t SelectOuterRows(bool *matches) {
+		idx_t count = 0;
+		for (; outer_idx < outer_count; ++outer_idx) {
+			if (!matches[outer_idx]) {
+				true_sel.set_index(count++, outer_idx);
+				if (count >= STANDARD_VECTOR_SIZE) {
+					break;
+				}
+			}
+		}
+
+		return count;
+	}
+
 	const PhysicalIEJoin &op;
 
+	// Joining
 	unique_ptr<IEJoinUnion> joiner;
 
 	idx_t left_base;
 	idx_t left_block_index;
-	unique_ptr<PayloadScanner> left_scanner;
-	DataChunk left_payload;
 
 	idx_t right_base;
 	idx_t right_block_index;
-	unique_ptr<PayloadScanner> right_scanner;
-	DataChunk right_payload;
 
 	// Trailing predicates
 	SelectionVector true_sel;
@@ -1051,6 +1059,12 @@ public:
 
 	ExpressionExecutor right_executor;
 	DataChunk right_keys;
+
+	// Outer joins
+	idx_t outer_idx;
+	idx_t outer_count;
+	bool *left_matches;
+	bool *right_matches;
 };
 
 idx_t IEJoinLocalSourceState::SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
@@ -1094,8 +1108,8 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &ch
 		} else {
 			// found matches: extract them
 			chunk.Reset();
-			SliceSortedPayload(chunk, left_table.global_sort_state, state.left_block_index, 0, lsel, result_count, 0);
-			SliceSortedPayload(chunk, right_table.global_sort_state, state.right_block_index, 0, rsel, result_count,
+			SliceSortedPayload(chunk, left_table.global_sort_state, state.left_block_index, lsel, result_count, 0);
+			SliceSortedPayload(chunk, right_table.global_sort_state, state.right_block_index, rsel, result_count,
 			                   left_cols);
 			chunk.SetCardinality(result_count);
 
@@ -1251,9 +1265,12 @@ public:
 			lstate.left_block_index = l;
 			lstate.left_base = left_bases[l];
 
-			lstate.left_scanner = make_unique<PayloadScanner>(left_table.global_sort_state, l);
+			lstate.left_matches = left_table.found_match.get() + lstate.left_base;
+			lstate.outer_idx = 0;
+			lstate.outer_count = left_table.BlockSize(l);
 			return;
 		} else {
+			lstate.left_matches = nullptr;
 			--next_left;
 		}
 
@@ -1261,11 +1278,14 @@ public:
 		const auto r = next_right++;
 		if (r < right_outers) {
 			lstate.right_block_index = r;
-			lstate.right_base = right_bases[l];
+			lstate.right_base = right_bases[r];
 
-			lstate.right_scanner = make_unique<PayloadScanner>(right_table.global_sort_state, r);
+			lstate.right_matches = right_table.found_match.get() + lstate.right_base;
+			lstate.outer_idx = 0;
+			lstate.outer_count = right_table.BlockSize(r);
 			return;
 		} else {
+			lstate.right_matches = nullptr;
 			--next_right;
 		}
 	}
@@ -1346,43 +1366,49 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 	}
 
 	// Process LEFT OUTER results
-	auto found_match = ie_sink.tables[0]->found_match.get();
-	while (ie_lstate.left_scanner) {
-		ie_lstate.left_payload.Reset();
-		ie_lstate.left_scanner->Scan(ie_lstate.left_payload);
-		const auto count = ie_lstate.left_payload.size();
-		if (count == 0) {
-			ie_lstate.left_scanner.reset();
+	const auto left_cols = children[0]->GetTypes().size();
+	while (ie_lstate.left_matches) {
+		const idx_t count = ie_lstate.SelectOuterRows(ie_lstate.left_matches);
+		if (!count) {
 			ie_gstate.GetNextPair(context.client, ie_sink, ie_lstate);
 			continue;
 		}
 
-		ConstructLeftJoinResult(ie_lstate.left_payload, result, found_match + ie_lstate.left_base);
-		ie_lstate.left_base += count;
+		SliceSortedPayload(result, ie_sink.tables[0]->global_sort_state, ie_lstate.left_base, ie_lstate.true_sel,
+		                   count);
 
-		if (result.size()) {
-			return;
+		// Fill in NULLs to the right
+		for (auto col_idx = left_cols; col_idx < result.ColumnCount(); ++col_idx) {
+			result.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(result.data[col_idx], true);
 		}
+
+		result.SetCardinality(count);
+		result.Verify();
+
+		return;
 	}
 
 	// Process RIGHT OUTER results
-	found_match = ie_sink.tables[1]->found_match.get();
-	while (ie_lstate.right_scanner) {
-		ie_lstate.right_payload.Reset();
-		ie_lstate.right_scanner->Scan(ie_lstate.right_payload);
-		const auto count = ie_lstate.right_payload.size();
-		if (count == 0) {
-			ie_lstate.right_scanner.reset();
+	while (ie_lstate.right_matches) {
+		const idx_t count = ie_lstate.SelectOuterRows(ie_lstate.right_matches);
+		if (!count) {
 			ie_gstate.GetNextPair(context.client, ie_sink, ie_lstate);
-			continue;
 		}
 
-		ConstructRightJoinResult(ie_lstate.right_payload, result, found_match + ie_lstate.right_base);
-		ie_lstate.right_base += count;
+		SliceSortedPayload(result, ie_sink.tables[1]->global_sort_state, ie_lstate.right_base, ie_lstate.true_sel,
+		                   count, left_cols);
 
-		if (result.size()) {
-			return;
+		// Fill in NULLs to the left
+		for (idx_t col_idx = 0; col_idx < left_cols; ++col_idx) {
+			result.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(result.data[col_idx], true);
 		}
+
+		result.SetCardinality(count);
+		result.Verify();
+
+		return;
 	}
 }
 
