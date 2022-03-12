@@ -6,7 +6,7 @@ statement ok
 CREATE TABLE pkt1(i1 INTEGER PRIMARY KEY CHECK(i1 < 3), j1 INTEGER UNIQUE);
 
 statement ok
-CREATE TABLE pkt2(i2 INTEGER PRIMARY KEY, j2 INTEGER UNIQUE);
+CREATE TABLE pkt2(i2 INTEGER PRIMARY KEY, j2 INTEGER UNIQUE CHECK (j2 > 1000));
 
 statement ok
 CREATE TABLE fkt1(k1 INTEGER, l1 INTEGER, FOREIGN KEY(k1) REFERENCES pkt1(i1), FOREIGN KEY(l1) REFERENCES pkt2(i2));
@@ -18,6 +18,10 @@ CREATE TABLE fkt2(k2 INTEGER, l2 INTEGER, FOREIGN KEY(k2) REFERENCES pkt1(j1), F
 statement error
 INSERT INTO pkt1 VALUES (3, 11);
 
+statement error
+INSERT INTO pkt2 VALUES (101, 1000);
+
+# test multiple foreign key constraints
 statement ok
 INSERT INTO pkt1 VALUES (1, 11), (2, 12);
 
