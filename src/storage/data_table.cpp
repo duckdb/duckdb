@@ -491,7 +491,7 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 	err_msgs.resize(count);
 	tran_err_msgs.resize(count);
 
-	//! check whether or not the chunk can be inserted into the referenced table
+	// check whether or not the chunk can be inserted or deleted into the referenced table' storage
 	TableIndexList &table_indices = data_table->info->indexes;
 	table_indices.Scan([&](Index &index) {
 		if (FindColumnIndex(dst_keys_ptr, index.column_ids)) {
@@ -504,6 +504,7 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 		return false;
 	});
 
+	// check whether or not the chunk can be inserted or deleted into the referenced table' transaction local storage
 	auto &transaction = Transaction::GetTransaction(context);
 	bool transaction_check = transaction.storage.Find(data_table);
 	if (transaction_check) {
@@ -519,6 +520,7 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 		}
 	}
 
+	// we need to look at the error messages concurrently in data table's index and transaction local storage's index
 	for (idx_t i = 0; i < count; i++) {
 		if ((!transaction_check && !err_msgs[i].empty()) ||
 		    (transaction_check && ((is_append && !err_msgs[i].empty() && !tran_err_msgs[i].empty()) ||
