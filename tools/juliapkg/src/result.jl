@@ -172,11 +172,10 @@ function convert_vector_list(column_data::ColumnConversionData, vector::Vec, siz
 	return size
 end
 
-function convert_vector_struct(column_data::ColumnConversionData, vector::Vec, size::UInt64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
-	child_count = GetStructChildCount(column_data.logical_type)
+function convert_struct_children(column_data::ColumnConversionData, vector::Vec, size::UInt64)
 	# convert the child vectors of the struct
+	child_count = GetStructChildCount(column_data.logical_type)
 	child_arrays = Vector()
-# 	println(column_data.conversion_data)
 	for i in 1:child_count
 		child_vector = StructChild(vector, i)
 		ldata = column_data.conversion_data.child_conversion_data[i]
@@ -186,6 +185,13 @@ function convert_vector_struct(column_data::ColumnConversionData, vector::Vec, s
 		ldata.conversion_loop_func(child_column_data, child_vector, size, ldata.conversion_func, child_array, 1, false, ldata.internal_type, ldata.target_type)
 		push!(child_arrays, child_array)
 	end
+	return child_arrays
+end
+
+
+function convert_vector_struct(column_data::ColumnConversionData, vector::Vec, size::UInt64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
+	child_count = GetStructChildCount(column_data.logical_type)
+	child_arrays = convert_struct_children(column_data, vector, size)
 
 	if !all_valid
 		validity = GetValidity(vector)
@@ -197,6 +203,28 @@ function convert_vector_struct(column_data::ColumnConversionData, vector::Vec, s
 				push!(result_tuple, child_arrays[child_idx][i])
 			end
 			result[position] = NamedTuple{column_data.conversion_data.tuple_type}(result_tuple)
+		end
+		position += 1
+	end
+	return size
+end
+
+function convert_vector_map(column_data::ColumnConversionData, vector::Vec, size::UInt64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
+	child_arrays = convert_struct_children(column_data, vector, size)
+	keys = child_arrays[1]
+	values = child_arrays[2]
+
+	if !all_valid
+		validity = GetValidity(vector)
+	end
+	for i in 1:size
+		if all_valid || IsValid(validity, i)
+			result_dict = Dict()
+			key_count = length(keys[i])
+			for key_idx in 1:key_count
+				result_dict[keys[i][key_idx]] = values[i][key_idx]
+			end
+			result[position] = result_dict
 		end
 		position += 1
 	end
@@ -251,7 +279,7 @@ function init_conversion_loop(logical_type::LogicalType)
 	elseif type == DUCKDB_TYPE_LIST
 		child_type = GetListChildType(logical_type)
 		return create_child_conversion_data(child_type)
-	elseif type == DUCKDB_TYPE_STRUCT
+	elseif type == DUCKDB_TYPE_STRUCT || type == DUCKDB_TYPE_MAP
 		child_count = GetStructChildCount(logical_type)
 		child_symbols::Vector{Symbol} = Vector()
 		child_data::Vector{ListConversionData} = Vector()
@@ -314,6 +342,8 @@ function get_conversion_loop_function(logical_type::LogicalType)::Function
 		return convert_vector_list
 	elseif type == DUCKDB_TYPE_STRUCT
 		return convert_vector_struct
+	elseif type == DUCKDB_TYPE_MAP
+		return convert_vector_map
 	else
 		return convert_vector
 	end

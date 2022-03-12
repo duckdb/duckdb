@@ -165,7 +165,8 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_BLOB => duckdb_string_t,
     DUCKDB_TYPE_UUID => duckdb_hugeint,
     DUCKDB_TYPE_LIST => duckdb_list_entry_t,
-    DUCKDB_TYPE_STRUCT => Cvoid
+    DUCKDB_TYPE_STRUCT => Cvoid,
+    DUCKDB_TYPE_MAP => Cvoid
 )
 
 JULIA_TYPE_MAP = Dict(
@@ -193,7 +194,8 @@ JULIA_TYPE_MAP = Dict(
 	DUCKDB_TYPE_UUID => UUID,
 	DUCKDB_TYPE_VARCHAR => AbstractString,
 	DUCKDB_TYPE_ENUM => AbstractString,
-	DUCKDB_TYPE_BLOB => Base.CodeUnits{UInt8, String}
+	DUCKDB_TYPE_BLOB => Base.CodeUnits{UInt8, String},
+	DUCKDB_TYPE_MAP => Dict
 )
 
 # convert a DuckDB type into Julia equivalent

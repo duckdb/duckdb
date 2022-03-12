@@ -124,7 +124,7 @@ idx_t duckdb_struct_type_child_count(duckdb_logical_type type) {
 		return 0;
 	}
 	auto &ltype = *((duckdb::LogicalType *) type);
-	if (ltype.id() != duckdb::LogicalTypeId::STRUCT) {
+	if (ltype.InternalType() != duckdb::PhysicalType::STRUCT) {
 		return 0;
 	}
 	return duckdb::StructType::GetChildCount(ltype);
@@ -135,7 +135,7 @@ char* duckdb_struct_type_child_name(duckdb_logical_type type, idx_t index) {
 		return nullptr;
 	}
 	auto &ltype = *((duckdb::LogicalType *) type);
-	if (ltype.id() != duckdb::LogicalTypeId::STRUCT) {
+	if (ltype.InternalType() != duckdb::PhysicalType::STRUCT) {
 		return nullptr;
 	}
 	return strdup(duckdb::StructType::GetChildName(ltype, index).c_str());
@@ -146,7 +146,7 @@ duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_
 		return nullptr;
 	}
 	auto &ltype = *((duckdb::LogicalType *) type);
-	if (ltype.id() != duckdb::LogicalTypeId::STRUCT) {
+	if (ltype.InternalType() != duckdb::PhysicalType::STRUCT) {
 		return nullptr;
 	}
 	return new duckdb::LogicalType(duckdb::StructType::GetChildType(ltype, index));
