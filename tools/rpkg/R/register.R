@@ -111,21 +111,33 @@ duckdb_list_arrow <- function(conn) {
 #' @param conn A DuckDB connection, created by `dbConnect()`.
 #' @param name The name for the virtual table that is registered
 #' @param path A (vector of) strings pointing to the files to be registered
-#' @param binary_as_string Convert binary data to strings
+#' @param binary_as_string Convert binary data to strings (boolean)
+#' @param replace Replace view if it is already existing (boolean)
+#' @param temporary Do not save view to the catalog permanently (boolean)
 #' @return These functions are called for their side effect.
 #' @export
-duckdb_register_parquet <- function(conn, name, path, binary_as_string = FALSE) {
+duckdb_register_parquet <- function(conn, name, path, binary_as_string = FALSE, replace = FALSE, temporary = FALSE) {
   stopifnot(DBI::dbIsValid(conn))
-  rapi_register_parquet(conn@conn_ref, enc2utf8(as.character(name)), path, binary_as_string)
+  if (grepl(".", name, fixed = TRUE)) stop("Schemas not allowed!", call. = TRUE)
+  rapi_register_parquet(conn@conn_ref, enc2utf8(as.character(name)), path, binary_as_string, replace, temporary)
+  if (temporary) {
+    if (name %in% DBI::dbGetQuery(conn, "SELECT table_name FROM information_schema.tables WHERE table_schema='main'")) {
+      warning("Created temporary view masks another table/view with the same name from the main schema!", call. = TRUE)
+    }
+  }
   invisible(TRUE)
 }
 
 #' @rdname duckdb_register_parquet
+#' @param if_exists Do not throw error if no view with given name is found (boolean)
 #' @export
-duckdb_unregister_parquet <- function(conn, name) {
-  stopifnot(dbIsValid(conn))
+duckdb_unregister_parquet <- function(conn, name, if_exists = FALSE) {
+  stopifnot(DBI::dbIsValid(conn))
+  exists <- ""
+  if (if_exists) exists <- "IF EXISTS "
   query <- paste0(
-    "DROP VIEW IF EXISTS ",
+    "DROP VIEW ",
+    exists,
     enc2utf8(as.character(name)),
     ";",
     collapse = " "

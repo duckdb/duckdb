@@ -5,9 +5,16 @@
 \alias{duckdb_unregister_parquet}
 \title{Register Parquet file(s) as a virtual table}
 \usage{
-duckdb_register_parquet(conn, name, path, binary_as_string = FALSE)
+duckdb_register_parquet(
+  conn,
+  name,
+  path,
+  binary_as_string = FALSE,
+  replace = FALSE,
+  temporary = FALSE
+)
 
-duckdb_unregister_parquet(conn, name)
+duckdb_unregister_parquet(conn, name, if_exists = FALSE)
 }
 \arguments{
 \item{conn}{A DuckDB connection, created by \code{dbConnect()}.}
@@ -16,7 +23,13 @@ duckdb_unregister_parquet(conn, name)
 
 \item{path}{A (vector of) strings pointing to the files to be registered}
 
-\item{binary_as_string}{Convert binary data to strings}
+\item{binary_as_string}{Convert binary data to strings (boolean)}
+
+\item{replace}{Replace view if it is already existing (boolean)}
+
+\item{temporary}{Do not save view to the catalog permanently (boolean)}
+
+\item{if_exists}{Do not throw error if no view with given name is found (boolean)}
 }
 \value{
 These functions are called for their side effect.

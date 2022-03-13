@@ -239,7 +239,7 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(const string &table_na
 }
 
 [[cpp11::register]] void rapi_register_parquet(duckdb::conn_eptr_t conn, std::string name, std::string path,
-                                               bool binary_as_string) {
+                                               bool binary_as_string, bool replace, bool temporary) {
 	if (!conn || !conn->conn) {
 		cpp11::stop("rapi_register_parquet: Invalid connection");
 	}
@@ -250,7 +250,7 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(const string &table_na
 	params.emplace_back(path);
 	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
 	try {
-		conn->conn->TableFunction("parquet_scan", params, named_parameters)->CreateView(name, true, true);
+		conn->conn->TableFunction("parquet_scan", params, named_parameters)->CreateView(name, replace, temporary);
 	} catch (std::exception &e) {
 		cpp11::stop("rapi_register_parquet: Failed to register parquet: %s", e.what());
 	}
