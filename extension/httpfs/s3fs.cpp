@@ -95,116 +95,6 @@ static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(Heade
 	return headers;
 }
 
-static string listobjectsv2_request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
-                                    string &continuation_token, bool use_delimiter = false) {
-
-	// Parse the query shared_path
-	string shared_path_host, shared_path_http_proto, shared_path_path, shared_path_query_param;
-	S3FileSystem::S3UrlParse(path, s3_auth_params.endpoint, s3_auth_params.use_ssl, shared_path_host,
-	                         shared_path_http_proto, shared_path_path, shared_path_query_param);
-
-	// Construct the ListObjectsV2 call
-	auto result_offset = 0;
-	auto req_path = "/";
-
-	string req_params = "?encoding-type=url&list-type=2&continuation-token=" + continuation_token + "&prefix=";
-	req_params += S3FileSystem::UrlEncode(shared_path_path.substr(1), true);
-
-	if (use_delimiter) {
-		req_params += "&delimiter=%2F";
-	}
-
-	string listobjectv2_url = /*shared_path_http_proto*/ "http://" + shared_path_host + req_path + req_params;
-	auto header_map =
-	    create_s3_header(req_path, req_params.substr(1), shared_path_host, "s3", "GET", s3_auth_params, "", "", "", "");
-	auto headers = initialize_http_headers(header_map);
-
-	auto client = S3FileSystem::GetClient(
-	    http_params, (shared_path_http_proto + shared_path_host).c_str()); // Get requests use fresh connection
-	std::stringstream response;
-	auto res = client->Get(
-	    listobjectv2_url.c_str(), *headers,
-	    [&](const duckdb_httplib_openssl::Response &response) {
-		    if (response.status >= 400) {
-			    std::cout << response.reason << std::endl;
-			    throw std::runtime_error("HTTP GET error on '" + listobjectv2_url + "' (HTTP " +
-			                             std::to_string(response.status) + ")");
-		    }
-		    return true;
-	    },
-	    [&](const char *data, size_t data_length) {
-		    response << string(data, data_length);
-		    return true;
-	    });
-	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP GET error on '" + listobjectv2_url + "' (Error code " +
-		                         std::to_string((int)res.error()) + ")");
-	}
-
-	return response.str();
-}
-
-// Parse the s3 keys from the ListObjectsV2 call
-static void parse_keys(string& aws_response, vector<string> &result) {
-	idx_t cur_pos = 0;
-	while (true) {
-		auto next_open_tag_pos = aws_response.find("<Key>", cur_pos);
-		if (next_open_tag_pos == string::npos) {
-			break;
-		} else {
-			auto next_close_tag_pos = aws_response.find("</Key>", next_open_tag_pos + 5);
-			if (next_close_tag_pos == string::npos) {
-				throw InternalException("Failed to parse S3 result");
-			}
-			auto parsed_path = aws_response.substr(next_open_tag_pos + 5, next_close_tag_pos - next_open_tag_pos - 5);
-			if (parsed_path.back() != '/') {
-				result.push_back(parsed_path);
-			}
-			cur_pos = next_close_tag_pos + 6;
-		}
-	}
-}
-
-// Parse the continuation token from the ListObjectsV2 call
-static string parse_continuation_token(string& aws_response) {
-
-	auto open_tag_pos = aws_response.find("<NextContinuationToken>");
-	if (open_tag_pos == string::npos) {
-		return "";
-	} else {
-		auto close_tag_pos = aws_response.find("</NextContinuationToken>", open_tag_pos + 23);
-		if (close_tag_pos == string::npos) {
-			throw InternalException("Failed to parse S3 result");
-		}
-		return aws_response.substr(open_tag_pos + 23, close_tag_pos - open_tag_pos - 23);
-	}
-}
-
-// Parse the common prefixes from the ListObjectsV2 call
-static vector<string> parse_common_prefixes(string& aws_response) {
-	vector<string> s3_prefixes;
-	idx_t cur_pos = 0;
-	while (true) {
-		cur_pos = aws_response.find("<CommonPrefixes>", cur_pos);
-		if (cur_pos == string::npos) {
-			break;
-		}
-		auto next_open_tag_pos = aws_response.find("<Prefix>", cur_pos);
-		if (next_open_tag_pos == string::npos) {
-			throw InternalException("Parsing error while parsing s3 listobject result");
-		} else {
-			auto next_close_tag_pos = aws_response.find("</Prefix>", next_open_tag_pos + 8);
-			if (next_close_tag_pos == string::npos) {
-				throw InternalException("Failed to parse S3 result");
-			}
-			auto parsed_path = aws_response.substr(next_open_tag_pos + 8, next_close_tag_pos - next_open_tag_pos - 8);
-			s3_prefixes.push_back(parsed_path);
-			cur_pos = next_close_tag_pos + 6;
-		}
-	}
-	return s3_prefixes;
-}
-
 std::string S3FileSystem::UrlEncode(const std::string &input, bool encode_slash) {
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 	static const char *hex_digit = "0123456789ABCDEF";
@@ -225,78 +115,6 @@ std::string S3FileSystem::UrlEncode(const std::string &input, bool encode_slash)
 			result += std::string("%");
 			result += hex_digit[static_cast<unsigned char>(ch) >> 4];
 			result += hex_digit[static_cast<unsigned char>(ch) & 15];
-		}
-	}
-	return result;
-}
-
-vector<string> S3FileSystem::Glob(const string &path, ClientContext *context) {
-	if (context == nullptr) {
-		throw InternalException("Cannot S3 Glob without context");
-	}
-	// AWS matches on prefix, not glob pattern so we take a substring until the first wildcard char for the aws calls
-	auto first_star_pos = path.find_first_of("*?[\\");
-	if (first_star_pos == string::npos) {
-		return {path};
-	}
-	string shared_path = path.substr(0, first_star_pos);
-	string match_path = path.substr(first_star_pos + 1);
-
-	auto opener = FileSystem::GetFileOpener(*context);
-	auto s3_auth_params = S3AuthParams::ReadFrom(opener);
-	auto http_params = HTTPParams::ReadFrom(opener);
-
-	// Parse request
-	string full_path_host, full_path_http_proto, full_path_path, full_path_query_param;
-	S3UrlParse(path, s3_auth_params.endpoint, s3_auth_params.use_ssl, full_path_host, full_path_http_proto,
-	           full_path_path, full_path_query_param);
-	auto bucket = full_path_host.substr(0, full_path_host.find('.'));
-
-	// Do main listobjectsv2 request
-	vector<string> s3_keys;
-	string main_continuation_token = "";
-
-	// Main paging loop
-	do {
-		// main listobject call, may
-		string response_str = listobjectsv2_request(shared_path, http_params, s3_auth_params, main_continuation_token);
-		main_continuation_token = parse_continuation_token(response_str);
-		parse_keys(response_str, s3_keys);
-
-		// Repeat requests until the keys of all common prefixes are parsed.
-		auto common_prefixes = parse_common_prefixes(response_str);
-		while (!common_prefixes.empty()) {
-			auto prefix_path = "s3://" + bucket + '/' + common_prefixes.back();
-			common_prefixes.pop_back();
-			// TODO we could optimize here by doing a match on the prefix, if it doesn't match we can skip the request
-
-			// Paging loop for common prefix requests
-			string common_prefix_continuation_token = "";
-			do {
-				auto prefix_res =
-				    listobjectsv2_request(prefix_path, http_params, s3_auth_params, common_prefix_continuation_token);
-				parse_keys(prefix_res, s3_keys);
-				auto more_prefixes = parse_common_prefixes(prefix_res);
-				common_prefixes.insert(common_prefixes.end(), more_prefixes.begin(), more_prefixes.end());
-				common_prefix_continuation_token = parse_continuation_token(prefix_res);
-			} while (!common_prefix_continuation_token.empty());
-		}
-	} while (!main_continuation_token.empty());
-
-	vector<string> result;
-	for (const auto &s3_key : s3_keys) {
-
-		auto pattern_trimmed = full_path_path.substr(1);
-
-		// dis shit hacky
-		if (full_path_query_param != "") {
-			pattern_trimmed += '?' + full_path_query_param;
-		}
-		auto is_match = LikeFun::Glob(s3_key.data(), s3_key.length(), pattern_trimmed.data(), pattern_trimmed.length());
-
-		if (is_match) {
-			auto result_full_url = "s3://" + bucket + "/" + s3_key;
-			result.push_back(result_full_url);
 		}
 	}
 	return result;
@@ -902,6 +720,186 @@ void S3FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx
 		s3fh.file_offset += bytes_to_write;
 		bytes_written += bytes_to_write;
 	}
+}
+
+vector<string> S3FileSystem::Glob(const string &glob_pattern, ClientContext *context) {
+	if (context == nullptr) {
+		throw InternalException("Cannot S3 Glob without context");
+	}
+	// AWS matches on prefix, not glob pattern so we take a substring until the first wildcard char for the aws calls
+	auto first_wildcard_pos = glob_pattern.find_first_of("*?[\\");
+	if (first_wildcard_pos == string::npos) {
+		return {glob_pattern};
+	}
+	string shared_path = glob_pattern.substr(0, first_wildcard_pos);
+
+	auto opener = FileSystem::GetFileOpener(*context);
+	auto s3_auth_params = S3AuthParams::ReadFrom(opener);
+	auto http_params = HTTPParams::ReadFrom(opener);
+
+	// Parse pattern
+	string parsed_host, parsed_proto, parsed_path, parsed_query_param;
+	S3UrlParse(glob_pattern, s3_auth_params.endpoint, s3_auth_params.use_ssl, parsed_host, parsed_proto, parsed_path,
+	           parsed_query_param);
+	auto bucket = parsed_host.substr(0, parsed_host.find('.'));
+
+	// Do main listobjectsv2 request
+	vector<string> s3_keys;
+	string main_continuation_token = "";
+
+	// Main paging loop
+	do {
+		// main listobject call, may
+		string response_str =
+		    AWSListObjectV2::Request(shared_path, http_params, s3_auth_params, main_continuation_token);
+		main_continuation_token = AWSListObjectV2::ParseContinuationToken(response_str);
+		AWSListObjectV2::ParseKey(response_str, s3_keys);
+
+		// Repeat requests until the keys of all common prefixes are parsed.
+		auto common_prefixes = AWSListObjectV2::ParseCommonPrefix(response_str);
+		while (!common_prefixes.empty()) {
+			auto prefix_path = "s3://" + bucket + '/' + common_prefixes.back();
+			common_prefixes.pop_back();
+
+			// TODO we could optimize here by doing a match on the prefix, if it doesn't match we can skip this prefix
+
+			// Paging loop for common prefix requests
+			string common_prefix_continuation_token = "";
+			do {
+				auto prefix_res = AWSListObjectV2::Request(prefix_path, http_params, s3_auth_params,
+				                                           common_prefix_continuation_token);
+				AWSListObjectV2::ParseKey(prefix_res, s3_keys);
+				auto more_prefixes = AWSListObjectV2::ParseCommonPrefix(prefix_res);
+				common_prefixes.insert(common_prefixes.end(), more_prefixes.begin(), more_prefixes.end());
+				common_prefix_continuation_token = AWSListObjectV2::ParseContinuationToken(prefix_res);
+			} while (!common_prefix_continuation_token.empty());
+		}
+	} while (!main_continuation_token.empty());
+
+	vector<string> result;
+	for (const auto &s3_key : s3_keys) {
+
+		auto pattern_trimmed = parsed_path.substr(1);
+
+		// if a ? char was present, we re-add it here as the url parsing will have trimmed it.
+		if (parsed_query_param != "") {
+			pattern_trimmed += '?' + parsed_query_param;
+		}
+		auto is_match = LikeFun::Glob(s3_key.data(), s3_key.length(), pattern_trimmed.data(), pattern_trimmed.length());
+
+		if (is_match) {
+			auto result_full_url = "s3://" + bucket + "/" + s3_key;
+			result.push_back(result_full_url);
+		}
+	}
+	return result;
+}
+
+string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
+                                string &continuation_token, bool use_delimiter) {
+
+	// Parse the query shared_path
+	string shared_path_host, shared_path_http_proto, shared_path_path, shared_path_query_param;
+	S3FileSystem::S3UrlParse(path, s3_auth_params.endpoint, s3_auth_params.use_ssl, shared_path_host,
+	                         shared_path_http_proto, shared_path_path, shared_path_query_param);
+
+	// Construct the ListObjectsV2 call
+	auto result_offset = 0;
+	auto req_path = "/";
+
+	string req_params = "?encoding-type=url&list-type=2&continuation-token=" + continuation_token + "&prefix=";
+	req_params += S3FileSystem::UrlEncode(shared_path_path.substr(1), true);
+
+	if (use_delimiter) {
+		req_params += "&delimiter=%2F";
+	}
+
+	string listobjectv2_url = shared_path_http_proto + shared_path_host + req_path + req_params;
+	auto header_map =
+	    create_s3_header(req_path, req_params.substr(1), shared_path_host, "s3", "GET", s3_auth_params, "", "", "", "");
+	auto headers = initialize_http_headers(header_map);
+
+	auto client = S3FileSystem::GetClient(
+	    http_params, (shared_path_http_proto + shared_path_host).c_str()); // Get requests use fresh connection
+	std::stringstream response;
+	auto res = client->Get(
+	    listobjectv2_url.c_str(), *headers,
+	    [&](const duckdb_httplib_openssl::Response &response) {
+		    if (response.status >= 400) {
+			    std::cout << response.reason << std::endl;
+			    throw std::runtime_error("HTTP GET error on '" + listobjectv2_url + "' (HTTP " +
+			                             std::to_string(response.status) + ")");
+		    }
+		    return true;
+	    },
+	    [&](const char *data, size_t data_length) {
+		    response << string(data, data_length);
+		    return true;
+	    });
+	if (res.error() != duckdb_httplib_openssl::Error::Success) {
+		throw std::runtime_error("HTTP GET error on '" + listobjectv2_url + "' (Error code " +
+		                         std::to_string((int)res.error()) + ")");
+	}
+
+	return response.str();
+}
+
+void AWSListObjectV2::ParseKey(string &aws_response, vector<string> &result) {
+	idx_t cur_pos = 0;
+	while (true) {
+		auto next_open_tag_pos = aws_response.find("<Key>", cur_pos);
+		if (next_open_tag_pos == string::npos) {
+			break;
+		} else {
+			auto next_close_tag_pos = aws_response.find("</Key>", next_open_tag_pos + 5);
+			if (next_close_tag_pos == string::npos) {
+				throw InternalException("Failed to parse S3 result");
+			}
+			auto parsed_path = aws_response.substr(next_open_tag_pos + 5, next_close_tag_pos - next_open_tag_pos - 5);
+			if (parsed_path.back() != '/') {
+				result.push_back(parsed_path);
+			}
+			cur_pos = next_close_tag_pos + 6;
+		}
+	}
+}
+
+string AWSListObjectV2::ParseContinuationToken(string &aws_response) {
+
+	auto open_tag_pos = aws_response.find("<NextContinuationToken>");
+	if (open_tag_pos == string::npos) {
+		return "";
+	} else {
+		auto close_tag_pos = aws_response.find("</NextContinuationToken>", open_tag_pos + 23);
+		if (close_tag_pos == string::npos) {
+			throw InternalException("Failed to parse S3 result");
+		}
+		return aws_response.substr(open_tag_pos + 23, close_tag_pos - open_tag_pos - 23);
+	}
+}
+
+vector<string> AWSListObjectV2::ParseCommonPrefix(string &aws_response) {
+	vector<string> s3_prefixes;
+	idx_t cur_pos = 0;
+	while (true) {
+		cur_pos = aws_response.find("<CommonPrefixes>", cur_pos);
+		if (cur_pos == string::npos) {
+			break;
+		}
+		auto next_open_tag_pos = aws_response.find("<Prefix>", cur_pos);
+		if (next_open_tag_pos == string::npos) {
+			throw InternalException("Parsing error while parsing s3 listobject result");
+		} else {
+			auto next_close_tag_pos = aws_response.find("</Prefix>", next_open_tag_pos + 8);
+			if (next_close_tag_pos == string::npos) {
+				throw InternalException("Failed to parse S3 result");
+			}
+			auto parsed_path = aws_response.substr(next_open_tag_pos + 8, next_close_tag_pos - next_open_tag_pos - 8);
+			s3_prefixes.push_back(parsed_path);
+			cur_pos = next_close_tag_pos + 6;
+		}
+	}
+	return s3_prefixes;
 }
 
 } // namespace duckdb

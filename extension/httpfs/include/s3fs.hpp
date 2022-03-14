@@ -151,7 +151,7 @@ public:
 	// Note: caller is responsible to not call this method twice on the same buffer
 	static void UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer);
 
-	vector<string> Glob(const string &path, ClientContext *context = nullptr) override;
+	vector<string> Glob(const string &glob_pattern, ClientContext *context = nullptr) override;
 
 protected:
 	std::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
@@ -163,5 +163,14 @@ protected:
 	// Allocate an S3WriteBuffer
 	// Note: call may block if no buffers are available or if the buffer manager fails to allocate more memory.
 	std::shared_ptr<S3WriteBuffer> GetBuffer(S3FileHandle &file_handle, uint16_t write_buffer_idx);
+};
+
+// Helper class to do s3 ListObjectV2 api call https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+struct AWSListObjectV2 {
+	static string Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
+	                      string &continuation_token, bool use_delimiter = false);
+	static void ParseKey(string &aws_response, vector<string> &result);
+	static vector<string> ParseCommonPrefix(string &aws_response);
+	static string ParseContinuationToken(string &aws_response);
 };
 } // namespace duckdb
