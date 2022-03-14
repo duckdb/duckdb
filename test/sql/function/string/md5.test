@@ -11,6 +11,24 @@ select md5('hello'), md5(NULL)
 5d41402abc4b2a76b9719d911017c592
 NULL
 
+query II
+select md5_number('hello'), md5_number_upper(NULL)
+----
+-145191729247072235933599665601768308387
+NULL
+
+query II
+select md5_number_upper('hello'), md5_number_upper(NULL)
+----
+8514701317032132957
+NULL
+
+query II
+select md5_number_lower('hello'), md5_number_lower(NULL)
+----
+10575884659879408057
+NULL
+
 statement ok
 CREATE TABLE strings AS SELECT s::VARCHAR s FROM generate_series(0,10,1) t(s)
 
