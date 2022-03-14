@@ -215,9 +215,9 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		}
 
 		binder->bind_context.AddGenericBinding(update->table_index, table->name, names, types);
-		UpdateBinder update_binder(*binder, context);
+		ReturningBinder returning_binder(*binder, context);
 
-		unique_ptr<LogicalOperator> update_as_logicaloperator = move(update);
+		unique_ptr<LogicalOperator> returning_as_logicaloperator = move(update);
 
 		auto projection_expressions = vector<unique_ptr<Expression>>();
 		LogicalType result_type;
@@ -229,24 +229,25 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 				                                                  generated_star_list);
 
 				for (auto &star_column : generated_star_list) {
-					auto star_expr = update_binder.Bind(star_column, &result_type);
+					auto star_expr = returning_binder.Bind(star_column, &result_type);
 					result.types.push_back(result_type);
-					result.names.push_back(star_expr->ToString());
+					result.names.push_back(star_expr->GetName());
 					projection_expressions.push_back(move(star_expr));
 				}
 			} else {
-				auto expr = update_binder.Bind(returning_expr, &result_type);
-				result.names.push_back(expr->ToString());
+				auto expr = returning_binder.Bind(returning_expr, &result_type);
+				result.names.push_back(expr->GetName());
 				result.types.push_back(result_type);
-				if (expr_type != ExpressionType::BOUND_COLUMN_REF) {
-					PlanSubqueries(&expr, &update_as_logicaloperator);
-				}
 				projection_expressions.push_back(move(expr));
 			}
 		}
+		for (auto &expr : projection_expressions) {
+			binder->PlanSubqueries(&expr, &returning_as_logicaloperator);
+		}
+		MoveCorrelatedExpressions(*binder);
 
-		auto projection = make_unique<LogicalProjection>(update_table_index, move(projection_expressions));
-		projection->AddChild(move(update_as_logicaloperator));
+		auto projection = make_unique<LogicalProjection>(GenerateTableIndex(), move(projection_expressions));
+		projection->AddChild(move(returning_as_logicaloperator));
 		result.plan = move(projection);
 		D_ASSERT(result.types.size() == result.names.size());
 		this->allow_stream_result = true;

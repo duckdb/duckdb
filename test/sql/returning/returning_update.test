@@ -1,4 +1,4 @@
-# name: test/sql/returning/returning_insert.test
+# name: test/sql/returning/returning_update.test
 # description: Test returning with top level INSERT statement
 # group: [returning]
 
@@ -8,6 +8,7 @@ CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAU
 statement ok
 insert into table1(a) select * from range (0, 4000, 1) t1(a);
 
+mode skip
 
 # basic update
 query III
@@ -25,42 +26,50 @@ WHERE a = 2 RETURNING a, b, c;
 4	-4	-6
 
 
-mode skip
 # returning 1 named column
 query I
-INSERT INTO table1 VALUES (1, 2, 3) RETURNING a;
+UPDATE table1
+SET a=a*2, b=b*2, c=c*2
+WHERE a = 3 RETURNING a;
 ----
-1
+6
 
 # returning all columns with *
 query III
-INSERT INTO table1 VALUES (1, 2, 3) RETURNING *;
+UPDATE table1
+SET a=a*2, b=b*2, c=c*2
+WHERE a = 4 RETURNING *;
 ----
-1	2	3
+8	-8	-12
+8	-4	-6
+
+mode unskip
 
 # returning * expression with more named columns
 query IIIIII
-INSERT INTO table1 VALUES (10, 20, 30), (40, 50, 60), (70, 80, 90) RETURNING *, c, b, a;
+UPDATE table1
+SET a=3, b=2, c=1
+WHERE a=10 AND b=-2 AND c=-3 RETURNING *, c, b, a;
 ----
-10	20	30	30	20	10
-40	50	60	60	50	40
-70	80	90	90	80	70
+3	2	1	1	2	3
+
 
 # returning column names out of order
 query III
-INSERT INTO table1 VALUES (1, 2, 3) RETURNING c, a, b;
-----
-3	1	2
-
-# inserting column names out of order, then returning them in order
-query III
-INSERT INTO table1 (c, b, a) VALUES (3, 2, 1) RETURNING a, b, c;
+UPDATE table1
+SET c=1, b=2, a=3
+WHERE a=12 AND b=-2 AND c=-3 RETURNING c, b, a;
 ----
 1	2	3
 
+
+mode skip
+
 # returning using a column alias
-query II
-INSERT INTO table1 VALUES (1, 2, 3) RETURNING a AS alias1, b AS alias2;
+query III
+UPDATE table1
+SET c=1, b=2, a=3
+WHERE a=11 AND b=-2 AND c=-3 RETURNING a, b, c;
 ----
 1	2
 
@@ -74,28 +83,28 @@ INSERT INTO table1(a) VALUES (10) RETURNING *;
 ----
 10	-2	-3
 
+
 # returning while insert uses a subquery
 query III
 INSERT INTO table1 (a, b, c) SELECT * from table1 WHERE a = 10 and b=-2 and c=-3 RETURNING *;
 ----
 10	-2	-3
+10	-2	-3
 
-# returning with bound subquery
-query I
+# subquery not allowed in returning statement
+statement error
 INSERT INTO table1(a, b, c) SELECT * FROM table1 WHERE a = 10 and b=-2 and c=-3 LIMIT 1 RETURNING a IN (SELECT a FROM table1);
-----
-1
+
 
 # inserting empty subquery returns nothing
 query III
 INSERT INTO table1 (a, b, c) SELECT * from table1 WHERE a = 100000 and b = 10000 and c=100000 RETURNING a, b, c;
 ----
 
-# returning subquery should still query table1, not just returning rows.
-query I
+# subquery not allowed in returning statement
+statement error
 INSERT INTO table1 (a, b, c) VALUES (10, 1000, 1000) RETURNING a IN (SELECT a from table1 where b = -2);
-----
-1
+
 
 # using case statement
 query I
@@ -121,12 +130,8 @@ SELECT count(*) FROM table1;
 ----
 4000
 
-mode output_hash
-
 # the following two tests test that all inserts get streamed back to the returning statement
 query I
 INSERT INTO table1(a, b, c) SELECT a, b, c FROM table1  RETURNING a;
 ----
 4000 values hashing to b28a0440a7c3898c88617db0673db740
-
-mode unskip

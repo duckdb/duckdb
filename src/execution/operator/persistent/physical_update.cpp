@@ -159,7 +159,7 @@ void PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		idx_t chunk_return = g.returned_chunk_count;
 
 		if (g.return_chunk_collection.Chunks().size() > chunk_return) {
-			(g.return_chunk_collection.Chunks().at(chunk_return))->Copy(chunk);
+			chunk.Reference(g.return_chunk_collection.GetChunk(chunk_return));
 			chunk.SetCardinality((g.return_chunk_collection.Chunks().at(chunk_return))->size());
 			g.returned_chunk_count += 1;
 			if (g.returned_chunk_count >= g.return_chunk_collection.Chunks().size()) {
