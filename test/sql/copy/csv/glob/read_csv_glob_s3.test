@@ -19,6 +19,8 @@ COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/a2/a2.csv', heade
 COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/a3/b1.csv', header=True)) to 's3://test-bucket/glob/glob/a3/b1.csv' ( HEADER );
 COPY (select null) to 's3://test-bucket/glob/glob/empty/empty.csv';
 COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/i1/integer.csv', header=True)) to 's3://test-bucket/glob/glob/i1/integer.csv' ( HEADER );
+COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/a1/a1.csv', header=True)) to 's3://test-bucket/glob/glob/f1/f*.csv' ( HEADER );
+COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/a2/a2.csv', header=True)) to 's3://test-bucket/glob/glob/f2/f[a].csv' ( HEADER );
 
 # simple globbing
 query I
@@ -60,7 +62,7 @@ SELECT * FROM read_csv('s3://test-bucket/glob/glob/*/*.csv', auto_detect=1) ORDE
 
 # forcing string parsing works
 query I
-SELECT * FROM read_csv('s3://test-bucket/glob/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), header=1) ORDER BY 1
+SELECT * FROM read_csv('s3://test-bucket/glob/glob/[aei]*/*.csv', columns=STRUCT_PACK(d := 'STRING'), header=1) ORDER BY 1
 ----
 1
 2
@@ -76,7 +78,7 @@ SELECT * FROM read_csv('s3://test-bucket/glob/glob/*/*.csv', columns=STRUCT_PACK
 3
 
 query II
-SELECT a, b LIKE '%a_.csv' FROM read_csv('s3://test-bucket/glob/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), header=1, filename=1) t(a,b) ORDER BY 1
+SELECT a, b LIKE '%a_.csv' FROM read_csv('s3://test-bucket/glob/glob/[aei]*/*.csv', columns=STRUCT_PACK(d := 'STRING'), header=1, filename=1) t(a,b) ORDER BY 1
 ----
 1	0
 2	0
@@ -93,16 +95,16 @@ SELECT a, b LIKE '%a_.csv' FROM read_csv('s3://test-bucket/glob/glob/*/*.csv', c
 
 # test glob parsing
 query I
-SELECT COUNT(*) FROM glob('s3://test-bucket/glob/glob/*/*.csv')
+SELECT COUNT(*) FROM glob('s3://test-bucket/glob/glob/[aei]*/*.csv')
 ----
 5
 
 # nothing matches the glob
 statement error
-SELECT * FROM read_csv('s3://test-bucket/glob/glob/*/a*a.csv', auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv('s3://test-bucket/glob/glob/[aei]*/a*a.csv', auto_detect=1) ORDER BY 1
 
 query I
-SELECT COUNT(*) FROM glob('s3://test-bucket/glob/glob/*/a*a.csv')
+SELECT COUNT(*) FROM glob('s3://test-bucket/glob/glob/[aei]*/a*a.csv')
 ----
 0
 
@@ -111,3 +113,20 @@ select count(*) from glob('s3://test-bucket/glob/glob/rewoiarwiouw3rajkawrasdf79
 ----
 0
 
+# Escaping
+query I
+SELECT * FROM read_csv('s3://test-bucket/glob/glob/f*/f\*.csv', auto_detect=1) ORDER BY 1
+----
+2019-06-05
+2019-06-15
+2019-06-25
+
+query I
+SELECT * FROM read_csv('s3://test-bucket/glob/glob/f2/f\[a\].csv', auto_detect=1) ORDER BY 1
+----
+2019-07-05
+2019-07-15
+2019-07-25
+
+statement error
+SELECT * FROM read_csv('s3://test-bucket/glob/glob/e2/e[a].csv', auto_detect=1) ORDER BY 1
