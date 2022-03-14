@@ -19,35 +19,10 @@
 
 namespace duckdb {
 
-std::string S3FileSystem::UrlEncode(const std::string &input, bool encode_slash) {
-	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
-	static const char *hex_digit = "0123456789ABCDEF";
-	std::string result;
-	result.reserve(input.size());
-	for (idx_t i = 0; i < input.length(); i++) {
-		char ch = input[i];
-		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' ||
-		    ch == '-' || ch == '~' || ch == '.') {
-			result += ch;
-		} else if (ch == '/') {
-			if (encode_slash) {
-				result += std::string("%2F");
-			} else {
-				result += ch;
-			}
-		} else {
-			result += std::string("%");
-			result += hex_digit[static_cast<unsigned char>(ch) >> 4];
-			result += hex_digit[static_cast<unsigned char>(ch) & 15];
-		}
-	}
-	return result;
-}
-
-static HeaderMap create_s3_get_header(std::string url, std::string query, std::string host, std::string service,
-                                      std::string method, const S3AuthParams &auth_params, std::string date_now = "",
-                                      std::string datetime_now = "", std::string payload_hash = "",
-                                      std::string content_type = "") {
+static HeaderMap create_s3_header(std::string url, std::string query, std::string host, std::string service,
+                                  std::string method, const S3AuthParams &auth_params, std::string date_now = "",
+                                  std::string datetime_now = "", std::string payload_hash = "",
+                                  std::string content_type = "") {
 
 	if (payload_hash == "") {
 		payload_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"; // Empty payload hash
@@ -140,8 +115,8 @@ static string listobjectsv2_request(string &path, HTTPParams &http_params, S3Aut
 	}
 
 	string listobjectv2_url = /*shared_path_http_proto*/ "http://" + shared_path_host + req_path + req_params;
-	auto header_map = create_s3_get_header(req_path, req_params.substr(1), shared_path_host, "s3", "GET",
-	                                       s3_auth_params, "", "", "", "");
+	auto header_map =
+	    create_s3_header(req_path, req_params.substr(1), shared_path_host, "s3", "GET", s3_auth_params, "", "", "", "");
 	auto headers = initialize_http_headers(header_map);
 
 	auto client = S3FileSystem::GetClient(
@@ -170,7 +145,7 @@ static string listobjectsv2_request(string &path, HTTPParams &http_params, S3Aut
 }
 
 // Parse the s3 keys from the ListObjectsV2 call
-static void parse_keys(string aws_response, vector<string> &result) {
+static void parse_keys(string& aws_response, vector<string> &result) {
 	idx_t cur_pos = 0;
 	while (true) {
 		auto next_open_tag_pos = aws_response.find("<Key>", cur_pos);
@@ -191,7 +166,7 @@ static void parse_keys(string aws_response, vector<string> &result) {
 }
 
 // Parse the continuation token from the ListObjectsV2 call
-static string parse_continuation_token(string aws_response) {
+static string parse_continuation_token(string& aws_response) {
 
 	auto open_tag_pos = aws_response.find("<NextContinuationToken>");
 	if (open_tag_pos == string::npos) {
@@ -206,7 +181,7 @@ static string parse_continuation_token(string aws_response) {
 }
 
 // Parse the common prefixes from the ListObjectsV2 call
-static vector<string> parse_common_prefixes(string aws_response) {
+static vector<string> parse_common_prefixes(string& aws_response) {
 	vector<string> s3_prefixes;
 	idx_t cur_pos = 0;
 	while (true) {
@@ -228,6 +203,31 @@ static vector<string> parse_common_prefixes(string aws_response) {
 		}
 	}
 	return s3_prefixes;
+}
+
+std::string S3FileSystem::UrlEncode(const std::string &input, bool encode_slash) {
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+	static const char *hex_digit = "0123456789ABCDEF";
+	std::string result;
+	result.reserve(input.size());
+	for (idx_t i = 0; i < input.length(); i++) {
+		char ch = input[i];
+		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' ||
+		    ch == '-' || ch == '~' || ch == '.') {
+			result += ch;
+		} else if (ch == '/') {
+			if (encode_slash) {
+				result += std::string("%2F");
+			} else {
+				result += ch;
+			}
+		} else {
+			result += std::string("%");
+			result += hex_digit[static_cast<unsigned char>(ch) >> 4];
+			result += hex_digit[static_cast<unsigned char>(ch) & 15];
+		}
+	}
+	return result;
 }
 
 vector<string> S3FileSystem::Glob(const string &path, ClientContext *context) {
@@ -700,8 +700,8 @@ unique_ptr<ResponseWrapper> S3FileSystem::PostRequest(FileHandle &handle, string
 	auto payload_hash = GetPayloadHash(buffer_in, buffer_in_len);
 
 	auto headers =
-	    create_s3_get_header(path, query_param, host, "s3", "POST", static_cast<S3FileHandle &>(handle).auth_params, "",
-	                         "", payload_hash, "application/octet-stream");
+	    create_s3_header(path, query_param, host, "s3", "POST", static_cast<S3FileHandle &>(handle).auth_params, "", "",
+	                     payload_hash, "application/octet-stream");
 
 	return HTTPFileSystem::PostRequest(handle, full_url, headers, buffer_out, buffer_out_len, buffer_in, buffer_in_len);
 }
@@ -717,8 +717,8 @@ unique_ptr<ResponseWrapper> S3FileSystem::PutRequest(FileHandle &handle, string 
 	auto payload_hash = GetPayloadHash(buffer_in, buffer_in_len);
 
 	auto headers =
-	    create_s3_get_header(path, query_param, host, "s3", "PUT", static_cast<S3FileHandle &>(handle).auth_params, "",
-	                         "", payload_hash, content_type);
+	    create_s3_header(path, query_param, host, "s3", "PUT", static_cast<S3FileHandle &>(handle).auth_params, "", "",
+	                     payload_hash, content_type);
 	return HTTPFileSystem::PutRequest(handle, http_proto + host + path + query_append, headers, buffer_in,
 	                                  buffer_in_len);
 }
@@ -727,8 +727,8 @@ unique_ptr<ResponseWrapper> S3FileSystem::HeadRequest(FileHandle &handle, string
 	string host, http_proto, path, query_param;
 	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
 	S3UrlParse(url, auth_params.endpoint, auth_params.use_ssl, host, http_proto, path, query_param);
-	auto headers = create_s3_get_header(path, query_param, host, "s3", "HEAD",
-	                                    static_cast<S3FileHandle &>(handle).auth_params, "", "", "", "");
+	auto headers = create_s3_header(path, query_param, host, "s3", "HEAD",
+	                                static_cast<S3FileHandle &>(handle).auth_params, "", "", "", "");
 	return HTTPFileSystem::HeadRequest(handle, http_proto + host + path, headers);
 }
 
@@ -737,8 +737,8 @@ unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, st
 	string host, http_proto, path, query_param;
 	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
 	S3UrlParse(url, auth_params.endpoint, auth_params.use_ssl, host, http_proto, path, query_param);
-	auto headers = create_s3_get_header(path, query_param, host, "s3", "GET",
-	                                    static_cast<S3FileHandle &>(handle).auth_params, "", "", "", "");
+	auto headers = create_s3_header(path, query_param, host, "s3", "GET",
+	                                static_cast<S3FileHandle &>(handle).auth_params, "", "", "", "");
 	return HTTPFileSystem::GetRangeRequest(handle, http_proto + host + path, headers, file_offset, buffer_out,
 	                                       buffer_out_len);
 }
@@ -757,8 +757,8 @@ void S3FileSystem::Verify() {
 
 	S3AuthParams auth_params = {"us-east-1", "AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "", "",
 	                            true};
-	auto test_header = create_s3_get_header("/", "", "my-precious-bucket.s3.amazonaws.com", "s3", "GET", auth_params,
-	                                        "20150915", "20150915T124500Z");
+	auto test_header = create_s3_header("/", "", "my-precious-bucket.s3.amazonaws.com", "s3", "GET", auth_params,
+	                                    "20150915", "20150915T124500Z");
 	if (test_header["Authorization"] !=
 	    "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20150915/us-east-1/s3/aws4_request, "
 	    "SignedHeaders=host;x-amz-content-sha256;x-amz-date, "
@@ -798,9 +798,8 @@ void S3FileSystem::Verify() {
 	    "YoIvHhQWmnRLuKgTb5PkF7ZWrXBHFWG5/tZDOvBbbaCWTlRCL9b0Vpg5+BM/81xd8jChP4w83",
 	    "",
 	    true};
-	auto test_header2 =
-	    create_s3_get_header("/", canonical_query_string, "my-precious-bucket.s3.eu-west-1.amazonaws.com", "s3", "GET",
-	                         auth_params2, "20210904", "20210904T121746Z");
+	auto test_header2 = create_s3_header("/", canonical_query_string, "my-precious-bucket.s3.eu-west-1.amazonaws.com",
+	                                     "s3", "GET", auth_params2, "20210904", "20210904T121746Z");
 	if (test_header2["Authorization"] !=
 	    "AWS4-HMAC-SHA256 Credential=ASIAYSPIOYDTHTBIITVC/20210904/eu-west-1/s3/aws4_request, "
 	    "SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token, "
@@ -809,10 +808,10 @@ void S3FileSystem::Verify() {
 	}
 
 	S3AuthParams auth_params3 = {"eu-west-1", "S3RVER", "S3RVER", "", "", true};
-	auto test_header3 = create_s3_get_header("/correct_auth_test.csv", "", "test-bucket-ceiveran.s3.amazonaws.com",
-	                                         "s3", "PUT", auth_params3, "20220121", "20220121T141452Z",
-	                                         "28a0cf6ac5c4cb73793091fe6ecc6a68bf90855ac9186158748158f50241bb0c",
-	                                         "text/data;charset=utf-8");
+	auto test_header3 =
+	    create_s3_header("/correct_auth_test.csv", "", "test-bucket-ceiveran.s3.amazonaws.com", "s3", "PUT",
+	                     auth_params3, "20220121", "20220121T141452Z",
+	                     "28a0cf6ac5c4cb73793091fe6ecc6a68bf90855ac9186158748158f50241bb0c", "text/data;charset=utf-8");
 	if (test_header3["Authorization"] != "AWS4-HMAC-SHA256 Credential=S3RVER/20220121/eu-west-1/s3/aws4_request, "
 	                                     "SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, "
 	                                     "Signature=5d9a6cbfaa78a6d0f2ab7df0445e2f1cc9c80cd3655ac7de9e7219c036f23f02") {

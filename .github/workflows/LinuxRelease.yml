@@ -472,7 +472,7 @@ jobs:
 
     - name: Start S3/HTTP test server
       run: |
-        ./scripts/install_s3_test_server.sh
+        sudo ./scripts/install_s3_test_server.sh
         ./scripts/run_s3_test_server.sh &> /tmp/s3rver/access_log.txt &
 
     - name: Test
