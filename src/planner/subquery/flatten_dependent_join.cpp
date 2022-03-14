@@ -54,7 +54,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_
 }
 
 bool SubqueryDependentFilter(Expression *expr) {
-	if (expr->expression_class == ExpressionClass::BOUND_CONJUNCTION) {
+	if (expr->expression_class == ExpressionClass::BOUND_CONJUNCTION &&
+	    expr->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto bound_conjuction = (BoundConjunctionExpression *)expr;
 		for (auto &child : bound_conjuction->children) {
 			if (SubqueryDependentFilter(child.get())) {
@@ -67,8 +68,7 @@ bool SubqueryDependentFilter(Expression *expr) {
 	}
 	return false;
 }
-unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan,
-                                                                                 bool null_matters) {
+unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan) {
 	// first check if the logical operator has correlated expressions
 	auto entry = has_correlated_expressions.find(plan.get());
 	D_ASSERT(entry != has_correlated_expressions.end());
@@ -102,12 +102,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		// projection
 		// first we flatten the dependent join in the child of the projection
-		for (auto &expr : plan->expressions) {
-			if (expr->type == ExpressionType::OPERATOR_IS_NULL || expr->type == ExpressionType::OPERATOR_IS_NULL) {
-				null_matters = true;
-			}
-		}
-		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]), null_matters);
+		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
@@ -149,8 +144,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			unique_ptr<LogicalComparisonJoin> join = make_unique<LogicalComparisonJoin>(JoinType::INNER);
 			for (auto &aggr_exp : aggr.expressions) {
 				auto b_aggr_exp = (BoundAggregateExpression *)aggr_exp.get();
-				if (b_aggr_exp->function.name == "count" || b_aggr_exp->function.name == "count_star" || null_matters ||
-				    any_join) {
+				if (!b_aggr_exp->PropagatesNullValues() || any_join) {
 					join = make_unique<LogicalComparisonJoin>(JoinType::LEFT);
 					break;
 				}

@@ -32,6 +32,7 @@ public:
 	bool IsScalar() const override;
 	bool HasParameter() const override;
 	virtual bool HasSideEffects() const;
+	virtual bool PropagatesNullValues() const;
 	virtual bool IsFoldable() const;
 
 	hash_t Hash() const override;

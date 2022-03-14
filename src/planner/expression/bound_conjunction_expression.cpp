@@ -27,6 +27,10 @@ bool BoundConjunctionExpression::Equals(const BaseExpression *other_p) const {
 	return ExpressionUtil::SetEquals(children, other->children);
 }
 
+bool BoundConjunctionExpression::PropagatesNullValues() const {
+	return false;
+}
+
 unique_ptr<Expression> BoundConjunctionExpression::Copy() {
 	auto copy = make_unique<BoundConjunctionExpression>(type);
 	for (auto &expr : children) {
