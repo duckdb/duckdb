@@ -5,7 +5,6 @@
 statement ok
 CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAULT -3);
 
-
 # standard insert still works
 query I
 INSERT INTO table1 VALUES (1, 2, 3);
@@ -60,23 +59,27 @@ INSERT INTO table1(a) VALUES (10) RETURNING *;
 ----
 10	-2	-3
 
+
 # returning while insert uses a subquery
 query III
 INSERT INTO table1 (a, b, c) SELECT * from table1 WHERE a = 10 and b=-2 and c=-3 RETURNING *;
 ----
 10	-2	-3
 
+# Using a Window function to insert
+query III
+INSERT INTO table1 (SELECT row_number() OVER (ORDER BY a) as row_number, b, c FROM table1 LIMIT 1) RETURNING *;
+----
+1	2	3
 
 # inserting empty subquery returns nothing
 query III
 INSERT INTO table1 (a, b, c) SELECT * from table1 WHERE a = 100000 and b = 10000 and c=100000 RETURNING a, b, c;
 ----
 
-# returning subquery should still query table1, not just returning rows.
+# returning subquery should result in error (test 2).
 statement error
 INSERT INTO table1 (a, b, c) VALUES (10, 1000, 1000) RETURNING a IN (SELECT a from table1 where b = -2);
-----
-1
 
 # using case statement
 query I
@@ -128,7 +131,7 @@ INSERT INTO table1(a) VALUES (SELECT 42) RETURNING a, b, (select 10);
 statement error
 INSERT INTO table1 VALUES (1,2,3) RETURNING d, e, f
 
-# Top level statement cannot contain a window function
+# Top level statement cannot contain a window function in returning statement
 statement error
 INSERT INTO table1 SELECT * from table1 RETURNING row_number() OVER (ORDER BY a) as row_number, a, b FROM table1;
 
@@ -179,6 +182,3 @@ INSERT INTO table3(b) VALUES (4), (5) RETURNING a, b;
 ----
 1	4
 2	5
-
-
-
