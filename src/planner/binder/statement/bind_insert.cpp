@@ -171,10 +171,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 				projection_expressions.push_back(move(expr));
 			}
 		}
-		for (auto &expr : projection_expressions) {
-			binder->PlanSubqueries(&expr, &insert_as_logicaloperator);
-		}
-		MoveCorrelatedExpressions(*binder);
 
 		auto projection = make_unique<LogicalProjection>(GenerateTableIndex(), move(projection_expressions));
 		projection->AddChild(move(insert_as_logicaloperator));
