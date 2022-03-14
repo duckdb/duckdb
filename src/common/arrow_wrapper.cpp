@@ -181,16 +181,6 @@ unique_ptr<DataChunk> ArrowUtil::FetchNext(QueryResult &result) {
 	return chunk;
 }
 
-bool ArrowUtil::IfStreamResultIsOpen(QueryResult *result) {
-	if (result->type == QueryResultType::STREAM_RESULT) {
-		auto stream_result = (StreamQueryResult *)result;
-		if (!stream_result->IsOpen()) {
-			return false;
-		}
-	}
-	return true;
-}
-
 unique_ptr<DataChunk> ArrowUtil::FetchChunk(QueryResult *result, idx_t chunk_size) {
 
 	auto data_chunk = FetchNext(*result);

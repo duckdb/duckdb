@@ -109,6 +109,18 @@ test_that("duckdb_fetch_arrow() record_batch_reader multiple vectors per chunk",
   dbDisconnect(con, shutdown = T)
 })
 
+test_that("record_batch_reader and table error", {
+  skip_if_not_installed("arrow", "4.0.1")
+  con <- dbConnect(duckdb::duckdb())
+  dbExecute(con, paste0("CREATE table t as select range a from range(5000);"))
+  res <- dbSendQuery(con, "SELECT * FROM t", arrow = TRUE)
+  expect_error(duckdb::duckdb_fetch_record_batch(res, 0))
+  expect_error(duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE),0))
+
+  dbDisconnect(con, shutdown = T)
+})
+
+
 test_that("duckdb_fetch_arrow() record_batch_reader defaultparamenter", {
   skip_if_not_installed("arrow", "4.0.1")
   con <- dbConnect(duckdb::duckdb())

@@ -308,9 +308,6 @@ void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, DataChunk &duck_chunk,
 }
 
 bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size) {
-	if (!ArrowUtil::IfStreamResultIsOpen(result)) {
-		return false;
-	}
 	auto data_chunk = ArrowUtil::FetchChunk(result, chunk_size);
 	if (!data_chunk || data_chunk->size() == 0) {
 		return false;

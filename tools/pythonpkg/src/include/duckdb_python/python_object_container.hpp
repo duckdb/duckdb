@@ -17,12 +17,9 @@ struct PythonAssignmentFunction {
 	typedef void (*assign_t)(TGT_PY_TYPE &, SRC_PY_TYPE &);
 };
 
-#pragma GCC visibility push(hidden)
-
 struct PythonGILWrapper {
 	py::gil_scoped_acquire acquire;
 };
-#pragma GCC visibility pop
 
 //! Every Python Object Must be created through our container
 //! The Container ensures that the GIL is HOLD on Python Object Construction/Destruction/Modification

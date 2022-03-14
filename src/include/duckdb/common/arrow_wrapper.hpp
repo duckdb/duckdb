@@ -54,7 +54,6 @@ public:
 class ArrowUtil {
 public:
 	static unique_ptr<DataChunk> FetchChunk(QueryResult *result, idx_t chunk_size);
-	static bool IfStreamResultIsOpen(QueryResult *result);
 
 private:
 	static unique_ptr<DataChunk> FetchNext(QueryResult &result);

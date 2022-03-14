@@ -6,6 +6,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/arrow_wrapper.hpp"
 #include "duckdb/common/result_arrow_wrapper.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 
 using namespace duckdb;
 using namespace cpp11::literals;
@@ -555,9 +556,6 @@ struct AppendableRList {
 bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowArray &arrow_data,
                      ArrowSchema &arrow_schema, SEXP batch_import_from_c, SEXP arrow_namespace, idx_t chunk_size) {
 
-	if (!ArrowUtil::IfStreamResultIsOpen(result)) {
-		return false;
-	}
 	auto data_chunk = ArrowUtil::FetchChunk(result, chunk_size);
 	if (!data_chunk || data_chunk->size() == 0) {
 		return false;
@@ -571,6 +569,9 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 
 // Turn a DuckDB result set into an Arrow Table
 [[cpp11::register]] SEXP rapi_execute_arrow(duckdb::rqry_eptr_t qry_res, int chunk_size) {
+	if (qry_res->result->type == QueryResultType::STREAM_RESULT) {
+		qry_res->result = ((StreamQueryResult *)qry_res->result.get())->Materialize();
+	}
 	auto result = qry_res->result.get();
 	// somewhat dark magic below
 	cpp11::function getNamespace = RStrings::get().getNamespace_sym;

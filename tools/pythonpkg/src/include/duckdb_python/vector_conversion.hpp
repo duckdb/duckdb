@@ -32,7 +32,6 @@ enum class PandasType : uint8_t {
 	OBJECT,
 	CATEGORY
 };
-#pragma GCC visibility push(hidden)
 
 struct NumPyArrayWrapper {
 	explicit NumPyArrayWrapper(py::array numpy_array) : numpy_array(move(numpy_array)) {
@@ -51,7 +50,6 @@ struct PandasColumnBindData {
 	// When object types are cast we must hold their data somewhere
 	PythonObjectContainer<py::str> object_str_val;
 };
-#pragma GCC visibility pop
 
 class VectorConversion {
 public:
