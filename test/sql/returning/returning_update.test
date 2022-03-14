@@ -8,7 +8,6 @@ CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAU
 statement ok
 insert into table1(a) select * from range (0, 4000, 1) t1(a);
 
-mode skip
 
 # basic update
 query III
@@ -43,7 +42,7 @@ WHERE a = 4 RETURNING *;
 8	-8	-12
 8	-4	-6
 
-mode unskip
+
 
 # returning * expression with more named columns
 query IIIIII
@@ -54,6 +53,7 @@ WHERE a=10 AND b=-2 AND c=-3 RETURNING *, c, b, a;
 3	2	1	1	2	3
 
 
+
 # returning column names out of order
 query III
 UPDATE table1
@@ -61,6 +61,25 @@ SET c=1, b=2, a=3
 WHERE a=12 AND b=-2 AND c=-3 RETURNING c, b, a;
 ----
 1	2	3
+
+# returning column names out of order with alias's
+query III
+UPDATE table1
+SET c=1, b=2, a=3
+WHERE a=13 AND b=-2 AND c=-3 RETURNING c as aliasc, b as aliasb, a as aliasa;
+----
+1	2	3
+
+# returning expression with aggregate function at top level is not allowed
+statement error
+UPDATE table1 SET c=1, b=5, a=7 WHERE a > 5 RETURNING SUM(a);
+
+
+# returning * while only updating a subset of columns
+query III
+UPDATE table1 SET c=14 WHERE a=14 RETURNING *;
+----
+14	-2	14
 
 
 mode skip
