@@ -127,20 +127,6 @@ jobs:
            choco install python visualstudio2019-workload-vctools -y
            npm config set msvs_version 2019
 
-       - name: Install OpenSSL
-         run: |
-           choco install openssl -y --force
-
-       - name: Build
-         run: |
-           python scripts/windows_ci.py
-           cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_TPCH_EXTENSION=1 -DBUILD_HTTPFS_EXTENSION=1 -DOPENSSL_USE_STATIC_LIBS=1 -DDISABLE_UNITY=1
-           cmake --build . --config Release
-
-       - name: Uninstall OpenSSL
-         run: |
-           choco uninstall openssl -y --force
-
        - name: Node Version
          run: ./scripts/node_version.sh
 
