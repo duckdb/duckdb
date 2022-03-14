@@ -177,7 +177,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquetDefault(const string &
 	return conn->FromParquet(filename, binary_as_string);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstrait(py::bytes proto, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstrait(const string &query, DuckDBPyConnection *conn) {
+	return conn->GetSubstrait(query);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn) {
 	return conn->FromSubstrait(proto);
 }
 

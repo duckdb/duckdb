@@ -51,8 +51,11 @@ public:
 	static unique_ptr<DuckDBPyRelation> FromParquet(const string &filename, bool binary_as_string,
 	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
-	static unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes proto,
-	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	static unique_ptr<DuckDBPyRelation>
+	FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
+	static unique_ptr<DuckDBPyRelation>
+	GetSubstrait(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation>
 	FromParquetDefault(const string &filename, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
