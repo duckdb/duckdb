@@ -247,21 +247,21 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(const string &table_na
 		cpp11::stop("rapi_register_parquet: Name cannot be empty");
 	}
 
-  // R-list as handled by cpp11 -> C++11 string vector
+	// R-list as handled by cpp11 -> C++11 string vector
 	vector<Value> paths;
 	for (auto it = 0; it < path.size(); ++it) {
-	  std::string val = cpp11::as_cpp<std::string>(path[it]);
-	  paths.emplace_back(val);
+		std::string val = cpp11::as_cpp<std::string>(path[it]);
+		paths.emplace_back(val);
 	}
-	
+
 	// C++11 string vector .> DuckDB LIST
 	Value pathlist;
-	pathlist=Value::LIST(paths);
-	
-  // DuckDB LIST -> parameter vector suitable for TableFunction
-  vector<Value> pp;
-  pp.emplace_back(pathlist);
- 
+	pathlist = Value::LIST(paths);
+
+	// DuckDB LIST -> parameter vector suitable for TableFunction
+	vector<Value> pp;
+	pp.emplace_back(pathlist);
+
 	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
 	try {
 		conn->conn->TableFunction("parquet_scan", pp, named_parameters)->CreateView(name, replace, temporary);
