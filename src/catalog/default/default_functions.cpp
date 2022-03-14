@@ -90,7 +90,52 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, "unnest(generate_series(1, array_length(arr, dim)))"},
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, "floor(x/y)"},
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
+
+	// algebraic list aggregates
+	{DEFAULT_SCHEMA, "list_avg", {"l", nullptr}, "list_aggr(l, 'avg')"},
+	// {DEFAULT_SCHEMA, "list_favg", {"l", nullptr}, "list_aggr(l, 'favg')"}, // calculates avg using kahan sum
+	{DEFAULT_SCHEMA, "list_var_samp", {"l", nullptr}, "list_aggr(l, 'var_samp')"},
+	// {DEFAULT_SCHEMA, "list_variance", {"l", nullptr}, "list_aggr(l, 'variance')"}, // alias for var_samp
+	{DEFAULT_SCHEMA, "list_var_pop", {"l", nullptr}, "list_aggr(l, 'var_pop')"},
+	{DEFAULT_SCHEMA, "list_stddev_pop", {"l", nullptr}, "list_aggr(l, 'stddev_pop')"},
+	{DEFAULT_SCHEMA, "list_stddev_samp", {"l", nullptr}, "list_aggr(l, 'stddev_samp')"},
+	// {DEFAULT_SCHEMA, "list_stddev", {"l", nullptr}, "list_aggr(l, 'stddev')"}, // alias for stddev_samp
+	{DEFAULT_SCHEMA, "list_sem", {"l", nullptr}, "list_aggr(l, 'sem')"},
+
+	// distributive list aggregates
+	{DEFAULT_SCHEMA, "list_approx_count_distinct", {"l", nullptr}, "list_aggr(l, 'approx_count_distinct')"},
+	{DEFAULT_SCHEMA, "list_bit_xor", {"l", nullptr}, "list_aggr(l, 'bit_xor')"},
+	{DEFAULT_SCHEMA, "list_bit_or", {"l", nullptr}, "list_aggr(l, 'bit_or')"},
+	{DEFAULT_SCHEMA, "list_bit_and", {"l", nullptr}, "list_aggr(l, 'bit_and')"},
+	{DEFAULT_SCHEMA, "list_bool_and", {"l", nullptr}, "list_aggr(l, 'bool_and')"},
+	{DEFAULT_SCHEMA, "list_bool_or", {"l", nullptr}, "list_aggr(l, 'bool_or')"},
+	{DEFAULT_SCHEMA, "list_count", {"l", nullptr}, "list_aggr(l, 'count')"},
+	{DEFAULT_SCHEMA, "list_entropy", {"l", nullptr}, "list_aggr(l, 'entropy')"},
+	{DEFAULT_SCHEMA, "list_last", {"l", nullptr}, "list_aggr(l, 'last')"},
+	{DEFAULT_SCHEMA, "list_first", {"l", nullptr}, "list_aggr(l, 'first')"},
+	// {DEFAULT_SCHEMA, "list_arbitrary", {"l", nullptr}, "list_aggr(l, 'arbitrary')"}, // alias for first
+	{DEFAULT_SCHEMA, "list_kurtosis", {"l", nullptr}, "list_aggr(l, 'kurtosis')"},
 	{DEFAULT_SCHEMA, "list_min", {"l", nullptr}, "list_aggr(l, 'min')"},
+	{DEFAULT_SCHEMA, "list_max", {"l", nullptr}, "list_aggr(l, 'max')"},
+	{DEFAULT_SCHEMA, "list_product", {"l", nullptr}, "list_aggr(l, 'product')"},
+	{DEFAULT_SCHEMA, "list_skewness", {"l", nullptr}, "list_aggr(l, 'skewness')"},
+	{DEFAULT_SCHEMA, "list_sum", {"l", nullptr}, "list_aggr(l, 'sum')"},
+	// {DEFAULT_SCHEMA, "list_fsum", {"l", nullptr}, "list_aggr(l, 'fsum')"}, // calculates sum using kahan sum
+	// {DEFAULT_SCHEMA, "list_sumKahan", {"l", nullptr}, "list_aggr(l, 'sumKahan')"}, // alias for fsum
+	// {DEFAULT_SCHEMA, "list_kahan_sum", {"l", nullptr}, "list_aggr(l, 'kahan_sum')"}, // alias for fsum
+	{DEFAULT_SCHEMA, "list_string_agg", {"l", nullptr}, "list_aggr(l, 'string_agg')"},
+	// {DEFAULT_SCHEMA, "list_group_concat", {"l", nullptr}, "list_aggr(l, 'group_concat')"}, // alias for string_agg
+
+	// holistic list aggregates
+	{DEFAULT_SCHEMA, "list_mode", {"l", nullptr}, "list_aggr(l, 'mode')"},
+	{DEFAULT_SCHEMA, "list_median", {"l", nullptr}, "list_aggr(l, 'median')"},
+	{DEFAULT_SCHEMA, "list_mad", {"l", nullptr}, "list_aggr(l, 'mad')"},
+
+	// nested list aggregates
+	{DEFAULT_SCHEMA, "list_histogram", {"l", nullptr}, "list_aggr(l, 'histogram')"},
+	// {DEFAULT_SCHEMA, "list_array_agg", {"l", nullptr}, "list_aggr(l, 'array_agg')"},
+	// {DEFAULT_SCHEMA, "list_list", {"l", nullptr}, "list_aggr(l, 'list')"},
+
 	{nullptr, nullptr, {nullptr}, nullptr}
 	};
 

@@ -1,0 +1,78 @@
+# name: test/sql/function/list/aggregates_invalid.test
+# description: Test aggregate functions that are not compatible with list aggregate functions
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'count_star');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'corr');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'covar_pop');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'covar_samp');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'regr_intercept');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'regr_sxy');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'regr_sxx');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'regr_syy');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'regr_r2');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'regr_slope');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'regr_count');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'regr_avgy');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'regr_avgx');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'reservoir_quantile');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'approx_quantile');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'quantile');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'quantile_cont');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'quantile_disc');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'arg_max');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'max_by');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'argmax');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'arg_min');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'min_by');
+
+statement error
+SELECT list_aggr([1, 2, NULL], 'argmin');

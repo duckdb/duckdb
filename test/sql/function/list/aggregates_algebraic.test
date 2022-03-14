@@ -1,0 +1,37 @@
+# name: test/sql/function/list/algebraic_aggregates.test
+# description: Test algebraic list aggregate functions
+# group: [list]
+
+# this file contains tests for
+# avg, favg, stddev, stddev_pop, var_pop, var_samp, stddev_samp
+# variance, sem
+
+# not supported (due to more than one parameter) are
+# corr, covar_pop, covar_samp
+# these are only tested for the correct error
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE int_lists (l int[]);
+
+statement ok
+CREATE TABLE double_lists (l int[]);
+
+statement ok
+INSERT INTO int_lists VALUES ([1, 2, 3]), ([-2, 4, 8, -16]), ([NULL, 2, -4, NULL]), ([]), 
+    ([NULL]), (NULL);
+
+# avg
+query I
+SELECT list_avg(l) FROM int_lists;
+----
+2
+-1.5
+-1
+0
+0
+NULL
+
+# TODO
