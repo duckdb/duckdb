@@ -152,18 +152,19 @@ test_that("parameters replace and temporary work as expected", {
   # Check whether permanent view can be dropped in read-only connection
   expect_error(duckdb::duckdb_unregister_parquet(con, "testview"))
   expect_error(duckdb::duckdb_unregister_parquet(con, "testview", if_exists = TRUE))
-  expect_error(duckdb::duckdb_unregister_parquet(con, "testview2"))
-  duckdb::duckdb_unregister_parquet(con, "testview2", if_exists = TRUE)
+  expect_error(duckdb::duckdb_unregister_parquet(con, "testview3"))
+  duckdb::duckdb_unregister_parquet(con, "testview3", if_exists = TRUE)
   expect_warning(duckdb::duckdb_register_parquet(con, "testview", tmp[2], temporary = TRUE))
   expect_true(DBI::dbGetQuery(con, "SELECT count(*) AS n FROM testview;") == 10)
   duckdb::duckdb_unregister_parquet(con, "testview")
   expect_true(DBI::dbGetQuery(con, "SELECT count(*) AS n FROM testview;") == 30)
   expect_error(duckdb::duckdb_register_parquet(con, "testview", tmp[2], replace = TRUE))
 
-  # Check what happens if parquet file disappears
+  # Check that deleted file gives an error
   unlink(tmp[1])
   expect_error(DBI::dbGetQuery(con, "SELECT count(*) AS n FROM testview;"))
 
+  # Check that file cannot be replaced with another file with incorrect structure
   file.copy(tmp[2], tmp[1])
   expect_error(DBI::dbGetQuery(con, "SELECT count(*) AS n FROM testview;"))
 
@@ -171,7 +172,7 @@ test_that("parameters replace and temporary work as expected", {
 })
 
 
-test_that("Parquet files tolerate manipulation", {
+test_that("Parquet files can be given as lists/wildcards and tolerate manipulation", {
   # Set up the test environment
   filename <- "data/userdata1.parquet"
   tmpdir <- file.path(tempdir(), "rstest")
@@ -179,6 +180,7 @@ test_that("Parquet files tolerate manipulation", {
   if (!file.exists(tmpdir)) dir.create(tmpdir)
   unlink(paste0(tmpdir, "/*.*"))
   tmp <- paste0(tmpdir, "/file", 1:2, ".parquet")
+  tmplist <- as.list(c(tmp, tmp))
   on.exit(unlink(tmpdir, recursive = TRUE))
   tmpwild <- paste0(tmpdir, "/file*.parquet")
 
@@ -188,12 +190,35 @@ test_that("Parquet files tolerate manipulation", {
   DBI::dbExecute(con, paste0("COPY (SELECT * EXCLUDE comments FROM parquet_scan('", filename, "') LIMIT 10) TO '", tmp[2], "' (FORMAT 'parquet');"))
   DBI::dbDisconnect(con, shutdown = TRUE)
 
+  # Check that a character vector of Parquet-files paths work as expected
+  con <- DBI::dbConnect(duckdb::duckdb(dbdir = dbpath))
+  duckdb::duckdb_register_parquet(con, "testview", tmp, replace = TRUE, temporary = TRUE)
+  expect_true(DBI::dbGetQuery(con, "SELECT count(*) AS n FROM testview;") == 40)
+  DBI::dbDisconnect(con, shutdown = TRUE)
+
+  # Check that a list of Parquet-files work as expected
+  con <- DBI::dbConnect(duckdb::duckdb(dbdir = dbpath))
+  duckdb::duckdb_register_parquet(con, "testview2", tmplist, replace = TRUE, temporary = TRUE)
+  expect_true(DBI::dbGetQuery(con, "SELECT count(*) AS n FROM testview2;") == 80)
+  DBI::dbDisconnect(con, shutdown = TRUE)
+
+  # Check that only characters are accepted in paths
+  con <- DBI::dbConnect(duckdb::duckdb(dbdir = dbpath))
+  expect_error(duckdb::duckdb_register_parquet(con, "testview2", 1:10, replace = TRUE, temporary = TRUE))
+  DBI::dbDisconnect(con, shutdown = TRUE)
+
+  # Check that named nested lists work if those can be unlisted to a vector of strings
+  con <- DBI::dbConnect(duckdb::duckdb(dbdir = dbpath))
+  duckdb::duckdb_register_parquet(con, "testview2", list("first" = tmp, "second" = c("f1" = tmp[1], "f2" = tmp[1])), replace = TRUE, temporary = TRUE)
+  expect_true(DBI::dbGetQuery(con, "SELECT count(*) AS n FROM testview2;") == 100)
+  DBI::dbDisconnect(con, shutdown = TRUE)
+
   # Check that wildcard identified Parquet-files work as expected in file-storage
   con <- DBI::dbConnect(duckdb::duckdb(dbdir = dbpath))
   duckdb::duckdb_register_parquet(con, "testview", tmpwild, replace = TRUE)
   expect_true(DBI::dbGetQuery(con, "SELECT count(*) AS n FROM testview;") == 40)
 
-  # Check what happens if parquet file disappears
+  # Check what happens if parquet file disappears or changes
   unlink(tmp[1])
   expect_true(DBI::dbGetQuery(con, "SELECT count(*) AS n FROM testview;") == 10)
 

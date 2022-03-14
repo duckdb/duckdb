@@ -119,7 +119,8 @@ duckdb_list_arrow <- function(conn) {
 duckdb_register_parquet <- function(conn, name, path, binary_as_string = FALSE, replace = FALSE, temporary = FALSE) {
   stopifnot(DBI::dbIsValid(conn))
   if (grepl(".", name, fixed = TRUE)) stop("Schemas not allowed!", call. = TRUE)
-  rapi_register_parquet(conn@conn_ref, enc2utf8(as.character(name)), path, binary_as_string, replace, temporary)
+  if (!is.character(unlist(path))) stop("Paths must be strings!", call. = TRUE)
+  rapi_register_parquet(conn@conn_ref, enc2utf8(as.character(name)), as.list(unlist(path)), binary_as_string, replace, temporary)
   if (temporary) {
     if (name %in% DBI::dbGetQuery(conn, "SELECT table_name FROM information_schema.tables WHERE table_schema='main'")) {
       warning("Created temporary view masks another table/view with the same name from the main schema!", call. = TRUE)
