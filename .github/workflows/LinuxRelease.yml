@@ -473,6 +473,7 @@ jobs:
     - name: Start S3/HTTP test server
       run: |
         sudo ./scripts/install_s3_test_server.sh
+        mkdir -p /tmp/s3rver
         ./scripts/run_s3_test_server.sh &> /tmp/s3rver/access_log.txt &
 
     - name: Test
