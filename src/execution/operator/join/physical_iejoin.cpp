@@ -136,16 +136,13 @@ public:
 		count += keys.size();
 
 		// Sink the data into the local sort state
-		if (keys.ColumnCount() > 1) {
-			//	Only sort the primary key
-			DataChunk join_head;
-			join_head.data.emplace_back(Vector(keys.data[0]));
-			join_head.SetCardinality(keys.size());
+		D_ASSERT(keys.ColumnCount() > 1);
+		//	Only sort the primary key
+		DataChunk join_head;
+		join_head.data.emplace_back(Vector(keys.data[0]));
+		join_head.SetCardinality(keys.size());
 
-			local_sort_state.SinkChunk(join_head, input);
-		} else {
-			local_sort_state.SinkChunk(keys, input);
-		}
+		local_sort_state.SinkChunk(join_head, input);
 	}
 
 	void Sort(GlobalSortState &gss) {
@@ -488,6 +485,9 @@ struct SBIterator {
 			if (new_block_idx < block_count) {
 				scan.PinRadix(scan.block_idx);
 				block_ptr = scan.RadixPtr();
+				if (!all_constant) {
+					scan.PinData(*scan.sb->blob_sorting_data);
+				}
 			}
 		}
 
@@ -853,7 +853,6 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 		return n;
 	}
 
-	// In the paper, they used a Bloom filter of 4096:1,
 	// We can do a first approximation by checking entries one at a time
 	// which gives 64:1.
 	idx_t entry_idx, idx_in_entry;
@@ -1105,62 +1104,62 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &ch
 		if (result_count == 0) {
 			// exhausted this pair
 			return;
-		} else {
-			// found matches: extract them
-			chunk.Reset();
-			SliceSortedPayload(chunk, left_table.global_sort_state, state.left_block_index, lsel, result_count, 0);
-			SliceSortedPayload(chunk, right_table.global_sort_state, state.right_block_index, rsel, result_count,
-			                   left_cols);
-			chunk.SetCardinality(result_count);
+		}
 
-			auto sel = FlatVector::IncrementalSelectionVector();
-			if (conditions.size() > 2) {
-				// If there are more expressions to compute,
-				// split the result chunk into the left and right halves
-				// so we can compute the values for comparison.
-				const auto tail_cols = conditions.size() - 2;
+		// found matches: extract them
+		chunk.Reset();
+		SliceSortedPayload(chunk, left_table.global_sort_state, state.left_block_index, lsel, result_count, 0);
+		SliceSortedPayload(chunk, right_table.global_sort_state, state.right_block_index, rsel, result_count,
+		                   left_cols);
+		chunk.SetCardinality(result_count);
 
-				DataChunk right_chunk;
-				chunk.Split(right_chunk, left_cols);
-				state.left_executor.SetChunk(chunk);
-				state.right_executor.SetChunk(right_chunk);
+		auto sel = FlatVector::IncrementalSelectionVector();
+		if (conditions.size() > 2) {
+			// If there are more expressions to compute,
+			// split the result chunk into the left and right halves
+			// so we can compute the values for comparison.
+			const auto tail_cols = conditions.size() - 2;
 
-				auto tail_count = result_count;
-				for (size_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
-					auto &left = state.left_keys.data[cmp_idx];
-					state.left_executor.ExecuteExpression(cmp_idx, left);
+			DataChunk right_chunk;
+			chunk.Split(right_chunk, left_cols);
+			state.left_executor.SetChunk(chunk);
+			state.right_executor.SetChunk(right_chunk);
 
-					auto &right = state.right_keys.data[cmp_idx];
-					state.right_executor.ExecuteExpression(cmp_idx, right);
+			auto tail_count = result_count;
+			for (size_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
+				auto &left = state.left_keys.data[cmp_idx];
+				state.left_executor.ExecuteExpression(cmp_idx, left);
 
-					if (tail_count < result_count) {
-						left.Slice(*sel, tail_count);
-						right.Slice(*sel, tail_count);
-					}
-					tail_count = state.SelectJoinTail(conditions[cmp_idx + 2].comparison, left, right, sel, tail_count);
-					sel = &state.true_sel;
-				}
-				chunk.Fuse(right_chunk);
+				auto &right = state.right_keys.data[cmp_idx];
+				state.right_executor.ExecuteExpression(cmp_idx, right);
 
 				if (tail_count < result_count) {
-					result_count = tail_count;
-					chunk.Slice(*sel, result_count);
+					left.Slice(*sel, tail_count);
+					right.Slice(*sel, tail_count);
 				}
+				tail_count = state.SelectJoinTail(conditions[cmp_idx + 2].comparison, left, right, sel, tail_count);
+				sel = &state.true_sel;
 			}
+			chunk.Fuse(right_chunk);
 
-			// found matches: mark the found matches if required
-			if (left_table.found_match) {
-				for (idx_t i = 0; i < result_count; i++) {
-					left_table.found_match[state.left_base + lsel[sel->get_index(i)]] = true;
-				}
+			if (tail_count < result_count) {
+				result_count = tail_count;
+				chunk.Slice(*sel, result_count);
 			}
-			if (right_table.found_match) {
-				for (idx_t i = 0; i < result_count; i++) {
-					right_table.found_match[state.right_base + rsel[sel->get_index(i)]] = true;
-				}
-			}
-			chunk.Verify();
 		}
+
+		// found matches: mark the found matches if required
+		if (left_table.found_match) {
+			for (idx_t i = 0; i < result_count; i++) {
+				left_table.found_match[state.left_base + lsel[sel->get_index(i)]] = true;
+			}
+		}
+		if (right_table.found_match) {
+			for (idx_t i = 0; i < result_count; i++) {
+				right_table.found_match[state.right_base + rsel[sel->get_index(i)]] = true;
+			}
+		}
+		chunk.Verify();
 	} while (chunk.size() == 0);
 }
 
@@ -1326,22 +1325,6 @@ unique_ptr<LocalSourceState> PhysicalIEJoin::GetLocalSourceState(ExecutionContex
 	return make_unique<IEJoinLocalSourceState>(*this);
 }
 
-void PhysicalJoin::ConstructRightJoinResult(DataChunk &right, DataChunk &result, bool found_match[]) {
-	SelectionVector remaining_sel(STANDARD_VECTOR_SIZE);
-	idx_t remaining_count = 0;
-	for (idx_t i = 0; i < right.size(); i++) {
-		if (!found_match[i]) {
-			remaining_sel.set_index(remaining_count++, i);
-		}
-	}
-	if (remaining_count > 0) {
-		result.Slice(right, remaining_sel, remaining_count, right.ColumnCount());
-		for (idx_t idx = 0; idx < right.ColumnCount(); idx++) {
-			result.data[idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result.data[idx], true);
-		}
-	}
-}
 void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, GlobalSourceState &gstate,
                              LocalSourceState &lstate) const {
 	auto &ie_sink = (IEJoinGlobalState &)*sink_state;

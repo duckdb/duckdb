@@ -228,7 +228,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 
 	} else {
 		bool can_merge = has_range > 0;
-		bool can_iejoin = has_range >= 2;
+		bool can_iejoin = has_range >= 2 && rec_ctes.empty();
 		switch (op.join_type) {
 		case JoinType::SEMI:
 		case JoinType::ANTI:
