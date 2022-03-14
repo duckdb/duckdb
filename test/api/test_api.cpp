@@ -508,20 +508,21 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 	auto &connection_manager = ConnectionManager::Get(*context);
 
 	vector<unique_ptr<Connection>> connections;
-	int numCon = 5000;
+	size_t createdConnections = 5000;
+	size_t remainingConnections = 500;
+	size_t toRemove = createdConnections - remainingConnections;
 
-	for (size_t i = 0; i < numCon; i++) {
+	for (size_t i = 0; i < createdConnections; i++) {
 		auto conn = make_unique<Connection>(*db);
 		connections.push_back(move(conn));
 	}
 
-	REQUIRE(connection_manager.connections.size() == numCon);
+	REQUIRE(connection_manager.connections.size() == createdConnections);
 
-	for (size_t i = 0; i < connections.size(); i++) {
-		auto conn = *connections[i];
-		connections.erase(connections.begin() + i);
-		i--;
+	for (size_t i = 0; i < toRemove; i++) {
+		auto conn = *connections[0];
+		connections.erase(connections.begin());
 	}
 
-	REQUIRE(connection_manager.connections.size() == 0);
+	REQUIRE(connection_manager.connections.size() == remainingConnections);
 }
