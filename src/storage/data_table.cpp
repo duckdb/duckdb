@@ -487,6 +487,7 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 		return;
 	}
 
+	// we need to look at the error messages concurrently in data table's index and transaction local storage's index
 	vector<string> err_msgs, tran_err_msgs;
 	err_msgs.resize(count);
 	tran_err_msgs.resize(count);
@@ -522,9 +523,27 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 
 	// we need to look at the error messages concurrently in data table's index and transaction local storage's index
 	for (idx_t i = 0; i < count; i++) {
-		if ((!transaction_check && !err_msgs[i].empty()) ||
-		    (transaction_check && ((is_append && !err_msgs[i].empty() && !tran_err_msgs[i].empty()) ||
-		                           (!is_append && (!err_msgs[i].empty() || !tran_err_msgs[i].empty()))))) {
+		if (!transaction_check) {
+			// if there is no transaction-local data we only need to check if there is an error message in the main
+			// index
+			if (!err_msgs[i].empty()) {
+				throw ConstraintException(err_msgs[i]);
+			} else {
+				continue;
+			}
+		}
+		if (is_append) {
+			// if we are appending we need to check to ensure the foreign key exists in either the transaction-local
+			// storage or the main table
+			if (!err_msgs[i].empty() && !tran_err_msgs[i].empty()) {
+				throw ConstraintException(err_msgs[i]);
+			} else {
+				continue;
+			}
+		}
+		// if we are deleting we need to ensure the foreign key DOES NOT exist in EITHER the transaction-local storage
+		// OR the main table
+		if (!err_msgs[i].empty() || !tran_err_msgs[i].empty()) {
 			string &err_msg = err_msgs[i];
 			if (err_msg.empty()) {
 				err_msg = tran_err_msgs[i];

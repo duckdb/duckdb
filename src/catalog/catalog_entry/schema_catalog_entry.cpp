@@ -39,7 +39,8 @@
 
 namespace duckdb {
 
-void FindForeignKeyInformation(CatalogEntry *entry, bool is_drop, vector<unique_ptr<AlterForeignKeyInfo>> &fk_arrays) {
+void FindForeignKeyInformation(CatalogEntry *entry, AlterForeignKeyType alter_fk_type,
+                               vector<unique_ptr<AlterForeignKeyInfo>> &fk_arrays) {
 	if (entry->type != CatalogType::TABLE_ENTRY) {
 		return;
 	}
@@ -51,14 +52,11 @@ void FindForeignKeyInformation(CatalogEntry *entry, bool is_drop, vector<unique_
 		}
 		auto &fk = (ForeignKeyConstraint &)*cond;
 		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-			AlterForeignKeyType type = AlterForeignKeyType::AFT_ADD;
-			if (is_drop) {
-				type = AlterForeignKeyType::AFT_DELETE;
-			}
 			fk_arrays.push_back(make_unique<AlterForeignKeyInfo>(fk.info.schema, fk.info.table, entry->name,
 			                                                     fk.pk_columns, fk.fk_columns, fk.info.pk_keys,
-			                                                     fk.info.fk_keys, type));
-		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && is_drop) {
+			                                                     fk.info.fk_keys, alter_fk_type));
+		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE &&
+		           alter_fk_type == AlterForeignKeyType::AFT_DELETE) {
 			throw CatalogException("Could not drop the table because this table is main key table of the table \"%s\"",
 			                       fk.info.table);
 		}
@@ -136,7 +134,7 @@ CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreat
 	}
 	// add a foreign key constraint in main key table if there is a foreign key constraint
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
-	FindForeignKeyInformation(entry, false, fk_arrays);
+	FindForeignKeyInformation(entry, AlterForeignKeyType::AFT_ADD, fk_arrays);
 	for (idx_t i = 0; i < fk_arrays.size(); i++) {
 		// alter primary key table
 		AlterForeignKeyInfo *fk_info = fk_arrays[i].get();
@@ -258,7 +256,7 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 
 	// if there is a foreign key constraint, get that information
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
-	FindForeignKeyInformation(existing_entry, true, fk_arrays);
+	FindForeignKeyInformation(existing_entry, AlterForeignKeyType::AFT_DELETE, fk_arrays);
 
 	if (!set.DropEntry(context, info->name, info->cascade)) {
 		throw InternalException("Could not drop element because of an internal error");
