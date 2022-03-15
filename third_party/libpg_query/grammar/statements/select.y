@@ -152,7 +152,7 @@ select_clause:
  * However, this is not checked by the grammar; parse analysis must check it.
  */
 simple_select:
-			SELECT opt_all_clause opt_target_list
+			SELECT opt_all_clause opt_target_list_opt_comma
 			into_clause from_clause where_clause
 			group_clause having_clause window_clause qualify_clause sample_clause
 				{
@@ -168,7 +168,7 @@ simple_select:
 					n->sampleOptions = $11;
 					$$ = (PGNode *)n;
 				}
-			| SELECT distinct_clause target_list
+			| SELECT distinct_clause target_list_opt_comma
 			into_clause from_clause where_clause
 			group_clause having_clause window_clause qualify_clause sample_clause
 				{
@@ -185,7 +185,7 @@ simple_select:
 					n->sampleOptions = $11;
 					$$ = (PGNode *)n;
 				}
-			| values_clause							{ $$ = $1; }
+			| values_clause_opt_comma							{ $$ = $1; }
 			| TABLE relation_expr
 				{
 					/* same as SELECT * FROM relation_expr */
@@ -357,7 +357,7 @@ all_or_distinct:
  */
 distinct_clause:
 			DISTINCT								{ $$ = list_make1(NIL); }
-			| DISTINCT ON '(' expr_list ')'			{ $$ = $4; }
+			| DISTINCT ON '(' expr_list_opt_comma ')'			{ $$ = $4; }
 		;
 
 opt_all_clause:
@@ -643,7 +643,7 @@ first_or_next: FIRST_P								{ $$ = 0; }
  * PGGroupingSet node of some type.
  */
 group_clause:
-			GROUP_P BY group_by_list				{ $$ = $3; }
+			GROUP_P BY group_by_list_opt_comma				{ $$ = $3; }
 			| GROUP_P BY ALL
 				{
 					PGNode *node = (PGNode *) makeGroupingSet(GROUPING_SET_ALL, NIL, @3);
@@ -660,6 +660,11 @@ group_clause:
 group_by_list:
 			group_by_item							{ $$ = list_make1($1); }
 			| group_by_list ',' group_by_item		{ $$ = lappend($1,$3); }
+		;
+
+group_by_list_opt_comma:
+			group_by_list								{ $$ = $1; }
+			| group_by_list ','							{ $$ = $1; }
 		;
 
 group_by_item:
@@ -684,21 +689,21 @@ empty_grouping_set:
  */
 
 rollup_clause:
-			ROLLUP '(' expr_list ')'
+			ROLLUP '(' expr_list_opt_comma ')'
 				{
 					$$ = (PGNode *) makeGroupingSet(GROUPING_SET_ROLLUP, $3, @1);
 				}
 		;
 
 cube_clause:
-			CUBE '(' expr_list ')'
+			CUBE '(' expr_list_opt_comma ')'
 				{
 					$$ = (PGNode *) makeGroupingSet(GROUPING_SET_CUBE, $3, @1);
 				}
 		;
 
 grouping_sets_clause:
-			GROUPING SETS '(' group_by_list ')'
+			GROUPING SETS '(' group_by_list_opt_comma ')'
 				{
 					$$ = (PGNode *) makeGroupingSet(GROUPING_SET_SETS, $4, @1);
 				}
@@ -770,18 +775,23 @@ opt_nowait_or_skip:
  * than allowing the noise-word is worth.
  */
 values_clause:
-			VALUES '(' expr_list ')'
+			VALUES '(' expr_list_opt_comma ')'
 				{
 					PGSelectStmt *n = makeNode(PGSelectStmt);
 					n->valuesLists = list_make1($3);
 					$$ = (PGNode *) n;
 				}
-			| values_clause ',' '(' expr_list ')'
+			| values_clause ',' '(' expr_list_opt_comma ')'
 				{
 					PGSelectStmt *n = (PGSelectStmt *) $1;
 					n->valuesLists = lappend(n->valuesLists, $4);
 					$$ = (PGNode *) n;
 				}
+		;
+
+values_clause_opt_comma:
+			values_clause				{ $$ = $1; }
+			| values_clause ','			{ $$ = $1; }
 		;
 
 
@@ -794,13 +804,18 @@ values_clause:
  *****************************************************************************/
 
 from_clause:
-			FROM from_list							{ $$ = $2; }
+			FROM from_list_opt_comma							{ $$ = $2; }
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
 
 from_list:
 			table_ref								{ $$ = list_make1($1); }
 			| from_list ',' table_ref				{ $$ = lappend($1, $3); }
+		;
+
+from_list_opt_comma:
+			from_list								{ $$ = $1; }
+			| from_list ','							{ $$ = $1; }
 		;
 
 /*
@@ -950,7 +965,7 @@ joined_table:
 		;
 
 alias_clause:
-			AS ColId '(' name_list ')'
+			AS ColId '(' name_list_opt_comma ')'
 				{
 					$$ = makeNode(PGAlias);
 					$$->aliasname = $2;
@@ -961,7 +976,7 @@ alias_clause:
 					$$ = makeNode(PGAlias);
 					$$->aliasname = $2;
 				}
-			| ColId '(' name_list ')'
+			| ColId '(' name_list_opt_comma ')'
 				{
 					$$ = makeNode(PGAlias);
 					$$->aliasname = $1;
@@ -1029,7 +1044,7 @@ join_outer: OUTER_P									{ $$ = NULL; }
  * We return USING as a PGList node, while an ON-expr will not be a List.
  */
 
-join_qual:	USING '(' name_list ')'					{ $$ = (PGNode *) $3; }
+join_qual:	USING '(' name_list_opt_comma ')'					{ $$ = (PGNode *) $3; }
 			| ON a_expr								{ $$ = $2; }
 		;
 
@@ -1314,7 +1329,7 @@ GenericType:
 			// 	}
 		;
 
-opt_type_modifiers: '(' expr_list ')'				{ $$ = $2; }
+opt_type_modifiers: '(' expr_list_opt_comma	 ')'				{ $$ = $2; }
 					| /* EMPTY */					{ $$ = NIL; }
 		;
 
@@ -1436,7 +1451,7 @@ ConstBit:	BitWithLength
 		;
 
 BitWithLength:
-			BIT opt_varying '(' expr_list ')'
+			BIT opt_varying '(' expr_list_opt_comma ')'
 				{
 					const char *typname;
 
@@ -1911,27 +1926,19 @@ a_expr:		c_expr									{ $$ = $1; }
 				PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
 				$$ = (PGNode *) n;
 			}
-			| '{' dict_arguments '}' {
+			| '{' dict_arguments_opt_comma '}' {
 				PGFuncCall *n = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
 				$$ = (PGNode *) n;
 			}
-			| '[' opt_expr_list ']' {
+			| '[' opt_expr_list_opt_comma ']' {
 				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
 				$$ = (PGNode *) n;
 			}
-			| row LAMBDA_ARROW a_expr
+			| a_expr LAMBDA_ARROW a_expr %prec Op
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
-				n->parameters = $1;
-				n->function = $3;
-				n->location = @2;
-				$$ = (PGNode *) n;
-			}
-			| columnref LAMBDA_ARROW a_expr
-			{
-				PGLambdaFunction *n = makeNode(PGLambdaFunction);
-				n->parameters = list_make1($1);
-				n->function = $3;
+				n->lhs = $1;
+				n->rhs = $3;
 				n->location = @2;
 				$$ = (PGNode *) n;
 			}
@@ -2121,7 +2128,7 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
-			| ARRAY '[' opt_expr_list ']' {
+			| ARRAY '[' opt_expr_list_opt_comma ']' {
 				PGList *func_name = list_make1(makeString("construct_array"));
 				PGFuncCall *n = makeFuncCall(func_name, $3, @1);
 				$$ = (PGNode *) n;
@@ -2309,7 +2316,7 @@ c_expr:		columnref								{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
-			| grouping_or_grouping_id '(' expr_list ')'
+			| grouping_or_grouping_id '(' expr_list_opt_comma ')'
 			  {
 				  PGGroupingFunc *g = makeNode(PGGroupingFunc);
 				  g->args = $3;
@@ -2580,7 +2587,7 @@ func_expr_common_subexpr:
 				{
 					$$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_NULLIF, "=", $3, $5, @1);
 				}
-			| COALESCE '(' expr_list ')'
+			| COALESCE '(' expr_list_opt_comma ')'
 				{
 					PGCoalesceExpr *c = makeNode(PGCoalesceExpr);
 					c->args = $3;
@@ -2830,7 +2837,7 @@ frame_bound:
  * without conflicting with the parenthesized a_expr production.  Without the
  * ROW keyword, there must be more than one a_expr inside the parens.
  */
-qualified_row:	ROW '(' expr_list ')'					{ $$ = $3; }
+qualified_row:	ROW '(' expr_list_opt_comma ')'					{ $$ = $3; }
 			| ROW '(' ')'							{ $$ = NIL; }
 		;
 
@@ -2851,6 +2858,13 @@ dict_arg:
 dict_arguments:
 	dict_arg						{ $$ = list_make1($1); }
 	| dict_arguments ',' dict_arg	{ $$ = lappend($1, $3); }
+
+
+dict_arguments_opt_comma:
+			dict_arguments								{ $$ = $1; }
+			| dict_arguments ','							{ $$ = $1; }
+		;
+
 
 sub_type:	ANY										{ $$ = PG_ANY_SUBLINK; }
 			| SOME									{ $$ = PG_ANY_SUBLINK; }
@@ -2933,6 +2947,18 @@ expr_list:	a_expr
 				}
 		;
 
+expr_list_opt_comma:
+			expr_list
+				{
+					$$ = $1;
+				}
+			|
+			expr_list ','
+				{
+					$$ = $1;
+				}
+		;
+
 opt_expr_list:
 			expr_list
 				{
@@ -2943,6 +2969,18 @@ opt_expr_list:
 					$$ = NULL;
 				}
 		;
+
+opt_expr_list_opt_comma:
+			expr_list_opt_comma
+				{
+					$$ = $1;
+				}
+			| /* empty */
+				{
+					$$ = NULL;
+				}
+		;
+
 
 
 /* function arguments can have names */
@@ -3093,9 +3131,9 @@ substr_from:
 substr_for: FOR a_expr								{ $$ = $2; }
 		;
 
-trim_list:	a_expr FROM expr_list					{ $$ = lappend($3, $1); }
-			| FROM expr_list						{ $$ = $2; }
-			| expr_list								{ $$ = $1; }
+trim_list:	a_expr FROM expr_list_opt_comma					{ $$ = lappend($3, $1); }
+			| FROM expr_list_opt_comma						{ $$ = $2; }
+			| expr_list_opt_comma								{ $$ = $1; }
 		;
 
 in_expr:	select_with_parens
@@ -3105,7 +3143,7 @@ in_expr:	select_with_parens
 					/* other fields will be filled later */
 					$$ = (PGNode *)n;
 				}
-			| '(' expr_list ')'						{ $$ = (PGNode *)$2; }
+			| '(' expr_list_opt_comma ')'						{ $$ = (PGNode *)$2; }
 		;
 
 /*
@@ -3212,13 +3250,18 @@ opt_asymmetric: ASYMMETRIC
  *
  *****************************************************************************/
 
-opt_target_list: target_list						{ $$ = $1; }
+opt_target_list_opt_comma: target_list_opt_comma						{ $$ = $1; }
 			| /* EMPTY */							{ $$ = NIL; }
 		;
 
 target_list:
 			target_el								{ $$ = list_make1($1); }
 			| target_list ',' target_el				{ $$ = lappend($1, $3); }
+		;
+
+target_list_opt_comma:
+			target_list								{ $$ = $1; }
+			| target_list ','						{ $$ = $1; }
 		;
 
 target_el:	a_expr AS ColLabelOrString
@@ -3286,7 +3329,7 @@ target_el:	a_expr AS ColLabelOrString
 				}
 		;
 
-except_list: EXCLUDE '(' name_list ')'					{ $$ = $3; }
+except_list: EXCLUDE '(' name_list_opt_comma ')'					{ $$ = $3; }
 			| EXCLUDE ColId								{ $$ = list_make1(makeString($2)); }
 		;
 
@@ -3302,7 +3345,12 @@ replace_list:
 			| replace_list ',' replace_list_el		{ $$ = lappend($1, $3); }
 		;
 
-opt_replace_list: REPLACE '(' replace_list ')'		{ $$ = $3; }
+replace_list_opt_comma:
+			replace_list								{ $$ = $1; }
+			| replace_list ','							{ $$ = $1; }
+		;
+
+opt_replace_list: REPLACE '(' replace_list_opt_comma ')'		{ $$ = $3; }
 			| REPLACE replace_list_el				{ $$ = list_make1($2); }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
@@ -3363,6 +3411,11 @@ name_list:	name
 					{ $$ = lappend($1, makeString($3)); }
 		;
 
+
+name_list_opt_comma:
+			name_list								{ $$ = $1; }
+			| name_list ','							{ $$ = $1; }
+		;
 
 name:		ColId									{ $$ = $1; };
 

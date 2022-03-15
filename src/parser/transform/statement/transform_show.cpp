@@ -29,9 +29,12 @@ unique_ptr<SQLStatement> Transformer::TransformShow(duckdb_libpgquery::PGNode *n
 	auto result = make_unique<PragmaStatement>();
 	auto &info = *result->info;
 
-	if (string(stmt->name) == "tables") {
+	string name = stmt->name;
+	if (name == "tables") {
 		// show all tables
 		info.name = "show_tables";
+	} else if (name == "__show_tables_expanded") {
+		info.name = "show_tables_expanded";
 	} else {
 		// show one specific table
 		info.name = "show";

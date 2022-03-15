@@ -943,16 +943,6 @@ int sqlite3_complete(const char *zSql) {
 			token = tkWS;
 			break;
 		}
-		case '[': { /* Microsoft-style identifiers in [...] */
-			zSql++;
-			while (*zSql && *zSql != ']') {
-				zSql++;
-			}
-			if (*zSql == 0)
-				return 0;
-			token = tkOTHER;
-			break;
-		}
 		case '`': /* Grave-accent quoted symbols used by MySQL */
 		case '"': /* single- and double-quoted strings */
 		case '\'': {

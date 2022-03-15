@@ -166,7 +166,8 @@ struct VectorOperations {
 	//! Cast the data from the source type to the target type. Any elements that could not be converted are turned into
 	//! NULLs. If any elements cannot be converted, returns false and fills in the error_message. If no error message is
 	//! provided, an exception is thrown instead.
-	static bool TryCast(Vector &source, Vector &result, idx_t count, string *error_message, bool strict = false);
+	DUCKDB_API static bool TryCast(Vector &source, Vector &result, idx_t count, string *error_message,
+	                               bool strict = false);
 	//! Cast the data from the source type to the target type. Throws an exception if the cast fails.
 	static void Cast(Vector &source, Vector &result, idx_t count, bool strict = false);
 

@@ -134,6 +134,16 @@ void DataChunk::Split(DataChunk &other, idx_t split_idx) {
 	other.SetCardinality(*this);
 }
 
+void DataChunk::Fuse(DataChunk &other) {
+	D_ASSERT(other.size() == size());
+	const idx_t num_cols = other.data.size();
+	for (idx_t col_idx = 0; col_idx < num_cols; ++col_idx) {
+		data.emplace_back(move(other.data[col_idx]));
+		vector_caches.emplace_back(move(other.vector_caches[col_idx]));
+	}
+	other.Destroy();
+}
+
 void DataChunk::Append(const DataChunk &other, bool resize, SelectionVector *sel, idx_t sel_count) {
 	idx_t new_size = sel ? size() + sel_count : size() + other.size();
 	if (other.size() == 0) {
@@ -423,13 +433,13 @@ void SetStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &
 }
 
 struct ArrowUUIDConversion {
-	using internal_type_t = uint64_t;
+	using internal_type_t = hugeint_t;
 
 	static unique_ptr<Vector> InitializeVector(Vector &data, idx_t size) {
 		return make_unique<Vector>(LogicalType::VARCHAR, size);
 	}
 
-	static idx_t GetStringLength(uint64_t value) {
+	static idx_t GetStringLength(hugeint_t value) {
 		return UUID::STRING_SIZE;
 	}
 
@@ -598,12 +608,13 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		break;
 	}
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		SetVarchar<ArrowVarcharConversion, string_t>(child_holder, type, data, size);
 		break;
 	}
 	case LogicalTypeId::UUID: {
-		SetVarchar<ArrowUUIDConversion, uint64_t>(child_holder, type, data, size);
+		SetVarchar<ArrowUUIDConversion, hugeint_t>(child_holder, type, data, size);
 		break;
 	}
 	case LogicalTypeId::LIST: {

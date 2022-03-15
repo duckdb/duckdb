@@ -84,7 +84,7 @@ interval_t ICUCalendarSub::Operation(timestamp_t end_date, timestamp_t start_dat
 	}
 
 	auto start_micros = ICUDateFunc::SetTime(calendar, start_date);
-	auto end_micros = end_date.value % Interval::MICROS_PER_MSEC;
+	auto end_micros = (uint64_t)(end_date.value % Interval::MICROS_PER_MSEC);
 
 	// Borrow 1ms from end_date if we wrap. This works because start_date <= end_date
 	// and if the µs are out of order, then there must be an extra ms.
@@ -116,7 +116,7 @@ interval_t ICUCalendarAge::Operation(timestamp_t end_date, timestamp_t start_dat
 	}
 
 	auto start_micros = ICUDateFunc::SetTime(calendar, start_date);
-	auto end_micros = end_date.value % Interval::MICROS_PER_MSEC;
+	auto end_micros = (uint64_t)(end_date.value % Interval::MICROS_PER_MSEC);
 
 	// Borrow 1ms from end_date if we wrap. This works because start_date <= end_date
 	// and if the µs are out of order, then there must be an extra ms.

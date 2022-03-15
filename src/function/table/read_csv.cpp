@@ -113,7 +113,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 				if (val.type().id() != LogicalTypeId::VARCHAR) {
 					throw BinderException("read_csv requires a type specification as string");
 				}
-				return_types.emplace_back(TransformStringToLogicalType(StringValue::Get(val)));
+				return_types.emplace_back(TransformStringToLogicalTypeId(StringValue::Get(val)));
 			}
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");

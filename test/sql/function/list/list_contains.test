@@ -1,5 +1,5 @@
 # name: test/sql/function/list/list_contains.test
-# description: Test list_ccontains function
+# description: Test list_contains function
 # group: [list]
 
 statement ok
@@ -320,6 +320,16 @@ SELECT list_contains([{a: 1}, {a: 2}], {a: 2})
 
 query T
 SELECT list_contains([{a: 1}, {a: 2}], {a: 3})
+----
+0
+
+query T
+SELECT list_contains([{a: 1, b: 3}, {a: 2, b: 2}], {a: 2, b: 2})
+----
+1
+
+query T
+SELECT list_contains([{a: 1, b: 3}, {a: 2, b: 2}], {a: 1, b: 2})
 ----
 0
 

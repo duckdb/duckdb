@@ -194,6 +194,7 @@ TEST_CASE("Test Arrow Parquet Files", "[arrow]") {
 	std::vector<std::string> skip {"datapage_v2.snappy.parquet"}; //! Not supported by arrow
 	skip.emplace_back("lz4_raw_compressed.parquet");              //! Arrow can't read this
 	skip.emplace_back("lz4_raw_compressed_larger.parquet");       //! Arrow can't read this
+	skip.emplace_back("uuid-arrow.parquet");                      //! Not supported by arrow
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};

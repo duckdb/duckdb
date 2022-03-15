@@ -17,10 +17,10 @@ CREATE TABLE listdata (
 
 statement ok
 INSERT INTO listdata VALUES
-    ('h', 'e', 'l', 'l', 'o', 0, 2),
-    ('w', 'o', 'r', 'l', 'd', 1, 3),
+    ('h', 'e', 'l', 'l', 'o', 1, 2),
+    ('w', 'o', 'r', 'l', 'd', 2, 3),
     ('b', NULL, NULL, NULL, NULL, 0, 1),
-    (NULL, NULL, NULL, NULL, NULL, 1, 2)
+    (NULL, NULL, NULL, NULL, NULL, 0, 2);
 
 statement ok
 CREATE VIEW lists AS
@@ -51,10 +51,10 @@ statement ok
 CREATE VIEW ducks AS SELECT LIST_VALUE(c0, c1, c2) AS d from duckdata;
 
 statement ok
-CREATE VIEW hello AS SELECT s AS hello FROM lists WHERE off = 0 AND length = 2
+CREATE VIEW hello AS SELECT s AS hello FROM lists WHERE off = 1 AND length = 2
 
 statement ok
-CREATE VIEW nulltable as SELECT s as n FROM lists WHERE off = 1 AND length = 2
+CREATE VIEW nulltable as SELECT s as n FROM lists WHERE off = 0 AND length = 2
 
 query T
 SELECT d from ducks
@@ -72,7 +72,7 @@ SELECT d[0:0] FROM ducks
 # constant offset/length
 # normal slice
 query T
-SELECT s[0:2] FROM lists
+SELECT s[1:2] FROM lists
 ----
 [h, e]
 [w, o]
@@ -83,25 +83,25 @@ NULL
 query T
 SELECT s[1:3] FROM lists
 ----
-[e, l]
-[o, r]
-[]
+[h, e, l]
+[w, o, r]
+[b]
 NULL
 
 # variable length offset/length
 query T
 SELECT s[off:length+off] FROM lists
 ----
-[h, e]
-[o, r, l]
+[h, e, l]
+[o, r, l, d]
 [b]
 NULL
 
 query T
 SELECT s[off:2+off] FROM lists
 ----
-[h, e]
-[o, r]
+[h, e, l]
+[o, r, l]
 [b]
 NULL
 
@@ -116,12 +116,11 @@ NULL
 query T
 SELECT hello[off:length+off] FROM lists, hello
 ----
-[h, e]
-[e, l, l]
+[h, e, l]
+[e, l, l, o]
 [h]
-[e, l]
+[h, e]
 
-# test substrings with constant nulls in different places
 query T
 SELECT n[off:length+off] FROM lists, nulltable
 ----
@@ -144,7 +143,7 @@ SELECT hello[off:NULL+off] FROM lists, hello
 [h, e, l, l, o]
 [e, l, l, o]
 [h, e, l, l, o]
-[e, l, l, o]
+[h, e, l, l, o]
 
 query T
 SELECT n[NULL:length+NULL] FROM lists, nulltable
@@ -187,7 +186,7 @@ SELECT s[-2:] FROM lists
 NULL
 NULL
 
-# negative length
+# length 1
 query T
 SELECT s[0:1] FROM lists
 ----
@@ -205,18 +204,26 @@ SELECT s[-4:-2] FROM lists
 NULL
 NULL
 
-# length 0
+# length 1
 query T
 SELECT s[1:1] FROM lists
 ----
-[]
-[]
-[]
+[h]
+[w]
+[b]
 NULL
 
 # no end
 query T
 SELECT s[1:] FROM lists
+----
+[h, e, l, l, o]
+[w, o, r, l, d]
+[b]
+NULL
+
+query T
+SELECT s[2:] FROM lists
 ----
 [e, l, l, o]
 [o, r, l, d]
@@ -254,4 +261,22 @@ SELECT s[(-2147483646-1):-2147483647] FROM lists
 NULL
 NULL
 NULL
+NULL
+
+# pop back
+query T
+SELECT ARRAY_POP_BACK(s) FROM lists;
+----
+[h, e, l, l]
+[w, o, r, l]
+[]
+NULL
+
+# pop front
+query T
+SELECT ARRAY_POP_FRONT(s) FROM lists;
+----
+[e, l, l, o]
+[o, r, l, d]
+[]
 NULL
