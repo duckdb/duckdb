@@ -55,9 +55,9 @@ end
 @testset "HUGE Int test" begin
     db = DuckDB.open(":memory:")
     con = DuckDB.connect(db)
-    res = DuckDB.execute(con,"CREATE TABLE huge(id INTEGER,data HUGEINT);")
-    res = DuckDB.execute(con,"INSERT INTO huge VALUES (1,NULL), (2, 1761718171), (3, 171661889178);")
-    res = DuckDB.toDataFrame(con,"SELECT * FROM huge")
+    res = DuckDB.execute(con, "CREATE TABLE huge(id INTEGER,data HUGEINT);")
+    res = DuckDB.execute(con, "INSERT INTO huge VALUES (1,NULL), (2, 1761718171), (3, 171661889178);")
+    res = DuckDB.toDataFrame(con, "SELECT * FROM huge")
     DuckDB.disconnect(con)
     DuckDB.close(db)
 end
@@ -74,7 +74,7 @@ INSERT INTO interval VALUES
 (INTERVAL 12 MONTH),
 (INTERVAL 12 MICROSECOND),
 (INTERVAL 1 YEAR);
-""",
+"""
     )
     res = DuckDB.toDataFrame(con, "SELECT * FROM interval;")
     @test isa(res, DataFrame)
@@ -88,7 +88,7 @@ end
     res = DuckDB.execute(con, "CREATE TABLE timestamp(timestamp TIMESTAMP , data INTEGER);")
     res = DuckDB.execute(
         con,
-        "INSERT INTO timestamp VALUES ('2021-09-27 11:30:00.000', 4), ('2021-09-28 12:30:00.000', 6), ('2021-09-29 13:30:00.000', 8);",
+        "INSERT INTO timestamp VALUES ('2021-09-27 11:30:00.000', 4), ('2021-09-28 12:30:00.000', 6), ('2021-09-29 13:30:00.000', 8);"
     )
     res = DuckDB.execute(con, "SELECT * FROM timestamp;")
     res = DuckDB.toDataFrame(res)
@@ -110,10 +110,8 @@ end
 @testset "Integers and dates table" begin
     db = DuckDB.DB()
     res = DBInterface.execute(db, "CREATE TABLE integers(date DATE, data INTEGER);")
-    res = DBInterface.execute(
-        db,
-        "INSERT INTO integers VALUES ('2021-09-27', 4), ('2021-09-28', 6), ('2021-09-29', 8);",
-    )
+    res =
+        DBInterface.execute(db, "INSERT INTO integers VALUES ('2021-09-27', 4), ('2021-09-28', 6), ('2021-09-29', 8);")
     res = DBInterface.execute(db, "SELECT * FROM integers;")
     res = DuckDB.toDataFrame(res)
     @test res.date == [Date(2021, 9, 27), Date(2021, 9, 28), Date(2021, 9, 29)]

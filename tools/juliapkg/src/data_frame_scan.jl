@@ -68,7 +68,8 @@ function RegisterDataFrame(db::DB, df::DataFrame, name::AbstractString)
 end
 
 function AddDataFrameScan(db::DB)
-    return DuckDB.CreateTableFunction(
+    # add the data frame scan function
+    DuckDB.CreateTableFunction(
         db.main_connection,
         "julia_df_scan",
         [String],
@@ -77,4 +78,5 @@ function AddDataFrameScan(db::DB)
         DFScanFunction,
         db.handle.data_frames
     )
+    return
 end

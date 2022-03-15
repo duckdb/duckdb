@@ -25,17 +25,17 @@ function GetValidity(vector::Vec)::ValidityMask
 end
 
 function AllValid(vector::Vec)::Bool
-	return duckdb_vector_get_validity(vector.handle) == C_NULL
+    return duckdb_vector_get_validity(vector.handle) == C_NULL
 end
 
 function ListChild(vector::Vec)::Vec
-	return Vec(duckdb_list_vector_get_child(vector.handle))
+    return Vec(duckdb_list_vector_get_child(vector.handle))
 end
 
 function ListSize(vector::Vec)::UInt64
-	return duckdb_list_vector_get_size(vector.handle)
+    return duckdb_list_vector_get_size(vector.handle)
 end
 
 function StructChild(vector::Vec, index::UInt64)::Vec
-	return Vec(duckdb_struct_vector_get_child(vector.handle, index))
+    return Vec(duckdb_struct_vector_get_child(vector.handle, index))
 end

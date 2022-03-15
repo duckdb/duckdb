@@ -17,376 +17,477 @@ function _close_result(result::QueryResult)
 end
 
 mutable struct ColumnConversionData
-	chunks::Vector{DataChunk}
-	col_idx::Int64
-	logical_type::LogicalType
-	conversion_data::Any
+    chunks::Vector{DataChunk}
+    col_idx::Int64
+    logical_type::LogicalType
+    conversion_data::Any
 end
 
 mutable struct ListConversionData
-	conversion_func::Function
-	conversion_loop_func::Function
-	child_type::LogicalType
-	internal_type::Type
-	target_type::Type
-	child_conversion_data::Any
+    conversion_func::Function
+    conversion_loop_func::Function
+    child_type::LogicalType
+    internal_type::Type
+    target_type::Type
+    child_conversion_data::Any
 end
 
 mutable struct StructConversionData
-	tuple_type::Any
-	child_conversion_data::Vector{ListConversionData}
+    tuple_type::Any
+    child_conversion_data::Vector{ListConversionData}
 end
 
 function nop_convert(column_data::ColumnConversionData, val)
-	return val
+    return val
 end
 
 function convert_string(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::UInt64)
-	base_ptr = val + (idx - 1) * sizeof(duckdb_string_t)
+    base_ptr = val + (idx - 1) * sizeof(duckdb_string_t)
     length_ptr = Base.unsafe_convert(Ptr{Int32}, base_ptr)
-	length = unsafe_load(length_ptr)
-	if length <= STRING_INLINE_LENGTH
-		prefix_ptr = Base.unsafe_convert(Ptr{UInt8}, base_ptr + sizeof(Int32))
-		return unsafe_string(prefix_ptr, length)
-	else
-		ptr_ptr = Base.unsafe_convert(Ptr{Ptr{UInt8}}, base_ptr + sizeof(Int32) * 2)
-		data_ptr = Base.unsafe_load(ptr_ptr)
-		return unsafe_string(data_ptr, length)
-	end
+    length = unsafe_load(length_ptr)
+    if length <= STRING_INLINE_LENGTH
+        prefix_ptr = Base.unsafe_convert(Ptr{UInt8}, base_ptr + sizeof(Int32))
+        return unsafe_string(prefix_ptr, length)
+    else
+        ptr_ptr = Base.unsafe_convert(Ptr{Ptr{UInt8}}, base_ptr + sizeof(Int32) * 2)
+        data_ptr = Base.unsafe_load(ptr_ptr)
+        return unsafe_string(data_ptr, length)
+    end
 end
 
 function convert_blob(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::UInt64)::Base.CodeUnits{UInt8, String}
-	return Base.codeunits(convert_string(column_data, val, idx))
+    return Base.codeunits(convert_string(column_data, val, idx))
 end
 
 function convert_date(column_data::ColumnConversionData, val::Int32)::Date
-	return Dates.epochdays2date(val + 719528)
+    return Dates.epochdays2date(val + 719528)
 end
 
 function convert_time(column_data::ColumnConversionData, val::Int64)::Time
-	return Dates.Time(Dates.Nanosecond(val * 1000))
+    return Dates.Time(Dates.Nanosecond(val * 1000))
 end
 
 function convert_timestamp(column_data::ColumnConversionData, val::Int64)::DateTime
-	return Dates.epochms2datetime((val ÷ 1000) + 62167219200000)
+    return Dates.epochms2datetime((val ÷ 1000) + 62167219200000)
 end
 
 function convert_timestamp_s(column_data::ColumnConversionData, val::Int64)::DateTime
-	return Dates.epochms2datetime((val * 1000) + 62167219200000)
+    return Dates.epochms2datetime((val * 1000) + 62167219200000)
 end
 
 function convert_timestamp_ms(column_data::ColumnConversionData, val::Int64)::DateTime
-	return Dates.epochms2datetime((val) + 62167219200000)
+    return Dates.epochms2datetime((val) + 62167219200000)
 end
 
 function convert_timestamp_ns(column_data::ColumnConversionData, val::Int64)::DateTime
-	return Dates.epochms2datetime((val ÷ 1000000) + 62167219200000)
+    return Dates.epochms2datetime((val ÷ 1000000) + 62167219200000)
 end
 
 function convert_interval(column_data::ColumnConversionData, val::duckdb_interval)::Dates.CompoundPeriod
-	return Dates.CompoundPeriod(
-		Dates.Month(val.months),
-		Dates.Day(val.days),
-		Dates.Microsecond(val.micros),
-	)
+    return Dates.CompoundPeriod(Dates.Month(val.months), Dates.Day(val.days), Dates.Microsecond(val.micros))
 end
 
 function convert_hugeint(column_data::ColumnConversionData, val::duckdb_hugeint)::Int128
-	return Int128(val.lower) + Int128(val.upper) << 64;
+    return Int128(val.lower) + Int128(val.upper) << 64
 end
 
 function convert_uuid(column_data::ColumnConversionData, val::duckdb_hugeint)::UUID
-	hugeint = convert_hugeint(column_data, val)
-	base_value = Int128(170141183460469231731687303715884105727)
-	if hugeint < 0
-		return UUID(UInt128(hugeint + base_value) + 1)
-	else
-		return UUID(UInt128(hugeint) + base_value + 1)
-	end
+    hugeint = convert_hugeint(column_data, val)
+    base_value = Int128(170141183460469231731687303715884105727)
+    if hugeint < 0
+        return UUID(UInt128(hugeint + base_value) + 1)
+    else
+        return UUID(UInt128(hugeint) + base_value + 1)
+    end
 end
 
 function convert_enum(column_data::ColumnConversionData, val)::String
-	return column_data.conversion_data[val + 1]
+    return column_data.conversion_data[val + 1]
 end
 
 function convert_decimal_hugeint(column_data::ColumnConversionData, val::duckdb_hugeint)::Float64
-	return convert_hugeint(column_data, val) / column_data.conversion_data
+    return convert_hugeint(column_data, val) / column_data.conversion_data
 end
 
 function convert_decimal(column_data::ColumnConversionData, val)::Float64
-	return val / column_data.conversion_data
+    return val / column_data.conversion_data
 end
 
-function convert_vector(column_data::ColumnConversionData, vector::Vec, size::UInt64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
-	array = GetArray(vector, SRC)
-	if !all_valid
-		validity = GetValidity(vector)
-	end
-	for i in 1:size
-		if all_valid || IsValid(validity, i)
-			result[position] = convert_func(column_data, array[i])
-		end
-		position += 1
-	end
-	return size
+function convert_vector(
+    column_data::ColumnConversionData,
+    vector::Vec,
+    size::UInt64,
+    convert_func::Function,
+    result,
+    position,
+    all_valid,
+    ::Type{SRC},
+    ::Type{DST}
+) where {SRC, DST}
+    array = GetArray(vector, SRC)
+    if !all_valid
+        validity = GetValidity(vector)
+    end
+    for i in 1:size
+        if all_valid || IsValid(validity, i)
+            result[position] = convert_func(column_data, array[i])
+        end
+        position += 1
+    end
+    return size
 end
 
-function convert_vector_string(column_data::ColumnConversionData, vector::Vec, size::UInt64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
+function convert_vector_string(
+    column_data::ColumnConversionData,
+    vector::Vec,
+    size::UInt64,
+    convert_func::Function,
+    result,
+    position,
+    all_valid,
+    ::Type{SRC},
+    ::Type{DST}
+) where {SRC, DST}
     raw_ptr = duckdb_vector_get_data(vector.handle)
     ptr = Base.unsafe_convert(Ptr{duckdb_string_t}, raw_ptr)
     if !all_valid
-		validity = GetValidity(vector)
-	end
-	for i in 1:size
-		if all_valid || IsValid(validity, i)
- 			result[position] = convert_func(column_data, raw_ptr, i)
-		end
-		position += 1
-	end
-	return size
+        validity = GetValidity(vector)
+    end
+    for i in 1:size
+        if all_valid || IsValid(validity, i)
+            result[position] = convert_func(column_data, raw_ptr, i)
+        end
+        position += 1
+    end
+    return size
 end
 
-function convert_vector_list(column_data::ColumnConversionData, vector::Vec, size::UInt64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
-	child_vector = ListChild(vector)
-	list_size = ListSize(vector)
+function convert_vector_list(
+    column_data::ColumnConversionData,
+    vector::Vec,
+    size::UInt64,
+    convert_func::Function,
+    result,
+    position,
+    all_valid,
+    ::Type{SRC},
+    ::Type{DST}
+) where {SRC, DST}
+    child_vector = ListChild(vector)
+    list_size = ListSize(vector)
 
-	# convert the child vector
-	ldata = column_data.conversion_data
+    # convert the child vector
+    ldata = column_data.conversion_data
 
-	child_column_data = ColumnConversionData(column_data.chunks, column_data.col_idx, ldata.child_type, ldata.child_conversion_data)
-	child_array = Array{Union{Missing,ldata.target_type}}(missing, list_size)
-	ldata.conversion_loop_func(child_column_data, child_vector, list_size, ldata.conversion_func, child_array, 1, false, ldata.internal_type, ldata.target_type)
+    child_column_data =
+        ColumnConversionData(column_data.chunks, column_data.col_idx, ldata.child_type, ldata.child_conversion_data)
+    child_array = Array{Union{Missing, ldata.target_type}}(missing, list_size)
+    ldata.conversion_loop_func(
+        child_column_data,
+        child_vector,
+        list_size,
+        ldata.conversion_func,
+        child_array,
+        1,
+        false,
+        ldata.internal_type,
+        ldata.target_type
+    )
 
-	array = GetArray(vector, SRC)
-	if !all_valid
-		validity = GetValidity(vector)
-	end
-	for i in 1:size
-		if all_valid || IsValid(validity, i)
-			start_offset::UInt64 = array[i].offset + 1
-			end_offset::UInt64 = array[i].offset + array[i].length
-			result[position] = child_array[start_offset:end_offset]
-		end
-		position += 1
-	end
-	return size
+    array = GetArray(vector, SRC)
+    if !all_valid
+        validity = GetValidity(vector)
+    end
+    for i in 1:size
+        if all_valid || IsValid(validity, i)
+            start_offset::UInt64 = array[i].offset + 1
+            end_offset::UInt64 = array[i].offset + array[i].length
+            result[position] = child_array[start_offset:end_offset]
+        end
+        position += 1
+    end
+    return size
 end
 
 function convert_struct_children(column_data::ColumnConversionData, vector::Vec, size::UInt64)
-	# convert the child vectors of the struct
-	child_count = GetStructChildCount(column_data.logical_type)
-	child_arrays = Vector()
-	for i in 1:child_count
-		child_vector = StructChild(vector, i)
-		ldata = column_data.conversion_data.child_conversion_data[i]
+    # convert the child vectors of the struct
+    child_count = GetStructChildCount(column_data.logical_type)
+    child_arrays = Vector()
+    for i in 1:child_count
+        child_vector = StructChild(vector, i)
+        ldata = column_data.conversion_data.child_conversion_data[i]
 
-		child_column_data = ColumnConversionData(column_data.chunks, column_data.col_idx, ldata.child_type, ldata.child_conversion_data)
-		child_array = Array{Union{Missing,ldata.target_type}}(missing, size)
-		ldata.conversion_loop_func(child_column_data, child_vector, size, ldata.conversion_func, child_array, 1, false, ldata.internal_type, ldata.target_type)
-		push!(child_arrays, child_array)
-	end
-	return child_arrays
+        child_column_data =
+            ColumnConversionData(column_data.chunks, column_data.col_idx, ldata.child_type, ldata.child_conversion_data)
+        child_array = Array{Union{Missing, ldata.target_type}}(missing, size)
+        ldata.conversion_loop_func(
+            child_column_data,
+            child_vector,
+            size,
+            ldata.conversion_func,
+            child_array,
+            1,
+            false,
+            ldata.internal_type,
+            ldata.target_type
+        )
+        push!(child_arrays, child_array)
+    end
+    return child_arrays
 end
 
 
-function convert_vector_struct(column_data::ColumnConversionData, vector::Vec, size::UInt64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
-	child_count = GetStructChildCount(column_data.logical_type)
-	child_arrays = convert_struct_children(column_data, vector, size)
+function convert_vector_struct(
+    column_data::ColumnConversionData,
+    vector::Vec,
+    size::UInt64,
+    convert_func::Function,
+    result,
+    position,
+    all_valid,
+    ::Type{SRC},
+    ::Type{DST}
+) where {SRC, DST}
+    child_count = GetStructChildCount(column_data.logical_type)
+    child_arrays = convert_struct_children(column_data, vector, size)
 
-	if !all_valid
-		validity = GetValidity(vector)
-	end
-	for i in 1:size
-		if all_valid || IsValid(validity, i)
-			result_tuple = Vector()
-			for child_idx in 1:child_count
-				push!(result_tuple, child_arrays[child_idx][i])
-			end
-			result[position] = NamedTuple{column_data.conversion_data.tuple_type}(result_tuple)
-		end
-		position += 1
-	end
-	return size
+    if !all_valid
+        validity = GetValidity(vector)
+    end
+    for i in 1:size
+        if all_valid || IsValid(validity, i)
+            result_tuple = Vector()
+            for child_idx in 1:child_count
+                push!(result_tuple, child_arrays[child_idx][i])
+            end
+            result[position] = NamedTuple{column_data.conversion_data.tuple_type}(result_tuple)
+        end
+        position += 1
+    end
+    return size
 end
 
-function convert_vector_map(column_data::ColumnConversionData, vector::Vec, size::UInt64, convert_func::Function, result, position, all_valid, ::Type{SRC}, ::Type{DST}) where {SRC, DST}
-	child_arrays = convert_struct_children(column_data, vector, size)
-	keys = child_arrays[1]
-	values = child_arrays[2]
+function convert_vector_map(
+    column_data::ColumnConversionData,
+    vector::Vec,
+    size::UInt64,
+    convert_func::Function,
+    result,
+    position,
+    all_valid,
+    ::Type{SRC},
+    ::Type{DST}
+) where {SRC, DST}
+    child_arrays = convert_struct_children(column_data, vector, size)
+    keys = child_arrays[1]
+    values = child_arrays[2]
 
-	if !all_valid
-		validity = GetValidity(vector)
-	end
-	for i in 1:size
-		if all_valid || IsValid(validity, i)
-			result_dict = Dict()
-			key_count = length(keys[i])
-			for key_idx in 1:key_count
-				result_dict[keys[i][key_idx]] = values[i][key_idx]
-			end
-			result[position] = result_dict
-		end
-		position += 1
-	end
-	return size
+    if !all_valid
+        validity = GetValidity(vector)
+    end
+    for i in 1:size
+        if all_valid || IsValid(validity, i)
+            result_dict = Dict()
+            key_count = length(keys[i])
+            for key_idx in 1:key_count
+                result_dict[keys[i][key_idx]] = values[i][key_idx]
+            end
+            result[position] = result_dict
+        end
+        position += 1
+    end
+    return size
 end
 
-function convert_column_loop(column_data::ColumnConversionData, convert_func::Function, ::Type{SRC}, ::Type{DST}, convert_vector_func::Function) where {SRC, DST}
-	# first check if there are null values in any chunks
-	has_missing = false
-	row_count = 0
-	for chunk in column_data.chunks
-		if !AllValid(chunk, column_data.col_idx)
-			has_missing = true
-		end
-		row_count += GetSize(chunk)
-	end
-	if has_missing
-		# missing values
-		result = Array{Union{Missing,DST}}(missing, row_count)
-		position = 1
-		for chunk in column_data.chunks
-			position += convert_vector_func(column_data, GetVector(chunk, column_data.col_idx), GetSize(chunk), convert_func, result, position, AllValid(chunk, column_data.col_idx), SRC, DST)
-		end
-	else
-		# no missing values
-		result = Array{DST}(undef, row_count)
-		position = 1
-		for chunk in column_data.chunks
-			position += convert_vector_func(column_data, GetVector(chunk, column_data.col_idx), GetSize(chunk), convert_func, result, position, true, SRC, DST)
-		end
-	end
-	return result
+function convert_column_loop(
+    column_data::ColumnConversionData,
+    convert_func::Function,
+    ::Type{SRC},
+    ::Type{DST},
+    convert_vector_func::Function
+) where {SRC, DST}
+    # first check if there are null values in any chunks
+    has_missing = false
+    row_count = 0
+    for chunk in column_data.chunks
+        if !AllValid(chunk, column_data.col_idx)
+            has_missing = true
+        end
+        row_count += GetSize(chunk)
+    end
+    if has_missing
+        # missing values
+        result = Array{Union{Missing, DST}}(missing, row_count)
+        position = 1
+        for chunk in column_data.chunks
+            position += convert_vector_func(
+                column_data,
+                GetVector(chunk, column_data.col_idx),
+                GetSize(chunk),
+                convert_func,
+                result,
+                position,
+                AllValid(chunk, column_data.col_idx),
+                SRC,
+                DST
+            )
+        end
+    else
+        # no missing values
+        result = Array{DST}(undef, row_count)
+        position = 1
+        for chunk in column_data.chunks
+            position += convert_vector_func(
+                column_data,
+                GetVector(chunk, column_data.col_idx),
+                GetSize(chunk),
+                convert_func,
+                result,
+                position,
+                true,
+                SRC,
+                DST
+            )
+        end
+    end
+    return result
 end
 
 function create_child_conversion_data(child_type::LogicalType)
-	internal_type_id = GetInternalTypeId(child_type)
-	internal_type = duckdb_type_to_internal_type(internal_type_id)
-	target_type = duckdb_type_to_julia_type(child_type)
+    internal_type_id = GetInternalTypeId(child_type)
+    internal_type = duckdb_type_to_internal_type(internal_type_id)
+    target_type = duckdb_type_to_julia_type(child_type)
 
-	conversion_func = get_conversion_function(child_type)
-	conversion_loop_func = get_conversion_loop_function(child_type)
-	child_conversion_data = init_conversion_loop(child_type)
-	return ListConversionData(conversion_func, conversion_loop_func, child_type, internal_type, target_type, child_conversion_data)
+    conversion_func = get_conversion_function(child_type)
+    conversion_loop_func = get_conversion_loop_function(child_type)
+    child_conversion_data = init_conversion_loop(child_type)
+    return ListConversionData(
+        conversion_func,
+        conversion_loop_func,
+        child_type,
+        internal_type,
+        target_type,
+        child_conversion_data
+    )
 end
 
 function init_conversion_loop(logical_type::LogicalType)
-	type = GetTypeId(logical_type)
-	if type == DUCKDB_TYPE_DECIMAL
-		return 10 ^ GetDecimalScale(logical_type)
-	elseif type == DUCKDB_TYPE_ENUM
-		return GetEnumDictionary(logical_type)
-	elseif type == DUCKDB_TYPE_LIST
-		child_type = GetListChildType(logical_type)
-		return create_child_conversion_data(child_type)
-	elseif type == DUCKDB_TYPE_STRUCT || type == DUCKDB_TYPE_MAP
-		child_count = GetStructChildCount(logical_type)
-		child_symbols::Vector{Symbol} = Vector()
-		child_data::Vector{ListConversionData} = Vector()
-		for i in 1:child_count
-			child_symbol = Symbol(GetStructChildName(logical_type, i))
-			child_type = GetStructChildType(logical_type, i)
-			child_conv_data = create_child_conversion_data(child_type)
-			push!(child_symbols, child_symbol)
-			push!(child_data, child_conv_data)
-		end
-		return StructConversionData(Tuple(x for x in child_symbols), child_data)
-	else
-		return nothing
-	end
+    type = GetTypeId(logical_type)
+    if type == DUCKDB_TYPE_DECIMAL
+        return 10^GetDecimalScale(logical_type)
+    elseif type == DUCKDB_TYPE_ENUM
+        return GetEnumDictionary(logical_type)
+    elseif type == DUCKDB_TYPE_LIST
+        child_type = GetListChildType(logical_type)
+        return create_child_conversion_data(child_type)
+    elseif type == DUCKDB_TYPE_STRUCT || type == DUCKDB_TYPE_MAP
+        child_count = GetStructChildCount(logical_type)
+        child_symbols::Vector{Symbol} = Vector()
+        child_data::Vector{ListConversionData} = Vector()
+        for i in 1:child_count
+            child_symbol = Symbol(GetStructChildName(logical_type, i))
+            child_type = GetStructChildType(logical_type, i)
+            child_conv_data = create_child_conversion_data(child_type)
+            push!(child_symbols, child_symbol)
+            push!(child_data, child_conv_data)
+        end
+        return StructConversionData(Tuple(x for x in child_symbols), child_data)
+    else
+        return nothing
+    end
 end
 
 function get_conversion_function(logical_type::LogicalType)::Function
-	type = GetTypeId(logical_type)
-	if type == DUCKDB_TYPE_VARCHAR || type == DUCKDB_TYPE_JSON
-		return convert_string
-	elseif type == DUCKDB_TYPE_BLOB
-		return convert_blob
-	elseif type == DUCKDB_TYPE_DATE
-		return convert_date
-	elseif type == DUCKDB_TYPE_TIME
-		return convert_time
-	elseif type == DUCKDB_TYPE_TIMESTAMP
-		return convert_timestamp
-	elseif type == DUCKDB_TYPE_TIMESTAMP_S
-		return convert_timestamp_s
-	elseif type == DUCKDB_TYPE_TIMESTAMP_MS
-		return convert_timestamp_ms
-	elseif type == DUCKDB_TYPE_TIMESTAMP_NS
-		return convert_timestamp_ns
-	elseif type == DUCKDB_TYPE_INTERVAL
-		return convert_interval
-	elseif type == DUCKDB_TYPE_HUGEINT
-		return convert_hugeint
-	elseif type == DUCKDB_TYPE_UUID
-		return convert_uuid
-	elseif type == DUCKDB_TYPE_DECIMAL
-		internal_type_id = GetInternalTypeId(logical_type)
-		if internal_type_id == DUCKDB_TYPE_HUGEINT
-			return convert_decimal_hugeint
-		else
-			return convert_decimal
-		end
-	elseif type == DUCKDB_TYPE_ENUM
-		return convert_enum
-	else
-		return nop_convert
-	end
+    type = GetTypeId(logical_type)
+    if type == DUCKDB_TYPE_VARCHAR || type == DUCKDB_TYPE_JSON
+        return convert_string
+    elseif type == DUCKDB_TYPE_BLOB
+        return convert_blob
+    elseif type == DUCKDB_TYPE_DATE
+        return convert_date
+    elseif type == DUCKDB_TYPE_TIME
+        return convert_time
+    elseif type == DUCKDB_TYPE_TIMESTAMP
+        return convert_timestamp
+    elseif type == DUCKDB_TYPE_TIMESTAMP_S
+        return convert_timestamp_s
+    elseif type == DUCKDB_TYPE_TIMESTAMP_MS
+        return convert_timestamp_ms
+    elseif type == DUCKDB_TYPE_TIMESTAMP_NS
+        return convert_timestamp_ns
+    elseif type == DUCKDB_TYPE_INTERVAL
+        return convert_interval
+    elseif type == DUCKDB_TYPE_HUGEINT
+        return convert_hugeint
+    elseif type == DUCKDB_TYPE_UUID
+        return convert_uuid
+    elseif type == DUCKDB_TYPE_DECIMAL
+        internal_type_id = GetInternalTypeId(logical_type)
+        if internal_type_id == DUCKDB_TYPE_HUGEINT
+            return convert_decimal_hugeint
+        else
+            return convert_decimal
+        end
+    elseif type == DUCKDB_TYPE_ENUM
+        return convert_enum
+    else
+        return nop_convert
+    end
 end
 
 function get_conversion_loop_function(logical_type::LogicalType)::Function
-	type = GetTypeId(logical_type)
-	if type == DUCKDB_TYPE_VARCHAR || type == DUCKDB_TYPE_BLOB || type == DUCKDB_TYPE_JSON
-		return convert_vector_string
-	elseif type == DUCKDB_TYPE_LIST
-		return convert_vector_list
-	elseif type == DUCKDB_TYPE_STRUCT
-		return convert_vector_struct
-	elseif type == DUCKDB_TYPE_MAP
-		return convert_vector_map
-	else
-		return convert_vector
-	end
+    type = GetTypeId(logical_type)
+    if type == DUCKDB_TYPE_VARCHAR || type == DUCKDB_TYPE_BLOB || type == DUCKDB_TYPE_JSON
+        return convert_vector_string
+    elseif type == DUCKDB_TYPE_LIST
+        return convert_vector_list
+    elseif type == DUCKDB_TYPE_STRUCT
+        return convert_vector_struct
+    elseif type == DUCKDB_TYPE_MAP
+        return convert_vector_map
+    else
+        return convert_vector
+    end
 end
 
 function convert_column(column_data::ColumnConversionData)
-	internal_type_id = GetInternalTypeId(column_data.logical_type)
-	internal_type = duckdb_type_to_internal_type(internal_type_id)
-	target_type = duckdb_type_to_julia_type(column_data.logical_type)
+    internal_type_id = GetInternalTypeId(column_data.logical_type)
+    internal_type = duckdb_type_to_internal_type(internal_type_id)
+    target_type = duckdb_type_to_julia_type(column_data.logical_type)
 
-	conversion_func = get_conversion_function(column_data.logical_type)
-	conversion_loop_func = get_conversion_loop_function(column_data.logical_type)
+    conversion_func = get_conversion_function(column_data.logical_type)
+    conversion_loop_func = get_conversion_loop_function(column_data.logical_type)
 
-	column_data.conversion_data = init_conversion_loop(column_data.logical_type)
-	return convert_column_loop(column_data, conversion_func, internal_type, target_type, conversion_loop_func)
+    column_data.conversion_data = init_conversion_loop(column_data.logical_type)
+    return convert_column_loop(column_data, conversion_func, internal_type, target_type, conversion_loop_func)
 end
 
 function toDataFrame(result::Ref{duckdb_result})::DataFrame
     column_count = duckdb_column_count(result)
-	# duplicate eliminate the names
-	names = Vector{Symbol}(undef, column_count)
-	for i in 1:column_count
-	  name = sym(duckdb_column_name(result, i))
-	  if name in view(names, 1:(i - 1))
-		  j = 1
-		  new_name = Symbol(name, :_, j)
-		  while new_name in view(names, 1:(i - 1))
-			  j += 1
-			  new_name = Symbol(name, :_, j)
-		  end
-		  name = new_name
-	  end
-	  names[i] = name
-	end
-	# gather all the data chunks
-	chunk_count = duckdb_result_chunk_count(result[])
-	chunks::Vector{DataChunk} = []
-	for i = 1:chunk_count
-		push!(chunks, DataChunk(duckdb_result_get_chunk(result[], i), true))
-	end
+    # duplicate eliminate the names
+    names = Vector{Symbol}(undef, column_count)
+    for i in 1:column_count
+        name = sym(duckdb_column_name(result, i))
+        if name in view(names, 1:(i - 1))
+            j = 1
+            new_name = Symbol(name, :_, j)
+            while new_name in view(names, 1:(i - 1))
+                j += 1
+                new_name = Symbol(name, :_, j)
+            end
+            name = new_name
+        end
+        names[i] = name
+    end
+    # gather all the data chunks
+    chunk_count = duckdb_result_chunk_count(result[])
+    chunks::Vector{DataChunk} = []
+    for i in 1:chunk_count
+        push!(chunks, DataChunk(duckdb_result_get_chunk(result[], i), true))
+    end
 
     df = DataFrame()
-    for i = 1:column_count
+    for i in 1:column_count
         name = names[i]
         logical_type = LogicalType(duckdb_column_logical_type(result, i))
         column_data = ColumnConversionData(chunks, i, logical_type, nothing)
@@ -434,7 +535,7 @@ Tables.isrowtable(::Type{QueryResult}) = true
 Tables.columnnames(q::QueryResult) = Tables.columnnames(q.df)
 
 function Tables.schema(q::QueryResult)
-	return Tables.schema(q.df)
+    return Tables.schema(q.df)
 end
 
 Base.IteratorSize(::Type{QueryResult}) = Base.SizeUnknown()

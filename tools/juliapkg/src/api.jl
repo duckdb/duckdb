@@ -228,7 +228,13 @@ Returns `NULL` if the column is out of range.
 * returns: The logical column type of the specified column.
 """
 function duckdb_column_logical_type(result, col)
-    return ccall((:duckdb_column_logical_type, libduckdb), duckdb_logical_type, (Ref{duckdb_result}, Int32), result, col - 1)
+    return ccall(
+        (:duckdb_column_logical_type, libduckdb),
+        duckdb_logical_type,
+        (Ref{duckdb_result}, Int32),
+        result,
+        col - 1
+    )
 end
 
 """
@@ -280,13 +286,7 @@ printf("Data for row %d: %d\\n", row, data[row]);
 * returns: The column data of the specified column.
 """
 function duckdb_column_data(result, col)
-    return ccall(
-        (:duckdb_column_data, libduckdb),
-        Ptr{Cvoid},
-        (Ref{duckdb_result}, Int32),
-        result,
-        col - 1,
-    )
+    return ccall((:duckdb_column_data, libduckdb), Ptr{Cvoid}, (Ref{duckdb_result}, Int32), result, col - 1)
 end
 
 """
@@ -308,13 +308,7 @@ if (nullmask[row]) {
 * returns: The nullmask of the specified column.
 """
 function duckdb_nullmask_data(result, col)
-    return ccall(
-        (:duckdb_nullmask_data, libduckdb),
-        Ptr{Int32},
-        (Ref{duckdb_result}, Int32),
-        result,
-        col - 1,
-    )
+    return ccall((:duckdb_nullmask_data, libduckdb), Ptr{Int32}, (Ref{duckdb_result}, Int32), result, col - 1)
 end
 
 """
@@ -349,7 +343,13 @@ Use `duckdb_result_chunk_count` to figure out how many chunks there are in the r
 * returns: The resulting data chunk. Returns `NULL` if the chunk index is out of bounds.
 """
 function duckdb_result_get_chunk(result, chunk_index)
-    return ccall((:duckdb_result_get_chunk, libduckdb), duckdb_data_chunk, (duckdb_result, UInt64), result, chunk_index - 1)
+    return ccall(
+        (:duckdb_result_get_chunk, libduckdb),
+        duckdb_data_chunk,
+        (duckdb_result, UInt64),
+        result,
+        chunk_index - 1
+    )
 end
 
 """
@@ -1344,7 +1344,13 @@ The result must be freed with `duckdb_free`
 * returns: The string value of the enum type. Must be freed with `duckdb_free`.
 """
 function duckdb_enum_dictionary_value(handle, index)
-    return ccall((:duckdb_enum_dictionary_value, libduckdb), Ptr{UInt8}, (duckdb_logical_type,UInt64), handle, index - 1)
+    return ccall(
+        (:duckdb_enum_dictionary_value, libduckdb),
+        Ptr{UInt8},
+        (duckdb_logical_type, UInt64),
+        handle,
+        index - 1
+    )
 end
 
 """
@@ -1379,7 +1385,13 @@ The result must be freed with `duckdb_free`
 * returns: The name of the struct type. Must be freed with `duckdb_free`.
 """
 function duckdb_struct_type_child_name(handle, index)
-    return ccall((:duckdb_struct_type_child_name, libduckdb), Ptr{UInt8}, (duckdb_logical_type,UInt64), handle, index - 1)
+    return ccall(
+        (:duckdb_struct_type_child_name, libduckdb),
+        Ptr{UInt8},
+        (duckdb_logical_type, UInt64),
+        handle,
+        index - 1
+    )
 end
 
 """
@@ -1392,7 +1404,13 @@ The result must be freed with `duckdb_destroy_logical_type`
 * returns: The child type of the struct type. Must be destroyed with `duckdb_destroy_logical_type`.
 """
 function duckdb_struct_type_child_type(handle, index)
-    return ccall((:duckdb_struct_type_child_type, libduckdb), duckdb_logical_type, (duckdb_logical_type,UInt64), handle, index - 1)
+    return ccall(
+        (:duckdb_struct_type_child_type, libduckdb),
+        duckdb_logical_type,
+        (duckdb_logical_type, UInt64),
+        handle,
+        index - 1
+    )
 end
 
 """
@@ -1485,7 +1503,13 @@ It does NOT need to be destroyed.
 * returns: The vector
 """
 function duckdb_data_chunk_get_vector(chunk, col_idx)
-    return ccall((:duckdb_data_chunk_get_vector, libduckdb), duckdb_vector, (duckdb_data_chunk, UInt64), chunk, col_idx - 1)
+    return ccall(
+        (:duckdb_data_chunk_get_vector, libduckdb),
+        duckdb_vector,
+        (duckdb_data_chunk, UInt64),
+        chunk,
+        col_idx - 1
+    )
 end
 
 #=
@@ -1502,12 +1526,7 @@ The result must be destroyed with `duckdb_destroy_logical_type`.
 * returns: The type of the vector
 """
 function duckdb_vector_get_column_type(vector)
-    return ccall(
-        (:duckdb_vector_get_column_type, libduckdb),
-        duckdb_logical_type,
-        (duckdb_vector,),
-        vector
-    )
+    return ccall((:duckdb_vector_get_column_type, libduckdb), duckdb_logical_type, (duckdb_vector,), vector)
 end
 
 """
@@ -1556,12 +1575,7 @@ This allows null values to be written to the vector, regardless of whether a val
 * vector: The vector to alter
 """
 function duckdb_vector_ensure_validity_writable(vector)
-    return ccall(
-        (:duckdb_vector_ensure_validity_writable, libduckdb),
-        Cvoid,
-        (duckdb_vector,),
-        vector
-    )
+    return ccall((:duckdb_vector_ensure_validity_writable, libduckdb), Cvoid, (duckdb_vector,), vector)
 end
 
 """
@@ -1573,12 +1587,7 @@ The resulting vector is valid as long as the parent vector is valid.
 * returns: The child vector
 """
 function duckdb_list_vector_get_child(vector)
-    return ccall(
-        (:duckdb_list_vector_get_child, libduckdb),
-        duckdb_vector,
-        (duckdb_vector,),
-        vector
-    )
+    return ccall((:duckdb_list_vector_get_child, libduckdb), duckdb_vector, (duckdb_vector,), vector)
 end
 
 """
@@ -1588,12 +1597,7 @@ Returns the size of the child vector of the list
 * returns: The size of the child list
 """
 function duckdb_list_vector_get_size(vector)
-    return ccall(
-        (:duckdb_list_vector_get_size, libduckdb),
-        UInt64,
-        (duckdb_vector,),
-        vector
-    )
+    return ccall((:duckdb_list_vector_get_size, libduckdb), UInt64, (duckdb_vector,), vector)
 end
 
 """

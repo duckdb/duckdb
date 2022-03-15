@@ -39,14 +39,14 @@ const DuckDBError = 1;
     DUCKDB_TYPE_BLOB
     DUCKDB_TYPE_DECIMAL
     DUCKDB_TYPE_TIMESTAMP_S
-	DUCKDB_TYPE_TIMESTAMP_MS
-	DUCKDB_TYPE_TIMESTAMP_NS
-	DUCKDB_TYPE_ENUM
-	DUCKDB_TYPE_LIST
-	DUCKDB_TYPE_STRUCT
-	DUCKDB_TYPE_MAP
-	DUCKDB_TYPE_UUID
-	DUCKDB_TYPE_JSON
+    DUCKDB_TYPE_TIMESTAMP_MS
+    DUCKDB_TYPE_TIMESTAMP_NS
+    DUCKDB_TYPE_ENUM
+    DUCKDB_TYPE_LIST
+    DUCKDB_TYPE_STRUCT
+    DUCKDB_TYPE_MAP
+    DUCKDB_TYPE_UUID
+    DUCKDB_TYPE_JSON
 end
 
 const DUCKDB_TYPE = DUCKDB_TYPE_
@@ -114,13 +114,13 @@ struct duckdb_hugeint
 end
 
 struct duckdb_string_t
-	length::UInt32
-	data::NTuple{12, UInt8}
+    length::UInt32
+    data::NTuple{12, UInt8}
 end
 
 struct duckdb_list_entry_t
-	offset::UInt64
-	length::UInt64
+    offset::UInt64
+    length::UInt64
 end
 
 STRING_INLINE_LENGTH = 12
@@ -173,61 +173,61 @@ INTERNAL_TYPE_MAP = Dict(
 )
 
 JULIA_TYPE_MAP = Dict(
-	DUCKDB_TYPE_INVALID => Missing,
-	DUCKDB_TYPE_BOOLEAN => Bool,
-	DUCKDB_TYPE_TINYINT => Int8,
-	DUCKDB_TYPE_SMALLINT => Int16,
-	DUCKDB_TYPE_INTEGER => Int32,
-	DUCKDB_TYPE_BIGINT => Int64,
-	DUCKDB_TYPE_HUGEINT => Int128,
-	DUCKDB_TYPE_UTINYINT => UInt8,
-	DUCKDB_TYPE_USMALLINT => UInt16,
-	DUCKDB_TYPE_UINTEGER => UInt32,
-	DUCKDB_TYPE_UBIGINT => UInt64,
-	DUCKDB_TYPE_FLOAT => Float32,
-	DUCKDB_TYPE_DOUBLE => Float64,
-	DUCKDB_TYPE_DECIMAL => Float64,
-	DUCKDB_TYPE_DATE => Date,
-	DUCKDB_TYPE_TIME => Time,
-	DUCKDB_TYPE_TIMESTAMP => DateTime,
-	DUCKDB_TYPE_TIMESTAMP_S => DateTime,
-	DUCKDB_TYPE_TIMESTAMP_MS => DateTime,
-	DUCKDB_TYPE_TIMESTAMP_NS => DateTime,
-	DUCKDB_TYPE_INTERVAL => Dates.CompoundPeriod,
-	DUCKDB_TYPE_UUID => UUID,
-	DUCKDB_TYPE_VARCHAR => AbstractString,
-	DUCKDB_TYPE_JSON => AbstractString,
-	DUCKDB_TYPE_ENUM => AbstractString,
-	DUCKDB_TYPE_BLOB => Base.CodeUnits{UInt8, String},
-	DUCKDB_TYPE_MAP => Dict
+    DUCKDB_TYPE_INVALID => Missing,
+    DUCKDB_TYPE_BOOLEAN => Bool,
+    DUCKDB_TYPE_TINYINT => Int8,
+    DUCKDB_TYPE_SMALLINT => Int16,
+    DUCKDB_TYPE_INTEGER => Int32,
+    DUCKDB_TYPE_BIGINT => Int64,
+    DUCKDB_TYPE_HUGEINT => Int128,
+    DUCKDB_TYPE_UTINYINT => UInt8,
+    DUCKDB_TYPE_USMALLINT => UInt16,
+    DUCKDB_TYPE_UINTEGER => UInt32,
+    DUCKDB_TYPE_UBIGINT => UInt64,
+    DUCKDB_TYPE_FLOAT => Float32,
+    DUCKDB_TYPE_DOUBLE => Float64,
+    DUCKDB_TYPE_DECIMAL => Float64,
+    DUCKDB_TYPE_DATE => Date,
+    DUCKDB_TYPE_TIME => Time,
+    DUCKDB_TYPE_TIMESTAMP => DateTime,
+    DUCKDB_TYPE_TIMESTAMP_S => DateTime,
+    DUCKDB_TYPE_TIMESTAMP_MS => DateTime,
+    DUCKDB_TYPE_TIMESTAMP_NS => DateTime,
+    DUCKDB_TYPE_INTERVAL => Dates.CompoundPeriod,
+    DUCKDB_TYPE_UUID => UUID,
+    DUCKDB_TYPE_VARCHAR => AbstractString,
+    DUCKDB_TYPE_JSON => AbstractString,
+    DUCKDB_TYPE_ENUM => AbstractString,
+    DUCKDB_TYPE_BLOB => Base.CodeUnits{UInt8, String},
+    DUCKDB_TYPE_MAP => Dict
 )
 
 # convert a DuckDB type into Julia equivalent
 function duckdb_type_to_internal_type(x::DUCKDB_TYPE)
-	if !haskey(INTERNAL_TYPE_MAP, x)
-		throw(NotImplementedException(string("Unsupported type for duckdb_type_to_internal_type: ", x)))
-	end
-	return INTERNAL_TYPE_MAP[x]
+    if !haskey(INTERNAL_TYPE_MAP, x)
+        throw(NotImplementedException(string("Unsupported type for duckdb_type_to_internal_type: ", x)))
+    end
+    return INTERNAL_TYPE_MAP[x]
 end
 
 function duckdb_type_to_julia_type(x)
-	type_id = GetTypeId(x)
-	if type_id == DUCKDB_TYPE_LIST
-		return Vector{Union{Missing,duckdb_type_to_julia_type(GetListChildType(x))}}
-	elseif type_id == DUCKDB_TYPE_STRUCT
-		child_count = GetStructChildCount(x)
-		names::Vector{Symbol} = Vector()
-		for i in 1:child_count
-			child_name::Symbol = Symbol(GetStructChildName(x, i))
-			push!(names, child_name)
-		end
-		names_tuple = Tuple(x for x in names)
-		return Union{Missing, NamedTuple{names_tuple}}
-	end
-	if !haskey(JULIA_TYPE_MAP, type_id)
-		throw(NotImplementedException(string("Unsupported type for duckdb_type_to_julia_type: ", type_id)))
-	end
-	return JULIA_TYPE_MAP[type_id]
+    type_id = GetTypeId(x)
+    if type_id == DUCKDB_TYPE_LIST
+        return Vector{Union{Missing, duckdb_type_to_julia_type(GetListChildType(x))}}
+    elseif type_id == DUCKDB_TYPE_STRUCT
+        child_count = GetStructChildCount(x)
+        names::Vector{Symbol} = Vector()
+        for i in 1:child_count
+            child_name::Symbol = Symbol(GetStructChildName(x, i))
+            push!(names, child_name)
+        end
+        names_tuple = Tuple(x for x in names)
+        return Union{Missing, NamedTuple{names_tuple}}
+    end
+    if !haskey(JULIA_TYPE_MAP, type_id)
+        throw(NotImplementedException(string("Unsupported type for duckdb_type_to_julia_type: ", type_id)))
+    end
+    return JULIA_TYPE_MAP[type_id]
 end
 
 sym(ptr) = ccall(:jl_symbol, Ref{Symbol}, (Ptr{UInt8},), ptr)
