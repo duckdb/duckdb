@@ -66,9 +66,9 @@ WHERE a=12 AND b=-2 AND c=-3 RETURNING c, b, a;
 query III
 UPDATE table1
 SET c=1, b=2, a=3
-WHERE a=13 AND b=-2 AND c=-3 RETURNING c as aliasc, b as aliasb, a as aliasa;
+WHERE a=13 AND b=-2 AND c=-3 RETURNING c as aliasc, a as aliasa, b as aliasb;
 ----
-1	2	3
+1	3	2
 
 # returning expression with aggregate function at top level is not allowed
 statement error
@@ -77,9 +77,9 @@ UPDATE table1 SET c=1, b=5, a=7 WHERE a > 5 RETURNING SUM(a);
 
 # returning * while only updating a subset of columns
 query III
-UPDATE table1 SET c=14 WHERE a=14 RETURNING *;
+UPDATE table1 SET c=15 WHERE a=14 RETURNING b, c;
 ----
-14	-2	14
+-2	15
 
 
 mode skip

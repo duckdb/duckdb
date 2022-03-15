@@ -162,8 +162,10 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 	auto proj_index = GenerateTableIndex();
 	vector<unique_ptr<Expression>> projection_expressions;
+
 	auto types = vector<LogicalType>();
 	auto names = vector<std::string>();
+
 	for (idx_t i = 0; i < stmt.columns.size(); i++) {
 		auto &colname = stmt.columns[i];
 		auto &expr = stmt.expressions[i];
@@ -191,6 +193,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 			projection_expressions.push_back(move(bound_expr));
 		}
 	}
+
 	// now create the projection
 	auto proj = make_unique<LogicalProjection>(proj_index, move(projection_expressions));
 	proj->AddChild(move(root));
@@ -212,6 +215,13 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		update->table_index = update_table_index;
 
 		auto binder = Binder::CreateBinder(context);
+
+		for (auto &col : table->columns) {
+			if (std::find(names.begin(), names.end(), col.name) == names.end()) {
+				names.push_back(col.name);
+				types.push_back(col.type);
+			}
+		}
 
 		binder->bind_context.AddGenericBinding(update_table_index, table->name, names, types);
 		ReturningBinder returning_binder(*binder, context);
