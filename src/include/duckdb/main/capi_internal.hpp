@@ -10,6 +10,7 @@
 
 #include "duckdb.h"
 #include "duckdb.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/appender.hpp"
 #include <cstring>
@@ -45,5 +46,9 @@ struct AppenderWrapper {
 duckdb_type ConvertCPPTypeToC(const LogicalType &type);
 idx_t GetCTypeSize(duckdb_type type);
 duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_result *out);
+
+struct DuckDBColumnData {
+	LogicalType type;
+};
 
 } // namespace duckdb

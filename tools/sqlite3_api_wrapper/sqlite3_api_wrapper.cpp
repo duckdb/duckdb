@@ -199,6 +199,7 @@ bool sqlite3_display_result(StatementType type) {
 	case StatementType::PRAGMA_STATEMENT:
 	case StatementType::SELECT_STATEMENT:
 	case StatementType::SHOW_STATEMENT:
+	case StatementType::CALL_STATEMENT:
 		return true;
 	default:
 		return false;
@@ -942,16 +943,6 @@ int sqlite3_complete(const char *zSql) {
 			token = tkWS;
 			break;
 		}
-		case '[': { /* Microsoft-style identifiers in [...] */
-			zSql++;
-			while (*zSql && *zSql != ']') {
-				zSql++;
-			}
-			if (*zSql == 0)
-				return 0;
-			token = tkOTHER;
-			break;
-		}
 		case '`': /* Grave-accent quoted symbols used by MySQL */
 		case '"': /* single- and double-quoted strings */
 		case '\'': {
@@ -1602,7 +1593,7 @@ const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 
 	if (pVal->type == SQLiteTypeValue::INTEGER || pVal->type == SQLiteTypeValue::FLOAT) {
 		Value value = (pVal->type == SQLiteTypeValue::INTEGER) ? Value::BIGINT(pVal->u.i) : Value::DOUBLE(pVal->u.r);
-		if (value.TryCastAs(LogicalType::VARCHAR) == false) {
+		if (!value.TryCastAs(LogicalType::VARCHAR)) {
 			pVal->db->errCode = SQLITE_NOMEM;
 			return nullptr;
 		}

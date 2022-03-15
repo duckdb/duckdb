@@ -2,16 +2,16 @@ comment: false
 coverage:
   precision: 2
   round: down
-  range: "94...100"
+  range: "0...100"
   status:
     project:
       default:
         # basic
         # for now
         target: number
-        threshold: 0%
+        threshold: 100%
          # advanced settings
-        if_not_found: failure
+        if_not_found: success
         if_ci_failed: failure
         informational: true
         only_pulls: false
@@ -24,7 +24,9 @@ coverage:
         # advanced
         branches:
           - master
-        if_ci_failed: error #success, failure, error, ignore
+        if_not_found: success
+        if_ci_failed: error
+        informational: true
         only_pulls: true
         paths:
           - "src"

@@ -36,6 +36,7 @@ static void allocate_new(parser_state *state, size_t n) {
 	if (state->malloc_ptr_idx >= state->malloc_ptr_size) {
 		size_t new_size = state->malloc_ptr_size * 2;
 		auto new_malloc_ptrs = (char **) malloc(sizeof(char *) * new_size);
+		memset(new_malloc_ptrs, 0, sizeof(char*) * new_size);
 		memcpy(new_malloc_ptrs, state->malloc_ptrs, state->malloc_ptr_size * sizeof(char*));
 		free(state->malloc_ptrs);
 		state->malloc_ptr_size = new_size;
@@ -55,12 +56,17 @@ static void allocate_new(parser_state *state, size_t n) {
 
 void *palloc(size_t n) {
 	// we need to align our pointers for the sanitizer
-	auto aligned_n = ((n + 7) / 8) * 8;
+	auto allocate_n = n + sizeof(size_t);
+	auto aligned_n = ((allocate_n + 7) / 8) * 8;
 	if (pg_parser_state.malloc_pos + aligned_n > PG_MALLOC_SIZE) {
 		allocate_new(&pg_parser_state, aligned_n);
 	}
 
-	void *ptr = pg_parser_state.malloc_ptrs[pg_parser_state.malloc_ptr_idx - 1] + pg_parser_state.malloc_pos;
+	// store the length of the allocation
+	char *base_ptr = pg_parser_state.malloc_ptrs[pg_parser_state.malloc_ptr_idx - 1] + pg_parser_state.malloc_pos;
+	memcpy(base_ptr, &n, sizeof(size_t));
+	// store the actual pointer
+	char *ptr = (char*) base_ptr + sizeof(size_t);
 	memset(ptr, 0, n);
 	pg_parser_state.malloc_pos += aligned_n;
 	return ptr;
@@ -72,6 +78,7 @@ void pg_parser_init() {
 
 	pg_parser_state.malloc_ptr_size = 4;
 	pg_parser_state.malloc_ptrs = (char **) malloc(sizeof(char *) * pg_parser_state.malloc_ptr_size);
+	memset(pg_parser_state.malloc_ptrs, 0, sizeof(char*) * pg_parser_state.malloc_ptr_size);
 	pg_parser_state.malloc_ptr_idx = 0;
 	allocate_new(&pg_parser_state, 1);
 }
@@ -83,14 +90,7 @@ void pg_parser_parse(const char *query, parse_result *res) {
 		res->success = pg_parser_state.pg_err_code == PGUNDEFINED;
 	} catch (std::exception &ex) {
 		res->success = false;
-		// copy the error message of the exception
-		auto error_message = ex.what();
-		uint32_t pos = 0;
-		while(pos < 1023 && error_message[pos]) {
-			pg_parser_state.pg_err_msg[pos] = error_message[pos];
-			pos++;
-		}
-		pg_parser_state.pg_err_msg[pos] = '\0';
+		res->error_message = ex.what();
 	}
 	res->error_message = pg_parser_state.pg_err_msg;
 	res->error_location = pg_parser_state.pg_err_pos;
@@ -173,7 +173,14 @@ void *palloc0fast(size_t n) { // very fast
 	return palloc(n);
 }
 void *repalloc(void *ptr, size_t n) {
-	return palloc(n);
+	// get the length of the allocation
+	size_t old_len;
+	char *old_len_ptr = (char *) ptr - sizeof(size_t);
+	memcpy((void *) &old_len, old_len_ptr, sizeof(size_t));
+	// re-allocate and copy the data
+	void *new_buf = palloc(n);
+	memcpy(new_buf, ptr, old_len);
+	return new_buf;
 }
 char *NameListToString(PGList *names) {
 	throw std::runtime_error("NameListToString NOT IMPLEMENTED");

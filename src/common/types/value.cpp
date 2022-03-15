@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/exception.hpp"
@@ -565,6 +567,25 @@ Value Value::BLOB(const string &data) {
 	result.str_value = Blob::ToBlob(string_t(data));
 	return result;
 }
+
+Value Value::JSON(const char *val) {
+	auto result = Value(val);
+	result.type_ = LogicalTypeId::JSON;
+	return result;
+}
+
+Value Value::JSON(string_t val) {
+	auto result = Value(val);
+	result.type_ = LogicalTypeId::JSON;
+	return result;
+}
+
+Value Value::JSON(string val) {
+	auto result = Value(move(val));
+	result.type_ = LogicalTypeId::JSON;
+	return result;
+}
+
 Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 	D_ASSERT(original_type.id() == LogicalTypeId::ENUM);
 	Value result(original_type);
@@ -1274,6 +1295,7 @@ string Value::ToString() const {
 		return Timestamp::ToString(Timestamp::FromEpochNanoSeconds(value_.timestamp.value));
 	case LogicalTypeId::INTERVAL:
 		return Interval::ToString(value_.interval);
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		return str_value;
 	case LogicalTypeId::BLOB:
@@ -1341,6 +1363,56 @@ string Value::ToString() const {
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString());
+	}
+}
+
+string Value::ToSQLString() const {
+	if (IsNull()) {
+		return ToString();
+	}
+	switch (type_.id()) {
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::BLOB:
+		return "'" + ToString() + "'::" + type_.ToString();
+	case LogicalTypeId::VARCHAR:
+		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
+	case LogicalTypeId::STRUCT: {
+		string ret = "{";
+		auto &child_types = StructType::GetChildTypes(type_);
+		for (size_t i = 0; i < struct_value.size(); i++) {
+			auto &name = child_types[i].first;
+			auto &child = struct_value[i];
+			ret += "'" + name + "': " + child.ToSQLString();
+			if (i < struct_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "}";
+		return ret;
+	}
+	case LogicalTypeId::LIST: {
+		string ret = "[";
+		for (size_t i = 0; i < list_value.size(); i++) {
+			auto &child = list_value[i];
+			ret += child.ToSQLString();
+			if (i < list_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "]";
+		return ret;
+	}
+	default:
+		return ToString();
 	}
 }
 

@@ -3,6 +3,9 @@
 # group: [table_function]
 
 statement ok
+SELECT * FROM INFORMATION_SCHEMA.SCHEMATA;
+
+statement ok
 SELECT * FROM information_schema.schemata;
 
 statement ok

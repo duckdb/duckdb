@@ -103,7 +103,6 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		function_name = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->next->data.ptr_value)->val.str;
 	} else {
 		// unqualified name
-		//		schema = DEFAULT_SCHEMA;
 		schema = INVALID_SCHEMA;
 		function_name = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->data.ptr_value)->val.str;
 	}
@@ -121,6 +120,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 
 		if (root->agg_filter) {
 			throw ParserException("FILTER is not implemented for window functions!");
+		}
+		if (root->export_state) {
+			throw ParserException("EXPORT_STATE is not supported for window functions!");
 		}
 
 		const auto win_fun_type = WindowToExpressionType(lowercase_name);
@@ -276,8 +278,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	}
 
 	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), move(children), move(filter_expr),
-	                                                move(order_bys), root->agg_distinct);
+	                                                move(order_bys), root->agg_distinct, false, root->export_state);
 	function->query_location = root->location;
+
 	return move(function);
 }
 

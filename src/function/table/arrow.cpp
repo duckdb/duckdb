@@ -14,7 +14,8 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "utf8proc_wrapper.hpp"
-
+#include "duckdb/common/types/arrow_aux_data.hpp"
+#include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/mutex.hpp"
 #include <map>
@@ -617,6 +618,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		}
 		break;
 	}
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.first++];
 		auto cdata = (char *)array.buffers[2];
@@ -629,7 +631,6 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 				offsets = (uint64_t *)array.buffers[1] + array.offset + nested_offset;
 			}
 			SetVectorString(vector, size, cdata, offsets);
-
 		} else {
 			auto offsets = (uint32_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 			if (nested_offset != -1) {
@@ -637,7 +638,6 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			}
 			SetVectorString(vector, size, cdata, offsets);
 		}
-
 		break;
 	}
 	case LogicalTypeId::DATE: {
@@ -991,6 +991,8 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
 		if (array.length != scan_state.chunk->arrow_array.length) {
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
+		output.data[idx].GetBuffer()->SetAuxiliaryData(make_unique<ArrowAuxiliaryData>(scan_state.chunk),
+		                                               VectorAuxiliaryDataType::ARROW_AUXILIARY);
 		if (array.dictionary) {
 			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_convert_data,
 			                              col_idx, arrow_convert_idx);

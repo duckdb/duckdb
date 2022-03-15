@@ -152,6 +152,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("bool");
 		result.push_back("interval");
 		result.push_back("varchar");
+		result.push_back("json");
 		collection = true;
 	}
 	if (is_compression) {
@@ -159,6 +160,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("uncompressed");
 		result.push_back("rle");
 		result.push_back("bitpacking");
+		result.push_back("dictionary");
 		collection = true;
 	}
 	return collection;
@@ -192,6 +194,12 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	while (parser.NextStatement()) {
 		// tokenize the current line
 		auto token = parser.Tokenize();
+
+		// throw explicit error on single line statements that are not separated by a comment or newline
+		if (parser.IsSingleLineStatement(token) && !parser.NextLineEmptyOrComment()) {
+			parser.Fail("all test statements need to be separated by an empty line");
+		}
+
 		bool skip_statement = false;
 		while (token.type == SQLLogicTokenType::SQLLOGIC_SKIP_IF || token.type == SQLLogicTokenType::SQLLOGIC_ONLY_IF) {
 			// skipif/onlyif

@@ -72,26 +72,41 @@ jobs:
         run: ./scripts/node_build.sh 17
 
    win-nodejs:
-      name: node.js Windows
-      runs-on: windows-latest
-      needs: linux-nodejs
+     name: node.js Windows
+     runs-on: windows-latest
+     needs: linux-nodejs
 
-      strategy:
-        matrix:
-          node: [ '10', '12', '14', '15' ]
+     strategy:
+       matrix:
+         node: [ '10', '12', '14', '15' ]
 
-      steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
+     steps:
+       - uses: actions/setup-python@v2
+         with:
+           python-version: '3.8'
 
-      - name: Setup Node
-        uses: actions/setup-node@v2
-        with:
-          node-version: ${{ matrix.node }}
+       - uses: actions/checkout@v2
+         with:
+           fetch-depth: 0
 
-      - name: Node Version
-        run: ./scripts/node_version.sh
+       - name: Setup Node
+         uses: actions/setup-node@v2
+         with:
+           node-version: ${{ matrix.node }}
 
-      - name: Node
-        run: ./scripts/node_build_win.sh
+       - name: Versions
+         run: |
+           systeminfo
+           node -v
+           npm -v
+
+       - name: Windows Build Tools
+         run: |
+           choco install python visualstudio2019-workload-vctools -y
+           npm config set msvs_version 2019
+
+       - name: Node Version
+         run: ./scripts/node_version.sh
+
+       - name: Node
+         run: ./scripts/node_build_win.sh

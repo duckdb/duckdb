@@ -8,7 +8,7 @@ OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> o
     : Relation(child_p->context, RelationType::ORDER_RELATION), orders(move(orders)), child(move(child_p)) {
 	// bind the expressions
 	vector<ColumnDefinition> dummy_columns;
-	context.TryBindRelation(*this, dummy_columns);
+	context.GetContext()->TryBindRelation(*this, dummy_columns);
 }
 
 unique_ptr<QueryNode> OrderRelation::GetQueryNode() {

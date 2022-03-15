@@ -1,20 +1,21 @@
 #include "duckdb/common/types.hpp"
 
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
-
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/parser.hpp"
 
 #include <cmath>
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
 
@@ -97,6 +98,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::JSON:
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
@@ -132,6 +134,8 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::INVALID;
 	case LogicalTypeId::USER:
 		return PhysicalType::UNKNOWN;
+	case LogicalTypeId::AGGREGATE_STATE:
+		return PhysicalType::VARCHAR;
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
 	}
@@ -168,6 +172,7 @@ constexpr const LogicalTypeId LogicalType::HASH;
 constexpr const LogicalTypeId LogicalType::POINTER;
 
 constexpr const LogicalTypeId LogicalType::VARCHAR;
+constexpr const LogicalTypeId LogicalType::JSON;
 
 constexpr const LogicalTypeId LogicalType::BLOB;
 constexpr const LogicalTypeId LogicalType::INTERVAL;
@@ -201,7 +206,7 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,     LogicalType::USMALLINT,
 	    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,         LogicalTypeId::LIST,
 	    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,
-	    LogicalType::UUID};
+	    LogicalType::UUID,     LogicalType::JSON};
 	return types;
 }
 
@@ -379,11 +384,11 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 	case LogicalTypeId::TIMESTAMP:
 		return "TIMESTAMP";
 	case LogicalTypeId::TIMESTAMP_MS:
-		return "TIMESTAMP (MS)";
+		return "TIMESTAMP_MS";
 	case LogicalTypeId::TIMESTAMP_NS:
-		return "TIMESTAMP (NS)";
+		return "TIMESTAMP_NS";
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return "TIMESTAMP (SEC)";
+		return "TIMESTAMP_S";
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return "TIMESTAMP WITH TIME ZONE";
 	case LogicalTypeId::TIME_TZ:
@@ -426,8 +431,12 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "UNKNOWN";
 	case LogicalTypeId::ENUM:
 		return "ENUM";
+	case LogicalTypeId::AGGREGATE_STATE:
+		return "AGGREGATE_STATE<?>";
 	case LogicalTypeId::USER:
 		return "USER";
+	case LogicalTypeId::JSON:
+		return "JSON";
 	}
 	return "UNDEFINED";
 }
@@ -439,21 +448,21 @@ string LogicalType::ToString() const {
 			return "STRUCT";
 		}
 		auto &child_types = StructType::GetChildTypes(*this);
-		string ret = "STRUCT<";
+		string ret = "STRUCT(";
 		for (size_t i = 0; i < child_types.size(); i++) {
-			ret += child_types[i].first + ": " + child_types[i].second.ToString();
+			ret += child_types[i].first + " " + child_types[i].second.ToString();
 			if (i < child_types.size() - 1) {
 				ret += ", ";
 			}
 		}
-		ret += ">";
+		ret += ")";
 		return ret;
 	}
 	case LogicalTypeId::LIST: {
 		if (!type_info_) {
 			return "LIST";
 		}
-		return "LIST<" + ListType::GetChildType(*this).ToString() + ">";
+		return ListType::GetChildType(*this).ToString() + "[]";
 	}
 	case LogicalTypeId::MAP: {
 		if (!type_info_) {
@@ -461,13 +470,13 @@ string LogicalType::ToString() const {
 		}
 		auto &child_types = StructType::GetChildTypes(*this);
 		if (child_types.empty()) {
-			return "MAP<?>";
+			return "MAP(?)";
 		}
 		if (child_types.size() != 2) {
 			throw InternalException("Map needs exactly two child elements");
 		}
-		return "MAP<" + ListType::GetChildType(child_types[0].second).ToString() + ", " +
-		       ListType::GetChildType(child_types[1].second).ToString() + ">";
+		return "MAP(" + ListType::GetChildType(child_types[0].second).ToString() + ", " +
+		       ListType::GetChildType(child_types[1].second).ToString() + ")";
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (!type_info_) {
@@ -481,7 +490,13 @@ string LogicalType::ToString() const {
 		return StringUtil::Format("DECIMAL(%d,%d)", width, scale);
 	}
 	case LogicalTypeId::ENUM: {
-		return EnumType::GetTypeName(*this);
+		return KeywordHelper::WriteOptionallyQuoted(EnumType::GetTypeName(*this));
+	}
+	case LogicalTypeId::USER: {
+		return KeywordHelper::WriteOptionallyQuoted(UserType::GetTypeName(*this));
+	}
+	case LogicalTypeId::AGGREGATE_STATE: {
+		return AggregateStateType::GetTypeName(*this);
 	}
 	default:
 		return LogicalTypeIdToString(id_);
@@ -489,7 +504,7 @@ string LogicalType::ToString() const {
 }
 // LCOV_EXCL_STOP
 
-LogicalTypeId TransformStringToLogicalType(const string &str) {
+LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
 	auto lower_str = StringUtil::Lower(str);
 	// Transform column type
 	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed" || lower_str == "integer" ||
@@ -549,11 +564,22 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		return LogicalTypeId::TIMESTAMP_TZ;
 	} else if (lower_str == "timetz") {
 		return LogicalTypeId::TIME_TZ;
+	} else if (lower_str == "json") {
+		return LogicalTypeId::JSON;
+	} else if (lower_str == "null") {
+		return LogicalTypeId::SQLNULL;
 	} else {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder
 		return LogicalTypeId::USER;
 	}
+}
+
+LogicalType TransformStringToLogicalType(const string &str) {
+	if (StringUtil::Lower(str) == "null") {
+		return LogicalType::SQLNULL;
+	}
+	return Parser::ParseColumnList("dummy " + str)[0].type;
 }
 
 bool LogicalType::IsIntegral() const {
@@ -738,7 +764,8 @@ enum class ExtraTypeInfoType : uint8_t {
 	LIST_TYPE_INFO = 3,
 	STRUCT_TYPE_INFO = 4,
 	ENUM_TYPE_INFO = 5,
-	USER_TYPE_INFO = 6
+	USER_TYPE_INFO = 6,
+	AGGREGATE_STATE_TYPE_INFO = 7
 };
 
 struct ExtraTypeInfo {
@@ -943,6 +970,74 @@ public:
 	}
 };
 
+struct AggregateStateTypeInfo : public ExtraTypeInfo {
+	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p)
+	    : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), state_type(move(state_type_p)) {
+	}
+
+	aggregate_state_t state_type;
+
+public:
+	bool Equals(ExtraTypeInfo *other_p) const override {
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		auto &other = (AggregateStateTypeInfo &)*other_p;
+		return state_type.function_name == other.state_type.function_name &&
+		       state_type.return_type == other.state_type.return_type &&
+		       state_type.bound_argument_types == other.state_type.bound_argument_types;
+	}
+
+	void Serialize(FieldWriter &writer) const override {
+		auto &serializer = writer.GetSerializer();
+		writer.WriteString(state_type.function_name);
+		state_type.return_type.Serialize(serializer);
+		writer.WriteField<uint32_t>(state_type.bound_argument_types.size());
+		for (idx_t i = 0; i < state_type.bound_argument_types.size(); i++) {
+			state_type.bound_argument_types[i].Serialize(serializer);
+		}
+	}
+
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
+		auto &source = reader.GetSource();
+
+		auto function_name = reader.ReadRequired<string>();
+		auto return_type = LogicalType::Deserialize(source);
+		auto bound_argument_types_size = reader.ReadRequired<uint32_t>();
+		vector<LogicalType> bound_argument_types;
+
+		for (uint32_t i = 0; i < bound_argument_types_size; i++) {
+			auto type = LogicalType::Deserialize(source);
+			bound_argument_types.push_back(move(type));
+		}
+		return make_shared<AggregateStateTypeInfo>(
+		    aggregate_state_t(move(function_name), move(return_type), move(bound_argument_types)));
+	}
+};
+
+const aggregate_state_t &AggregateStateType::GetStateType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::AGGREGATE_STATE);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((AggregateStateTypeInfo &)*info).state_type;
+}
+
+const string AggregateStateType::GetTypeName(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::AGGREGATE_STATE);
+	auto info = type.AuxInfo();
+	if (!info) {
+		return "AGGREGATE_STATE<?>";
+	}
+	auto aggr_state = ((AggregateStateTypeInfo &)*info).state_type;
+	return "AGGREGATE_STATE<" + aggr_state.function_name + "(" +
+	       StringUtil::Join(aggr_state.bound_argument_types, aggr_state.bound_argument_types.size(), ", ",
+	                        [](const LogicalType &arg_type) { return arg_type.ToString(); }) +
+	       ")" + "::" + aggr_state.return_type.ToString() + ">";
+}
+
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP);
 	auto info = type.AuxInfo();
@@ -971,6 +1066,11 @@ LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	return LogicalType(LogicalTypeId::STRUCT, move(info));
 }
 
+LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) { // NOLINT
+	auto info = make_shared<AggregateStateTypeInfo>(move(state_type));
+	return LogicalType(LogicalTypeId::AGGREGATE_STATE, move(info));
+}
+
 //===--------------------------------------------------------------------===//
 // Map Type
 //===--------------------------------------------------------------------===//
@@ -988,12 +1088,12 @@ LogicalType LogicalType::MAP(LogicalType key, LogicalType value) {
 
 const LogicalType &MapType::KeyType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::MAP);
-	return StructType::GetChildTypes(type)[0].second;
+	return ListType::GetChildType(StructType::GetChildTypes(type)[0].second);
 }
 
 const LogicalType &MapType::ValueType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::MAP);
-	return StructType::GetChildTypes(type)[1].second;
+	return ListType::GetChildType(StructType::GetChildTypes(type)[1].second);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1240,6 +1340,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 			throw InternalException("Invalid Physical Type for ENUMs");
 		}
 	}
+	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
+		return AggregateStateTypeInfo::Deserialize(reader);
+
 	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
 	}

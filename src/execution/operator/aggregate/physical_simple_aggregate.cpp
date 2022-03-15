@@ -113,8 +113,6 @@ SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSi
 	sink.Reset();
 
 	DataChunk &payload_chunk = sink.payload_chunk;
-	sink.child_executor.SetChunk(input);
-	payload_chunk.SetCardinality(input);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		DataChunk filtered_input;
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
@@ -129,6 +127,9 @@ SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSi
 			filtered_input.Slice(input, true_sel, count);
 			sink.child_executor.SetChunk(filtered_input);
 			payload_chunk.SetCardinality(count);
+		} else {
+			sink.child_executor.SetChunk(input);
+			payload_chunk.SetCardinality(input);
 		}
 		// resolve the child expressions of the aggregate (if any)
 		if (!aggregate.children.empty()) {
