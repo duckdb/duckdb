@@ -106,6 +106,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_MAP,
 	// duckdb_hugeint
 	DUCKDB_TYPE_UUID,
+	// const char*
+	DUCKDB_TYPE_JSON,
 } duckdb_type;
 
 //! Days are stored as days since 1970-01-01

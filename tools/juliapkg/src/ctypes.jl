@@ -45,6 +45,7 @@ const DuckDBError = 1;
 	DUCKDB_TYPE_STRUCT
 	DUCKDB_TYPE_MAP
 	DUCKDB_TYPE_UUID
+	DUCKDB_TYPE_JSON
 end
 
 const DUCKDB_TYPE = DUCKDB_TYPE_
@@ -162,6 +163,7 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_HUGEINT => duckdb_hugeint,
     DUCKDB_TYPE_UUID => duckdb_hugeint,
     DUCKDB_TYPE_VARCHAR => duckdb_string_t,
+    DUCKDB_TYPE_JSON => duckdb_string_t,
     DUCKDB_TYPE_BLOB => duckdb_string_t,
     DUCKDB_TYPE_UUID => duckdb_hugeint,
     DUCKDB_TYPE_LIST => duckdb_list_entry_t,
@@ -193,6 +195,7 @@ JULIA_TYPE_MAP = Dict(
 	DUCKDB_TYPE_INTERVAL => Dates.CompoundPeriod,
 	DUCKDB_TYPE_UUID => UUID,
 	DUCKDB_TYPE_VARCHAR => AbstractString,
+	DUCKDB_TYPE_JSON => AbstractString,
 	DUCKDB_TYPE_ENUM => AbstractString,
 	DUCKDB_TYPE_BLOB => Base.CodeUnits{UInt8, String},
 	DUCKDB_TYPE_MAP => Dict

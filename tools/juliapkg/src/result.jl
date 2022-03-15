@@ -298,7 +298,7 @@ end
 
 function get_conversion_function(logical_type::LogicalType)::Function
 	type = GetTypeId(logical_type)
-	if type == DUCKDB_TYPE_VARCHAR
+	if type == DUCKDB_TYPE_VARCHAR || type == DUCKDB_TYPE_JSON
 		return convert_string
 	elseif type == DUCKDB_TYPE_BLOB
 		return convert_blob
@@ -336,7 +336,7 @@ end
 
 function get_conversion_loop_function(logical_type::LogicalType)::Function
 	type = GetTypeId(logical_type)
-	if type == DUCKDB_TYPE_VARCHAR || type == DUCKDB_TYPE_BLOB
+	if type == DUCKDB_TYPE_VARCHAR || type == DUCKDB_TYPE_BLOB || type == DUCKDB_TYPE_JSON
 		return convert_vector_string
 	elseif type == DUCKDB_TYPE_LIST
 		return convert_vector_list
