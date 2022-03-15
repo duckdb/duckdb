@@ -1216,6 +1216,26 @@ function duckdb_destroy_value(handle)
 end
 
 """
+Creates a value from a string
+
+* value: The varchar value
+* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+"""
+function duckdb_create_varchar(handle)
+    return ccall((:duckdb_create_varchar, libduckdb), duckdb_value, (Ptr{UInt8},), handle)
+end
+
+"""
+Creates a value from an int64
+
+* value: The bigint value
+* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+"""
+function duckdb_create_int64(handle)
+    return ccall((:duckdb_create_int64, libduckdb), duckdb_value, (Int64,), handle)
+end
+
+"""
 Obtains a string representation of the given value.
 The result must be destroyed with `duckdb_free`.
 
@@ -1934,15 +1954,67 @@ end
 
 #=
 //===--------------------------------------------------------------------===//
+// Replacement scans
+//===--------------------------------------------------------------------===//
+=#
+"""
+Add a replacement scan definition to the specified database
+
+* db: The database object to add the replacement scan to
+* replacement: The replacement scan callback
+* extra_data: Extra data that is passed back into the specified callback
+* delete_callback: The delete callback to call on the extra data, if any
+"""
+function duckdb_add_replacement_scan(db, replacement, extra_data, delete_callback)
+    return ccall(
+        (:duckdb_add_replacement_scan, libduckdb),
+        Cvoid,
+        (duckdb_database, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+        db,
+        replacement,
+        extra_data,
+        delete_callback
+    )
+end
+
+"""
+Sets the replacement function name to use. If this function is called in the replacement callback,
+ the replacement scan is performed. If it is not called, the replacement callback is not performed.
+
+* info: The info object
+* function_name: The function name to substitute.
+"""
+function duckdb_replacement_scan_set_function_name(info, function_name)
+    return ccall(
+        (:duckdb_replacement_scan_set_function_name, libduckdb),
+        Cvoid,
+        (duckdb_replacement_scan_info, Ptr{UInt8}),
+        info,
+        function_name
+    )
+end
+
+
+"""
+Adds a parameter to the replacement scan function.
+
+* info: The info object
+* parameter: The parameter to add. The function will call `duckdb_destroy_value` on the parameter.
+"""
+function duckdb_replacement_scan_add_parameter(info, parameter)
+    return ccall(
+        (:duckdb_replacement_scan_add_parameter, libduckdb),
+        Cvoid,
+        (duckdb_replacement_scan_info, duckdb_value),
+        info,
+        parameter
+    )
+end
+
+#=
+//===--------------------------------------------------------------------===//
 // Appender
 //===--------------------------------------------------------------------===//
-// Appenders are the most efficient way of loading data into DuckDB from within the C interface, and are recommended for
-// fast data loading. The appender is much faster than using prepared statements or individual `INSERT INTO` statements.
-// Appends are made in row-wise format. For every column, a `duckdb_append_[type]` call should be made, after which
-// the row should be finished by calling `duckdb_appender_end_row`. After all rows have been appended,
-// `duckdb_appender_destroy` should be used to finalize the appender and clean up the resulting memory.
-// Note that `duckdb_appender_destroy` should always be called on the resulting appender, even if the function returns
-// `DuckDBError`.
 =#
 
 """

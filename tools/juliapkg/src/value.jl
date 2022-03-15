@@ -29,3 +29,9 @@ end
 function GetValue(val::Value, ::Type{T}) where {T}
     throw(NotImplementedException("Unsupported type for GetValue"))
 end
+
+
+CreateValue(val::T) where {T <: Int64} = Value(duckdb_create_int64(val))
+function CreateValue(val::T) where {T}
+    throw(NotImplementedException("Unsupported type for GetValue"))
+end

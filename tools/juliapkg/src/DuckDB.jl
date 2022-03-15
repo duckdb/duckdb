@@ -28,6 +28,7 @@ include("transaction.jl")
 include("ddl.jl")
 include("appender.jl")
 include("table_function.jl")
+include("replacement_scan.jl")
 include("data_frame_scan.jl")
 include("old_interface.jl")
 

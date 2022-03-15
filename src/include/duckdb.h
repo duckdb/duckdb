@@ -946,6 +946,14 @@ DUCKDB_API void duckdb_destroy_value(duckdb_value *value);
 
 
 /*!
+Creates a value from a varchar
+
+* value: The varchar value
+* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_varchar(const char *text);
+
+/*!
 Creates a value from an int64
 
 * value: The bigint value
@@ -1539,7 +1547,7 @@ DUCKDB_API void duckdb_replacement_scan_set_function_name(duckdb_replacement_sca
 Adds a parameter to the replacement scan function.
 
 * info: The info object
-* parameter: The parameter to add. The function will call `duckdb_destroy_value` on the parameter.
+* parameter: The parameter to add.
 */
 DUCKDB_API void duckdb_replacement_scan_add_parameter(duckdb_replacement_scan_info info, duckdb_value parameter);
 

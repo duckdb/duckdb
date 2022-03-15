@@ -23,7 +23,9 @@ void number_scanner(duckdb_replacement_scan_info info, const char *table_name, v
 	}
 	auto num_data = (MyBaseNumber *) data;
 	duckdb_replacement_scan_set_function_name(info, "range");
-	duckdb_replacement_scan_add_parameter(info, duckdb_create_int64(number + num_data->number));
+	auto val = duckdb_create_int64(number + num_data->number);
+	duckdb_replacement_scan_add_parameter(info, val);
+	duckdb_destroy_value(&val);
 }
 
 TEST_CASE("Test replacement scans in C API", "[capi]") {
@@ -57,5 +59,4 @@ TEST_CASE("Test replacement scans in C API", "[capi]") {
 
 	// not a number
 	REQUIRE_FAIL(tester.Query("SELECT * FROM nonexistant"));
-
 }
