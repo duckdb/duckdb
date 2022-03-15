@@ -383,7 +383,7 @@ public class TestDuckDBJDBC {
 		stmt1.close();
 	}
 
-public static void test_duckdb_timestamp() throws Exception {
+	public static void test_duckdb_timestamp() throws Exception {
 
 		duckdb_timestamp_test();
 
@@ -699,9 +699,9 @@ public static void test_duckdb_timestamp() throws Exception {
 
 		// Metadata tests
 		assertEquals(Types.DECIMAL, meta.type_to_int(DuckDBColumnType.DECIMAL));
-		assertTrue(Short.class.toString().equals(meta.getColumnClassName(1)));
-		assertTrue(Integer.class.toString().equals(meta.getColumnClassName(2)));
-		assertTrue(Long.class.toString().equals(meta.getColumnClassName(3)));
+		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(1)));
+		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(2)));
+		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(3)));
 		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(4)));
 
 		conn.close();

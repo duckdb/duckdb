@@ -159,16 +159,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		case Types.BLOB:
 			return DuckDBBlobResult.class.toString();
 		case Types.DECIMAL:
-			switch (column_types_meta[column].type_size) {
-			case 16:
-				return Short.class.toString();
-			case 32:
-				return Integer.class.toString();
-			case 64:
-				return Long.class.toString();
-			case 128:
-				return BigDecimal.class.toString();
-			}
+			return BigDecimal.class.toString();
 		default:
 			throw new SQLException("Unknown type " + getColumnTypeName(column));
 		}
