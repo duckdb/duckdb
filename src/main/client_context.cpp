@@ -707,10 +707,10 @@ void ClientContext::Interrupt() {
 	interrupted = true;
 }
 
-void ClientContext::EnableProfiling() {
+void ClientContext::EnableProfiling(ProfilerPrintFormat print_format) {
 	auto lock = LockContext();
 	auto &config = ClientConfig::GetConfig(*this);
-	config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
+	config.profiler_print_format = print_format;
 	config.enable_profiler = true;
 }
 

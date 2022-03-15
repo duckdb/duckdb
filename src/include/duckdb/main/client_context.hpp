@@ -10,20 +10,21 @@
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
-#include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/deque.hpp"
+#include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/progress_bar.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/main/client_config.hpp"
+#include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
-#include "duckdb/main/pending_query_result.hpp"
+
 #include <random>
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/main/client_config.hpp"
 
 namespace duckdb {
 class Catalog;
@@ -88,7 +89,7 @@ public:
 	//! Interrupt execution of a query
 	DUCKDB_API void Interrupt();
 	//! Enable query profiling
-	DUCKDB_API void EnableProfiling();
+	DUCKDB_API void EnableProfiling(ProfilerPrintFormat print_format = ProfilerPrintFormat::QUERY_TREE);
 	//! Disable query profiling
 	DUCKDB_API void DisableProfiling();
 
