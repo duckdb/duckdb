@@ -256,7 +256,7 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(read_csv_auto);
 }
 
-unique_ptr<TableFunctionRef> ReadCSVReplacement(const string &table_name, void *data) {
+unique_ptr<TableFunctionRef> ReadCSVReplacement(const string &table_name, ReplacementScanData *data) {
 	auto lower_name = StringUtil::Lower(table_name);
 	// remove any compression
 	if (StringUtil::EndsWith(lower_name, ".gz")) {

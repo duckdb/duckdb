@@ -1227,7 +1227,6 @@ The resulting vector is valid as long as the parent vector is valid.
 */
 DUCKDB_API duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index);
 
-
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
 //===--------------------------------------------------------------------===//
@@ -1498,6 +1497,41 @@ Report that an error has occurred while executing the function.
 * error: The error message
 */
 DUCKDB_API void duckdb_function_set_error(duckdb_function_info info, const char *error);
+
+//===--------------------------------------------------------------------===//
+// Replacement Scans
+//===--------------------------------------------------------------------===//
+typedef void *duckdb_replacement_scan_info;
+
+typedef void (*duckdb_replacement_callback_t)(duckdb_replacement_scan_info info, const char *table_name, void *data);
+
+/*!
+Add a replacement scan definition to the specified database
+
+* db: The database object to add the replacement scan to
+* replacement: The replacement scan callback
+* extra_data: Extra data that is passed back into the specified callback
+* delete_callback: The delete callback to call on the extra data, if any
+*/
+DUCKDB_API void duckdb_add_replacement_scan(duckdb_database db, duckdb_replacement_callback_t replacement, void *extra_data, duckdb_delete_callback_t delete_callback);
+
+/*!
+Sets the replacement function name to use. If this function is called in the replacement callback,
+ the replacement scan is performed. If it is not called, the replacement callback is not performed.
+
+* info: The info object
+* function_name: The function name to substitute.
+*/
+DUCKDB_API void duckdb_replacement_scan_set_function_name(duckdb_replacement_scan_info info, const char *function_name);
+
+/*!
+Adds a parameter to the replacement scan function.
+
+* info: The info object
+* parameter: The parameter to add. The function will call `duckdb_destroy_value` on the parameter.
+*/
+DUCKDB_API void duckdb_replacement_scan_add_parameter(duckdb_replacement_scan_info info, duckdb_value parameter);
+
 
 //===--------------------------------------------------------------------===//
 // Appender

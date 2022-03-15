@@ -12,6 +12,7 @@ add_library_unity(
   hugeint-c.cpp
   logical_types-c.cpp
   prepared-c.cpp
+  replacement_scan-c.cpp
   result-c.cpp
   table_function-c.cpp
   value-c.cpp)
