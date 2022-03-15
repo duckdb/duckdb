@@ -4,6 +4,9 @@
 
 # No verification - it doesn't scale
 
+# Otherwise we run out of memory
+require 64bit
+
 statement ok
 PRAGMA verify_parallelism
 
