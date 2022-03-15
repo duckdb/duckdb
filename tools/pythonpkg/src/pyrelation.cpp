@@ -135,7 +135,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 }
 
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel, py::function map_function)
-    : rel(move(rel)), map_function(map_function) {
+    : rel(move(rel)), map_function(std::move(map_function)) {
 }
 
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
