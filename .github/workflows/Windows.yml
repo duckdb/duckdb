@@ -223,6 +223,7 @@ jobs:
      - name: Build
        run: |
          make
+         rm build/release/src/Release/duckdb*
 
      - name: Uninstall OpenSSL
        run: |
