@@ -9,6 +9,6 @@ statement ok
 CREATE TABLE test AS (SELECT range i, 0 as j FROM range(70000));
 
 query I
-SELECT list(i)[69999] FROM test GROUP BY j;
+SELECT list(i)[70000] FROM test GROUP BY j;
 ----
 69999

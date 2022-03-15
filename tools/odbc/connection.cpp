@@ -1,11 +1,14 @@
 #include "driver.hpp"
 #include "duckdb_odbc.hpp"
 #include "api_info.hpp"
+#include "odbc_diagnostic.hpp"
+#include "odbc_exception.hpp"
 #include "odbc_utils.hpp"
 
 #include "duckdb/common/helper.hpp"
 
 using duckdb::OdbcUtils;
+using duckdb::SQLStateType;
 using std::ptrdiff_t;
 
 SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
@@ -418,7 +421,8 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 	}
 	case SQL_DATA_SOURCE_NAME: {
 		return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) -> SQLRETURN {
-			duckdb::OdbcUtils::WriteString(dbc->dsn, (SQLCHAR *)info_value_ptr, buffer_length, string_length_ptr);
+			duckdb::OdbcUtils::WriteString(dbc->GetDataSourceName(), (SQLCHAR *)info_value_ptr, buffer_length,
+			                               string_length_ptr);
 			return SQL_SUCCESS;
 		});
 	}
@@ -952,8 +956,14 @@ SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALL
 			dbc->conn->Commit();
 			return SQL_SUCCESS;
 		case SQL_ROLLBACK:
-			dbc->conn->Rollback();
-			return SQL_SUCCESS;
+			try {
+				dbc->conn->Rollback();
+				return SQL_SUCCESS;
+			} catch (duckdb::Exception &ex) {
+				duckdb::DiagRecord diag_rec(std::string(ex.what()), SQLStateType::SQLENDTRAN_ASYNC_FUNCT_EXECUTION,
+				                            dbc->GetDataSourceName());
+				throw duckdb::OdbcException("SQLEndTran", SQL_ERROR, diag_rec);
+			}
 		default:
 			return SQL_ERROR;
 		}

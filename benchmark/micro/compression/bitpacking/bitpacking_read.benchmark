@@ -1,9 +1,9 @@
-# name: benchmark/micro/compression/bitpacking_read.benchmark
+# name: benchmark/micro/compression/bitpacking/bitpacking_read.benchmark
 # description: Scanning 1GB of ints compressed at ~3x compression
-# group: [compression]
+# group: [bitpacking]
 
 name Bitpacking Scan
-group aggregate
+group bitpacking
 storage persistent
 
 load

@@ -136,10 +136,6 @@
     Output
       <SQL> LOG2("x")
     Code
-      translate(is.na(var1))
-    Output
-      <SQL> ("var1" IS NULL OR PRINTF('%f', "var1") = 'nan')
-    Code
       translate(is.nan(var1))
     Output
       <SQL> ("var1" IS NOT NULL AND PRINTF('%f', "var1") = 'nan')
