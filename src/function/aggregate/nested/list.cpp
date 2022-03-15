@@ -54,10 +54,12 @@ static void ListCombineFunction(Vector &state, Vector &combined, idx_t count) {
 	auto states_ptr = (ListAggState **)sdata.data;
 
 	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
-
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states_ptr[sdata.sel->get_index(i)];
-		D_ASSERT(state->list_vector);
+		if (!state->list_vector) {
+			// NULL, no need to append.
+			continue;
+		}
 		if (!combined_ptr[i]->list_vector) {
 			combined_ptr[i]->list_vector = new Vector(state->list_vector->GetType());
 		}
@@ -75,17 +77,18 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 
 	auto &mask = FlatVector::Validity(result);
 	size_t total_len = ListVector::GetListSize(result);
+
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
+		const auto rid = i + offset;
 		if (!state->list_vector) {
-			mask.SetInvalid(i);
+			mask.SetInvalid(rid);
 			continue;
 		}
-		D_ASSERT(state->list_vector);
+
 		auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 		auto &state_lv = *state->list_vector;
 		auto state_lv_count = ListVector::GetListSize(state_lv);
-		const auto rid = i + offset;
 		list_struct_data[rid].length = state_lv_count;
 		list_struct_data[rid].offset = total_len;
 		total_len += state_lv_count;

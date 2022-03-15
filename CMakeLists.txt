@@ -214,6 +214,10 @@ option(AMALGAMATION_BUILD
        "Build from the amalgamation files, rather than from the normal sources."
        FALSE)
 
+option(BUILD_MAIN_DUCKDB_LIBRARY
+        "Build the main duckdb library and executable."
+        TRUE)
+
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
 option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
@@ -253,6 +257,12 @@ option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
+endif()
+
+if (NOT BUILD_MAIN_DUCKDB_LIBRARY)
+  set(BUILD_UNITTESTS FALSE)
+  set(BUILD_SHELL FALSE)
+  set(DISABLE_BUILTIN_EXTENSIONS TRUE)
 endif()
 
 if(BUILD_PYTHON
@@ -629,8 +639,13 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
   add_library(${TARGET_NAME} SHARED ${FILES})
   set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
   set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+  endif()
+  if(WIN32)
+    target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
+  endif()
   target_compile_definitions(${TARGET_NAME} PUBLIC -DDUCKDB_BUILD_LOADABLE_EXTENSION)
-  target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
   set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
           ".duckdb_extension")
 
@@ -673,9 +688,10 @@ if(${EXPORT_DLL_SYMBOLS})
   add_definitions(-DDUCKDB_BUILD_LIBRARY)
 endif()
 
-add_subdirectory(src)
-
-add_subdirectory(tools)
+if (BUILD_MAIN_DUCKDB_LIBRARY)
+  add_subdirectory(src)
+  add_subdirectory(tools)
+endif()
 
 add_subdirectory(extension)
 
