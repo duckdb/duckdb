@@ -10,7 +10,24 @@ defaults:
     shell: bash
 
 jobs:
-  test:
+  format_check:
+    name: Julia Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+
+      - name: Format Check
+        run: |
+            ./format_check.sh 
+
+  main_julia:
     name: Julia ${{ matrix.version }}
     runs-on: ${{ matrix.os }}
     strategy:
