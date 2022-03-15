@@ -9,6 +9,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#include "duckdb/main/client_context.hpp"
 #endif
 
 #include "dbgen/dbgen.hpp"
@@ -205,3 +206,7 @@ DUCKDB_EXTENSION_API const char *tpch_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
 }
+
+#ifndef DUCKDB_EXTENSION_MAIN
+#error DUCKDB_EXTENSION_MAIN not defined
+#endif

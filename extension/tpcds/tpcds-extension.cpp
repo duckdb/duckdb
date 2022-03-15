@@ -209,3 +209,7 @@ DUCKDB_EXTENSION_API const char *tpcds_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
 }
+
+#ifndef DUCKDB_EXTENSION_MAIN
+#error DUCKDB_EXTENSION_MAIN not defined
+#endif

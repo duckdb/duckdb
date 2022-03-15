@@ -515,11 +515,9 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 	state.filters = filters;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 
-	if (!state.file_handle) {
-		state.file_handle =
-		    file_handle->file_system.OpenFile(file_handle->path, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
-		                                      FileSystem::DEFAULT_COMPRESSION, file_opener);
-	}
+	state.file_handle =
+	    file_handle->file_system.OpenFile(file_handle->path, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+	                                      FileSystem::DEFAULT_COMPRESSION, file_opener);
 
 	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle);
 	state.root_reader = CreateReader(GetFileMetadata());

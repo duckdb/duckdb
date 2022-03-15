@@ -10,23 +10,23 @@
 #include "relmodel.hh"
 #include "schema.hh"
 
-struct duckdb_connection {
+struct sqlsmith_duckdb_connection {
 	std::unique_ptr<duckdb::DuckDB> database;
 	std::unique_ptr<duckdb::Connection> connection;
 	char *zErrMsg = 0;
 	int rc;
 	void q(const char *query);
-	duckdb_connection(std::string &conninfo);
+	sqlsmith_duckdb_connection(std::string &conninfo);
 };
 
-struct schema_duckdb : schema, duckdb_connection {
+struct schema_duckdb : schema, sqlsmith_duckdb_connection {
 	schema_duckdb(std::string &conninfo, bool no_catalog);
 	virtual std::string quote_name(const std::string &id) {
 		return id;
 	}
 };
 
-struct dut_duckdb : dut_base, duckdb_connection {
+struct dut_duckdb : dut_base, sqlsmith_duckdb_connection {
 	virtual void test(const std::string &stmt);
 	dut_duckdb(std::string &conninfo);
 };

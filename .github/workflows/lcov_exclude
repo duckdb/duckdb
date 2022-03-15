@@ -16,4 +16,5 @@
 */extension/tpcds/*
 */extension/tpch/*
 */extension/visualizer/*
+*/extension/json/yyjson/*
 src/main/extension_helper.cpp

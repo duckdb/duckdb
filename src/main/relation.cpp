@@ -36,7 +36,7 @@ shared_ptr<Relation> Relation::Project(const string &expression, const string &a
 }
 
 shared_ptr<Relation> Relation::Project(const string &select_list, const vector<string> &aliases) {
-	auto expressions = Parser::ParseExpressionList(select_list, context.GetParserOptions());
+	auto expressions = Parser::ParseExpressionList(select_list, context.GetContext()->GetParserOptions());
 	return make_shared<ProjectionRelation>(shared_from_this(), move(expressions), aliases);
 }
 
@@ -62,12 +62,12 @@ static vector<unique_ptr<ParsedExpression>> StringListToExpressionList(ClientCon
 }
 
 shared_ptr<Relation> Relation::Project(const vector<string> &expressions, const vector<string> &aliases) {
-	auto result_list = StringListToExpressionList(context, expressions);
+	auto result_list = StringListToExpressionList(*context.GetContext(), expressions);
 	return make_shared<ProjectionRelation>(shared_from_this(), move(result_list), aliases);
 }
 
 shared_ptr<Relation> Relation::Filter(const string &expression) {
-	auto expression_list = Parser::ParseExpressionList(expression, context.GetParserOptions());
+	auto expression_list = Parser::ParseExpressionList(expression, context.GetContext()->GetParserOptions());
 	if (expression_list.size() != 1) {
 		throw ParserException("Expected a single expression as filter condition");
 	}
@@ -76,7 +76,7 @@ shared_ptr<Relation> Relation::Filter(const string &expression) {
 
 shared_ptr<Relation> Relation::Filter(const vector<string> &expressions) {
 	// if there are multiple expressions, we AND them together
-	auto expression_list = StringListToExpressionList(context, expressions);
+	auto expression_list = StringListToExpressionList(*context.GetContext(), expressions);
 	D_ASSERT(!expression_list.empty());
 
 	auto expr = move(expression_list[0]);
@@ -92,7 +92,7 @@ shared_ptr<Relation> Relation::Limit(int64_t limit, int64_t offset) {
 }
 
 shared_ptr<Relation> Relation::Order(const string &expression) {
-	auto order_list = Parser::ParseOrderList(expression, context.GetParserOptions());
+	auto order_list = Parser::ParseOrderList(expression, context.GetContext()->GetParserOptions());
 	return make_shared<OrderRelation>(shared_from_this(), move(order_list));
 }
 
@@ -102,7 +102,7 @@ shared_ptr<Relation> Relation::Order(const vector<string> &expressions) {
 	}
 	vector<OrderByNode> order_list;
 	for (auto &expression : expressions) {
-		auto inner_list = Parser::ParseOrderList(expression, context.GetParserOptions());
+		auto inner_list = Parser::ParseOrderList(expression, context.GetContext()->GetParserOptions());
 		if (inner_list.size() != 1) {
 			throw ParserException("Expected a single ORDER BY expression in the expression list");
 		}
@@ -112,7 +112,7 @@ shared_ptr<Relation> Relation::Order(const vector<string> &expressions) {
 }
 
 shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const string &condition, JoinType type) {
-	auto expression_list = Parser::ParseExpressionList(condition, context.GetParserOptions());
+	auto expression_list = Parser::ParseExpressionList(condition, context.GetContext()->GetParserOptions());
 	D_ASSERT(!expression_list.empty());
 
 	if (expression_list.size() > 1 || expression_list[0]->type == ExpressionType::COLUMN_REF) {
@@ -160,24 +160,24 @@ shared_ptr<Relation> Relation::Alias(const string &alias) {
 }
 
 shared_ptr<Relation> Relation::Aggregate(const string &aggregate_list) {
-	auto expression_list = Parser::ParseExpressionList(aggregate_list, context.GetParserOptions());
+	auto expression_list = Parser::ParseExpressionList(aggregate_list, context.GetContext()->GetParserOptions());
 	return make_shared<AggregateRelation>(shared_from_this(), move(expression_list));
 }
 
 shared_ptr<Relation> Relation::Aggregate(const string &aggregate_list, const string &group_list) {
-	auto expression_list = Parser::ParseExpressionList(aggregate_list, context.GetParserOptions());
-	auto groups = Parser::ParseExpressionList(group_list, context.GetParserOptions());
+	auto expression_list = Parser::ParseExpressionList(aggregate_list, context.GetContext()->GetParserOptions());
+	auto groups = Parser::ParseExpressionList(group_list, context.GetContext()->GetParserOptions());
 	return make_shared<AggregateRelation>(shared_from_this(), move(expression_list), move(groups));
 }
 
 shared_ptr<Relation> Relation::Aggregate(const vector<string> &aggregates) {
-	auto aggregate_list = StringListToExpressionList(context, aggregates);
+	auto aggregate_list = StringListToExpressionList(*context.GetContext(), aggregates);
 	return make_shared<AggregateRelation>(shared_from_this(), move(aggregate_list));
 }
 
 shared_ptr<Relation> Relation::Aggregate(const vector<string> &aggregates, const vector<string> &groups) {
-	auto aggregate_list = StringListToExpressionList(context, aggregates);
-	auto group_list = StringListToExpressionList(context, groups);
+	auto aggregate_list = StringListToExpressionList(*context.GetContext(), aggregates);
+	auto group_list = StringListToExpressionList(*context.GetContext(), groups);
 	return make_shared<AggregateRelation>(shared_from_this(), move(aggregate_list), move(group_list));
 }
 
@@ -192,7 +192,7 @@ unique_ptr<TableRef> Relation::GetTableRef() {
 }
 
 unique_ptr<QueryResult> Relation::Execute() {
-	return context.Execute(shared_from_this());
+	return context.GetContext()->Execute(shared_from_this());
 }
 
 BoundStatement Relation::Bind(Binder &binder) {
@@ -215,7 +215,7 @@ void Relation::Insert(const string &schema_name, const string &table_name) {
 
 void Relation::Insert(const vector<vector<Value>> &values) {
 	vector<string> column_names;
-	auto rel = make_shared<ValueRelation>(context, values, move(column_names), "values");
+	auto rel = make_shared<ValueRelation>(context.GetContext(), values, move(column_names), "values");
 	rel->Insert(GetAlias());
 }
 
@@ -249,7 +249,7 @@ shared_ptr<Relation> Relation::CreateView(const string &name, bool replace, bool
 }
 
 unique_ptr<QueryResult> Relation::Query(const string &sql) {
-	return context.Query(sql, false);
+	return context.GetContext()->Query(sql, false);
 }
 
 unique_ptr<QueryResult> Relation::Query(const string &name, const string &sql) {
@@ -272,11 +272,12 @@ void Relation::Delete(const string &condition) {
 
 shared_ptr<Relation> Relation::TableFunction(const std::string &fname, const vector<Value> &values,
                                              const named_parameter_map_t &named_parameters) {
-	return make_shared<TableFunctionRelation>(context, fname, values, named_parameters, shared_from_this());
+	return make_shared<TableFunctionRelation>(context.GetContext(), fname, values, named_parameters,
+	                                          shared_from_this());
 }
 
 shared_ptr<Relation> Relation::TableFunction(const std::string &fname, const vector<Value> &values) {
-	return make_shared<TableFunctionRelation>(context, fname, values, shared_from_this());
+	return make_shared<TableFunctionRelation>(context.GetContext(), fname, values, shared_from_this());
 }
 
 string Relation::ToString() {

@@ -54,6 +54,7 @@ static vector<TestType> GetTestTypes() {
 	result.emplace_back(LogicalType::DECIMAL(18, 6), "dec_18_6");
 	result.emplace_back(LogicalType::DECIMAL(38, 10), "dec38_10");
 	result.emplace_back(LogicalType::UUID, "uuid");
+
 	// interval
 	interval_t min_interval;
 	min_interval.months = 0;
@@ -68,6 +69,7 @@ static vector<TestType> GetTestTypes() {
 	                    Value::INTERVAL(max_interval));
 	// strings/blobs
 	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
+	result.emplace_back(LogicalType::JSON, "json", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
 	result.emplace_back(LogicalType::BLOB, "blob", Value::BLOB("thisisalongblob\\x00withnullbytes"),
 	                    Value("\\x00\\x00\\x00a"));
 
