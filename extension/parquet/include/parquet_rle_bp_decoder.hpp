@@ -18,7 +18,7 @@ class RleBpDecoder {
 public:
 	/// Create a decoder object. buffer/buffer_len is the decoded data.
 	/// bit_width is the width of each value (before encoding).
-	RleBpDecoder(const uint8_t *buffer, uint32_t buffer_len, uint64_t bit_width)
+	RleBpDecoder(const uint8_t *buffer, uint32_t buffer_len, uint32_t bit_width)
 	    : buffer_((char *)buffer, buffer_len), bit_width_(bit_width), current_value_(0), repeat_count_(0),
 	      literal_count_(0) {
 		if (bit_width >= 64) {
@@ -77,7 +77,7 @@ private:
 	ByteBuffer buffer_;
 
 	/// Number of bits needed to encode the value. Must be between 0 and 64.
-	uint64_t bit_width_;
+	uint32_t bit_width_;
 	uint64_t current_value_;
 	uint32_t repeat_count_;
 	uint32_t literal_count_;
