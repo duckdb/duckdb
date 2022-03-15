@@ -18,14 +18,14 @@ class RleBpDecoder {
 public:
 	/// Create a decoder object. buffer/buffer_len is the decoded data.
 	/// bit_width is the width of each value (before encoding).
-	RleBpDecoder(const uint8_t *buffer, uint32_t buffer_len, uint32_t bit_width)
+	RleBpDecoder(const uint8_t *buffer, uint32_t buffer_len, uint64_t bit_width)
 	    : buffer_((char *)buffer, buffer_len), bit_width_(bit_width), current_value_(0), repeat_count_(0),
 	      literal_count_(0) {
 		if (bit_width >= 64) {
 			throw std::runtime_error("Decode bit width too large");
 		}
 		byte_encoded_len = ((bit_width_ + 7) / 8);
-		max_val = (1 << bit_width_) - 1;
+		max_val = (uint64_t(1) << bit_width_) - 1;
 	}
 
 	template <typename T>
@@ -77,12 +77,12 @@ private:
 	ByteBuffer buffer_;
 
 	/// Number of bits needed to encode the value. Must be between 0 and 64.
-	int bit_width_;
+	uint64_t bit_width_;
 	uint64_t current_value_;
 	uint32_t repeat_count_;
 	uint32_t literal_count_;
 	uint8_t byte_encoded_len;
-	uint32_t max_val;
+	uint64_t max_val;
 
 	uint8_t bitpack_pos = 0;
 
