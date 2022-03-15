@@ -95,11 +95,7 @@ class TestArrowFetchRecordBatch(object):
         chunk = record_batch_reader.read_next_batch()
         assert(len(chunk) == 3000)
 
-    def test_record_batch_stream_closed(self, duckdb_cursor):
-        if not can_run:
-            return
-
-    def test_record_coverage():
+    def test_record_coverage(self, duckdb_cursor):
         if not can_run:
             return
         duckdb_cursor = duckdb.connect()
@@ -110,9 +106,3 @@ class TestArrowFetchRecordBatch(object):
         chunk = record_batch_reader.read_all()
         assert(len(chunk) == 2048)
 
-duckdb_cursor = duckdb.connect()
-duckdb_cursor.execute("CREATE table t as select range a from range(2048);")
-rel = duckdb_cursor.table("t")
-record_batch_reader = rel.record_batch(1024)
-chunk = record_batch_reader.read_all()
-assert(len(chunk) == 2048)
