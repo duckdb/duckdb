@@ -306,7 +306,6 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
 				odbc_handle->odbc_diagnostic->AddNewRecIdx(rec_idx);
 				return SQL_SUCCESS_WITH_INFO;
 			}
-
 		}
 
 		if (message_text == nullptr) {

@@ -236,9 +236,9 @@ static BOOL Uninstall(const char *dsn, const char *drivername) {
 
 void ElevateToAdminPrivileges() {
 	char szPath[MAX_PATH];
-	if (GetModuleFileName(NULL, szPath, ARRAYSIZE(szPath)))	{
+	if (GetModuleFileName(NULL, szPath, ARRAYSIZE(szPath))) {
 		// Launch itself as admin
-		SHELLEXECUTEINFO sei = { sizeof(sei) };
+		SHELLEXECUTEINFO sei = {sizeof(sei)};
 		sei.lpVerb = "runas";
 		sei.lpFile = szPath;
 		sei.hwnd = NULL;
@@ -263,12 +263,12 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
-	char *INSTALL_CMD = "/Install";
+	char *install_cmd = "/Install";
 	char *cmd;
 	bool is_ci;
 	// Default mode is Install to allow double click
 	if (argc == 1) {
-		cmd = INSTALL_CMD;
+		cmd = install_cmd;
 	} else {
 		is_ci = (strcmp("/CI", argv[1]) == 0) ? true : false;
 		cmd = is_ci ? argv[2] : argv[1];

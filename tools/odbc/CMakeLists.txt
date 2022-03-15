@@ -20,7 +20,8 @@ if(ODBC_FOUND)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
     add_subdirectory(winsetup)
     list(APPEND LINK_LIB_LIST $<$<PLATFORM_ID:Windows>:odbccp32>)
-    list(APPEND LINK_LIB_LIST $<$<PLATFORM_ID:Windows>:legacy_stdio_definitions>)
+    list(APPEND LINK_LIB_LIST
+         $<$<PLATFORM_ID:Windows>:legacy_stdio_definitions>)
   endif()
 endif()
 
