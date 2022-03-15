@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <shlobj_core.h>
 
 static const char *driver_name = "DuckDB Driver";
 static const char *data_source_name = "DuckDB";
@@ -20,6 +21,14 @@ static const char *duckdb_odbc_ver = "3.0";
 
 // global option do show or not message box, useful on the CI
 static bool show_msg_box = true;
+
+void PrintInfoMsg(const char *func, const char *msg, int errnr) {
+	if (show_msg_box) {
+		MessageBox(NULL, msg, func, MB_ICONINFORMATION | MB_TASKMODAL | MB_SETFOREGROUND);
+	} else {
+		printf("%d - %s: %s\n", errnr, func, msg);
+	}
+}
 
 void PrintMsg(const char *func, const char *msg, int errnr) {
 	if (show_msg_box) {
@@ -225,16 +234,51 @@ static BOOL Uninstall(const char *dsn, const char *drivername) {
 	return TRUE;
 }
 
+void ElevateToAdminPrivileges() {
+	char szPath[MAX_PATH];
+	if (GetModuleFileName(NULL, szPath, ARRAYSIZE(szPath)))	{
+		// Launch itself as admin
+		SHELLEXECUTEINFO sei = { sizeof(sei) };
+		sei.lpVerb = "runas";
+		sei.lpFile = szPath;
+		sei.hwnd = NULL;
+		sei.nShow = SW_NORMAL;
+		if (!ShellExecuteEx(&sei)) {
+			DWORD dwError = GetLastError();
+			if (dwError == ERROR_CANCELLED) {
+				PrintMsg("Admin Privileges", "User did not allow privileges elevation", 0);
+			} else {
+				PrintMsg("Admin Privileges", "Error during privileges elevation", 0);
+			}
+			exit(1);
+		} else {
+			_exit(1);
+		}
+	}
+}
+
 int main(int argc, char **argv) {
-	if (argc < 2 || argc > 5) {
-		PrintMsg(argv[0], "[/Install | /Uninstall]", 0);
+	if (argc > 5) {
+		PrintMsg(argv[0], "/CI [/Install | /Uninstall]", 0);
 		exit(1);
 	}
 
-	bool is_ci = (strcmp("/CI", argv[1]) == 0) ? true : false;
-	char *cmd = is_ci ? argv[2] : argv[1];
-	if (is_ci) {
-		show_msg_box = false;
+	char *INSTALL_CMD = "/Install";
+	char *cmd;
+	bool is_ci;
+	// Default mode is Install to allow double click
+	if (argc == 1) {
+		cmd = INSTALL_CMD;
+	} else {
+		is_ci = (strcmp("/CI", argv[1]) == 0) ? true : false;
+		cmd = is_ci ? argv[2] : argv[1];
+		if (is_ci) {
+			show_msg_box = false;
+		}
+	}
+
+	if (!IsUserAnAdmin()) {
+		ElevateToAdminPrivileges();
 	}
 
 	/* after /Install or /Uninstall we optionally accept the DSN and the driver name */
@@ -281,6 +325,9 @@ int main(int argc, char **argv) {
 		if (!Install(buf, dsn, drivername)) {
 			PrintMsg(argv[0], "ODBC Install Failed", 0);
 			exit(1);
+		} else {
+			PrintInfoMsg(argv[0], "ODBC Installation completed successfully", 0);
+			exit(0);
 		}
 	} else if (strcmp("/Uninstall", cmd) == 0) {
 		/* remove file we've installed in previous versions of this program */
@@ -290,6 +337,9 @@ int main(int argc, char **argv) {
 		if (!Uninstall(dsn, drivername)) {
 			PrintMsg(argv[0], "ODBC Uninstall Failed", 0);
 			exit(1);
+		} else {
+			PrintInfoMsg(argv[0], "ODBC Uninstall completed successfully", 0);
+			exit(0);
 		}
 	} else {
 		PrintMsg(argv[0], "[/Install | /Uninstall]", 0);
