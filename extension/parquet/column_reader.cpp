@@ -620,6 +620,15 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 	child_filter.set();
 }
 
+// ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+//                             Vector &result_out)
+void ListColumnReader::Skip(idx_t num_values) {
+	parquet_filter_t filter;
+	auto define_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
+	auto repeat_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
+	Vector result_out(Type());
+	Read(num_values, filter, define_out.get(), repeat_out.get(), result_out);
+}
 //===--------------------------------------------------------------------===//
 // Struct Column Reader
 //===--------------------------------------------------------------------===//
@@ -667,7 +676,9 @@ idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, ui
 }
 
 void StructColumnReader::Skip(idx_t num_values) {
-	throw InternalException("Skip not implemented for StructColumnReader");
+	for (auto &child_reader : child_readers) {
+		child_reader->Skip(num_values);
+	}
 }
 
 idx_t StructColumnReader::GroupRowsAvailable() {
