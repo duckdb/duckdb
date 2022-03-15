@@ -98,7 +98,7 @@ void RunExampleDuckDBCatalog() {
 //===--------------------------------------------------------------------===//
 void CreateMyScanFunction(Connection &con);
 
-unique_ptr<TableFunctionRef> MyReplacementScan(const string &table_name, ReplacementScanData *data) {
+unique_ptr<TableFunctionRef> MyReplacementScan(ClientContext &context, const string &table_name, ReplacementScanData *data) {
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ConstantExpression>(Value(table_name)));

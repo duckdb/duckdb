@@ -8,6 +8,11 @@ void duckdb_destroy_value(duckdb_value *value) {
 	}
 }
 
+duckdb_value duckdb_create_int64(int64_t input) {
+	auto val = Value::BIGINT(input);
+	return (duckdb_value) new Value(val);
+}
+
 char *duckdb_get_varchar(duckdb_value value) {
 	auto val = (duckdb::Value *)value;
 	auto str_val = val->CastAs(duckdb::LogicalType::VARCHAR);

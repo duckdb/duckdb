@@ -476,7 +476,7 @@ struct ReplacementRegisteredObjects : public ReplacementScanData {
 	unordered_map<string, unique_ptr<RegisteredObject>> *registered_objects;
 };
 
-static unique_ptr<TableFunctionRef> ScanReplacement(const string &table_name, ReplacementScanData *data) {
+static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, const string &table_name, ReplacementScanData *data) {
 	py::gil_scoped_acquire acquire;
 	auto &registered_data = (ReplacementRegisteredObjects &) *data;
 	auto registered_objects = registered_data.registered_objects;

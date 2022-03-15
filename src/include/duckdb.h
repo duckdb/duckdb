@@ -944,6 +944,15 @@ Destroys the value and de-allocates all memory allocated for that type.
 */
 DUCKDB_API void duckdb_destroy_value(duckdb_value *value);
 
+
+/*!
+Creates a value from an int64
+
+* value: The bigint value
+* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_int64(int64_t val);
+
 /*!
 Obtains a string representation of the given value.
 The result must be destroyed with `duckdb_free`.
