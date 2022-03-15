@@ -1,0 +1,42 @@
+# name: test/sql/function/list/aggregates/list_sem.test
+# description: Test the list_sem aggregate function
+# group: [aggregates]
+
+statement error
+select list_sem()
+
+statement error
+select list_sem('hello')
+
+statement error
+select list_sem(['hello'])
+
+statement error
+select list_sem(True)
+
+statement error
+select list_sem([True])
+
+query I
+select list_sem(NULL)
+----
+NULL
+
+query I
+select list_sem([1])
+----
+0.000000
+
+statement error
+select list_sem(*)
+
+statement ok
+create table aggr(k int[], v decimal(10,2)[], v2 decimal(10, 2)[]);
+
+statement ok
+insert into aggr values ([1, 2, 2, 2, 2], [10, 10, 20, 25, 30], [NULL, 11, 22, NULL, 35]);
+
+query III
+select list_sem(k), list_sem(v), list_sem(v2)  from aggr;
+----
+0.178885	3.577709	5.663398

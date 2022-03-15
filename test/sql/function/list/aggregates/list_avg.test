@@ -1,0 +1,142 @@
+# name: test/sql/function/list/aggregates/list_avg.test
+# description: Test the list_avg aggregate function
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+# scalar average
+query I
+SELECT list_avg([3])
+----
+3
+
+query I
+SELECT list_avg(NULL)
+----
+NULL
+
+query I
+SELECT list_avg([NULL])
+----
+NULL
+
+query I
+SELECT list_avg([3::SMALLINT])
+----
+3
+
+query I
+SELECT list_avg([NULL::SMALLINT])
+----
+NULL
+
+statement error
+SELECT list_avg(NULL::SMALLINT)
+
+query I
+SELECT list_avg([3::DOUBLE])
+----
+3
+
+query I
+SELECT list_avg([NULL::DOUBLE])
+----
+NULL
+
+statement error
+SELECT list_avg(NULL::DOUBLE)
+
+# test average on sequence
+statement ok
+CREATE SEQUENCE seq;
+
+# TODO: failing, but does not fail in isolated file...
+query R
+SELECT list_avg([nextval('seq')]);
+----
+1
+
+# TODO: failing, but does not fail in isolated file...
+query I
+SELECT list_avg([nextval('seq')]);
+----
+2
+
+statement ok
+CREATE TABLE integers(i INTEGER[]);
+
+statement ok
+INSERT INTO integers VALUES ([1, 2, 3]), ([6, 3, 2, 5]);
+
+query I
+SELECT list_avg(i) FROM integers;
+----
+2
+4
+
+# invalid use of average
+statement error
+SELECT list_avg()
+
+statement error
+SELECT list_avg(1, 2, 3)
+
+statement error
+SELECT list_avg(list_avg([1]))
+
+statement error
+SELECT list_avg([True])
+
+statement error
+SELECT list_avg(['hello'])
+
+statement error
+SELECT list_avg([DATE '1992-02-02'])
+
+# empty average
+statement ok
+CREATE TABLE vals(i INTEGER[], j HUGEINT[]);
+
+statement ok
+INSERT INTO vals VALUES ([NULL], [NULL])
+
+query I
+SELECT list_avg(i) FROM vals;
+----
+NULL
+
+query I
+SELECT list_avg(j) FROM vals;
+----
+NULL
+
+# Test list_avg on integers with no exact float64 representation
+
+statement ok
+CREATE TABLE bigints(n HUGEINT[]);
+
+statement ok
+INSERT INTO bigints (n) VALUES (['9007199254740992'::HUGEINT, 1::HUGEINT, 0::HUGEINT]);
+
+# this would give the wrong result with 'double' precision
+require longdouble
+
+query R
+SELECT list_avg(n)::DOUBLE - '3002399751580331'::DOUBLE FROM bigints;
+----
+0
+
+# Test averages in which the intermediate sums are not exact (favg)
+
+statement ok
+CREATE TABLE doubles(n DOUBLE[]);
+
+statement ok
+INSERT INTO doubles (n) VALUES (['9007199254740992'::DOUBLE, 1::DOUBLE, 1::DOUBLE, 0::DOUBLE]);
+
+# this would give the wrong result with a simple sum-and-divide
+query R
+SELECT list_aggr(n, 'favg') - '2251799813685248.5'::DOUBLE FROM doubles;
+----
+0

@@ -1,6 +1,6 @@
-# name: test/sql/function/list/aggregates_invalid.test
+# name: test/sql/function/list/aggregates/invalid.test
 # description: Test aggregate functions that are not compatible with list aggregate functions
-# group: [list]
+# group: [aggregates]
 
 statement ok
 PRAGMA enable_verification

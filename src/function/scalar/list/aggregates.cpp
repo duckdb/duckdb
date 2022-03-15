@@ -24,9 +24,8 @@ struct ListAggregatesBindData : public FunctionData {
 	unique_ptr<FunctionData> Copy() override;
 };
 
-
-ListAggregatesBindData::ListAggregatesBindData(const LogicalType &stype_p, 
-	unique_ptr<Expression> aggr_expr_p) : stype(stype_p), aggr_expr(move(aggr_expr_p)) {
+ListAggregatesBindData::ListAggregatesBindData(const LogicalType &stype_p, unique_ptr<Expression> aggr_expr_p)
+    : stype(stype_p), aggr_expr(move(aggr_expr_p)) {
 }
 
 unique_ptr<FunctionData> ListAggregatesBindData::Copy() {
@@ -42,11 +41,6 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto count = args.size();
 	Vector &lists = args.data[0];
 
-	// get the aggregate function
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (ListAggregatesBindData &)*func_expr.bind_info;
-	auto &aggr = (BoundAggregateExpression &)*info.aggr_expr;
-
 	// set the result vector
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &result_validity = FlatVector::Validity(result);
@@ -55,6 +49,11 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 		result_validity.SetInvalid(0);
 		return;
 	}
+
+	// get the aggregate function
+	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &info = (ListAggregatesBindData &)*func_expr.bind_info;
+	auto &aggr = (BoundAggregateExpression &)*info.aggr_expr;
 
 	auto lists_size = ListVector::GetListSize(lists);
 	auto &child_vector = ListVector::GetEntry(lists);
@@ -104,18 +103,18 @@ static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, Scalar
 	D_ASSERT(bound_function.arguments.size() == 2);
 	D_ASSERT(arguments.size() == 2);
 
-	auto list_child_type = ListType::GetChildType(arguments[0]->return_type);
-
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
 		bound_function.return_type = LogicalType::SQLNULL;
-	} else {
-		D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
-		bound_function.return_type = list_child_type;
+		return make_unique<VariableReturnBindData>(bound_function.return_type);
 	}
 
+	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
+	auto list_child_type = ListType::GetChildType(arguments[0]->return_type);
+	bound_function.return_type = list_child_type;
+
 	if (!arguments[1]->IsFoldable()) {
-		throw InvalidInputException("Aggregate function field must be a constant");
+		throw InvalidInputException("Aggregate function name must be a constant");
 	}
 
 	// get the function name
@@ -125,13 +124,11 @@ static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, Scalar
 	vector<LogicalType> types;
 	types.push_back(list_child_type);
 
-	// create the child expressions and their type
+	// create the child expression and its type
 	vector<unique_ptr<Expression>> children;
-	auto expr = arguments[0]->Copy(); // TODO: this is a hack, we just copy the argument as a child
+	auto expr = make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL));
+	expr->return_type = list_child_type;
 	children.push_back(move(expr));
-
-	// TODO: instead, use the constant null type and give that the type (bound constant expression), this 
-	// can be passed a value of the specified type
 
 	// look up the aggregate function in the catalog
 	QueryErrorContext error_context(nullptr, 0);
@@ -148,12 +145,11 @@ static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, Scalar
 
 	// found a matching function, bind it as an aggregate
 	auto &best_function = func->functions[best_function_idx];
-	children[0]->return_type = list_child_type;
 	auto bound_aggr_function = AggregateFunction::BindAggregateFunction(context, best_function, move(children));
 
 	bound_function.arguments[0] = LogicalType::LIST(best_function.arguments[0]); // for proper casting of the vectors
 	bound_function.return_type = bound_aggr_function->function.return_type;
- 	return make_unique<ListAggregatesBindData>(bound_function.return_type, move(bound_aggr_function));
+	return make_unique<ListAggregatesBindData>(bound_function.return_type, move(bound_aggr_function));
 }
 
 ScalarFunction ListAggregateFun::GetFunction() {
