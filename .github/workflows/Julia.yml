@@ -46,5 +46,4 @@ jobs:
       - name: Run Tests
         run: |
           cd tools/juliapkg
-          ./test.sh
-
+          julia -e "import Pkg; Pkg.activate(\".\"); Pkg.instantiate(); include(\"test/runtests.jl\")"
