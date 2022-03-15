@@ -804,7 +804,6 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	                         shared_path_http_proto, shared_path_path, shared_path_query_param);
 
 	// Construct the ListObjectsV2 call
-	auto result_offset = 0;
 	auto req_path = "/";
 
 	string req_params = "?encoding-type=url&list-type=2&continuation-token=" + continuation_token + "&prefix=";
