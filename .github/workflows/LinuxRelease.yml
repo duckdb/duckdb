@@ -187,7 +187,9 @@ jobs:
         ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
     - name: Build
-      run: make
+      run: |
+        make
+        rm build/release/src/libduckdb*
 
     - name: Deploy
       run: |
