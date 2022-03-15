@@ -5,18 +5,19 @@ namespace duckdb {
 ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
                                scalar_function_t function, bool has_side_effects, bind_scalar_function_t bind,
                                dependency_function_t dependency, function_statistics_t statistics,
-                               init_local_state_t init_local_state, LogicalType varargs)
-    : BaseScalarFunction(move(name), move(arguments), move(return_type), has_side_effects, move(varargs)),
+                               init_local_state_t init_local_state, LogicalType varargs, bool propagate_null_values)
+    : BaseScalarFunction(move(name), move(arguments), move(return_type), has_side_effects, move(varargs),
+                         propagate_null_values),
       function(move(function)), bind(bind), init_local_state(init_local_state), dependency(dependency),
       statistics(statistics) {
 }
 
 ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
-                               bool has_side_effects, bind_scalar_function_t bind, dependency_function_t dependency,
-                               function_statistics_t statistics, init_local_state_t init_local_state,
-                               LogicalType varargs)
+                               bool propagate_null_values, bool has_side_effects, bind_scalar_function_t bind,
+                               dependency_function_t dependency, function_statistics_t statistics,
+                               init_local_state_t init_local_state, LogicalType varargs)
     : ScalarFunction(string(), move(arguments), move(return_type), move(function), has_side_effects, bind, dependency,
-                     statistics, init_local_state, move(varargs)) {
+                     statistics, init_local_state, move(varargs), propagate_null_values) {
 }
 
 bool ScalarFunction::operator==(const ScalarFunction &rhs) const {

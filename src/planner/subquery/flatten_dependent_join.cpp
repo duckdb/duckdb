@@ -68,7 +68,8 @@ bool SubqueryDependentFilter(Expression *expr) {
 	}
 	return false;
 }
-unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan) {
+unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan,
+                                                                                 bool parent_propagate_null_values) {
 	// first check if the logical operator has correlated expressions
 	auto entry = has_correlated_expressions.find(plan.get());
 	D_ASSERT(entry != has_correlated_expressions.end());
@@ -102,7 +103,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		// projection
 		// first we flatten the dependent join in the child of the projection
-		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
+		bool propagate_null_values = true;
+		for (auto &expr : plan->expressions) {
+			propagate_null_values &= expr->PropagatesNullValues();
+		}
+		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]), propagate_null_values);
 
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
@@ -144,7 +149,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			unique_ptr<LogicalComparisonJoin> join = make_unique<LogicalComparisonJoin>(JoinType::INNER);
 			for (auto &aggr_exp : aggr.expressions) {
 				auto b_aggr_exp = (BoundAggregateExpression *)aggr_exp.get();
-				if (!b_aggr_exp->PropagatesNullValues() || any_join) {
+				if (!b_aggr_exp->PropagatesNullValues() || any_join || !parent_propagate_null_values) {
 					join = make_unique<LogicalComparisonJoin>(JoinType::LEFT);
 					break;
 				}
