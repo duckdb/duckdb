@@ -16,7 +16,6 @@ namespace duckdb {
 class UpdateGlobalState : public GlobalSinkState {
 public:
 	UpdateGlobalState() : updated_count(0) {
-		return_chunk_collection = ChunkCollection();
 		returned_chunk_count = 0;
 	}
 
