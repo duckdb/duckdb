@@ -172,8 +172,6 @@ void PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, Global
 			state.finished = true;
 		}
 	}
-
-
 }
 
 } // namespace duckdb
