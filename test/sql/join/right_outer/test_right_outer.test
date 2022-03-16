@@ -133,6 +133,8 @@ SELECT integers.*, integers2.* FROM integers2 RIGHT OUTER JOIN integers ON integ
 1	2	2	20
 2	3	NULL	NULL
 
+mode debug
+
 query IIII
 SELECT integers.*, integers2.* FROM integers2 RIGHT OUTER JOIN integers ON integers.i<integers2.k AND integers.i<integers2.l WHERE integers.i <= 2 ORDER BY i
 ----

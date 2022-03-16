@@ -160,6 +160,9 @@ SELECT * FROM integers LEFT OUTER JOIN integers2 ON integers.i<integers2.k WHERE
 2	3	NULL	NULL
 
 # multiple conditions
+
+mode debug
+
 query IIII
 SELECT * FROM integers LEFT OUTER JOIN integers2 ON integers.i<integers2.k AND integers.i<integers2.l WHERE integers.i <= 2 ORDER BY i
 ----
