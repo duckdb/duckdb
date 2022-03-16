@@ -225,7 +225,11 @@ jobs:
           fetch-depth: 0
 
       - name: Install
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov curl
+
+      - name: Validate Configuration
+        run: |
+          curl --fail --data-binary @.codecov.yml https://codecov.io/validate
 
       - name: Set up Python 3.9
         uses: actions/setup-python@v2

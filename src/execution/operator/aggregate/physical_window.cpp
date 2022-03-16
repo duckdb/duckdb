@@ -616,7 +616,7 @@ private:
 };
 
 template <typename T, typename OP>
-struct OperationCompare : public std::binary_function<T, T, bool> {
+struct OperationCompare : public std::function<bool(T, T)> {
 	inline bool operator()(const T &lhs, const T &val) const {
 		return OP::template Operation(lhs, val);
 	}
