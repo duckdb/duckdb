@@ -21,14 +21,9 @@ public:
 	MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info);
 	//! The macro function
 	unique_ptr<MacroFunction> function;
-
 public:
-	//! Serialize the meta information of the ScalarMacroCatalogEntry a serializer
+	//! Serialize the meta information
 	virtual void Serialize(Serializer &serializer) = 0;
-
-	//! Deserializes to a CreateMacroInfo
-	// static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &source);
-	// static unique_ptr<CreateMacroInfo> Deserialize2(Deserializer &main_source);
 };
 
 } // namespace duckdb

@@ -43,7 +43,6 @@ unique_ptr<CreateMacroInfo> ScalarMacroCatalogEntry::Deserialize(Deserializer &m
 	info->schema = reader.ReadRequired<string>();
 	info->name = reader.ReadRequired<string>();
 	auto expression = reader.ReadRequiredSerializable<ParsedExpression>();
-	auto prn_expr = expression->ToString();
 	auto func = make_unique<ScalarMacroFunction>(move(expression));
 	info->function = move(func);
 	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>();

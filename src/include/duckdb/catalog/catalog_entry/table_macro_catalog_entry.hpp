@@ -20,11 +20,10 @@ public:
 	TableMacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info);
 
 public:
-	//! Serialize the meta information of the ScalarMacroCatalogEntry a serializer
-	virtual void Serialize(Serializer &serializer);
+	//! Serialize the meta information of the ScalarMacroCatalogEntry
+	void Serialize(Serializer &serializer) override;
 	//! Deserializes to a CreateMacroInfo
 	static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &source);
-	// static unique_ptr<CreateMacroInfo> Deserialize2(Deserializer &main_source);
 };
 
 } // namespace duckdb
