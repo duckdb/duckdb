@@ -2,10 +2,45 @@ using DataFrames
 
 mutable struct DFBindInfo
     df::DataFrame
+    result_types::Vector{Type}
+    scan_functions::Vector{Function}
 
-    function DFBindInfo(df::DataFrame)
-        return new(df)
+    function DFBindInfo(df::DataFrame, result_types::Vector{Type}, scan_functions::Vector{Function})
+        return new(df, result_types, scan_functions)
     end
+end
+
+function DFScanColumn(
+    df::DataFrame,
+    df_offset::Int64,
+    col_idx::Int64,
+    scan_count::Int64,
+    output::DuckDB.DataChunk,
+    ::Type{T}
+) where {T}
+    result_array::Vector{T} = DuckDB.GetArray(output, col_idx, T)
+    validity = DuckDB.GetValidity(output, col_idx)
+    input_column = df[!, col_idx]
+    for i in 1:scan_count
+        if input_column[df_offset + i] === missing
+            DuckDB.SetInvalid(validity, i)
+        else
+            result_array[i] = input_column[df_offset + i]
+        end
+    end
+end
+
+function DFResultType(df, entry)
+    column_type = eltype(df[!, entry])
+    if typeof(column_type) == Union
+        # remove Missing type from the union
+        column_type = Core.Compiler.typesubtract(column_type, Missing, 1)
+    end
+    return column_type
+end
+
+function DFScanFunction(df, entry)
+    return DFScanColumn
 end
 
 function DFBindFunction(info::DuckDB.BindInfo)
@@ -16,11 +51,18 @@ function DFBindFunction(info::DuckDB.BindInfo)
     extra_data = DuckDB.GetExtraData(info)
     df = extra_data[name]
     # register the result columns
+
+    result_types::Vector{Type} = Vector()
+    scan_functions::Vector{Function} = Vector()
     for entry in names(df)
-        # FIXME; actually get the type of the data frame
-        DuckDB.AddResultColumn(info, entry, Int64)
+        result_type = DFResultType(df, entry)
+        scan_function = DFScanFunction(df, entry)
+        push!(result_types, result_type)
+        push!(scan_functions, scan_function)
+
+        DuckDB.AddResultColumn(info, entry, result_type)
     end
-    return DFBindInfo(df)
+    return DFBindInfo(df, result_types, scan_functions)
 end
 
 mutable struct DFInitInfo
@@ -47,11 +89,14 @@ function DFScanFunction(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
     end
 
     for col_idx in 1:column_count
-        result_array::Vector{Int64} = DuckDB.GetArray(output, col_idx, Int64)
-        input_column = bind_info.df[!, col_idx]
-        for i in 1:scan_count
-            result_array[i] = input_column[init_info.pos + i]
-        end
+        bind_info.scan_functions[col_idx](
+            bind_info.df,
+            init_info.pos,
+            col_idx,
+            scan_count,
+            output,
+            bind_info.result_types[col_idx]
+        )
     end
     init_info.pos += scan_count
     DuckDB.SetSize(output, scan_count)

@@ -20,8 +20,8 @@ jobs:
 
       - uses: julia-actions/setup-julia@v1
         with:
-          version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
+          version: 1.7
+          arch: x64
 
       - name: Format Check
         run: |
@@ -55,12 +55,9 @@ jobs:
         run: |
             make
 
-      - name: Set Julia DuckDB Library Path
+      - name: Run Tests
         run: |
           export JULIA_DUCKDB_LIBRARY="`pwd`/build/release/src/libduckdb.so"
           ls $JULIA_DUCKDB_LIBRARY
-
-      - name: Run Tests
-        run: |
           cd tools/juliapkg
           julia -e "import Pkg; Pkg.activate(\".\"); Pkg.instantiate(); include(\"test/runtests.jl\")"
