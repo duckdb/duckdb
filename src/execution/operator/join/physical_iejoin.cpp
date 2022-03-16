@@ -11,6 +11,8 @@
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 
+#include <thread>
+
 namespace duckdb {
 
 PhysicalIEJoin::PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -1255,7 +1257,7 @@ public:
 
 		// Spin wait for regular blocks to finish(!)
 		while (completed < pair_count) {
-			continue;
+			std::this_thread::yield();
 		}
 
 		// Left outer blocks
