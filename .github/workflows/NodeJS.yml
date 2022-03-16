@@ -58,12 +58,15 @@ jobs:
       run: ./scripts/node_build.sh 10
 
     - name: Node 12
+      if: github.ref == 'refs/heads/master'
       run: ./scripts/node_build.sh 12
 
     - name: Node 14
+      if: github.ref == 'refs/heads/master'
       run: ./scripts/node_build.sh 14
 
     - name: Node 15
+      if: github.ref == 'refs/heads/master'
       run: ./scripts/node_build.sh 15
 
     - name: Node 17
@@ -92,12 +95,15 @@ jobs:
         run: ./scripts/node_build.sh 10
 
       - name: Node 12
+        if: github.ref == 'refs/heads/master'
         run: ./scripts/node_build.sh 12
 
       - name: Node 14
+        if: github.ref == 'refs/heads/master'
         run: ./scripts/node_build.sh 14
 
       - name: Node 15
+        if: github.ref == 'refs/heads/master'
         run: ./scripts/node_build.sh 15
 
       - name: Node 17
