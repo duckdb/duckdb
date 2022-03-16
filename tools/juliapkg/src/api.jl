@@ -795,7 +795,7 @@ DUCKDB_API duckdb_state duckdb_prepare(duckdb_connection connection, const char 
 function duckdb_prepare(connection, query, out_prepared_statement)
     return ccall(
         (:duckdb_prepare, libduckdb),
-        Int32,
+        duckdb_state,
         (duckdb_connection, Ptr{UInt8}, Ref{duckdb_prepared_statement}),
         connection,
         query,
@@ -859,7 +859,7 @@ DUCKDB_API duckdb_state duckdb_bind_boolean(duckdb_prepared_statement prepared_s
 function duckdb_bind_boolean(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_boolean, libduckdb),
-        Int32,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Int32),
         prepared_statement,
         param_idx,
@@ -874,7 +874,7 @@ DUCKDB_API duckdb_state duckdb_bind_int8(duckdb_prepared_statement prepared_stat
 function duckdb_bind_int8(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_int8, libduckdb),
-        Int16,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Int16),
         prepared_statement,
         param_idx,
@@ -889,7 +889,7 @@ DUCKDB_API duckdb_state duckdb_bind_int16(duckdb_prepared_statement prepared_sta
 function duckdb_bind_int16(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_int16, libduckdb),
-        Int16,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Int16),
         prepared_statement,
         param_idx,
@@ -904,7 +904,7 @@ DUCKDB_API duckdb_state duckdb_bind_int32(duckdb_prepared_statement prepared_sta
 function duckdb_bind_int32(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_int32, libduckdb),
-        Int32,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Int32),
         prepared_statement,
         param_idx,
@@ -919,7 +919,7 @@ DUCKDB_API duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_sta
 function duckdb_bind_int64(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_int64, libduckdb),
-        Int64,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Int64),
         prepared_statement,
         param_idx,
@@ -936,7 +936,7 @@ DUCKDB_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_s
 function duckdb_bind_hugeint(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_hugeint, libduckdb),
-        Int64,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Int64),
         prepared_statement,
         param_idx,
@@ -951,7 +951,7 @@ DUCKDB_API duckdb_state duckdb_bind_uint8(duckdb_prepared_statement prepared_sta
 function duckdb_bind_uint8(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_uint8, libduckdb),
-        UInt16,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, UInt16),
         prepared_statement,
         param_idx,
@@ -966,7 +966,7 @@ DUCKDB_API duckdb_state duckdb_bind_uint16(duckdb_prepared_statement prepared_st
 function duckdb_bind_uint16(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_uint16, libduckdb),
-        UInt16,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, UInt16),
         prepared_statement,
         param_idx,
@@ -981,7 +981,7 @@ DUCKDB_API duckdb_state duckdb_bind_uint32(duckdb_prepared_statement prepared_st
 function duckdb_bind_uint32(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_uint32, libduckdb),
-        UInt32,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, UInt32),
         prepared_statement,
         param_idx,
@@ -996,7 +996,7 @@ DUCKDB_API duckdb_state duckdb_bind_uint64(duckdb_prepared_statement prepared_st
 function duckdb_bind_uint64(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_uint64, libduckdb),
-        UInt64,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, UInt64),
         prepared_statement,
         param_idx,
@@ -1011,7 +1011,7 @@ DUCKDB_API duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_sta
 function duckdb_bind_float(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_float, libduckdb),
-        Float32,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Float32),
         prepared_statement,
         param_idx,
@@ -1026,7 +1026,7 @@ DUCKDB_API duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_st
 function duckdb_bind_double(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_double, libduckdb),
-        Float64,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Float64),
         prepared_statement,
         param_idx,
@@ -1042,7 +1042,7 @@ DUCKDB_API duckdb_state duckdb_bind_date(duckdb_prepared_statement prepared_stat
 function duckdb_bind_date(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_date, libduckdb),
-        Int32,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Int32),
         prepared_statement,
         param_idx,
@@ -1058,7 +1058,7 @@ DUCKDB_API duckdb_state duckdb_bind_time(duckdb_prepared_statement prepared_stat
 function duckdb_bind_time(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_time, libduckdb),
-        Int32,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Int32),
         prepared_statement,
         param_idx,
@@ -1074,7 +1074,7 @@ DUCKDB_API duckdb_state duckdb_bind_timestamp(duckdb_prepared_statement prepared
 function duckdb_bind_timestamp(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_timestamp, libduckdb),
-        Int32,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Int32),
         prepared_statement,
         param_idx,
@@ -1090,7 +1090,7 @@ DUCKDB_API duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepared_
 function duckdb_bind_interval(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_interval, libduckdb),
-        Int32,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Int32),
         prepared_statement,
         param_idx,
@@ -1106,7 +1106,7 @@ DUCKDB_API duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_s
 function duckdb_bind_varchar(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_varchar, libduckdb),
-        Int32,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Ptr{UInt8}),
         prepared_statement,
         param_idx,
@@ -1122,7 +1122,7 @@ DUCKDB_API duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement pre
 function duckdb_bind_varchar_length(prepared_statement, param_idx, val, length)
     return ccall(
         (:duckdb_bind_varchar_length, libduckdb),
-        Int32,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Ptr{UInt8}, Int32),
         prepared_statement,
         param_idx,
@@ -1139,7 +1139,7 @@ DUCKDB_API duckdb_state duckdb_bind_blob(duckdb_prepared_statement prepared_stat
 function duckdb_bind_blob(prepared_statement, param_idx, val, length)
     return ccall(
         (:duckdb_bind_blob, libduckdb),
-        Int32,
+        duckdb_state,
         (duckdb_prepared_statement, Int32, Ptr{Cvoid}, Int32),
         prepared_statement,
         param_idx,
@@ -1155,7 +1155,7 @@ DUCKDB_API duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_stat
 function duckdb_bind_null(prepared_statement, param_idx)
     return ccall(
         (:duckdb_bind_null, libduckdb),
-        Int32,
+        duckdb_state,
         (duckdb_prepared_statement, Int32),
         prepared_statement,
         param_idx
@@ -1175,7 +1175,7 @@ DUCKDB_API duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepar
 function duckdb_execute_prepared(prepared_statement, out_result)
     return ccall(
         (:duckdb_execute_prepared, libduckdb),
-        Int32,
+        duckdb_state,
         (duckdb_prepared_statement, Ref{duckdb_result}),
         prepared_statement,
         out_result
@@ -1193,7 +1193,7 @@ end
 # function duckdb_execute_prepared_arrow(prepared_statement, out_result)
 #     return ccall(
 #         (:duckdb_execute_prepared_arrow, libduckdb),
-#         Int32,
+#         duckdb_state,
 #         (Ptr{Cvoid}, Ptr{Cvoid}),
 #         prepared_statement,
 #         out_result,
@@ -2065,7 +2065,7 @@ are done with the appender.
 DUCKDB_API duckdb_state duckdb_appender_flush(duckdb_appender appender);
 """
 function duckdb_appender_flush(appender)
-    return ccall((:duckdb_appender_flush, libduckdb), Int32, (duckdb_appender,), appender)
+    return ccall((:duckdb_appender_flush, libduckdb), duckdb_state, (duckdb_appender,), appender)
 end
 
 """
@@ -2076,7 +2076,7 @@ This is generally not necessary. Call `duckdb_appender_destroy` instead.
 DUCKDB_API duckdb_state duckdb_appender_close(duckdb_appender appender);
 """
 function duckdb_appender_close(appender)
-    return ccall((:duckdb_appender_close, libduckdb), Int32, (duckdb_appender,), appender)
+    return ccall((:duckdb_appender_close, libduckdb), duckdb_state, (duckdb_appender,), appender)
 end
 
 """
@@ -2087,7 +2087,7 @@ all memory associated with the appender.
 DUCKDB_API duckdb_state duckdb_appender_destroy(duckdb_appender *appender);
 """
 function duckdb_appender_destroy(appender)
-    return ccall((:duckdb_appender_destroy, libduckdb), Int32, (Ref{duckdb_appender},), appender)
+    return ccall((:duckdb_appender_destroy, libduckdb), duckdb_state, (Ref{duckdb_appender},), appender)
 end
 
 """
@@ -2095,7 +2095,7 @@ A nop function, provided for backwards compatibility reasons. Does nothing. Only
 DUCKDB_API duckdb_state duckdb_appender_begin_row(duckdb_appender appender);
 """
 function duckdb_appender_begin_row(appender)
-    return ccall((:duckdb_appender_begin_row, libduckdb), Int32, (duckdb_appender,), appender)
+    return ccall((:duckdb_appender_begin_row, libduckdb), duckdb_state, (duckdb_appender,), appender)
 end
 
 """
@@ -2105,7 +2105,7 @@ Finish the current row of appends. After end_row is called, the next row can be 
 DUCKDB_API duckdb_state duckdb_appender_end_row(duckdb_appender appender);
 """
 function duckdb_appender_end_row(appender)
-    return ccall((:duckdb_appender_end_row, libduckdb), Int32, (duckdb_appender,), appender)
+    return ccall((:duckdb_appender_end_row, libduckdb), duckdb_state, (duckdb_appender,), appender)
 end
 
 """
@@ -2113,7 +2113,7 @@ Append a bool value to the appender.
 DUCKDB_API duckdb_state duckdb_append_bool(duckdb_appender appender, bool value);
 """
 function duckdb_append_bool(appender, value)
-    return ccall((:duckdb_append_bool, libduckdb), Int32, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_bool, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
 end
 
 """
@@ -2121,7 +2121,7 @@ Append an int8_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_int8(duckdb_appender appender, int8_t value);
 """
 function duckdb_append_int8(appender, value)
-    return ccall((:duckdb_append_int8, libduckdb), Int32, (duckdb_appender, Int16), appender, value)
+    return ccall((:duckdb_append_int8, libduckdb), duckdb_state, (duckdb_appender, Int16), appender, value)
 end
 
 """
@@ -2129,7 +2129,7 @@ Append an int16_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_int16(duckdb_appender appender, int16_t value);
 """
 function duckdb_append_int16(appender, value)
-    return ccall((:duckdb_append_int16, libduckdb), Int32, (duckdb_appender, Int16), appender, value)
+    return ccall((:duckdb_append_int16, libduckdb), duckdb_state, (duckdb_appender, Int16), appender, value)
 end
 
 """
@@ -2137,7 +2137,7 @@ Append an int32_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_int32(duckdb_appender appender, int32_t value);
 """
 function duckdb_append_int32(appender, value)
-    return ccall((:duckdb_append_int16, libduckdb), Int32, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_int16, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
 end
 
 """
@@ -2145,7 +2145,7 @@ Append an int64_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_int64(duckdb_appender appender, int64_t value);
 """
 function duckdb_append_int64(appender, value)
-    return ccall((:duckdb_append_int64, libduckdb), Int32, (duckdb_appender, Int64), appender, value)
+    return ccall((:duckdb_append_int64, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
 end
 
 """
@@ -2153,7 +2153,7 @@ Append a duckdb_hugeint value to the appender.
 DUCKDB_API duckdb_state duckdb_append_hugeint(duckdb_appender appender, duckdb_hugeint value);
 """
 function duckdb_append_hugeint(appender, value)
-    return ccall((:duckdb_append_hugeint, libduckdb), Int32, (duckdb_appender, Int64), appender, value)
+    return ccall((:duckdb_append_hugeint, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
 end
 
 """
@@ -2161,7 +2161,7 @@ Append a uint8_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_uint8(duckdb_appender appender, uint8_t value);
 """
 function duckdb_append_uint8(appender, value)
-    return ccall((:duckdb_append_uint8, libduckdb), Int32, (duckdb_appender, UInt16), appender, value)
+    return ccall((:duckdb_append_uint8, libduckdb), duckdb_state, (duckdb_appender, UInt16), appender, value)
 end
 
 """
@@ -2169,7 +2169,7 @@ Append a uint16_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_uint16(duckdb_appender appender, uint16_t value);
 """
 function duckdb_append_uint16(appender, value)
-    return ccall((:duckdb_append_uint16, libduckdb), Int32, (duckdb_appender, UInt16), appender, value)
+    return ccall((:duckdb_append_uint16, libduckdb), duckdb_state, (duckdb_appender, UInt16), appender, value)
 end
 
 """
@@ -2177,7 +2177,7 @@ Append a uint32_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_uint32(duckdb_appender appender, uint32_t value);
 """
 function duckdb_append_uint32(appender, value)
-    return ccall((:duckdb_append_uint32, libduckdb), Int32, (duckdb_appender, UInt32), appender, value)
+    return ccall((:duckdb_append_uint32, libduckdb), duckdb_state, (duckdb_appender, UInt32), appender, value)
 end
 
 """
@@ -2185,7 +2185,7 @@ Append a uint64_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_uint64(duckdb_appender appender, uint64_t value);
 """
 function duckdb_append_uint64(appender, value)
-    return ccall((:duckdb_append_uint64, libduckdb), Int32, (duckdb_appender, UInt64), appender, value)
+    return ccall((:duckdb_append_uint64, libduckdb), duckdb_state, (duckdb_appender, UInt64), appender, value)
 end
 
 """
@@ -2193,7 +2193,7 @@ Append a float value to the appender.
 DUCKDB_API duckdb_state duckdb_append_float(duckdb_appender appender, float value);
 """
 function duckdb_append_float(appender, value)
-    return ccall((:duckdb_append_float, libduckdb), Int32, (duckdb_appender, Float32), appender, value)
+    return ccall((:duckdb_append_float, libduckdb), duckdb_state, (duckdb_appender, Float32), appender, value)
 end
 
 """
@@ -2201,7 +2201,7 @@ Append a double value to the appender.
 DUCKDB_API duckdb_state duckdb_append_double(duckdb_appender appender, double value);
 """
 function duckdb_append_double(appender, value)
-    return ccall((:duckdb_append_double, libduckdb), Int32, (duckdb_appender, Float64), appender, value)
+    return ccall((:duckdb_append_double, libduckdb), duckdb_state, (duckdb_appender, Float64), appender, value)
 end
 
 """
@@ -2209,7 +2209,7 @@ Append a duckdb_date value to the appender.
 DUCKDB_API duckdb_state duckdb_append_date(duckdb_appender appender, duckdb_date value);
 """
 function duckdb_append_date(appender, value)
-    return ccall((:duckdb_append_date, libduckdb), Int32, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_date, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
 end
 
 """
@@ -2217,7 +2217,7 @@ Append a duckdb_time value to the appender.
 DUCKDB_API duckdb_state duckdb_append_time(duckdb_appender appender, duckdb_time value);
 """
 function duckdb_append_time(appender, value)
-    return ccall((:duckdb_append_time, libduckdb), Int32, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_time, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
 end
 
 """
@@ -2225,7 +2225,7 @@ Append a duckdb_timestamp value to the appender.
 DUCKDB_API duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value);
 """
 function duckdb_append_timestamp(appender, value)
-    return ccall((:duckdb_append_timestamp, libduckdb), Int32, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_timestamp, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
 end
 
 """
@@ -2233,7 +2233,7 @@ Append a duckdb_interval value to the appender.
 DUCKDB_API duckdb_state duckdb_append_interval(duckdb_appender appender, duckdb_interval value);
 """
 function duckdb_append_interval(appender, value)
-    return ccall((:duckdb_append_interval, libduckdb), Int32, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_interval, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
 end
 
 """
@@ -2241,7 +2241,7 @@ Append a varchar value to the appender.
 DUCKDB_API duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val);
 """
 function duckdb_append_varchar(appender, value)
-    return ccall((:duckdb_append_varchar, libduckdb), Int32, (duckdb_appender, Ptr{UInt8}), appender, value)
+    return ccall((:duckdb_append_varchar, libduckdb), duckdb_state, (duckdb_appender, Ptr{UInt8}), appender, value)
 end
 
 """
@@ -2251,7 +2251,7 @@ DUCKDB_API duckdb_state duckdb_append_varchar_length(duckdb_appender appender, c
 function duckdb_append_varchar_length(appender, value, length)
     return ccall(
         (:duckdb_append_varchar_length, libduckdb),
-        Int32,
+        duckdb_state,
         (duckdb_appender, Ptr{UInt8}, Int32),
         appender,
         value,
@@ -2264,7 +2264,7 @@ Append a blob value to the appender.
 DUCKDB_API duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length);
 """
 function duckdb_append_blob(appender, data, length)
-    return ccall((:duckdb_append_blob, libduckdb), Int32, (duckdb_appender, Ptr{Cvoid}, Int32), appender, data, length)
+    return ccall((:duckdb_append_blob, libduckdb), duckdb_state, (duckdb_appender, Ptr{Cvoid}, Int32), appender, data, length)
 end
 
 """
@@ -2272,7 +2272,7 @@ Append a NULL value to the appender (of any type).
 DUCKDB_API duckdb_state duckdb_append_null(duckdb_appender appender);
 """
 function duckdb_append_null(appender)
-    return ccall((:duckdb_append_null, libduckdb), Int32, (duckdb_appender,), appender)
+    return ccall((:duckdb_append_null, libduckdb), duckdb_state, (duckdb_appender,), appender)
 end
 
 # #=
@@ -2315,7 +2315,7 @@ end
 # function duckdb_query_arrow_schema(result, out_schema)
 #     return ccall(
 #         (:duckdb_query_arrow_schema, libduckdb),
-#         Int32,
+#         duckdb_state,
 #         (Ptr{Cvoid}, Ptr{UInt8}),
 #         result,
 #         out_schema,
@@ -2334,7 +2334,7 @@ end
 # function duckdb_query_arrow_array(result, out_array)
 #     return ccall(
 #         (:duckdb_query_arrow_array, libduckdb),
-#         Int32,
+#         duckdb_state,
 #         (Ptr{Cvoid}, Ptr{Cvoid}),
 #         result,
 #         out_array,
