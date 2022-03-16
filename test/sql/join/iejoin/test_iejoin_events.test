@@ -2,6 +2,9 @@
 # description: Test IEJoin
 # group: [iejoin]
 
+# RNG order depends on vector size
+require vector_size 1024
+
 statement ok
 PRAGMA enable_verification
 
