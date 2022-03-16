@@ -1,5 +1,15 @@
 name: NodeJS
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'tools/pythonpkg'
+      - 'tools/rpkg'
+      - '.github/workflows/Python.yml'
+      - '.github/workflows/R.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}
