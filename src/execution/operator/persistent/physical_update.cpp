@@ -104,13 +104,21 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 		}
 		table.Append(tableref, context.client, mock_chunk);
 	} else {
+		if (return_chunk) {
+			mock_chunk.SetCardinality(update_chunk);
+			for (idx_t i = 0; i < columns.size(); i++) {
+				mock_chunk.data[columns[i]].Reference(update_chunk.data[i]);
+			}
+		}
 		table.Update(tableref, context.client, row_ids, columns, update_chunk);
 	}
-	gstate.updated_count += chunk.size();
 
 	if (return_chunk) {
 		gstate.return_chunk_collection.Append(mock_chunk);
 	}
+
+	gstate.updated_count += chunk.size();
+
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -155,22 +163,17 @@ void PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		chunk.SetCardinality(1);
 		chunk.SetValue(0, 0, Value::BIGINT(g.updated_count));
 		state.finished = true;
-	} else {
-		idx_t chunk_return = g.returned_chunk_count;
+	}
 
-		if (g.return_chunk_collection.Chunks().size() > chunk_return) {
-			chunk.Reference(g.return_chunk_collection.GetChunk(chunk_return));
-			chunk.SetCardinality((g.return_chunk_collection.Chunks().at(chunk_return))->size());
-			g.returned_chunk_count += 1;
-			if (g.returned_chunk_count >= g.return_chunk_collection.Chunks().size()) {
-				state.finished = true;
-			}
-		} else {
-			//! it's possible nothing was updated.
-			//! in this case reset the returning chunk and set state.finished = true
-			chunk.Reset();
-			state.finished = true;
-		}
+	idx_t chunk_return = g.returned_chunk_count;
+	if (chunk_return >= g.return_chunk_collection.Chunks().size()) {
+		return;
+	}
+	chunk.Reference(g.return_chunk_collection.GetChunk(chunk_return));
+	chunk.SetCardinality((g.return_chunk_collection.GetChunk(chunk_return)).size());
+	g.returned_chunk_count += 1;
+	if (g.returned_chunk_count >= g.return_chunk_collection.Chunks().size()) {
+		state.finished = true;
 	}
 }
 

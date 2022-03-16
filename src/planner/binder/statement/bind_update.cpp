@@ -90,7 +90,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	// we thus need all the columns to be available, hence we check if the update touches any index columns
 	// If the returning keyword is used, we need access to the whole row in case the user requests it.
 	// Therefore switch the update to a delete and insert.
-	update.update_is_del_and_insert = update.return_chunk;
+	update.update_is_del_and_insert = false;
 	table.storage->info->indexes.Scan([&](Index &index) {
 		if (index.IndexIsUpdated(update.columns)) {
 			update.update_is_del_and_insert = true;
@@ -107,8 +107,9 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 		}
 	}
 
-	if (update.update_is_del_and_insert) {
-		// the update updates a column required by an index, push projections for all columns
+	if (update.update_is_del_and_insert || update.return_chunk) {
+		// the update updates a column required by an index or requires returning the updated rows,
+		// push projections for all columns
 		unordered_set<column_t> all_columns;
 		for (idx_t i = 0; i < table.storage->column_definitions.size(); i++) {
 			all_columns.insert(i);
