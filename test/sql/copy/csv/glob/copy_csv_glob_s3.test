@@ -14,18 +14,18 @@ SET s3_secret_access_key='S3RVER';SET s3_access_key_id='S3RVER';SET s3_region='e
 
 # copy files to S3 before beginning tests
 statement ok
-COPY (select * from 'test/sql/copy/csv/data/glob/a1/a1.csv') to 's3://test-bucket/glob/copy/a1/a1.csv';
-COPY (select * from 'test/sql/copy/csv/data/glob/a2/a2.csv') to 's3://test-bucket/glob/copy/a2/a2.csv';
-COPY (select * from 'test/sql/copy/csv/data/glob/a3/b1.csv') to 's3://test-bucket/glob/copy/a3/b1.csv';
+COPY (select * from 'test/sql/copy/csv/data/glob/a1/a1.csv') to 's3://test-bucket/copy_csv_glob_s3/copy/a1/a1.csv';
+COPY (select * from 'test/sql/copy/csv/data/glob/a2/a2.csv') to 's3://test-bucket/copy_csv_glob_s3/copy/a2/a2.csv';
+COPY (select * from 'test/sql/copy/csv/data/glob/a3/b1.csv') to 's3://test-bucket/copy_csv_glob_s3/copy/a3/b1.csv';
 COPY (select null) to 's3://test-bucket/glob/copy/empty/empty.csv';
-COPY (select * from 'test/sql/copy/csv/data/glob/i1/integer.csv') to 's3://test-bucket/glob/copy/empty/integer.csv';
+COPY (select * from 'test/sql/copy/csv/data/glob/i1/integer.csv') to 's3://test-bucket/copy_csv_glob_s3/copy/empty/integer.csv';
 
 statement ok
 CREATE TABLE dates(d DATE);
 
 # simple globbing
 statement ok
-COPY dates FROM 's3://test-bucket/glob/copy/a?/*.csv' (AUTO_DETECT 1);
+COPY dates FROM 's3://test-bucket/copy_csv_glob_s3/copy/a?/*.csv' (AUTO_DETECT 1);
 
 query I
 SELECT * FROM dates ORDER BY 1
@@ -42,5 +42,5 @@ SELECT * FROM dates ORDER BY 1
 
 # nothing matches the glob
 statement error
-COPY dates FROM read_csv('s3://test-bucket/glob/copy/*/a*a.csv', auto_detect=1)
+COPY dates FROM read_csv('s3://test-bucket/copy_csv_glob_s3/copy/*/a*a.csv', auto_detect=1)
 

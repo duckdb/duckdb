@@ -1,6 +1,6 @@
-# name: test/sql/copy/parquet/parquet_glob_s3_paging.test_slow
+# name: test/sql/copy/s3/glob_s3_paging.test_slow
 # description: Test globbing of a large number of parquet files to test the paging mechanism
-# group: [parquet]
+# group: [s3]
 
 require parquet
 
@@ -26,7 +26,7 @@ foreach k 0 1 2 3 4 5 6 7 8 9
 foreach l 0 1 2 3 4 5 6 7 8 9
 
 statement ok
-COPY (select (${i}${j}${k}${l})::INT as column0) to 's3://test-bucket/glob/paging/t${i}${j}${k}${l}.${format}';
+COPY (select (${i}${j}${k}${l})::INT as column0) to 's3://test-bucket/parquet_glob_s3_paging/paging/t${i}${j}${k}${l}.${format}';
 
 endloop
 
@@ -38,12 +38,12 @@ endloop
 
 # Begin tests
 query I
-select count(*) from 's3://test-bucket/glob/paging/t*.${format}'
+select count(*) from 's3://test-bucket/parquet_glob_s3_paging/paging/t*.${format}'
 ----
 2000
 
 query I
-select sum(column0) from 's3://test-bucket/glob/paging/t*.${format}'
+select sum(column0) from 's3://test-bucket/parquet_glob_s3_paging/paging/t*.${format}'
 ----
 1999000
 

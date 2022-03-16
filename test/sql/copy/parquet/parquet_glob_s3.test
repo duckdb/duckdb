@@ -16,51 +16,51 @@ SET s3_secret_access_key='S3RVER';SET s3_access_key_id='S3RVER';SET s3_region='e
 
 # Copy files to S3 before beginning tests
 statement ok
-COPY (select * from 'data/parquet-testing/glob/t1.parquet') to 's3://test-bucket/glob/parquet-testing/glob/t1.parquet';
-COPY (select * from 'data/parquet-testing/glob/t2.parquet') to 's3://test-bucket/glob/parquet-testing/glob/t2.parquet';
-COPY (select * from 'data/parquet-testing/glob2/t1.parquet') to 's3://test-bucket/glob/parquet-testing/glob2/t1.parquet';
+COPY (select * from 'data/parquet-testing/glob/t1.parquet') to 's3://test-bucket/parquet_glob_s3/glob/t1.parquet';
+COPY (select * from 'data/parquet-testing/glob/t2.parquet') to 's3://test-bucket/parquet_glob_s3/glob/t2.parquet';
+COPY (select * from 'data/parquet-testing/glob2/t1.parquet') to 's3://test-bucket/parquet_glob_s3/glob2/t1.parquet';
 
 # Begin tests
 query I
-select count(*) from parquet_scan('s3://test-bucket/glob/parquet-testing/glob/t?.parquet')
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/glob/t?.parquet')
 ----
 2
 
 query I
-select count(*) from parquet_scan('s3://test-bucket/glob/parquet-testing/glob/t[0-9].parquet')
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/glob/t[0-9].parquet')
 ----
 2
 
 query I
-select count(*) from parquet_scan('s3://test-bucket/glob/parquet-testing/glob/*')
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/glob/*')
 ----
 2
 
 query I
-select count(*) from parquet_scan('s3://test-bucket/glob/parquet-testing/glob/*.parquet')
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/glob/*.parquet')
 ----
 2
 
 query I
-select count(*) from parquet_scan('s3://test-bucket/glob/parquet-testing/g*/*.parquet')
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/g*/*.parquet')
 ----
 3
 
 query I
-select count(*) from parquet_scan('s3://test-bucket/glob/parquet-testing/g*/t1.parquet')
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/g*/t1.parquet')
 ----
 2
 
 # schema mismatch in parquet glob
 statement error
-select count(*) from parquet_scan('s3://test-bucket/glob/parquet-testing/notglob/*.parquet')
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/notglob/*.parquet')
 
 # parquet glob with COPY FROM
 statement ok
 CREATE TABLE vals (i INTEGER, j BLOB)
 
 statement ok
-COPY vals FROM 's3://test-bucket/glob/parquet-testing/glob/t?.parquet' (FORMAT PARQUET);
+COPY vals FROM 's3://test-bucket/parquet_glob_s3/glob/t?.parquet' (FORMAT PARQUET);
 
 query II
 SELECT * FROM vals ORDER BY 1, 2
@@ -73,33 +73,33 @@ statement ok
 CREATE TABLE vals2 (i INTEGER, j INTEGER)
 
 statement error
-COPY vals2 FROM 's3://test-bucket/nonexistentfolderblablabla/glob/t*.parquet' (FORMAT PARQUET);
+COPY vals2 FROM 's3://test-bucket/parquet_glob_s3/nonexistentfolderblablabla/t*.parquet' (FORMAT PARQUET);
 
 # parallel testing
 statement ok
 PRAGMA threads=4
 
 query I
-select count(*) from parquet_scan('s3://test-bucket/glob/parquet-testing/glob/t?.parquet')
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/glob/t?.parquet')
 ----
 2
 
 query I
-select count(*) from parquet_scan('s3://test-bucket/glob/parquet-testing/glob/*')
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/glob/*')
 ----
 2
 
 query I
-select count(*) from parquet_scan('s3://test-bucket/glob/parquet-testing/glob/*.parquet')
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/glob/*.parquet')
 ----
 2
 
 query I
-select count(*) from parquet_scan('s3://test-bucket/glob/parquet-testing/g*/*.parquet')
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/g*/*.parquet')
 ----
 3
 
 query I
-select count(*) from parquet_scan('s3://test-bucket/glob/parquet-testing/g*/t1.parquet')
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/g*/t1.parquet')
 ----
 2
