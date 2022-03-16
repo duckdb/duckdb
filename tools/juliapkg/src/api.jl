@@ -141,7 +141,14 @@ This can fail if either the name is invalid, or if the value provided for the op
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_set_config(config, name, option)
-    return ccall((:duckdb_set_config, libduckdb), duckdb_state, (duckdb_config, Ptr{UInt8}, Ptr{UInt8}), config, name, option)
+    return ccall(
+        (:duckdb_set_config, libduckdb),
+        duckdb_state,
+        (duckdb_config, Ptr{UInt8}, Ptr{UInt8}),
+        config,
+        name,
+        option
+    )
 end
 
 """
@@ -2264,7 +2271,14 @@ Append a blob value to the appender.
 DUCKDB_API duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length);
 """
 function duckdb_append_blob(appender, data, length)
-    return ccall((:duckdb_append_blob, libduckdb), duckdb_state, (duckdb_appender, Ptr{Cvoid}, Int32), appender, data, length)
+    return ccall(
+        (:duckdb_append_blob, libduckdb),
+        duckdb_state,
+        (duckdb_appender, Ptr{Cvoid}, Int32),
+        appender,
+        data,
+        length
+    )
 end
 
 """

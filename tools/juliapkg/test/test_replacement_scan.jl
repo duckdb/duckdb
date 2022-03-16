@@ -7,7 +7,8 @@ function RangeReplacementScan(info)
         return
     end
     DuckDB.SetFunctionName(info, "range")
-    return DuckDB.AddFunctionParameter(info, DuckDB.CreateValue(number))
+    DuckDB.AddFunctionParameter(info, DuckDB.CreateValue(number))
+    return
 end
 
 @testset "Test replacement scans" begin
