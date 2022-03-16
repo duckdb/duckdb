@@ -231,4 +231,7 @@ function duckdb_type_to_julia_type(x)
     return JULIA_TYPE_MAP[type_id]
 end
 
+const ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS = 719528
+const ROUNDING_EPOCH_TO_UNIX_EPOCH_MS = 62167219200000
+
 sym(ptr) = ccall(:jl_symbol, Ref{Symbol}, (Ptr{UInt8},), ptr)

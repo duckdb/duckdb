@@ -10,6 +10,34 @@ mutable struct DFBindInfo
     end
 end
 
+function DFResultType(df, entry)
+    column_type = eltype(df[!, entry])
+    if typeof(column_type) == Union
+        # remove Missing type from the union
+        column_type = Core.Compiler.typesubtract(column_type, Missing, 1)
+    end
+    return column_type
+end
+
+function DFJuliaType(column_type)
+    if column_type == Date
+        column_type = Int32
+    elseif column_type == Time
+        column_type = Int64
+    elseif column_type == DateTime
+        column_type = Int64
+    end
+    return column_type
+end
+
+ValueToDuckDB(val::T) where {T <: Date} = convert(Int32, Dates.date2epochdays(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
+ValueToDuckDB(val::T) where {T <: Time} = convert(Int64, Dates.value(val) / 1000)
+ValueToDuckDB(val::T) where {T <: DateTime} =
+    convert(Int64, (Dates.datetime2epochms(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_MS) * 1000)
+function ValueToDuckDB(val::T) where {T}
+    return val
+end
+
 function DFScanColumn(
     df::DataFrame,
     df_offset::Int64,
@@ -25,18 +53,9 @@ function DFScanColumn(
         if input_column[df_offset + i] === missing
             DuckDB.SetInvalid(validity, i)
         else
-            result_array[i] = input_column[df_offset + i]
+            result_array[i] = ValueToDuckDB(input_column[df_offset + i])
         end
     end
-end
-
-function DFResultType(df, entry)
-    column_type = eltype(df[!, entry])
-    if typeof(column_type) == Union
-        # remove Missing type from the union
-        column_type = Core.Compiler.typesubtract(column_type, Missing, 1)
-    end
-    return column_type
 end
 
 function DFScanFunction(df, entry)
@@ -50,14 +69,14 @@ function DFBindFunction(info::DuckDB.BindInfo)
     # fetch the actual df using the function name
     extra_data = DuckDB.GetExtraData(info)
     df = extra_data[name]
-    # register the result columns
 
+    # register the result columns
     result_types::Vector{Type} = Vector()
     scan_functions::Vector{Function} = Vector()
     for entry in names(df)
         result_type = DFResultType(df, entry)
         scan_function = DFScanFunction(df, entry)
-        push!(result_types, result_type)
+        push!(result_types, DFJuliaType(result_type))
         push!(scan_functions, scan_function)
 
         DuckDB.AddResultColumn(info, entry, result_type)
@@ -105,7 +124,10 @@ end
 
 function RegisterDataFrame(con::Connection, df::DataFrame, name::AbstractString)
     con.db.data_frames[name] = df
-    return DBInterface.execute(con, string("CREATE VIEW \"", name, "\" AS SELECT * FROM julia_df_scan('", name, "')"))
+    return DBInterface.execute(
+        con,
+        string("CREATE OR REPLACE VIEW \"", name, "\" AS SELECT * FROM julia_df_scan('", name, "')")
+    )
 end
 
 function RegisterDataFrame(db::DB, df::DataFrame, name::AbstractString)

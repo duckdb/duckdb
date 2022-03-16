@@ -60,7 +60,7 @@ function convert_blob(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::U
 end
 
 function convert_date(column_data::ColumnConversionData, val::Int32)::Date
-    return Dates.epochdays2date(val + 719528)
+    return Dates.epochdays2date(val + ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
 end
 
 function convert_time(column_data::ColumnConversionData, val::Int64)::Time
@@ -68,19 +68,19 @@ function convert_time(column_data::ColumnConversionData, val::Int64)::Time
 end
 
 function convert_timestamp(column_data::ColumnConversionData, val::Int64)::DateTime
-    return Dates.epochms2datetime((val ÷ 1000) + 62167219200000)
+    return Dates.epochms2datetime((val ÷ 1000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
 end
 
 function convert_timestamp_s(column_data::ColumnConversionData, val::Int64)::DateTime
-    return Dates.epochms2datetime((val * 1000) + 62167219200000)
+    return Dates.epochms2datetime((val * 1000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
 end
 
 function convert_timestamp_ms(column_data::ColumnConversionData, val::Int64)::DateTime
-    return Dates.epochms2datetime((val) + 62167219200000)
+    return Dates.epochms2datetime((val) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
 end
 
 function convert_timestamp_ns(column_data::ColumnConversionData, val::Int64)::DateTime
-    return Dates.epochms2datetime((val ÷ 1000000) + 62167219200000)
+    return Dates.epochms2datetime((val ÷ 1000000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
 end
 
 function convert_interval(column_data::ColumnConversionData, val::duckdb_interval)::Dates.CompoundPeriod

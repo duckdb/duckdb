@@ -26,7 +26,20 @@ function _destroy_type(type::LogicalType)
 end
 
 CreateLogicalType(::Type{T}) where {T <: String} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_VARCHAR)
+CreateLogicalType(::Type{T}) where {T <: Bool} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_BOOLEAN)
+CreateLogicalType(::Type{T}) where {T <: Int8} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_TINYINT)
+CreateLogicalType(::Type{T}) where {T <: Int16} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_SMALLINT)
+CreateLogicalType(::Type{T}) where {T <: Int32} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_INTEGER)
 CreateLogicalType(::Type{T}) where {T <: Int64} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_BIGINT)
+CreateLogicalType(::Type{T}) where {T <: UInt8} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_UTINYINT)
+CreateLogicalType(::Type{T}) where {T <: UInt16} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_USMALLINT)
+CreateLogicalType(::Type{T}) where {T <: UInt32} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_UINTEGER)
+CreateLogicalType(::Type{T}) where {T <: UInt64} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_UBIGINT)
+CreateLogicalType(::Type{T}) where {T <: Float32} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_FLOAT)
+CreateLogicalType(::Type{T}) where {T <: Float64} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_DOUBLE)
+CreateLogicalType(::Type{T}) where {T <: Date} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_DATE)
+CreateLogicalType(::Type{T}) where {T <: Time} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_TIME)
+CreateLogicalType(::Type{T}) where {T <: DateTime} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_TIMESTAMP)
 
 function CreateLogicalType(::Type{T}) where {T}
     throw(NotImplementedException("Unsupported type for CreateLogicalType"))
