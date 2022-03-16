@@ -15,7 +15,6 @@ statement ok
 INSERT INTO  test_tbl values (1,'tom', 1.1), (2,'dick',1.2),(3,'harry', 1.2),
                              (4,'mary',0.9), (5,'mungo', 0.8), (6,'midge', 0.5);
 
-
 # create a table macro
 statement ok
 CREATE MACRO xt(a, _name) as TABLE SELECT * FROM test_tbl WHERE id<=a or name = _name;
@@ -55,12 +54,12 @@ DROP MACRO TABLE xt;
 
 endloop
 
-# create a macro but don't drop
+#create a macro but dont drop
 
 statement ok
 CREATE MACRO yt(a) as TABLE SELECT * FROM test_tbl WHERE id<=a;
 
-loop i 0 2
+loop i 0 1
 
 query T
 SELECT min(height) FROM yt(10); 
@@ -76,3 +75,26 @@ SELECT * FROM yt(2) ORDER BY  id limit 1;
 
 
 endloop
+
+# check  the wal - TableMacro Deserialize works
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE MACRO zt(a) as TABLE SELECT * FROM test_tbl WHERE id<=a;
+
+restart
+
+query T
+SELECT min(height) FROM zt(10); 
+----
+0.5
+
+
+
+
