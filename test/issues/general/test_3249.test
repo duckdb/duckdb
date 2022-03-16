@@ -1,0 +1,17 @@
+# name: test/issues/general/test_3249.test
+# description: Issue 3249: Updating the value of a column having UNIQUE constraint unexpectedly fails
+# group: [general]
+
+statement ok
+CREATE TABLE test (c1 bigint primary key not null, c2 bigint unique);
+
+statement ok
+INSERT INTO test (c1, c2) VALUES (1, 1);
+
+statement ok
+UPDATE test SET c2 = 2 WHERE c1 = 1;
+
+query II
+SELECT c1, c2 from test;
+----
+1	2
