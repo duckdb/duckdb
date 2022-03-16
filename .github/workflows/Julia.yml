@@ -25,6 +25,7 @@ jobs:
 
       - name: Format Check
         run: |
+            cd tools/juliapkg
             ./format_check.sh 
 
   main_julia:
