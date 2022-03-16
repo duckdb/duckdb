@@ -88,6 +88,8 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	}
 	// for index updates we always turn any update into an insert and a delete
 	// we thus need all the columns to be available, hence we check if the update touches any index columns
+	// If the returning keyword is used, we need access to the whole row in case the user requests it.
+	// Therefore switch the update to a delete and insert.
 	update.update_is_del_and_insert = update.return_chunk;
 	table.storage->info->indexes.Scan([&](Index &index) {
 		if (index.IndexIsUpdated(update.columns)) {
@@ -144,6 +146,8 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		this->read_only = false;
 	}
 	auto update = make_unique<LogicalUpdate>(table);
+
+	// set return_chunk boolean early because it needs uses update_is_del_and_insert logic
 	if (!stmt.returning_list.empty()) {
 		update->return_chunk = true;
 	}
