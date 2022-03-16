@@ -8,57 +8,52 @@ CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAU
 statement ok
 insert into table1(a) select * from range (0, 4000, 1) t1(a);
 
-
 # basic update
 query III
 UPDATE table1
-SET a=5, b=5, c=5
+SET a=-10
 WHERE a = 1 RETURNING a, b, c;
 ----
-5	5	5
+-10	-2	-3
 
+# update all columns and return all of them named
 query III
 UPDATE table1
-SET a=a*2, b=b*2, c=c*2
+SET a=a*-2, b=b*2, c=c*2
 WHERE a = 2 RETURNING a, b, c;
 ----
-4	-4	-6
-
+-4	-4	-6
 
 # returning 1 named column
 query I
 UPDATE table1
-SET a=a*2, b=b*2, c=c*2
+SET a=a*-2, b=b*2, c=c*2
 WHERE a = 3 RETURNING a;
 ----
-6
+-6
 
 # returning all columns with *
 query III
 UPDATE table1
-SET a=a*2, b=b*2, c=c*2
+SET a=a*-2, b=b*2, c=c*2
 WHERE a = 4 RETURNING *;
 ----
-8	-8	-12
-8	-4	-6
-
-
+-8	-4	-6
 
 # returning * expression with more named columns
 query IIIIII
 UPDATE table1
-SET a=3, b=2, c=1
-WHERE a=10 AND b=-2 AND c=-3 RETURNING *, c, b, a;
+SET a=-5, b=2, c=1
+WHERE a=5 AND b=-2 AND c=-3 RETURNING *, c, b, a;
 ----
-3	2	1	1	2	3
-
+-5	2	1	1	2	-5
 
 
 # returning column names out of order
 query III
 UPDATE table1
 SET c=1, b=2, a=3
-WHERE a=12 AND b=-2 AND c=-3 RETURNING c, b, a;
+WHERE a=6 AND b=-2 AND c=-3 RETURNING c, b, a;
 ----
 1	2	3
 
@@ -66,7 +61,7 @@ WHERE a=12 AND b=-2 AND c=-3 RETURNING c, b, a;
 query III
 UPDATE table1
 SET c=1, b=2, a=3
-WHERE a=13 AND b=-2 AND c=-3 RETURNING c as aliasc, a as aliasa, b as aliasb;
+WHERE a=7 AND b=-2 AND c=-3 RETURNING c as aliasc, a as aliasa, b as aliasb;
 ----
 1	3	2
 
@@ -76,81 +71,205 @@ UPDATE table1 SET c=1, b=5, a=7 WHERE a > 5 RETURNING SUM(a);
 
 
 # returning * while only updating a subset of columns
-query III
-UPDATE table1 SET c=15 WHERE a=14 RETURNING b, c;
-----
--2	15
-
-
-mode skip
-
-# returning using a column alias
+# this test is why we use delete insert logics
 query III
 UPDATE table1
-SET c=1, b=2, a=3
-WHERE a=11 AND b=-2 AND c=-3 RETURNING a, b, c;
+SET c=15
+WHERE a=8 RETURNING *;
 ----
-1	2
+8	-2	15
 
-# returning expression with aggregation function is not allowed
-statement error
-INSERT INTO table1 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3) RETURNING SUM(a);
+# update and return combination of values
+query I
+UPDATE table1
+SET a=-9, b=b+7
+WHERE a=9
+RETURNING a + b + c;
+----
+-7
 
-# returning * while inserting only a subset of columns
+# returning a literal
+query I
+UPDATE table1
+SET a=-10
+WHERE a=10
+RETURNING 'duckdb';
+----
+duckdb
+
+
+# Set up tables for Joins
+statement ok
+CREATE TABLE table2 (a2 INTEGER, b2 INTEGER, c2 INTEGER);
+
+statement ok
+CREATE TABLE table3 (a3 INTEGER, b3 INTEGER, c3 INTEGER);
+
+
+
+statement ok
+INSERT INTO table2 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3), (100, 100, 100), (200, 200, 200);
+
+statement ok
+INSERT INTO table3 VALUES (1, 4, 4), (2, 6, 7), (8, 8, 8);
+
+
+
+# update using other table (automatic join should happen here)
 query III
-INSERT INTO table1(a) VALUES (10) RETURNING *;
+UPDATE table3
+SET b3 = t2.b2
+FROM table2 AS t2
+WHERE table3.a3 = t2.a2 RETURNING *;
 ----
-10	-2	-3
+1	1	4
+2	2	7
+
+statement ok
+CREATE TABLE table4 (a4 INTEGER, b4 INTEGER, c4 INTEGER);
+
+statement ok
+CREATE TABLE table5 (a5 INTEGER, b5 INTEGER, c5 INTEGER);
+
+statement ok
+INSERT INTO table4 VALUES (1, 0, 2), (2, 0, 1), (3, 0, 0);
+
+statement ok
+INSERT INTO table5 VALUES (1, 0, 0), (2, 0, 0), (3, 0, 1), (4, 0, 1), (5, 0, 2), (6, 0, 2);
 
 
-# returning while insert uses a subquery
+# another join with GROUP by
 query III
-INSERT INTO table1 (a, b, c) SELECT * from table1 WHERE a = 10 and b=-2 and c=-3 RETURNING *;
+UPDATE table4
+SET b4 = temp_table.sum_a
+FROM (SELECT sum(a5) as sum_a, c5 FROM table5 GROUP BY c5) as temp_table
+WHERE table4.c4 = temp_table.c5
+RETURNING *;
 ----
-10	-2	-3
-10	-2	-3
+3	3	0
+2	7	1
+1	11	2
+
+
+# update using a window function
+query III
+UPDATE table4
+SET b4 = temp_table.row_num
+FROM (SELECT row_number() OVER (ORDER BY a4) as row_num, c4 from table4) as temp_table
+WHERE table4.a4=temp_table.row_num
+RETURNING *;
+----
+3	3	0
+2	2	1
+1	1	2
+
 
 # subquery not allowed in returning statement
 statement error
-INSERT INTO table1(a, b, c) SELECT * FROM table1 WHERE a = 10 and b=-2 and c=-3 LIMIT 1 RETURNING a IN (SELECT a FROM table1);
+UPDATE table1 SET a = 0, b = 0, c = 0 WHERE a = 10 RETURNING a IN (SELECT a FROM table1);
 
 
-# inserting empty subquery returns nothing
+# updating using empty subquery returns nothing
 query III
-INSERT INTO table1 (a, b, c) SELECT * from table1 WHERE a = 100000 and b = 10000 and c=100000 RETURNING a, b, c;
+UPDATE table3 SET a3 = 0, b3 = 0, c3 = 0 FROM table3 t3 WHERE t3.a3 = 0 returning *;
 ----
-
-# subquery not allowed in returning statement
-statement error
-INSERT INTO table1 (a, b, c) VALUES (10, 1000, 1000) RETURNING a IN (SELECT a from table1 where b = -2);
-
 
 # using case statement
 query I
-INSERT INTO table1 VALUES (1, 2, 3) RETURNING CASE WHEN b=2 THEN a ELSE b END;
+UPDATE table3 SET a3 = 0 WHERE a3 = 1 RETURNING CASE WHEN b3=1 THEN a3 ELSE b3 END;
+----
+0
+
+# using case statement
+query I
+UPDATE table3 SET a3 = -1 WHERE a3 = 0 RETURNING CASE WHEN b3=2 THEN a3 ELSE b3 END;
 ----
 1
 
-# using case statement
+
+# drop temporary tables
+statement ok
+DROP TABLE table2;
+
+statement ok
+DROP TABLE table3;
+
+statement ok
+DROP TABLE table4;
+
+statement ok
+DROP TABLE table5;
+
+# create table with varchars
+statement ok
+CREATE TABLE table2 (a VARCHAR DEFAULT 'hello world', b INT);
+
+statement ok
+INSERT INTO table2 VALUES ('duckdb', 1);
+
+# update varchar
+query II
+UPDATE table2
+SET a='hello world'
+WHERE b = 1
+RETURNING a, b;
+----
+hello world	1
+
+# cast int as varchar
 query I
-INSERT INTO table1 VALUES (1, 2, 3) RETURNING CASE WHEN b=3 THEN a ELSE b END;
+UPDATE table2
+SET b=100
+WHERE b = 1
+RETURNING b::VARCHAR;
 ----
-2
+100
+
+# return a struct
+query I
+UPDATE table2
+SET a='Mr.Duck', b=99
+WHERE b=100
+RETURNING {'a': a, 'b': b};
+----
+{'a': Mr.Duck, 'b': 99}
+
+# returning a list
+query I
+UPDATE table2
+SET b=98
+WHERE b=99
+RETURNING [a, b];
+----
+[Mr.Duck, 98]
+
+# Sequence
+statement ok
+CREATE SEQUENCE seq;
 
 statement ok
-----
-DELETE FROM table1;
+CREATE TABLE table3 (a INTEGER DEFAULT nextval('seq'), b INTEGER);
 
 statement ok
-insert into table1(a) select * from range (0, 4000, 1) t1(a);
+INSERT INTO table3(b) VALUES (4), (5) RETURNING a, b;
+
+query II
+UPDATE table3
+SET b=b+1
+RETURNING *;
+----
+1	5
+2	6
+
 
 query I
 SELECT count(*) FROM table1;
 ----
 4000
 
+
 # the following two tests test that all inserts get streamed back to the returning statement
 query I
-INSERT INTO table1(a, b, c) SELECT a, b, c FROM table1  RETURNING a;
+UPDATE table1 SET a=5 returning a;
 ----
-4000 values hashing to b28a0440a7c3898c88617db0673db740
+4000 values hashing to e301b6700134ddecb65484e0532d3fd5

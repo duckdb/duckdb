@@ -140,7 +140,7 @@ INSERT INTO table1 VALUES (1, 2, 3) RETURNING [1, 2] IN (SELECT [a, b] from tabl
 ----
 1
 
-# scalar subquery
+# scalar subquery (should fail since scalar is a subquery)
 statement error
 INSERT INTO table1(a, b) VALUES (42, 43) RETURNING (SELECT a), (SELECT b), NULL;
 

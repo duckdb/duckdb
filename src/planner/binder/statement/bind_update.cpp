@@ -88,7 +88,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	}
 	// for index updates we always turn any update into an insert and a delete
 	// we thus need all the columns to be available, hence we check if the update touches any index columns
-	update.update_is_del_and_insert = false;
+	update.update_is_del_and_insert = update.return_chunk;
 	table.storage->info->indexes.Scan([&](Index &index) {
 		if (index.IndexIsUpdated(update.columns)) {
 			update.update_is_del_and_insert = true;
@@ -144,6 +144,9 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		this->read_only = false;
 	}
 	auto update = make_unique<LogicalUpdate>(table);
+	if (!stmt.returning_list.empty()) {
+		update->return_chunk = true;
+	}
 	// bind the default values
 	BindDefaultValues(table->columns, update->bound_defaults);
 
@@ -163,9 +166,6 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	auto proj_index = GenerateTableIndex();
 	vector<unique_ptr<Expression>> projection_expressions;
 
-	auto types = vector<LogicalType>();
-	auto names = vector<std::string>();
-
 	for (idx_t i = 0; i < stmt.columns.size(); i++) {
 		auto &colname = stmt.columns[i];
 		auto &expr = stmt.expressions[i];
@@ -178,8 +178,6 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		}
 		update->columns.push_back(column.oid);
 
-		names.push_back(colname);
-		types.push_back(column.type);
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
 			update->expressions.push_back(make_unique<BoundDefaultExpression>(column.type));
 		} else {
@@ -210,17 +208,17 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	update->AddChild(move(proj));
 
 	if (!stmt.returning_list.empty()) {
-		update->return_chunk = true;
+		auto types = vector<LogicalType>();
+		auto names = vector<std::string>();
+
 		auto update_table_index = GenerateTableIndex();
 		update->table_index = update_table_index;
 
 		auto binder = Binder::CreateBinder(context);
 
 		for (auto &col : table->columns) {
-			if (std::find(names.begin(), names.end(), col.name) == names.end()) {
-				names.push_back(col.name);
-				types.push_back(col.type);
-			}
+			names.push_back(col.name);
+			types.push_back(col.type);
 		}
 
 		binder->bind_context.AddGenericBinding(update_table_index, table->name, names, types);

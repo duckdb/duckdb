@@ -109,7 +109,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 	gstate.updated_count += chunk.size();
 
 	if (return_chunk) {
-		gstate.return_chunk_collection.Append(update_chunk);
+		gstate.return_chunk_collection.Append(mock_chunk);
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
