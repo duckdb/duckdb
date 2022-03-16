@@ -422,7 +422,7 @@ void ReplayState::ReplayDropMacro() {
 // Replay Table Macro
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateTableMacro() {
-	auto entry = ScalarMacroCatalogEntry::Deserialize(source);
+	auto entry = TableMacroCatalogEntry::Deserialize(source);
 	if (deserialize_only) {
 		return;
 	}
