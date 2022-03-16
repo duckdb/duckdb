@@ -19,7 +19,7 @@ If no path is given a new in-memory database is created instead.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_open(path, out_database)
-    return ccall((:duckdb_open, libduckdb), Int32, (Ptr{UInt8}, Ref{duckdb_database}), path, out_database)
+    return ccall((:duckdb_open, libduckdb), duckdb_state, (Ptr{UInt8}, Ref{duckdb_database}), path, out_database)
 end
 """
 	Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the the given path.
@@ -34,7 +34,7 @@ end
 function duckdb_open_ext(path, out_database, config, out_error)
     return ccall(
         (:duckdb_open_ext, libduckdb),
-        Int32,
+        duckdb_state,
         (Ptr{UInt8}, Ref{duckdb_database}, duckdb_config, Ptr{Ptr{UInt8}}),
         path,
         out_database,
@@ -64,7 +64,7 @@ associated with the connection.
 function duckdb_connect(database, out_connection)
     return ccall(
         (:duckdb_connect, libduckdb),
-        Int32,
+        duckdb_state,
         (duckdb_database, Ref{duckdb_connection}),
         database,
         out_connection
@@ -95,7 +95,7 @@ This will always succeed unless there is a malloc failure.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_create_config(config)
-    return ccall((:duckdb_create_config, libduckdb), Int32, (Ref{duckdb_config},), config)
+    return ccall((:duckdb_create_config, libduckdb), duckdb_state, (Ref{duckdb_config},), config)
 end
 
 """
@@ -121,7 +121,7 @@ The result name or description MUST NOT be freed.
 function duckdb_get_config_flag(index, out_name, out_description)
     return ccall(
         (:duckdb_get_config_flag, libduckdb),
-        Int32,
+        duckdb_state,
         (Int32, Ptr{Ptr{UInt8}}, Ptr{Ptr{UInt8}}),
         index,
         out_name,
@@ -141,7 +141,7 @@ This can fail if either the name is invalid, or if the value provided for the op
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_set_config(config, name, option)
-    return ccall((:duckdb_set_config, libduckdb), Int32, (duckdb_config, Ptr{UInt8}, Ptr{UInt8}), config, name, option)
+    return ccall((:duckdb_set_config, libduckdb), duckdb_state, (duckdb_config, Ptr{UInt8}, Ptr{UInt8}), config, name, option)
 end
 
 """
