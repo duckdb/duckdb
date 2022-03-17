@@ -143,12 +143,20 @@ duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepared_statement, 
 }
 
 duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx, const char *val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value(val));
+	try {
+		return duckdb_bind_value(prepared_statement, param_idx, Value(val));
+	} catch (...) {
+		return DuckDBError;
+	}
 }
 
 duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx, const char *val,
                                         idx_t length) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value(std::string(val, length)));
+	try {
+		return duckdb_bind_value(prepared_statement, param_idx, Value(std::string(val, length)));
+	} catch (...) {
+		return DuckDBError;
+	}
 }
 
 duckdb_state duckdb_bind_blob(duckdb_prepared_statement prepared_statement, idx_t param_idx, const void *data,

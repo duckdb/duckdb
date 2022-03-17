@@ -96,6 +96,7 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(duckdb_bind_float(stmt, 1, NAN) == DuckDBError);
 	REQUIRE(duckdb_bind_double(stmt, 1, NAN) == DuckDBError);
 
+	REQUIRE(duckdb_bind_varchar(stmt, 1, "\x80\x40\x41") == DuckDBError);
 	duckdb_bind_varchar(stmt, 1, "44");
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
@@ -117,6 +118,7 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(stmt != nullptr);
 
+	REQUIRE(duckdb_bind_varchar_length(stmt, 1, "\x00\x40\x41", 3) == DuckDBError);
 	duckdb_bind_varchar_length(stmt, 1, "hello world", 5);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
