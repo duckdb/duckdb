@@ -6,8 +6,8 @@ on:
   pull_request:
     paths-ignore:
       - '**.md'
-      - 'tools/nodejs'
-      - 'tools/pythonpkg'
+      - 'tools/nodejs/**'
+      - 'tools/pythonpkg/**'
       - '.github/workflows/NodeJS.yml'
       - '.github/workflows/Python.yml'
 
