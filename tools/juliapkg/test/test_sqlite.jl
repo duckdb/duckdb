@@ -139,30 +139,20 @@ end
     end
 end
 
-# FIXME: dates
-# @testset "Dates" begin
-# 	setup_clean_test_db() do db
-# 		DBInterface.execute(db, "create table temp as select * from album")
-# 		DBInterface.execute(db, "alter table temp add column dates blob")
-# 		stmt = DBInterface.prepare(db, "update temp set dates = ?")
-# 		DBInterface.execute(stmt, (Date(2014, 1, 1),))
-#
-# 		r = DBInterface.execute(db, "select * from temp limit 10") |> columntable
-# 		@test length(r) == 4 && length(r[1]) == 10
-# 		@test isa(r[4][1], Date)
-# 		@test all(Bool[x == Date(2014, 1, 1) for x in r[4]])
-# 		DBInterface.execute(db, "drop table temp")
-#
-# 		rng = Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 5)
-# 		dt = (i = collect(rng), j = collect(rng))
-# 		tablename = dt |> DuckDB.load!(db, "temp")
-# 		r = DBInterface.execute(db, "select * from $tablename") |> columntable
-# 		@test length(r) == 2 && length(r[1]) == 5
-# 		@test all([i for i in r[1]] .== collect(rng))
-# 		@test all([isa(i, Dates.Date) for i in r[1]])
-# 		DuckDB.drop!(db, "$tablename")
-# 	end
-# end
+@testset "Dates" begin
+    setup_clean_test_db() do db
+        DBInterface.execute(db, "create table temp as select * from album")
+        DBInterface.execute(db, "alter table temp add column dates date")
+        stmt = DBInterface.prepare(db, "update temp set dates = ?")
+        DBInterface.execute(stmt, (Date(2014, 1, 1),))
+
+        r = DBInterface.execute(db, "select * from temp limit 10") |> columntable
+        @test length(r) == 4 && length(r[1]) == 10
+        @test isa(r[4][1], Date)
+        @test all(Bool[x == Date(2014, 1, 1) for x in r[4]])
+        return DBInterface.execute(db, "drop table temp")
+    end
+end
 
 @testset "Prepared Statements" begin
     setup_clean_test_db() do db

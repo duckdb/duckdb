@@ -98,6 +98,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			}
 			if (table_name_index.find(info->file_path) == table_name_index.end()) {
 				// this name was not yet taken: take it
+				table_name_index.insert(info->file_path);
 				break;
 			}
 			id++;

@@ -882,7 +882,7 @@ function duckdb_bind_int8(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_int8, libduckdb),
         duckdb_state,
-        (duckdb_prepared_statement, Int32, Int16),
+        (duckdb_prepared_statement, Int32, Int8),
         prepared_statement,
         param_idx,
         val
@@ -944,7 +944,7 @@ function duckdb_bind_hugeint(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_hugeint, libduckdb),
         duckdb_state,
-        (duckdb_prepared_statement, Int32, Int64),
+        (duckdb_prepared_statement, Int32, duckdb_hugeint),
         prepared_statement,
         param_idx,
         val
@@ -959,7 +959,7 @@ function duckdb_bind_uint8(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_uint8, libduckdb),
         duckdb_state,
-        (duckdb_prepared_statement, Int32, UInt16),
+        (duckdb_prepared_statement, Int32, UInt8),
         prepared_statement,
         param_idx,
         val
@@ -1066,7 +1066,7 @@ function duckdb_bind_time(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_time, libduckdb),
         duckdb_state,
-        (duckdb_prepared_statement, Int32, Int32),
+        (duckdb_prepared_statement, Int32, Int64),
         prepared_statement,
         param_idx,
         val
@@ -1082,7 +1082,7 @@ function duckdb_bind_timestamp(prepared_statement, param_idx, val)
     return ccall(
         (:duckdb_bind_timestamp, libduckdb),
         duckdb_state,
-        (duckdb_prepared_statement, Int32, Int32),
+        (duckdb_prepared_statement, Int32, Int64),
         prepared_statement,
         param_idx,
         val

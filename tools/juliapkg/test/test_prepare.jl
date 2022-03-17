@@ -32,6 +32,52 @@
     DBInterface.close!(con)
 end
 
+@testset "Test DBInterface.prepare with various types" begin
+    con = DBInterface.connect(DuckDB.DB)
+
+    type_names = [
+        "BOOLEAN",
+        "TINYINT",
+        "SMALLINT",
+        "INTEGER",
+        "BIGINT",
+        "UTINYINT",
+        "USMALLINT",
+        "UINTEGER",
+        "UBIGINT",
+        "FLOAT",
+        "DOUBLE",
+        "DATE",
+        "TIME",
+        "TIMESTAMP",
+        "VARCHAR",
+        "INTEGER"
+    ]
+    type_values = [
+        Bool(true),
+        Int8(3),
+        Int16(4),
+        Int32(8),
+        Int64(20),
+        UInt8(42),
+        UInt16(300),
+        UInt32(420421),
+        UInt64(43294832),
+        Float32(0.5),
+        Float64(0.25),
+        Date(1992, 9, 20),
+        Time(23, 10, 33),
+        DateTime(1992, 9, 20, 23, 10, 33),
+        String("hello world"),
+        missing
+    ]
+    for i in 1:size(type_values, 1)
+        stmt = DBInterface.prepare(con, string("SELECT ?::", type_names[i], " a"))
+        result = DataFrame(DBInterface.execute(stmt, [type_values[i]]))
+        @test isequal(result.a, [type_values[i]])
+    end
+end
+
 @testset "DBInterface.prepare: named parameters not supported yet" begin
     con = DBInterface.connect(DuckDB.DB)
 
