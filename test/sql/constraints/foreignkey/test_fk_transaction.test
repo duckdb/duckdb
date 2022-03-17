@@ -36,6 +36,18 @@ INSERT INTO fkt VALUES (3)
 statement ok
 ROLLBACK
 
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO fkt VALUES (1)
+
+statement error
+DELETE FROM pkt WHERE i=1
+
+statement ok
+ROLLBACK
+
 # delete a tuple in the referencing table and then delete that tuple in the main table
 statement ok
 BEGIN TRANSACTION

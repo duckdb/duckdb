@@ -142,12 +142,7 @@ CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreat
 
 		// make a dependency between this table and referenced table
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
-		auto pk_table_entry_ptr = set.GetEntry(context, fk_info->name);
-		if (pk_table_entry_ptr) {
-			info->dependencies.insert(pk_table_entry_ptr);
-		} else {
-			throw ParserException("Can't find table \"%s\" in foreign key constraint", fk_info->name);
-		}
+		info->dependencies.insert(set.GetEntry(context, fk_info->name));
 	}
 	return entry;
 }
