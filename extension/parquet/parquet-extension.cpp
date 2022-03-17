@@ -42,6 +42,8 @@ struct ParquetReadBindData : public FunctionData {
 	vector<column_t> column_ids;
 	atomic<idx_t> chunk_count;
 	atomic<idx_t> cur_file;
+	vector<string> names;
+	vector<LogicalType> types;
 };
 
 struct ParquetReadOperatorData : public FunctionOperatorData {
@@ -88,6 +90,7 @@ public:
 	static unique_ptr<FunctionData> ParquetReadBind(ClientContext &context, CopyInfo &info,
 	                                                vector<string> &expected_names,
 	                                                vector<LogicalType> &expected_types) {
+		D_ASSERT(expected_names.size() == expected_types.size());
 		for (auto &option : info.options) {
 			auto loption = StringUtil::Lower(option.first);
 			if (loption == "compression" || loption == "codec") {
@@ -106,6 +109,8 @@ public:
 		}
 		ParquetOptions parquet_options(context);
 		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options);
+		result->names = result->initial_reader->names;
+		result->types = result->initial_reader->return_types;
 		return move(result);
 	}
 
@@ -181,9 +186,8 @@ public:
 		result->files = move(files);
 
 		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], parquet_options);
-		return_types = result->initial_reader->return_types;
-
-		names = result->initial_reader->names;
+		return_types = result->types = result->initial_reader->return_types;
+		names = result->names = result->initial_reader->names;
 		return move(result);
 	}
 
@@ -309,8 +313,9 @@ public:
 					bind_data.chunk_count = 0;
 					string file = bind_data.files[data.file_index];
 					// move to the next file
-					data.reader = make_shared<ParquetReader>(context, file, data.reader->return_types,
-					                                         data.reader->parquet_options, bind_data.files[0]);
+					data.reader =
+					    make_shared<ParquetReader>(context, file, bind_data.names, bind_data.types, data.column_ids,
+					                               data.reader->parquet_options, bind_data.files[0]);
 					vector<idx_t> group_ids;
 					for (idx_t i = 0; i < data.reader->NumRowGroups(); i++) {
 						group_ids.push_back(i);
@@ -371,8 +376,8 @@ public:
 				// read the next file
 				string file = bind_data.files[++parallel_state.file_index];
 				parallel_state.current_reader =
-				    make_shared<ParquetReader>(context, file, parallel_state.current_reader->return_types,
-				                               parallel_state.current_reader->parquet_options);
+				    make_shared<ParquetReader>(context, file, bind_data.names, bind_data.types, scan_data.column_ids,
+				                               parallel_state.current_reader->parquet_options, bind_data.files[0]);
 				if (parallel_state.current_reader->NumRowGroups() == 0) {
 					// empty parquet file, move to next file
 					continue;

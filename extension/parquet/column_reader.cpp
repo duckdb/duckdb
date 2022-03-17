@@ -4,6 +4,7 @@
 #include "parquet_reader.hpp"
 
 #include "boolean_column_reader.hpp"
+#include "cast_column_reader.hpp"
 #include "callback_column_reader.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "list_column_reader.hpp"
@@ -51,12 +52,28 @@ ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const Sche
 ColumnReader::~ColumnReader() {
 }
 
-const LogicalType &ColumnReader::Type() {
+ParquetReader &ColumnReader::Reader() {
+	return reader;
+}
+
+const LogicalType &ColumnReader::Type() const {
 	return type;
 }
 
-const SchemaElement &ColumnReader::Schema() {
+const SchemaElement &ColumnReader::Schema() const {
 	return schema;
+}
+
+idx_t ColumnReader::FileIdx() const {
+	return file_idx;
+}
+
+idx_t ColumnReader::MaxDefine() const {
+	return max_define;
+}
+
+idx_t ColumnReader::MaxRepeat() const {
+	return max_repeat;
 }
 
 idx_t ColumnReader::GroupRowsAvailable() {
@@ -117,9 +134,6 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 
 	PageHeader page_hdr;
 	page_hdr.read(protocol);
-
-	//		page_hdr.printTo(std::cout);
-	//		std::cout << '\n';
 
 	switch (page_hdr.type) {
 	case PageType::DATA_PAGE_V2:
@@ -629,6 +643,55 @@ void ListColumnReader::Skip(idx_t num_values) {
 	Vector result_out(Type());
 	Read(num_values, filter, define_out.get(), repeat_out.get(), result_out);
 }
+//===--------------------------------------------------------------------===//
+// Cast Column Reader
+//===--------------------------------------------------------------------===//
+CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, LogicalType target_type_p)
+    : ColumnReader(child_reader_p->Reader(), move(target_type_p), child_reader_p->Schema(), child_reader_p->FileIdx(),
+                   child_reader_p->MaxDefine(), child_reader_p->MaxRepeat()),
+      child_reader(move(child_reader_p)) {
+	vector<LogicalType> intermediate_types {child_reader->Type()};
+	intermediate_chunk.Initialize(intermediate_types);
+}
+
+unique_ptr<BaseStatistics> CastColumnReader::Stats(const std::vector<ColumnChunk> &columns) {
+	// casting stats is not supported (yet)
+	return nullptr;
+}
+
+void CastColumnReader::InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
+	child_reader->InitializeRead(columns, protocol_p);
+}
+
+idx_t CastColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+                             Vector &result) {
+	intermediate_chunk.Reset();
+	auto &intermediate_vector = intermediate_chunk.data[0];
+
+	auto amount = child_reader->Read(num_values, filter, define_out, repeat_out, intermediate_vector);
+	if (!filter.all()) {
+		// work-around for filters: set all values that are filtered to NULL to prevent the cast from failing on
+		// uninitialized data
+		intermediate_vector.Normalify(amount);
+		auto &validity = FlatVector::Validity(intermediate_vector);
+		for (idx_t i = 0; i < amount; i++) {
+			if (!filter[i]) {
+				validity.SetInvalid(i);
+			}
+		}
+	}
+	VectorOperations::Cast(intermediate_vector, result, amount);
+	return amount;
+}
+
+void CastColumnReader::Skip(idx_t num_values) {
+	child_reader->Skip(num_values);
+}
+
+idx_t CastColumnReader::GroupRowsAvailable() {
+	return child_reader->GroupRowsAvailable();
+}
+
 //===--------------------------------------------------------------------===//
 // Struct Column Reader
 //===--------------------------------------------------------------------===//
