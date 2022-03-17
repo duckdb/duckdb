@@ -348,16 +348,15 @@ static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *tar
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				target_mask[offset] = true;
 			} else {
-				out_ptr[offset] = CONVERT::ConvertValue(input, src_idx);
+				out_ptr[offset] = CONVERT::ConvertValue(input, i);
 				target_mask[offset] = false;
 			}
 		}
 		return true;
 	} else {
 		for (idx_t i = 0; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
 			idx_t offset = target_offset + i;
-			out_ptr[offset] = CONVERT::ConvertValue(input, src_idx);
+			out_ptr[offset] = CONVERT::ConvertValue(input, i);
 			target_mask[offset] = false;
 		}
 		return false;
