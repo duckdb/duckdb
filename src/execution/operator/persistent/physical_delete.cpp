@@ -37,7 +37,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &
 
 	// get rows and
 	auto &transaction = Transaction::GetTransaction(context.client);
-	auto &row_identifiers = input.data[input.ColumnCount() - 1];
+	auto &row_identifiers = input.data[row_id_index];
 
 	vector<column_t> column_ids;
 	for (idx_t i = 0; i < table.column_definitions.size(); i++) {
@@ -62,8 +62,9 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &
 		}
 		gstate.return_chunk_collection.Append(ustate.delete_chunk);
 	}
-
 	gstate.deleted_count += table.Delete(tableref, context.client, row_identifiers, input.size());
+
+
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

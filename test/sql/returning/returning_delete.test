@@ -83,12 +83,12 @@ RETURNING 'duckdb';
 
 
 # returning a literal where a row matches
-#query I
-#DELETE FROM table1
-#WHERE a=14
-#RETURNING 'duckdb';
-#----
-#duckdb
+query I
+DELETE FROM table1
+WHERE a=15
+RETURNING 'duckdb';
+----
+duckdb
 
 
 # Set up tables for Joins
@@ -104,7 +104,6 @@ INSERT INTO table2 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3), (100, 100, 100), (200
 
 statement ok
 INSERT INTO table3 VALUES (1, 4, 4), (2, 6, 7), (8, 8, 8);
-
 
 # update using other table (automatic join should happen here)
 query III
@@ -252,7 +251,6 @@ query I
 SELECT count(*) FROM table1;
 ----
 4000
-
 
 # the following two tests test that all inserts get streamed back to the returning statement
 query I
