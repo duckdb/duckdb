@@ -21,6 +21,7 @@ public:
 	MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info);
 	//! The macro function
 	unique_ptr<MacroFunction> function;
+
 public:
 	//! Serialize the meta information
 	virtual void Serialize(Serializer &serializer) = 0;
