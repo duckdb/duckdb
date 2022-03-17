@@ -134,7 +134,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		    "Failed to bind \"%s\": Table function return_types and return_names must be of the same size",
 		    table_function.name);
 	}
-	if (return_types.size() == 0) {
+	if (return_types.empty()) {
 		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
 		                        table_function.name);
 	}
