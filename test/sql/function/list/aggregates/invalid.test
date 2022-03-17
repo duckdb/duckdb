@@ -2,9 +2,6 @@
 # description: Test aggregate functions that are not compatible with list aggregate functions
 # group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SELECT list_aggr([1, 2, NULL], 'count_star');
 

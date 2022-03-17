@@ -1,0 +1,68 @@
+# name: test/sql/function/list/aggregates/bit_and.test
+# description: Test the list_bit_and aggregate function
+# group: [aggregates]
+
+# test on scalar values
+query IIII
+SELECT list_bit_and([3]), list_bit_and(NULL), list_bit_and([NULL]), list_bit_and([])
+----
+3	NULL	NULL	NULL
+
+# test on a sequence
+statement ok
+CREATE SEQUENCE seq;
+
+query I
+SELECT list_bit_and([nextval('seq')])
+----
+1
+
+query I
+SELECT list_bit_and([nextval('seq')])
+----
+2
+
+# test on a list of integers
+statement ok
+CREATE TABLE integers(i INTEGER[]);
+
+statement ok
+INSERT INTO integers VALUES ([3, 7, 15, 31, 3, 15]);
+
+query I
+SELECT list_bit_and(i) FROM integers WHERE i > [100, 200]
+----
+
+# test on an empty list
+query I
+SELECT list_bit_and([]) FROM integers
+----
+NULL
+
+statement ok
+INSERT INTO integers VALUES ([]), (NULL), ([NULL]), ([3, 7, NULL, 15, 31, 3, 15, NULL]);
+
+query III
+SELECT list_bit_and(i), list_bit_and([1, 1, 1, 1, 1, 1]), list_bit_and(NULL) FROM integers
+----
+3	1	NULL
+NULL	1	NULL
+NULL	1	NULL
+NULL	1	NULL
+3	1	NULL
+
+# test incorrect usage
+statement error
+SELECT list_bit_and()
+
+statement error
+SELECT list_bit_and(1, 2, 3)
+
+statement error
+SELECT list_bit_and(list_bit_xor([1]))
+
+statement error
+SELECT list_bit_and(['hello'])
+
+statement error
+SELECT list_bit_and([True, False])

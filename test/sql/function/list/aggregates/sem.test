@@ -1,4 +1,4 @@
-# name: test/sql/function/list/aggregates/list_sem.test
+# name: test/sql/function/list/aggregates/sem.test
 # description: Test the list_sem aggregate function
 # group: [aggregates]
 
@@ -27,6 +27,16 @@ select list_sem([1])
 ----
 0.000000
 
+query I
+select list_sem([])
+----
+NULL
+
+query I
+select list_sem([NULL])
+----
+NULL
+
 statement error
 select list_sem(*)
 
@@ -40,3 +50,18 @@ query III
 select list_sem(k), list_sem(v), list_sem(v2)  from aggr;
 ----
 0.178885	3.577709	5.663398
+
+statement ok
+create table sems (l int[]);
+
+statement ok
+insert into sems values ([1, 2, 2, 2, 2]), ([1, 2, NULL, 2, 2, NULL, 2]), ([]), ([NULL]), (NULL);
+
+query I
+select list_sem(l) from sems;
+----
+0.178885
+0.178885
+NULL
+NULL
+NULL

@@ -1,0 +1,109 @@
+# name: test/sql/function/list/aggregates/bool_and_or.test
+# description: Test the list_bool_and, list_bool_or aggregate functions
+# group: [aggregates]
+
+statement error
+select list_bool_or([0])
+
+statement error
+select list_bool_and([0])
+
+query I
+select list_bool_or(NULL)
+----
+NULL
+
+query I
+select list_bool_and(NULL)
+----
+NULL
+
+query I
+select list_bool_or([NULL])
+----
+NULL
+
+query I
+select list_bool_and([NULL])
+----
+NULL
+
+query I
+select list_bool_or([])
+----
+NULL
+
+query I
+select list_bool_and([])
+----
+NULL
+
+statement error
+select list_bool_or()
+
+statement error
+select list_bool_and()
+
+statement error
+select list_bool_or(*)
+
+statement error
+select list_bool_and(*)
+
+statement error
+select list_bool_or(['hello'])
+
+statement error
+select list_bool_and(['hello'])
+
+statement error
+select list_bool_or(True)
+
+statement error
+select list_bool_and(True)
+
+statement ok
+CREATE TABLE bools (l BOOLEAN[]);
+
+statement ok
+INSERT INTO bools SELECT LIST(True) FROM range(100) tbl(i);
+
+statement ok
+INSERT INTO bools SELECT LIST(False) FROM range(100) tbl(i);
+
+statement ok
+INSERT INTO bools VALUES ([True, False]);
+
+query I
+SELECT list_bool_or(l) FROM bools WHERE 1 = 0;
+----
+
+query I
+SELECT list_bool_and(l) FROM bools WHERE 1 = 0;
+----
+
+statement ok
+INSERT INTO bools VALUES ([]), ([NULL]), (NULL), ([NULL, True, False, NULL]);
+
+query I
+SELECT list_bool_or(l) FROM bools;
+----
+1
+0
+1
+NULL
+NULL
+NULL
+1
+
+query I
+SELECT list_bool_and(l) FROM bools;
+----
+1
+0
+0
+NULL
+NULL
+NULL
+0
+

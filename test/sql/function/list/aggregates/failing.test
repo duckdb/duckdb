@@ -3,6 +3,7 @@
 # group: [aggregates]
 
 #---- bigints_sum_avg.test ----#
+
 statement ok
 CREATE TABLE decimals (i DECIMAL(18,1)[]);
 
@@ -15,17 +16,108 @@ SELECT list_sum(i) FROM decimals;
 ----
 6.0
 
-#---- list_avg.test ----#
+#---- approx_count_distinct.test ----#
+
 statement ok
-CREATE SEQUENCE seq;
+CREATE TABLE list_ints (l INTEGER[]);
 
-# this somehow only fails in the list_avg.test file - why?
+statement ok
+INSERT INTO list_ints SELECT LIST(i) FROM range(100) tbl(i);
+
+statement ok
+INSERT INTO list_ints VALUES ([]), (NULL), ([NULL]);
+
+# this has 0 instead of NULL
 query I
-SELECT list_avg([nextval('seq')])
+select list_approx_count_distinct(l) from list_ints;
 ----
-1
+100
+0
+NULL
+0
 
+# this is the original query
+statement ok
+create  table t as select range a, mod(range,10) b from range(2000);
+
+query III
+SELECT COUNT( a),approx_count_distinct(a),approx_count_distinct(b) from t
+----
+2000	1990	10
+
+# this is the list aggregate query, result seems also fine?
+statement ok
+CREATE TABLE list_ints_2 (a INTEGER[], b INTEGER[]);
+
+statement ok
+INSERT INTO list_ints_2 SELECT LIST(a), LIST(mod(a, 10)) FROM range(2000) tbl(a);
+
+# different result...
+query III
+SELECT list_count(a), list_approx_count_distinct(a), list_approx_count_distinct(b) from list_ints_2
+----
+2000	2002	10
+
+# this is the original query
 query I
-SELECT list_avg([nextval('seq')])
+SELECT approx_count_distinct(a) from t group by a %2;
+----
+1007
+1003
+
+# this is the list aggregate query, result seems also fine?
+statement ok
+DELETE FROM list_ints_2
+
+statement ok
+INSERT INTO list_ints_2 SELECT LIST(a), NULL FROM range(2000) tbl(a, b) WHERE a % 2 = 0;
+
+statement ok
+INSERT INTO list_ints_2 SELECT LIST(a), NULL FROM range(2000) tbl(a, b) WHERE a % 2 = 1;
+
+# different result...
+query I
+SELECT list_approx_count_distinct(a) from list_ints_2;
+----
+998
+997
+
+#---- count.test ----#
+
+statement ok
+CREATE TABLE lists (l INTEGER[]);
+
+statement ok
+INSERT INTO lists VALUES ([1, 2]), ([NULL]), (NULL), ([]), ([3, 4, 5, 6, 7]), ([1, 2, NULL, 1, NULL]);
+
+# this has 0 instead of NULL
+query I
+SELECT list_count(l) FROM lists
 ----
 2
+0
+NULL
+0
+5
+3
+
+#---- entropy.test ----#
+
+statement ok
+create table aggr(k int[]);
+
+statement ok
+insert into aggr values ([0, 1, 1, 1, 4, 0, 3, 3, 2, 2, 4, 4, 2, 4, 0, 0, 0, 1, 2, 3, 4, 2, 3, 3, 1]);
+
+statement ok
+insert into aggr values ([]), ([NULL]), (NULL), ([0, 1, 1, 1, 4, NULL, 0, 3, 3, 2, NULL, 2, 4, 4, 2, 4, 0, 0, 0, 1, NULL, 2, 3, 4, 2, 3, 3, 1]);
+
+# this has 0 instead of NULL
+query I
+select list_entropy(k) from aggr ;
+----
+2.321928
+0
+0
+NULL
+2.321928
