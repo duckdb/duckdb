@@ -151,7 +151,7 @@ public:
 	// Note: caller is responsible to not call this method twice on the same buffer
 	static void UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer);
 
-	vector<string> Glob(const string &glob_pattern, ClientContext *context = nullptr) override;
+	vector<string> Glob(const string &glob_pattern, FileOpener *opener = nullptr) override;
 
 protected:
 	std::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,

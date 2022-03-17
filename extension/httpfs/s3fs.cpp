@@ -722,9 +722,9 @@ void S3FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx
 	}
 }
 
-vector<string> S3FileSystem::Glob(const string &glob_pattern, ClientContext *context) {
-	if (context == nullptr) {
-		throw InternalException("Cannot S3 Glob without context");
+vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener) {
+	if (opener == nullptr) {
+		throw InternalException("Cannot S3 Glob without FileOpener");
 	}
 	// AWS matches on prefix, not glob pattern so we take a substring until the first wildcard char for the aws calls
 	auto first_wildcard_pos = glob_pattern.find_first_of("*?[\\");
@@ -733,7 +733,6 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, ClientContext *con
 	}
 	string shared_path = glob_pattern.substr(0, first_wildcard_pos);
 
-	auto opener = FileSystem::GetFileOpener(*context);
 	auto s3_auth_params = S3AuthParams::ReadFrom(opener);
 	auto http_params = HTTPParams::ReadFrom(opener);
 
