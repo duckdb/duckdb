@@ -162,7 +162,7 @@ static void GetDatabaseNameFromDSN(duckdb::OdbcHandleDbc *dbc, SQLCHAR *dsn, str
 		new_db_name = dbc->sql_attr_current_catalog;
 		return;
 	}
-#ifdef ODBC_LINK_ODBCINST
+#if defined ODBC_LINK_ODBCINST || defined WIN32
 	if (new_db_name.empty()) {
 		string dsn_name;
 		OdbcUtils::SetValueFromConnStr(dsn, "DSN", dsn_name);

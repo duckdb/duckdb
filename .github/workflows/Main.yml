@@ -2,7 +2,7 @@ name: Main
 on: [push, pull_request]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
 defaults:
@@ -225,7 +225,11 @@ jobs:
           fetch-depth: 0
 
       - name: Install
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov curl
+
+      - name: Validate Configuration
+        run: |
+          curl --fail --data-binary @.codecov.yml https://codecov.io/validate
 
       - name: Set up Python 3.9
         uses: actions/setup-python@v2
