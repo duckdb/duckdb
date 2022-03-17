@@ -1626,6 +1626,43 @@ function duckdb_struct_vector_get_child(vector, index)
     )
 end
 
+"""
+Assigns a string element in the vector at the specified location.
+
+* vector: The vector to alter
+* index: The row position in the vector to assign the string to
+* str: The null-terminated string
+"""
+function duckdb_vector_assign_string_element(vector, index, str)
+    return ccall(
+        (:duckdb_vector_assign_string_element, libduckdb),
+        Cvoid,
+        (duckdb_vector, UInt64, Ptr{UInt8}),
+        vector,
+        index - 1,
+        str
+    )
+end
+"""
+Assigns a string element in the vector at the specified location.
+
+* vector: The vector to alter
+* index: The row position in the vector to assign the string to
+* str: The null-terminated string
+* str_len: The string length
+"""
+function duckdb_vector_assign_string_element_len(vector, index, str, str_len)
+    return ccall(
+        (:duckdb_vector_assign_string_element_len, libduckdb),
+        Cvoid,
+        (duckdb_vector, UInt64, Ptr{UInt8}, UInt64),
+        vector,
+        index - 1,
+        str,
+        str_len
+    )
+end
+
 #=
 //===--------------------------------------------------------------------===//
 // Table Functions

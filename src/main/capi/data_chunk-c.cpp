@@ -1,5 +1,6 @@
 #include "duckdb/main/capi_internal.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include <string.h>
 
 duckdb_data_chunk duckdb_create_data_chunk(duckdb_logical_type *ctypes, idx_t column_count) {
 	if (!ctypes) {
@@ -95,6 +96,19 @@ void duckdb_vector_ensure_validity_writable(duckdb_vector vector) {
 	auto v = (duckdb::Vector *)vector;
 	auto &validity = duckdb::FlatVector::Validity(*v);
 	validity.EnsureWritable();
+}
+
+void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str) {
+	duckdb_vector_assign_string_element_len(vector, index, str, strlen(str));
+}
+
+void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str, idx_t str_len) {
+	if (!vector) {
+		return;
+	}
+	auto v = (duckdb::Vector *)vector;
+	auto data = duckdb::FlatVector::GetData<string_t>(*v);
+	data[index] = duckdb::StringVector::AddString(*v, str, str_len);
 }
 
 duckdb_vector duckdb_list_vector_get_child(duckdb_vector vector) {

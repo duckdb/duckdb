@@ -79,3 +79,18 @@ end
 
     DBInterface.close!(con)
 end
+
+@testset "Test DataFrame scan with strings" begin
+    con = DBInterface.connect(DuckDB.DB)
+
+    # date/time/timestamp
+    my_df = DataFrame(str = ["hello", "this is a very long string", missing, "obligatory mühleisen"])
+
+    DuckDB.RegisterDataFrame(con, my_df, "my_df")
+
+    results = DBInterface.execute(con, "SELECT * FROM my_df")
+    df = DataFrame(results)
+    @test isequal(df, my_df)
+
+    DBInterface.close!(con)
+end

@@ -40,6 +40,7 @@ CreateLogicalType(::Type{T}) where {T <: Float64} = DuckDB.LogicalType(DuckDB.DU
 CreateLogicalType(::Type{T}) where {T <: Date} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_DATE)
 CreateLogicalType(::Type{T}) where {T <: Time} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_TIME)
 CreateLogicalType(::Type{T}) where {T <: DateTime} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_TIMESTAMP)
+CreateLogicalType(::Type{T}) where {T <: AbstractString} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_VARCHAR)
 
 function CreateLogicalType(::Type{T}) where {T}
     throw(NotImplementedException("Unsupported type for CreateLogicalType"))

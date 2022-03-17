@@ -1218,6 +1218,25 @@ This allows null values to be written to the vector, regardless of whether a val
 DUCKDB_API void duckdb_vector_ensure_validity_writable(duckdb_vector vector);
 
 /*!
+Assigns a string element in the vector at the specified location.
+
+* vector: The vector to alter
+* index: The row position in the vector to assign the string to
+* str: The null-terminated string
+*/
+DUCKDB_API void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str);
+
+/*!
+Assigns a string element in the vector at the specified location.
+
+* vector: The vector to alter
+* index: The row position in the vector to assign the string to
+* str: The string
+* str_len: The length of the string (in bytes)
+*/
+DUCKDB_API void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str, idx_t str_len);
+
+/*!
 Retrieves the child vector of a list vector.
 
 The resulting vector is valid as long as the parent vector is valid.

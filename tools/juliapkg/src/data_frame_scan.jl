@@ -34,6 +34,13 @@ ValueToDuckDB(val::T) where {T <: Date} = convert(Int32, Dates.date2epochdays(va
 ValueToDuckDB(val::T) where {T <: Time} = convert(Int64, Dates.value(val) / 1000)
 ValueToDuckDB(val::T) where {T <: DateTime} =
     convert(Int64, (Dates.datetime2epochms(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_MS) * 1000)
+function ValueToDuckDB(val::T) where {T <: AbstractString}
+    throw(
+        NotImplementedException(
+            "Cannot use ValueToDuckDB to convert string values - use DuckDB.AssignStringElement on a vector instead"
+        )
+    )
+end
 function ValueToDuckDB(val::T) where {T}
     return val
 end
@@ -46,8 +53,9 @@ function DFScanColumn(
     output::DuckDB.DataChunk,
     ::Type{T}
 ) where {T}
-    result_array::Vector{T} = DuckDB.GetArray(output, col_idx, T)
-    validity = DuckDB.GetValidity(output, col_idx)
+    vector = DuckDB.GetVector(output, col_idx)
+    result_array::Vector{T} = DuckDB.GetArray(vector, T)
+    validity = DuckDB.GetValidity(vector)
     input_column = df[!, col_idx]
     for i in 1:scan_count
         if input_column[df_offset + i] === missing
@@ -58,7 +66,31 @@ function DFScanColumn(
     end
 end
 
+function DFScanStringColumn(
+    df::DataFrame,
+    df_offset::Int64,
+    col_idx::Int64,
+    scan_count::Int64,
+    output::DuckDB.DataChunk,
+    ::Type{T}
+) where {T}
+    vector = DuckDB.GetVector(output, col_idx)
+    validity = DuckDB.GetValidity(vector)
+    input_column = df[!, col_idx]
+    for i in 1:scan_count
+        if input_column[df_offset + i] === missing
+            DuckDB.SetInvalid(validity, i)
+        else
+            DuckDB.AssignStringElement(vector, i, input_column[df_offset + i])
+        end
+    end
+end
+
 function DFScanFunction(df, entry)
+    result_type = DFResultType(df, entry)
+    if result_type <: AbstractString
+        return DFScanStringColumn
+    end
     return DFScanColumn
 end
 
