@@ -394,7 +394,7 @@ duckdb_logical_type duckdb_column_logical_type(duckdb_result *result, idx_t col)
 		return nullptr;
 	}
 	auto &result_data = *((duckdb::DuckDBResultData *)result->internal_data);
-	return new LogicalType(result_data.result->types[col]);
+	return new duckdb::LogicalType(result_data.result->types[col]);
 }
 
 idx_t duckdb_column_count(duckdb_result *result) {
@@ -460,8 +460,8 @@ idx_t duckdb_result_chunk_count(duckdb_result result) {
 	if (result_data.result_set_type == duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
 		return 0;
 	}
-	D_ASSERT(result_data.result->type == QueryResultType::MATERIALIZED_RESULT);
-	auto &materialized = (MaterializedQueryResult &)*result_data.result;
+	D_ASSERT(result_data.result->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
+	auto &materialized = (duckdb::MaterializedQueryResult &)*result_data.result;
 	return materialized.collection.ChunkCount();
 }
 
@@ -474,7 +474,7 @@ duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx)
 		return nullptr;
 	}
 	result_data.result_set_type = duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_MATERIALIZED;
-	auto &materialized = (MaterializedQueryResult &)*result_data.result;
+	auto &materialized = (duckdb::MaterializedQueryResult &)*result_data.result;
 	if (chunk_idx >= materialized.collection.ChunkCount()) {
 		return nullptr;
 	}

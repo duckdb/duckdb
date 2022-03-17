@@ -77,6 +77,6 @@ void duckdb_replacement_scan_add_parameter(duckdb_replacement_scan_info info_p, 
 		return;
 	}
 	auto info = (duckdb::CAPIReplacementScanInfo *)info_p;
-	auto val = (Value *)parameter;
+	auto val = (duckdb::Value *)parameter;
 	info->parameters.push_back(*val);
 }

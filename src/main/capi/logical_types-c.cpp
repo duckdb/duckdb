@@ -116,7 +116,7 @@ duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type) {
 	if (ltype.id() != duckdb::LogicalTypeId::LIST) {
 		return nullptr;
 	}
-	return new LogicalType(duckdb::ListType::GetChildType(ltype));
+	return new duckdb::LogicalType(duckdb::ListType::GetChildType(ltype));
 }
 
 idx_t duckdb_struct_type_child_count(duckdb_logical_type type) {
