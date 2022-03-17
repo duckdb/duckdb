@@ -521,6 +521,7 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 		}
 	}
 
+	// we need to look at the error messages concurrently in data table's index and transaction local storage's index
 	for (idx_t i = 0; i < count; i++) {
 		if (!transaction_check) {
 			// if there is no transaction-local data we only need to check if there is an error message in the main
