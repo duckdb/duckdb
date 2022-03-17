@@ -112,11 +112,18 @@ jobs:
    win-nodejs:
      name: node.js Windows
      runs-on: windows-latest
-     needs: linux-nodejs
+#     needs: linux-nodejs
 
      strategy:
        matrix:
          node: [ '10', '12', '14', '15' ]
+         isMaster:
+            - ${{ github.ref == 'refs/heads/master' }}
+         exclude:
+           - isMaster: false
+             node: 12
+           - isMaster: false
+             node: 14
 
      steps:
        - uses: actions/setup-python@v2
