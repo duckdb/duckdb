@@ -17,6 +17,7 @@ void my_bind(duckdb_bind_info info) {
 	auto my_bind_data = (my_bind_data_struct *)malloc(sizeof(my_bind_data_struct));
 	auto param = duckdb_bind_get_parameter(info, 0);
 	my_bind_data->size = duckdb_get_int64(param);
+	duckdb_destroy_value(&param);
 
 	duckdb_bind_set_bind_data(info, my_bind_data, free);
 }
