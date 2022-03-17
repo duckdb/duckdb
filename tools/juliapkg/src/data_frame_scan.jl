@@ -156,15 +156,21 @@ end
 
 function RegisterDataFrame(con::Connection, df::DataFrame, name::AbstractString)
     con.db.data_frames[name] = df
-    return DBInterface.execute(
+    DBInterface.execute(
         con,
         string("CREATE OR REPLACE VIEW \"", name, "\" AS SELECT * FROM julia_df_scan('", name, "')")
     )
+    return
 end
+RegisterDataFrame(db::DB, df::DataFrame, name::AbstractString) = RegisterDataFrame(db.main_connection, df, name)
 
-function RegisterDataFrame(db::DB, df::DataFrame, name::AbstractString)
-    return RegisterDataFrame(db.main_connection, df, name)
+function UnregisterDataFrame(con::Connection, name::AbstractString)
+    pop!(con.db.data_frames, name)
+    DBInterface.execute(con, string("DROP VIEW IF EXISTS \"", name, "\""))
+    return
 end
+UnregisterDataFrame(db::DB, name::AbstractString) = UnregisterDataFrame(db.main_connection, name)
+
 
 function AddDataFrameScan(db::DB)
     # add the data frame scan function
