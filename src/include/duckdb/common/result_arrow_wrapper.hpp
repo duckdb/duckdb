@@ -14,11 +14,13 @@
 namespace duckdb {
 class ResultArrowArrayStreamWrapper {
 public:
-	explicit ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result, idx_t approx_batch_size);
+	explicit ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result, idx_t batch_size);
 	ArrowArrayStream stream;
 	unique_ptr<QueryResult> result;
 	std::string last_error;
-	idx_t vectors_per_chunk;
+	idx_t batch_size;
+	vector<LogicalType> column_types;
+	vector<string> column_names;
 
 private:
 	static int MyStreamGetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out);

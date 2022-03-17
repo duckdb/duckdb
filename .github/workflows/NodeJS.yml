@@ -2,7 +2,7 @@ name: NodeJS
 on: [push, pull_request]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
 defaults:
@@ -25,6 +25,21 @@ jobs:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
+
+    - name: Install requirements
+      run: |
+        sudo apt-get update -y -qq
+        sudo apt-get install -y git ninja-build make gcc-multilib g++-multilib wget libssl-dev
+
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+        chmod +x cmake-3.21.3-linux-x86_64.sh
+        sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+
+    - name: Build extensions
+      run: |
+        GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
 
     - name: Setup
       run: ./scripts/node_version.sh upload
@@ -52,6 +67,13 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
+
+      - name: Build extensions
+        run: |
+          brew install openssl ninja
+          export OPENSSL_ROOT_DIR=`brew --prefix openssl`
+          echo $OPENSSL_ROOT_DIR
+          GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
 
       - name: Setup
         run: ./scripts/node_version.sh

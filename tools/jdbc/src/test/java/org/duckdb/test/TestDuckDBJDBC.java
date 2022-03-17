@@ -32,6 +32,8 @@ import org.duckdb.DuckDBConnection;
 import org.duckdb.DuckDBDatabase;
 import org.duckdb.DuckDBDriver;
 import org.duckdb.DuckDBTimestamp;
+import org.duckdb.DuckDBColumnType;
+import org.duckdb.DuckDBResultSetMetaData;
 
 public class TestDuckDBJDBC {
 
@@ -188,6 +190,10 @@ public class TestDuckDBJDBC {
 		rs.next();
 		assertTrue(rs.getObject(2, OffsetDateTime.class).isEqual(odt2Rounded));
 		assertTrue(((OffsetDateTime)rs.getObject(2)).isEqual(odt2Rounded));
+
+		// Metadata tests
+		assertEquals(Types.TIME_WITH_TIMEZONE, ((DuckDBResultSetMetaData)meta).type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE));
+		assertTrue(OffsetDateTime.class.toString().equals(meta.getColumnClassName(2)));
 
 		rs.close();
 		stmt.close();
@@ -377,7 +383,7 @@ public class TestDuckDBJDBC {
 		stmt1.close();
 	}
 
-public static void test_duckdb_timestamp() throws Exception {
+	public static void test_duckdb_timestamp() throws Exception {
 
 		duckdb_timestamp_test();
 
@@ -652,6 +658,7 @@ public static void test_duckdb_timestamp() throws Exception {
 		rs.close();
 
 		ResultSet rs2 = ps.executeQuery();
+		DuckDBResultSetMetaData meta = (DuckDBResultSetMetaData)rs2.getMetaData();
 		rs2.next();
 		assertEquals(rs2.getBigDecimal(1), new BigDecimal("1"));
 		assertEquals(rs2.getBigDecimal(2), new BigDecimal("999.9"));
@@ -689,6 +696,13 @@ public static void test_duckdb_timestamp() throws Exception {
 		assertEquals(rs2.getBigDecimal(1), new BigDecimal("8"));
 		assertEquals(rs2.getBigDecimal(5), new BigDecimal("-18446744073709551616.0000000000"));
 		rs2.close();
+
+		// Metadata tests
+		assertEquals(Types.DECIMAL, meta.type_to_int(DuckDBColumnType.DECIMAL));
+		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(1)));
+		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(2)));
+		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(3)));
+		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(4)));
 
 		conn.close();
 	}
