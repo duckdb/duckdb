@@ -73,6 +73,7 @@ jobs:
       run: ./scripts/node_build.sh 17
 
    osx-nodejs:
+      if: github.ref == 'refs/heads/master'
       name: node.js OSX
       runs-on: macos-latest
       needs: linux-nodejs

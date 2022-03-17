@@ -127,6 +127,7 @@ jobs:
         fi
 
    osx-python3:
+      if: github.ref == 'refs/heads/master'
       name: Python 3 OSX
       runs-on: macos-latest
       strategy:
