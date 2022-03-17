@@ -210,11 +210,9 @@ private:
 	BoundStatement Bind(ExportStatement &stmt);
 	BoundStatement Bind(SetStatement &stmt);
 	BoundStatement Bind(LoadStatement &stmt);
-	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list,
-	                                TableCatalogEntry *table,
-	                                idx_t update_table_index,
-	                                unique_ptr<LogicalOperator> child_operator,
-	                                BoundStatement result);
+	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
+	                             idx_t update_table_index, unique_ptr<LogicalOperator> child_operator,
+	                             BoundStatement result);
 
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);

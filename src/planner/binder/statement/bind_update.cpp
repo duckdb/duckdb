@@ -217,7 +217,8 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		update->table_index = update_table_index;
 		unique_ptr<LogicalOperator> update_as_logicaloperator = move(update);
 
-		return BindReturning(move(stmt.returning_list), table, update_table_index, move(update_as_logicaloperator), move(result));
+		return BindReturning(move(stmt.returning_list), table, update_table_index, move(update_as_logicaloperator),
+		                     move(result));
 
 	} else {
 		update->table_index = 0;

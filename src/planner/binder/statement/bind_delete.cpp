@@ -83,7 +83,8 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		del->table_index = update_table_index;
 
 		unique_ptr<LogicalOperator> del_as_logicaloperator = move(del);
-		return BindReturning(move(stmt.returning_list), table, update_table_index, move(del_as_logicaloperator), move(result));
+		return BindReturning(move(stmt.returning_list), table, update_table_index, move(del_as_logicaloperator),
+		                     move(result));
 	} else {
 		result.plan = move(del);
 		result.names = {"Count"};

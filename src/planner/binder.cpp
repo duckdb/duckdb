@@ -377,12 +377,9 @@ string Binder::FormatErrorRecursive(idx_t query_location, const string &message,
 	return context.FormatErrorRecursive(message, values);
 }
 
-BoundStatement Binder::BindReturning(
-    vector<unique_ptr<ParsedExpression>> returning_list,
-    TableCatalogEntry *table,
-    idx_t update_table_index,
-    unique_ptr<LogicalOperator> child_operator,
-    BoundStatement result) {
+BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
+                                     idx_t update_table_index, unique_ptr<LogicalOperator> child_operator,
+                                     BoundStatement result) {
 
 	vector<LogicalType> types;
 	vector<std::string> names;
@@ -399,12 +396,11 @@ BoundStatement Binder::BindReturning(
 
 	vector<unique_ptr<Expression>> projection_expressions;
 	LogicalType result_type;
-	for (auto& returning_expr : returning_list) {
+	for (auto &returning_expr : returning_list) {
 		auto expr_type = returning_expr->GetExpressionType();
 		if (expr_type == ExpressionType::STAR) {
 			auto generated_star_list = vector<unique_ptr<ParsedExpression>>();
-			binder->bind_context.GenerateAllColumnExpressions((StarExpression &)*returning_expr,
-			                                                  generated_star_list);
+			binder->bind_context.GenerateAllColumnExpressions((StarExpression &)*returning_expr, generated_star_list);
 
 			for (auto &star_column : generated_star_list) {
 				auto star_expr = returning_binder.Bind(star_column, &result_type);
@@ -427,6 +423,5 @@ BoundStatement Binder::BindReturning(
 	this->allow_stream_result = true;
 	return result;
 }
-
 
 } // namespace duckdb

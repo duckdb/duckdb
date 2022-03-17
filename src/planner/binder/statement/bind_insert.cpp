@@ -136,7 +136,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		insert->table_index = insert_table_index;
 		unique_ptr<LogicalOperator> index_as_logicaloperator = move(insert);
 
-		return BindReturning(move(stmt.returning_list), table, insert_table_index, move(index_as_logicaloperator), move(result));
+		return BindReturning(move(stmt.returning_list), table, insert_table_index, move(index_as_logicaloperator),
+		                     move(result));
 	} else {
 		D_ASSERT(result.types.size() == result.names.size());
 		result.plan = move(insert);
