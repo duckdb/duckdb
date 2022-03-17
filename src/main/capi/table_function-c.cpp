@@ -100,7 +100,7 @@ unique_ptr<FunctionData> CTableFunctionBind(ClientContext &context, TableFunctio
 	}
 
 	result->info = info;
-	return result;
+	return move(result);
 }
 
 unique_ptr<FunctionOperatorData> CTableFunctionInit(ClientContext &context, const FunctionData *bind_data_p,
@@ -114,7 +114,7 @@ unique_ptr<FunctionOperatorData> CTableFunctionInit(ClientContext &context, cons
 	if (!init_info.success) {
 		throw Exception(init_info.error);
 	}
-	return result;
+	return move(result);
 }
 
 void CTableFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *operator_state,
