@@ -76,7 +76,7 @@ jobs:
             python_build: 'cp38-*'
           - isMaster: false
             python_build: 'cp39-*'
-#    needs: linux-python3-9
+    needs: linux-python3-9
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
@@ -141,7 +141,7 @@ jobs:
             python_build: 'cp38-*'
           - isMaster: false
             python_build: 'cp39-*'
-#      needs: linux-python3-9
+      needs: linux-python3-9
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
         CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
@@ -193,7 +193,7 @@ jobs:
             python_build: 'cp38-*'
           - isMaster: false
             python_build: 'cp39-*'
-#      needs: linux-python3-9
+      needs: linux-python3-9
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
