@@ -17,6 +17,12 @@ namespace duckdb {
 
 struct DuckDBPyResult;
 
+class PythonDependencies : public ExtraDependencies {
+public:
+	explicit PythonDependencies(py::function map_function) : map_function(map_function) {};
+	py::function map_function;
+};
+
 struct DuckDBPyRelation {
 public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
@@ -190,7 +196,6 @@ private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
 	                              const string &projected_columns = "", const string &window_function = "");
-	py::object map_function;
 };
 
 } // namespace duckdb

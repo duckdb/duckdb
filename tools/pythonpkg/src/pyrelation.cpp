@@ -549,7 +549,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)fun.ptr()));
 	auto res = make_unique<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
-	res->map_function = fun;
+	res->rel->extra_dependencies = make_unique<PythonDependencies>(fun);
 	return res;
 }
 
