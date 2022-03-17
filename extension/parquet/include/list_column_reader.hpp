@@ -21,9 +21,7 @@ public:
 	idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 	           Vector &result_out) override;
 
-	virtual void Skip(idx_t num_values) override {
-		D_ASSERT(0);
-	}
+	void Skip(idx_t num_values) override;
 
 	void InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
 		child_column_reader->InitializeRead(columns, protocol_p);
