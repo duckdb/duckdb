@@ -19,7 +19,6 @@ namespace duckdb {
 
 struct DuckDBPyRelation;
 struct DuckDBPyResult;
-
 class RegisteredObject {
 public:
 	explicit RegisteredObject(py::object obj_p) : obj(move(obj_p)) {
@@ -109,11 +108,9 @@ public:
 
 	py::object FetchDFChunk(const idx_t vectors_per_chunk = 1) const;
 
-	py::object FetchArrow();
+	py::object FetchArrow(idx_t chunk_size);
 
-	py::object FetchArrowChunk(const idx_t vectors_per_chunk, bool return_table) const;
-
-	py::object FetchRecordBatchReader(const idx_t vectors_per_chunk) const;
+	py::object FetchRecordBatchReader(const idx_t chunk_size) const;
 
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
 

@@ -14,6 +14,7 @@
 #include "duckdb_python/pyconnection.hpp"
 
 namespace duckdb {
+
 struct DuckDBPyResult;
 
 struct DuckDBPyRelation {
@@ -144,7 +145,9 @@ public:
 
 	py::object Fetchall();
 
-	py::object ToArrowTable();
+	py::object ToArrowTable(idx_t batch_size);
+
+	py::object ToRecordBatch(idx_t batch_size);
 
 	unique_ptr<DuckDBPyRelation> Union(DuckDBPyRelation *other);
 
