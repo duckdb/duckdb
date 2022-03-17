@@ -18,7 +18,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelete &op
 
 	dependencies.insert(op.table);
 	auto del =
-	    make_unique<PhysicalDelete>(op.types, *op.table, *op.table->storage, bound_ref.index, op.estimated_cardinality);
+	    make_unique<PhysicalDelete>(op.types, *op.table, *op.table->storage, bound_ref.index, op.estimated_cardinality, op.return_chunk);
 	del->children.push_back(move(plan));
 	return move(del);
 }

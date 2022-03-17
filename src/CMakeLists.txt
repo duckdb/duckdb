@@ -24,6 +24,7 @@ if(AMALGAMATION_BUILD)
     add_definitions(/bigobj)
   endif()
 
+
   add_library(duckdb SHARED "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
   target_link_libraries(duckdb ${DUCKDB_SYSTEM_LIBS})
   link_threads(duckdb)
