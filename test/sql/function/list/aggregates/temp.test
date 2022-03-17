@@ -1,0 +1,18 @@
+# name: test/sql/function/list/aggregates/temp.test
+# description: Test the list_min, list_max aggregate functions
+# group: [aggregates]
+
+statement ok
+CREATE TABLE five_complex AS
+	SELECT
+		LIST(i::integer) AS i,
+		LIST(i::VARCHAR) AS s,
+		LIST([i]) AS l,
+		LIST({'a': i}) AS r
+	FROM range(1, 6, 1) t1(i)
+
+query I
+SELECT list_min(l)
+FROM five_complex
+----
+[1]

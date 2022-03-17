@@ -121,3 +121,91 @@ select list_entropy(k) from aggr ;
 0
 NULL
 2.321928
+
+#---- last.test ----#
+
+# complex types
+statement ok
+CREATE TABLE five_complex AS
+	SELECT
+		LIST(i::integer) AS i,
+		LIST(i::VARCHAR) AS s,
+		LIST([i]) AS l,
+		LIST({'a': i}) AS r
+	FROM range(1, 6, 1) t1(i)
+
+query III
+SELECT list_last(s), list_last(l), list_last(r)
+FROM five_complex
+----
+5	[5]	{'a': 5}
+
+statement ok
+DROP TABLE five_complex
+
+# decimals
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
+
+statement ok
+INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
+
+query I
+SELECT list_last(i) FROM five
+----
+5.0
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+DROP TABLE five
+
+endloop
+
+#---- first.test ----#
+
+# complex types
+statement ok
+CREATE TABLE five_complex AS
+	SELECT
+		LIST(i::integer) AS i,
+		LIST(i::VARCHAR) AS s,
+		LIST([i]) AS l,
+		LIST({'a': i}) AS r
+	FROM range(1, 6, 1) t1(i)
+
+query III
+SELECT list_first(s), list_first(l), list_first(r)
+FROM five_complex
+----
+1	[1]	{'a': 1}
+
+statement ok
+DROP TABLE five_complex
+
+# decimals
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
+
+statement ok
+INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
+
+query I
+SELECT list_first(i) FROM five
+----
+1.0
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+DROP TABLE five
+
+endloop
