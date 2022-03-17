@@ -8,7 +8,7 @@ struct MyBaseNumber {
 };
 
 void destroy_base_number(void *data) {
-	auto num = (MyBaseNumber *) data;
+	auto num = (MyBaseNumber *)data;
 	delete num;
 }
 
@@ -17,11 +17,11 @@ void number_scanner(duckdb_replacement_scan_info info, const char *table_name, v
 	long long number;
 	try {
 		number = std::stoll(table_name);
-	} catch(...) {
+	} catch (...) {
 		// not a number!
 		return;
 	}
-	auto num_data = (MyBaseNumber *) data;
+	auto num_data = (MyBaseNumber *)data;
 	duckdb_replacement_scan_set_function_name(info, "range");
 	auto val = duckdb_create_int64(number + num_data->number);
 	duckdb_replacement_scan_add_parameter(info, val);
@@ -38,7 +38,7 @@ TEST_CASE("Test replacement scans in C API", "[capi]") {
 	auto base_number = new MyBaseNumber();
 	base_number->number = 3;
 
-	duckdb_add_replacement_scan(tester.database, number_scanner, (void *) base_number, destroy_base_number);
+	duckdb_add_replacement_scan(tester.database, number_scanner, (void *)base_number, destroy_base_number);
 
 	// 0-4
 	result = tester.Query("SELECT * FROM \"2\"");

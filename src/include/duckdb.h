@@ -427,11 +427,9 @@ queries. For other queries the rows_changed will be 0.
 DUCKDB_API idx_t duckdb_rows_changed(duckdb_result *result);
 
 /*!
-**DEPRECATED**: Prefer using `duckdb_result_fetch_chunk` instead.
+**DEPRECATED**: Prefer using `duckdb_result_get_chunk` instead.
 
-Returns the data of a specific column of a result in columnar format. This is the fastest way of accessing data in a
-query result, as no conversion or type checking must be performed (outside of the original switch). If performance
-is a concern, it is recommended to use this API over the `duckdb_value` functions.
+Returns the data of a specific column of a result in columnar format.
 
 The function returns a dense array which contains the result data. The exact type stored in the array depends on the
 corresponding duckdb_type (as provided by `duckdb_column_type`). For the exact type by which the data should be
@@ -450,7 +448,7 @@ printf("Data for row %d: %d\n", row, data[row]);
 DUCKDB_API void *duckdb_column_data(duckdb_result *result, idx_t col);
 
 /*!
-**DEPRECATED**: Prefer using `duckdb_result_fetch_chunk` instead.
+**DEPRECATED**: Prefer using `duckdb_result_get_chunk` instead.
 
 Returns the nullmask of a specific column of a result in columnar format. The nullmask indicates for every row
 whether or not the corresponding row is `NULL`. If a row is `NULL`, the values present in the array provided
@@ -489,10 +487,11 @@ DUCKDB_API const char *duckdb_result_error(duckdb_result *result);
 /*!
 Fetches a data chunk from the duckdb_result. This function should be called repeatedly until the result is exhausted.
 
-This function supersedes all `duckdb_value` functions, as well as the `duckdb_column_data` and `duckdb_nullmask_data` functions.
-It results in significantly better performance, and should be preferred in newer code-bases.
+This function supersedes all `duckdb_value` functions, as well as the `duckdb_column_data` and `duckdb_nullmask_data`
+functions. It results in significantly better performance, and should be preferred in newer code-bases.
 
-If this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be mixed with the legacy result functions).
+If this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be
+mixed with the legacy result functions).
 
 Use `duckdb_result_chunk_count` to figure out how many chunks there are in the result.
 
@@ -514,7 +513,7 @@ DUCKDB_API idx_t duckdb_result_chunk_count(duckdb_result result);
 // These functions will perform conversions if necessary.
 // On failure (e.g. if conversion cannot be performed or if the value is NULL) a default value is returned.
 // Note that these functions are slow since they perform bounds checking and conversion
-// For fast access of values prefer using `duckdb_result_fetch_chunk`
+// For fast access of values prefer using `duckdb_result_get_chunk`
 
 /*!
  * returns: The boolean value at the specified location, or false if the value cannot be converted.
@@ -944,7 +943,6 @@ Destroys the value and de-allocates all memory allocated for that type.
 */
 DUCKDB_API void duckdb_destroy_value(duckdb_value *value);
 
-
 /*!
 Creates a value from a varchar
 
@@ -1052,7 +1050,6 @@ The result must be freed with `duckdb_free`
 */
 DUCKDB_API char *duckdb_enum_dictionary_value(duckdb_logical_type type, idx_t index);
 
-
 /*!
 Retrieves the child type of the given list type.
 
@@ -1080,7 +1077,7 @@ The result must be freed with `duckdb_free`
 * index: The child index
 * returns: The name of the struct type. Must be freed with `duckdb_free`.
 */
-DUCKDB_API char* duckdb_struct_type_child_name(duckdb_logical_type type, idx_t index);
+DUCKDB_API char *duckdb_struct_type_child_name(duckdb_logical_type type, idx_t index);
 
 /*!
 Retrieves the child type of the given struct type at the specified index.
@@ -1234,7 +1231,8 @@ Assigns a string element in the vector at the specified location.
 * str: The string
 * str_len: The length of the string (in bytes)
 */
-DUCKDB_API void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str, idx_t str_len);
+DUCKDB_API void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str,
+                                                        idx_t str_len);
 
 /*!
 Retrieves the child vector of a list vector.
@@ -1551,7 +1549,8 @@ Add a replacement scan definition to the specified database
 * extra_data: Extra data that is passed back into the specified callback
 * delete_callback: The delete callback to call on the extra data, if any
 */
-DUCKDB_API void duckdb_add_replacement_scan(duckdb_database db, duckdb_replacement_callback_t replacement, void *extra_data, duckdb_delete_callback_t delete_callback);
+DUCKDB_API void duckdb_add_replacement_scan(duckdb_database db, duckdb_replacement_callback_t replacement,
+                                            void *extra_data, duckdb_delete_callback_t delete_callback);
 
 /*!
 Sets the replacement function name to use. If this function is called in the replacement callback,
@@ -1569,7 +1568,6 @@ Adds a parameter to the replacement scan function.
 * parameter: The parameter to add.
 */
 DUCKDB_API void duckdb_replacement_scan_add_parameter(duckdb_replacement_scan_info info, duckdb_value parameter);
-
 
 //===--------------------------------------------------------------------===//
 // Appender

@@ -115,7 +115,6 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 	duckdb_destroy_logical_type(&types[1]);
 }
 
-
 TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
 	CAPITester tester;
 	unique_ptr<CAPIResult> result;
@@ -126,6 +125,7 @@ TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
 	result = tester.Query("SELECT CASE WHEN i=1 THEN NULL ELSE i::INTEGER END i FROM range(3) tbl(i)");
 	REQUIRE(NO_FAIL(*result));
 	REQUIRE(result->ColumnCount() == 1);
+	REQUIRE(result->row_count() == 3);
 	REQUIRE(result->ErrorMessage() == nullptr);
 
 	// fetch the first chunk
@@ -136,7 +136,7 @@ TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
 	REQUIRE(chunk->ColumnCount() == 1);
 	REQUIRE(chunk->size() == 3);
 
-	auto data = (int32_t *) chunk->GetData(0);
+	auto data = (int32_t *)chunk->GetData(0);
 	auto validity = chunk->GetValidity(0);
 	REQUIRE(data[0] == 0);
 	REQUIRE(data[2] == 2);
@@ -146,7 +146,6 @@ TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
 
 	// after fetching a chunk, we cannot use the old API anymore
 	REQUIRE(result->ColumnData<int32_t>(0) == nullptr);
-	REQUIRE(result->row_count() == 0);
 	REQUIRE(result->Fetch<int32_t>(0, 1) == 0);
 
 	// result set is exhausted!

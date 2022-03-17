@@ -264,7 +264,7 @@ duckdb_state duckdb_translate_result(unique_ptr<QueryResult> result_p, duckdb_re
 
 	if (!result.success) {
 		// write the error message
-		out->__deprecated_error_message = (char *) result.error.c_str();
+		out->__deprecated_error_message = (char *)result.error.c_str();
 		return DuckDBError;
 	}
 	// copy the data
@@ -300,18 +300,18 @@ bool deprecated_materialize_result(duckdb_result *result) {
 	} // LCOV_EXCL_STOP
 	if (result_data->result->type == QueryResultType::STREAM_RESULT) {
 		// if we are dealing with a stream result, convert it to a materialized result first
-		auto &stream_result = (StreamQueryResult &) *result_data->result;
+		auto &stream_result = (StreamQueryResult &)*result_data->result;
 		result_data->result = stream_result.Materialize();
 	}
 	D_ASSERT(result_data->result->type == QueryResultType::MATERIALIZED_RESULT);
-	auto &materialized = (MaterializedQueryResult &) *result_data->result;
+	auto &materialized = (MaterializedQueryResult &)*result_data->result;
 
 	// convert the result to a materialized result
 	// zero initialize the columns (so we can cleanly delete it in case a malloc fails)
 	memset(result->__deprecated_columns, 0, sizeof(duckdb_column) * column_count);
 	for (idx_t i = 0; i < column_count; i++) {
 		result->__deprecated_columns[i].__deprecated_type = ConvertCPPTypeToC(result_data->result->types[i]);
-		result->__deprecated_columns[i].__deprecated_name = (char *) result_data->result->names[i].c_str();
+		result->__deprecated_columns[i].__deprecated_name = (char *)result_data->result->names[i].c_str();
 	}
 	result->__deprecated_row_count = materialized.collection.Count();
 	if (result->__deprecated_row_count > 0 && StatementTypeReturnChanges(materialized.statement_type)) {
@@ -377,7 +377,7 @@ const char *duckdb_column_name(duckdb_result *result, idx_t col) {
 	if (!result || col >= duckdb_column_count(result)) {
 		return nullptr;
 	}
-	auto &result_data = *((duckdb::DuckDBResultData *) result->internal_data);
+	auto &result_data = *((duckdb::DuckDBResultData *)result->internal_data);
 	return result_data.result->names[col].c_str();
 }
 
@@ -385,7 +385,7 @@ duckdb_type duckdb_column_type(duckdb_result *result, idx_t col) {
 	if (!result || col >= duckdb_column_count(result)) {
 		return DUCKDB_TYPE_INVALID;
 	}
-	auto &result_data = *((duckdb::DuckDBResultData *) result->internal_data);
+	auto &result_data = *((duckdb::DuckDBResultData *)result->internal_data);
 	return duckdb::ConvertCPPTypeToC(result_data.result->types[col]);
 }
 
@@ -393,7 +393,7 @@ duckdb_logical_type duckdb_column_logical_type(duckdb_result *result, idx_t col)
 	if (!result || col >= duckdb_column_count(result)) {
 		return nullptr;
 	}
-	auto &result_data = *((duckdb::DuckDBResultData *) result->internal_data);
+	auto &result_data = *((duckdb::DuckDBResultData *)result->internal_data);
 	return new LogicalType(result_data.result->types[col]);
 }
 
@@ -401,7 +401,7 @@ idx_t duckdb_column_count(duckdb_result *result) {
 	if (!result) {
 		return 0;
 	}
-	auto &result_data = *((duckdb::DuckDBResultData *) result->internal_data);
+	auto &result_data = *((duckdb::DuckDBResultData *)result->internal_data);
 	return result_data.result->ColumnCount();
 }
 
@@ -409,10 +409,9 @@ idx_t duckdb_row_count(duckdb_result *result) {
 	if (!result) {
 		return 0;
 	}
-	if (!duckdb::deprecated_materialize_result(result)) {
-		return 0;
-	}
-	return result->__deprecated_row_count;
+	auto &result_data = *((duckdb::DuckDBResultData *)result->internal_data);
+	auto &materialized = (duckdb::MaterializedQueryResult &)*result_data.result;
+	return materialized.collection.Count();
 }
 
 idx_t duckdb_rows_changed(duckdb_result *result) {
@@ -449,20 +448,20 @@ const char *duckdb_result_error(duckdb_result *result) {
 	if (!result) {
 		return nullptr;
 	}
-	auto &result_data = *((duckdb::DuckDBResultData *) result->internal_data);
+	auto &result_data = *((duckdb::DuckDBResultData *)result->internal_data);
 	return result_data.result->success ? nullptr : result_data.result->error.c_str();
 }
 
 idx_t duckdb_result_chunk_count(duckdb_result result) {
-    if (!result.internal_data) {
+	if (!result.internal_data) {
 		return 0;
 	}
-	auto &result_data = *((duckdb::DuckDBResultData *) result.internal_data);
+	auto &result_data = *((duckdb::DuckDBResultData *)result.internal_data);
 	if (result_data.result_set_type == duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
 		return 0;
 	}
 	D_ASSERT(result_data.result->type == QueryResultType::MATERIALIZED_RESULT);
-    auto &materialized = (MaterializedQueryResult &) *result_data.result;
+	auto &materialized = (MaterializedQueryResult &)*result_data.result;
 	return materialized.collection.ChunkCount();
 }
 
@@ -470,12 +469,12 @@ duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx)
 	if (!result.internal_data) {
 		return nullptr;
 	}
-	auto &result_data = *((duckdb::DuckDBResultData *) result.internal_data);
+	auto &result_data = *((duckdb::DuckDBResultData *)result.internal_data);
 	if (result_data.result_set_type == duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
 		return nullptr;
 	}
 	result_data.result_set_type = duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_MATERIALIZED;
-    auto &materialized = (MaterializedQueryResult &) *result_data.result;
+	auto &materialized = (MaterializedQueryResult &)*result_data.result;
 	if (chunk_idx >= materialized.collection.ChunkCount()) {
 		return nullptr;
 	}
@@ -484,4 +483,3 @@ duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx)
 	chunk->Reference(*materialized.collection.Chunks()[chunk_idx]);
 	return chunk.release();
 }
-

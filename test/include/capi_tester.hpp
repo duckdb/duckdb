@@ -10,10 +10,10 @@ namespace duckdb {
 
 class CAPIDataChunk {
 public:
-	CAPIDataChunk(duckdb_data_chunk chunk_p) :
- 		chunk(chunk_p) {}
+	CAPIDataChunk(duckdb_data_chunk chunk_p) : chunk(chunk_p) {
+	}
 	~CAPIDataChunk() {
-	    duckdb_destroy_data_chunk(&chunk);
+		duckdb_destroy_data_chunk(&chunk);
 	}
 
 	idx_t ColumnCount() {
@@ -201,7 +201,7 @@ public:
 	duckdb_connection connection = nullptr;
 };
 
-}
+} // namespace duckdb
 
 bool NO_FAIL(duckdb::CAPIResult &result);
 bool NO_FAIL(duckdb::unique_ptr<duckdb::CAPIResult> result);

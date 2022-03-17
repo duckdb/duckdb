@@ -24,7 +24,7 @@ uint8_t duckdb_decimal_width(duckdb_logical_type type) {
 	if (!type) {
 		return 0;
 	}
-	auto &ltype = *((duckdb::LogicalType *) type);
+	auto &ltype = *((duckdb::LogicalType *)type);
 	if (ltype.id() != duckdb::LogicalTypeId::DECIMAL) {
 		return 0;
 	}
@@ -35,7 +35,7 @@ uint8_t duckdb_decimal_scale(duckdb_logical_type type) {
 	if (!type) {
 		return 0;
 	}
-	auto &ltype = *((duckdb::LogicalType *) type);
+	auto &ltype = *((duckdb::LogicalType *)type);
 	if (ltype.id() != duckdb::LogicalTypeId::DECIMAL) {
 		return 0;
 	}
@@ -46,11 +46,11 @@ duckdb_type duckdb_decimal_internal_type(duckdb_logical_type type) {
 	if (!type) {
 		return DUCKDB_TYPE_INVALID;
 	}
-	auto &ltype = *((duckdb::LogicalType *) type);
+	auto &ltype = *((duckdb::LogicalType *)type);
 	if (ltype.id() != duckdb::LogicalTypeId::DECIMAL) {
 		return DUCKDB_TYPE_INVALID;
 	}
-	switch(ltype.InternalType()) {
+	switch (ltype.InternalType()) {
 	case duckdb::PhysicalType::INT16:
 		return DUCKDB_TYPE_SMALLINT;
 	case duckdb::PhysicalType::INT32:
@@ -68,11 +68,11 @@ duckdb_type duckdb_enum_internal_type(duckdb_logical_type type) {
 	if (!type) {
 		return DUCKDB_TYPE_INVALID;
 	}
-	auto &ltype = *((duckdb::LogicalType *) type);
+	auto &ltype = *((duckdb::LogicalType *)type);
 	if (ltype.id() != duckdb::LogicalTypeId::ENUM) {
 		return DUCKDB_TYPE_INVALID;
 	}
-	switch(ltype.InternalType()) {
+	switch (ltype.InternalType()) {
 	case duckdb::PhysicalType::UINT8:
 		return DUCKDB_TYPE_UTINYINT;
 	case duckdb::PhysicalType::UINT16:
@@ -88,7 +88,7 @@ uint32_t duckdb_enum_dictionary_size(duckdb_logical_type type) {
 	if (!type) {
 		return 0;
 	}
-	auto &ltype = *((duckdb::LogicalType *) type);
+	auto &ltype = *((duckdb::LogicalType *)type);
 	if (ltype.id() != duckdb::LogicalTypeId::ENUM) {
 		return 0;
 	}
@@ -99,7 +99,7 @@ char *duckdb_enum_dictionary_value(duckdb_logical_type type, idx_t index) {
 	if (!type) {
 		return nullptr;
 	}
-	auto &ltype = *((duckdb::LogicalType *) type);
+	auto &ltype = *((duckdb::LogicalType *)type);
 	if (ltype.id() != duckdb::LogicalTypeId::ENUM) {
 		return nullptr;
 	}
@@ -112,7 +112,7 @@ duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type) {
 	if (!type) {
 		return nullptr;
 	}
-	auto &ltype = *((duckdb::LogicalType *) type);
+	auto &ltype = *((duckdb::LogicalType *)type);
 	if (ltype.id() != duckdb::LogicalTypeId::LIST) {
 		return nullptr;
 	}
@@ -123,18 +123,18 @@ idx_t duckdb_struct_type_child_count(duckdb_logical_type type) {
 	if (!type) {
 		return 0;
 	}
-	auto &ltype = *((duckdb::LogicalType *) type);
+	auto &ltype = *((duckdb::LogicalType *)type);
 	if (ltype.InternalType() != duckdb::PhysicalType::STRUCT) {
 		return 0;
 	}
 	return duckdb::StructType::GetChildCount(ltype);
 }
 
-char* duckdb_struct_type_child_name(duckdb_logical_type type, idx_t index) {
+char *duckdb_struct_type_child_name(duckdb_logical_type type, idx_t index) {
 	if (!type) {
 		return nullptr;
 	}
-	auto &ltype = *((duckdb::LogicalType *) type);
+	auto &ltype = *((duckdb::LogicalType *)type);
 	if (ltype.InternalType() != duckdb::PhysicalType::STRUCT) {
 		return nullptr;
 	}
@@ -145,7 +145,7 @@ duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_
 	if (!type) {
 		return nullptr;
 	}
-	auto &ltype = *((duckdb::LogicalType *) type);
+	auto &ltype = *((duckdb::LogicalType *)type);
 	if (ltype.InternalType() != duckdb::PhysicalType::STRUCT) {
 		return nullptr;
 	}
