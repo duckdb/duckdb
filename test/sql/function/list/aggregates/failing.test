@@ -25,10 +25,11 @@ SELECT list_sum(i) FROM integers;
 
 #---- nested.test ----#
 
-# fail, probably same error as with histogram?
+# fails
+# because the simple_update does not exist for these aggr functions
 
 #---- median.test ----#
-# maybe this is related to the failing decimal tests?
+# slice is not working correctly here
 
 statement ok
 CREATE TABLE range AS SELECT LIST(1) AS i FROM range(2000) t1(i)

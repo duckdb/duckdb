@@ -2,7 +2,17 @@
 # description: Test the list_min, list_max aggregate functions
 # group: [list]
 
+statement ok
+CREATE TABLE range AS SELECT LIST(1) AS i FROM range(1000) t1(i)
+
+statement ok
+INSERT INTO range VALUES (NULL), ([]), ([NULL]);
+
+# fails with wrong (very small negative) value
 query I
-SELECT list_histogram([1]);
+SELECT list_median(i) FROM range
 ----
-{1=1}
+1
+NULL
+NULL
+NULL

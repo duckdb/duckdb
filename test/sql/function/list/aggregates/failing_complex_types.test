@@ -2,12 +2,7 @@
 # description: Tests failing due to an error with complex types
 # group: [list]
 
-# for lists:
-# Error: INTERNAL Error: Assertion triggered in file "/Users/tania/DuckDB/duckdb/src/common/types.cpp" on line 920: info
-
-# for structs:
-# Error: INTERNAL Error: Assertion triggered in file "/Users/tania/DuckDB/duckdb/src/common/types.cpp" on line 1044: info
-
+# these fail because the simple_update does not exist
 #---- last.test ----#
 
 # complex types
