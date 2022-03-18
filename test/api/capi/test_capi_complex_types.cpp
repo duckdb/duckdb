@@ -16,6 +16,10 @@ TEST_CASE("Test decimal types C API", "[capi]") {
 	REQUIRE(result->ColumnCount() == 5);
 	REQUIRE(result->ErrorMessage() == nullptr);
 
+	if (duckdb_vector_size() < 64) {
+		return;
+	}
+
 	// fetch the first chunk
 	REQUIRE(result->ChunkCount() == 1);
 	auto chunk = result->FetchChunk(0);
@@ -45,6 +49,10 @@ TEST_CASE("Test decimal types C API", "[capi]") {
 TEST_CASE("Test enum types C API", "[capi]") {
 	CAPITester tester;
 	unique_ptr<CAPIResult> result;
+
+	if (duckdb_vector_size() < 64) {
+		return;
+	}
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	result = tester.Query("select small_enum, medium_enum, large_enum, int from test_all_types();");
