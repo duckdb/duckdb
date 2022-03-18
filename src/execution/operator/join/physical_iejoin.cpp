@@ -1176,7 +1176,8 @@ OperatorResultType PhysicalIEJoin::Execute(ExecutionContext &context, DataChunk 
 class IEJoinGlobalSourceState : public GlobalSourceState {
 public:
 	explicit IEJoinGlobalSourceState(const PhysicalIEJoin &op)
-	    : op(op), initialized(false), next_pair(0), left_outers(0), next_left(0), right_outers(0), next_right(0) {
+	    : op(op), initialized(false), next_pair(0), completed(0), left_outers(0), next_left(0), right_outers(0),
+	      next_right(0) {
 	}
 
 	void Initialize(IEJoinGlobalState &sink_state) {
