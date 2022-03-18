@@ -339,6 +339,16 @@ bool Value::IsNan(double input) {
 	return std::isnan(input);
 }
 
+template <>
+bool Value::IsFinite(float input) {
+	return Value::FloatIsFinite(input);
+}
+
+template <>
+bool Value::IsFinite(double input) {
+	return Value::DoubleIsFinite(input);
+}
+
 bool Value::StringIsValid(const char *str, idx_t length) {
 	auto utf_type = Utf8Proc::Analyze(str, length);
 	return utf_type != UnicodeType::INVALID;

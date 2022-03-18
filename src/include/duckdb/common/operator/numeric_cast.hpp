@@ -10,11 +10,15 @@
 
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
 template <class SRC, class DST>
 static bool TryCastWithOverflowCheck(SRC value, DST &result) {
+	if (!Value::IsFinite<SRC>(value)) {
+		return false;
+	}
 	if (NumericLimits<SRC>::IsSigned() != NumericLimits<DST>::IsSigned()) {
 		if (NumericLimits<SRC>::IsSigned()) {
 			// signed to unsigned conversion
@@ -56,41 +60,61 @@ static bool TryCastWithOverflowCheck(SRC value, DST &result) {
 		}
 	}
 }
+//
+//template <>
+//bool TryCastWithOverflowCheck(float value, int32_t &result) {
+//	if (!(value >= -2147483648.0f && value < 2147483648.0f)) {
+//		return false;
+//	}
+//	result = int32_t(value);
+//	return true;
+//}
+//
+//template <>
+//bool TryCastWithOverflowCheck(float value, int64_t &result) {
+//	if (!(value >= -9223372036854775808.0f && value < 9223372036854775808.0f)) {
+//		return false;
+//	}
+//	result = int64_t(value);
+//	return true;
+//}
+//
+//template <>
+//bool TryCastWithOverflowCheck(double value, int64_t &result) {
+//	if (!(value >= -9223372036854775808.0 && value < 9223372036854775808.0)) {
+//		return false;
+//	}
+//	result = int64_t(value);
+//	return true;
+//}
 
 template <>
-bool TryCastWithOverflowCheck(float value, int32_t &result) {
-	if (!(value >= -2147483648.0f && value < 2147483648.0f)) {
-		return false;
-	}
-	result = int32_t(value);
+bool TryCastWithOverflowCheck(float input, float &result) {
+	result = input;
 	return true;
 }
-
 template <>
-bool TryCastWithOverflowCheck(float value, int64_t &result) {
-	if (!(value >= -9223372036854775808.0f && value < 9223372036854775808.0f)) {
-		return false;
-	}
-	result = int64_t(value);
+bool TryCastWithOverflowCheck(float input, double &result) {
+	result = double(input);
 	return true;
 }
-
 template <>
-bool TryCastWithOverflowCheck(double value, int64_t &result) {
-	if (!(value >= -9223372036854775808.0 && value < 9223372036854775808.0)) {
-		return false;
-	}
-	result = int64_t(value);
+bool TryCastWithOverflowCheck(double input, double &result) {
+	result = input;
 	return true;
 }
 
 template <>
 bool TryCastWithOverflowCheck(double input, float &result) {
+	if (!Value::IsFinite(input)) {
+		result = float(input);
+		return true;
+	}
 	if (input < (double)NumericLimits<float>::Minimum() || input > (double)NumericLimits<float>::Maximum()) {
 		return false;
 	}
 	auto res = (float)input;
-	if (std::isnan(res) || std::isinf(res)) {
+	if (Value::FloatIsFinite(input)) {
 		return false;
 	}
 	result = res;

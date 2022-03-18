@@ -366,6 +366,16 @@ struct NegateOperator {
 	}
 };
 
+template<>
+bool NegateOperator::CanNegate(float input) {
+	return Value::FloatIsFinite(input);
+}
+
+template<>
+bool NegateOperator::CanNegate(double input) {
+	return Value::DoubleIsFinite(input);
+}
+
 template <>
 interval_t NegateOperator::Operation(interval_t input) {
 	interval_t result;
@@ -812,13 +822,21 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 template <>
 float ModuloOperator::Operation(float left, float right) {
 	D_ASSERT(right != 0);
-	return std::fmod(left, right);
+	auto result = std::fmod(left, right);
+	if (!Value::FloatIsFinite(result)) {
+		throw OutOfRangeException("Overflow in modulo of float!");
+	}
+	return result;
 }
 
 template <>
 double ModuloOperator::Operation(double left, double right) {
 	D_ASSERT(right != 0);
-	return std::fmod(left, right);
+	auto result = std::fmod(left, right);
+	if (!Value::DoubleIsFinite(result)) {
+		throw OutOfRangeException("Overflow in modulo of double!");
+	}
+	return result;
 }
 
 template <>

@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/likely.hpp"
 #include <cmath>
 #include <errno.h>
 
@@ -37,51 +38,6 @@ static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(const LogicalT
 	return function;
 }
 
-template <class OP>
-struct UnaryDoubleWrapper {
-	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		RESULT_TYPE result = OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input);
-		if (std::isnan(result) || std::isinf(result) || errno != 0) {
-			errno = 0;
-			mask.SetInvalid(idx);
-			return 0;
-		}
-		return result;
-	}
-};
-
-template <class T, class OP>
-static void UnaryDoubleFunctionWrapper(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.ColumnCount() >= 1);
-	errno = 0;
-	UnaryExecutor::GenericExecute<T, T, UnaryDoubleWrapper<OP>>(input.data[0], result, input.size(), nullptr, true);
-}
-
-struct BinaryDoubleWrapper {
-	template <class FUNC, class OP, class TA, class TB, class TR>
-	static inline TR Operation(FUNC fun, TA left, TB right, ValidityMask &mask, idx_t idx) {
-		TR result = OP::template Operation<TA, TB, TR>(left, right);
-		if (std::isnan(result) || std::isinf(result) || errno != 0) {
-			errno = 0;
-			mask.SetInvalid(idx);
-			return 0;
-		}
-		return result;
-	}
-
-	static bool AddsNulls() {
-		return true;
-	}
-};
-
-template <class T, class OP>
-static void BinaryDoubleFunctionWrapper(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.ColumnCount() >= 2);
-	errno = 0;
-	BinaryExecutor::Execute<T, T, T, OP, BinaryDoubleWrapper>(input.data[0], input.data[1], result, input.size());
-}
-
 //===--------------------------------------------------------------------===//
 // nextafter
 //===--------------------------------------------------------------------===//
@@ -102,23 +58,13 @@ struct NextAfterOperator {
 	}
 };
 
-unique_ptr<FunctionData> BindNextAfter(ClientContext &context, ScalarFunction &function,
-                                       vector<unique_ptr<Expression>> &arguments) {
-	if ((arguments[0]->return_type != arguments[1]->return_type) ||
-	    (arguments[0]->return_type != LogicalType::FLOAT && arguments[0]->return_type != LogicalType::DOUBLE)) {
-		throw NotImplementedException("Unimplemented type for NextAfter Function");
-	}
-	return nullptr;
-}
-
 void NextAfterFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet next_after_fun("nextafter");
 	next_after_fun.AddFunction(
 	    ScalarFunction("nextafter", {LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                   BinaryDoubleFunctionWrapper<double, NextAfterOperator>, false, BindNextAfter));
+	                   ScalarFunction::BinaryFunction<double, double, double, NextAfterOperator>, false));
 	next_after_fun.AddFunction(ScalarFunction("nextafter", {LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT,
-	                                          BinaryDoubleFunctionWrapper<float, NextAfterOperator>, false,
-	                                          BindNextAfter));
+	                                          ScalarFunction::BinaryFunction<float, float, float, NextAfterOperator>, false));
 	set.AddFunction(next_after_fun);
 }
 
@@ -195,16 +141,38 @@ void BitCountFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct SignOperator {
 	template <class TA, class TR>
-	static inline TR Operation(TA left) {
-		if (left == TA(0)) {
+	static TR Operation(TA input) {
+		if (input == TA(0)) {
 			return 0;
-		} else if (left > TA(0)) {
+		} else if (input > TA(0)) {
 			return 1;
 		} else {
 			return -1;
 		}
 	}
 };
+
+template <>
+int8_t SignOperator::Operation(float input) {
+	if (input == 0 || Value::IsNan(input)) {
+		return 0;
+	} else if (input > 0) {
+		return 1;
+	} else {
+		return -1;
+	}
+}
+
+template <>
+int8_t SignOperator::Operation(double input) {
+	if (input == 0 || Value::IsNan(input)) {
+		return 0;
+	} else if (input > 0) {
+		return 1;
+	} else {
+		return -1;
+	}
+}
 
 void SignFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet sign("sign");
@@ -585,7 +553,7 @@ struct ExpOperator {
 
 void ExpFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("exp", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, ExpOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, ExpOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -600,7 +568,7 @@ struct PowOperator {
 
 void PowFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction power_function("pow", {LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                              BinaryDoubleFunctionWrapper<double, PowOperator>);
+	                              ScalarFunction::BinaryFunction<double, double, double, PowOperator>);
 	set.AddFunction(power_function);
 	power_function.name = "power";
 	set.AddFunction(power_function);
@@ -622,7 +590,7 @@ struct SqrtOperator {
 
 void SqrtFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("sqrt", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, SqrtOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, SqrtOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -637,7 +605,7 @@ struct CbRtOperator {
 
 void CbrtFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("cbrt", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, CbRtOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, CbRtOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -653,7 +621,7 @@ struct LnOperator {
 
 void LnFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("ln", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, LnOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, LnOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -668,7 +636,7 @@ struct Log10Operator {
 
 void Log10Fun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"log10", "log"}, ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                                                 UnaryDoubleFunctionWrapper<double, Log10Operator>));
+	                                                 ScalarFunction::UnaryFunction<double, double, Log10Operator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -683,7 +651,7 @@ struct Log2Operator {
 
 void Log2Fun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("log2", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, Log2Operator>));
+	                               ScalarFunction::UnaryFunction<double, double, Log2Operator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -711,7 +679,7 @@ struct DegreesOperator {
 
 void DegreesFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("degrees", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, DegreesOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, DegreesOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -726,12 +694,26 @@ struct RadiansOperator {
 
 void RadiansFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("radians", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, RadiansOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, RadiansOperator>));
 }
 
 //===--------------------------------------------------------------------===//
 // sin
 //===--------------------------------------------------------------------===//
+template <class OP>
+struct NoInfiniteDoubleWrapper {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input) {
+		if (DUCKDB_UNLIKELY(!Value::IsFinite(input))) {
+			if (Value::IsNan(input)) {
+				return input;
+			}
+			throw OutOfRangeException("input value %lf is out of range for numeric function", input);
+		}
+		return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input);
+	}
+};
+
 struct SinOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -741,7 +723,7 @@ struct SinOperator {
 
 void SinFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("sin", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, SinOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<SinOperator>>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -756,7 +738,7 @@ struct CosOperator {
 
 void CosFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("cos", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, CosOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CosOperator>>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -771,7 +753,7 @@ struct TanOperator {
 
 void TanFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("tan", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, TanOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<TanOperator>>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -789,7 +771,7 @@ struct ASinOperator {
 
 void AsinFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("asin", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, ASinOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ASinOperator>>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -804,7 +786,7 @@ struct ATanOperator {
 
 void AtanFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("atan", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, ATanOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, ATanOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -819,7 +801,7 @@ struct ATan2 {
 
 void Atan2Fun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("atan2", {LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               BinaryDoubleFunctionWrapper<double, ATan2>));
+	                               ScalarFunction::BinaryFunction<double, double, double, ATan2>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -834,7 +816,7 @@ struct ACos {
 
 void AcosFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
-	    ScalarFunction("acos", {LogicalType::DOUBLE}, LogicalType::DOUBLE, UnaryDoubleFunctionWrapper<double, ACos>));
+	    ScalarFunction("acos", {LogicalType::DOUBLE}, LogicalType::DOUBLE, ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ACos>>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -849,7 +831,7 @@ struct CotOperator {
 
 void CotFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("cot", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, CotOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CotOperator>>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -864,7 +846,7 @@ struct GammaOperator {
 
 void GammaFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("gamma", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, GammaOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, GammaOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -879,7 +861,7 @@ struct LogGammaOperator {
 
 void LogGammaFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("lgamma", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, LogGammaOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, LogGammaOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -929,7 +911,7 @@ struct EvenOperator {
 
 void EvenFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("even", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               UnaryDoubleFunctionWrapper<double, EvenOperator>));
+	                               ScalarFunction::UnaryFunction<double, double, EvenOperator>));
 }
 
 } // namespace duckdb

@@ -228,6 +228,10 @@ public:
 	static bool IsNan(T value) {
 		throw InternalException("Unimplemented template type for Value::IsNan");
 	}
+	template<class T>
+	static bool IsFinite(T value) {
+		return true;
+	}
 	DUCKDB_API static bool StringIsValid(const char *str, idx_t length);
 	static bool StringIsValid(const string &str) {
 		return StringIsValid(str.c_str(), str.size());
@@ -521,5 +525,10 @@ template <>
 DUCKDB_API bool Value::IsNan(float input);
 template <>
 DUCKDB_API bool Value::IsNan(double input);
+
+template <>
+DUCKDB_API bool Value::IsFinite(float input);
+template <>
+DUCKDB_API bool Value::IsFinite(double input);
 
 } // namespace duckdb
