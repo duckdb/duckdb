@@ -1,0 +1,127 @@
+# name: test/sql/function/list/aggregates/failing_decimal.test
+# description: Tests failing due to an error with decimal types
+# group: [list]
+
+#---- bigints_sum_avg.test ----#
+
+statement ok
+CREATE TABLE decimals (i DECIMAL(18,1)[]);
+
+statement ok
+INSERT INTO decimals VALUES ([1, 2, 3]);
+
+# sum
+query I
+SELECT list_sum(i) FROM decimals;
+----
+6.0
+
+#---- last.test ----#
+
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
+
+statement ok
+INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
+
+query I
+SELECT list_last(i) FROM five
+----
+5.0
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+DROP TABLE five
+
+endloop
+
+#---- first.test ----#
+
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
+
+statement ok
+INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
+
+query I
+SELECT list_first(i) FROM five
+----
+1.0
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+DROP TABLE five
+
+endloop
+
+#---- min.test ----#
+
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
+
+statement ok
+INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
+
+query I
+SELECT list_min(i) FROM five
+----
+1.0
+NULL
+NULL
+NULL
+1.0
+
+statement ok
+DROP TABLE five
+
+endloop
+
+#---- mode.test ----#
+
+statement ok
+create table aggr (v decimal(10,2)[]);
+
+statement ok
+insert into aggr values ([10, 10, 20, 21]), ([20, 20, 25, 30]), ([NULL]), ([]), (NULL);
+
+query I
+select list_mode(v) from aggr;
+----
+10
+20
+NULL
+NULL
+NULL
+
+#---- median.test ----#
+
+foreach type decimal(10,2)
+
+statement ok
+CREATE TABLE quantile AS SELECT LIST(r::${type}) AS r FROM range(10000) t1(r);
+
+query I
+SELECT list_median(r) FROM quantile
+----
+4999
+
+statement ok
+DROP TABLE quantile
+
+endloop
+
+#---- mad.test ----#
+
+# all test cases with decimals fail

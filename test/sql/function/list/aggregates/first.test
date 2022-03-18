@@ -1,9 +1,14 @@
 # name: test/sql/function/list/aggregates/first.test
 # description: Test the list_first aggregate function
-# group: [aggregates]
+# group: [list]
 
 statement ok
 PRAGMA enable_verification
+
+query I
+SELECT list_aggr([1, 2], 'arbitrary')
+----
+1
 
 query I
 SELECT list_first([1])

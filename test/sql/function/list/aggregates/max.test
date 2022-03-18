@@ -1,42 +1,42 @@
-# name: test/sql/function/list/aggregates/min_max.test
-# description: Test the list_min, list_max aggregate functions
-# group: [aggregates]
+# name: test/sql/function/list/aggregates/max.test
+# description: Test the list_max aggregate function
+# group: [list]
 
 statement ok
 PRAGMA enable_verification
 
 query I
-SELECT list_min([1])
+SELECT list_max([1])
 ----
 1
 
 query I
-SELECT list_min([])
+SELECT list_max([])
 ----
 NULL
 
 query I
-SELECT list_min([NULL])
+SELECT list_max([NULL])
 ----
 NULL
 
 query I
-SELECT list_min(NULL)
+SELECT list_max(NULL)
 ----
 NULL
 
 query I
-SELECT list_min([1]) WHERE 1 = 2
+SELECT list_max([1]) WHERE 1 = 2
 ----
 
 statement error
-SELECT list_min('hello')
+SELECT list_max('hello')
 
 statement error
-SELECT list_min()
+SELECT list_max()
 
 statement error
-SELECT list_min(True, False)
+SELECT list_max(True, False)
 
 # test all types
 
@@ -50,13 +50,13 @@ statement ok
 INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
 
 query I
-SELECT list_min(i) FROM five
+SELECT list_max(i) FROM five
 ----
-1
+5
 NULL
 NULL
 NULL
-1
+2
 
 statement ok
 DROP TABLE five
@@ -75,9 +75,9 @@ CREATE TABLE five_dates AS
 	FROM range(1, 6, 1) t1(i)
 
 query IIII
-SELECT list_min(d), list_min(dt), list_min(t), list_min(s) FROM five_dates
+SELECT list_max(d), list_max(dt), list_max(t), list_max(s) FROM five_dates
 ----
-2021-08-21	2021-08-20 01:00:00	15:00:37	00:00:01
+2021-08-25	2021-08-20 05:00:00	15:04:37	00:00:05
 
 statement ok
 DROP TABLE five_dates
@@ -91,9 +91,9 @@ CREATE TABLE five_dates_tz AS
 	FROM range(1, 6, 1) t1(i)
 
 query II
-SELECT list_min(dt), list_min(t) FROM five_dates_tz
+SELECT list_max(dt), list_max(t) FROM five_dates_tz
 ----
-2021-08-20 01:00:00+00	15:00:37+00
+2021-08-20 05:00:00+00	15:04:37+00
 
 statement ok
 DROP TABLE five_dates_tz
@@ -109,10 +109,10 @@ CREATE TABLE five_complex AS
 	FROM range(1, 6, 1) t1(i)
 
 query III
-SELECT list_min(s), list_min(l), list_min(r)
+SELECT list_max(s), list_max(l), list_max(r)
 FROM five_complex
 ----
-1	[1]	{'a': 1}
+5	[5]	{'a': 5}
 
 statement ok
 DROP TABLE five_complex
@@ -127,13 +127,13 @@ statement ok
 INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
 
 query I
-SELECT list_min(i) FROM five
+SELECT list_max(i) FROM five
 ----
-1.0
+5.0
 NULL
 NULL
 NULL
-1.0
+5.0
 
 statement ok
 DROP TABLE five

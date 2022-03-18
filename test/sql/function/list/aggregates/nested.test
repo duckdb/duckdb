@@ -1,0 +1,13 @@
+# name: test/sql/aggregate/aggregates/nested.test
+# description: Test redundant nested list aggregate functions
+# group: [list]
+
+query I
+SELECT list_aggr([1, 2], 'array_agg')
+----
+[1, 2]
+
+query I
+SELECT list_aggr([1, 2], 'list')
+----
+[1, 2]

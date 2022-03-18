@@ -1,6 +1,6 @@
 # name: test/sql/function/list/aggregates/bool_and_or.test
 # description: Test the list_bool_and, list_bool_or aggregate functions
-# group: [aggregates]
+# group: [list]
 
 statement error
 select list_bool_or([0])

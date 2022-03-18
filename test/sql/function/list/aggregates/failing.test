@@ -1,20 +1,30 @@
 # name: test/sql/function/list/aggregates/failing.test
-# description: Test list_sum and list_avg with bigints
-# group: [aggregates]
+# description: Different failing list aggregate functions
+# group: [list]
 
-#---- bigints_sum_avg.test ----#
+#---- sum.test ----#
+
+# something is very wrong here...
 
 statement ok
-CREATE TABLE decimals (i DECIMAL(18,1)[]);
+CREATE TABLE integers(i INTEGER[]);
 
+# negative numbers
 statement ok
-INSERT INTO decimals VALUES ([1, 2, 3]);
+INSERT INTO integers SELECT LIST(i) FROM range(-1000, 1000, 1) tbl(i);
 
-# sum
 query I
-SELECT list_sum(i) FROM decimals;
+SELECT list_sum(i) FROM integers;
 ----
-6.0
+0
+
+#---- histogram.test ----#
+
+# fails in general
+
+#---- nested.test ----#
+
+# fail, probably same error as with histogram?
 
 #---- approx_count_distinct.test ----#
 
@@ -81,131 +91,3 @@ SELECT list_approx_count_distinct(a) from list_ints_2;
 ----
 998
 997
-
-#---- count.test ----#
-
-statement ok
-CREATE TABLE lists (l INTEGER[]);
-
-statement ok
-INSERT INTO lists VALUES ([1, 2]), ([NULL]), (NULL), ([]), ([3, 4, 5, 6, 7]), ([1, 2, NULL, 1, NULL]);
-
-# this has 0 instead of NULL
-query I
-SELECT list_count(l) FROM lists
-----
-2
-0
-NULL
-0
-5
-3
-
-#---- entropy.test ----#
-
-statement ok
-create table aggr(k int[]);
-
-statement ok
-insert into aggr values ([0, 1, 1, 1, 4, 0, 3, 3, 2, 2, 4, 4, 2, 4, 0, 0, 0, 1, 2, 3, 4, 2, 3, 3, 1]);
-
-statement ok
-insert into aggr values ([]), ([NULL]), (NULL), ([0, 1, 1, 1, 4, NULL, 0, 3, 3, 2, NULL, 2, 4, 4, 2, 4, 0, 0, 0, 1, NULL, 2, 3, 4, 2, 3, 3, 1]);
-
-# this has 0 instead of NULL
-query I
-select list_entropy(k) from aggr ;
-----
-2.321928
-0
-0
-NULL
-2.321928
-
-#---- last.test ----#
-
-# complex types
-statement ok
-CREATE TABLE five_complex AS
-	SELECT
-		LIST(i::integer) AS i,
-		LIST(i::VARCHAR) AS s,
-		LIST([i]) AS l,
-		LIST({'a': i}) AS r
-	FROM range(1, 6, 1) t1(i)
-
-query III
-SELECT list_last(s), list_last(l), list_last(r)
-FROM five_complex
-----
-5	[5]	{'a': 5}
-
-statement ok
-DROP TABLE five_complex
-
-# decimals
-foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
-
-statement ok
-CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
-
-statement ok
-INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
-
-query I
-SELECT list_last(i) FROM five
-----
-5.0
-NULL
-NULL
-NULL
-NULL
-
-statement ok
-DROP TABLE five
-
-endloop
-
-#---- first.test ----#
-
-# complex types
-statement ok
-CREATE TABLE five_complex AS
-	SELECT
-		LIST(i::integer) AS i,
-		LIST(i::VARCHAR) AS s,
-		LIST([i]) AS l,
-		LIST({'a': i}) AS r
-	FROM range(1, 6, 1) t1(i)
-
-query III
-SELECT list_first(s), list_first(l), list_first(r)
-FROM five_complex
-----
-1	[1]	{'a': 1}
-
-statement ok
-DROP TABLE five_complex
-
-# decimals
-foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
-
-statement ok
-CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
-
-statement ok
-INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
-
-query I
-SELECT list_first(i) FROM five
-----
-1.0
-NULL
-NULL
-NULL
-NULL
-
-statement ok
-DROP TABLE five
-
-endloop

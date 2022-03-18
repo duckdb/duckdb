@@ -1,6 +1,6 @@
 # name: test/sql/function/list/aggregates/approx_count_distinct.test
 # description: Test the list_approx_count_distinct aggregate function
-# group: [aggregates]
+# group: [list]
 
 statement error
 select list_approx_count_distinct(*)

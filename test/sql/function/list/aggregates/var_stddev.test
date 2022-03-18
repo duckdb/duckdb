@@ -1,6 +1,6 @@
 # name: test/sql/function/list/aggregates/var_stddev.test
 # description: Test the list_var_samp, list_var_pop, list_stddev_pop, list_stddev_samp aggregate functions
-# group: [aggregates]
+# group: [list]
 
 statement ok
 create table stddev_test(val integer[])

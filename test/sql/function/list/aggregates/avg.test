@@ -1,6 +1,6 @@
 # name: test/sql/function/list/aggregates/avg.test
 # description: Test the list_avg aggregate function
-# group: [aggregates]
+# group: [list]
 
 # scalar average
 query I

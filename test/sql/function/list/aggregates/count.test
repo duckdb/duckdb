@@ -1,6 +1,6 @@
 # name: test/sql/function/list/aggregates/count.test
 # description: Test the list_count aggregate function
-# group: [aggregates]
+# group: [list]
 
 query I
 SELECT list_count([1, 2, 3])

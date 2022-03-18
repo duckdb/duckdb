@@ -1,6 +1,6 @@
 # name: test/sql/function/list/aggregates/bit_or.test
 # description: Test the list_bit_or aggregate function
-# group: [aggregates]
+# group: [list]
 
 # test on scalar values
 query IIII

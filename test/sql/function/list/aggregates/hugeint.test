@@ -1,6 +1,6 @@
 # name: test/sql/function/list/aggregates/hugeint.test
 # description: Test hugeint aggregates
-# group: [aggregates]
+# group: [list]
 
 statement ok
 PRAGMA enable_verification

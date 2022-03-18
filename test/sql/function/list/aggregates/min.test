@@ -1,42 +1,44 @@
-# name: test/sql/function/list/aggregates/last.test
-# description: Test the list_last aggregate function
+# name: test/sql/function/list/aggregates/min.test
+# description: Test the list_min aggregate function
 # group: [list]
+
+# TODO: once this works, also test list_max
 
 statement ok
 PRAGMA enable_verification
 
 query I
-SELECT list_last([1])
+SELECT list_min([1])
 ----
 1
 
 query I
-SELECT list_last([])
+SELECT list_min([])
 ----
 NULL
 
 query I
-SELECT list_last([NULL])
+SELECT list_min([NULL])
 ----
 NULL
 
 query I
-SELECT list_last(NULL)
+SELECT list_min(NULL)
 ----
 NULL
 
 query I
-SELECT list_last([1]) WHERE 1 = 2
+SELECT list_min([1]) WHERE 1 = 2
 ----
 
 statement error
-SELECT list_last('hello')
+SELECT list_min('hello')
 
 statement error
-SELECT list_last()
+SELECT list_min()
 
 statement error
-SELECT list_last(True, False)
+SELECT list_min(True, False)
 
 # test all types
 
@@ -47,16 +49,16 @@ statement ok
 CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
 
 statement ok
-INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
+INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
 
 query I
-SELECT list_last(i) FROM five
+SELECT list_min(i) FROM five
 ----
-5
+1
 NULL
 NULL
 NULL
-NULL
+1
 
 statement ok
 DROP TABLE five
@@ -75,9 +77,9 @@ CREATE TABLE five_dates AS
 	FROM range(1, 6, 1) t1(i)
 
 query IIII
-SELECT list_last(d), list_last(dt), list_last(t), list_last(s) FROM five_dates
+SELECT list_min(d), list_min(dt), list_min(t), list_min(s) FROM five_dates
 ----
-2021-08-25	2021-08-20 05:00:00	15:04:37	00:00:05
+2021-08-21	2021-08-20 01:00:00	15:00:37	00:00:01
 
 statement ok
 DROP TABLE five_dates
@@ -91,9 +93,9 @@ CREATE TABLE five_dates_tz AS
 	FROM range(1, 6, 1) t1(i)
 
 query II
-SELECT list_last(dt), list_last(t) FROM five_dates_tz
+SELECT list_min(dt), list_min(t) FROM five_dates_tz
 ----
-2021-08-20 05:00:00+00	15:04:37+00
+2021-08-20 01:00:00+00	15:00:37+00
 
 statement ok
 DROP TABLE five_dates_tz
@@ -109,10 +111,10 @@ CREATE TABLE five_complex AS
 	FROM range(1, 6, 1) t1(i)
 
 query III
-SELECT list_last(s), list_last(l), list_last(r)
+SELECT list_min(s), list_min(l), list_min(r)
 FROM five_complex
 ----
-5	[5]	{'a': 5}
+1	[1]	{'a': 1}
 
 statement ok
 DROP TABLE five_complex
@@ -124,16 +126,16 @@ statement ok
 CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
 
 statement ok
-INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
+INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
 
 query I
-SELECT list_last(i) FROM five
+SELECT list_min(i) FROM five
 ----
-5.0
+1.0
 NULL
 NULL
 NULL
-NULL
+1.0
 
 statement ok
 DROP TABLE five

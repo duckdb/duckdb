@@ -147,7 +147,8 @@ static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, Scalar
 	auto &best_function = func->functions[best_function_idx];
 	auto bound_aggr_function = AggregateFunction::BindAggregateFunction(context, best_function, move(children));
 
-	bound_function.arguments[0] = LogicalType::LIST(best_function.arguments[0]); // for proper casting of the vectors
+	// bound_function.arguments[0] = LogicalType::LIST(bound_aggr_function->function.arguments[0]); // for proper casting of the vectors
+	bound_function.arguments[0] = LogicalType::LIST(best_function.arguments[0]);
 	bound_function.return_type = bound_aggr_function->function.return_type;
 	return make_unique<ListAggregatesBindData>(bound_function.return_type, move(bound_aggr_function));
 }

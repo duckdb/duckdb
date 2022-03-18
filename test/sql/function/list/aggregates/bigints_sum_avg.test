@@ -1,6 +1,6 @@
 # name: test/sql/function/list/aggregates/bigints_sum_avg.test
 # description: Test list_sum and list_avg with bigints
-# group: [aggregates]
+# group: [list]
 
 statement ok
 CREATE TABLE bigints (i BIGINT[]);

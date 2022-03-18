@@ -1,6 +1,6 @@
 # name: test/sql/function/list/aggregates/entropy.test
 # description: Test the list_entropy aggregate function
-# group: [aggregates]
+# group: [list]
 
 statement error
 select list_entropy()

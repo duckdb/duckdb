@@ -1,6 +1,6 @@
 # name: test/sql/function/list/aggregates/kurtosis.test
 # description: Test the list_kurtosis aggregate function
-# group: [aggregates]
+# group: [list]
 
 statement error
 select list_kurtosis()
