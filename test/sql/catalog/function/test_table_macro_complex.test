@@ -33,9 +33,31 @@ select * from dates_between('2021-01-01', '2021-02-04');
 2021-01-01 00:00:00
 2021-02-01 00:00:00
 
+statement ok
+CREATE MACRO fibonacci(n0, n1, nlimit, noffset) AS TABLE
+WITH RECURSIVE fib AS (
+      SELECT 1 AS n,
+             n0::bigint AS "fibₙ",
+             n1::bigint AS "fibₙ₊₁"
+   UNION ALL
+      SELECT n+1,
+             "fibₙ₊₁",
+             "fibₙ" + "fibₙ₊₁"
+      FROM fib
+)
+SELECT n, "fibₙ" FROM fib
+LIMIT nlimit OFFSET noffset;
 
 
 
+query II
+SELECT * FROM fibonacci(1, 2, 5, 10);
+----
+11	144
+12	233
+13	377  
+14	610
+15	987
 
 
 
