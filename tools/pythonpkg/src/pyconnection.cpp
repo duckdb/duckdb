@@ -186,7 +186,7 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		auto object = make_unique<RegisteredObject>(python_object);
 		registered_objects[name] = move(object);
 	} else if (py_object_type == "Table" || py_object_type == "FileSystemDataset" ||
-	           py_object_type == "InMemoryDataset") {
+	           py_object_type == "InMemoryDataset"|| py_object_type == "RecordBatchReader") {
 		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr());
 
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;

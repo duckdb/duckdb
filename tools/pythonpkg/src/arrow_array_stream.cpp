@@ -1,10 +1,11 @@
-#include "duckdb/common/assert.hpp"
 #include "include/duckdb_python/arrow_array_stream.hpp"
+
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
@@ -17,6 +18,9 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	py::handle arrow_obj_handle(factory->arrow_object);
 	py::object scanner;
 	py::object arrow_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_dataset");
+
+
+
 	auto py_object_type = string(py::str(arrow_obj_handle.get_type().attr("__name__")));
 	py::list projection_list = py::cast(project_columns.second);
 	bool has_filter = filters && filters->table_filters && !filters->table_filters->filters.empty();
@@ -35,20 +39,34 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 			}
 		}
 
+	} else if (py_object_type == "RecordBatchReader") {
+		// py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
+		// scanner = arrow_batch_scanner(arrow_obj_handle);
+		// auto record_batches = scanner.attr("to_reader")();
+		auto res = make_unique<ArrowArrayStreamWrapper>();
+		auto export_to_c = arrow_obj_handle.attr("_export_to_c");
+		export_to_c((uint64_t)&res->arrow_array_stream);
+		return res;
 	} else {
+
 		if (project_columns.second.empty()) {
 			//! This is only called at the binder to get the schema
 			scanner = arrow_scanner(arrow_obj_handle);
+
 		} else {
 			if (has_filter) {
 				auto filter = TransformFilter(*filters, project_columns.first);
+
 				scanner =
 				    arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list, py::arg("filter") = filter);
+
 			} else {
+
 				scanner = arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list);
 			}
 		}
 	}
+
 	auto record_batches = scanner.attr("to_reader")();
 	auto res = make_unique<ArrowArrayStreamWrapper>();
 	auto export_to_c = record_batches.attr("_export_to_c");
