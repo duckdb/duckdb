@@ -9,6 +9,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include <algorithm>
@@ -39,6 +40,51 @@ string SanitizeExportIdentifier(const string &str) {
 	return result;
 }
 
+bool IsExistMainKeyTable(string &table_name, vector<TableCatalogEntry *> &unordered) {
+	for (idx_t i = 0; i < unordered.size(); i++) {
+		if (unordered[i]->name == table_name) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void ScanForeignKeyTable(vector<TableCatalogEntry *> &ordered, vector<TableCatalogEntry *> &unordered,
+                         bool move_only_pk_table) {
+	for (auto i = unordered.begin(); i != unordered.end();) {
+		auto table_entry = *i;
+		bool move_to_ordered = true;
+		for (idx_t j = 0; j < table_entry->constraints.size(); j++) {
+			auto &cond = table_entry->constraints[j];
+			if (cond->type == ConstraintType::FOREIGN_KEY) {
+				auto &fk = (ForeignKeyConstraint &)*cond;
+				if ((move_only_pk_table && fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) ||
+				    (!move_only_pk_table && fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE &&
+				     IsExistMainKeyTable(fk.info.table, unordered))) {
+					move_to_ordered = false;
+					break;
+				}
+			}
+		}
+		if (move_to_ordered) {
+			ordered.push_back(table_entry);
+			i = unordered.erase(i);
+		} else {
+			i++;
+		}
+	}
+}
+
+void ReorderTableEntries(vector<TableCatalogEntry *> &tables) {
+	vector<TableCatalogEntry *> ordered;
+	vector<TableCatalogEntry *> unordered = tables;
+	ScanForeignKeyTable(ordered, unordered, true);
+	while (!unordered.empty()) {
+		ScanForeignKeyTable(ordered, unordered, false);
+	}
+	tables = ordered;
+}
+
 BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
@@ -66,6 +112,9 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			}
 		});
 	}
+
+	// reorder tables because of foreign key constraint
+	ReorderTableEntries(tables);
 
 	// now generate the COPY statements for each of the tables
 	auto &fs = FileSystem::GetFileSystem(context);
@@ -101,7 +150,10 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		exported_data.schema_name = info->schema;
 		exported_data.file_path = info->file_path;
 
-		exported_tables.data[table] = exported_data;
+		ExportedTableInfo table_info;
+		table_info.entry = table;
+		table_info.table_data = exported_data;
+		exported_tables.data.push_back(table_info);
 		id++;
 
 		// generate the copy statement and bind it

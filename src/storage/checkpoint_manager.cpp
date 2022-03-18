@@ -27,6 +27,8 @@
 
 namespace duckdb {
 
+void ReorderTableEntries(vector<TableCatalogEntry *> &tables);
+
 CheckpointManager::CheckpointManager(DatabaseInstance &db) : db(db) {
 }
 
@@ -171,6 +173,8 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	for (auto &seq : sequences) {
 		WriteSequence(*seq);
 	}
+	// reorder tables because of foreign key constraint
+	ReorderTableEntries(tables);
 	// now write the tables
 	metadata_writer->Write<uint32_t>(tables.size());
 	for (auto &table : tables) {
