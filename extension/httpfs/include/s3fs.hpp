@@ -1,10 +1,10 @@
 #pragma once
 
-#include "httpfs.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/atomic.hpp"
+#include "httpfs.hpp"
 
 #include <condition_variable>
 #include <iostream>
@@ -17,6 +17,7 @@ struct S3AuthParams {
 	const std::string secret_access_key;
 	const std::string session_token;
 	const std::string endpoint;
+	const bool use_ssl;
 
 	static S3AuthParams ReadFrom(FileOpener *opener);
 };
@@ -142,12 +143,15 @@ public:
 
 	void FlushAllBuffers(S3FileHandle &handle);
 
-	static void S3UrlParse(FileHandle &handle, string url, string &host_out, string &http_proto_out, string &path_out,
-	                       string &query_param);
+	static void S3UrlParse(string url, string endpoint, bool use_ssl, string &host_out, string &http_proto_out,
+	                       string &path_out, string &query_param);
+	static std::string UrlEncode(const std::string &input, bool encode_slash = false);
 
 	// Uploads the contents of write_buffer to S3.
 	// Note: caller is responsible to not call this method twice on the same buffer
 	static void UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer);
+
+	vector<string> Glob(const string &glob_pattern, FileOpener *opener = nullptr) override;
 
 protected:
 	std::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
@@ -159,5 +163,14 @@ protected:
 	// Allocate an S3WriteBuffer
 	// Note: call may block if no buffers are available or if the buffer manager fails to allocate more memory.
 	std::shared_ptr<S3WriteBuffer> GetBuffer(S3FileHandle &file_handle, uint16_t write_buffer_idx);
+};
+
+// Helper class to do s3 ListObjectV2 api call https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+struct AWSListObjectV2 {
+	static string Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
+	                      string &continuation_token, bool use_delimiter = false);
+	static void ParseKey(string &aws_response, vector<string> &result);
+	static vector<string> ParseCommonPrefix(string &aws_response);
+	static string ParseContinuationToken(string &aws_response);
 };
 } // namespace duckdb

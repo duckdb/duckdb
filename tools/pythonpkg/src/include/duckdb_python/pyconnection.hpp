@@ -46,6 +46,7 @@ public:
 	unique_ptr<DuckDBPyResult> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
 	std::thread::id thread_id = std::this_thread::get_id();
+	bool check_same_thread = true;
 
 public:
 	explicit DuckDBPyConnection(std::thread::id thread_id_p = std::this_thread::get_id()) : thread_id(thread_id_p) {
@@ -112,7 +113,8 @@ public:
 
 	py::object FetchRecordBatchReader(const idx_t chunk_size) const;
 
-	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
+	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config,
+	                                              bool check_same_thread);
 
 	static vector<Value> TransformPythonParamList(py::handle params);
 

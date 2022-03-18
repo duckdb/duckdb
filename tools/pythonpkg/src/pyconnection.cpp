@@ -101,7 +101,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	if (std::this_thread::get_id() != thread_id) {
+	if (std::this_thread::get_id() != thread_id && check_same_thread) {
 		throw std::runtime_error("DuckDB objects created in a thread can only be used in that same thread. The object "
 		                         "was created in thread id " +
 		                         to_string(std::hash<std::thread::id> {}(thread_id)) + " and this is thread id " +
@@ -500,7 +500,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           const py::dict &config_dict) {
+                                                           const py::dict &config_dict, bool check_same_thread) {
 	auto res = make_shared<DuckDBPyConnection>();
 	DBConfig config;
 	if (read_only) {
@@ -523,7 +523,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 
 	res->database = make_unique<DuckDB>(database, &config);
 	res->connection = make_unique<Connection>(*res->database);
-
+	res->check_same_thread = check_same_thread;
 	PandasScanFunction scan_fun;
 	CreateTableFunctionInfo scan_info(scan_fun);
 
@@ -625,7 +625,7 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
 	if (!default_connection) {
 		py::dict config_dict;
-		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict);
+		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict, true);
 	}
 	return default_connection.get();
 }
