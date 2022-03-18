@@ -68,13 +68,14 @@ protected:
 
 class HTTPFileSystem : public FileSystem {
 public:
-	static unique_ptr<duckdb_httplib_openssl::Client> GetClient(HTTPFileHandle &handle, const char *proto_host_port);
+	static unique_ptr<duckdb_httplib_openssl::Client> GetClient(const HTTPParams &http_params,
+	                                                            const char *proto_host_port);
 	static void ParseUrl(string &url, string &path_out, string &proto_host_port_out);
 	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
 	                                     FileCompressionType compression = DEFAULT_COMPRESSION,
 	                                     FileOpener *opener = nullptr) final;
 
-	std::vector<std::string> Glob(const std::string &path) override {
+	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
 		return {path}; // FIXME
 	}
 

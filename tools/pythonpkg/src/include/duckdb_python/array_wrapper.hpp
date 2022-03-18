@@ -12,7 +12,6 @@
 #include "duckdb.hpp"
 
 namespace duckdb {
-
 struct RawArrayWrapper {
 	explicit RawArrayWrapper(const LogicalType &type);
 
@@ -27,7 +26,6 @@ public:
 	void Resize(idx_t new_capacity);
 	void Append(idx_t current_offset, Vector &input, idx_t count);
 };
-
 struct ArrayWrapper {
 	explicit ArrayWrapper(const LogicalType &type);
 
