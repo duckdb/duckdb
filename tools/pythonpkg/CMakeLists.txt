@@ -1,5 +1,4 @@
 include_directories(src)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(PythonLibs)
 find_package(pybind11)
 if(NOT pybind11_FOUND)
