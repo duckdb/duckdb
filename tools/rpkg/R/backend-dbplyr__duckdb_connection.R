@@ -46,18 +46,18 @@ translate_duckdb <- function(...) {
   structure(list(), ..., class = c("duckdb_connection", "DBIConnection"))
 }
 
-#' Declare which version of dbplyr API is being called.
-#' @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
-#' @name dbplyr_edition
+# Declare which version of dbplyr API is being called.
+# @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
+# @name dbplyr_edition
 dbplyr_edition.duckdb_connection <- function(con) {
   2L
 }
 
-#' Description of the database connection
-#' @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
-#' @name db_connection_describe
-#' @return
-#' String consisting of DuckDB version, user login name, operating system, R version and the name of database
+# Description of the database connection
+# @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
+# @name db_connection_describe
+# @return
+# String consisting of DuckDB version, user login name, operating system, R version and the name of database
 db_connection_describe.duckdb_connection <- function(con) {
   info <- DBI::dbGetInfo(con)
   paste0(
@@ -84,9 +84,9 @@ duckdb_grepl <- function(pattern, x, ignore.case = FALSE, perl = FALSE, fixed = 
 }
 
 
-#' Customized translation functions for DuckDB SQL
-#' @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
-#' @name sql_translation
+# Customized translation functions for DuckDB SQL
+# @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
+# @name sql_translation
 sql_translation.duckdb_connection <- function(con) {
   sql_variant <- pkg_method("sql_variant", "dbplyr")
   sql_translator <- pkg_method("sql_translator", "dbplyr")
@@ -345,43 +345,43 @@ sql_translation.duckdb_connection <- function(con) {
 }
 
 
-#' Customized translation for comparing to objects in DuckDB SQL
-#' @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
-#' @param x First object to be compared
-#' @param y Second object to be compared
-#' @name sql_expr_matches
+# Customized translation for comparing to objects in DuckDB SQL
+# @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
+# @param x First object to be compared
+# @param y Second object to be compared
+# @name sql_expr_matches
 sql_expr_matches.duckdb_connection <- function(con, x, y) {
   build_sql <- pkg_method("build_sql", "dbplyr")
   # https://duckdb.org/docs/sql/expressions/comparison_operators
   build_sql(x, " IS NOT DISTINCT FROM ", y, con = con)
 }
 
-#' Customized escape translation for date objects
-#' @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
-#' @param x Date object to be escaped
-#' @name sql_escape_date
+# Customized escape translation for date objects
+# @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
+# @param x Date object to be escaped
+# @name sql_escape_date
 sql_escape_date.duckdb_connection <- function(con, x) {
   # https://github.com/tidyverse/dbplyr/issues/727
   dbQLit <- pkg_method("dbQuoteLiteral", "DBI")
   dbQLit(con, x)
 }
 
-#' Customized escape translation for datetime objects
-#' @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
-#' @param x Datetime object to be escaped
-#' @name sql_escape_datetime
+# Customized escape translation for datetime objects
+# @param con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
+# @param x Datetime object to be escaped
+# @name sql_escape_datetime
 sql_escape_datetime.duckdb_connection <- function(con, x) {
   dbQLit <- pkg_method("dbQuoteLiteral", "DBI")
   dbQLit(con, x)
 }
 
-#' Customized translation for fill function
-#' @param .con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
-#' @param .data Data frame
-#' @param cols_to_fill Which colums to be altered
-#' @param order_by_cols Defined order of variables
-#' @param .direction Direction in which to fill missing values.
-#' @name dbplyr_fill0
+# Customized translation for fill function
+# @param .con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
+# @param .data Data frame
+# @param cols_to_fill Which colums to be altered
+# @param order_by_cols Defined order of variables
+# @param .direction Direction in which to fill missing values.
+# @name dbplyr_fill0
 dbplyr_fill0.duckdb_connection <- function(.con, .data, cols_to_fill, order_by_cols, .direction) {
   dbplyr_fill0 <- pkg_method("dbplyr_fill0.SQLiteConnection", "dbplyr")
 
