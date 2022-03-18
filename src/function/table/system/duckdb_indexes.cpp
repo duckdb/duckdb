@@ -104,9 +104,9 @@ void DuckDBIndexesFunction(ClientContext &context, const FunctionData *bind_data
 		auto table_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, index.info->schema, index.info->table);
 		output.SetValue(5, count, Value::BIGINT(table_entry->oid));
 		// is_unique, BOOLEAN
-		output.SetValue(6, count, Value::BOOLEAN(index.index->is_unique));
+		output.SetValue(6, count, Value::BOOLEAN(index.index->IsUnique()));
 		// is_primary, BOOLEAN
-		output.SetValue(7, count, Value::BOOLEAN(index.index->is_primary));
+		output.SetValue(7, count, Value::BOOLEAN(index.index->IsPrimary()));
 		// expressions, VARCHAR
 		output.SetValue(8, count, Value());
 		// sql, VARCHAR

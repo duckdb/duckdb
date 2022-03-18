@@ -56,7 +56,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
-	auto client = GetClient(hfs, proto_host_port.c_str()); // POST requests use fresh connection
+	auto client = GetClient(hfs.http_params, proto_host_port.c_str()); // POST requests use fresh connection
 
 	// We use a custom Request method here, because there is no Post call with a contentreceiver in httplib
 	idx_t out_offset = 0;
@@ -87,15 +87,15 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	return make_unique<ResponseWrapper>(res.value());
 }
 
-unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(HTTPFileHandle &handle,
+unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPParams &http_params,
                                                                      const char *proto_host_port) {
 	auto client = make_unique<duckdb_httplib_openssl::Client>(proto_host_port);
 	client->set_follow_location(true);
 	client->set_keep_alive(true);
 	client->enable_server_certificate_verification(false);
-	client->set_write_timeout(handle.http_params.timeout);
-	client->set_read_timeout(handle.http_params.timeout);
-	client->set_connection_timeout(handle.http_params.timeout);
+	client->set_write_timeout(http_params.timeout);
+	client->set_read_timeout(http_params.timeout);
+	client->set_connection_timeout(http_params.timeout);
 	return client;
 }
 
@@ -104,7 +104,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 	auto &hfs = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	auto client = GetClient(hfs, proto_host_port.c_str()); // Put requests use fresh connection for parallel uploads
+	auto client =
+	    GetClient(hfs.http_params, proto_host_port.c_str()); // Put requests use fresh connection for parallel uploads
 	auto headers = initialize_http_headers(header_map);
 
 	auto res = client->Put(path.c_str(), *headers, buffer_in, buffer_in_len, "application/octet-stream");
@@ -128,6 +129,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
+
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                             idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
 	auto &hfs = (HTTPFileHandle &)handle;
@@ -336,7 +338,7 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 void HTTPFileHandle::InitializeClient() {
 	string path_out, proto_host_port;
 	HTTPFileSystem::ParseUrl(path, path_out, proto_host_port);
-	http_client = HTTPFileSystem::GetClient(*this, proto_host_port.c_str());
+	http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str());
 }
 
 ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res) {
