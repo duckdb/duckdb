@@ -81,16 +81,6 @@ hearts
 spades
 
 
-# wrong arg order
-statement error
-CREATE MACRO card_select_args(_val_min, _name:='%', _suit:='%', _val_max)
-as TABLE SELECT * FROM  cards_tbl WHERE val>=_val_min AND val<=_val_max AND name like  _name AND suit like _suit;
-
-
-# positional parameter repeated
-# should give error but is parsed !!!
-statement ok
-CREATE MACRO card_select_val(_val_min, _val_min) as TABLE SELECT * FROM cards_tbl WHERE val>=_val_min AND val<=_val_max;
 
 # create macro without any args
 statement ok
@@ -102,6 +92,50 @@ SELECT * FROM card_dfl();
 hearts
 
 
+
+# check order by , limit with expressions
+statement ok
+CREATE MACRO  sc(aorder, border, nlimit) AS TABLE SELECT * FROM cards_tbl ORDER BY aorder,border LIMIT nlimit;
+
+query III
+SELECT * FROM sc(name, suit, 4);
+----
+1	ace	clubs
+1	ace	diamonds
+1	ace	hearts
+1	ace	spades
+
+# check limit PERCENT and offset
+statement ok
+CREATE MACRO sc2(dlimit, noffset) AS TABLE SELECT DISTINCT  suit from cards_tbl limit dlimit% offset noffset;
+
+query I
+SELECT * FROM sc2(50.0, 2);
+----
+hearts
+spades
+
+
+statement ok
+CREATE MACRO sc3(col) AS TABLE SELECT DISTINCT ON (col) col FROM cards_tbl ORDER BY col;
+
+query I
+SELECT * FROM sc3(name);
+----
+ace
+jack
+king
+queen
+
+query I
+SELECT * FROM sc3(suit);
+----
+clubs
+diamonds
+hearts
+spades
+
+
 # create macro with non existing table
 statement ok
 CREATE MACRO card_no_tbl() as TABLE SELECT * FROM suit_tbl;
@@ -110,4 +144,13 @@ statement error
 SELECT * FROM card_no_tbl();
 
 
+# wrong arg order
+statement error
+CREATE MACRO card_select_args(_val_min, _name:='%', _suit:='%', _val_max)
+as TABLE SELECT * FROM  cards_tbl WHERE val>=_val_min AND val<=_val_max AND name like  _name AND suit like _suit;
 
+
+# positional parameter repeated
+# should give error but is parsed !!!
+statement ok
+CREATE MACRO card_select_val(_val_min, _val_min) as TABLE SELECT * FROM cards_tbl WHERE val>=_val_min AND val<=_val_max;
