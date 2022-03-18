@@ -119,6 +119,10 @@ TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
 	CAPITester tester;
 	unique_ptr<CAPIResult> result;
 
+	if (duckdb_vector_size() < 64) {
+		return;
+	}
+
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	// fetch a small result set
