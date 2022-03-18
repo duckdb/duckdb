@@ -66,13 +66,13 @@ void LocalTableStorage::Clear() {
 	table.info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.type == IndexType::ART);
 		auto &art = (ART &)index;
-		if (art.is_unique) {
+		if (art.constraint_type != IndexConstraintType::NONE) {
 			// unique index: create a local ART index that maintains the same unique constraint
 			vector<unique_ptr<Expression>> unbound_expressions;
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
-			indexes.push_back(make_unique<ART>(art.column_ids, move(unbound_expressions), true));
+			indexes.push_back(make_unique<ART>(art.column_ids, move(unbound_expressions), art.constraint_type));
 		}
 		return false;
 	});
@@ -464,6 +464,30 @@ void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t change
 		return;
 	}
 	throw NotImplementedException("FIXME: ALTER TYPE with transaction local data not currently supported");
+}
+
+void LocalStorage::FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &dst_chunk) {
+	auto storage = GetStorage(table);
+	idx_t chunk_idx = GetChunk(row_ids);
+	auto &chunk = storage->collection.GetChunk(chunk_idx);
+
+	VectorData row_ids_data;
+	row_ids.Orrify(count, row_ids_data);
+	auto row_identifiers = (const row_t *)row_ids_data.data;
+	SelectionVector sel(count);
+	for (idx_t i = 0; i < count; ++i) {
+		const auto idx = row_ids_data.sel->get_index(i);
+		sel.set_index(i, row_identifiers[idx] - MAX_ROW_ID);
+	}
+
+	dst_chunk.InitializeEmpty(chunk.GetTypes());
+	dst_chunk.Slice(chunk, sel, count);
+}
+
+vector<unique_ptr<Index>> &LocalStorage::GetIndexes(DataTable *table) {
+	auto storage = GetStorage(table);
+
+	return storage->indexes;
 }
 
 } // namespace duckdb

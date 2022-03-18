@@ -45,13 +45,12 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
 	         "Fetch a chunk of the result as Data.Frame following execute()", py::arg("vectors_per_chunk") = 1)
 	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
-	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
-	    .def("fetch_arrow_chunk", &DuckDBPyConnection::FetchArrowChunk,
-	         "Fetch a chunk of the result as an Arrow Table following execute()", py::arg("vectors_per_chunk") = 1,
-	         py::arg("return_table") = false)
+	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
+	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
-	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("approx_batch_size") = 1)
-	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
+	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("chunk_size") = 1000000)
+	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
+	         py::arg("chunk_size") = 1000000)
 	    .def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
 	    .def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
 	    .def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction")
@@ -102,7 +101,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	if (std::this_thread::get_id() != thread_id) {
+	if (std::this_thread::get_id() != thread_id && check_same_thread) {
 		throw std::runtime_error("DuckDB objects created in a thread can only be used in that same thread. The object "
 		                         "was created in thread id " +
 		                         to_string(std::hash<std::thread::id> {}(thread_id)) + " and this is thread id " +
@@ -418,25 +417,18 @@ py::object DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk) const
 	return result->FetchDFChunk(vectors_per_chunk);
 }
 
-py::object DuckDBPyConnection::FetchArrow() {
+py::object DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
-	return result->FetchArrowTable();
+	return result->FetchArrowTable(chunk_size);
 }
 
-py::object DuckDBPyConnection::FetchArrowChunk(const idx_t vectors_per_chunk, bool return_table) const {
+py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
-	return result->FetchArrowTableChunk(vectors_per_chunk, return_table);
-}
-
-py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t approx_batch_size) const {
-	if (!result) {
-		throw std::runtime_error("no open result set");
-	}
-	return result->FetchRecordBatchReader(approx_batch_size);
+	return result->FetchRecordBatchReader(chunk_size);
 }
 static unique_ptr<TableFunctionRef>
 TryReplacement(py::dict &dict, py::str &table_name,
@@ -502,7 +494,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(const string &table_name, vo
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           const py::dict &config_dict) {
+                                                           const py::dict &config_dict, bool check_same_thread) {
 	auto res = make_shared<DuckDBPyConnection>();
 	DBConfig config;
 	if (read_only) {
@@ -523,7 +515,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 
 	res->database = make_unique<DuckDB>(database, &config);
 	res->connection = make_unique<Connection>(*res->database);
-
+	res->check_same_thread = check_same_thread;
 	PandasScanFunction scan_fun;
 	CreateTableFunctionInfo scan_info(scan_fun);
 
@@ -625,7 +617,7 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
 	if (!default_connection) {
 		py::dict config_dict;
-		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict);
+		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict, true);
 	}
 	return default_connection.get();
 }

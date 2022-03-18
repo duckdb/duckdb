@@ -12,6 +12,9 @@
 
 //! Here we have the internal duckdb classes that interact with Arrow's Internal Header (i.e., duckdb/commons/arrow.hpp)
 namespace duckdb {
+class QueryResult;
+class DataChunk;
+
 class ArrowSchemaWrapper {
 public:
 	ArrowSchema arrow_schema;
@@ -46,5 +49,13 @@ public:
 	ArrowArrayStreamWrapper() {
 		arrow_array_stream.release = nullptr;
 	}
+};
+
+class ArrowUtil {
+public:
+	static unique_ptr<DataChunk> FetchChunk(QueryResult *result, idx_t chunk_size);
+
+private:
+	static unique_ptr<DataChunk> FetchNext(QueryResult &result);
 };
 } // namespace duckdb

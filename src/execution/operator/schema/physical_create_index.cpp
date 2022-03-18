@@ -42,7 +42,8 @@ void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, G
 	unique_ptr<Index> index;
 	switch (info->index_type) {
 	case IndexType::ART: {
-		index = make_unique<ART>(column_ids, unbound_expressions, info->unique);
+		index = make_unique<ART>(column_ids, unbound_expressions,
+		                         info->unique ? IndexConstraintType::UNIQUE : IndexConstraintType::NONE);
 		break;
 	}
 	default:

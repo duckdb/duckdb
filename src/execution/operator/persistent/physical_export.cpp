@@ -108,19 +108,16 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	vector<CatalogEntry *> views;
 	vector<CatalogEntry *> indexes;
 
-	Catalog::GetCatalog(ccontext).schemas->Scan(context.client, [&](CatalogEntry *entry) {
-		auto schema = (SchemaCatalogEntry *)entry;
+	auto schema_list = Catalog::GetCatalog(ccontext).schemas->GetEntries<SchemaCatalogEntry>(context.client);
+	for (auto &schema : schema_list) {
 		if (!schema->internal) {
-			// export schema
 			schemas.push_back(schema);
 		}
 		schema->Scan(context.client, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (entry->internal) {
 				return;
 			}
-			if (entry->type == CatalogType::TABLE_ENTRY) {
-				tables.push_back(entry);
-			} else {
+			if (entry->type != CatalogType::TABLE_ENTRY) {
 				views.push_back(entry);
 			}
 		});
@@ -129,7 +126,12 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		schema->Scan(context.client, CatalogType::TYPE_ENTRY,
 		             [&](CatalogEntry *entry) { custom_types.push_back(entry); });
 		schema->Scan(context.client, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { indexes.push_back(entry); });
-	});
+	}
+
+	// consider the order of tables because of foreign key constraint
+	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
+		tables.push_back((CatalogEntry *)exported_tables.data[i].entry);
+	}
 
 	// write the schema.sql file
 	// export order is SCHEMA -> SEQUENCE -> TABLE -> VIEW -> INDEX
@@ -147,9 +149,9 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	// write the load.sql file
 	// for every table, we write COPY INTO statement with the specified options
 	stringstream load_ss;
-	for (auto const &kv : exported_tables.data) {
-		auto table = kv.first;
-		auto exported_table_info = kv.second;
+	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
+		auto &table = exported_tables.data[i].entry;
+		auto exported_table_info = exported_tables.data[i].table_data;
 		WriteCopyStatement(fs, load_ss, table, *info, exported_table_info, function);
 	}
 	WriteStringStreamToFile(fs, opener, load_ss, fs.JoinPath(info->file_path, "load.sql"));

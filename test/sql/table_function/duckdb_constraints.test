@@ -8,6 +8,9 @@ create table integers(i int primary key, check (i < 10));
 statement ok
 create table test(i varchar unique, k varchar, check(len(i || k) < 10));
 
+statement ok
+create table fk_integers(j int, foreign key (j) references integers(i));
+
 statement ok nosort duckdb_col
 SELECT * FROM duckdb_constraints();
 
@@ -17,9 +20,12 @@ SELECT * FROM duckdb_constraints;
 query IIII
 SELECT table_name, constraint_index, constraint_type, UNNEST(constraint_column_names) col_name FROM duckdb_constraints ORDER BY table_name, constraint_index, col_name
 ----
+fk_integers	0	FOREIGN KEY	j
 integers	0	PRIMARY KEY	i
 integers	1	CHECK	i
 integers	2	NOT NULL	i
+integers	3	FOREIGN KEY	i
+integers	4	NOT NULL	i
 test	0	UNIQUE	i
 test	1	CHECK	i
 test	1	CHECK	k

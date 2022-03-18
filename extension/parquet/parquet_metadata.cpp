@@ -403,7 +403,7 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, vector<Valu
 
 	FileSystem &fs = FileSystem::GetFileSystem(context);
 	result->return_types = return_types;
-	result->files = fs.Glob(file_name);
+	result->files = fs.Glob(file_name, context);
 	if (result->files.empty()) {
 		throw IOException("No files found that match the pattern \"%s\"", file_name);
 	}

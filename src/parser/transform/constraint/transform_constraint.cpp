@@ -24,6 +24,30 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		}
 		return make_unique<CheckConstraint>(TransformExpression(constraint->raw_expr));
 	}
+	case duckdb_libpgquery::PG_CONSTR_FOREIGN: {
+		ForeignKeyInfo fk_info;
+		fk_info.type = ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
+		if (constraint->pktable->schemaname) {
+			fk_info.schema = constraint->pktable->schemaname;
+		} else {
+			fk_info.schema = "";
+		}
+		fk_info.table = constraint->pktable->relname;
+		vector<string> pk_columns, fk_columns;
+		for (auto kc = constraint->fk_attrs->head; kc; kc = kc->next) {
+			fk_columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
+		}
+		for (auto kc = constraint->pk_attrs->head; kc; kc = kc->next) {
+			pk_columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
+		}
+		if (pk_columns.size() != fk_columns.size()) {
+			throw ParserException("The number of referencing and referenced columns for foreign keys must be the same");
+		}
+		if (fk_columns.empty()) {
+			throw ParserException("The set of referencing and referenced columns for foreign keys must be not empty");
+		}
+		return make_unique<ForeignKeyConstraint>(pk_columns, fk_columns, move(fk_info));
+	}
 	default:
 		throw NotImplementedException("Constraint type not handled yet!");
 	}
