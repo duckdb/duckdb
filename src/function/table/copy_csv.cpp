@@ -190,7 +190,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	string file_pattern = info.file_path;
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	bind_data->files = fs.Glob(file_pattern);
+	bind_data->files = fs.Glob(file_pattern, context);
 	if (bind_data->files.empty()) {
 		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
 	}

@@ -28,7 +28,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 	auto &file_pattern = StringValue::Get(inputs[0]);
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	result->files = fs.Glob(file_pattern);
+	result->files = fs.Glob(file_pattern, context);
 	if (result->files.empty()) {
 		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
 	}
