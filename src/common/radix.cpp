@@ -28,15 +28,17 @@ uint32_t EncodeFloat(float x) {
 		buff |= (1u << 31);
 		return buff;
 	}
+	// nan
+	if (Value::IsNan(x)) {
+		return UINT_MAX;
+	}
 	//! infinity
 	if (x > FLT_MAX) {
-		throw InternalException("+INFINITY detected in floating point number");
-		// return UINT_MAX;
+		return UINT_MAX - 1;
 	}
 	//! -infinity
 	if (x < -FLT_MAX) {
-		throw InternalException("-INFINITY detected in floating point number");
-		// return 0;
+		return 0;
 	}
 	buff = Load<uint32_t>((const_data_ptr_t)&x);
 	if ((buff & (1u << 31)) == 0) { //! +0 and positive numbers
@@ -56,15 +58,17 @@ uint64_t EncodeDouble(double x) {
 		buff += (1ull << 63);
 		return buff;
 	}
+	// nan
+	if (Value::IsNan(x)) {
+		return ULLONG_MAX;
+	}
 	//! infinity
 	if (x > DBL_MAX) {
-		throw InternalException("+INFINITY detected in floating point number");
-		// return ULLONG_MAX;
+		return ULLONG_MAX - 1;
 	}
 	//! -infinity
 	if (x < -DBL_MAX) {
-		throw InternalException("-INFINITY detected in floating point number");
-		// return 0;
+		return 0;
 	}
 	buff = Load<uint64_t>((const_data_ptr_t)&x);
 	if (buff < (1ull << 63)) { //! +0 and positive numbers

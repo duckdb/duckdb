@@ -691,7 +691,7 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 template <>
 float DivideOperator::Operation(float left, float right) {
 	auto result = left / right;
-	if (!Value::FloatIsValid(result)) {
+	if (!Value::FloatIsFinite(result)) {
 		throw OutOfRangeException("Overflow in division of float!");
 	}
 	return result;
@@ -700,7 +700,7 @@ float DivideOperator::Operation(float left, float right) {
 template <>
 double DivideOperator::Operation(double left, double right) {
 	auto result = left / right;
-	if (!Value::DoubleIsValid(result)) {
+	if (!Value::DoubleIsFinite(result)) {
 		throw OutOfRangeException("Overflow in division of double!");
 	}
 	return result;

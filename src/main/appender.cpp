@@ -208,17 +208,11 @@ void BaseAppender::Append(string_t value) {
 
 template <>
 void BaseAppender::Append(float value) {
-	if (!Value::FloatIsValid(value)) {
-		throw InvalidInputException("Float value is out of range!");
-	}
 	AppendValueInternal<float>(value);
 }
 
 template <>
 void BaseAppender::Append(double value) {
-	if (!Value::DoubleIsValid(value)) {
-		throw InvalidInputException("Double value is out of range!");
-	}
 	AppendValueInternal<double>(value);
 }
 

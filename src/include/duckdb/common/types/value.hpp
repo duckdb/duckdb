@@ -222,16 +222,15 @@ public:
 	DUCKDB_API bool operator<=(const int64_t &rhs) const;
 	DUCKDB_API bool operator>=(const int64_t &rhs) const;
 
-	DUCKDB_API static bool FloatIsValid(float value);
-	DUCKDB_API static bool DoubleIsValid(double value);
+	DUCKDB_API static bool FloatIsFinite(float value);
+	DUCKDB_API static bool DoubleIsFinite(double value);
+	template<class T>
+	static bool IsNan(T value) {
+		throw InternalException("Unimplemented template type for Value::IsNan");
+	}
 	DUCKDB_API static bool StringIsValid(const char *str, idx_t length);
 	static bool StringIsValid(const string &str) {
 		return StringIsValid(str.c_str(), str.size());
-	}
-
-	template <class T>
-	static bool IsValid(T value) {
-		return true;
 	}
 
 	//! Returns true if the values are (approximately) equivalent. Note this is NOT the SQL equivalence. For this
@@ -519,8 +518,8 @@ template <>
 DUCKDB_API interval_t &Value::GetReferenceUnsafe();
 
 template <>
-DUCKDB_API bool Value::IsValid(float value);
+DUCKDB_API bool Value::IsNan(float input);
 template <>
-DUCKDB_API bool Value::IsValid(double value);
+DUCKDB_API bool Value::IsNan(double input);
 
 } // namespace duckdb
