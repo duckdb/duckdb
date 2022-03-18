@@ -2,6 +2,8 @@
 # description: Tests failing due to an error with decimal types
 # group: [list]
 
+# Error: INTERNAL Error: Invalid PhysicalType for GetTypeIdSize
+
 #---- bigints_sum_avg.test ----#
 
 statement ok

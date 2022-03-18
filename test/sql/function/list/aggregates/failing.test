@@ -21,10 +21,36 @@ SELECT list_sum(i) FROM integers;
 #---- histogram.test ----#
 
 # fails in general
+# because the simple_update does not exist for the histogram aggregate
 
 #---- nested.test ----#
 
 # fail, probably same error as with histogram?
+
+#---- median.test ----#
+# maybe this is related to the failing decimal tests?
+
+statement ok
+CREATE TABLE range AS SELECT LIST(1) AS i FROM range(2000) t1(i)
+
+statement ok
+INSERT INTO range VALUES (NULL), ([]), ([NULL]);
+
+# fails with wrong (very small negative) value
+query I
+SELECT list_median(i) FROM range
+----
+1
+NULL
+NULL
+NULL
+
+# 1.000000
+# NULL
+# NULL
+# -2147483648.000000
+
+# while SELECT list_median([NULL]) works
 
 #---- approx_count_distinct.test ----#
 

@@ -2,3 +2,7 @@
 # description: Test the list_min, list_max aggregate functions
 # group: [list]
 
+query I
+SELECT list_histogram([1]);
+----
+{1=1}

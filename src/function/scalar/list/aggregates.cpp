@@ -81,6 +81,7 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 		aggr.function.initialize(states[i]);
 
 		if (!lists_data.validity.RowIsValid(lists_index)) {
+			result_validity.SetInvalid(i);
 			continue;
 		}
 
