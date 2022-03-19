@@ -64,7 +64,8 @@ void NextAfterFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction("nextafter", {LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                   ScalarFunction::BinaryFunction<double, double, double, NextAfterOperator>, false));
 	next_after_fun.AddFunction(ScalarFunction("nextafter", {LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT,
-	                                          ScalarFunction::BinaryFunction<float, float, float, NextAfterOperator>, false));
+	                                          ScalarFunction::BinaryFunction<float, float, float, NextAfterOperator>,
+	                                          false));
 	set.AddFunction(next_after_fun);
 }
 
@@ -583,8 +584,11 @@ void PowFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct SqrtOperator {
 	template <class TA, class TR>
-	static inline TR Operation(TA left) {
-		return std::sqrt(left);
+	static inline TR Operation(TA input) {
+		if (input < 0) {
+			throw OutOfRangeException("cannot take square root of a negative number");
+		}
+		return std::sqrt(input);
 	}
 };
 
@@ -614,8 +618,14 @@ void CbrtFun::RegisterFunction(BuiltinFunctions &set) {
 
 struct LnOperator {
 	template <class TA, class TR>
-	static inline TR Operation(TA left) {
-		return std::log(left);
+	static inline TR Operation(TA input) {
+		if (input < 0) {
+			throw OutOfRangeException("cannot take logarithm of a negative number");
+		}
+		if (input == 0) {
+			throw OutOfRangeException("cannot take logarithm of zero");
+		}
+		return std::log(input);
 	}
 };
 
@@ -629,8 +639,14 @@ void LnFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct Log10Operator {
 	template <class TA, class TR>
-	static inline TR Operation(TA left) {
-		return std::log10(left);
+	static inline TR Operation(TA input) {
+		if (input < 0) {
+			throw OutOfRangeException("cannot take logarithm of a negative number");
+		}
+		if (input == 0) {
+			throw OutOfRangeException("cannot take logarithm of zero");
+		}
+		return std::log10(input);
 	}
 };
 
@@ -644,8 +660,14 @@ void Log10Fun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct Log2Operator {
 	template <class TA, class TR>
-	static inline TR Operation(TA left) {
-		return std::log2(left);
+	static inline TR Operation(TA input) {
+		if (input < 0) {
+			throw OutOfRangeException("cannot take logarithm of a negative number");
+		}
+		if (input == 0) {
+			throw OutOfRangeException("cannot take logarithm of zero");
+		}
+		return std::log2(input);
 	}
 };
 
@@ -722,8 +744,9 @@ struct SinOperator {
 };
 
 void SinFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("sin", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<SinOperator>>));
+	set.AddFunction(
+	    ScalarFunction("sin", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                   ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<SinOperator>>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -737,8 +760,9 @@ struct CosOperator {
 };
 
 void CosFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("cos", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CosOperator>>));
+	set.AddFunction(
+	    ScalarFunction("cos", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                   ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CosOperator>>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -752,8 +776,9 @@ struct TanOperator {
 };
 
 void TanFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("tan", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<TanOperator>>));
+	set.AddFunction(
+	    ScalarFunction("tan", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                   ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<TanOperator>>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -770,8 +795,9 @@ struct ASinOperator {
 };
 
 void AsinFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("asin", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ASinOperator>>));
+	set.AddFunction(
+	    ScalarFunction("asin", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                   ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ASinOperator>>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -815,8 +841,8 @@ struct ACos {
 };
 
 void AcosFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("acos", {LogicalType::DOUBLE}, LogicalType::DOUBLE, ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ACos>>));
+	set.AddFunction(ScalarFunction("acos", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ACos>>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -830,8 +856,9 @@ struct CotOperator {
 };
 
 void CotFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("cot", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CotOperator>>));
+	set.AddFunction(
+	    ScalarFunction("cot", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                   ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CotOperator>>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -839,8 +866,11 @@ void CotFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct GammaOperator {
 	template <class TA, class TR>
-	static inline TR Operation(TA left) {
-		return std::tgamma(left);
+	static inline TR Operation(TA input) {
+		if (input == 0) {
+			throw OutOfRangeException("cannot take gamma of zero");
+		}
+		return std::tgamma(input);
 	}
 };
 
@@ -854,8 +884,11 @@ void GammaFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct LogGammaOperator {
 	template <class TA, class TR>
-	static inline TR Operation(TA left) {
-		return std::lgamma(left);
+	static inline TR Operation(TA input) {
+		if (input == 0) {
+			throw OutOfRangeException("cannot take log gamma of zero");
+		}
+		return std::lgamma(input);
 	}
 };
 

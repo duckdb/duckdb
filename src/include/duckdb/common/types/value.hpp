@@ -224,11 +224,11 @@ public:
 
 	DUCKDB_API static bool FloatIsFinite(float value);
 	DUCKDB_API static bool DoubleIsFinite(double value);
-	template<class T>
+	template <class T>
 	static bool IsNan(T value) {
 		throw InternalException("Unimplemented template type for Value::IsNan");
 	}
-	template<class T>
+	template <class T>
 	static bool IsFinite(T value) {
 		return true;
 	}

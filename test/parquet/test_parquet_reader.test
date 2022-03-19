@@ -284,7 +284,7 @@ query III
 SELECT * FROM parquet_scan('data/parquet-testing/nan-float.parquet') limit 50;
 ----
 -1.0	foo	True	
-NULL	bar	False	
+inf	bar	False
 2.5	baz	True	
 
 query I

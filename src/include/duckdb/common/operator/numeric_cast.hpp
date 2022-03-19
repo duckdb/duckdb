@@ -60,33 +60,34 @@ static bool TryCastWithOverflowCheck(SRC value, DST &result) {
 		}
 	}
 }
-//
-//template <>
-//bool TryCastWithOverflowCheck(float value, int32_t &result) {
-//	if (!(value >= -2147483648.0f && value < 2147483648.0f)) {
-//		return false;
-//	}
-//	result = int32_t(value);
-//	return true;
-//}
-//
-//template <>
-//bool TryCastWithOverflowCheck(float value, int64_t &result) {
-//	if (!(value >= -9223372036854775808.0f && value < 9223372036854775808.0f)) {
-//		return false;
-//	}
-//	result = int64_t(value);
-//	return true;
-//}
-//
-//template <>
-//bool TryCastWithOverflowCheck(double value, int64_t &result) {
-//	if (!(value >= -9223372036854775808.0 && value < 9223372036854775808.0)) {
-//		return false;
-//	}
-//	result = int64_t(value);
-//	return true;
-//}
+
+template <class SRC, class T>
+bool TryCastWithOverflowCheckFloat(SRC value, T &result, SRC min, SRC max) {
+	if (!Value::IsFinite<SRC>(value)) {
+		return false;
+	}
+	if (!(value >= min && value < max)) {
+		return false;
+	}
+	result = T(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(float value, int32_t &result) {
+	return TryCastWithOverflowCheckFloat<float, int32_t>(value, result, -2147483648.0f, 2147483648.0f);
+}
+
+template <>
+bool TryCastWithOverflowCheck(float value, int64_t &result) {
+	return TryCastWithOverflowCheckFloat<float, int64_t>(value, result, -9223372036854775808.0f,
+	                                                     9223372036854775808.0f);
+}
+
+template <>
+bool TryCastWithOverflowCheck(double value, int64_t &result) {
+	return TryCastWithOverflowCheckFloat<double, int64_t>(value, result, -9223372036854775808.0, 9223372036854775808.0);
+}
 
 template <>
 bool TryCastWithOverflowCheck(float input, float &result) {
@@ -110,11 +111,8 @@ bool TryCastWithOverflowCheck(double input, float &result) {
 		result = float(input);
 		return true;
 	}
-	if (input < (double)NumericLimits<float>::Minimum() || input > (double)NumericLimits<float>::Maximum()) {
-		return false;
-	}
-	auto res = (float)input;
-	if (Value::FloatIsFinite(input)) {
+	auto res = float(input);
+	if (!Value::FloatIsFinite(input)) {
 		return false;
 	}
 	result = res;

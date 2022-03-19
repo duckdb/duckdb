@@ -11,17 +11,20 @@ select nextafter()
 statement error
 select nextafter('bla','bla')
 
-statement error
+query I
 select nextafter(NULL,1)
+----
+NULL
 
-
-statement error
+query I
 select nextafter(1,NULL)
+----
+NULL
 
-
-statement error
+query I
 select nextafter(99, 1)
-
+----
+99
 
 query R
 select nextafter(99.0::DOUBLE, 1.0::DOUBLE) < 99

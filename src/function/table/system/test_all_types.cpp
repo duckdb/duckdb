@@ -105,8 +105,9 @@ static vector<TestType> GetTestTypes() {
 
 	auto double_list_type = LogicalType::LIST(LogicalType::DOUBLE);
 	auto empty_double_list = Value::EMPTYLIST(LogicalType::DOUBLE);
-	auto double_list = Value::LIST({Value::DOUBLE(42), Value::DOUBLE(NAN), Value::DOUBLE(std::numeric_limits<double>::infinity()), Value::DOUBLE(-std::numeric_limits<double>::infinity()),
-	                             Value(LogicalType::DOUBLE), Value::DOUBLE(-42)});
+	auto double_list = Value::LIST(
+	    {Value::DOUBLE(42), Value::DOUBLE(NAN), Value::DOUBLE(std::numeric_limits<double>::infinity()),
+	     Value::DOUBLE(-std::numeric_limits<double>::infinity()), Value(LogicalType::DOUBLE), Value::DOUBLE(-42)});
 	result.emplace_back(double_list_type, "double_array", empty_double_list, double_list);
 
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);

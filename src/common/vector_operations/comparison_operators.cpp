@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-template<class T>
+template <class T>
 bool EqualsFloat(T left, T right) {
 	if (DUCKDB_UNLIKELY(Value::IsNan(left) && Value::IsNan(right))) {
 		return true;
@@ -31,7 +31,7 @@ bool Equals::Operation(double left, double right) {
 	return EqualsFloat<double>(left, right);
 }
 
-template<class T>
+template <class T>
 bool GreaterThanFloat(T left, T right) {
 	// handle nans
 	// nan is always bigger than everything else
@@ -58,7 +58,7 @@ bool GreaterThan::Operation(double left, double right) {
 	return GreaterThanFloat<float>(left, right);
 }
 
-template<class T>
+template <class T>
 bool GreaterThanEqualsFloat(T left, T right) {
 	// handle nans
 	// nan is always bigger than everything else
@@ -85,7 +85,6 @@ template <>
 bool GreaterThanEquals::Operation(double left, double right) {
 	return GreaterThanEqualsFloat<float>(left, right);
 }
-
 
 struct ComparisonSelector {
 	template <typename OP>

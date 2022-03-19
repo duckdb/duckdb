@@ -366,12 +366,12 @@ struct NegateOperator {
 	}
 };
 
-template<>
+template <>
 bool NegateOperator::CanNegate(float input) {
 	return Value::FloatIsFinite(input);
 }
 
-template<>
+template <>
 bool NegateOperator::CanNegate(double input) {
 	return Value::DoubleIsFinite(input);
 }
