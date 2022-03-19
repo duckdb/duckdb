@@ -1,0 +1,66 @@
+# name: test/sql/copy/parquet/tpch_parquet_schema_evolution.test_slow
+# description: Test more complex type evolution on TPC-H schema
+# group: [parquet]
+
+require parquet
+
+require tpch
+
+statement ok
+CREATE SCHEMA tpch
+
+statement ok
+CALL dbgen(sf=0.01, schema='tpch');
+
+# original schema, minus some unnecessary columns
+statement ok
+COPY (
+	SELECT
+	l_shipdate,
+	l_discount,
+	l_linenumber,
+	l_tax,
+	l_extendedprice,
+	l_shipinstruct,
+	l_commitdate,
+	l_linestatus,
+	l_returnflag,
+	l_quantity,
+	l_orderkey,
+	l_shipmode FROM tpch.lineitem LIMIT 30000
+) TO '__TEST_DIR__/schema_evolution_lineitem1.parquet' (FORMAT PARQUET);
+
+# complete schema, with casts
+statement ok
+COPY (
+	SELECT
+	l_comment,
+	l_shipmode,
+	l_commitdate::TIMESTAMP l_commitdate,
+	l_shipinstruct,
+	l_quantity::SMALLINT l_quantity,
+	l_suppkey::BIGINT l_suppkey,
+	l_linenumber,
+	l_linestatus,
+	l_receiptdate::VARCHAR l_receiptdate,
+	l_returnflag,
+	l_extendedprice::DECIMAL(18,4) l_extendedprice,
+	l_partkey::BIGINT l_partkey,
+	l_orderkey::HUGEINT l_orderkey,
+	l_discount::DECIMAL(8,3) l_discount,
+	l_shipdate::TIMESTAMP l_shipdate,
+	l_tax FROM tpch.lineitem OFFSET 30000
+) TO '__TEST_DIR__/schema_evolution_lineitem2.parquet' (FORMAT PARQUET);
+
+statement ok
+CREATE VIEW lineitem AS SELECT * FROM '__TEST_DIR__/schema_evolution_lineitem*.parquet'
+
+query I
+PRAGMA tpch(1)
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.01/q01.csv
+
+query I
+PRAGMA tpch(6)
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.01/q06.csv

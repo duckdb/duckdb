@@ -75,6 +75,7 @@ class Constraint;
 class NotNullConstraint;
 class CheckConstraint;
 class UniqueConstraint;
+class ForeignKeyConstraint;
 
 //===--------------------------------------------------------------------===//
 // TableRefs

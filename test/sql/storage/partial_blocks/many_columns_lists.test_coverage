@@ -31,13 +31,13 @@ true
 loop i 0 100
 
 query III
-SELECT i${i}[0]=${i}, i${i}[1]=${i}, i${i}[2]=${i} FROM lists
+SELECT i${i}[1]=${i}, i${i}[2]=${i}, i${i}[3]=${i} FROM lists
 ----
 true	NULL	true
 false	NULL	false
 
 query III
-SELECT i${i}[0]=${i}+1, i${i}[1]=${i}+1, i${i}[2]=${i}+1 FROM lists
+SELECT i${i}[1]=${i}+1, i${i}[2]=${i}+1, i${i}[3]=${i}+1 FROM lists
 ----
 false	NULL	false
 true	NULL	true
@@ -49,13 +49,13 @@ restart
 loop i 0 100
 
 query III
-SELECT i${i}[0]=${i}, i${i}[1]=${i}, i${i}[2]=${i} FROM lists
+SELECT i${i}[1]=${i}, i${i}[2]=${i}, i${i}[3]=${i} FROM lists
 ----
 true	NULL	true
 false	NULL	false
 
 query III
-SELECT i${i}[0]=${i}+1, i${i}[1]=${i}+1, i${i}[2]=${i}+1 FROM lists
+SELECT i${i}[1]=${i}+1, i${i}[2]=${i}+1, i${i}[3]=${i}+1 FROM lists
 ----
 false	NULL	false
 true	NULL	true
