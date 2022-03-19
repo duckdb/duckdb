@@ -167,11 +167,8 @@ static vector<TestType> GetTestTypes() {
 	return result;
 }
 
-static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, vector<Value> &inputs,
-                                                 named_parameter_map_t &named_parameters,
-                                                 vector<LogicalType> &input_table_types,
-                                                 vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                 vector<string> &names) {
+static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFunctionBindInput &input,
+                                                 vector<LogicalType> &return_types, vector<string> &names) {
 	auto test_types = GetTestTypes();
 	for (auto &test_type : test_types) {
 		return_types.push_back(move(test_type.type));

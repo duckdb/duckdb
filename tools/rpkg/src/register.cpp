@@ -184,8 +184,10 @@ private:
 	}
 };
 
-unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(const string &table_name, void *data) {
-	auto db_wrapper = (DBWrapper *)data;
+unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(ClientContext &context, const string &table_name,
+                                                          ReplacementScanData *data_p) {
+	auto &data = (ArrowScanReplacementData &)*data_p;
+	auto db_wrapper = data.wrapper;
 	lock_guard<mutex> arrow_scans_lock(db_wrapper->lock);
 	for (auto &e : db_wrapper->arrow_scans) {
 		if (e.first == table_name) {

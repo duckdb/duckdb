@@ -340,6 +340,7 @@ OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &
 		}
 		if (state.fetch_next_left) {
 			// resolve the left join condition for the current chunk
+			state.left_condition.Reset();
 			state.lhs_executor.Execute(input, state.left_condition);
 
 			state.left_tuple = 0;

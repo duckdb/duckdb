@@ -913,6 +913,10 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 
 void Vector::SetVectorType(VectorType vector_type_p) {
 	this->vector_type = vector_type_p;
+	if (TypeIsConstantSize(GetType().InternalType()) &&
+	    (GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR)) {
+		auxiliary.reset();
+	}
 	if (vector_type == VectorType::CONSTANT_VECTOR && GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &entries = StructVector::GetEntries(*this);
 		for (auto &entry : entries) {

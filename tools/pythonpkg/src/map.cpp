@@ -43,18 +43,15 @@ static py::handle FunctionCall(NumpyResultConversion &conversion, vector<string>
 
 // we call the passed function with a zero-row data frame to infer the output columns and their names.
 // they better not change in the actual execution ^^
-unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, vector<Value> &inputs,
-                                                      named_parameter_map_t &named_parameters,
-                                                      vector<LogicalType> &input_table_types,
-                                                      vector<string> &input_table_names,
+unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	py::gil_scoped_acquire acquire;
 
 	auto data_uptr = make_unique<MapFunctionData>();
 	auto &data = *data_uptr;
-	data.function = (PyObject *)inputs[0].GetPointer();
-	data.in_names = input_table_names;
-	data.in_types = input_table_types;
+	data.function = (PyObject *)input.inputs[0].GetPointer();
+	data.in_names = input.input_table_names;
+	data.in_types = input.input_table_types;
 
 	NumpyResultConversion conversion(data.in_types, 0);
 	auto df = FunctionCall(conversion, data.in_names, data.function);

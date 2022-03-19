@@ -464,9 +464,15 @@ TryReplacement(py::dict &dict, py::str &table_name,
 	return table_function;
 }
 
-static unique_ptr<TableFunctionRef> ScanReplacement(const string &table_name, void *data) {
+struct ReplacementRegisteredObjects : public ReplacementScanData {
+	unordered_map<string, unique_ptr<RegisteredObject>> *registered_objects;
+};
+
+static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, const string &table_name,
+                                                    ReplacementScanData *data) {
 	py::gil_scoped_acquire acquire;
-	auto registered_objects = (unordered_map<string, unique_ptr<RegisteredObject>> *)data;
+	auto &registered_data = (ReplacementRegisteredObjects &)*data;
+	auto registered_objects = registered_data.registered_objects;
 	auto py_table_name = py::str(table_name);
 	// Here we do an exhaustive search on the frame lineage
 	auto current_frame = py::module::import("inspect").attr("currentframe")();
@@ -510,7 +516,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		config.SetOption(*config_property, Value(val));
 	}
 	if (config.enable_external_access) {
-		config.replacement_scans.emplace_back(ScanReplacement, (void *)&res->registered_objects);
+		auto extra_data = make_unique<ReplacementRegisteredObjects>();
+		extra_data->registered_objects = &res->registered_objects;
+		config.replacement_scans.emplace_back(ScanReplacement, move(extra_data));
 	}
 
 	res->database = make_unique<DuckDB>(database, &config);
