@@ -393,5 +393,16 @@ dbplyr_fill0.duckdb_connection <- function(.con, .data, cols_to_fill, order_by_c
   dbplyr_fill0(.con, .data, cols_to_fill, order_by_cols, .direction)
 }
 
+# Customized handling for tbl() to allow the use of scan tables
+# @param src .con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
+# @param from Table or parquet/csv -files to be registered
+# @param cache Enable object cache for parquet files
+tbl.duckdb_connection <- function(src, from, cache = TRUE, ...) {
+  ident_q <- pkg_method("ident_q", "dbplyr")
+  if (grepl("^parquet_scan|\\.parquet'$|^read_csv|\\.csv'", from, ignore.case = TRUE)) from <- ident_q(from)
+  if (cache & grepl("parquet", from, ignore.case = TRUE)) DBI::dbExecute(src, "PRAGMA enable_object_cache")
+  NextMethod("tbl")
+}
+
 # Needed to suppress the R CHECK notes (due to the use of sql_expr)
 globalVariables(c("REGEXP_MATCHES", "CAST", "%AS%", "INTEGER", "XOR", "%<<%", "%>>%", "LN", "LOG", "ROUND", "EXTRACT", "%FROM%", "MONTH", "STRFTIME", "QUARTER", "YEAR", "DATE_TRUNC", "DATE", "DOY", "TO_SECONDS", "BIGINT", "TO_MINUTES", "TO_HOURS", "TO_DAYS", "TO_WEEKS", "TO_MONTHS", "TO_YEARS", "STRPOS", "NOT", "REGEXP_REPLACE", "TRIM", "LPAD", "RPAD", "%||%", "REPEAT", "LENGTH", "STRING_AGG", "GREATEST", "LIST_EXTRACT", "LOG10", "LOG2", "STRING_SPLIT_REGEX", "FLOOR", "FMOD", "FDIV"))
