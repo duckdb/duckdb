@@ -36,6 +36,18 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	info->schema = qname.schema;
 	info->name = qname.name;
 
+	switch (stmt->relpersistence) {
+	case duckdb_libpgquery::PG_RELPERSISTENCE_TEMP:
+		info->temporary = true;
+		break;
+	case duckdb_libpgquery::PG_RELPERSISTENCE_UNLOGGED:
+		throw ParserException("Unlogged flag not supported for macros: '%s'", qname.name);
+		break;
+	case duckdb_libpgquery::RELPERSISTENCE_PERMANENT:
+		info->temporary = false;
+		break;
+	}
+
 	if (stmt->params) {
 		vector<unique_ptr<ParsedExpression>> parameters;
 		TransformExpressionList(*stmt->params, parameters);
