@@ -1,8 +1,20 @@
 name: LinuxRelease
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'tools/nodejs/**'
+      - 'tools/pythonpkg/**'
+      - 'tools/rpkg/**'
+      - '.github/workflows/NodeJS.yml'
+      - '.github/workflows/Python.yml'
+      - '.github/workflows/R.yml'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
 defaults:
@@ -187,7 +199,9 @@ jobs:
         ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
     - name: Build
-      run: make
+      run: |
+        make
+        rm build/release/src/libduckdb*
 
     - name: Deploy
       run: |
@@ -488,16 +502,16 @@ jobs:
 
     - uses: actions/setup-node@v2
       with:
-        node-version: '17'
+        node-version: '16'
 
     - name: Build
       run: make
 
     - name: Start S3/HTTP test server
       run: |
-        npm install -g s3rver
+        sudo ./scripts/install_s3_test_server.sh
         mkdir -p /tmp/s3rver
-        s3rver -d "/tmp/s3rver" -p "4923" -a "localhost" --configure-bucket "test-bucket" &> /tmp/s3rver/access_log.txt &
+        ./scripts/run_s3_test_server.sh &> /tmp/s3rver/access_log.txt &
 
     - name: Test
       run: make allunit
