@@ -1408,6 +1408,22 @@ string Value::ToSQLString() const {
 		ret += "}";
 		return ret;
 	}
+	case LogicalTypeId::FLOAT:
+		if (!FloatIsFinite(FloatValue::Get(*this))) {
+			return "'" + ToString() + "'::" + type_.ToString();
+		}
+		return ToString();
+	case LogicalTypeId::DOUBLE: {
+		double val = DoubleValue::Get(*this);
+		if (!DoubleIsFinite(val)) {
+			if (!Value::IsNan(val)) {
+				// to infinity and beyond
+				return val < 0 ? "-1e1000" : "1e1000";
+			}
+			return "'" + ToString() + "'::" + type_.ToString();
+		}
+		return ToString();
+	}
 	case LogicalTypeId::LIST: {
 		string ret = "[";
 		for (size_t i = 0; i < list_value.size(); i++) {

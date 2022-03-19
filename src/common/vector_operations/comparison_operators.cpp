@@ -55,7 +55,7 @@ bool GreaterThan::Operation(float left, float right) {
 
 template <>
 bool GreaterThan::Operation(double left, double right) {
-	return GreaterThanFloat<float>(left, right);
+	return GreaterThanFloat<double>(left, right);
 }
 
 template <class T>
@@ -83,7 +83,7 @@ bool GreaterThanEquals::Operation(float left, float right) {
 
 template <>
 bool GreaterThanEquals::Operation(double left, double right) {
-	return GreaterThanEqualsFloat<float>(left, right);
+	return GreaterThanEqualsFloat<double>(left, right);
 }
 
 struct ComparisonSelector {
