@@ -3,16 +3,41 @@
 # group: [list]
 
 statement ok
-CREATE TABLE range AS SELECT LIST(1) AS i FROM range(1000) t1(i)
+CREATE TABLE integers(i INTEGER[]);
 
 statement ok
-INSERT INTO range VALUES (NULL), ([]), ([NULL]);
+INSERT INTO integers VALUES ([1, 2, 3]), ([6, 3, 2, 5]), ([]), ([NULL]), (NULL), ([1, NULL, 2, 3]);
 
-# fails with wrong (very small negative) value
 query I
-SELECT list_median(i) FROM range
+SELECT list_avg(i) FROM integers;
+----
+2
+4
+NULL
+NULL
+NULL
+2
+
+query II
+SELECT list_avg(i), list_avg(i) FROM integers;
+----
+2	2
+4	4
+NULL	NULL
+NULL	NULL
+NULL	NULL
+2	2
+
+query I
+SELECT list_avg([1, 1, 1, 1]);
 ----
 1
-NULL
-NULL
-NULL
+
+query I
+SELECT list_avg([1, 1, 1, 1]) FROM integers;
+----
+1
+1
+1
+1
+1

@@ -12,8 +12,6 @@ namespace duckdb {
 // FIXME: use update instead of simple_update to make use of 'group by functionality'
 // this should also increase performance (especially for many small lists)
 
-// TODO: destructor for aggregate state
-
 struct ListAggregatesBindData : public FunctionData {
 	ListAggregatesBindData(const LogicalType &stype_p, unique_ptr<Expression> aggr_expr_p);
 	~ListAggregatesBindData() override;
@@ -55,7 +53,6 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &info = (ListAggregatesBindData &)*func_expr.bind_info;
 	auto &aggr = (BoundAggregateExpression &)*info.aggr_expr;
 
-	//D_ASSERT(aggr.function.simple_update);
 	D_ASSERT(aggr.function.update);
 
 	auto lists_size = ListVector::GetListSize(lists);
@@ -72,15 +69,13 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 	idx_t size = aggr.function.state_size();
 	auto state_buffer = unique_ptr<data_t[]>(new data_t[size * count]);
 
-	// once my state vector is full (1024 elements or VECTOR_SIZE), I run the update
-	// in the state vector for each element of the same list I point to the same state
-
-	// state_vector holds the pointers to the states
-	//Vector state_vector = Vector(LogicalType::POINTER, count);
+	// state vector for initialize and finalize
+	Vector state_vector = Vector(LogicalType::POINTER, count);
+	auto states = FlatVector::GetData<data_ptr_t>(state_vector);
 
 	// state vector of STANDARD_VECTOR_SIZE holds the pointers to the states
-	Vector state_vector = Vector(LogicalType::POINTER);
-	auto states = FlatVector::GetData<data_ptr_t>(state_vector);
+	Vector state_vector_update = Vector(LogicalType::POINTER);
+	auto states_update = FlatVector::GetData<data_ptr_t>(state_vector_update);
 
 	idx_t states_idx = 0;
 	idx_t offset_child_vector = 0;
@@ -98,19 +93,10 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 		const auto &list_entry = list_entries[lists_index];
 		auto source_idx = child_data.sel->get_index(list_entry.offset);
 
-		//[state_buffer.get() + size * 0, state_buffer.get() + size * 0, state_buffer.get() + size * 0,
-		//	state_buffer.get() + size * 1, state_buffer.get() + size * 1]
-
-		// do the update for small lists and the other one for big lists (if exists) (but benchmark first)
-
-		// initialize the aggregate state for this list
-		// TODO: this is kind of the first element of the list, but what if the list is empty?
+		// initialize the state for this list
 		auto state_ptr = state_buffer.get() + size * i;
-		states[states_idx] = state_ptr;
-		aggr.function.initialize(states[states_idx]);
-
-		//states[i] = state_buffer.get() + size * i;
-		//aggr.function.initialize(states[i]);
+		states[i] = state_ptr;
+		aggr.function.initialize(states[i]);
 
 		// nothing to do for this list
 		if (!lists_data.validity.RowIsValid(lists_index)) {
@@ -126,27 +112,23 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 				
 				// update the aggregate state(s)
 				Vector slices[] = {Vector(child_vector, offset_child_vector)};
-				aggr.function.update(slices, aggr.bind_info.get(), 1, state_vector, states_idx);
+				aggr.function.update(slices, aggr.bind_info.get(), 1, state_vector_update, states_idx);
 
 				// reset values
 				states_idx = 0;
 				offset_child_vector = source_idx;
 			}
 
-			states[states_idx] = state_ptr;
+			states_update[states_idx] = state_ptr;
 			states_idx++;
 			child_idx++;
 		}
-
-		// update the aggregate state
-		//Vector slices[] = {Vector(child_vector, source_idx)};
-		//aggr.function.simple_update(slices, aggr.bind_info.get(), 1, states[i], list_entry.length);
 	}
 
 	// update the remaining elements of the last list(s)
 	if (states_idx != 0) {
 		Vector slices[] = {Vector(child_vector, offset_child_vector)};
-		aggr.function.update(slices, aggr.bind_info.get(), 1, state_vector, states_idx);
+		aggr.function.update(slices, aggr.bind_info.get(), 1, state_vector_update, states_idx);
 	}
 
 	// finalize all the aggregate states
@@ -205,7 +187,6 @@ static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, Scalar
 	auto bound_aggr_function = AggregateFunction::BindAggregateFunction(context, best_function, move(children));
 
 	bound_function.arguments[0] = LogicalType::LIST(bound_aggr_function->function.arguments[0]); // for proper casting of the vectors
-	//bound_function.arguments[0] = LogicalType::LIST(best_function.arguments[0]);
 	bound_function.return_type = bound_aggr_function->function.return_type;
 	return make_unique<ListAggregatesBindData>(bound_function.return_type, move(bound_aggr_function));
 }
