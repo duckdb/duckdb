@@ -11,13 +11,16 @@ import pandas
 import sys
 # stubgen override - This should probably not be exposed
 #_clean_default_connection: Any
+apilevel: str
 comment: token_type
 default_connection: DuckDBPyConnection
 identifier: token_type
 keyword: token_type
 numeric_const: token_type
 operator: token_type
+paramstyle: str
 string_const: token_type
+threadsafety: int
 
 class DuckDBPyConnection:
     def __init__(self, *args, **kwargs) -> None: ...
