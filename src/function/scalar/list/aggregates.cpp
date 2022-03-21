@@ -77,26 +77,19 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 	Vector state_vector_update = Vector(LogicalType::POINTER);
 	auto states_update = FlatVector::GetData<data_ptr_t>(state_vector_update);
 
+	// selection vector pointing to the data
+	SelectionVector sel_vector = SelectionVector(STANDARD_VECTOR_SIZE);
 	idx_t states_idx = 0;
-	idx_t offset_child_vector = 0;
-
-	// initialize the offset of the first list
-	if (count > 0) {
-		auto lists_index = lists_data.sel->get_index(0);
-		const auto &list_entry = list_entries[lists_index];
-		offset_child_vector = child_data.sel->get_index(list_entry.offset);
-	}
 
 	for (idx_t i = 0; i < count; i++) {
-
-		auto lists_index = lists_data.sel->get_index(i);
-		const auto &list_entry = list_entries[lists_index];
-		auto source_idx = child_data.sel->get_index(list_entry.offset);
 
 		// initialize the state for this list
 		auto state_ptr = state_buffer.get() + size * i;
 		states[i] = state_ptr;
 		aggr.function.initialize(states[i]);
+
+		auto lists_index = lists_data.sel->get_index(i);
+		const auto &list_entry = list_entries[lists_index];
 
 		// nothing to do for this list
 		if (!lists_data.validity.RowIsValid(lists_index)) {
@@ -104,21 +97,29 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 			continue;
 		}
 
+		// skip empty list
+		if (list_entry.length == 0) {
+			continue;
+		}
+
+		auto source_idx = child_data.sel->get_index(list_entry.offset);
 		idx_t child_idx = 0;
+		
 		while (child_idx < list_entry.length) {
 
 			// states vector is full, update
 			if (states_idx == STANDARD_VECTOR_SIZE) {
 				
 				// update the aggregate state(s)
-				Vector slices[] = {Vector(child_vector, offset_child_vector)};
+				Vector slices[] = {Vector(child_vector, sel_vector, states_idx)};
 				aggr.function.update(slices, aggr.bind_info.get(), 1, state_vector_update, states_idx);
 
 				// reset values
 				states_idx = 0;
-				offset_child_vector = source_idx;
+				sel_vector.Initialize(STANDARD_VECTOR_SIZE);
 			}
 
+			sel_vector.set_index(states_idx, source_idx + child_idx);
 			states_update[states_idx] = state_ptr;
 			states_idx++;
 			child_idx++;
@@ -127,7 +128,7 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 
 	// update the remaining elements of the last list(s)
 	if (states_idx != 0) {
-		Vector slices[] = {Vector(child_vector, offset_child_vector)};
+		Vector slices[] = {Vector(child_vector, sel_vector, states_idx)};
 		aggr.function.update(slices, aggr.bind_info.get(), 1, state_vector_update, states_idx);
 	}
 

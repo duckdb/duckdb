@@ -31,7 +31,7 @@ INSERT INTO integers SELECT LIST(i) FROM range(0, 1000, 1) tbl(i);
 
 # negative numbers
 statement ok
-INSERT INTO integers SELECT LIST(i) FROM range(-1000, 1000, 1) tbl(i);
+INSERT INTO integers SELECT LIST(i) FROM range(-999, 1000, 1) tbl(i);
 
 # more negative numbers
 statement ok
@@ -53,7 +53,7 @@ NULL
 
 # no values
 query I
-SELECT list_sum(i) FROM integers WHERE i > 10000;
+SELECT list_sum(i) FROM integers WHERE 1 = 0;
 ----
 
 statement ok
@@ -80,7 +80,7 @@ SELECT list_aggr(n, 'kahan_sum') FROM doubles;
 
 # bigint sum
 statement ok
-CREATE TABLE bigints(b BIGINT[]);
+CREATE TABLE bigints(i BIGINT[]);
 
 # a bunch of huge values
 statement ok

@@ -2,56 +2,25 @@
 # description: Different failing list aggregate functions
 # group: [list]
 
-#---- sum.test ----#
-
-# something is very wrong here...
-
 statement ok
-CREATE TABLE integers(i INTEGER[]);
+CREATE TABLE decimals (i DECIMAL(18,1)[]);
 
-# negative numbers
+# sum no longer fits in int64
 statement ok
-INSERT INTO integers SELECT LIST(i) FROM range(-1000, 1000, 1) tbl(i);
+INSERT INTO decimals VALUES ([99999999999999999.9, 99999999999999999.9, 99999999999999999.9,
+    99999999999999999.9, 99999999999999999.9, 99999999999999999.9, 99999999999999999.9,
+    99999999999999999.9, 99999999999999999.9, 99999999999999999.9]);
+
+# sum
+query I
+SELECT list_sum(i) FROM decimals;
+----
+1000000000000000005.0
 
 query I
-SELECT list_sum(i) FROM integers;
+SELECT list_avg(i) FROM decimals;
 ----
-0
-
-#---- histogram.test ----#
-
-# fails in general
-# because the simple_update does not exist for the histogram aggregate
-
-#---- nested.test ----#
-
-# fails
-# because the simple_update does not exist for these aggr functions
-
-#---- median.test ----#
-# slice is not working correctly here
-
-statement ok
-CREATE TABLE range AS SELECT LIST(1) AS i FROM range(2000) t1(i)
-
-statement ok
-INSERT INTO range VALUES (NULL), ([]), ([NULL]);
-
-# fails with wrong (very small negative) value
-query I
-SELECT list_median(i) FROM range
-----
-1
-NULL
-NULL
-NULL
-
-# 1.000000
-# NULL
-# NULL
-# -2147483648.000000
-
-# while SELECT list_median([NULL]) works
+76923076923076923
 
 #---- approx_count_distinct.test ----#
 

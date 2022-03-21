@@ -2,8 +2,6 @@
 # description: Test the list_min aggregate function
 # group: [list]
 
-# TODO: once this works, also test list_max
-
 statement ok
 PRAGMA enable_verification
 

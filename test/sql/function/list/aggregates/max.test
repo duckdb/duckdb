@@ -133,7 +133,7 @@ SELECT list_max(i) FROM five
 NULL
 NULL
 NULL
-5.0
+2.0
 
 statement ok
 DROP TABLE five
