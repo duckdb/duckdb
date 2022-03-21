@@ -78,13 +78,13 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	template <typename TA>
 	static ScalarFunction GetSenaryFunction(const LogicalTypeId &type) {
 		return ScalarFunction({type, type, type, type, type, LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ,
-		                      Execute<TA>, false, Bind);
+		                      Execute<TA>, false, false, Bind);
 	}
 
 	template <typename TA>
 	static ScalarFunction GetSeptenaryFunction(const LogicalTypeId &type) {
 		return ScalarFunction({type, type, type, type, type, LogicalType::DOUBLE, LogicalType::VARCHAR},
-		                      LogicalType::TIMESTAMP_TZ, Execute<TA>, false, Bind);
+		                      LogicalType::TIMESTAMP_TZ, Execute<TA>, false, false, Bind);
 	}
 
 	static void AddFunction(const string &name, ClientContext &context) {
