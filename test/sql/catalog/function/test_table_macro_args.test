@@ -1,5 +1,5 @@
 # name: test/sql/catalog/function/test_table_macro_args.test
-# description: Test SELECTMacro
+# description: Test table macros with default args
 # group: [function]
 
 statement ok
