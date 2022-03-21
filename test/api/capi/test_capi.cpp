@@ -676,10 +676,12 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(duckdb_bind_float(stmt, 1, NAN) == DuckDBSuccess);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBError);
+	duckdb_destroy_result(&res);
 
 	REQUIRE(duckdb_bind_double(stmt, 1, NAN) == DuckDBSuccess);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBError);
+	duckdb_destroy_result(&res);
 
 	duckdb_bind_varchar(stmt, 1, "44");
 	status = duckdb_execute_prepared(stmt, &res);

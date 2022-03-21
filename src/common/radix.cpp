@@ -1,4 +1,6 @@
 #include "duckdb/common/radix.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 #include <cfloat>
 #include <cstring> // strlen() on Solaris

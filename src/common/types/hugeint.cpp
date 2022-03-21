@@ -3,6 +3,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/windows_undefs.hpp"
+#include "duckdb/common/types/value.hpp"
 
 #include <cmath>
 #include <limits>
