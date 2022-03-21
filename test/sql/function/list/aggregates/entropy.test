@@ -6,21 +6,6 @@ statement error
 select list_entropy()
 
 query I
-select list_entropy(NULL)
-----
-NULL
-
-query I
-select list_entropy([NULL])
-----
-0
-
-query I
-select list_entropy([])
-----
-0
-
-query I
 select list_entropy([1])
 ----
 0

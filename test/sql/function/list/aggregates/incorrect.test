@@ -1,6 +1,8 @@
 # name: test/sql/function/list/aggregates/invalid.test
-# description: Test aggregate functions that are not compatible with list aggregate functions
+# description: Test incorrect and incompatible aggregate functions for lists
 # group: [list]
+
+# incompatible aggregate functions (more than one column)
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'count_star');

@@ -1,0 +1,53 @@
+# name: test/sql/function/list/aggregates/null_or_empty.test
+# description: Test the list_aggr function for NULL, [NULL] and []
+# group: [list]
+
+# NULL list
+foreach func_name avg approx_count_distinct bit_and bit_or bit_xor bool_or bool_and count entropy
+
+query I
+SELECT list_aggr(NULL, '${func_name}')
+----
+NULL
+
+endloop
+
+# [NULL] list with NULL result
+foreach func_name avg bit_and bit_or bit_xor bool_or bool_and
+
+query I
+SELECT list_aggr([NULL], '${func_name}')
+----
+NULL
+
+endloop
+
+# [NULL] list with 0 result
+foreach func_name approx_count_distinct count entropy
+
+query I
+SELECT list_aggr([NULL], '${func_name}')
+----
+0
+
+endloop
+
+# empty list with NULL result
+foreach func_name avg bit_and bit_or bit_xor bool_or bool_and
+
+query I
+SELECT list_aggr([], '${func_name}')
+----
+NULL
+
+endloop
+
+# empty list with 0 result
+foreach func_name approx_count_distinct count entropy
+
+query I
+SELECT list_aggr([], '${func_name}')
+----
+0
+
+endloop

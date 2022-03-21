@@ -2,26 +2,11 @@
 # description: Test the list_avg aggregate function
 # group: [list]
 
-# scalar average
-query I
-SELECT list_avg([3])
-----
-3
+# not supported types
 
-query I
-SELECT list_avg(NULL)
-----
-NULL
+# not supported temporal types
 
-query I
-SELECT list_avg([NULL])
-----
-NULL
-
-query I
-SELECT list_avg([])
-----
-NULL
+# not supported nested types
 
 query I
 SELECT list_avg([3::SMALLINT])

@@ -8,36 +8,6 @@ select list_bool_or([0])
 statement error
 select list_bool_and([0])
 
-query I
-select list_bool_or(NULL)
-----
-NULL
-
-query I
-select list_bool_and(NULL)
-----
-NULL
-
-query I
-select list_bool_or([NULL])
-----
-NULL
-
-query I
-select list_bool_and([NULL])
-----
-NULL
-
-query I
-select list_bool_or([])
-----
-NULL
-
-query I
-select list_bool_and([])
-----
-NULL
-
 statement error
 select list_bool_or()
 

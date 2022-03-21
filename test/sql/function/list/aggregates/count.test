@@ -8,22 +8,6 @@ SELECT list_count([1, 2, 3])
 3
 
 query I
-SELECT list_count([])
-----
-0
-
-query I
-SELECT list_count(NULL)
-----
-NULL
-
-# count aggr function does not count NULLs
-query I
-SELECT list_count([NULL])
-----
-0
-
-query I
 SELECT list_count([1]) FROM range(3)
 ----
 1
