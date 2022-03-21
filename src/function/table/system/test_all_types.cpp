@@ -1,6 +1,7 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/common/pair.hpp"
 #include <cmath>
+#include <limits>
 
 namespace duckdb {
 
