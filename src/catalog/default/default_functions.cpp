@@ -6,13 +6,6 @@
 
 namespace duckdb {
 
-struct DefaultMacro {
-	const char *schema;
-	const char *name;
-	const char *parameters[8];
-	const char *macro;
-};
-
 static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "current_user", {nullptr}, "'duckdb'"},                       // user name of current execution context
 	{DEFAULT_SCHEMA, "current_catalog", {nullptr}, "'duckdb'"},                    // name of current database (called "catalog" in the SQL standard)
@@ -91,7 +84,7 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "list_prepend", {"e", "l", nullptr}, "list_concat(list_value(e), l)"},
 	{DEFAULT_SCHEMA, "array_prepend", {"el", "arr", nullptr}, "list_prepend(el, arr)"},
 	{DEFAULT_SCHEMA, "array_pop_back", {"arr", nullptr}, "arr[:LEN(arr)-1]"},
-	{DEFAULT_SCHEMA, "array_pop_front", {"arr", nullptr}, "arr[1:]"},
+	{DEFAULT_SCHEMA, "array_pop_front", {"arr", nullptr}, "arr[2:]"},
 	{DEFAULT_SCHEMA, "array_push_back", {"arr", "e", nullptr}, "list_concat(arr, list_value(e))"},
 	{DEFAULT_SCHEMA, "array_push_front", {"arr", "e", nullptr}, "list_concat(list_value(e), arr)"},
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, "unnest(generate_series(1, array_length(arr, dim)))"},
@@ -99,28 +92,32 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
 	{nullptr, nullptr, {nullptr}, nullptr}};
 
+unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(DefaultMacro &default_macro) {
+	// parse the expression
+	auto expressions = Parser::ParseExpressionList(default_macro.macro);
+	D_ASSERT(expressions.size() == 1);
+
+	auto result = make_unique<MacroFunction>(move(expressions[0]));
+	for (idx_t param_idx = 0; default_macro.parameters[param_idx] != nullptr; param_idx++) {
+		result->parameters.push_back(
+		    make_unique<ColumnRefExpression>(default_macro.parameters[param_idx]));
+	}
+
+	auto bind_info = make_unique<CreateMacroInfo>();
+	bind_info->schema = default_macro.schema;
+	bind_info->name = default_macro.name;
+	bind_info->temporary = true;
+	bind_info->internal = true;
+	bind_info->function = move(result);
+	return bind_info;
+}
+
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &input_schema, const string &input_name) {
 	auto schema = StringUtil::Lower(input_schema);
 	auto name = StringUtil::Lower(input_name);
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
 		if (internal_macros[index].schema == schema && internal_macros[index].name == name) {
-			// parse the expression
-			auto expressions = Parser::ParseExpressionList(internal_macros[index].macro);
-			D_ASSERT(expressions.size() == 1);
-
-			auto result = make_unique<MacroFunction>(move(expressions[0]));
-			for (idx_t param_idx = 0; internal_macros[index].parameters[param_idx] != nullptr; param_idx++) {
-				result->parameters.push_back(
-				    make_unique<ColumnRefExpression>(internal_macros[index].parameters[param_idx]));
-			}
-
-			auto bind_info = make_unique<CreateMacroInfo>();
-			bind_info->schema = schema;
-			bind_info->name = internal_macros[index].name;
-			bind_info->temporary = true;
-			bind_info->internal = true;
-			bind_info->function = move(result);
-			return move(bind_info);
+			return DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index]);
 		}
 	}
 	return nullptr;

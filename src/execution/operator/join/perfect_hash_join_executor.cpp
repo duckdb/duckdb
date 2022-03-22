@@ -153,6 +153,7 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 	idx_t probe_sel_count = 0;
 
 	// fetch the join keys from the chunk
+	state.join_keys.Reset();
 	state.probe_executor.Execute(input, state.join_keys);
 	// select the keys that are in the min-max range
 	auto &keys_vec = state.join_keys.data[0];

@@ -14,7 +14,14 @@
 #include "duckdb_python/pyconnection.hpp"
 
 namespace duckdb {
+
 struct DuckDBPyResult;
+
+class PythonDependencies : public ExtraDependencies {
+public:
+	explicit PythonDependencies(py::function map_function) : map_function(map_function) {};
+	py::function map_function;
+};
 
 struct DuckDBPyRelation {
 public:
@@ -43,6 +50,12 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> FromParquet(const string &filename, bool binary_as_string,
 	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
+	static unique_ptr<DuckDBPyRelation>
+	FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
+	static unique_ptr<DuckDBPyRelation>
+	GetSubstrait(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation>
 	FromParquetDefault(const string &filename, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
@@ -144,7 +157,9 @@ public:
 
 	py::object Fetchall();
 
-	py::object ToArrowTable();
+	py::object ToArrowTable(idx_t batch_size);
+
+	py::object ToRecordBatch(idx_t batch_size);
 
 	unique_ptr<DuckDBPyRelation> Union(DuckDBPyRelation *other);
 
@@ -187,7 +202,6 @@ private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
 	                              const string &projected_columns = "", const string &window_function = "");
-	py::object map_function;
 };
 
 } // namespace duckdb

@@ -26,6 +26,10 @@ Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientC
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
 }
 
+Connection::~Connection() {
+	ConnectionManager::Get(*context->db).RemoveConnection(*context);
+}
+
 string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	auto &profiler = QueryProfiler::Get(*context);
 	if (format == ProfilerPrintFormat::JSON) {

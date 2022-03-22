@@ -18,11 +18,8 @@ struct DuckDBIndexesData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, vector<Value> &inputs,
-                                                  named_parameter_map_t &named_parameters,
-                                                  vector<LogicalType> &input_table_types,
-                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                  vector<string> &names) {
+static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, TableFunctionBindInput &input,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -104,9 +101,9 @@ void DuckDBIndexesFunction(ClientContext &context, const FunctionData *bind_data
 		auto table_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, index.info->schema, index.info->table);
 		output.SetValue(5, count, Value::BIGINT(table_entry->oid));
 		// is_unique, BOOLEAN
-		output.SetValue(6, count, Value::BOOLEAN(index.index->is_unique));
+		output.SetValue(6, count, Value::BOOLEAN(index.index->IsUnique()));
 		// is_primary, BOOLEAN
-		output.SetValue(7, count, Value::BOOLEAN(index.index->is_primary));
+		output.SetValue(7, count, Value::BOOLEAN(index.index->IsPrimary()));
 		// expressions, VARCHAR
 		output.SetValue(8, count, Value());
 		// sql, VARCHAR

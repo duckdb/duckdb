@@ -24,21 +24,26 @@ public:
 
 	void AddConnection(ClientContext &context) {
 		lock_guard<mutex> lock(connections_lock);
-		connections.push_back(weak_ptr<ClientContext>(context.shared_from_this()));
+		connections.insert(make_pair(&context, weak_ptr<ClientContext>(context.shared_from_this())));
+	}
+
+	void RemoveConnection(ClientContext &context) {
+		lock_guard<mutex> lock(connections_lock);
+		connections.erase(&context);
 	}
 
 	vector<shared_ptr<ClientContext>> GetConnectionList() {
 		vector<shared_ptr<ClientContext>> result;
-		for (size_t i = 0; i < connections.size(); i++) {
-			auto connection = connections[i].lock();
+		for (auto &it : connections) {
+			auto connection = it.second.lock();
 			if (!connection) {
-				connections.erase(connections.begin() + i);
-				i--;
+				connections.erase(it.first);
 				continue;
 			} else {
 				result.push_back(move(connection));
 			}
 		}
+
 		return result;
 	}
 
@@ -47,7 +52,7 @@ public:
 
 public:
 	mutex connections_lock;
-	vector<weak_ptr<ClientContext>> connections;
+	unordered_map<ClientContext *, weak_ptr<ClientContext>> connections;
 };
 
 } // namespace duckdb

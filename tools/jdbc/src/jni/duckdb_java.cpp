@@ -281,8 +281,9 @@ static std::string type_to_jduckdb_type(LogicalType logical_type) {
 			return std::string("no physical type found");
 		}
 	} break;
+	default:
+		return std::string("");
 	}
-	return std::string("");
 }
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv *env, jclass, jobject stmt_ref_buf) {
@@ -401,6 +402,8 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 			case PhysicalType::INT128:
 				constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 				break;
+			default:
+				throw InternalException("Unimplemented physical type for decimal");
 			}
 			break;
 		}

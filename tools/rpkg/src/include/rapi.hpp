@@ -46,7 +46,12 @@ struct RQueryResult {
 typedef cpp11::external_pointer<RQueryResult> rqry_eptr_t;
 
 // internal
-unique_ptr<TableFunctionRef> ArrowScanReplacement(const std::string &table_name, void *data);
+unique_ptr<TableFunctionRef> ArrowScanReplacement(ClientContext &context, const std::string &table_name,
+                                                  ReplacementScanData *data);
+
+struct ArrowScanReplacementData : public ReplacementScanData {
+	DBWrapper *wrapper;
+};
 
 SEXP StringsToSexp(vector<std::string> s);
 
@@ -136,7 +141,7 @@ void rapi_register_arrow(duckdb::conn_eptr_t, SEXP namesexp, SEXP export_funsexp
 
 void rapi_unregister_arrow(duckdb::conn_eptr_t, SEXP namesexp);
 
-SEXP rapi_execute_arrow(duckdb::rqry_eptr_t, bool, int, bool);
+SEXP rapi_execute_arrow(duckdb::rqry_eptr_t, int);
 
 SEXP rapi_record_batch(duckdb::rqry_eptr_t, int);
 

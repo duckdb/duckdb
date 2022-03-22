@@ -123,8 +123,12 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("create_view", &DuckDBPyRelation::CreateView,
 	         "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
 	         py::arg("replace") = true)
-	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Transforms the relation object into a Arrow table")
-	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Transforms the relation object into a Arrow table")
+	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Transforms the relation object into a Arrow table",
+	         py::arg("batch_size") = 1000000)
+	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Transforms the relation object into a Arrow table",
+	         py::arg("batch_size") = 1000000)
+	    .def("record_batch", &DuckDBPyRelation::ToRecordBatch,
+	         "Transforms the relation object into a Arrow Record Batch Reader", py::arg("batch_size") = 1000000)
 	    .def("to_df", &DuckDBPyRelation::ToDF, "Transforms the relation object into a Data.Frame")
 	    .def("df", &DuckDBPyRelation::ToDF, "Transforms the relation object into a Data.Frame")
 	    .def("fetchone", &DuckDBPyRelation::Fetchone, "Execute and fetch a single row")
@@ -171,6 +175,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquetDefault(const string &
 		binary_as_string = result.GetValue<bool>();
 	}
 	return conn->FromParquet(filename, binary_as_string);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstrait(const string &query, DuckDBPyConnection *conn) {
+	return conn->GetSubstrait(query);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn) {
+	return conn->FromSubstrait(proto);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrowTable(py::object &table, DuckDBPyConnection *conn) {
@@ -428,7 +440,7 @@ py::object DuckDBPyRelation::Fetchall() {
 	return res->Fetchall();
 }
 
-py::object DuckDBPyRelation::ToArrowTable() {
+py::object DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
@@ -437,7 +449,19 @@ py::object DuckDBPyRelation::ToArrowTable() {
 	if (!res->result->success) {
 		throw std::runtime_error(res->result->error);
 	}
-	return res->FetchArrowTable();
+	return res->FetchArrowTable(batch_size);
+}
+
+py::object DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
+	auto res = make_unique<DuckDBPyResult>();
+	{
+		py::gil_scoped_release release;
+		res->result = rel->Execute();
+	}
+	if (!res->result->success) {
+		throw std::runtime_error(res->result->error);
+	}
+	return res->FetchRecordBatchReader(batch_size);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Union(DuckDBPyRelation *other) {
@@ -533,7 +557,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)fun.ptr()));
 	auto res = make_unique<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
-	res->map_function = fun;
+	res->rel->extra_dependencies = make_unique<PythonDependencies>(fun);
 	return res;
 }
 

@@ -161,18 +161,15 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 	}
 }
 
-unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, vector<Value> &inputs,
-                                                           named_parameter_map_t &named_parameters,
-                                                           vector<LogicalType> &input_table_types,
-                                                           vector<string> &input_table_names,
+unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
 	typedef unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce_t)(
 	    uintptr_t stream_factory_ptr,
 	    std::pair<std::unordered_map<idx_t, string>, std::vector<string>> & project_columns,
 	    TableFilterCollection * filters);
-	auto stream_factory_ptr = inputs[0].GetPointer();
-	auto stream_factory_produce = (stream_factory_produce_t)inputs[1].GetPointer();
-	auto rows_per_thread = inputs[2].GetValue<uint64_t>();
+	auto stream_factory_ptr = input.inputs[0].GetPointer();
+	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer();
+	auto rows_per_thread = input.inputs[2].GetValue<uint64_t>();
 	std::pair<std::unordered_map<idx_t, string>, std::vector<string>> project_columns;
 #ifndef DUCKDB_NO_THREADS
 
@@ -618,6 +615,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		}
 		break;
 	}
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.first++];
 		auto cdata = (char *)array.buffers[2];
@@ -630,7 +628,6 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 				offsets = (uint64_t *)array.buffers[1] + array.offset + nested_offset;
 			}
 			SetVectorString(vector, size, cdata, offsets);
-
 		} else {
 			auto offsets = (uint32_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 			if (nested_offset != -1) {
@@ -638,7 +635,6 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			}
 			SetVectorString(vector, size, cdata, offsets);
 		}
-
 		break;
 	}
 	case LogicalTypeId::DATE: {

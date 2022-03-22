@@ -114,11 +114,8 @@ public:
 
 private:
 	//! Binds an arrow table
-	static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, vector<Value> &inputs,
-	                                              named_parameter_map_t &named_parameters,
-	                                              vector<LogicalType> &input_table_types,
-	                                              vector<string> &input_table_names, vector<LogicalType> &return_types,
-	                                              vector<string> &names);
+	static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
+	                                              vector<LogicalType> &return_types, vector<string> &names);
 	//! Actual conversion from Arrow to DuckDB
 	static void ArrowToDuckDB(ArrowScanState &scan_state,
 	                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,

@@ -83,7 +83,7 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 	auto result = ArrowToDuck(conn, *table);
 	ArrowSchema abi_arrow_schema;
 	std::vector<std::shared_ptr<arrow::RecordBatch>> batches_result;
-	result->ToArrowSchema(&abi_arrow_schema);
+	duckdb::QueryResult::ToArrowSchema(&abi_arrow_schema, result->types, result->names);
 	auto result_schema = arrow::ImportSchema(&abi_arrow_schema);
 
 	while (true) {
@@ -194,6 +194,7 @@ TEST_CASE("Test Arrow Parquet Files", "[arrow]") {
 	std::vector<std::string> skip {"datapage_v2.snappy.parquet"}; //! Not supported by arrow
 	skip.emplace_back("lz4_raw_compressed.parquet");              //! Arrow can't read this
 	skip.emplace_back("lz4_raw_compressed_larger.parquet");       //! Arrow can't read this
+	skip.emplace_back("uuid-arrow.parquet");                      //! Not supported by arrow
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};

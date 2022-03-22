@@ -20,11 +20,8 @@ public:
 public:
 	PandasScanFunction();
 
-	static unique_ptr<FunctionData> PandasScanBind(ClientContext &context, vector<Value> &inputs,
-	                                               named_parameter_map_t &named_parameters,
-	                                               vector<LogicalType> &input_table_types,
-	                                               vector<string> &input_table_names, vector<LogicalType> &return_types,
-	                                               vector<string> &names);
+	static unique_ptr<FunctionData> PandasScanBind(ClientContext &context, TableFunctionBindInput &input,
+	                                               vector<LogicalType> &return_types, vector<string> &names);
 
 	static unique_ptr<FunctionOperatorData> PandasScanInit(ClientContext &context, const FunctionData *bind_data_p,
 	                                                       const vector<column_t> &column_ids,

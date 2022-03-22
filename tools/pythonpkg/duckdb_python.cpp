@@ -81,7 +81,8 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.def("connect", &DuckDBPyConnection::Connect,
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
 	      "read_only flag if no changes are desired",
-	      py::arg("database") = ":memory:", py::arg("read_only") = false, py::arg("config") = py::dict());
+	      py::arg("database") = ":memory:", py::arg("read_only") = false, py::arg("config") = py::dict(),
+	      py::arg("check_same_thread") = true);
 	m.def("tokenize", PyTokenize,
 	      "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
 	      "used for e.g. syntax highlighting",
@@ -107,6 +108,10 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("from_csv_auto", &DuckDBPyRelation::FromCsvAuto, "Creates a relation object from the CSV file in file_name",
 	      py::arg("file_name"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	m.def("from_substrait", &DuckDBPyRelation::FromSubstrait, "Creates a query object from the substrait plan",
+	      py::arg("proto"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	m.def("get_substrait", &DuckDBPyRelation::GetSubstrait, "Serialize a query object to protobuf", py::arg("query"),
+	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("from_parquet", &DuckDBPyRelation::FromParquet,
 	      "Creates a relation object from the Parquet file in file_name", py::arg("file_name"),
 	      py::arg("binary_as_string"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());

@@ -15,7 +15,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 
 	auto name = (reinterpret_cast<duckdb_libpgquery::PGValue *>(type_name->names->tail->data.ptr_value)->val.str);
 	// transform it to the SQL type
-	LogicalTypeId base_type = TransformStringToLogicalType(name);
+	LogicalTypeId base_type = TransformStringToLogicalTypeId(name);
 
 	LogicalType result_type;
 	if (base_type == LogicalTypeId::STRUCT) {

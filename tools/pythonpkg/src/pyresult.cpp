@@ -24,11 +24,10 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	    .def("fetch_df", &DuckDBPyResult::FetchDF)
 	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk)
 	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch Result as an Arrow Table",
-	         py::arg("stream") = false, py::arg("num_of_vectors") = 1, py::arg("return_table") = true)
+	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader,
 	         "Fetch Result as an Arrow Record Batch Reader", py::arg("approx_batch_size"))
-	    .def("fetch_arrow_chunk", &DuckDBPyResult::FetchArrowTableChunk)
-	    .def("arrow", &DuckDBPyResult::FetchArrowTable)
+	    .def("arrow", &DuckDBPyResult::FetchArrowTable, py::arg("chunk_size") = 1000000)
 	    .def("df", &DuckDBPyResult::FetchDF);
 
 	PyDateTime_IMPORT;
@@ -69,6 +68,7 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	}
 	case LogicalTypeId::ENUM:
 		return py::cast(EnumType::GetValue(val));
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		return py::cast(StringValue::Get(val));
 	case LogicalTypeId::BLOB:
@@ -300,68 +300,62 @@ py::object DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
 	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpyInternal(true, num_of_vectors));
 }
 
-bool FetchArrowChunk(QueryResult *result, py::list &batches,
-                     pybind11::detail::accessor<pybind11::detail::accessor_policies::str_attr> &batch_import_func,
-                     bool copy = false) {
-	if (result->type == QueryResultType::STREAM_RESULT) {
-		auto stream_result = (StreamQueryResult *)result;
-		if (!stream_result->IsOpen()) {
-			return false;
-		}
-	}
-	auto data_chunk = FetchNext(*result);
+void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, DataChunk &duck_chunk, py::list &batches) {
+	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
+	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
+	ArrowArray data;
+	duck_chunk.ToArrowArray(&data);
+	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
+}
+
+bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size) {
+	auto data_chunk = ArrowUtil::FetchChunk(result, chunk_size);
 	if (!data_chunk || data_chunk->size() == 0) {
 		return false;
 	}
-	if (result->type == QueryResultType::STREAM_RESULT && copy) {
-		auto new_chunk = make_unique<DataChunk>();
-		new_chunk->Initialize(data_chunk->GetTypes());
-		data_chunk->Copy(*new_chunk);
-		data_chunk = move(new_chunk);
-	}
-	ArrowArray data;
-	data_chunk->ToArrowArray(&data);
 	ArrowSchema arrow_schema;
-	result->ToArrowSchema(&arrow_schema);
-	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
+	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names);
+	TransformDuckToArrowChunk(arrow_schema, *data_chunk, batches);
 	return true;
 }
 
-py::object DuckDBPyResult::FetchArrowTable(bool stream, idx_t num_of_vectors, bool return_table) {
+py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("result closed");
 	}
-	py::gil_scoped_acquire acquire;
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 
-	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
-	auto from_batches_func = pyarrow_lib_module.attr("Table").attr("from_batches");
-	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
-	ArrowSchema schema;
-	result->ToArrowSchema(&schema);
-	auto schema_obj = schema_import_func((uint64_t)&schema);
-
 	py::list batches;
-	if (stream) {
-		for (idx_t i = 0; i < num_of_vectors; i++) {
-			if (!FetchArrowChunk(result.get(), batches, batch_import_func, true)) {
-				break;
-			}
-		}
-	} else {
-		if (result->type == QueryResultType::STREAM_RESULT) {
-			result = ((StreamQueryResult *)result.get())->Materialize();
-		}
-		while (FetchArrowChunk(result.get(), batches, batch_import_func)) {
-		}
+
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		result = ((StreamQueryResult *)result.get())->Materialize();
 	}
-	if (return_table) {
-		return from_batches_func(batches, schema_obj);
+	while (FetchArrowChunk(result.get(), batches, chunk_size)) {
 	}
 	return std::move(batches);
 }
 
-py::object DuckDBPyResult::FetchRecordBatchReader(idx_t approx_batch_size) {
+py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
+	if (!result) {
+		throw std::runtime_error("There is no query result");
+	}
+	py::gil_scoped_acquire acquire;
+
+	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
+	auto from_batches_func = pyarrow_lib_module.attr("Table").attr("from_batches");
+
+	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
+	ArrowSchema schema;
+	QueryResult::ToArrowSchema(&schema, result->types, result->names);
+	auto schema_obj = schema_import_func((uint64_t)&schema);
+
+	py::list batches = FetchAllArrowChunks(chunk_size);
+
+	// We return an Arrow Table
+	return from_batches_func(batches, schema_obj);
+}
+
+py::object DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("There is no query result");
 	}
@@ -369,13 +363,9 @@ py::object DuckDBPyResult::FetchRecordBatchReader(idx_t approx_batch_size) {
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto record_batch_reader_func = pyarrow_lib_module.attr("RecordBatchReader").attr("_import_from_c");
 	//! We have to construct an Arrow Array Stream
-	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(result), approx_batch_size);
+	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(result), chunk_size);
 	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream);
 	return record_batch_reader;
-}
-
-py::object DuckDBPyResult::FetchArrowTableChunk(idx_t num_of_vectors, bool return_table) {
-	return FetchArrowTable(true, num_of_vectors, return_table);
 }
 
 py::str GetTypeToPython(const LogicalType &type) {
@@ -396,6 +386,7 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::DECIMAL: {
 		return py::str("NUMBER");
 	}
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		return py::str("STRING");
 	case LogicalTypeId::BLOB:
