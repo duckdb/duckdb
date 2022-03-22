@@ -186,7 +186,9 @@ string OdbcUtils::GetQueryDuckdbTables(const string &schema_filter, const string
 	sql_duckdb_tables += " WHERE " + schema_filter + " AND " + table_filter;
 
 	if (!table_type_filter.empty()) {
-		sql_duckdb_tables += " AND table_type IN (" + table_type_filter + ") ";
+		if (table_type_filter != "'%'") {
+			sql_duckdb_tables += " AND table_type IN (" + table_type_filter + ") ";
+		}
 	}
 
 	sql_duckdb_tables += "ORDER BY TABLE_TYPE, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME";
