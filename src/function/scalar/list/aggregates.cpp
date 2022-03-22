@@ -9,8 +9,7 @@
 namespace duckdb {
 
 // FIXME: use a local state for each thread to increase performance?
-// FIXME: use update instead of simple_update to make use of 'group by functionality'
-// this should also increase performance (especially for many small lists)
+// FIXME: benchmark the use of simple_update against using update (if applicable)
 
 struct ListAggregatesBindData : public FunctionData {
 	ListAggregatesBindData(const LogicalType &stype_p, unique_ptr<Expression> aggr_expr_p);
@@ -104,12 +103,12 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 
 		auto source_idx = child_data.sel->get_index(list_entry.offset);
 		idx_t child_idx = 0;
-		
+
 		while (child_idx < list_entry.length) {
 
 			// states vector is full, update
 			if (states_idx == STANDARD_VECTOR_SIZE) {
-				
+
 				// update the aggregate state(s)
 				Vector slices[] = {Vector(child_vector, sel_vector, states_idx)};
 				aggr.function.update(slices, aggr.bind_info.get(), 1, state_vector_update, states_idx);
@@ -187,7 +186,8 @@ static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, Scalar
 	auto &best_function = func->functions[best_function_idx];
 	auto bound_aggr_function = AggregateFunction::BindAggregateFunction(context, best_function, move(children));
 
-	bound_function.arguments[0] = LogicalType::LIST(bound_aggr_function->function.arguments[0]); // for proper casting of the vectors
+	bound_function.arguments[0] =
+	    LogicalType::LIST(bound_aggr_function->function.arguments[0]); // for proper casting of the vectors
 	bound_function.return_type = bound_aggr_function->function.return_type;
 	return make_unique<ListAggregatesBindData>(bound_function.return_type, move(bound_aggr_function));
 }

@@ -1,38 +1,10 @@
 # name: test/sql/function/list/aggregates/product.test
 # description: Test the list_product aggregate function
-# group: [list]
+# group: [aggregates]
 
+# incorrect usage
 statement error
 select list_product()
-
-statement error
-select list_product(1, 2)
-
-statement error
-select list_product('hello')
-
-statement error
-select product(*)
-
-query I
-select list_product(NULL)
-----
-NULL
-
-query I
-select list_product([NULL])
-----
-NULL
-
-query I
-select list_product([])
-----
-NULL
-
-query I
-select list_product([1])
-----
-1
 
 statement ok
 CREATE TABLE integers(i INTEGER[]);
@@ -67,8 +39,3 @@ query I
 SELECT list_product(i) FROM prods;
 ----
 1125899906842624
-
-query I
-SELECT list_product(i) FROM prods WHERE 1 = 0;
-----
-

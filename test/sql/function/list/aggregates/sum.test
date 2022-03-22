@@ -1,26 +1,11 @@
 # name: test/sql/function/list/aggregates/sum.test
 # description: Test the list_sum aggregate function
-# group: [list]
+# group: [aggregates]
 
 query I
 SELECT list_sum([2, 2])
 ----
 4
-
-query I
-SELECT list_sum(NULL)
-----
-NULL
-
-query I
-SELECT list_sum([])
-----
-NULL
-
-query I
-SELECT list_sum([NULL])
-----
-NULL
 
 statement ok
 CREATE TABLE integers(i INTEGER[]);
@@ -50,11 +35,6 @@ SELECT list_sum(i) FROM integers;
 NULL
 NULL
 NULL
-
-# no values
-query I
-SELECT list_sum(i) FROM integers WHERE 1 = 0;
-----
 
 statement ok
 CREATE TABLE doubles(n DOUBLE[]);
@@ -91,4 +71,3 @@ query I
 SELECT list_sum(i) FROM bigints
 ----
 4611686018427388403500
-

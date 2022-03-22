@@ -1,9 +1,6 @@
 # name: test/sql/function/list/aggregates/approx_count_distinct.test
 # description: Test the list_approx_count_distinct aggregate function
-# group: [list]
-
-statement error
-select list_approx_count_distinct(*)
+# group: [aggregates]
 
 statement ok
 CREATE TABLE list_ints (l INTEGER[]);
@@ -21,11 +18,6 @@ select list_approx_count_distinct(l), list_approx_count_distinct(['hello']) from
 ----
 100	1
 
-# return zero rows
-query I
-select list_approx_count_distinct(l) from list_ints WHERE 1 == 0;
-----
-
 query I
 select list_approx_count_distinct([]) from list_ints;
 ----
@@ -42,32 +34,49 @@ select list_approx_count_distinct(l) from list_ints;
 NULL
 0
 
+# dates
 statement ok
 CREATE TABLE IF NOT EXISTS dates (t date[]);
 
 statement ok
 INSERT INTO dates VALUES (['2008-01-01', NULL, '2007-01-01', '2008-02-01', '2008-01-02', '2008-01-01', '2008-01-01', '2008-01-01'])
 
+query II
+SELECT list_count(t), list_approx_count_distinct(t) from dates
+----
+7	4
+
+# timestamps
 statement ok
 CREATE TABLE IF NOT EXISTS timestamp (t TIMESTAMP[]);
 
 statement ok
 INSERT INTO timestamp VALUES (['2008-01-01 00:00:01', NULL, '2007-01-01 00:00:01', '2008-02-01 00:00:01', '2008-01-02 00:00:01', '2008-01-01 10:00:00', '2008-01-01 00:10:00', '2008-01-01 00:00:10'])
 
+query II
+SELECT list_count(t), list_approx_count_distinct(t) from timestamp
+----
+7	7
+
+# strings
 statement ok
 CREATE TABLE IF NOT EXISTS names (t string[]);
 
 statement ok
 INSERT INTO names VALUES (['Pedro', NULL, 'Pedro', 'Pedro', 'Mark', 'Mark', 'Mark', 'Hannes-Muehleisen', 'Hannes-Muehleisen'])
 
-# test counts on a set of values
+query II
+SELECT list_count(t), list_approx_count_distinct(t) from names
+----
+8	3
+
+# test approximate count on different (long) lists
 statement ok
 CREATE TABLE list_ints_2 (a INTEGER[], b INTEGER[]);
 
 statement ok
 INSERT INTO list_ints_2 SELECT LIST(a), LIST(mod(a, 10)) FROM range(2000) tbl(a);
 
-# TODO: different result than original query
 query III
 SELECT list_count(a), list_approx_count_distinct(a), list_approx_count_distinct(b) from list_ints_2
 ----
@@ -82,26 +91,8 @@ INSERT INTO list_ints_2 SELECT LIST(a), NULL FROM range(2000) tbl(a, b) WHERE a 
 statement ok
 INSERT INTO list_ints_2 SELECT LIST(a), NULL FROM range(2000) tbl(a, b) WHERE a % 2 = 1;
 
-# TODO: different result than original query
 query I
 SELECT list_approx_count_distinct(a) from list_ints_2;
 ----
 998
 997
-
-require vector_size 512
-
-query II
-SELECT list_count(t), list_approx_count_distinct(t) from timestamp
-----
-7	7
-
-query II
-SELECT list_count(t), list_approx_count_distinct(t) from dates
-----
-7	4
-
-query II
-SELECT list_count(t), list_approx_count_distinct(t) from names
-----
-8	3

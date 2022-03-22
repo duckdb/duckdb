@@ -1,7 +1,8 @@
 # name: test/sql/function/list/aggregates/entropy.test
 # description: Test the list_entropy aggregate function
-# group: [list]
+# group: [aggregates]
 
+# incorrect usage
 statement error
 select list_entropy()
 
@@ -9,9 +10,6 @@ query I
 select list_entropy([1])
 ----
 0
-
-statement error
-select list_entropy(*)
 
 statement ok
 create table aggr(k int[]);
@@ -23,7 +21,7 @@ statement ok
 insert into aggr values ([]), ([NULL]), (NULL), ([0, 1, 1, 1, 4, NULL, 0, 3, 3, 2, NULL, 2, 4, 4, 2, 4, 0, 0, 0, 1, NULL, 2, 3, 4, 2, 3, 3, 1]);
 
 query I
-select list_entropy(k) from aggr ;
+select list_entropy(k) from aggr;
 ----
 2.321928
 0
@@ -67,7 +65,3 @@ query I
 select list_entropy(name) from names;
 ----
 1.459148
-
-query I
-select list_entropy(name) from names where 1 = 0;
-----

@@ -1,27 +1,10 @@
 # name: test/sql/function/list/aggregates/skewness.test
 # description: Test the list_skewness aggregate function
-# group: [list]
+# group: [aggregates]
 
+# incorrect usage
 statement error
 select list_skewness()
-
-statement error
-select list_skewness(*)
-
-query I
-select list_skewness(NULL)
-----
-NULL
-
-query I
-select list_skewness([NULL])
-----
-NULL
-
-query I
-select list_skewness([])
-----
-NULL
 
 query I
 select list_skewness([1])
@@ -36,10 +19,6 @@ query I
 select list_skewness (i) from skew
 ----
 NULL
-
-query I
-select list_skewness (i) from skew where 1 == 0
-----
 
 query I
 select list_skewness([-2e307, 0, 2e307])

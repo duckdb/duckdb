@@ -1,44 +1,12 @@
 # name: test/sql/function/list/aggregates/max.test
 # description: Test the list_max aggregate function
-# group: [list]
+# group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
-query I
-SELECT list_max([1])
-----
-1
-
-query I
-SELECT list_max([])
-----
-NULL
-
-query I
-SELECT list_max([NULL])
-----
-NULL
-
-query I
-SELECT list_max(NULL)
-----
-NULL
-
-query I
-SELECT list_max([1]) WHERE 1 = 2
-----
-
-statement error
-SELECT list_max('hello')
-
+# incorrect usage
 statement error
 SELECT list_max()
 
-statement error
-SELECT list_max(True, False)
-
-# test all types
+# test different types
 
 # numerics
 foreach type <numeric>

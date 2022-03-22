@@ -1,14 +1,8 @@
 # name: test/sql/function/list/aggregates/bit_or.test
 # description: Test the list_bit_or aggregate function
-# group: [list]
+# group: [aggregates]
 
-# test on scalar values
-query IIII
-SELECT list_bit_or([3]), list_bit_or(NULL), list_bit_or([NULL]), list_bit_or([])
-----
-3	NULL	NULL	NULL
-
-# test on a sequence
+# bit_or on a sequence
 statement ok
 CREATE SEQUENCE seq;
 
@@ -22,18 +16,14 @@ SELECT list_bit_or([nextval('seq')])
 ----
 2
 
-# test on a list of integers
+# list of integers
 statement ok
 CREATE TABLE integers(i INTEGER[]);
 
 statement ok
 INSERT INTO integers VALUES ([3, 7, 15, 31, 3, 15])
 
-query I
-SELECT list_bit_or(i) FROM integers WHERE i > [100, 200]
-----
-
-# test on an empty list
+# empty list
 query I
 SELECT list_bit_or([]) FROM integers
 ----
@@ -51,19 +41,6 @@ NULL	1	NULL
 NULL	1	NULL
 31	1	NULL
 
-# test incorrect usage
+# incorrect usage
 statement error
 SELECT list_bit_or()
-
-statement error
-SELECT list_bit_or(1, 2, 3)
-
-statement error
-SELECT list_bit_or(list_bit_xor([1]))
-
-statement error
-SELECT list_bit_or(['hello'])
-
-statement error
-SELECT list_bit_or([True, False])
-

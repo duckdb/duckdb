@@ -1,6 +1,6 @@
 # name: test/sql/function/list/aggregates/count.test
 # description: Test the list_count aggregate function
-# group: [list]
+# group: [aggregates]
 
 query I
 SELECT list_count([1, 2, 3])
@@ -30,17 +30,6 @@ NULL
 5
 3
 
+# incorrect usage
 statement error
 select list_count()
-
-statement error
-select list_count(*)
-
-statement error
-select list_count([*])
-
-statement error
-select list_count(True)
-
-statement error
-select list_count(1, 2)

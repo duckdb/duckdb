@@ -1,33 +1,14 @@
-# name: test/sql/aggregate/aggregates/mad.test
+# name: test/sql/function/list/aggregates/mad.test
 # description: Test list_mad (Moving Absolute Deviation) aggregate
-# group: [list]
+# group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
-# scalar list_mad
-query I
-SELECT list_mad(NULL)
-----
-NULL
-
-query I
-SELECT list_mad([NULL])
-----
-NULL
-
-query I
-SELECT list_mad([])
-----
-NULL
-
+# scalar value
 query I
 SELECT list_mad([1])
 ----
 0
 
 # constant list_mad is zero
-
 statement ok
 CREATE TABLE const AS SELECT LIST(1) AS i FROM range(2000) t1(i)
 
@@ -37,7 +18,6 @@ SELECT list_mad(i) FROM const
 0
 
 # small numerics
-
 foreach type tinyint decimal(4,1)
 
 statement ok
@@ -54,7 +34,6 @@ drop table tinys;
 endloop
 
 # large numerics
-
 foreach type smallint integer bigint hugeint float double decimal(8,1) decimal(12,1) decimal(18,1) decimal(24,1)
 
 statement ok
@@ -70,7 +49,7 @@ drop table numerics
 
 endloop
 
-# temporal
+# temporal types
 
 statement ok
 create table date as select list(('2018-01-01'::DATE + INTERVAL (r) DAY)::DATE) as r from range(10000) tbl(r);
@@ -96,6 +75,38 @@ SELECT list_mad(r) FROM second
 ----
 00:41:40
 
+query I
+select list_mad(x) from (values (['294247-01-10'::date, '290309-12-22 (BC)'::date])) tbl(x);
+----
+106751991 days
+
+query I
+select list_mad(x) from (values	(['294247-01-10 04:00:54.775807'::timestamp,
+	'290309-12-22 (BC) 00:00:00'::timestamp])) tbl(x);
+----
+106751991 days 02:00:27.387904
+
+query I
+select list_mad(x) from (values (['23:59:59.999999'::time, '00:00:00'::time])) tbl(x);
+----
+12:00:00
+
+foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz
+
+statement ok
+SELECT list_mad(['2021-08-20'::${type}])
+
+statement ok
+SELECT list_mad([NULL::${type}])
+
+endloop
+
+statement error
+SELECT list_mad([INTERVAL 1 YEAR])
+
+statement error
+SELECT list_mad([NULL::INTERVAL])
+
 # extreme values
 
 query I
@@ -115,19 +126,3 @@ select list_mad(x) from (values (['2147483647'::DECIMAL(10,0), '-2147483648'::DE
 
 statement ok
 select list_mad(x) from (values ([-1e308, 1e308])) tbl(x);
-
-query I
-select list_mad(x) from (values (['294247-01-10'::date, '290309-12-22 (BC)'::date])) tbl(x);
-----
-106751991 days
-
-query I
-select list_mad(x) from (values	(['294247-01-10 04:00:54.775807'::timestamp,
-	'290309-12-22 (BC) 00:00:00'::timestamp])) tbl(x);
-----
-106751991 days 02:00:27.387904
-
-query I
-select list_mad(x) from (values (['23:59:59.999999'::time, '00:00:00'::time])) tbl(x);
-----
-12:00:00

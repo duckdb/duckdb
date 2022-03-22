@@ -1,36 +1,12 @@
 # name: test/sql/function/list/aggregates/mode.test
 # description: Test the list_mode aggregate function
-# group: [list]
+# group: [aggregates]
 
+# incorrect usage
 statement error
 select list_mode()
 
-statement error
-select list_mode(*)
-
-statement error
-select list_mode('hello')
-
-query I
-select list_mode(NULL)
-----
-NULL
-
-query I
-select list_mode([NULL])
-----
-NULL
-
-query I
-select list_mode([])
-----
-NULL
-
-query I
-select list_mode([1])
-----
-1
-
+# integers
 statement ok
 CREATE TABLE range AS SELECT LIST(2) AS i FROM range(100) t1(i)
 
@@ -39,6 +15,7 @@ SELECT list_mode(i) FROM range;
 ----
 2
 
+# strings
 statement ok
 create table names (name string[])
 
@@ -52,13 +29,9 @@ pedro
 
 require vector_size 512
 
-
-query I
-SELECT list_mode(name) FROM names WHERE 1 = 0;
-----
-
 # temporal types
 
+# date
 statement ok
 create table dates (v date[])
 
@@ -70,6 +43,7 @@ select list_mode(v) from dates;
 ----
 2021-05-02
 
+# time
 statement ok
 create table times (v time[])
 
@@ -81,6 +55,7 @@ select list_mode(v) from times;
 ----
 12:11:49.5
 
+# timestamp
 statement ok
 create table timestamps (v timestamp[])
 
@@ -93,6 +68,7 @@ select list_mode(v) from timestamps;
 ----
 2021-05-02 12:11:49.5
 
+# interval
 statement ok
 create table intervals (v interval[])
 
@@ -112,20 +88,18 @@ select list_mode(v) from intervals;
 5 months 2 days 12:11:49
 
 # huge integers
-
 statement ok
 create table hugeints (v hugeint[])
 
 statement ok
 insert into hugeints values ([5, 5, 5, 2, 2, 1, NULL]);
 
-# decimals
-
 query I
 select list_mode(v) from hugeints;
 ----
 5
 
+# decimals
 statement ok
 create table aggr (v decimal(10,2)[]);
 

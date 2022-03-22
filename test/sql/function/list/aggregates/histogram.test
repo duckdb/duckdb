@@ -1,31 +1,9 @@
-# name: test/sql/aggregate/aggregates/histogram.test
+# name: test/sql/function/list/aggregates/histogram.test
 # description: Test list_histogram aggregate function
-# group: [list]
-
-statement ok
-PRAGMA enable_verification
-
-query I
-select list_histogram(NULL)
-----
-NULL
-
-query I
-select list_histogram([NULL])
-----
-NULL
-
-query I
-select list_histogram([])
-----
-NULL
+# group: [aggregates]
 
 statement ok
 CREATE TABLE const AS SELECT LIST(2) AS i FROM range(200) t1(i)
-
-query I
-SELECT list_histogram(i) FROM const WHERE 1 = 0;
-----
 
 query I
 SELECT list_histogram(i) FROM const
@@ -37,6 +15,7 @@ select list_histogram([1])
 ----
 {1=1}
 
+# integers
 statement ok
 CREATE TABLE hist_data (g INTEGER[])
 
@@ -52,6 +31,7 @@ NULL
 NULL
 NULL
 
+# strings
 statement ok
 create table names (name string[])
 
@@ -63,8 +43,29 @@ select list_histogram(name) from names;
 ----
 {Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr.=1, hannes=2, mark=1, pedro=3}
 
+# incorrect usage
 statement error
 select list_histogram()
 
+# temporal types
+
+# timestamp
+query I
+SELECT list_histogram(['2021-08-20'::TIMESTAMP])
+----
+{2021-08-20 00:00:00=1}
+
+# timestamp with time zone
+statement ok
+SELECT list_histogram(['2021-08-20'::TIMESTAMPTZ])
+
+# TODO: why does this say that is unexpectedly succeeds when it actually throws an unexpected exception (timestamp_s)?
+foreach type date time timestamp_s timestamp_ms timestamp_ns timetz
+
 statement error
-select list_histogram(*)
+SELECT list_histogram(['2021-08-20'::${type}])
+
+endloop
+
+statement error
+SELECT list_histogram([INTERVAL 1 YEAR])

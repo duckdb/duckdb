@@ -1,29 +1,6 @@
 # name: test/sql/function/list/aggregates/median.test
 # description: Test the list_median aggregate function
-# group: [list]
-
-statement ok
-PRAGMA enable_verification
-
-query I
-SELECT list_median(NULL)
-----
-NULL
-
-query I
-SELECT list_median([NULL])
-----
-NULL
-
-query I
-SELECT list_median([])
-----
-NULL
-
-query I
-SELECT list_median([1])
-----
-1
+# group: [aggregates]
 
 # types
 

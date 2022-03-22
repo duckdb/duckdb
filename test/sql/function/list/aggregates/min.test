@@ -1,44 +1,12 @@
 # name: test/sql/function/list/aggregates/min.test
 # description: Test the list_min aggregate function
-# group: [list]
+# group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
-query I
-SELECT list_min([1])
-----
-1
-
-query I
-SELECT list_min([])
-----
-NULL
-
-query I
-SELECT list_min([NULL])
-----
-NULL
-
-query I
-SELECT list_min(NULL)
-----
-NULL
-
-query I
-SELECT list_min([1]) WHERE 1 = 2
-----
-
-statement error
-SELECT list_min('hello')
-
+# incorrect usage
 statement error
 SELECT list_min()
 
-statement error
-SELECT list_min(True, False)
-
-# test all types
+# test different types
 
 # numerics
 foreach type <numeric>

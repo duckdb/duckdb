@@ -1,14 +1,6 @@
 # name: test/sql/function/list/aggregates/hugeint.test
 # description: Test hugeint aggregates
-# group: [list]
-
-statement ok
-PRAGMA enable_verification
-
-query I
-SELECT NULL::HUGEINT
-----
-NULL
+# group: [aggregates]
 
 statement ok
 CREATE TABLE hugeints(h HUGEINT[])

@@ -1,44 +1,12 @@
 # name: test/sql/function/list/aggregates/last.test
 # description: Test the list_last aggregate function
-# group: [list]
+# group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
-query I
-SELECT list_last([1])
-----
-1
-
-query I
-SELECT list_last([])
-----
-NULL
-
-query I
-SELECT list_last([NULL])
-----
-NULL
-
-query I
-SELECT list_last(NULL)
-----
-NULL
-
-query I
-SELECT list_last([1]) WHERE 1 = 2
-----
-
-statement error
-SELECT list_last('hello')
-
+# incorrect usage
 statement error
 SELECT list_last()
 
-statement error
-SELECT list_last(True, False)
-
-# test all types
+# different types
 
 # numerics
 foreach type <numeric>

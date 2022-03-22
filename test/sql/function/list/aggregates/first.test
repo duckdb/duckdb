@@ -1,49 +1,17 @@
 # name: test/sql/function/list/aggregates/first.test
 # description: Test the list_first aggregate function
-# group: [list]
-
-statement ok
-PRAGMA enable_verification
+# group: [aggregates]
 
 query I
 SELECT list_aggr([1, 2], 'arbitrary')
 ----
 1
 
-query I
-SELECT list_first([1])
-----
-1
-
-query I
-SELECT list_first([])
-----
-NULL
-
-query I
-SELECT list_first([NULL])
-----
-NULL
-
-query I
-SELECT list_first(NULL)
-----
-NULL
-
-query I
-SELECT list_first([1]) WHERE 1 = 2
-----
-
-statement error
-SELECT list_first('hello')
-
+# incorrect usage
 statement error
 SELECT list_first()
 
-statement error
-SELECT list_first(True, False)
-
-# test all types
+# different types
 
 # numerics
 foreach type <numeric>

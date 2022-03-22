@@ -1,36 +1,6 @@
 # name: test/sql/function/list/aggregates/kurtosis.test
 # description: Test the list_kurtosis aggregate function
-# group: [list]
-
-statement error
-select list_kurtosis()
-
-statement error
-select list_kurtosis(*)
-
-statement error
-select list_kurtosis(1)
-
-statement error
-select list_kurtosis(1, 2)
-
-statement error
-select list_kurtosis('hello')
-
-query I
-select list_kurtosis(NULL)
-----
-NULL
-
-query I
-select list_kurtosis([NULL])
-----
-NULL
-
-query I
-select list_kurtosis([])
-----
-NULL
+# group: [aggregates]
 
 query I
 select list_kurtosis([1])
@@ -46,10 +16,6 @@ query I
 select list_kurtosis([2e304, 2e305, 2e306, 2e307])
 ----
 NULL
-
-query I
-select list_kurtosis([10]) where 1 == 0
-----
 
 statement ok
 create table aggr(k int[]);
@@ -69,3 +35,7 @@ select list_kurtosis(k) from aggr;
 NULL
 NULL
 NULL
+
+# incorrect usage
+statement error
+select list_kurtosis()

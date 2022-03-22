@@ -1,44 +1,15 @@
 # name: test/sql/function/list/aggregates/sem.test
 # description: Test the list_sem aggregate function
-# group: [list]
+# group: [aggregates]
 
+# incorrect usage
 statement error
 select list_sem()
-
-statement error
-select list_sem('hello')
-
-statement error
-select list_sem(['hello'])
-
-statement error
-select list_sem(True)
-
-statement error
-select list_sem([True])
-
-query I
-select list_sem(NULL)
-----
-NULL
 
 query I
 select list_sem([1])
 ----
 0.000000
-
-query I
-select list_sem([])
-----
-NULL
-
-query I
-select list_sem([NULL])
-----
-NULL
-
-statement error
-select list_sem(*)
 
 statement ok
 create table aggr(k int[], v decimal(10,2)[], v2 decimal(10, 2)[]);

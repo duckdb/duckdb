@@ -1,22 +1,12 @@
 # name: test/sql/function/list/aggregates/string_agg.test
 # description: Test the list_string_agg aggregate function
-# group: [list]
+# group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
-# test incorrect usage of list_string_agg function
-
+# incorrect usage
 statement error
 SELECT list_string_agg()
 
-statement error
-SELECT list_string_agg(1, 2, 3)
-
-statement error
-SELECT list_string_agg(list_string_agg('a', ','))
-
-# test string aggregation on scalar values
+# scalar values
 query T
 SELECT list_string_agg(['a', ','])
 ----
@@ -27,28 +17,12 @@ SELECT list_string_agg(['a'])
 ----
 a
 
-query T
-SELECT list_string_agg([NULL])
-----
-NULL
-
-query T
-SELECT list_string_agg(NULL)
-----
-NULL
-
-query T
-SELECT list_string_agg([])
-----
-NULL
-
 statement ok
 CREATE TABLE str_aggs (str varchar[]);
 
 statement ok
 INSERT INTO str_aggs VALUES (['a', ',']), ([NULL, ',']), (['a', NULL]), ([NULL, NULL]), (NULL), ([]), ([NULL]);
 
-# test string aggregation on scalar values
 query T
 SELECT list_string_agg(str) from str_aggs;
 ----
@@ -60,7 +34,7 @@ NULL
 NULL
 NULL
 
-# test string aggregation on a set of values
+# test string aggregation on lists of values
 statement ok
 CREATE TABLE strings(g INTEGER[], x VARCHAR[], y VARCHAR[]);
 
@@ -89,7 +63,6 @@ SELECT list_aggr(['a'], 'group_concat')
 ----
 a
 
-# TODO: these lists could be longer but I don't know how to compare to hash values
 statement ok
 CREATE TABLE long AS SELECT LIST(c::VARCHAR) g, LIST((c*10+e)::VARCHAR) x FROM range(0, 10, 1) t1(c), range(0, 10, 1) t2(e);
 
