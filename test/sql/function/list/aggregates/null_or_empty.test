@@ -3,7 +3,7 @@
 # group: [aggregates]
 
 # NULL list
-foreach func_name avg favg approx_count_distinct bit_and bit_or bit_xor bool_or bool_and count entropy first arbitrary histogram kurtosis last mad max median min mode array_agg list product sem skewness string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop stddev_samp
+foreach func_name avg favg approx_count_distinct bit_and bit_or bit_xor bool_or bool_and count entropy first arbitrary histogram kurtosis last mad max median min mode array_agg list product sem skewness string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 query I
 SELECT list_aggr(NULL, '${func_name}')
@@ -13,7 +13,7 @@ NULL
 endloop
 
 # [NULL] list with NULL result
-foreach func_name avg favg bit_and bit_or bit_xor bool_or bool_and first arbitrary histogram kurtosis last mad max median min mode product sem string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor bool_or bool_and first arbitrary histogram kurtosis last mad max median min mode product sem string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 query I
 SELECT list_aggr([NULL], '${func_name}')
@@ -45,7 +45,7 @@ endloop
 # TODO: empty list returns NULL for array_agg and list, is this correct?
 
 # empty list with NULL result
-foreach func_name avg favg bit_and bit_or bit_xor bool_or bool_and first arbitrary histogram kurtosis last mad max median min mode array_agg list product sem skewness string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor bool_or bool_and first arbitrary histogram kurtosis last mad max median min mode array_agg list product sem skewness string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 query I
 SELECT list_aggr([], '${func_name}')
@@ -65,7 +65,7 @@ SELECT list_aggr([], '${func_name}')
 endloop
 
 # zero rows
-foreach func_name approx_count_distinct avg favg bit_and bit_or bit_xor bool_and bool_or count entropy first arbitrary histogram kurtosis last mad max median min mode array_agg list product sem skewness string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop stddev_samp
+foreach func_name approx_count_distinct avg favg bit_and bit_or bit_xor bool_and bool_or count entropy first arbitrary histogram kurtosis last mad max median min mode array_agg list product sem skewness string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 query I
 SELECT list_aggr([], '${func_name}') WHERE 1 = 0

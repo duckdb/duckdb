@@ -31,3 +31,19 @@ query I
 SELECT list_concat(list(list_last(l1)), list(list_first(l2))) FROM lists
 ----
 [3, NULL, NULL, NULL, NULL, 4, NULL, NULL, -4, NULL]
+
+# aliases
+query I
+SELECT array_aggregate([1, 2], 'min')
+----
+1
+
+query I
+SELECT array_aggr([1, 2], 'min')
+----
+1
+
+query I
+SELECT list_aggregate([1, 2], 'min')
+----
+1

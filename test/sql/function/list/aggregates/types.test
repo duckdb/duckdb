@@ -34,7 +34,7 @@ SELECT list_aggr([NULL::BOOLEAN], '${func_name}')
 endloop
 
 # statement error for BOOLEAN
-foreach func_name avg favg bit_and bit_or bit_xor histogram kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor histogram kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 statement error
 SELECT list_aggr([False], '${func_name}')
@@ -70,7 +70,7 @@ SELECT list_aggr([NULL::VARCHAR], '${func_name}')
 endloop
 
 # statement error for VARCHAR
-foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 statement error
 SELECT list_aggr(['hello'], '${func_name}')
@@ -98,7 +98,7 @@ endloop
 endloop
 
 # any other result
-foreach func_name approx_count_distinct count entropy histogram kurtosis mad array_agg list sem skewness var_samp var_pop stddev stddev_pop stddev_samp
+foreach func_name approx_count_distinct count entropy histogram kurtosis mad array_agg list sem skewness var_samp var_pop stddev stddev_pop variance stddev_samp
 
 foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
 
@@ -145,7 +145,7 @@ endloop
 endloop
 
 # any other result
-foreach func_name approx_count_distinct count entropy histogram kurtosis mad array_agg list sem skewness string_agg group_concat var_samp var_pop stddev stddev_pop stddev_samp
+foreach func_name approx_count_distinct count entropy histogram kurtosis mad array_agg list sem skewness string_agg group_concat var_samp var_pop stddev stddev_pop variance stddev_samp
 
 foreach type float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
 
@@ -270,7 +270,7 @@ SELECT list_aggr([NULL::INTERVAL], '${func_name}')
 endloop
 
 # statement error for TEMPORAL types
-foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz
 
@@ -313,7 +313,7 @@ SELECT list_aggr([NULL::JSON], '${func_name}')
 endloop
 
 # statement error for JSON
-foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 statement error
 SELECT list_aggr(['{a: 1}'::JSON], '${func_name}')
@@ -349,7 +349,7 @@ SELECT list_aggr([NULL::BLOB], '${func_name}')
 endloop
 
 # statement error for BLOB
-foreach func_name approx_count_distinct avg favg bit_and bit_or bit_xor bool_and bool_or entropy histogram kurtosis mad median mode product sem skewness string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop stddev_samp
+foreach func_name approx_count_distinct avg favg bit_and bit_or bit_xor bool_and bool_or entropy histogram kurtosis mad median mode product sem skewness string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 statement error
 SELECT list_aggr(['{a: 1}'::BLOB], '${func_name}')
@@ -387,7 +387,7 @@ endloop
 
 # statement error for ENUMS
 
-foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or histogram kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or histogram kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 statement error
 SELECT list_aggr(e, '${func_name}') FROM enums
@@ -425,7 +425,7 @@ endloop
 # statement error for NESTED types
 
 # list, struct
-foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or histogram kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or histogram kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 statement error
 SELECT list_aggr([[1]], '${func_name}')
