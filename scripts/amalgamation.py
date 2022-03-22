@@ -313,7 +313,7 @@ def list_files(dname, file_list):
         fpath = os.path.join(dname, fname)
         if os.path.isdir(fpath):
             list_files(fpath, file_list)
-        elif fname.endswith('.cpp') or fname.endswith('.c') or fname.endswith('.cc'):
+        elif fname.endswith(('.cpp', '.c', '.cc')):
             if need_to_write_file(fpath):
                 file_list.append(fpath)
 
@@ -332,7 +332,7 @@ def list_include_files_recursive(dname, file_list):
         fpath = os.path.join(dname, fname)
         if os.path.isdir(fpath):
             list_include_files_recursive(fpath, file_list)
-        elif fname.endswith('.hpp') or fname.endswith('.h') or fname.endswith('.hh') or fname.endswith('.tcc'):
+        elif fname.endswith(('.hpp', '.h', '.hh', '.tcc', '.inc')):
             file_list.append(fpath)
 
 def list_includes_files(include_dirs):

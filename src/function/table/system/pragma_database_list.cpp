@@ -11,10 +11,7 @@ struct PragmaDatabaseListData : public FunctionOperatorData {
 	bool finished;
 };
 
-static unique_ptr<FunctionData> PragmaDatabaseListBind(ClientContext &context, vector<Value> &inputs,
-                                                       named_parameter_map_t &named_parameters,
-                                                       vector<LogicalType> &input_table_types,
-                                                       vector<string> &input_table_names,
+static unique_ptr<FunctionData> PragmaDatabaseListBind(ClientContext &context, TableFunctionBindInput &input,
                                                        vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("seq");
 	return_types.emplace_back(LogicalType::INTEGER);

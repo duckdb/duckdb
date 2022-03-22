@@ -17,11 +17,10 @@ struct RangeFunctionBindData : public TableFunctionData {
 };
 
 template <bool GENERATE_SERIES>
-static unique_ptr<FunctionData>
-RangeFunctionBind(ClientContext &context, vector<Value> &inputs, named_parameter_map_t &named_parameters,
-                  vector<LogicalType> &input_table_types, vector<string> &input_table_names,
-                  vector<LogicalType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, TableFunctionBindInput &input,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<RangeFunctionBindData>();
+	auto &inputs = input.inputs;
 	if (inputs.size() < 2) {
 		// single argument: only the end is specified
 		result->start = 0;
@@ -128,11 +127,10 @@ struct RangeDateTimeBindData : public TableFunctionData {
 };
 
 template <bool GENERATE_SERIES>
-static unique_ptr<FunctionData>
-RangeDateTimeBind(ClientContext &context, vector<Value> &inputs, named_parameter_map_t &named_parameters,
-                  vector<LogicalType> &input_table_types, vector<string> &input_table_names,
-                  vector<LogicalType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> RangeDateTimeBind(ClientContext &context, TableFunctionBindInput &input,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<RangeDateTimeBindData>();
+	auto &inputs = input.inputs;
 	D_ASSERT(inputs.size() == 3);
 	result->start = inputs[0].GetValue<timestamp_t>();
 	result->end = inputs[1].GetValue<timestamp_t>();

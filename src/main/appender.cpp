@@ -264,6 +264,16 @@ void BaseAppender::AppendValue(const Value &value) {
 	column++;
 }
 
+void BaseAppender::AppendDataChunk(DataChunk &chunk) {
+	if (chunk.GetTypes() != types) {
+		throw InvalidInputException("Type mismatch in Append DataChunk and the types required for appender");
+	}
+	collection.Append(chunk);
+	if (collection.ChunkCount() >= FLUSH_COUNT) {
+		Flush();
+	}
+}
+
 void BaseAppender::FlushChunk() {
 	if (chunk->size() == 0) {
 		return;

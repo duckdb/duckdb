@@ -11,6 +11,10 @@ try:
 except:
     can_run = False
 
+def connect_duck(duckdb_conn):
+    out = duckdb_conn.execute('select i from (values (42), (84), (NULL), (128)) tbl(i)').fetchall()
+    assert out == [(42,), (84,), (None,), (128,)]
+
 class DuckDBThreaded:
     def __init__(self,duckdb_insert_thread_count,thread_function):
         self.duckdb_insert_thread_count = duckdb_insert_thread_count
@@ -41,7 +45,9 @@ class DuckDBThreaded:
 
         assert (return_value)
 
+
 def execute_query_same_connection(duckdb_conn, queue):
+
     try:
         out = duckdb_conn.execute('select i from (values (42), (84), (NULL), (128)) tbl(i)')
         queue.put(False)
@@ -425,6 +431,13 @@ class TestDuckMultithread(object):
 
     def test_cursor(self, duckdb_cursor):
         duck_threads = DuckDBThreaded(10,cursor)
-        duck_threads.multithread_test(False)    
+        duck_threads.multithread_test(False)
+
+    def test_check_same_thread_false(self, duckdb_cursor):
+        con = duckdb.connect(check_same_thread=False)
+
+        x = threading.Thread(target=connect_duck, args=(con,))
+        x.start()
+
 
 
