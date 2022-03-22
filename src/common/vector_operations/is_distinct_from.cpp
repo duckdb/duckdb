@@ -282,7 +282,7 @@ static idx_t DistinctSelect(Vector &left, Vector &right, idx_t vcount, const Sel
 	}
 }
 
-template <class OP>
+template <class OP, bool DENSE>
 static idx_t DistinctSelectNotNull(VectorData &lvdata, VectorData &rvdata, const idx_t count, idx_t &true_count,
                                    const SelectionVector &sel, SelectionVector &maybe_vec, OptionalSelection &true_vec,
                                    OptionalSelection &false_vec) {
@@ -301,7 +301,8 @@ static idx_t DistinctSelectNotNull(VectorData &lvdata, VectorData &rvdata, const
 
 	idx_t false_count = 0;
 	for (idx_t i = 0; i < count; ++i) {
-		const auto idx = sel.get_index(i);
+		const auto result_idx = sel.get_index(i);
+		const auto idx = DENSE ? i : result_idx;
 		const auto lidx = lvdata.sel->get_index(idx);
 		const auto ridx = rvdata.sel->get_index(idx);
 		const auto lnull = !lmask.RowIsValid(lidx);
@@ -309,13 +310,13 @@ static idx_t DistinctSelectNotNull(VectorData &lvdata, VectorData &rvdata, const
 		if (lnull || rnull) {
 			// If either is NULL then we can major distinguish them
 			if (!OP::Operation(false, false, lnull, rnull)) {
-				false_vec.Append(false_count, idx);
+				false_vec.Append(false_count, result_idx);
 			} else {
-				true_vec.Append(true_count, idx);
+				true_vec.Append(true_count, result_idx);
 			}
 		} else {
 			//	Neither is NULL, distinguish values.
-			maybe_vec.set_index(remaining++, idx);
+			maybe_vec.set_index(remaining++, result_idx);
 		}
 	}
 	true_vec.Advance(true_count);
@@ -523,12 +524,26 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t vcount, Vecto
 		return count;
 	}
 
+	// In order to recurse on lists, we have to be able to map
+	// the unresolved rows to the result true/false/maybe positions.
+	// To do this, we use the existing machinery in non-DENSE mode:
+	// The true/false/maybe indexes are used to index the inputs as well as the outputs.
+	// In order for this to work, we need to allocate cursors that are big enough to contain
+	// the entire range of  the input selection.
+	// Ideally, this would be vcount,  but it is not being passed in correctly at the top level,
+	// so we have to compute it by scanning maybe_vec.
+	vcount = maybe_vec.get_index(0);
+	for (idx_t i = 1; i < count; ++i) {
+		vcount = MaxValue<idx_t>(vcount, maybe_vec.get_index(i));
+	}
+	++vcount;
+
 	// We use them to create dictionary views of the children so we can vectorise the positional comparisons.
 	SelectionVector lcursor(vcount);
 	SelectionVector rcursor(vcount);
 
-	Vector lchild(ListVector::GetEntry(left), lcursor, count);
-	Vector rchild(ListVector::GetEntry(right), rcursor, count);
+	Vector lchild(ListVector::GetEntry(left), lcursor, vcount);
+	Vector rchild(ListVector::GetEntry(right), rcursor, vcount);
 
 	// To perform the positional comparison, we use a vectorisation of the following algorithm:
 	// bool CompareLists(T *left, idx_t nleft, T *right, nright) {
@@ -624,7 +639,7 @@ static idx_t DistinctSelectNested(Vector &left, Vector &right, idx_t vcount, con
 	}
 	idx_t match_count = 0;
 	idx_t no_match_count = count;
-	count = DistinctSelectNotNull<OP>(lvdata, rvdata, count, match_count, *sel, maybe_vec, true_opt, false_opt);
+	count = DistinctSelectNotNull<OP, DENSE>(lvdata, rvdata, count, match_count, *sel, maybe_vec, true_opt, false_opt);
 	no_match_count -= (count + match_count);
 
 	idx_t true_count = 0;
