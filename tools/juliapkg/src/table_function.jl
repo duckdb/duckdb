@@ -23,23 +23,23 @@ mutable struct InfoWrapper
     end
 end
 
-function ParameterCount(bind_info::BindInfo)
+function parameter_count(bind_info::BindInfo)
     return duckdb_bind_get_parameter_count(bind_info.handle)
 end
 
-function GetParameter(bind_info::BindInfo, index::Int64)
+function get_parameter(bind_info::BindInfo, index::Int64)
     return Value(duckdb_bind_get_parameter(bind_info.handle, index))
 end
 
-function AddResultColumn(bind_info::BindInfo, name::AbstractString, type::DataType)
-    return AddResultColumn(bind_info, name, CreateLogicalType(type))
+function add_result_column(bind_info::BindInfo, name::AbstractString, type::DataType)
+    return add_result_column(bind_info, name, create_logical_type(type))
 end
 
-function AddResultColumn(bind_info::BindInfo, name::AbstractString, type::LogicalType)
+function add_result_column(bind_info::BindInfo, name::AbstractString, type::LogicalType)
     return duckdb_bind_add_result_column(bind_info.handle, name, type.handle)
 end
 
-function GetExtraData(bind_info::BindInfo)
+function get_extra_data(bind_info::BindInfo)
     return bind_info.main_function.extra_data
 end
 
@@ -94,11 +94,11 @@ function _table_init_function(info::duckdb_init_info)
     return
 end
 
-function GetBindInfo(info::InitInfo, ::Type{T})::T where {T}
+function get_bind_info(info::InitInfo, ::Type{T})::T where {T}
     return unsafe_pointer_to_objref(duckdb_init_get_bind_data(info.handle)).info
 end
 
-function GetExtraData(info::InitInfo)
+function get_extra_data(info::InitInfo)
     return info.main_function.extra_data
 end
 
@@ -117,11 +117,11 @@ mutable struct FunctionInfo
     end
 end
 
-function GetBindInfo(info::FunctionInfo, ::Type{T})::T where {T}
+function get_bind_info(info::FunctionInfo, ::Type{T})::T where {T}
     return unsafe_pointer_to_objref(duckdb_function_get_bind_data(info.handle)).info
 end
 
-function GetInitInfo(info::FunctionInfo, ::Type{T})::T where {T}
+function get_init_info(info::FunctionInfo, ::Type{T})::T where {T}
     return unsafe_pointer_to_objref(duckdb_function_get_init_data(info.handle)).info
 end
 
@@ -187,7 +187,7 @@ function _destroy_table_function(func::TableFunction)
     return func.handle = C_NULL
 end
 
-function CreateTableFunction(
+function create_table_function(
     con::Connection,
     name::AbstractString,
     parameters::Vector{LogicalType},
@@ -204,7 +204,7 @@ function CreateTableFunction(
     return
 end
 
-function CreateTableFunction(
+function create_table_function(
     con::Connection,
     name::AbstractString,
     parameters::Vector{DataType},
@@ -215,12 +215,12 @@ function CreateTableFunction(
 )
     parameter_types::Vector{LogicalType} = Vector()
     for parameter_type in parameters
-        push!(parameter_types, CreateLogicalType(parameter_type))
+        push!(parameter_types, create_logical_type(parameter_type))
     end
-    return CreateTableFunction(con, name, parameter_types, bind_func, init_func, main_func, extra_data)
+    return create_table_function(con, name, parameter_types, bind_func, init_func, main_func, extra_data)
 end
 
-function CreateTableFunction(
+function create_table_function(
     db::DB,
     name::AbstractString,
     parameters::Vector{LogicalType},
@@ -229,10 +229,10 @@ function CreateTableFunction(
     main_func::Function,
     extra_data::Any = missing
 )
-    return CreateTableFunction(db.main_connection, name, parameters, bind_func, init_func, main_func)
+    return create_table_function(db.main_connection, name, parameters, bind_func, init_func, main_func)
 end
 
-function CreateTableFunction(
+function create_table_function(
     db::DB,
     name::AbstractString,
     parameters::Vector{DataType},
@@ -241,5 +241,5 @@ function CreateTableFunction(
     main_func::Function,
     extra_data::Any = missing
 )
-    return CreateTableFunction(db.main_connection, name, parameters, bind_func, init_func, main_func)
+    return create_table_function(db.main_connection, name, parameters, bind_func, init_func, main_func)
 end

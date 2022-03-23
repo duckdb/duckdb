@@ -4,7 +4,7 @@
     con = DBInterface.connect(DuckDB.DB)
     df = DataFrame(a = [1, 2, 3], b = [42, 84, 42])
 
-    DuckDB.RegisterDataFrame(con, df, "my_df")
+    DuckDB.register_data_frame(con, df, "my_df")
     GC.gc()
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
@@ -22,7 +22,7 @@ end
     con = DBInterface.connect(DuckDB.DB)
     df = DataFrame(a = [1, missing, 3], b = [missing, 84, missing])
 
-    DuckDB.RegisterDataFrame(con, df, "my_df")
+    DuckDB.register_data_frame(con, df, "my_df")
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
     df = DataFrame(results)
@@ -42,7 +42,7 @@ end
         my_df[!, :a] = convert.(Union{type, Missing}, my_df[!, :a])
         my_df[!, :b] = convert.(Union{type, Missing}, my_df[!, :b])
 
-        DuckDB.RegisterDataFrame(con, my_df, "my_df")
+        DuckDB.register_data_frame(con, my_df, "my_df")
 
         results = DBInterface.execute(con, "SELECT * FROM my_df")
         df = DataFrame(results)
@@ -58,7 +58,7 @@ end
     # boolean
     my_df = DataFrame(a = [true, false, missing])
 
-    DuckDB.RegisterDataFrame(con, my_df, "my_df")
+    DuckDB.register_data_frame(con, my_df, "my_df")
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
     df = DataFrame(results)
@@ -71,7 +71,7 @@ end
         timestamp = [DateTime(1992, 9, 20, 23, 3, 1), DateTime(1950, 2, 3, 11, 49, 3), missing]
     )
 
-    DuckDB.RegisterDataFrame(con, my_df, "my_df")
+    DuckDB.register_data_frame(con, my_df, "my_df")
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
     df = DataFrame(results)
@@ -86,7 +86,7 @@ end
     # date/time/timestamp
     my_df = DataFrame(str = ["hello", "this is a very long string", missing, "obligatory mühleisen"])
 
-    DuckDB.RegisterDataFrame(con, my_df, "my_df")
+    DuckDB.register_data_frame(con, my_df, "my_df")
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
     df = DataFrame(results)

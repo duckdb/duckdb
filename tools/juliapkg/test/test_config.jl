@@ -14,8 +14,8 @@
 
     # if we add this configuration flag, nulls should come last
     config = DuckDB.Config()
-    DuckDB.SetConfig(config, "default_null_order", "nulls_last")
-    @test_throws DuckDB.QueryException DuckDB.SetConfig(config, "unrecognized option", "aaa")
+    DuckDB.set_config(config, "default_null_order", "nulls_last")
+    @test_throws DuckDB.QueryException DuckDB.set_config(config, "unrecognized option", "aaa")
 
     con = DBInterface.connect(DuckDB.DB, ":memory:", config)
 

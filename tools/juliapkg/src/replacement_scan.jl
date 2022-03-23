@@ -29,23 +29,23 @@ function _replacement_scan_function(handle::duckdb_replacement_scan_info, table_
     return
 end
 
-function GetDB(info::ReplacementFunctionInfo)
+function getdb(info::ReplacementFunctionInfo)
     return info.main_function.db
 end
 
-function GetExtraData(info::ReplacementFunctionInfo)
+function get_extra_data(info::ReplacementFunctionInfo)
     return info.main_function.extra_data
 end
 
-function GetTableName(info::ReplacementFunctionInfo)
+function get_table_name(info::ReplacementFunctionInfo)
     return info.table_name
 end
 
-function SetFunctionName(info::ReplacementFunctionInfo, function_name::String)
+function set_function_name(info::ReplacementFunctionInfo, function_name::String)
     return duckdb_replacement_scan_set_function_name(info.handle, function_name)
 end
 
-function AddFunctionParameter(info::ReplacementFunctionInfo, parameter::Value)
+function add_function_parameter(info::ReplacementFunctionInfo, parameter::Value)
     return duckdb_replacement_scan_add_parameter(info.handle, parameter.handle)
 end
 
@@ -55,7 +55,7 @@ function _replacement_func_cleanup(data::Ptr{Cvoid})
     return
 end
 
-function AddReplacementScan(db::DB, replacement_func::Function, extra_data::Any)
+function add_replacement_scan!(db::DB, replacement_func::Function, extra_data::Any)
     func = ReplacementFunction(db, replacement_func, extra_data)
     push!(global_objects, func)
     return duckdb_add_replacement_scan(

@@ -212,14 +212,14 @@ function duckdb_type_to_internal_type(x::DUCKDB_TYPE)
 end
 
 function duckdb_type_to_julia_type(x)
-    type_id = GetTypeId(x)
+    type_id = get_type_id(x)
     if type_id == DUCKDB_TYPE_LIST
-        return Vector{Union{Missing, duckdb_type_to_julia_type(GetListChildType(x))}}
+        return Vector{Union{Missing, duckdb_type_to_julia_type(get_list_child_type(x))}}
     elseif type_id == DUCKDB_TYPE_STRUCT
-        child_count = GetStructChildCount(x)
+        child_count = get_struct_child_count(x)
         names::Vector{Symbol} = Vector()
         for i in 1:child_count
-            child_name::Symbol = Symbol(GetStructChildName(x, i))
+            child_name::Symbol = Symbol(get_struct_child_name(x, i))
             push!(names, child_name)
         end
         names_tuple = Tuple(x for x in names)
