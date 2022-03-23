@@ -53,7 +53,6 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &
 	}
 	gstate.deleted_count += table.Delete(tableref, context.client, row_identifiers, input.size());
 
-
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
