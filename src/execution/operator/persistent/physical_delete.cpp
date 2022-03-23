@@ -24,7 +24,7 @@ public:
 
 class DeleteLocalState : public LocalSinkState {
 public:
-	DeleteLocalState(const vector<LogicalType> &table_types) {
+	explicit DeleteLocalState(const vector<LogicalType> &table_types) {
 		delete_chunk.Initialize(table_types);
 	}
 	DataChunk delete_chunk;
