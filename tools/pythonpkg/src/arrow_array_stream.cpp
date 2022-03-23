@@ -23,37 +23,52 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	if (py_object_type == "Table") {
 		auto arrow_dataset = py::module_::import("pyarrow.dataset").attr("dataset");
 		auto dataset = arrow_dataset(arrow_obj_handle);
-		if (project_columns.second.empty()) {
-			//! This is only called at the binder to get the schema
-			scanner = arrow_scanner(dataset);
+		if (has_filter) {
+			auto filter = TransformFilter(*filters, project_columns.first);
+			scanner = arrow_scanner(dataset, py::arg("columns") = projection_list, py::arg("filter") = filter);
 		} else {
-			if (has_filter) {
-				auto filter = TransformFilter(*filters, project_columns.first);
-				scanner = arrow_scanner(dataset, py::arg("columns") = projection_list, py::arg("filter") = filter);
-			} else {
-				scanner = arrow_scanner(dataset, py::arg("columns") = projection_list);
-			}
-		}
-
-	} else {
-		if (project_columns.second.empty()) {
-			//! This is only called at the binder to get the schema
-			scanner = arrow_scanner(arrow_obj_handle);
-		} else {
-			if (has_filter) {
-				auto filter = TransformFilter(*filters, project_columns.first);
-				scanner =
-				    arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list, py::arg("filter") = filter);
-			} else {
-				scanner = arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list);
-			}
+			scanner = arrow_scanner(dataset, py::arg("columns") = projection_list);
 		}
 	}
+	else if (py_object_type == "RecordBatchReader") {
+		 py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
+		 if (has_filter) {
+			 auto filter = TransformFilter(*filters, project_columns.first);
+			 scanner =
+			     arrow_batch_scanner(arrow_obj_handle, py::arg("columns") = projection_list, py::arg("filter") = filter);
+		 } else {
+			 scanner = arrow_batch_scanner(arrow_obj_handle, py::arg("columns") = projection_list);
+		 }
+	} else {
+		if (has_filter) {
+			auto filter = TransformFilter(*filters, project_columns.first);
+			scanner =
+			    arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list, py::arg("filter") = filter);
+		} else {
+			scanner = arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list);
+		}
+	}
+
 	auto record_batches = scanner.attr("to_reader")();
 	auto res = make_unique<ArrowArrayStreamWrapper>();
 	auto export_to_c = record_batches.attr("_export_to_c");
 	export_to_c((uint64_t)&res->arrow_array_stream);
 	return res;
+}
+
+void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowSchemaWrapper &schema){
+	py::gil_scoped_acquire acquire;
+	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
+	D_ASSERT(factory->arrow_object);
+	py::handle arrow_obj_handle(factory->arrow_object);
+	auto py_object_type = string(py::str(arrow_obj_handle.get_type().attr("__name__")));
+	if (py_object_type == "Scanner") {
+		auto export_to_c = arrow_obj_handle.attr("projected_schema").attr("_export_to_c");
+		export_to_c((uint64_t)&schema);
+	} else {
+		auto export_to_c = arrow_obj_handle.attr("schema").attr("_export_to_c");
+		export_to_c((uint64_t)&schema);
+	}
 }
 
 py::object GetScalar(Value &constant) {
