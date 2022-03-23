@@ -263,14 +263,11 @@ void CopyParameters(int argc, char **argv, char **parameters){
 	size_t alloc_size, last_alloc_pos = 0;
 	for (int i=1; i < argc; i++) {
 		alloc_size = strlen(argv[i]) + 1;
-		if (i == 0) {
-			*parameters = (char *)malloc(alloc_size * sizeof(char));
-			strcpy(*parameters, argv[i]);
-		} else {
-			*parameters = (char *)realloc(*parameters, alloc_size);
-			strcat(*parameters, argv[i]);
+		*parameters = (char *)realloc(*parameters, alloc_size);
+		strcat(*parameters, argv[i]);
+		if ((i+1) != argc) {
+			strcat(*parameters, " ");
 		}
-		strcat(*parameters, " ");
 	}
 }
 
