@@ -47,19 +47,8 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &
 
 	lock_guard<mutex> delete_guard(gstate.delete_lock);
 	if (return_chunk) {
-		if (row_identifiers.GetVectorType() == VectorType::FLAT_VECTOR ||
-		    row_identifiers.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			table.Fetch(transaction, ustate.delete_chunk, column_ids, row_identifiers, input.size(), cfs);
-		} else if (row_identifiers.GetVectorType() == VectorType::SEQUENCE_VECTOR) {
-			// if a user is deleting a whole table. Convert sequence vector to flat vector
-			int64_t start, increment;
-			SequenceVector::GetSequence(row_identifiers, start, increment);
-
-			Vector flattened(row_identifiers.GetType());
-			VectorOperations::GenerateSequence(flattened, input.size(), start, increment);
-
-			table.Fetch(transaction, ustate.delete_chunk, column_ids, flattened, input.size(), cfs);
-		}
+		row_identifiers.Normalify(input.size());
+		table.Fetch(transaction, ustate.delete_chunk, column_ids, row_identifiers, input.size(), cfs);
 		gstate.return_chunk_collection.Append(ustate.delete_chunk);
 	}
 	gstate.deleted_count += table.Delete(tableref, context.client, row_identifiers, input.size());

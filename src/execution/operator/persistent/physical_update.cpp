@@ -15,8 +15,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class UpdateGlobalState : public GlobalSinkState {
 public:
-	UpdateGlobalState() : updated_count(0) {
-		returned_chunk_count = 0;
+	UpdateGlobalState() : updated_count(0), returned_chunk_count(0) {
 	}
 
 	mutex lock;
