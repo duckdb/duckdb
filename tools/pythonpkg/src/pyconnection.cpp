@@ -331,7 +331,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 	        ->TableFunction("arrow_scan",
 	                        {Value::POINTER((uintptr_t)stream_factory.get()),
 	                         Value::POINTER((uintptr_t)stream_factory_produce),
-			                     Value::POINTER((uintptr_t)stream_factory_get_schema), Value::UBIGINT(rows_per_tuple)})
+	                         Value::POINTER((uintptr_t)stream_factory_get_schema), Value::UBIGINT(rows_per_tuple)})
 	        ->Alias(name));
 	registered_objects[name] = make_unique<RegisteredArrow>(move(stream_factory), table);
 	return rel;

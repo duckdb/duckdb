@@ -16,8 +16,7 @@ class TestArrowRecordBatchReader(object):
             return
 
 duckdb_conn = duckdb.connect()
-duckdb_conn.execute("PRAGMA threads=4")
-duckdb_conn.execute("PRAGMA verify_parallelism")
+duckdb_conn.execute("PRAGMA threads=1")
 
 parquet_filename = os.path.join('data','userdata1.parquet')
 
@@ -40,6 +39,6 @@ assert rel.filter("first_name=\'Jose\' and salary > 134708.82").aggregate('count
 
 rel = duckdb_conn.from_arrow_table(reader)
 
-rows=rel.fetchall()
-print (rel.aggregate('count(*)').execute().fetchone()[0])
+# rows=rel.fetchall()
+# print (rel.aggregate('count(*)').execute().fetchone()[0])
 assert rel.filter("first_name=\'Jose\' and salary > 134708.82").aggregate('count(*)').execute().fetchone()[0] == 12

@@ -35,5 +35,9 @@ public:
 private:
 	//! We transform a TableFilterCollection to an Arrow Expression Object
 	static py::object TransformFilter(TableFilterCollection &filters, std::unordered_map<idx_t, string> &columns);
+
+	static py::object ProduceScanner(py::object &arrow_scanner, py::handle &arrow_obj_handle,
+	                                 std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
+	                                 TableFilterCollection *filters);
 };
 } // namespace duckdb
