@@ -49,13 +49,10 @@ struct DataFrameScanState : public FunctionOperatorData {
 	idx_t position;
 };
 
-static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
-                                                    named_parameter_map_t &named_parameters,
-                                                    vector<LogicalType> &input_table_types,
-                                                    vector<string> &input_table_names,
+static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	RProtector r;
-	SEXP df((SEXP)inputs[0].GetPointer());
+	SEXP df((SEXP)input.inputs[0].GetPointer());
 
 	auto df_names = r.Protect(GET_NAMES(df));
 	vector<RType> rtypes;

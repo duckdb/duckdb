@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 #include "duckdb/execution/operator/join/physical_cross_product.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/execution/operator/join/physical_iejoin.hpp"
 #include "duckdb/execution/operator/join/physical_index_join.hpp"
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
 #include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
@@ -172,8 +173,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 
 	bool has_equality = false;
 	// bool has_inequality = false;
-	bool has_range = false;
-	bool has_null_equal_conditions = false;
+	size_t has_range = 0;
 	for (size_t c = 0; c < op.conditions.size(); ++c) {
 		auto &cond = op.conditions[c];
 		switch (cond.comparison) {
@@ -185,7 +185,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		case ExpressionType::COMPARE_GREATERTHAN:
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			has_range = true;
+			++has_range;
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
@@ -195,12 +195,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			throw NotImplementedException("Unimplemented comparison join");
 		}
 		if (cond.null_values_are_equal) {
-			has_null_equal_conditions = true;
 			D_ASSERT(cond.comparison == ExpressionType::COMPARE_EQUAL ||
 			         cond.comparison == ExpressionType::COMPARE_DISTINCT_FROM);
 		}
 	}
-	(void)has_null_equal_conditions;
 
 	unique_ptr<PhysicalOperator> plan;
 	if (has_equality) {
@@ -229,17 +227,22 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		                                     op.estimated_cardinality, perfect_join_stats);
 
 	} else {
-		bool can_merge = has_range;
+		bool can_merge = has_range > 0;
+		bool can_iejoin = has_range >= 2 && rec_ctes.empty();
 		switch (op.join_type) {
 		case JoinType::SEMI:
 		case JoinType::ANTI:
 		case JoinType::MARK:
 			can_merge = can_merge && op.conditions.size() == 1;
+			can_iejoin = false;
 			break;
 		default:
 			break;
 		}
-		if (can_merge) {
+		if (can_iejoin) {
+			plan = make_unique<PhysicalIEJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
+			                                   op.estimated_cardinality);
+		} else if (can_merge) {
 			// range join: use piecewise merge join
 			plan = make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions),
 			                                               op.join_type, op.estimated_cardinality);

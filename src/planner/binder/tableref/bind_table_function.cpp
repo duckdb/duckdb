@@ -125,11 +125,19 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	vector<LogicalType> return_types;
 	vector<string> return_names;
 	if (table_function.bind) {
-		bind_data = table_function.bind(context, parameters, named_parameters, input_table_types, input_table_names,
-		                                return_types, return_names);
+		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
+		                                  table_function.function_info.get());
+		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 	}
-	D_ASSERT(return_types.size() == return_names.size());
-	D_ASSERT(return_types.size() > 0);
+	if (return_types.size() != return_names.size()) {
+		throw InternalException(
+		    "Failed to bind \"%s\": Table function return_types and return_names must be of the same size",
+		    table_function.name);
+	}
+	if (return_types.empty()) {
+		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
+		                        table_function.name);
+	}
 	// overwrite the names with any supplied aliases
 	for (idx_t i = 0; i < ref.column_name_alias.size() && i < return_names.size(); i++) {
 		return_names[i] = ref.column_name_alias[i];

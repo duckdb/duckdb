@@ -43,12 +43,24 @@ struct AppenderWrapper {
 	string error;
 };
 
-duckdb_type ConvertCPPTypeToC(const LogicalType &type);
-idx_t GetCTypeSize(duckdb_type type);
-duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_result *out);
-
-struct DuckDBColumnData {
-	LogicalType type;
+enum class CAPIResultSetType : uint8_t {
+	CAPI_RESULT_TYPE_NONE = 0,
+	CAPI_RESULT_TYPE_MATERIALIZED,
+	CAPI_RESULT_TYPE_DEPRECATED
 };
+
+struct DuckDBResultData {
+	//! The underlying query result
+	unique_ptr<QueryResult> result;
+	// Results can only use either the new API or the old API, not a mix of the two
+	// They start off as "none" and switch to one or the other when an API method is used
+	CAPIResultSetType result_set_type;
+};
+
+duckdb_type ConvertCPPTypeToC(const LogicalType &type);
+LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type);
+idx_t GetCTypeSize(duckdb_type type);
+duckdb_state duckdb_translate_result(unique_ptr<QueryResult> result, duckdb_result *out);
+bool deprecated_materialize_result(duckdb_result *result);
 
 } // namespace duckdb

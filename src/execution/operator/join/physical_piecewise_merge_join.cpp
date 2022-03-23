@@ -122,32 +122,6 @@ unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(Clien
 	return move(state);
 }
 
-static idx_t CountValid(Vector &v, const idx_t count) {
-	idx_t valid = 0;
-
-	VectorData vdata;
-	v.Orrify(count, vdata);
-	if (vdata.validity.AllValid()) {
-		return count;
-	}
-	switch (v.GetVectorType()) {
-	case VectorType::FLAT_VECTOR:
-		valid += vdata.validity.CountValid(count);
-		break;
-	case VectorType::CONSTANT_VECTOR:
-		valid += vdata.validity.CountValid(1) * count;
-		break;
-	default:
-		for (idx_t i = 0; i < count; ++i) {
-			const auto row_idx = vdata.sel->get_index(i);
-			valid += int(vdata.validity.RowIsValid(row_idx));
-		}
-		break;
-	}
-
-	return valid;
-}
-
 class MergeJoinLocalState : public LocalSinkState {
 public:
 	explicit MergeJoinLocalState() : rhs_has_null(0), rhs_count(0) {
@@ -248,7 +222,7 @@ static idx_t PiecewiseMergeNulls(DataChunk &keys, const vector<JoinCondition> &c
 		}
 		return count - pvalidity.CountValid(count);
 	} else {
-		return count - CountValid(primary, count);
+		return count - VectorOperations::CountNotNull(primary, count);
 	}
 }
 
