@@ -720,6 +720,63 @@ void RadiansFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 //===--------------------------------------------------------------------===//
+// isnan
+//===--------------------------------------------------------------------===//
+struct IsNanOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return Value::IsNan(input);
+	}
+};
+
+void IsNanFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunctionSet funcs("isnan");
+	funcs.AddFunction(ScalarFunction({LogicalType::FLOAT}, LogicalType::BOOLEAN,
+	                   ScalarFunction::UnaryFunction<float, bool, IsNanOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
+	                   ScalarFunction::UnaryFunction<double, bool, IsNanOperator>));
+	set.AddFunction(funcs);
+}
+
+//===--------------------------------------------------------------------===//
+// isinf
+//===--------------------------------------------------------------------===//
+struct IsInfiniteOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return !Value::IsNan(input) && !Value::IsFinite(input);
+	}
+};
+
+void IsInfiniteFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunctionSet funcs("isinf");
+	funcs.AddFunction(ScalarFunction({LogicalType::FLOAT}, LogicalType::BOOLEAN,
+	                   ScalarFunction::UnaryFunction<float, bool, IsInfiniteOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
+	                   ScalarFunction::UnaryFunction<double, bool, IsInfiniteOperator>));
+	set.AddFunction(funcs);
+}
+
+//===--------------------------------------------------------------------===//
+// isfinite
+//===--------------------------------------------------------------------===//
+struct IsFiniteOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return Value::IsFinite(input);
+	}
+};
+
+void IsFiniteFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunctionSet funcs("isfinite");
+	funcs.AddFunction(ScalarFunction({LogicalType::FLOAT}, LogicalType::BOOLEAN,
+	                   ScalarFunction::UnaryFunction<float, bool, IsFiniteOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
+	                   ScalarFunction::UnaryFunction<double, bool, IsFiniteOperator>));
+	set.AddFunction(funcs);
+}
+
+//===--------------------------------------------------------------------===//
 // sin
 //===--------------------------------------------------------------------===//
 template <class OP>
