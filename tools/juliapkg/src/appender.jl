@@ -39,35 +39,35 @@ function close(appender::Appender)
     return
 end
 
-Append(appender::Appender, val::AbstractFloat) = duckdb_append_double(appender.handle, Float64(val));
-Append(appender::Appender, val::Bool) = duckdb_append_boolean(appender.handle, val);
-Append(appender::Appender, val::Int8) = duckdb_append_int8(appender.handle, val);
-Append(appender::Appender, val::Int16) = duckdb_append_int16(appender.handle, val);
-Append(appender::Appender, val::Int32) = duckdb_append_int32(appender.handle, val);
-Append(appender::Appender, val::Int64) = duckdb_append_int64(appender.handle, val);
-Append(appender::Appender, val::UInt8) = duckdb_append_uint8(appender.handle, val);
-Append(appender::Appender, val::UInt16) = duckdb_append_uint16(appender.handle, val);
-Append(appender::Appender, val::UInt32) = duckdb_append_uint32(appender.handle, val);
-Append(appender::Appender, val::UInt64) = duckdb_append_uint64(appender.handle, val);
-Append(appender::Appender, val::Float32) = duckdb_append_float(appender.handle, val);
-Append(appender::Appender, val::Float64) = duckdb_append_double(appender.handle, val);
-Append(appender::Appender, val::Missing) = duckdb_append_null(appender.handle);
-Append(appender::Appender, val::Nothing) = duckdb_append_null(appender.handle);
-Append(appender::Appender, val::AbstractString) = duckdb_append_varchar(appender.handle, val);
-Append(appender::Appender, val::Vector{UInt8}) = duckdb_append_blob(appender.handle, val, sizeof(val));
-Append(appender::Appender, val::WeakRefString{UInt8}) = duckdb_append_varchar(stmt.handle, i, val.ptr, val.len);
+append(appender::Appender, val::AbstractFloat) = duckdb_append_double(appender.handle, Float64(val));
+append(appender::Appender, val::Bool) = duckdb_append_boolean(appender.handle, val);
+append(appender::Appender, val::Int8) = duckdb_append_int8(appender.handle, val);
+append(appender::Appender, val::Int16) = duckdb_append_int16(appender.handle, val);
+append(appender::Appender, val::Int32) = duckdb_append_int32(appender.handle, val);
+append(appender::Appender, val::Int64) = duckdb_append_int64(appender.handle, val);
+append(appender::Appender, val::UInt8) = duckdb_append_uint8(appender.handle, val);
+append(appender::Appender, val::UInt16) = duckdb_append_uint16(appender.handle, val);
+append(appender::Appender, val::UInt32) = duckdb_append_uint32(appender.handle, val);
+append(appender::Appender, val::UInt64) = duckdb_append_uint64(appender.handle, val);
+append(appender::Appender, val::Float32) = duckdb_append_float(appender.handle, val);
+append(appender::Appender, val::Float64) = duckdb_append_double(appender.handle, val);
+append(appender::Appender, val::Missing) = duckdb_append_null(appender.handle);
+append(appender::Appender, val::Nothing) = duckdb_append_null(appender.handle);
+append(appender::Appender, val::AbstractString) = duckdb_append_varchar(appender.handle, val);
+append(appender::Appender, val::Vector{UInt8}) = duckdb_append_blob(appender.handle, val, sizeof(val));
+append(appender::Appender, val::WeakRefString{UInt8}) = duckdb_append_varchar(stmt.handle, i, val.ptr, val.len);
 
-function Append(appender::Appender, val::Any)
+function append(appender::Appender, val::Any)
     println(val)
     throw(NotImplementedException("unsupported type for append"))
 end
 
-function EndRow(appender::Appender)
+function end_row(appender::Appender)
     duckdb_appender_end_row(appender.handle)
     return
 end
 
-function Flush(appender::Appender)
+function flush(appender::Appender)
     duckdb_appender_flush(appender.handle)
     return
 end
