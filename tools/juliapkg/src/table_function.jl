@@ -101,6 +101,15 @@ function get_extra_data(info::InitInfo)
     return info.main_function.extra_data
 end
 
+function get_projected_columns(info::InitInfo)::Vector{Int64}
+    result::Vector{Int64} = Vector()
+    column_count = duckdb_init_get_column_count(info.handle)
+    for i in 1:column_count
+        push!(result, duckdb_init_get_column_index(info.handle, i))
+    end
+    return result
+end
+
 #=
 //===--------------------------------------------------------------------===//
 // Main Table Function
@@ -151,14 +160,14 @@ mutable struct TableFunction
     extra_data::Any
     global_objects::Set{Any}
 
-
     function TableFunction(
         name::AbstractString,
         parameters::Vector{LogicalType},
         bind_func::Function,
         init_func::Function,
         main_func::Function,
-        extra_data::Any
+        extra_data::Any,
+        projection_pushdown::Bool
     )
         handle = duckdb_create_table_function()
         duckdb_table_function_set_name(handle, name)
@@ -175,6 +184,7 @@ mutable struct TableFunction
             handle,
             @cfunction(_table_main_function, Cvoid, (duckdb_function_info, duckdb_data_chunk))
         )
+        duckdb_table_function_supports_projection_pushdown(handle, projection_pushdown)
 
         return result
     end
@@ -195,9 +205,10 @@ function create_table_function(
     bind_func::Function,
     init_func::Function,
     main_func::Function,
-    extra_data::Any = missing
+    extra_data::Any = missing,
+    projection_pushdown::Bool = false
 )
-    fun = TableFunction(name, parameters, bind_func, init_func, main_func, extra_data)
+    fun = TableFunction(name, parameters, bind_func, init_func, main_func, extra_data, projection_pushdown)
     if duckdb_register_table_function(con.handle, fun.handle) != DuckDBSuccess
         throw(QueryException(string("Failed to register table function \"", name, "\"")))
     end
@@ -212,13 +223,23 @@ function create_table_function(
     bind_func::Function,
     init_func::Function,
     main_func::Function,
-    extra_data::Any = missing
+    extra_data::Any = missing,
+    projection_pushdown::Bool = false
 )
     parameter_types::Vector{LogicalType} = Vector()
     for parameter_type in parameters
         push!(parameter_types, create_logical_type(parameter_type))
     end
-    return create_table_function(con, name, parameter_types, bind_func, init_func, main_func, extra_data)
+    return create_table_function(
+        con,
+        name,
+        parameter_types,
+        bind_func,
+        init_func,
+        main_func,
+        extra_data,
+        projection_pushdown
+    )
 end
 
 function create_table_function(
@@ -228,9 +249,19 @@ function create_table_function(
     bind_func::Function,
     init_func::Function,
     main_func::Function,
-    extra_data::Any = missing
+    extra_data::Any = missing,
+    projection_pushdown::Bool = false
 )
-    return create_table_function(db.main_connection, name, parameters, bind_func, init_func, main_func)
+    return create_table_function(
+        db.main_connection,
+        name,
+        parameters,
+        bind_func,
+        init_func,
+        main_func,
+        extra_data,
+        projection_pushdown
+    )
 end
 
 function create_table_function(
@@ -240,7 +271,17 @@ function create_table_function(
     bind_func::Function,
     init_func::Function,
     main_func::Function,
-    extra_data::Any = missing
+    extra_data::Any = missing,
+    projection_pushdown::Bool = false
 )
-    return create_table_function(db.main_connection, name, parameters, bind_func, init_func, main_func)
+    return create_table_function(
+        db.main_connection,
+        name,
+        parameters,
+        bind_func,
+        init_func,
+        main_func,
+        extra_data,
+        projection_pushdown
+    )
 end

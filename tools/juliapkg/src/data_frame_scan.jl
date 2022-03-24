@@ -50,11 +50,12 @@ function df_scan_column(
     df::DataFrame,
     df_offset::Int64,
     col_idx::Int64,
+    result_idx::Int64,
     scan_count::Int64,
     output::DuckDB.DataChunk,
     ::Type{T}
 ) where {T}
-    vector = DuckDB.get_vector(output, col_idx)
+    vector = DuckDB.get_vector(output, result_idx)
     result_array::Vector{T} = DuckDB.get_array(vector, T)
     validity = DuckDB.get_validity(vector)
     input_column = df[!, col_idx]
@@ -71,11 +72,12 @@ function df_scan_string_column(
     df::DataFrame,
     df_offset::Int64,
     col_idx::Int64,
+    result_idx::Int64,
     scan_count::Int64,
     output::DuckDB.DataChunk,
     ::Type{T}
 ) where {T}
-    vector = DuckDB.get_vector(output, col_idx)
+    vector = DuckDB.get_vector(output, result_idx)
     validity = DuckDB.get_validity(vector)
     input_column = df[!, col_idx]
     for i in 1:scan_count
@@ -119,36 +121,39 @@ end
 
 mutable struct DFInitInfo
     pos::Int64
+    columns::Vector{Int64}
 
-    function DFInitInfo()
-        return new(0)
+    function DFInitInfo(columns)
+        return new(0, columns)
     end
 end
 
 function df_init_function(info::DuckDB.InitInfo)
-    return DFInitInfo()
+    return DFInitInfo(DuckDB.get_projected_columns(info))
 end
 
 function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
     bind_info = DuckDB.get_bind_info(info, DFBindInfo)
     init_info = DuckDB.get_init_info(info, DFInitInfo)
 
-    column_count = size(names(bind_info.df), 1)
     row_count = size(bind_info.df, 1)
     scan_count = DuckDB.VECTOR_SIZE
     if init_info.pos + scan_count >= row_count
         scan_count = row_count - init_info.pos
     end
 
-    for col_idx in 1:column_count
+    result_idx = 1
+    for col_idx in init_info.columns
         bind_info.scan_functions[col_idx](
             bind_info.df,
             init_info.pos,
             col_idx,
+            result_idx,
             scan_count,
             output,
             bind_info.result_types[col_idx]
         )
+        result_idx += 1
     end
     init_info.pos += scan_count
     DuckDB.set_size(output, scan_count)
@@ -182,7 +187,8 @@ function _add_data_frame_scan(db::DB)
         df_bind_function,
         df_init_function,
         df_scan_function,
-        db.handle.registered_objects
+        db.handle.registered_objects,
+        true
     )
     return
 end

@@ -94,3 +94,39 @@ end
 
     DBInterface.close!(con)
 end
+
+@testset "Test DataFrame scan projection pushdown" begin
+    con = DBInterface.connect(DuckDB.DB)
+    df = DataFrame(a = [1, 2, 3], b = [42, 84, 42], c = [3, 7, 18])
+
+    DuckDB.register_data_frame(con, df, "my_df")
+    GC.gc()
+
+    results = DBInterface.execute(con, "SELECT b FROM my_df")
+    GC.gc()
+    df = DataFrame(results)
+    @test names(df) == ["b"]
+    @test size(df, 1) == 3
+    @test df.b == [42, 84, 42]
+
+    results = DBInterface.execute(con, "SELECT c, b FROM my_df")
+    GC.gc()
+    df = DataFrame(results)
+    @test names(df) == ["c", "b"]
+    @test size(df, 1) == 3
+    @test df.b == [42, 84, 42]
+    @test df.c == [3, 7, 18]
+
+    results = DBInterface.execute(con, "SELECT c, a, a FROM my_df")
+    GC.gc()
+    df = DataFrame(results)
+    @test names(df) == ["c", "a", "a_1"]
+    @test size(df, 1) == 3
+    @test df.c == [3, 7, 18]
+    @test df.a == [1, 2, 3]
+    @test df.a_1 == [1, 2, 3]
+
+    GC.gc()
+
+    DBInterface.close!(con)
+end

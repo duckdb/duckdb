@@ -1794,6 +1794,25 @@ function duckdb_table_function_set_function(table_func, func)
     )
 end
 
+"""
+Sets whether or not the given table function supports projection pushdown.
+
+If this is set to true, the system will provide a list of all required columns in the `init` stage through
+the `duckdb_init_get_column_count` and `duckdb_init_get_column_index` functions.
+If this is set to false (the default), the system will expect all columns to be projected.
+
+* table_function: The table function
+* pushdown: True if the table function supports projection pushdown, false otherwise.
+"""
+function duckdb_table_function_supports_projection_pushdown(table_func, pushdown)
+    return ccall(
+        (:duckdb_table_function_supports_projection_pushdown, libduckdb),
+        Cvoid,
+        (duckdb_table_function, Bool),
+        table_func,
+        pushdown
+    )
+end
 
 """
 Register the table function object within the given connection.
@@ -1947,6 +1966,32 @@ function duckdb_init_set_init_data(init_info, init_data, delete_callback)
         init_data,
         delete_callback
     )
+end
+
+
+"""
+Returns the number of projected columns.
+
+This function must be used if projection pushdown is enabled to figure out which columns to emit.
+
+* info: The info object
+* returns: The number of projected columns.
+"""
+function duckdb_init_get_column_count(info)
+    return ccall((:duckdb_init_get_column_count, libduckdb), UInt64, (duckdb_init_info,), info)
+end
+
+"""
+Returns the column index of the projected column at the specified position.
+
+This function must be used if projection pushdown is enabled to figure out which columns to emit.
+
+* info: The info object
+* column_index: The index at which to get the projected column index, from 0..duckdb_init_get_column_count(info)
+* returns: The column index of the projected column.
+"""
+function duckdb_init_get_column_index(info, index)
+    return ccall((:duckdb_init_get_column_index, libduckdb), UInt64, (duckdb_init_info, UInt64), info, index - 1) + 1
 end
 
 """
