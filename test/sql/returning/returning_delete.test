@@ -252,8 +252,11 @@ SELECT count(*) FROM table1;
 ----
 4000
 
+
 # the following two tests test that all inserts get streamed back to the returning statement
-query I
+# the order of the changed rows does not always reflect the order they were updated in. Therefore
+# returing column b (all -2)
+query I rowsort
 DELETE FROM table1 RETURNING a;
 ----
-4000 values hashing to b28a0440a7c3898c88617db0673db740
+4000 values hashing to 4a8cf4fccc8e076d1309e1db2163b3c4
