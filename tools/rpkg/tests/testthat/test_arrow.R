@@ -27,7 +27,7 @@ skip_if_not_installed("arrow", "5.0.0")
 skip_if_not(arrow::arrow_with_parquet(), message = "The installed Arrow is not fully featured, skipping Arrow integration tests")
 skip_if_not_installed("dbplyr")
 
-example_data <- tibble::tibble(
+example_data <- dplyr::tibble(
   int = c(1:3, NA_integer_, 5:10),
   dbl = c(1:8, NA, 10) + .1,
   dbl2 = rep(5, 10),
@@ -61,7 +61,7 @@ example_data <- tibble::tibble(
 #       summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
 #       collect() %>%
 #       arrange(mean_int),
-#     tibble::tibble(
+#     dplyr::tibble(
 #       lgl = c(TRUE, NA, FALSE),
 #       mean_int = c(3, 6.25, 8.5),
 #       mean_dbl = c(3.1, 6.35, 6.1)
@@ -77,7 +77,7 @@ example_data <- tibble::tibble(
 #       summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
 #       collect() %>%
 #       arrange(mean_int),
-#     tibble::tibble(
+#     dplyr::tibble(
 #       lgl = c(TRUE, NA, FALSE),
 #       mean_int = c(3, 6.25, 8.5),
 #       mean_dbl = c(3.1, 6.35, 6.1)
@@ -252,7 +252,7 @@ test_that("to_duckdb with a table", {
         dbl_mean = mean(dbl, na.rm = TRUE)
       ) %>%
       collect(),
-    tibble::tibble(
+    dplyr::tibble(
       "int > 4" = c(FALSE, NA, TRUE),
       int_mean = c(2, NA, 7.5),
       dbl_mean = c(2.1, 4.1, 7.3)
