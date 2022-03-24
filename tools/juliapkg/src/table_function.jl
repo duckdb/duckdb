@@ -1,5 +1,3 @@
-global_objects = Set()
-
 #=
 //===--------------------------------------------------------------------===//
 // Table Function Bind
@@ -16,10 +14,11 @@ struct BindInfo
 end
 
 mutable struct InfoWrapper
+    main_function::Any
     info::Any
 
-    function InfoWrapper(info)
-        return new(info)
+    function InfoWrapper(main_function, info)
+        return new(main_function, info)
     end
 end
 
@@ -45,7 +44,7 @@ end
 
 function _table_bind_cleanup(data::Ptr{Cvoid})
     info::InfoWrapper = unsafe_pointer_to_objref(data)
-    delete!(global_objects, info)
+    delete!(info.main_function.global_objects, info)
     return
 end
 
@@ -53,9 +52,9 @@ function _table_bind_function(info::duckdb_bind_info)
     try
         main_function = unsafe_pointer_to_objref(duckdb_bind_get_extra_info(info))
         binfo = BindInfo(info, main_function)
-        bind_data = InfoWrapper(main_function.bind_func(binfo))
+        bind_data = InfoWrapper(main_function, main_function.bind_func(binfo))
         bind_data_pointer = pointer_from_objref(bind_data)
-        push!(global_objects, bind_data)
+        push!(main_function.global_objects, bind_data)
         duckdb_bind_set_bind_data(info, bind_data_pointer, @cfunction(_table_bind_cleanup, Cvoid, (Ptr{Cvoid},)))
     catch ex
         duckdb_bind_set_error(info, sprint(showerror, ex))
@@ -83,9 +82,9 @@ function _table_init_function(info::duckdb_init_info)
     try
         main_function = unsafe_pointer_to_objref(duckdb_init_get_extra_info(info))
         binfo = InitInfo(info, main_function)
-        init_data = InfoWrapper(main_function.init_func(binfo))
+        init_data = InfoWrapper(main_function, main_function.init_func(binfo))
         init_data_pointer = pointer_from_objref(init_data)
-        push!(global_objects, init_data)
+        push!(main_function.global_objects, init_data)
         duckdb_init_set_init_data(info, init_data_pointer, @cfunction(_table_bind_cleanup, Cvoid, (Ptr{Cvoid},)))
     catch ex
         duckdb_init_set_error(info, sprint(showerror, ex))
@@ -150,6 +149,8 @@ mutable struct TableFunction
     init_func::Function
     main_func::Function
     extra_data::Any
+    global_objects::Set{Any}
+
 
     function TableFunction(
         name::AbstractString,
@@ -164,7 +165,7 @@ mutable struct TableFunction
         for param in parameters
             duckdb_table_function_add_parameter(handle, param.handle)
         end
-        result = new(handle, bind_func, init_func, main_func, extra_data)
+        result = new(handle, bind_func, init_func, main_func, extra_data, Set())
         finalizer(_destroy_table_function, result)
 
         duckdb_table_function_set_extra_info(handle, pointer_from_objref(result))
