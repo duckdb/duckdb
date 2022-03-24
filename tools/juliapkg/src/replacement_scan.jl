@@ -4,6 +4,7 @@ mutable struct ReplacementFunction
     db::DB
     replacement_func::Function
     extra_data::Any
+    uuid::UUID
 end
 
 struct ReplacementFunctionInfo
@@ -51,13 +52,13 @@ end
 
 function _replacement_func_cleanup(data::Ptr{Cvoid})
     info::ReplacementFunction = unsafe_pointer_to_objref(data)
-    delete!(global_objects, info)
+    delete!(info.db.handle.registered_objects, info.uuid)
     return
 end
 
 function add_replacement_scan!(db::DB, replacement_func::Function, extra_data::Any)
-    func = ReplacementFunction(db, replacement_func, extra_data)
-    push!(global_objects, func)
+    func = ReplacementFunction(db, replacement_func, extra_data, uuid4())
+    db.handle.registered_objects[func.uuid] = func
     return duckdb_add_replacement_scan(
         db.handle.handle,
         @cfunction(_replacement_scan_function, Cvoid, (duckdb_replacement_scan_info, Ptr{UInt8}, Ptr{Cvoid})),
