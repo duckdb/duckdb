@@ -1,0 +1,105 @@
+# name: test/sql/join/iejoin/test_iejoin.test
+# description: Test IEJoin
+# group: [iejoin]
+
+statement ok
+PRAGMA enable_verification
+
+# Restrictive tail predicates
+# Use inequalities to prevent future range choice optimisation
+query II
+WITH test AS (
+	SELECT
+		i AS id,
+		i AS begin,
+		i + 10 AS end,
+		i % 2 AS p1,
+		i % 3 AS p2
+	FROM range(0, 10) tbl(i)
+)
+SELECT lhs.id, rhs.id
+FROM test lhs, test rhs
+WHERE lhs.begin < rhs.end
+  AND rhs.begin < lhs.end
+  AND lhs.p1 <> rhs.p1
+  AND lhs.p2 <> rhs.p2
+ORDER BY ALL
+----
+0	1
+0	5
+0	7
+1	0
+1	2
+1	6
+1	8
+2	1
+2	3
+2	7
+2	9
+3	2
+3	4
+3	8
+4	3
+4	5
+4	9
+5	0
+5	4
+5	6
+6	1
+6	5
+6	7
+7	0
+7	2
+7	6
+7	8
+8	1
+8	3
+8	7
+8	9
+9	2
+9	4
+9	8
+
+# Subquery/CTE
+query II
+WITH test AS (
+	SELECT
+		i AS id,
+		i AS begin,
+		i + 10 AS end,
+		i % 2 AS p1,
+		i % 3 AS p2
+	FROM range(0, 10) tbl(i)
+),
+sub AS (
+	SELECT lhs.id AS lid, rhs.id AS rid
+	FROM test lhs, test rhs
+	WHERE lhs.begin < rhs.end
+	  AND rhs.begin < lhs.end
+	  AND lhs.p1 <> rhs.p1
+	  AND lhs.p2 <> rhs.p2
+	ORDER BY ALL
+)
+SELECT MIN(lid), MAX(rid)
+FROM sub
+----
+0	9
+
+# RTEs are not (yet) supported
+# so this should work, but not trigger IEJoin in the physical plan.
+query I
+WITH RECURSIVE t AS
+(
+	SELECT 1 AS x, 0 AS begin, 4 AS end
+UNION ALL
+	SELECT lhs.x + 1 AS x,
+		GREATEST(lhs.begin, rhs.begin) as begin,
+		LEAST(lhs.end, rhs.end) AS end
+	FROM t lhs, t rhs
+	WHERE lhs.begin + 1 < rhs.end - 1
+	  AND rhs.begin + 1 < lhs.end - 1
+	  AND lhs.x < 3
+)
+SELECT COUNT(*) FROM t
+----
+3

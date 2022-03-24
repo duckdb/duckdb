@@ -126,7 +126,26 @@ public:
 //! Used to scan the data into DataChunks after sorting
 struct PayloadScanner {
 public:
-	PayloadScanner(SortedData &sorted_data, GlobalSortState &global_sort_state);
+	PayloadScanner(SortedData &sorted_data, GlobalSortState &global_sort_state, bool flush = true);
+	explicit PayloadScanner(GlobalSortState &global_sort_state, bool flush = true);
+
+	//! Scan a single block
+	PayloadScanner(GlobalSortState &global_sort_state, idx_t block_idx);
+
+	//! The type layout of the payload
+	inline const vector<LogicalType> &GetPayloadTypes() const {
+		return sorted_data.layout.GetTypes();
+	}
+
+	//! The number of rows scanned so far
+	inline idx_t Scanned() const {
+		return total_scanned;
+	}
+
+	//! The number of remaining rows
+	inline idx_t Remaining() const {
+		return total_count - total_scanned;
+	}
 
 	//! Scans the next data chunk from the sorted data
 	void Scan(DataChunk &chunk);
@@ -144,6 +163,8 @@ private:
 	Vector addresses = Vector(LogicalType::POINTER);
 	//! The number of rows scanned so far
 	idx_t total_scanned;
+	//! Whether to flush the blocks after scanning
+	const bool flush;
 };
 
 } // namespace duckdb
