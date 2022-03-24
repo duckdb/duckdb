@@ -732,9 +732,9 @@ struct IsNanOperator {
 void IsNanFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet funcs("isnan");
 	funcs.AddFunction(ScalarFunction({LogicalType::FLOAT}, LogicalType::BOOLEAN,
-	                   ScalarFunction::UnaryFunction<float, bool, IsNanOperator>));
+	                                 ScalarFunction::UnaryFunction<float, bool, IsNanOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
-	                   ScalarFunction::UnaryFunction<double, bool, IsNanOperator>));
+	                                 ScalarFunction::UnaryFunction<double, bool, IsNanOperator>));
 	set.AddFunction(funcs);
 }
 
@@ -751,9 +751,9 @@ struct IsInfiniteOperator {
 void IsInfiniteFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet funcs("isinf");
 	funcs.AddFunction(ScalarFunction({LogicalType::FLOAT}, LogicalType::BOOLEAN,
-	                   ScalarFunction::UnaryFunction<float, bool, IsInfiniteOperator>));
+	                                 ScalarFunction::UnaryFunction<float, bool, IsInfiniteOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
-	                   ScalarFunction::UnaryFunction<double, bool, IsInfiniteOperator>));
+	                                 ScalarFunction::UnaryFunction<double, bool, IsInfiniteOperator>));
 	set.AddFunction(funcs);
 }
 
@@ -770,9 +770,9 @@ struct IsFiniteOperator {
 void IsFiniteFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet funcs("isfinite");
 	funcs.AddFunction(ScalarFunction({LogicalType::FLOAT}, LogicalType::BOOLEAN,
-	                   ScalarFunction::UnaryFunction<float, bool, IsFiniteOperator>));
+	                                 ScalarFunction::UnaryFunction<float, bool, IsFiniteOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
-	                   ScalarFunction::UnaryFunction<double, bool, IsFiniteOperator>));
+	                                 ScalarFunction::UnaryFunction<double, bool, IsFiniteOperator>));
 	set.AddFunction(funcs);
 }
 
