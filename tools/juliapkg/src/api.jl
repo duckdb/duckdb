@@ -1282,6 +1282,19 @@ function duckdb_create_logical_type(type)
 end
 
 """
+Creates a `duckdb_logical_type` of type decimal with the specified width and scale
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* width: The width of the decimal type
+* scale: The scale of the decimal type
+* returns: The logical type.
+"""
+function duckdb_create_decimal_type(width, scale)
+    return ccall((:duckdb_create_decimal_type, libduckdb), duckdb_logical_type, (UInt8, UInt8), width, scale)
+end
+
+
+"""
 Retrieves the type class of a `duckdb_logical_type`.
 
 * type: The logical type object

@@ -2,6 +2,7 @@ using DataFrames
 using DuckDB
 using Test
 using Dates
+using FixedPointDecimals
 using UUIDs
 
 test_files = [

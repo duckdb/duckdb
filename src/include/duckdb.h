@@ -987,9 +987,19 @@ The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 This should not be used with `DUCKDB_TYPE_DECIMAL`.
 
 * type: The primitive type to create.
-* returns: The logical type type.
+* returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_logical_type(duckdb_type type);
+
+/*!
+Creates a `duckdb_logical_type` of type decimal with the specified width and scale
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* width: The width of the decimal type
+* scale: The scale of the decimal type
+* returns: The logical type.
+*/
+DUCKDB_API duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t scale);
 
 /*!
 Retrieves the type class of a `duckdb_logical_type`.

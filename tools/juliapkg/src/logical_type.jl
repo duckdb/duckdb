@@ -41,6 +41,23 @@ create_logical_type(::Type{T}) where {T <: Date} = DuckDB.LogicalType(DuckDB.DUC
 create_logical_type(::Type{T}) where {T <: Time} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_TIME)
 create_logical_type(::Type{T}) where {T <: DateTime} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_TIMESTAMP)
 create_logical_type(::Type{T}) where {T <: AbstractString} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_VARCHAR)
+function create_logical_type(::Type{T}) where {T <: FixedDecimal}
+    int_type = T.parameters[1]
+    width = 0
+    scale = T.parameters[2]
+    if int_type == Int16
+        width = 4
+    elseif int_type == Int32
+        width = 9
+    elseif int_type == Int64
+        width = 18
+    elseif int_type == Int128
+        width = 38
+    else
+        throw(NotImplementedException("Unsupported internal type for decimal"))
+    end
+    return DuckDB.LogicalType(duckdb_create_decimal_type(width, scale))
+end
 
 function create_logical_type(::Type{T}) where {T}
     throw(NotImplementedException("Unsupported type for create_logical_type"))
