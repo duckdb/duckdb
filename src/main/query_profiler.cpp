@@ -83,6 +83,7 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	case PhysicalOperatorType::HASH_JOIN:
 	case PhysicalOperatorType::CROSS_PRODUCT:
 	case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
+	case PhysicalOperatorType::IE_JOIN:
 	case PhysicalOperatorType::DELIM_JOIN:
 	case PhysicalOperatorType::UNION:
 	case PhysicalOperatorType::RECURSIVE_CTE:

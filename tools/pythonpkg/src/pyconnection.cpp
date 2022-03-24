@@ -86,6 +86,9 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
 	         "Create a relation object from the Parquet file in file_name", py::arg("file_name"),
 	         py::arg("binary_as_string") = false)
+	    .def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
+	         py::arg("proto"))
+	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names");
 
@@ -101,7 +104,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	if (std::this_thread::get_id() != thread_id) {
+	if (std::this_thread::get_id() != thread_id && check_same_thread) {
 		throw std::runtime_error("DuckDB objects created in a thread can only be used in that same thread. The object "
 		                         "was created in thread id " +
 		                         to_string(std::hash<std::thread::id> {}(thread_id)) + " and this is thread id " +
@@ -329,6 +332,25 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 	return rel;
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto) {
+	if (!connection) {
+		throw std::runtime_error("connection closed");
+	}
+	string name = "substrait_" + GenerateRandomName();
+	vector<Value> params;
+	params.emplace_back(Value::BLOB_RAW(proto));
+	return make_unique<DuckDBPyRelation>(connection->TableFunction("from_substrait", params)->Alias(name));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &query) {
+	if (!connection) {
+		throw std::runtime_error("connection closed");
+	}
+	vector<Value> params;
+	params.emplace_back(query);
+	return make_unique<DuckDBPyRelation>(connection->TableFunction("get_substrait", params)->Alias(query));
+}
+
 DuckDBPyConnection *DuckDBPyConnection::UnregisterPythonObject(const string &name) {
 	registered_objects.erase(name);
 	py::gil_scoped_release release;
@@ -464,9 +486,15 @@ TryReplacement(py::dict &dict, py::str &table_name,
 	return table_function;
 }
 
-static unique_ptr<TableFunctionRef> ScanReplacement(const string &table_name, void *data) {
+struct ReplacementRegisteredObjects : public ReplacementScanData {
+	unordered_map<string, unique_ptr<RegisteredObject>> *registered_objects;
+};
+
+static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, const string &table_name,
+                                                    ReplacementScanData *data) {
 	py::gil_scoped_acquire acquire;
-	auto registered_objects = (unordered_map<string, unique_ptr<RegisteredObject>> *)data;
+	auto &registered_data = (ReplacementRegisteredObjects &)*data;
+	auto registered_objects = registered_data.registered_objects;
 	auto py_table_name = py::str(table_name);
 	// Here we do an exhaustive search on the frame lineage
 	auto current_frame = py::module::import("inspect").attr("currentframe")();
@@ -494,7 +522,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(const string &table_name, vo
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           const py::dict &config_dict) {
+                                                           const py::dict &config_dict, bool check_same_thread) {
 	auto res = make_shared<DuckDBPyConnection>();
 	DBConfig config;
 	if (read_only) {
@@ -510,12 +538,14 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		config.SetOption(*config_property, Value(val));
 	}
 	if (config.enable_external_access) {
-		config.replacement_scans.emplace_back(ScanReplacement, (void *)&res->registered_objects);
+		auto extra_data = make_unique<ReplacementRegisteredObjects>();
+		extra_data->registered_objects = &res->registered_objects;
+		config.replacement_scans.emplace_back(ScanReplacement, move(extra_data));
 	}
 
 	res->database = make_unique<DuckDB>(database, &config);
 	res->connection = make_unique<Connection>(*res->database);
-
+	res->check_same_thread = check_same_thread;
 	PandasScanFunction scan_fun;
 	CreateTableFunctionInfo scan_info(scan_fun);
 
@@ -617,7 +647,7 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
 	if (!default_connection) {
 		py::dict config_dict;
-		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict);
+		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict, true);
 	}
 	return default_connection.get();
 }
