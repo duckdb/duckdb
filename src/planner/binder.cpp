@@ -12,6 +12,8 @@
 
 #include <algorithm>
 
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+
 namespace duckdb {
 
 shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, Binder *parent, bool inherit_ctes) {

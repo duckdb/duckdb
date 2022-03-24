@@ -19,6 +19,8 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 
+//#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
+
 namespace duckdb {
 class BoundResultModifier;
 class BoundSelectNode;
@@ -28,6 +30,7 @@ class LimitModifier;
 class OrderBinder;
 class TableCatalogEntry;
 class ViewCatalogEntry;
+class TableMacroCatalogEntry;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
@@ -210,6 +213,8 @@ private:
 	BoundStatement Bind(ExportStatement &stmt);
 	BoundStatement Bind(SetStatement &stmt);
 	BoundStatement Bind(LoadStatement &stmt);
+
+	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry *macro_func, idx_t depth);
 
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);
