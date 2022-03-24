@@ -67,12 +67,15 @@ struct CTableInitData : public FunctionOperatorData {
 };
 
 struct CTableInternalInitInfo {
-	CTableInternalInitInfo(CTableBindData &bind_data, CTableInitData &init_data)
-	    : bind_data(bind_data), init_data(init_data), success(true) {
+	CTableInternalInitInfo(CTableBindData &bind_data, CTableInitData &init_data, const vector<column_t> &column_ids,
+	                       TableFilterCollection *filters)
+	    : bind_data(bind_data), init_data(init_data), column_ids(column_ids), filters(filters), success(true) {
 	}
 
 	CTableBindData &bind_data;
 	CTableInitData &init_data;
+	const vector<column_t> &column_ids;
+	TableFilterCollection *filters;
 	bool success;
 	string error;
 };
@@ -109,7 +112,7 @@ unique_ptr<FunctionOperatorData> CTableFunctionInit(ClientContext &context, cons
 	auto &bind_data = (CTableBindData &)*bind_data_p;
 	auto result = make_unique<CTableInitData>();
 
-	CTableInternalInitInfo init_info(bind_data, *result);
+	CTableInternalInitInfo init_info(bind_data, *result, column_ids, filters);
 	bind_data.info->init(&init_info);
 	if (!init_info.success) {
 		throw Exception(init_info.error);
@@ -201,6 +204,14 @@ void duckdb_table_function_set_function(duckdb_table_function table_function, du
 	auto tf = (duckdb::TableFunction *)table_function;
 	auto info = (duckdb::CTableFunctionInfo *)tf->function_info.get();
 	info->function = function;
+}
+
+void duckdb_table_function_supports_projection_pushdown(duckdb_table_function table_function, bool pushdown) {
+	if (!table_function) {
+		return;
+	}
+	auto tf = (duckdb::TableFunction *)table_function;
+	tf->projection_pushdown = pushdown;
 }
 
 duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb_table_function function) {
@@ -312,6 +323,25 @@ void duckdb_init_set_error(duckdb_init_info info, const char *error) {
 	auto function_info = (duckdb::CTableInternalInitInfo *)info;
 	function_info->error = error;
 	function_info->success = false;
+}
+
+idx_t duckdb_init_get_column_count(duckdb_init_info info) {
+	if (!info) {
+		return 0;
+	}
+	auto function_info = (duckdb::CTableInternalInitInfo *)info;
+	return function_info->column_ids.size();
+}
+
+idx_t duckdb_init_get_column_index(duckdb_init_info info, idx_t column_index) {
+	if (!info) {
+		return 0;
+	}
+	auto function_info = (duckdb::CTableInternalInitInfo *)info;
+	if (column_index >= function_info->column_ids.size()) {
+		return 0;
+	}
+	return function_info->column_ids[column_index];
 }
 
 //===--------------------------------------------------------------------===//

@@ -8,11 +8,11 @@ struct MyBindStruct
     end
 end
 
-function MyBindFunction(info::DuckDB.BindInfo)
-    DuckDB.AddResultColumn(info, "forty_two", Int64)
+function my_bind_function(info::DuckDB.BindInfo)
+    DuckDB.add_result_column(info, "forty_two", Int64)
 
-    parameter = DuckDB.GetParameter(info, 0)
-    number = DuckDB.GetValue(parameter, Int64)
+    parameter = DuckDB.get_parameter(info, 0)
+    number = DuckDB.getvalue(parameter, Int64)
     return MyBindStruct(number)
 end
 
@@ -24,15 +24,15 @@ mutable struct MyInitStruct
     end
 end
 
-function MyInitFunction(info::DuckDB.InitInfo)
+function my_init_function(info::DuckDB.InitInfo)
     return MyInitStruct()
 end
 
-function MyMainFunction(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
-    bind_info = DuckDB.GetBindInfo(info, MyBindStruct)
-    init_info = DuckDB.GetInitInfo(info, MyInitStruct)
+function my_main_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
+    bind_info = DuckDB.get_bind_info(info, MyBindStruct)
+    init_info = DuckDB.get_init_info(info, MyInitStruct)
 
-    result_array = DuckDB.GetArray(output, 1, Int64)
+    result_array = DuckDB.get_array(output, 1, Int64)
     count = 0
     for i in 1:(DuckDB.VECTOR_SIZE)
         if init_info.pos >= bind_info.count
@@ -43,16 +43,16 @@ function MyMainFunction(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
         init_info.pos += 1
     end
 
-    DuckDB.SetSize(output, count)
+    DuckDB.set_size(output, count)
     return
 end
 
-function MyMainFunctionNulls(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
-    bind_info = DuckDB.GetBindInfo(info, MyBindStruct)
-    init_info = DuckDB.GetInitInfo(info, MyInitStruct)
+function my_main_function_nulls(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
+    bind_info = DuckDB.get_bind_info(info, MyBindStruct)
+    init_info = DuckDB.get_init_info(info, MyInitStruct)
 
-    result_array = DuckDB.GetArray(output, 1, Int64)
-    validity = DuckDB.GetValidity(output, 1)
+    result_array = DuckDB.get_array(output, 1, Int64)
+    validity = DuckDB.get_validity(output, 1)
     count = 0
     for i in 1:(DuckDB.VECTOR_SIZE)
         if init_info.pos >= bind_info.count
@@ -61,20 +61,20 @@ function MyMainFunctionNulls(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk
         if init_info.pos % 2 == 0
             result_array[count + 1] = 42
         else
-            DuckDB.SetInvalid(validity, count + 1)
+            DuckDB.setinvalid(validity, count + 1)
         end
         count += 1
         init_info.pos += 1
     end
 
-    DuckDB.SetSize(output, count)
+    DuckDB.set_size(output, count)
     return
 end
 
 @testset "Test custom table functions" begin
     con = DBInterface.connect(DuckDB.DB)
 
-    DuckDB.CreateTableFunction(con, "forty_two", [Int64], MyBindFunction, MyInitFunction, MyMainFunction)
+    DuckDB.create_table_function(con, "forty_two", [Int64], my_bind_function, my_init_function, my_main_function)
     GC.gc()
 
     # 3 elements
@@ -100,7 +100,14 @@ end
     # 	println(df)
 
     # return null values from a table function
-    DuckDB.CreateTableFunction(con, "forty_two_nulls", [Int64], MyBindFunction, MyInitFunction, MyMainFunctionNulls)
+    DuckDB.create_table_function(
+        con,
+        "forty_two_nulls",
+        [Int64],
+        my_bind_function,
+        my_init_function,
+        my_main_function_nulls
+    )
     results = DBInterface.execute(con, "SELECT COUNT(*) total_cnt, COUNT(forty_two) cnt FROM forty_two_nulls(10000)")
     df = DataFrame(results)
     @test df.total_cnt == [10000]
@@ -113,24 +120,45 @@ end
     # 	println(df)
 end
 
-function MyBindErrorFunction(info::DuckDB.BindInfo)
+function my_bind_error_function(info::DuckDB.BindInfo)
     throw("bind error")
 end
 
-function MyInitErrorFunction(info::DuckDB.InitInfo)
+function my_init_error_function(info::DuckDB.InitInfo)
     throw("init error")
 end
 
-function MyMainErrorFunction(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
+function my_main_error_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
     throw("runtime error")
 end
 
 @testset "Test table function errors" begin
     con = DBInterface.connect(DuckDB.DB)
 
-    DuckDB.CreateTableFunction(con, "bind_error_function", [Int64], MyBindErrorFunction, MyInitFunction, MyMainFunction)
-    DuckDB.CreateTableFunction(con, "init_error_function", [Int64], MyBindFunction, MyInitErrorFunction, MyMainFunction)
-    DuckDB.CreateTableFunction(con, "main_error_function", [Int64], MyBindFunction, MyInitFunction, MyMainErrorFunction)
+    DuckDB.create_table_function(
+        con,
+        "bind_error_function",
+        [Int64],
+        my_bind_error_function,
+        my_init_function,
+        my_main_function
+    )
+    DuckDB.create_table_function(
+        con,
+        "init_error_function",
+        [Int64],
+        my_bind_function,
+        my_init_error_function,
+        my_main_function
+    )
+    DuckDB.create_table_function(
+        con,
+        "main_error_function",
+        [Int64],
+        my_bind_function,
+        my_init_function,
+        my_main_error_function
+    )
 
     @test_throws DuckDB.QueryException DBInterface.execute(con, "SELECT * FROM bind_error_function(3)")
     @test_throws DuckDB.QueryException DBInterface.execute(con, "SELECT * FROM init_error_function(3)")
