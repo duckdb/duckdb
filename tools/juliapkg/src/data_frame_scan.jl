@@ -156,7 +156,7 @@ function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
 end
 
 function register_data_frame(con::Connection, df::DataFrame, name::AbstractString)
-    con.db.data_frames[name] = df
+    con.db.registered_objects[name] = df
     DBInterface.execute(
         con,
         string("CREATE OR REPLACE VIEW \"", name, "\" AS SELECT * FROM julia_df_scan('", name, "')")
@@ -166,7 +166,7 @@ end
 register_data_frame(db::DB, df::DataFrame, name::AbstractString) = register_data_frame(db.main_connection, df, name)
 
 function unregister_data_frame(con::Connection, name::AbstractString)
-    pop!(con.db.data_frames, name)
+    pop!(con.db.registered_objects, name)
     DBInterface.execute(con, string("DROP VIEW IF EXISTS \"", name, "\""))
     return
 end
@@ -182,7 +182,7 @@ function _add_data_frame_scan(db::DB)
         df_bind_function,
         df_init_function,
         df_scan_function,
-        db.handle.data_frames
+        db.handle.registered_objects
     )
     return
 end
