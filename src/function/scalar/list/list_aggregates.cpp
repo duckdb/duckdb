@@ -110,12 +110,11 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 			if (states_idx == STANDARD_VECTOR_SIZE) {
 
 				// update the aggregate state(s)
-				Vector slices[] = {Vector(child_vector, sel_vector, states_idx)};
-				aggr.function.update(slices, aggr.bind_info.get(), 1, state_vector_update, states_idx);
+				Vector slice = Vector(child_vector, sel_vector, states_idx);
+				aggr.function.update(&slice, aggr.bind_info.get(), 1, state_vector_update, states_idx);
 
 				// reset values
 				states_idx = 0;
-				sel_vector.Initialize(STANDARD_VECTOR_SIZE);
 			}
 
 			sel_vector.set_index(states_idx, source_idx + child_idx);
@@ -127,12 +126,17 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 
 	// update the remaining elements of the last list(s)
 	if (states_idx != 0) {
-		Vector slices[] = {Vector(child_vector, sel_vector, states_idx)};
-		aggr.function.update(slices, aggr.bind_info.get(), 1, state_vector_update, states_idx);
+		Vector slice = Vector(child_vector, sel_vector, states_idx);
+		aggr.function.update(&slice, aggr.bind_info.get(), 1, state_vector_update, states_idx);
 	}
 
 	// finalize all the aggregate states
 	aggr.function.finalize(state_vector, aggr.bind_info.get(), result, count, 0);
+
+	// destroy objects within the aggregate states
+	if (aggr.function.destructor) {
+		aggr.function.destructor(state_vector, count);
+	}
 }
 
 static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, ScalarFunction &bound_function,

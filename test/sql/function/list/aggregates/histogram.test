@@ -59,8 +59,19 @@ SELECT list_histogram(['2021-08-20'::TIMESTAMP])
 statement ok
 SELECT list_histogram(['2021-08-20'::TIMESTAMPTZ])
 
-# TODO: why does this say that is unexpectedly succeeds when it actually throws an unexpected exception (timestamp_s)?
-foreach type date time timestamp_s timestamp_ms timestamp_ns timetz
+# timestamp in seconds
+statement ok
+SELECT list_histogram(['2021-08-20'::TIMESTAMP_S])
+
+# timestamp in milli seconds
+statement ok
+SELECT list_histogram(['2021-08-20'::TIMESTAMP_MS])
+
+# timestamp in nano seconds
+statement ok
+SELECT list_histogram(['2021-08-20'::TIMESTAMP_NS])
+
+foreach type date time timetz
 
 statement error
 SELECT list_histogram(['2021-08-20'::${type}])
