@@ -187,7 +187,6 @@ JULIA_TYPE_MAP = Dict(
     DUCKDB_TYPE_UBIGINT => UInt64,
     DUCKDB_TYPE_FLOAT => Float32,
     DUCKDB_TYPE_DOUBLE => Float64,
-    DUCKDB_TYPE_DECIMAL => Float64,
     DUCKDB_TYPE_DATE => Date,
     DUCKDB_TYPE_TIME => Time,
     DUCKDB_TYPE_TIMESTAMP => DateTime,
@@ -213,7 +212,21 @@ end
 
 function duckdb_type_to_julia_type(x)
     type_id = get_type_id(x)
-    if type_id == DUCKDB_TYPE_LIST
+    if type_id == DUCKDB_TYPE_DECIMAL
+        internal_type_id = get_internal_type_id(x)
+        scale = get_decimal_scale(x)
+        if internal_type_id == DUCKDB_TYPE_SMALLINT
+            return FixedDecimal{Int16, scale}
+        elseif internal_type_id == DUCKDB_TYPE_INTEGER
+            return FixedDecimal{Int32, scale}
+        elseif internal_type_id == DUCKDB_TYPE_BIGINT
+            return FixedDecimal{Int64, scale}
+        elseif internal_type_id == DUCKDB_TYPE_HUGEINT
+            return FixedDecimal{Int128, scale}
+        else
+            throw(NotImplementedException("Unimplemented internal type for decimal"))
+        end
+    elseif type_id == DUCKDB_TYPE_LIST
         return Vector{Union{Missing, duckdb_type_to_julia_type(get_list_child_type(x))}}
     elseif type_id == DUCKDB_TYPE_STRUCT
         child_count = get_struct_child_count(x)

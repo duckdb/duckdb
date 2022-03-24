@@ -105,12 +105,12 @@ function convert_enum(column_data::ColumnConversionData, val)::String
     return column_data.conversion_data[val + 1]
 end
 
-function convert_decimal_hugeint(column_data::ColumnConversionData, val::duckdb_hugeint)::Float64
-    return convert_hugeint(column_data, val) / column_data.conversion_data
+function convert_decimal_hugeint(column_data::ColumnConversionData, val::duckdb_hugeint)
+    return Base.reinterpret(column_data.conversion_data, convert_hugeint(column_data, val))
 end
 
-function convert_decimal(column_data::ColumnConversionData, val)::Float64
-    return val / column_data.conversion_data
+function convert_decimal(column_data::ColumnConversionData, val)
+    return Base.reinterpret(column_data.conversion_data, val)
 end
 
 function convert_vector(
@@ -374,7 +374,7 @@ end
 function init_conversion_loop(logical_type::LogicalType)
     type = get_type_id(logical_type)
     if type == DUCKDB_TYPE_DECIMAL
-        return 10^get_decimal_scale(logical_type)
+        return duckdb_type_to_julia_type(logical_type)
     elseif type == DUCKDB_TYPE_ENUM
         return get_enum_dictionary(logical_type)
     elseif type == DUCKDB_TYPE_LIST
