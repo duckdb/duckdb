@@ -235,7 +235,7 @@ static BOOL Uninstall(const char *dsn, const char *drivername) {
 	return TRUE;
 }
 
-void ElevateToAdminPrivileges(char **params) {
+void ElevatePrivilegesAsAdmin(char **params) {
 	char szPath[MAX_PATH];
 	if (GetModuleFileName(NULL, szPath, ARRAYSIZE(szPath))) {
 		// Launch itself as admin
@@ -280,7 +280,7 @@ int main(int argc, char **argv) {
 	char *parameters = NULL;
 	if (!IsUserAnAdmin()) {
 		CopyParameters(argc, argv, &parameters);
-		ElevateToAdminPrivileges(&parameters);
+		ElevatePrivilegesAsAdmin(&parameters);
 	}
 
 	char *install_cmd = "/Install";
