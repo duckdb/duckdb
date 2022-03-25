@@ -6,10 +6,13 @@ on:
   pull_request:
     paths-ignore:
       - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/juliapkg/**'
       - 'tools/nodejs/**'
       - 'tools/rpkg/**'
-      - '.github/workflows/NodeJS.yml'
-      - '.github/workflows/R.yml'
+      - '.github/workflows/**'
+      - '!.github/workflows/Python.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -50,6 +53,21 @@ jobs:
     - uses: actions/setup-python@v2
       with:
         python-version: '3.7'
+
+    - name: Install requirements
+      run: |
+        sudo apt-get update -y -qq
+        sudo apt-get install -y git ninja-build make gcc-multilib g++-multilib wget libssl-dev
+
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+        chmod +x cmake-3.21.3-linux-x86_64.sh
+        sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+
+    - name: Build extensions to test
+      run: |
+        GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
 
     - name: Install
       run: pip install cibuildwheel twine

@@ -45,7 +45,7 @@ struct RegrSlopeOperation {
 		} else {
 			auto cov = state->cov_pop.co_moment / state->cov_pop.count;
 			auto var_pop = state->var_pop.count > 1 ? (state->var_pop.dsquared / state->var_pop.count) : 0;
-			if (!Value::DoubleIsValid(var_pop)) {
+			if (!Value::DoubleIsFinite(var_pop)) {
 				throw OutOfRangeException("VARPOP is out of range!");
 			}
 			if (var_pop == 0) {

@@ -14,9 +14,7 @@
 
 namespace duckdb {
 
-static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value> &inputs,
-                                            named_parameter_map_t &named_parameters,
-                                            vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
                                             vector<LogicalType> &return_types, vector<string> &names) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.enable_external_access) {
@@ -25,7 +23,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 	auto result = make_unique<ReadCSVData>();
 	auto &options = result->options;
 
-	auto &file_pattern = StringValue::Get(inputs[0]);
+	auto &file_pattern = StringValue::Get(input.inputs[0]);
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	result->files = fs.Glob(file_pattern, context);
@@ -33,7 +31,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
 	}
 
-	for (auto &kv : named_parameters) {
+	for (auto &kv : input.named_parameters) {
 		auto loption = StringUtil::Lower(kv.first);
 		if (loption == "auto_detect") {
 			options.auto_detect = BooleanValue::Get(kv.second);
@@ -180,13 +178,10 @@ static unique_ptr<FunctionOperatorData> ReadCSVInit(ClientContext &context, cons
 	return move(result);
 }
 
-static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, vector<Value> &inputs,
-                                                named_parameter_map_t &named_parameters,
-                                                vector<LogicalType> &input_table_types,
-                                                vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                vector<string> &names) {
-	named_parameters["auto_detect"] = Value::BOOLEAN(true);
-	return ReadCSVBind(context, inputs, named_parameters, input_table_types, input_table_names, return_types, names);
+static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFunctionBindInput &input,
+                                                vector<LogicalType> &return_types, vector<string> &names) {
+	input.named_parameters["auto_detect"] = Value::BOOLEAN(true);
+	return ReadCSVBind(context, input, return_types, names);
 }
 
 static void ReadCSVFunction(ClientContext &context, const FunctionData *bind_data_p,
@@ -261,7 +256,8 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(read_csv_auto);
 }
 
-unique_ptr<TableFunctionRef> ReadCSVReplacement(const string &table_name, void *data) {
+unique_ptr<TableFunctionRef> ReadCSVReplacement(ClientContext &context, const string &table_name,
+                                                ReplacementScanData *data) {
 	auto lower_name = StringUtil::Lower(table_name);
 	// remove any compression
 	if (StringUtil::EndsWith(lower_name, ".gz")) {

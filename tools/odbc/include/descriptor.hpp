@@ -19,6 +19,7 @@ public:
 	DescRecord(const DescRecord &other);
 	SQLRETURN SetValueType(SQLSMALLINT value_type);
 	SQLRETURN SetSqlDescType(SQLSMALLINT type);
+	SQLRETURN SetSqlDataType(SQLSMALLINT type);
 
 public:
 	SQLINTEGER sql_desc_auto_unique_value;
@@ -30,7 +31,7 @@ public:
 	SQLPOINTER sql_desc_data_ptr;
 	SQLSMALLINT sql_desc_datetime_interval_code;
 	SQLINTEGER sql_desc_datetime_interval_precision;
-	SQLLEN sql_desc_display_size;
+	SQLINTEGER sql_desc_display_size;
 	SQLSMALLINT sql_desc_fixed_prec_scale;
 	SQLLEN *sql_desc_indicator_ptr;
 	std::string sql_desc_label;
@@ -39,7 +40,7 @@ public:
 	std::string sql_desc_literal_suffix;
 	std::string sql_desc_local_type_name;
 	std::string sql_desc_name;
-	SQLSMALLINT sql_desc_nullable;
+	SQLSMALLINT sql_desc_nullable = SQL_NULLABLE_UNKNOWN;
 	SQLINTEGER sql_desc_num_prec_radix;
 	SQLLEN sql_desc_octet_length;
 	SQLLEN *sql_desc_octet_length_ptr;

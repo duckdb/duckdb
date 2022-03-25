@@ -1,7 +1,8 @@
 #include "duckdb_odbc.hpp"
+#include "api_info.hpp"
+#include "descriptor.hpp"
 #include "odbc_fetch.hpp"
 #include "odbc_interval.hpp"
-#include "descriptor.hpp"
 #include "parameter_descriptor.hpp"
 #include "row_descriptor.hpp"
 
@@ -137,4 +138,40 @@ void OdbcHandleStmt::SetARD(OdbcHandleDesc *new_ard) {
 
 void OdbcHandleStmt::SetAPD(OdbcHandleDesc *new_apd) {
 	param_desc->SetCurrentAPD(new_apd);
+}
+
+void OdbcHandleStmt::FillIRD() {
+	D_ASSERT(stmt);
+	auto ird = row_desc->GetIRD();
+	ird->Reset();
+	for (duckdb::idx_t col_idx = 0; col_idx < stmt->ColumnCount(); ++col_idx) {
+		duckdb::DescRecord new_record;
+		LogicalType col_type = stmt->GetTypes()[col_idx];
+
+		new_record.sql_desc_base_column_name = stmt->GetNames()[col_idx];
+
+		auto sql_type = duckdb::ApiInfo::FindRelatedSQLType(col_type.id());
+		if (sql_type == SQL_INTERVAL) {
+			// default mapping from Logical::Interval -> SQL_INTERVAL_DAY_TO_SECOND
+			new_record.SetSqlDescType(SQL_INTERVAL_DAY_TO_SECOND);
+		} else {
+			new_record.SetSqlDescType(sql_type);
+		}
+
+		duckdb::ApiInfo::GetColumnSize(col_type, &new_record.sql_desc_display_size);
+		new_record.sql_desc_type_name = col_type.ToString();
+
+		switch (col_type.id()) {
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
+			new_record.sql_desc_unsigned = SQL_TRUE;
+			break;
+		default:
+			new_record.sql_desc_unsigned = SQL_FALSE;
+		}
+
+		ird->records.emplace_back(new_record);
+	}
 }

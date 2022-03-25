@@ -9,11 +9,8 @@ struct PragmaVersionData : public FunctionOperatorData {
 	bool finished;
 };
 
-static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, vector<Value> &inputs,
-                                                  named_parameter_map_t &named_parameters,
-                                                  vector<LogicalType> &input_table_types,
-                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                  vector<string> &names) {
+static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, TableFunctionBindInput &input,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("library_version");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("source_id");

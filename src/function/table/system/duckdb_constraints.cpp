@@ -25,10 +25,7 @@ struct DuckDBConstraintsData : public FunctionOperatorData {
 	idx_t constraint_offset;
 };
 
-static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, vector<Value> &inputs,
-                                                      named_parameter_map_t &named_parameters,
-                                                      vector<LogicalType> &input_table_types,
-                                                      vector<string> &input_table_names,
+static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, TableFunctionBindInput &input,
                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);

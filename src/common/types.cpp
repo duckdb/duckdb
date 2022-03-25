@@ -745,11 +745,23 @@ void LogicalType::Verify() const {
 }
 
 bool ApproxEqual(float ldecimal, float rdecimal) {
+	if (Value::IsNan(ldecimal) && Value::IsNan(rdecimal)) {
+		return true;
+	}
+	if (!Value::FloatIsFinite(ldecimal) || !Value::FloatIsFinite(rdecimal)) {
+		return ldecimal == rdecimal;
+	}
 	float epsilon = std::fabs(rdecimal) * 0.01;
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
 bool ApproxEqual(double ldecimal, double rdecimal) {
+	if (Value::IsNan(ldecimal) && Value::IsNan(rdecimal)) {
+		return true;
+	}
+	if (!Value::DoubleIsFinite(ldecimal) || !Value::DoubleIsFinite(rdecimal)) {
+		return ldecimal == rdecimal;
+	}
 	double epsilon = std::fabs(rdecimal) * 0.01;
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
