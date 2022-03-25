@@ -1,6 +1,7 @@
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/expression_binder/returning_binder.hpp"
 #include "duckdb/planner/operator/logical_delete.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -75,10 +76,21 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	    LogicalType::ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
 	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
-	result.plan = move(del);
-	result.names = {"Count"};
-	result.types = {LogicalType::BIGINT};
-	this->allow_stream_result = false;
+	if (!stmt.returning_list.empty()) {
+		del->return_chunk = true;
+
+		auto update_table_index = GenerateTableIndex();
+		del->table_index = update_table_index;
+
+		unique_ptr<LogicalOperator> del_as_logicaloperator = move(del);
+		return BindReturning(move(stmt.returning_list), table, update_table_index, move(del_as_logicaloperator),
+		                     move(result));
+	} else {
+		result.plan = move(del);
+		result.names = {"Count"};
+		result.types = {LogicalType::BIGINT};
+		this->allow_stream_result = false;
+	}
 	return result;
 }
 
