@@ -283,9 +283,13 @@ static idx_t DistinctSelect(Vector &left, Vector &right, idx_t vcount, const Sel
 }
 
 template <class OP>
-static idx_t DistinctSelectNotNull(VectorData &lvdata, VectorData &rvdata, const idx_t count, idx_t &true_count,
-                                   const SelectionVector &sel, SelectionVector &maybe_vec, OptionalSelection &true_vec,
-                                   OptionalSelection &false_vec) {
+static idx_t DistinctSelectNotNull(Vector &left, Vector &right, const idx_t count, idx_t &true_count,
+                                   const SelectionVector &sel, SelectionVector &maybe_vec, OptionalSelection &true_opt,
+                                   OptionalSelection &false_opt) {
+	VectorData lvdata, rvdata;
+	left.Orrify(count, lvdata);
+	right.Orrify(count, rvdata);
+
 	auto &lmask = lvdata.validity;
 	auto &rmask = rvdata.validity;
 
@@ -299,39 +303,39 @@ static idx_t DistinctSelectNotNull(VectorData &lvdata, VectorData &rvdata, const
 		return remaining;
 	}
 
+	// Slice the Vectors down to the rows that are not determined (i.e., neither is NULL)
+	SelectionVector slicer(count);
+	true_count = 0;
 	idx_t false_count = 0;
 	for (idx_t i = 0; i < count; ++i) {
-		const auto idx = sel.get_index(i);
-		const auto lidx = lvdata.sel->get_index(idx);
-		const auto ridx = rvdata.sel->get_index(idx);
+		const auto result_idx = sel.get_index(i);
+		const auto lidx = lvdata.sel->get_index(i);
+		const auto ridx = rvdata.sel->get_index(i);
 		const auto lnull = !lmask.RowIsValid(lidx);
 		const auto rnull = !rmask.RowIsValid(ridx);
 		if (lnull || rnull) {
 			// If either is NULL then we can major distinguish them
 			if (!OP::Operation(false, false, lnull, rnull)) {
-				false_vec.Append(false_count, idx);
+				false_opt.Append(false_count, result_idx);
 			} else {
-				true_vec.Append(true_count, idx);
+				true_opt.Append(true_count, result_idx);
 			}
 		} else {
 			//	Neither is NULL, distinguish values.
-			maybe_vec.set_index(remaining++, idx);
+			slicer.set_index(remaining, i);
+			maybe_vec.set_index(remaining++, result_idx);
 		}
 	}
-	true_vec.Advance(true_count);
-	false_vec.Advance(false_count);
+
+	true_opt.Advance(true_count);
+	false_opt.Advance(false_count);
+
+	if (remaining && remaining < count) {
+		left.Slice(slicer, remaining);
+		right.Slice(slicer, remaining);
+	}
 
 	return remaining;
-}
-
-template <bool DENSE>
-static inline void ScatterSelection(SelectionVector *target, const idx_t count, const SelectionVector &sel,
-                                    const SelectionVector &dense_vec) {
-	if (DENSE && target) {
-		for (idx_t i = 0; i < count; ++i) {
-			target->set_index(i, sel.get_index(dense_vec.get_index(i)));
-		}
-	}
 }
 
 struct PositionComparator {
@@ -463,26 +467,70 @@ static StructEntries &StructVectorGetSlicedEntries(Vector &parent, StructEntries
 	return children;
 }
 
+static void ExtractNestedSelection(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
+                                   OptionalSelection &opt) {
+
+	for (idx_t i = 0; i < count;) {
+		const auto slice_idx = slice_sel.get_index(i);
+		const auto result_idx = sel.get_index(slice_idx);
+		opt.Append(i, result_idx);
+	}
+	opt.Advance(count);
+}
+
+static void DensifyNestedSelection(const SelectionVector &dense_sel, const idx_t count, SelectionVector &slice_sel) {
+	for (idx_t i = 0; i < count; ++i) {
+		slice_sel.set_index(i, dense_sel.get_index(i));
+	}
+}
+
 template <class OP>
-static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t vcount, VectorData &lvdata, VectorData &rvdata,
-                                  idx_t count, SelectionVector &maybe_vec, OptionalSelection &true_opt,
-                                  OptionalSelection &false_opt) {
+static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
+                                  OptionalSelection &true_opt, OptionalSelection &false_opt) {
+	if (count == 0) {
+		return 0;
+	}
+
 	// Avoid allocating in the 99% of the cases where we don't need to.
 	StructEntries lsliced, rsliced;
-	auto &lchildren = StructVectorGetSlicedEntries(left, lsliced, vcount);
-	auto &rchildren = StructVectorGetSlicedEntries(right, rsliced, vcount);
+	auto &lchildren = StructVectorGetSlicedEntries(left, lsliced, count);
+	auto &rchildren = StructVectorGetSlicedEntries(right, rsliced, count);
 	D_ASSERT(lchildren.size() == rchildren.size());
+
+	// In order to reuse the comparators, we have to track what passed and failed internally.
+	// To do that, we need local SVs that we then merge back into the real ones after every pass.
+	const auto vcount = count;
+	SelectionVector slice_sel(count);
+	for (idx_t i = 0; i < count; ++i) {
+		slice_sel.set_index(i, i);
+	}
+
+	SelectionVector true_sel(count);
+	SelectionVector false_sel(count);
 
 	idx_t match_count = 0;
 	for (idx_t col_no = 0; col_no < lchildren.size(); ++col_no) {
-		auto &lchild = *lchildren[col_no];
-		auto &rchild = *rchildren[col_no];
+		// Slice the children to maintain density
+		Vector lchild(*lchildren[col_no]);
+		lchild.Normalify(vcount);
+		lchild.Slice(slice_sel, count);
+
+		Vector rchild(*rchildren[col_no]);
+		rchild.Normalify(vcount);
+		rchild.Slice(slice_sel, count);
 
 		// Find everything that definitely matches
 		auto true_count =
-		    PositionComparator::Definite<OP>(lchild, rchild, vcount, maybe_vec, count, true_opt, maybe_vec);
+		    PositionComparator::Definite<OP>(lchild, rchild, count, slice_sel, count, &true_sel, false_sel);
 		if (true_count > 0) {
-			true_opt.Advance(true_count);
+			auto false_count = count - true_count;
+
+			// Extract the definite matches into the true result
+			ExtractNestedSelection(false_count ? true_sel : slice_sel, true_count, sel, true_opt);
+
+			// Remove the definite matches from the slicing vector
+			DensifyNestedSelection(false_sel, false_count, slice_sel);
+
 			match_count += true_count;
 			count -= true_count;
 		}
@@ -490,12 +538,28 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t vcount, Vec
 		if (col_no != lchildren.size() - 1) {
 			// Find what might match on the next position
 			true_count =
-			    PositionComparator::Possible<OP>(lchild, rchild, vcount, maybe_vec, count, maybe_vec, false_opt);
+			    PositionComparator::Possible<OP>(lchild, rchild, count, slice_sel, count, true_sel, &false_sel);
 			auto false_count = count - true_count;
-			false_opt.Advance(false_count);
+
+			// Extract the definite failures into the false result
+			ExtractNestedSelection(true_count ? false_sel : slice_sel, false_count, sel, false_opt);
+
+			// Remove any definite failures from the slicing vector
+			if (false_count) {
+				DensifyNestedSelection(true_sel, true_count, slice_sel);
+			}
+
 			count = true_count;
 		} else {
-			true_count = PositionComparator::Final<OP>(lchild, rchild, vcount, maybe_vec, count, true_opt, false_opt);
+			true_count = PositionComparator::Final<OP>(lchild, rchild, count, slice_sel, count, &true_sel, &false_sel);
+			auto false_count = count - true_count;
+
+			// Extract the definite matches into the true result
+			ExtractNestedSelection(false_count ? true_sel : slice_sel, true_count, sel, true_opt);
+
+			// Extract the definite failures into the false result
+			ExtractNestedSelection(true_count ? false_sel : slice_sel, false_count, sel, false_opt);
+
 			match_count += true_count;
 		}
 	}
@@ -504,28 +568,27 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t vcount, Vec
 }
 
 static void PositionListCursor(SelectionVector &cursor, VectorData &vdata, const idx_t pos,
-                               const SelectionVector &maybe_vec, const idx_t count) {
+                               const SelectionVector &slice_sel, const idx_t count) {
 	const auto data = (const list_entry_t *)vdata.data;
 	for (idx_t i = 0; i < count; ++i) {
-		const auto idx = maybe_vec.get_index(i);
+		const auto slice_idx = slice_sel.get_index(i);
 
-		const auto lidx = vdata.sel->get_index(idx);
+		const auto lidx = vdata.sel->get_index(slice_idx);
 		const auto &entry = data[lidx];
-		cursor.set_index(idx, entry.offset + pos);
+		cursor.set_index(i, entry.offset + pos);
 	}
 }
 
 template <class OP>
-static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t vcount, VectorData &lvdata, VectorData &rvdata,
-                                idx_t count, SelectionVector &maybe_vec, OptionalSelection &true_opt,
-                                OptionalSelection &false_opt) {
+static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
+                                OptionalSelection &true_opt, OptionalSelection &false_opt) {
 	if (count == 0) {
 		return count;
 	}
 
-	// We use them to create dictionary views of the children so we can vectorise the positional comparisons.
-	SelectionVector lcursor(vcount);
-	SelectionVector rcursor(vcount);
+	// Create dictionary views of the children so we can vectorise the positional comparisons.
+	SelectionVector lcursor(count);
+	SelectionVector rcursor(count);
 
 	Vector lchild(ListVector::GetEntry(left), lcursor, count);
 	Vector rchild(ListVector::GetEntry(right), rcursor, count);
@@ -543,105 +606,137 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t vcount, Vecto
 	//	 	++left, ++right;
 	// 	}
 	// }
+
+	// Get pointers to the list entries
+	VectorData lvdata;
+	left.Orrify(count, lvdata);
 	const auto ldata = (const list_entry_t *)lvdata.data;
+
+	VectorData rvdata;
+	right.Orrify(count, rvdata);
 	const auto rdata = (const list_entry_t *)rvdata.data;
+
+	// In order to reuse the comparators, we have to track what passed and failed internally.
+	// To do that, we need local SVs that we then merge back into the real ones after every pass.
+	SelectionVector slice_sel(count);
+	for (idx_t i = 0; i < count; ++i) {
+		slice_sel.set_index(i, i);
+	}
+
+	SelectionVector true_sel(count);
+	SelectionVector false_sel(count);
 
 	idx_t match_count = 0;
 	for (idx_t pos = 0; count > 0; ++pos) {
 		// Set up the cursors for the current position
-		PositionListCursor(lcursor, lvdata, pos, maybe_vec, count);
-		PositionListCursor(rcursor, rvdata, pos, maybe_vec, count);
+		PositionListCursor(lcursor, lvdata, pos, slice_sel, count);
+		PositionListCursor(rcursor, rvdata, pos, slice_sel, count);
 
 		// Tie-break the pairs where one of the LISTs is exhausted.
 		idx_t true_count = 0;
 		idx_t false_count = 0;
 		idx_t maybe_count = 0;
 		for (idx_t i = 0; i < count; ++i) {
-			const auto idx = maybe_vec.get_index(i);
-			const auto lidx = lvdata.sel->get_index(idx);
+			const auto slice_idx = slice_sel.get_index(i);
+			const auto lidx = lvdata.sel->get_index(slice_idx);
 			const auto &lentry = ldata[lidx];
-			const auto ridx = rvdata.sel->get_index(idx);
+			const auto ridx = rvdata.sel->get_index(slice_idx);
 			const auto &rentry = rdata[ridx];
 			if (lentry.length == pos || rentry.length == pos) {
+				const auto idx = sel.get_index(slice_idx);
 				if (PositionComparator::TieBreak<OP>(lentry.length, rentry.length)) {
 					true_opt.Append(true_count, idx);
 				} else {
 					false_opt.Append(false_count, idx);
 				}
 			} else {
-				maybe_vec.set_index(maybe_count++, idx);
+				true_sel.set_index(maybe_count++, slice_idx);
 			}
 		}
 		true_opt.Advance(true_count);
 		false_opt.Advance(false_count);
-		count = maybe_count;
 		match_count += true_count;
+
+		// Redensify the list cursors
+		if (maybe_count < count) {
+			count = maybe_count;
+			DensifyNestedSelection(true_sel, count, slice_sel);
+			PositionListCursor(lcursor, lvdata, pos, slice_sel, count);
+			PositionListCursor(rcursor, rvdata, pos, slice_sel, count);
+		}
 
 		// Find everything that definitely matches
-		true_count = PositionComparator::Definite<OP>(lchild, rchild, vcount, maybe_vec, count, true_opt, maybe_vec);
-		true_opt.Advance(true_count);
-		match_count += true_count;
-		count -= true_count;
+		true_count = PositionComparator::Definite<OP>(lchild, rchild, count, slice_sel, count, &true_sel, false_sel);
+		if (true_count) {
+			false_count = count - true_count;
+			ExtractNestedSelection(false_count ? true_sel : slice_sel, true_count, sel, true_opt);
+			match_count += true_count;
+
+			// Redensify the list cursors
+			count -= true_count;
+			DensifyNestedSelection(false_sel, count, slice_sel);
+			PositionListCursor(lcursor, lvdata, pos, slice_sel, count);
+			PositionListCursor(rcursor, rvdata, pos, slice_sel, count);
+		}
 
 		// Find what might match on the next position
-		maybe_count = PositionComparator::Possible<OP>(lchild, rchild, vcount, maybe_vec, count, maybe_vec, false_opt);
-		false_count = count - maybe_count;
-		false_opt.Advance(false_count);
-		count = maybe_count;
+		true_count = PositionComparator::Possible<OP>(lchild, rchild, count, slice_sel, count, true_sel, &false_sel);
+		false_count = count - true_count;
+		ExtractNestedSelection(true_count ? false_sel : slice_sel, false_count, sel, false_opt);
+
+		if (false_count) {
+			DensifyNestedSelection(true_sel, true_count, slice_sel);
+		}
+		count = true_count;
 	}
 
 	return match_count;
 }
 
-template <class OP, bool DENSE, class OPNESTED>
-static idx_t DistinctSelectNested(Vector &left, Vector &right, idx_t vcount, const SelectionVector *sel, idx_t count,
+template <class OP, class OPNESTED>
+static idx_t DistinctSelectNested(Vector &left, Vector &right, const SelectionVector *sel, const idx_t count,
                                   SelectionVector *true_sel, SelectionVector *false_sel) {
-	// We need multiple, real selections
+	// The Select operations all use a dense pair of input vectors to partition
+	// a selection vector in a single pass. But to implement progressive comparisons,
+	// we have to make multiple passes, so we need to keep track of the original input positions
+	// and then scatter the output selections when we are done.
 	SelectionVector owned_sel;
 	if (!sel) {
 		sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
 	}
 
-	SelectionVector true_vec;
-	SelectionVector false_vec;
-	if (DENSE) {
-		true_vec.Initialize(vcount);
-		false_vec.Initialize(vcount);
-	}
+	// Make buffered selections for progressive comparisons
+	// TODO: Remove unnecessary allocations
+	SelectionVector true_vec(count);
+	OptionalSelection true_opt(&true_vec);
 
-	OptionalSelection true_opt(DENSE ? &true_vec : true_sel);
-	OptionalSelection false_opt(DENSE ? &false_vec : false_sel);
+	SelectionVector false_vec(count);
+	OptionalSelection false_opt(&false_vec);
 
-	// Handle NULL STRUCTs
-	VectorData lvdata, rvdata;
-	left.Orrify(vcount, lvdata);
-	right.Orrify(vcount, rvdata);
+	SelectionVector maybe_vec(count);
 
-	sel_t maybe_one;
-	SelectionVector maybe_vec(&maybe_one);
-	if (count > 1) {
-		maybe_vec.Initialize(count);
-	}
+	// Handle NULL nested values
+	Vector l_not_null(left);
+	Vector r_not_null(right);
+
 	idx_t match_count = 0;
-	idx_t no_match_count = count;
-	count = DistinctSelectNotNull<OP>(lvdata, rvdata, count, match_count, *sel, maybe_vec, true_opt, false_opt);
-	no_match_count -= (count + match_count);
+	auto unknown =
+	    DistinctSelectNotNull<OP>(l_not_null, r_not_null, count, match_count, *sel, maybe_vec, true_opt, false_opt);
 
-	idx_t true_count = 0;
 	if (PhysicalType::LIST == left.GetType().InternalType()) {
-		true_count =
-		    DistinctSelectList<OPNESTED>(left, right, vcount, lvdata, rvdata, count, maybe_vec, true_opt, false_opt);
+		match_count += DistinctSelectList<OPNESTED>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt);
 	} else {
-		true_count =
-		    DistinctSelectStruct<OPNESTED>(left, right, vcount, lvdata, rvdata, count, maybe_vec, true_opt, false_opt);
+		match_count += DistinctSelectStruct<OPNESTED>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt);
 	}
 
-	auto false_count = count - true_count;
-	match_count += true_count;
-	no_match_count += false_count;
+	// Copy the buffered selections to the output selections
+	if (true_sel) {
+		DensifyNestedSelection(true_vec, match_count, *true_sel);
+	}
 
-	ScatterSelection<DENSE>(true_sel, match_count, *sel, true_vec);
-	ScatterSelection<DENSE>(false_sel, no_match_count, *sel, false_vec);
+	if (false_sel) {
+		DensifyNestedSelection(false_vec, count - match_count, *false_sel);
+	}
 
 	return match_count;
 }
@@ -743,7 +838,7 @@ static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, idx_t
 	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
-		return DistinctSelectNested<OP, DENSE, OPNESTED>(left, right, vcount, sel, count, true_sel, false_sel);
+		return DistinctSelectNested<OP, OPNESTED>(left, right, sel, count, true_sel, false_sel);
 	default:
 		throw InternalException("Invalid type for distinct selection");
 	}
@@ -851,38 +946,38 @@ idx_t VectorOperations::DistinctLessThanEquals(Vector &left, Vector &right, cons
 // true := A != B with nulls being equal, inputs selected
 idx_t VectorOperations::NestedNotEquals(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel,
                                         idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::DistinctFrom, false>(left, right, vcount, &sel, count, true_sel,
-	                                                                     false_sel);
+	return TemplatedDistinctSelectOperation<duckdb::DistinctFrom, true>(left, right, vcount, &sel, count, true_sel,
+	                                                                    false_sel);
 }
 // true := A == B with nulls being equal, inputs selected
 idx_t VectorOperations::NestedEquals(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel, idx_t count,
                                      SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::NotDistinctFrom, false>(left, right, vcount, &sel, count, true_sel,
-	                                                                        false_sel);
+	return TemplatedDistinctSelectOperation<duckdb::NotDistinctFrom, true>(left, right, vcount, &sel, count, true_sel,
+	                                                                       false_sel);
 }
 // true := A > B with nulls being maximal, inputs selected
 idx_t VectorOperations::NestedGreaterThan(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel,
                                           idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThan, false>(left, right, vcount, &sel, count,
-	                                                                            true_sel, false_sel);
+	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThan, true>(left, right, vcount, &sel, count,
+	                                                                           true_sel, false_sel);
 }
 // true := A >= B with nulls being maximal, inputs selected
 idx_t VectorOperations::NestedGreaterThanEquals(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel,
                                                 idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanEquals, false>(left, right, vcount, &sel, count,
-	                                                                                  true_sel, false_sel);
+	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanEquals, true>(left, right, vcount, &sel, count,
+	                                                                                 true_sel, false_sel);
 }
 // true := A < B with nulls being maximal, inputs selected
 idx_t VectorOperations::NestedLessThan(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel,
                                        idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::DistinctLessThan, false>(left, right, vcount, &sel, count, true_sel,
-	                                                                         false_sel);
+	return TemplatedDistinctSelectOperation<duckdb::DistinctLessThan, true>(left, right, vcount, &sel, count, true_sel,
+	                                                                        false_sel);
 }
 // true := A <= B with nulls being maximal, inputs selected
 idx_t VectorOperations::NestedLessThanEquals(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel,
                                              idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::DistinctLessThanEquals, false>(left, right, vcount, &sel, count,
-	                                                                               true_sel, false_sel);
+	return TemplatedDistinctSelectOperation<duckdb::DistinctLessThanEquals, true>(left, right, vcount, &sel, count,
+	                                                                              true_sel, false_sel);
 }
 
 } // namespace duckdb
