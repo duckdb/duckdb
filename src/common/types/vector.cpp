@@ -913,6 +913,10 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 
 void Vector::SetVectorType(VectorType vector_type_p) {
 	this->vector_type = vector_type_p;
+	if (TypeIsConstantSize(GetType().InternalType()) &&
+	    (GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR)) {
+		auxiliary.reset();
+	}
 	if (vector_type == VectorType::CONSTANT_VECTOR && GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &entries = StructVector::GetEntries(*this);
 		for (auto &entry : entries) {
@@ -979,30 +983,6 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	if (TypeIsConstantSize(GetType().InternalType()) &&
 	    (GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR)) {
 		D_ASSERT(!auxiliary);
-	}
-	if (GetType().InternalType() == PhysicalType::DOUBLE) {
-		// verify that there are no INF or NAN values
-		switch (GetVectorType()) {
-		case VectorType::CONSTANT_VECTOR: {
-			auto dbl = ConstantVector::GetData<double>(*this);
-			if (!ConstantVector::IsNull(*this)) {
-				D_ASSERT(Value::DoubleIsValid(*dbl));
-			}
-			break;
-		}
-		case VectorType::FLAT_VECTOR: {
-			auto doubles = FlatVector::GetData<double>(*this);
-			for (idx_t i = 0; i < count; i++) {
-				auto oidx = sel.get_index(i);
-				if (validity.RowIsValid(oidx)) {
-					D_ASSERT(Value::DoubleIsValid(doubles[oidx]));
-				}
-			}
-			break;
-		}
-		default:
-			break;
-		}
 	}
 	if (GetType().id() == LogicalTypeId::VARCHAR || GetType().id() == LogicalTypeId::JSON) {
 		// verify that there are no '\0' bytes in string values

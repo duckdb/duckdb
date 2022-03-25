@@ -860,7 +860,7 @@ static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bo
 	});
 }
 
-vector<string> LocalFileSystem::Glob(const string &path) {
+vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	if (path.empty()) {
 		return vector<string>();
 	}

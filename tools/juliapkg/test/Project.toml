@@ -1,0 +1,6 @@
+[deps]
+DBInterface = "a10d1c49-ce27-4219-8d33-6db1a4562965"
+SQLite = "0aa819cd-b072-5ff4-a722-6bc24af294d9"
+Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+WeakRefStrings = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"

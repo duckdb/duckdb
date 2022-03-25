@@ -17,6 +17,9 @@ struct CreateMacroInfo : public CreateFunctionInfo {
 	CreateMacroInfo() : CreateFunctionInfo(CatalogType::MACRO_ENTRY, INVALID_SCHEMA) {
 	}
 
+	CreateMacroInfo(CatalogType type) : CreateFunctionInfo(type, INVALID_SCHEMA) {
+	}
+
 	unique_ptr<MacroFunction> function;
 
 public:

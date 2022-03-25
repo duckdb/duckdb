@@ -161,18 +161,15 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 	}
 }
 
-unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, vector<Value> &inputs,
-                                                           named_parameter_map_t &named_parameters,
-                                                           vector<LogicalType> &input_table_types,
-                                                           vector<string> &input_table_names,
+unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
 	typedef unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce_t)(
 	    uintptr_t stream_factory_ptr,
 	    std::pair<std::unordered_map<idx_t, string>, std::vector<string>> & project_columns,
 	    TableFilterCollection * filters);
-	auto stream_factory_ptr = inputs[0].GetPointer();
-	auto stream_factory_produce = (stream_factory_produce_t)inputs[1].GetPointer();
-	auto rows_per_thread = inputs[2].GetValue<uint64_t>();
+	auto stream_factory_ptr = input.inputs[0].GetPointer();
+	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer();
+	auto rows_per_thread = input.inputs[2].GetValue<uint64_t>();
 	std::pair<std::unordered_map<idx_t, string>, std::vector<string>> project_columns;
 #ifndef DUCKDB_NO_THREADS
 
@@ -593,6 +590,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
@@ -604,18 +602,6 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS: {
 		DirectConversion(vector, array, scan_state, nested_offset);
-		break;
-	}
-	case LogicalTypeId::DOUBLE: {
-		DirectConversion(vector, array, scan_state, nested_offset);
-		//! Need to check if there are NaNs, if yes, must turn that to null
-		auto data = (double *)vector.GetData();
-		auto &mask = FlatVector::Validity(vector);
-		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			if (!Value::DoubleIsValid(data[row_idx])) {
-				mask.SetInvalid(row_idx);
-			}
-		}
 		break;
 	}
 	case LogicalTypeId::JSON:
@@ -991,8 +977,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
 		if (array.length != scan_state.chunk->arrow_array.length) {
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
-		output.data[idx].GetBuffer()->SetAuxiliaryData(make_unique<ArrowAuxiliaryData>(scan_state.chunk),
-		                                               VectorAuxiliaryDataType::ARROW_AUXILIARY);
+		output.data[idx].GetBuffer()->SetAuxiliaryData(make_unique<ArrowAuxiliaryData>(scan_state.chunk));
 		if (array.dictionary) {
 			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_convert_data,
 			                              col_idx, arrow_convert_idx);

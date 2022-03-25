@@ -98,17 +98,17 @@ extern "C" SEXP _duckdb_rapi_bind(SEXP stmt, SEXP params, SEXP arrow) {
   END_CPP11
 }
 // statement.cpp
-SEXP rapi_execute_arrow(duckdb::rqry_eptr_t qry_res, bool stream, int vec_per_chunk, bool return_table);
-extern "C" SEXP _duckdb_rapi_execute_arrow(SEXP qry_res, SEXP stream, SEXP vec_per_chunk, SEXP return_table) {
+SEXP rapi_execute_arrow(duckdb::rqry_eptr_t qry_res, int chunk_size);
+extern "C" SEXP _duckdb_rapi_execute_arrow(SEXP qry_res, SEXP chunk_size) {
   BEGIN_CPP11
-    return cpp11::as_sexp(rapi_execute_arrow(cpp11::as_cpp<cpp11::decay_t<duckdb::rqry_eptr_t>>(qry_res), cpp11::as_cpp<cpp11::decay_t<bool>>(stream), cpp11::as_cpp<cpp11::decay_t<int>>(vec_per_chunk), cpp11::as_cpp<cpp11::decay_t<bool>>(return_table)));
+    return cpp11::as_sexp(rapi_execute_arrow(cpp11::as_cpp<cpp11::decay_t<duckdb::rqry_eptr_t>>(qry_res), cpp11::as_cpp<cpp11::decay_t<int>>(chunk_size)));
   END_CPP11
 }
 // statement.cpp
-SEXP rapi_record_batch(duckdb::rqry_eptr_t qry_res, int approx_batch_size);
-extern "C" SEXP _duckdb_rapi_record_batch(SEXP qry_res, SEXP approx_batch_size) {
+SEXP rapi_record_batch(duckdb::rqry_eptr_t qry_res, int chunk_size);
+extern "C" SEXP _duckdb_rapi_record_batch(SEXP qry_res, SEXP chunk_size) {
   BEGIN_CPP11
-    return cpp11::as_sexp(rapi_record_batch(cpp11::as_cpp<cpp11::decay_t<duckdb::rqry_eptr_t>>(qry_res), cpp11::as_cpp<cpp11::decay_t<int>>(approx_batch_size)));
+    return cpp11::as_sexp(rapi_record_batch(cpp11::as_cpp<cpp11::decay_t<duckdb::rqry_eptr_t>>(qry_res), cpp11::as_cpp<cpp11::decay_t<int>>(chunk_size)));
   END_CPP11
 }
 // statement.cpp
@@ -132,7 +132,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_connect",          (DL_FUNC) &_duckdb_rapi_connect,          1},
     {"_duckdb_rapi_disconnect",       (DL_FUNC) &_duckdb_rapi_disconnect,       1},
     {"_duckdb_rapi_execute",          (DL_FUNC) &_duckdb_rapi_execute,          2},
-    {"_duckdb_rapi_execute_arrow",    (DL_FUNC) &_duckdb_rapi_execute_arrow,    4},
+    {"_duckdb_rapi_execute_arrow",    (DL_FUNC) &_duckdb_rapi_execute_arrow,    2},
     {"_duckdb_rapi_prepare",          (DL_FUNC) &_duckdb_rapi_prepare,          2},
     {"_duckdb_rapi_ptr_to_str",       (DL_FUNC) &_duckdb_rapi_ptr_to_str,       1},
     {"_duckdb_rapi_record_batch",     (DL_FUNC) &_duckdb_rapi_record_batch,     2},

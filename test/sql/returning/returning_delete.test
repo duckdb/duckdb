@@ -1,0 +1,262 @@
+# name: test/sql/returning/returning_delete.test
+# description: Test returning with top level INSERT statement
+# group: [returning]
+
+statement ok
+CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAULT -3);
+
+statement ok
+insert into table1(a) select * from range (0, 4000, 1) t1(a);
+
+# basic update
+query III
+DELETE FROM table1
+WHERE a < 5 RETURNING a, b, c;
+----
+0	-2	-3
+1	-2	-3
+2	-2	-3
+3	-2	-3
+4	-2	-3
+
+
+# returning 1 named column
+query I
+DELETE FROM table1
+WHERE a = 6 RETURNING a;
+----
+6
+
+# returning all columns with *
+query III
+DELETE FROM table1
+WHERE a = 7 RETURNING *;
+----
+7	-2	-3
+
+# returning * expression with more named columns
+query IIIIII
+DELETE FROM table1
+WHERE a=8 AND b=-2 AND c=-3 RETURNING *, c, b, a;
+----
+8	-2	-3	-3	-2	8
+
+
+# returning column names out of order
+query III
+DELETE FROM table1
+WHERE a=9 RETURNING c, b, a;
+----
+-3	-2	9
+
+
+
+# returning column names out of order with alias's
+query III
+DELETE FROM table1
+WHERE a>=10 AND a <=13  RETURNING c as aliasc, a as aliasa, b as aliasb;
+----
+-3	10	-2
+-3	11	-2
+-3	12	-2
+-3	13	-2
+
+
+# returning expression with aggregate function at top level is not allowed
+statement error
+DELETE FROM table1 WHERE a >= 13 AND a <= 15 RETURNING SUM(a);
+
+# update and return combination of values
+query I
+DELETE FROM table1
+WHERE a=14
+RETURNING a + b + c;
+----
+9
+
+# returning a literal where no row matches
+query I
+DELETE FROM table1
+WHERE a=10
+RETURNING 'duckdb';
+----
+
+
+# returning a literal where a row matches
+query I
+DELETE FROM table1
+WHERE a=15
+RETURNING 'duckdb';
+----
+duckdb
+
+
+# Set up tables for Joins
+statement ok
+CREATE TABLE table2 (a2 INTEGER, b2 INTEGER, c2 INTEGER);
+
+statement ok
+CREATE TABLE table3 (a3 INTEGER, b3 INTEGER, c3 INTEGER);
+
+
+statement ok
+INSERT INTO table2 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3), (100, 100, 100), (200, 200, 200);
+
+statement ok
+INSERT INTO table3 VALUES (1, 4, 4), (2, 6, 7), (8, 8, 8);
+
+# update using other table (automatic join should happen here)
+query III
+DELETE FROM table3
+WHERE a3 IN (
+	SELECT a2 from table2
+) RETURNING *;
+----
+1	4	4
+2	6	7
+
+statement ok
+CREATE TABLE table4 (a4 INTEGER, b4 INTEGER, c4 INTEGER);
+
+statement ok
+CREATE TABLE table5 (a5 INTEGER, b5 INTEGER, c5 INTEGER);
+
+statement ok
+INSERT INTO table4 VALUES (1, 0, 2), (2, 0, 1), (3, 0, 0);
+
+statement ok
+INSERT INTO table5 VALUES (1, 0, 0), (2, 0, 0), (3, 0, 1), (4, 0, 1), (5, 0, 2), (6, 0, 2);
+
+
+# another join with SUM and GROUP by
+query III
+DELETE FROM table4
+WHERE a4 IN (SELECT sum(a5) FROM table5 GROUP BY c5)
+RETURNING *;
+----
+3	0	0
+
+
+# update using a window function
+#query III
+#DELETE FROM table4
+#FROM (SELECT row_number() OVER (ORDER BY a4) as row_num, c4 from table4) as temp_table
+#WHERE table4.a4=temp_table.row_num
+#RETURNING *;
+#----
+#1	1	2
+#2	2	1
+#3	3	0
+
+
+# subquery not allowed in returning statement
+statement error
+DELETE FROM table1 WHERE a = 14 RETURNING a IN (SELECT a FROM table1);
+
+
+# using case statement
+query I
+DELETE FROM table4 WHERE a4 = 1 RETURNING CASE WHEN b4=0 THEN a4 ELSE b4 END;
+----
+1
+
+# using case statement
+query I
+DELETE FROM table4 WHERE a4 = 2 RETURNING CASE WHEN b4=1 THEN a4 ELSE b4 END;
+----
+0
+
+
+# drop temporary tables
+statement ok
+DROP TABLE table2;
+
+statement ok
+DROP TABLE table3;
+
+statement ok
+DROP TABLE table4;
+
+statement ok
+DROP TABLE table5;
+
+# create table with varchars
+statement ok
+CREATE TABLE table2 (a VARCHAR DEFAULT 'hello world', b INT);
+
+statement ok
+INSERT INTO table2 VALUES ('duckdb', 1), ('postgres', 2), ('sqlite', 3), ('mysql', 4), ('mongo', 5);
+
+# update varchar
+query II
+DELETE FROM table2
+WHERE b = 1
+RETURNING a, b;
+----
+duckdb	1
+
+# cast int as varchar
+query I
+DELETE FROM table2
+WHERE b = 2
+RETURNING b::VARCHAR;
+----
+2
+
+# return a struct
+query I
+DELETE FROM table2
+WHERE b=3
+RETURNING {'a': a, 'b': b};
+----
+{'a': sqlite, 'b': 3}
+
+# returning a list
+query I
+DELETE FROM table2
+WHERE b=4
+RETURNING [a, b];
+----
+[mysql, 4]
+
+# Sequence
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE TABLE table3 (a INTEGER DEFAULT nextval('seq'), b INTEGER);
+
+statement ok
+INSERT INTO table3(b) VALUES (4), (5) RETURNING a, b;
+
+query II
+DELETE FROM table3
+WHERE b = 4
+RETURNING *;
+----
+1	4
+
+
+# recreate table1 for test maintainability.
+statement ok
+DROP TABLE table1;
+
+statement ok
+CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAULT -3);
+
+statement ok
+insert into table1(a) select * from range (0, 4000, 1) t1(a);
+
+query I
+SELECT count(*) FROM table1;
+----
+4000
+
+
+# the following two tests test that all inserts get streamed back to the returning statement
+# the order of the changed rows does not always reflect the order they were updated in. Therefore
+# returing column b (all -2)
+query I rowsort
+DELETE FROM table1 RETURNING a;
+----
+4000 values hashing to 4a8cf4fccc8e076d1309e1db2163b3c4

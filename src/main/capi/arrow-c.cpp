@@ -22,7 +22,7 @@ duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema 
 		return DuckDBSuccess;
 	}
 	auto wrapper = (ArrowResultWrapper *)result;
-	wrapper->result->ToArrowSchema((ArrowSchema *)*out_schema);
+	QueryResult::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names);
 	return DuckDBSuccess;
 }
 

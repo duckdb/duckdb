@@ -50,17 +50,16 @@ COMMIT;
 query II
 SELECT c0, exp(c0) IS NULL FROM t1;
 ----
-10000.0	1
-0.0	0
+10000.0	false
+0.0	false
 
 query II
 SELECT c0, exp(c0) FROM t1;
 ----
-10000.0	NULL
+10000.0	inf
 0.0	1
 
 query I
 SELECT c0 FROM t1 WHERE exp(c0) IS NULL;
 ----
-10000.0
 

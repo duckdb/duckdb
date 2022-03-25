@@ -1,7 +1,7 @@
 #include "duckdb/storage/checkpoint_manager.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -26,6 +26,8 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
+
+void ReorderTableEntries(vector<TableCatalogEntry *> &tables);
 
 CheckpointManager::CheckpointManager(DatabaseInstance &db) : db(db) {
 }
@@ -150,13 +152,23 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 		custom_types.push_back((TypeCatalogEntry *)entry);
 	});
 
-	vector<MacroCatalogEntry *> macros;
+	vector<ScalarMacroCatalogEntry *> macros;
 	schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->internal) {
 			return;
 		}
 		if (entry->type == CatalogType::MACRO_ENTRY) {
-			macros.push_back((MacroCatalogEntry *)entry);
+			macros.push_back((ScalarMacroCatalogEntry *)entry);
+		}
+	});
+
+	vector<TableMacroCatalogEntry *> table_macros;
+	schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
+		if (entry->internal) {
+			return;
+		}
+		if (entry->type == CatalogType::TABLE_MACRO_ENTRY) {
+			table_macros.push_back((TableMacroCatalogEntry *)entry);
 		}
 	});
 
@@ -171,6 +183,8 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	for (auto &seq : sequences) {
 		WriteSequence(*seq);
 	}
+	// reorder tables because of foreign key constraint
+	ReorderTableEntries(tables);
 	// now write the tables
 	metadata_writer->Write<uint32_t>(tables.size());
 	for (auto &table : tables) {
@@ -186,6 +200,12 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	metadata_writer->Write<uint32_t>(macros.size());
 	for (auto &macro : macros) {
 		WriteMacro(*macro);
+	}
+
+	// finally write the macro's
+	metadata_writer->Write<uint32_t>(table_macros.size());
+	for (auto &macro : table_macros) {
+		WriteTableMacro(*macro);
 	}
 }
 
@@ -224,6 +244,11 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	uint32_t macro_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < macro_count; i++) {
 		ReadMacro(context, reader);
+	}
+
+	uint32_t table_macro_count = reader.Read<uint32_t>();
+	for (uint32_t i = 0; i < table_macro_count; i++) {
+		ReadTableMacro(context, reader);
 	}
 }
 
@@ -272,13 +297,22 @@ void CheckpointManager::ReadType(ClientContext &context, MetaBlockReader &reader
 //===--------------------------------------------------------------------===//
 // Macro's
 //===--------------------------------------------------------------------===//
-void CheckpointManager::WriteMacro(MacroCatalogEntry &macro) {
+void CheckpointManager::WriteMacro(ScalarMacroCatalogEntry &macro) {
 	macro.Serialize(*metadata_writer);
 }
 
 void CheckpointManager::ReadMacro(ClientContext &context, MetaBlockReader &reader) {
-	auto info = MacroCatalogEntry::Deserialize(reader);
+	auto info = ScalarMacroCatalogEntry::Deserialize(reader);
+	auto &catalog = Catalog::GetCatalog(db);
+	catalog.CreateFunction(context, info.get());
+}
 
+void CheckpointManager::WriteTableMacro(TableMacroCatalogEntry &macro) {
+	macro.Serialize(*metadata_writer);
+}
+
+void CheckpointManager::ReadTableMacro(ClientContext &context, MetaBlockReader &reader) {
+	auto info = TableMacroCatalogEntry::Deserialize(reader);
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateFunction(context, info.get());
 }

@@ -1,0 +1,50 @@
+# name: test/sql/types/float/nan_cast.test
+# description: Test casting of NaN and inf values
+# group: [float]
+
+statement ok
+PRAGMA enable_verification
+
+# to integer/decimal casts
+foreach source_type FLOAT DOUBLE
+
+foreach target_type <integral> DECIMAL(4,1) DECIMAL(9,1) DECIMAL(18,1) DECIMAL(38,1)
+
+foreach val nan inf -inf
+
+statement ok
+SELECT '${val}'::${source_type}
+
+# cannot cast nan, inf or -inf to these types
+statement error
+SELECT '${val}'::${source_type}::${target_type}
+
+endloop
+
+endloop
+
+endloop
+
+# we can cast nan, inf and -inf between floats and doubles, as well as to/from strings
+foreach source_type FLOAT DOUBLE VARCHAR
+
+foreach target_type FLOAT DOUBLE VARCHAR
+
+query I
+SELECT 'nan'::${source_type}::${target_type}
+----
+nan
+
+query I
+SELECT 'inf'::${source_type}::${target_type}
+----
+inf
+
+query I
+SELECT '-inf'::${source_type}::${target_type}
+----
+-inf
+
+endloop
+
+endloop

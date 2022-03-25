@@ -1,0 +1,13 @@
+# name: test/sql/copy/parquet/struct_column_reader_skip.test
+# description: Issue #3205: skip in struct column reader
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SELECT my_map['A'], * FROM parquet_scan('data/parquet-testing/struct_skip_test.parquet') where filter == '0'
+----
+[NULL]	{A=NULL}	0
