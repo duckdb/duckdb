@@ -590,6 +590,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
@@ -601,18 +602,6 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS: {
 		DirectConversion(vector, array, scan_state, nested_offset);
-		break;
-	}
-	case LogicalTypeId::DOUBLE: {
-		DirectConversion(vector, array, scan_state, nested_offset);
-		//! Need to check if there are NaNs, if yes, must turn that to null
-		auto data = (double *)vector.GetData();
-		auto &mask = FlatVector::Validity(vector);
-		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			if (!Value::DoubleIsValid(data[row_idx])) {
-				mask.SetInvalid(row_idx);
-			}
-		}
 		break;
 	}
 	case LogicalTypeId::JSON:

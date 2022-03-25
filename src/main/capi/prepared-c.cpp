@@ -112,16 +112,10 @@ duckdb_state duckdb_bind_uint64(duckdb_prepared_statement prepared_statement, id
 }
 
 duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, idx_t param_idx, float val) {
-	if (!Value::FloatIsValid(val)) {
-		return DuckDBError;
-	}
 	return duckdb_bind_value(prepared_statement, param_idx, Value::FLOAT(val));
 }
 
 duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, idx_t param_idx, double val) {
-	if (!Value::DoubleIsValid(val)) {
-		return DuckDBError;
-	}
 	return duckdb_bind_value(prepared_statement, param_idx, Value::DOUBLE(val));
 }
 

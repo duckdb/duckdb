@@ -239,7 +239,7 @@ void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t 
 	if (!enabled) {
 		return;
 	}
-	if (!Value::DoubleIsValid(time)) {
+	if (!Value::DoubleIsFinite(time)) {
 		return;
 	}
 	auto entry = timings.find(op);

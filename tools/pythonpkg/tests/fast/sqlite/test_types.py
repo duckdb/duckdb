@@ -74,12 +74,19 @@ class DuckDBTypeTests(unittest.TestCase):
         self.assertEqual(row[0], val)
 
     def test_CheckNaN(self):
-        with self.assertRaises(RuntimeError) as context:
-            self.cur.execute("insert into test(f) values (?)", (decimal.Decimal('nan'),))
+        import math
+        val = decimal.Decimal('nan')
+        self.cur.execute("insert into test(f) values (?)", (val,))
+        self.cur.execute("select f from test")
+        row = self.cur.fetchone()
+        self.assertEqual(math.isnan(row[0]), True)
 
     def test_CheckInf(self):
-        with self.assertRaises(RuntimeError) as context:
-            self.cur.execute("insert into test(f) values (?)", (decimal.Decimal('inf'),))
+        val = decimal.Decimal('inf')
+        self.cur.execute("insert into test(f) values (?)", (val,))
+        self.cur.execute("select f from test")
+        row = self.cur.fetchone()
+        self.assertEqual(row[0], val)
 
     def test_CheckBytesBlob(self):
         val = b"Guglhupf"
