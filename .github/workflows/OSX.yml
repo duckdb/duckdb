@@ -112,7 +112,7 @@ jobs:
   xcode-extensions:
     name: OSX Extensions Release
     runs-on: macos-latest
-    needs: xcode-debug
+    #needs: xcode-debug
     env:
       BUILD_VISUALIZER: 1
       BUILD_ICU: 1
@@ -157,10 +157,15 @@ jobs:
           export OPENSSL_ROOT_DIR=`pwd`/build/openssl/build
           echo $OPENSSL_ROOT_DIR
           make
-          rm build/release/src/libduckdb*
+
+      - name: Build External Extensions
+        run: |
+          mkdir -p build/release/extension/out_of_tree
+          python scripts/build_out_of_tree_extensions.py --output build/release/extension/out_of_tree
 
       - name: Deploy
         run: |
+          rm build/release/src/libduckdb*
           zip -j httpfs.duckdb_extension.zip build/release/extension/httpfs/httpfs.duckdb_extension
           if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
