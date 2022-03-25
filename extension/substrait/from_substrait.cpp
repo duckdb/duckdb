@@ -45,17 +45,24 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformLiteralExpr(const subst
 		dval = Value::DECIMAL(substrait_value, substrait_decimal.precision(), substrait_decimal.scale());
 		break;
 	}
-
 	case substrait::Expression_Literal::LiteralTypeCase::kBoolean: {
 		dval = Value(slit.boolean());
 		break;
 	}
+	case substrait::Expression_Literal::LiteralTypeCase::kI8:
+		dval = Value::TINYINT(slit.i8());
+		break;
 	case substrait::Expression_Literal::LiteralTypeCase::kI32:
 		dval = Value::INTEGER(slit.i32());
 		break;
 	case substrait::Expression_Literal::LiteralTypeCase::kI64:
 		dval = Value::BIGINT(slit.i64());
 		break;
+	case substrait::Expression_Literal::LiteralTypeCase::kDate:{
+		date_t date(slit.date());
+		dval = Value::DATE(date);
+		break;
+	}
 	default:
 		throw InternalException(to_string(slit.literal_type_case()));
 	}
@@ -90,7 +97,7 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 	} else if (function_name == "lessthan") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, move(children[0]),
 		                                         move(children[1]));
-	} else if (function_name == "equal") {
+	} else if (function_name == "equal" || function_name == "equals") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(children[0]), move(children[1]));
 	} else if (function_name == "notequal") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOTEQUAL, move(children[0]),
