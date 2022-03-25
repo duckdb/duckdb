@@ -13,6 +13,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -78,6 +79,40 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
 	auto fexpr = (FunctionExpression *)ref.function.get();
 
+	TableFunctionCatalogEntry *function = nullptr;
+
+	// fetch the function from the catalog
+	auto &catalog = Catalog::GetCatalog(context);
+
+	auto func_catalog = catalog.GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr->schema,
+	                                     fexpr->function_name, false, error_context);
+
+	if (func_catalog->type == CatalogType::TABLE_FUNCTION_ENTRY) {
+		function = (TableFunctionCatalogEntry *)func_catalog;
+
+	} else if (func_catalog->type == CatalogType::TABLE_MACRO_ENTRY) {
+
+		auto macro_func = (TableMacroCatalogEntry *)func_catalog;
+		auto query_node = BindTableMacro(*fexpr, macro_func, 0);
+		D_ASSERT(query_node);
+
+		auto binder = Binder::CreateBinder(context, this);
+		binder->can_contain_nulls = true;
+
+		binder->alias = ref.alias.empty() ? "unnamed_query" : ref.alias;
+		auto query = binder->BindNode(*query_node);
+
+		idx_t bind_index = query->GetRootIndex();
+		// string alias;
+		string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index) : ref.alias);
+
+		auto result = make_unique<BoundSubqueryRef>(move(binder), move(query));
+		// remember ref here is TableFunctionRef and NOT base class
+		bind_context.AddSubquery(bind_index, alias, ref, *result->subquery);
+		MoveCorrelatedExpressions(*result->binder);
+		return move(result);
+	}
+
 	// evaluate the input parameters to the function
 	vector<LogicalType> arguments;
 	vector<Value> parameters;
@@ -87,11 +122,6 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	if (!BindFunctionParameters(fexpr->children, arguments, parameters, named_parameters, subquery, error)) {
 		throw BinderException(FormatError(ref, error));
 	}
-
-	// fetch the function from the catalog
-	auto &catalog = Catalog::GetCatalog(context);
-	auto function =
-	    catalog.GetEntry<TableFunctionCatalogEntry>(context, fexpr->schema, fexpr->function_name, false, error_context);
 
 	// select the function based on the input parameters
 	idx_t best_function_idx = Function::BindFunction(function->name, function->functions, arguments, error);

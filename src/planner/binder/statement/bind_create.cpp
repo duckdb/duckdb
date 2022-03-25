@@ -25,6 +25,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
 
 namespace duckdb {
 
@@ -72,8 +73,9 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 
 SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = (CreateMacroInfo &)info;
+	auto &scalar_function = (ScalarMacroFunction &)*base.function;
 
-	if (base.function->expression->HasParameter()) {
+	if (scalar_function.expression->HasParameter()) {
 		throw BinderException("Parameter expressions within macro's are not supported!");
 	}
 
@@ -97,10 +99,10 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	}
 	auto this_macro_binding = make_unique<MacroBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
-	ExpressionBinder::QualifyColumnNames(*this, base.function->expression);
+	ExpressionBinder::QualifyColumnNames(*this, scalar_function.expression);
 
 	// create a copy of the expression because we do not want to alter the original
-	auto expression = base.function->expression->Copy();
+	auto expression = scalar_function.expression->Copy();
 
 	// bind it to verify the function was defined correctly
 	string error;
@@ -170,6 +172,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::SEQUENCE_ENTRY: {
 		auto schema = BindSchema(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, move(stmt.info), schema);
+		break;
+	}
+	case CatalogType::TABLE_MACRO_ENTRY: {
+		auto schema = BindSchema(*stmt.info);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::MACRO_ENTRY: {

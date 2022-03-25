@@ -1,13 +1,13 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 
-#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include <cstring>
 
 namespace duckdb {
@@ -124,7 +124,7 @@ void WriteAheadLog::WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValu
 //===--------------------------------------------------------------------===//
 // MACRO'S
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteCreateMacro(MacroCatalogEntry *entry) {
+void WriteAheadLog::WriteCreateMacro(ScalarMacroCatalogEntry *entry) {
 	if (skip_writing) {
 		return;
 	}
@@ -132,11 +132,28 @@ void WriteAheadLog::WriteCreateMacro(MacroCatalogEntry *entry) {
 	entry->Serialize(*writer);
 }
 
-void WriteAheadLog::WriteDropMacro(MacroCatalogEntry *entry) {
+void WriteAheadLog::WriteDropMacro(ScalarMacroCatalogEntry *entry) {
 	if (skip_writing) {
 		return;
 	}
 	writer->Write<WALType>(WALType::DROP_MACRO);
+	writer->WriteString(entry->schema->name);
+	writer->WriteString(entry->name);
+}
+
+void WriteAheadLog::WriteCreateTableMacro(TableMacroCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
+	writer->Write<WALType>(WALType::CREATE_TABLE_MACRO);
+	entry->Serialize(*writer);
+}
+
+void WriteAheadLog::WriteDropTableMacro(TableMacroCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
+	writer->Write<WALType>(WALType::DROP_TABLE_MACRO);
 	writer->WriteString(entry->schema->name);
 	writer->WriteString(entry->name);
 }

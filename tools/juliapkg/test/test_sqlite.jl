@@ -193,9 +193,9 @@ end
     DBInterface.execute(
         binddb,
         "CREATE TABLE temp (n INTEGER, i1 INT, i2 integer,
-        					f1 REAL, f2 FLOAT, f3 NUMERIC,
-        					s1 TEXT, s2 CHAR(10), s3 VARCHAR(15), s4 NVARCHAR(5),
-        					d1 DATETIME, ts1 TIMESTAMP)"
+                            f1 REAL, f2 FLOAT, f3 DOUBLE,
+                            s1 TEXT, s2 CHAR(10), s3 VARCHAR(15), s4 NVARCHAR(5),
+                            d1 DATETIME, ts1 TIMESTAMP)"
     )
     DBInterface.execute(
         binddb,

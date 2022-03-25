@@ -77,6 +77,9 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.attr("__version__") = DuckDB::LibraryVersion();
 	m.attr("__git_revision__") = DuckDB::SourceID();
 	m.attr("default_connection") = DuckDBPyConnection::DefaultConnection();
+	m.attr("apilevel") = "1.0";
+	m.attr("threadsafety") = 1;
+	m.attr("paramstyle") = "qmark";
 
 	m.def("connect", &DuckDBPyConnection::Connect,
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
