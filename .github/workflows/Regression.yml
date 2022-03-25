@@ -132,6 +132,7 @@ jobs:
     CXX: g++-10
     GEN: ninja
     BUILD_BENCHMARK: 1
+    BUILD_TPCH: 1
 
   steps:
     - uses: actions/checkout@v2
