@@ -47,6 +47,12 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	} else if (py_object_type == "RecordBatchReader") {
 		py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
 		scanner = ProduceScanner(arrow_batch_scanner, arrow_obj_handle, project_columns, filters);
+	} else if (py_object_type == "Scanner") {
+		// If it's a scanner we have to turn it to a record batch reader, and then a scanner again since we can't stack
+		// scanners on arrow Otherwise pushed-down projections and filters will disappear like tears in the rain
+		auto record_batches = arrow_obj_handle.attr("to_reader")();
+		py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
+		scanner = ProduceScanner(arrow_batch_scanner, record_batches, project_columns, filters);
 	} else {
 		scanner = ProduceScanner(arrow_scanner, arrow_obj_handle, project_columns, filters);
 	}
