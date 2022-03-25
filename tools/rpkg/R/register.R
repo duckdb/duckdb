@@ -88,7 +88,11 @@ duckdb_register_arrow <- function(conn, name, arrow_scannable, use_async = NULL)
   }
 
   get_schema_fun <- function(arrow_scannable, stream_ptr) {
-    arrow_scannable$schema$export_to_c(stream_ptr)
+    if(class(arrow_scannable)[1] == "arrow_dplyr_query"){
+      collapse(arrow_scannable)$.data$schema$export_to_c(stream_ptr)
+    } else{
+      schema <- arrow_scannable$schema$export_to_c(stream_ptr)
+    }
   }
 
   # pass some functions to c land so we don't have to look them up there
