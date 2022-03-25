@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/join/physical_iejoin.hpp"
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -483,6 +484,35 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			}
 			BuildPipelines(op->children[0].get(), current);
 			break;
+		case PhysicalOperatorType::IE_JOIN: {
+			D_ASSERT(op->children.size() == 2);
+			if (recursive_cte) {
+				throw NotImplementedException("IEJoins are not supported in recursive CTEs yet");
+			}
+
+			// Build the LHS
+			auto lhs_pipeline = make_shared<Pipeline>(*this);
+			lhs_pipeline->sink = op;
+			D_ASSERT(op->children[0].get());
+			BuildPipelines(op->children[0].get(), lhs_pipeline.get());
+
+			// Build the RHS
+			auto rhs_pipeline = make_shared<Pipeline>(*this);
+			rhs_pipeline->sink = op;
+			D_ASSERT(op->children[1].get());
+			BuildPipelines(op->children[1].get(), rhs_pipeline.get());
+
+			// RHS => LHS => current
+			current->AddDependency(rhs_pipeline);
+			rhs_pipeline->AddDependency(lhs_pipeline);
+
+			pipelines.emplace_back(move(lhs_pipeline));
+			pipelines.emplace_back(move(rhs_pipeline));
+
+			// Now build both and scan
+			current->source = op;
+			return;
+		}
 		case PhysicalOperatorType::DELIM_JOIN: {
 			// duplicate eliminated join
 			// for delim joins, recurse into the actual join

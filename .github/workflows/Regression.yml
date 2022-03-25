@@ -1,8 +1,19 @@
 name: Regression
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'tools/juliapkg/**'
+      - 'tools/nodejs/**'
+      - 'tools/rpkg/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Regression.yml'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
 defaults:

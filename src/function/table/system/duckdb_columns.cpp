@@ -20,11 +20,8 @@ struct DuckDBColumnsData : public FunctionOperatorData {
 	idx_t column_offset;
 };
 
-static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, vector<Value> &inputs,
-                                                  named_parameter_map_t &named_parameters,
-                                                  vector<LogicalType> &input_table_types,
-                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                  vector<string> &names) {
+static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableFunctionBindInput &input,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("schema_oid");
 	return_types.emplace_back(LogicalType::BIGINT);
 

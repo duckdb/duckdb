@@ -16,7 +16,7 @@ double duckdb_hugeint_to_double(duckdb_hugeint val) {
 
 duckdb_hugeint duckdb_double_to_hugeint(double val) {
 	hugeint_t internal_result;
-	if (!Value::DoubleIsValid(val) || !Hugeint::TryConvert<double>(val, internal_result)) {
+	if (!Value::DoubleIsFinite(val) || !Hugeint::TryConvert<double>(val, internal_result)) {
 		internal_result.lower = 0;
 		internal_result.upper = 0;
 	}

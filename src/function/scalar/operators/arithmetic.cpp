@@ -367,6 +367,16 @@ struct NegateOperator {
 };
 
 template <>
+bool NegateOperator::CanNegate(float input) {
+	return Value::FloatIsFinite(input);
+}
+
+template <>
+bool NegateOperator::CanNegate(double input) {
+	return Value::DoubleIsFinite(input);
+}
+
+template <>
 interval_t NegateOperator::Operation(interval_t input) {
 	interval_t result;
 	result.months = NegateOperator::Operation<int32_t, int32_t>(input.months);
@@ -691,7 +701,7 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 template <>
 float DivideOperator::Operation(float left, float right) {
 	auto result = left / right;
-	if (!Value::FloatIsValid(result)) {
+	if (!Value::FloatIsFinite(result)) {
 		throw OutOfRangeException("Overflow in division of float!");
 	}
 	return result;
@@ -700,7 +710,7 @@ float DivideOperator::Operation(float left, float right) {
 template <>
 double DivideOperator::Operation(double left, double right) {
 	auto result = left / right;
-	if (!Value::DoubleIsValid(result)) {
+	if (!Value::DoubleIsFinite(result)) {
 		throw OutOfRangeException("Overflow in division of double!");
 	}
 	return result;
@@ -812,13 +822,21 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 template <>
 float ModuloOperator::Operation(float left, float right) {
 	D_ASSERT(right != 0);
-	return std::fmod(left, right);
+	auto result = std::fmod(left, right);
+	if (!Value::FloatIsFinite(result)) {
+		throw OutOfRangeException("Overflow in modulo of float!");
+	}
+	return result;
 }
 
 template <>
 double ModuloOperator::Operation(double left, double right) {
 	D_ASSERT(right != 0);
-	return std::fmod(left, right);
+	auto result = std::fmod(left, right);
+	if (!Value::DoubleIsFinite(result)) {
+		throw OutOfRangeException("Overflow in modulo of double!");
+	}
+	return result;
 }
 
 template <>

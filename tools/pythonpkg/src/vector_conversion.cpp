@@ -68,12 +68,12 @@ bool ValueIsNull(T value) {
 
 template <>
 bool ValueIsNull(float value) {
-	return !Value::FloatIsValid(value);
+	return !Value::FloatIsFinite(value);
 }
 
 template <>
 bool ValueIsNull(double value) {
-	return !Value::DoubleIsValid(value);
+	return !Value::DoubleIsFinite(value);
 }
 
 template <class T>

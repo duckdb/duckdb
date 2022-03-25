@@ -1,5 +1,3 @@
-#include <utility>
-
 #include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/exception.hpp"
@@ -29,6 +27,9 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hash.hpp"
 
+#include <utility>
+#include <cmath>
+
 namespace duckdb {
 
 Value::Value(LogicalType type) : type_(move(type)), is_null(true) {
@@ -43,16 +44,10 @@ Value::Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
 }
 
 Value::Value(float val) : type_(LogicalType::FLOAT), is_null(false) {
-	if (!Value::FloatIsValid(val)) {
-		throw OutOfRangeException("Invalid float value %f", val);
-	}
 	value_.float_ = val;
 }
 
 Value::Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
-	if (!Value::DoubleIsValid(val)) {
-		throw OutOfRangeException("Invalid double value %f", val);
-	}
 	value_.double_ = val;
 }
 
@@ -326,12 +321,32 @@ Value Value::UBIGINT(uint64_t value) {
 	return result;
 }
 
-bool Value::FloatIsValid(float value) {
+bool Value::FloatIsFinite(float value) {
 	return !(std::isnan(value) || std::isinf(value));
 }
 
-bool Value::DoubleIsValid(double value) {
+bool Value::DoubleIsFinite(double value) {
 	return !(std::isnan(value) || std::isinf(value));
+}
+
+template <>
+bool Value::IsNan(float input) {
+	return std::isnan(input);
+}
+
+template <>
+bool Value::IsNan(double input) {
+	return std::isnan(input);
+}
+
+template <>
+bool Value::IsFinite(float input) {
+	return Value::FloatIsFinite(input);
+}
+
+template <>
+bool Value::IsFinite(double input) {
+	return Value::DoubleIsFinite(input);
 }
 
 bool Value::StringIsValid(const char *str, idx_t length) {
@@ -386,9 +401,6 @@ Value Value::DECIMAL(hugeint_t value, uint8_t width, uint8_t scale) {
 }
 
 Value Value::FLOAT(float value) {
-	if (!Value::FloatIsValid(value)) {
-		throw OutOfRangeException("Invalid float value %f", value);
-	}
 	Value result(LogicalType::FLOAT);
 	result.value_.float_ = value;
 	result.is_null = false;
@@ -396,9 +408,6 @@ Value Value::FLOAT(float value) {
 }
 
 Value Value::DOUBLE(double value) {
-	if (!Value::DoubleIsValid(value)) {
-		throw OutOfRangeException("Invalid double value %f", value);
-	}
 	Value result(LogicalType::DOUBLE);
 	result.value_.double_ = value;
 	result.is_null = false;
@@ -1399,6 +1408,22 @@ string Value::ToSQLString() const {
 		ret += "}";
 		return ret;
 	}
+	case LogicalTypeId::FLOAT:
+		if (!FloatIsFinite(FloatValue::Get(*this))) {
+			return "'" + ToString() + "'::" + type_.ToString();
+		}
+		return ToString();
+	case LogicalTypeId::DOUBLE: {
+		double val = DoubleValue::Get(*this);
+		if (!DoubleIsFinite(val)) {
+			if (!Value::IsNan(val)) {
+				// to infinity and beyond
+				return val < 0 ? "-1e1000" : "1e1000";
+			}
+			return "'" + ToString() + "'::" + type_.ToString();
+		}
+		return ToString();
+	}
 	case LogicalTypeId::LIST: {
 		string ret = "[";
 		for (size_t i = 0; i < list_value.size(); i++) {
@@ -1776,16 +1801,6 @@ bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
 	default:
 		return value == result_value;
 	}
-}
-
-template <>
-bool Value::IsValid(float value) {
-	return Value::FloatIsValid(value);
-}
-
-template <>
-bool Value::IsValid(double value) {
-	return Value::DoubleIsValid(value);
 }
 
 } // namespace duckdb

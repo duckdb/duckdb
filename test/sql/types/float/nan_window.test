@@ -1,0 +1,62 @@
+# name: test/sql/types/float/nan_window.test
+# description: Test NaN and inf in windowing functions
+# group: [float]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+# grouping by inf and nan
+foreach type FLOAT DOUBLE
+
+statement ok
+create table floats(f ${type}, i int);
+
+statement ok
+insert into floats values ('inf', 1), ('inf', 7), ('-inf', 3), ('nan', 7), ('nan', 19), ('-inf', 2)
+
+query II
+SELECT f, SUM(i) OVER (PARTITION BY f) FROM floats ORDER BY f
+----
+-inf	5
+-inf	5
+inf	8
+inf	8
+nan	26
+nan	26
+
+query III
+SELECT f, i, SUM(i) OVER (ORDER BY f, i) FROM floats ORDER BY f, i
+----
+-inf	2	2
+-inf	3	5
+inf	1	6
+inf	7	13
+nan	7	20
+nan	19	39
+
+query III
+SELECT f, i, SUM(i) OVER (PARTITION BY f ORDER BY f, i) FROM floats ORDER BY f, i
+----
+-inf	2	2
+-inf	3	5
+inf	1	1
+inf	7	8
+nan	7	7
+nan	19	26
+
+query III
+SELECT i, f, SUM(i) OVER (ORDER BY i, f) FROM floats ORDER BY i, f
+----
+1	inf	1
+2	-inf	3
+3	-inf	6
+7	inf	13
+7	nan	20
+19	nan	39
+
+statement ok
+DROP TABLE floats
+
+endloop

@@ -154,6 +154,9 @@ RESULT_TYPE TryCastCInternal(duckdb_result *result, idx_t col, idx_t row) {
 }
 
 static bool CanFetchValue(duckdb_result *result, idx_t col, idx_t row) {
+	if (!duckdb::deprecated_materialize_result(result)) {
+		return false;
+	}
 	if (!result || col >= result->__deprecated_column_count || row >= result->__deprecated_row_count) {
 		return false;
 	}
@@ -240,8 +243,8 @@ int64_t duckdb_value_int64(duckdb_result *result, idx_t col, idx_t row) {
 duckdb_decimal duckdb_value_decimal(duckdb_result *result, idx_t col, idx_t row) {
 	duckdb_decimal result_value;
 
-	auto column_data = (duckdb::DuckDBColumnData *)result->__deprecated_columns[col].internal_data;
-	column_data->type.GetDecimalProperties(result_value.width, result_value.scale);
+	auto result_data = (duckdb::DuckDBResultData *)result->internal_data;
+	result_data->result->types[col].GetDecimalProperties(result_value.width, result_value.scale);
 
 	auto internal_value = GetInternalCValue<hugeint_t>(result, col, row);
 	result_value.value.lower = internal_value.lower;

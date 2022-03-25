@@ -83,7 +83,7 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 	auto result = ArrowToDuck(conn, *table);
 	ArrowSchema abi_arrow_schema;
 	std::vector<std::shared_ptr<arrow::RecordBatch>> batches_result;
-	result->ToArrowSchema(&abi_arrow_schema);
+	duckdb::QueryResult::ToArrowSchema(&abi_arrow_schema, result->types, result->names);
 	auto result_schema = arrow::ImportSchema(&abi_arrow_schema);
 
 	while (true) {
@@ -120,13 +120,12 @@ TEST_CASE("Test Parquet File NaN", "[arrow]") {
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
 
-	//! Impossible to round-trip NaNs so we just validate that the duckdb table is correct-o
 	std::string parquet_path = "data/parquet-testing/nan-float.parquet";
 	auto table = ReadParquetFile(parquet_path);
 
 	auto result = ArrowToDuck(conn, *table);
 	REQUIRE(result->success);
-	REQUIRE(CHECK_COLUMN(result, 0, {-1, nullptr, 2.5}));
+	REQUIRE(CHECK_COLUMN(result, 0, {-1, std::numeric_limits<double>::infinity(), 2.5}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"foo", "bar", "baz"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {true, false, true}));
 }

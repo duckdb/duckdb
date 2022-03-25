@@ -336,20 +336,21 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	}
 }
 
-void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
+void QueryResult::ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> &types, vector<string> &names) {
 	D_ASSERT(out_schema);
-
+	D_ASSERT(types.size() == names.size());
+	idx_t column_count = types.size();
 	// Allocate as unique_ptr first to cleanup properly on error
 	auto root_holder = make_unique<DuckDBArrowSchemaHolder>();
 
 	// Allocate the children
-	root_holder->children.resize(ColumnCount());
-	root_holder->children_ptrs.resize(ColumnCount(), nullptr);
-	for (size_t i = 0; i < ColumnCount(); ++i) {
+	root_holder->children.resize(column_count);
+	root_holder->children_ptrs.resize(column_count, nullptr);
+	for (size_t i = 0; i < column_count; ++i) {
 		root_holder->children_ptrs[i] = &root_holder->children[i];
 	}
 	out_schema->children = root_holder->children_ptrs.data();
-	out_schema->n_children = ColumnCount();
+	out_schema->n_children = column_count;
 
 	// Store the schema
 	out_schema->format = "+s"; // struct apparently
@@ -359,7 +360,7 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 	out_schema->dictionary = nullptr;
 
 	// Configure all child schemas
-	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 
 		auto &child = root_holder->children[col_idx];
 		InitializeChild(child, names[col_idx]);

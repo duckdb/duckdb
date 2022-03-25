@@ -1,8 +1,21 @@
 name: Python
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/juliapkg/**'
+      - 'tools/nodejs/**'
+      - 'tools/rpkg/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Python.yml'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
 defaults:
@@ -41,6 +54,21 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: Install requirements
+      run: |
+        sudo apt-get update -y -qq
+        sudo apt-get install -y git ninja-build make gcc-multilib g++-multilib wget libssl-dev
+
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+        chmod +x cmake-3.21.3-linux-x86_64.sh
+        sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+
+    - name: Build extensions to test
+      run: |
+        GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
+
     - name: Install
       run: pip install cibuildwheel twine
 
@@ -58,7 +86,14 @@ jobs:
     strategy:
       matrix:
         arch: [auto, aarch64]
-        python_build: [cp37-*, cp38-*,cp39-*,cp310-*]
+        python_build: [cp37-*, cp38-*, cp39-*,cp310-*]
+        isMaster:
+          - ${{ github.ref == 'refs/heads/master' }}
+        exclude:
+          - isMaster: false
+            python_build: 'cp38-*'
+          - isMaster: false
+            python_build: 'cp39-*'
     needs: linux-python3-9
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
@@ -110,11 +145,21 @@ jobs:
         fi
 
    osx-python3:
+      if: github.ref == 'refs/heads/master'
       name: Python 3 OSX
       runs-on: macos-latest
       strategy:
        matrix:
         python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*]
+        isMaster:
+          - ${{ github.ref == 'refs/heads/master' }}
+        exclude:
+          - isMaster: false
+            python_build: 'cp37-*'
+          - isMaster: false
+            python_build: 'cp38-*'
+          - isMaster: false
+            python_build: 'cp39-*'
       needs: linux-python3-9
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
@@ -158,6 +203,15 @@ jobs:
       strategy:
        matrix:
         python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*]
+        isMaster:
+          - ${{ github.ref == 'refs/heads/master' }}
+        exclude:
+          - isMaster: false
+            python_build: 'cp37-*'
+          - isMaster: false
+            python_build: 'cp38-*'
+          - isMaster: false
+            python_build: 'cp39-*'
       needs: linux-python3-9
 
       env:

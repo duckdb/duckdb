@@ -6,10 +6,6 @@ coverage:
   status:
     project:
       default:
-        # basic
-        # for now
-        target: number
-        threshold: 100%
          # advanced settings
         if_not_found: success
         if_ci_failed: failure
@@ -17,11 +13,6 @@ coverage:
         only_pulls: false
     patch:
       default:
-        # basic
-        target: number
-        threshold: 100%
-        base: auto
-        # advanced
         branches:
           - master
         if_not_found: success

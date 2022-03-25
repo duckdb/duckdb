@@ -52,7 +52,7 @@ struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, ADD_OPERATO
 		if (!state->isset) {
 			mask.SetInvalid(idx);
 		} else {
-			if (!Value::DoubleIsValid(state->value)) {
+			if (!Value::DoubleIsFinite(state->value)) {
 				throw OutOfRangeException("SUM is out of range!");
 			}
 			target[idx] = state->value;

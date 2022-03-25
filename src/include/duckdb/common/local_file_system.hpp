@@ -62,7 +62,7 @@ public:
 	void FileSync(FileHandle &handle) override;
 
 	//! Runs a glob on the file system, returning a list of matching files
-	vector<string> Glob(const string &path) override;
+	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
 
 	bool CanHandleFile(const string &fpath) override {
 		//! Whether or not a sub-system can handle a specific file path

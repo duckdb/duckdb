@@ -21,6 +21,11 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGNo
 		result->expressions.push_back(TransformExpression(target->val));
 	}
 
+	// Grab and transform the returning columns from the parser.
+	if (stmt->returningList) {
+		Transformer::TransformExpressionList(*(stmt->returningList), result->returning_list);
+	}
+
 	result->condition = TransformExpression(stmt->whereClause);
 	return result;
 }

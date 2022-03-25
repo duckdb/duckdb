@@ -35,6 +35,8 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 	}
 	case LogicalOperatorType::LOGICAL_GET:
 		return PushdownGet(move(op));
+	case LogicalOperatorType::LOGICAL_LIMIT:
+		return PushdownLimit(move(op));
 	default:
 		return FinishPushdown(move(op));
 	}
