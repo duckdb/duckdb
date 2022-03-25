@@ -235,14 +235,14 @@ static BOOL Uninstall(const char *dsn, const char *drivername) {
 	return TRUE;
 }
 
-void ElevatePrivilegesAsAdmin(char **params) {
+void ElevatePrivilegesAsAdmin(char **parameters) {
 	char szPath[MAX_PATH];
 	if (GetModuleFileName(NULL, szPath, ARRAYSIZE(szPath))) {
 		// Launch itself as admin
 		SHELLEXECUTEINFO sei = {sizeof(sei)};
 		sei.lpVerb = "runas";
 		sei.lpFile = szPath;
-		sei.lpParameters = *params;
+		sei.lpParameters = *parameters;
 		sei.hwnd = NULL;
 		sei.nShow = SW_NORMAL;
 		if (!ShellExecuteEx(&sei)) {
