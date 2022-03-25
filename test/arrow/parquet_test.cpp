@@ -58,6 +58,7 @@ std::unique_ptr<duckdb::QueryResult> ArrowToDuck(duckdb::Connection &conn, arrow
 	duckdb::vector<duckdb::Value> params;
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
+	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::GetSchema));
 	params.push_back(duckdb::Value::UBIGINT(1000000));
 	if (query.empty()) {
 		return conn.TableFunction("arrow_scan", params)->Execute();
