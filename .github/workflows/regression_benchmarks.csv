@@ -8,4 +8,3 @@ benchmark/micro/cast/cast_int64_int32.benchmark
 benchmark/micro/cast/cast_string_double.benchmark
 benchmark/micro/cast/cast_string_int.benchmark
 benchmark/micro/cast/cast_timestamp_string.benchmark
-benchmark/tpch/csv/read_lineitem_csv.benchmark
