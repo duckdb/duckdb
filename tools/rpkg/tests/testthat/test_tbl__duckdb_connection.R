@@ -20,6 +20,10 @@ test_that("Parquet files can be registered with dplyr::tbl()", {
   tab3 <- dplyr::tbl(con, "parquet_scan(['data/userdata1.parquet'])")
   expect_true(any(grepl("duckdb_connection", class(tab3))))
   expect_true(tab3 |> dplyr::count() |> dplyr::collect() == 1000)
+  
+  tab4 <- dplyr::tbl(con, "read_parquet(['data/userdata1.parquet'])")
+  expect_true(any(grepl("duckdb_connection", class(tab4))))
+  expect_true(tab4 |> dplyr::count() |> dplyr::collect() == 1000)
 })
 
 
@@ -27,10 +31,11 @@ test_that("Object cache can be enabled for parquet files with dplyr::tbl()", {
   con <- DBI::dbConnect(duckdb::duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 
-  tab1 <- dplyr::tbl(con, "data/userdata1.parquet")
-  expect_true(DBI::dbGetQuery(con, "SELECT value FROM duckdb_settings() WHERE name='enable_object_cache';") == "True")
   DBI::dbExecute(con, "SET enable_object_cache=False;")
-
+  tab1 <- dplyr::tbl(con, "data/userdata1.parquet", cache=TRUE)
+  expect_true(DBI::dbGetQuery(con, "SELECT value FROM duckdb_settings() WHERE name='enable_object_cache';") == "True")
+  
+  DBI::dbExecute(con, "SET enable_object_cache=False;")
   tab2 <- dplyr::tbl(con, "data/userdata1.parquet", cache = FALSE)
   expect_true(DBI::dbGetQuery(con, "SELECT value FROM duckdb_settings() WHERE name='enable_object_cache';") == "False")
 })

@@ -397,9 +397,9 @@ dbplyr_fill0.duckdb_connection <- function(.con, .data, cols_to_fill, order_by_c
 # @param src .con A \code{\link{dbConnect}} object, as returned by \code{dbConnect()}
 # @param from Table or parquet/csv -files to be registered
 # @param cache Enable object cache for parquet files
-tbl.duckdb_connection <- function(src, from, cache = TRUE, ...) {
+tbl.duckdb_connection <- function(src, from, cache = FALSE, ...) {
   ident_q <- pkg_method("ident_q", "dbplyr")
-  if (grepl("^parquet_scan|\\.parquet'$|^read_csv|\\.csv'", from, ignore.case = TRUE)) from <- ident_q(from)
+  if (grepl("^read_parquet|^parquet_scan|\\.parquet'$|^read_csv|\\.csv'", from, ignore.case = TRUE)) from <- ident_q(from)
   if (cache & grepl("parquet", from, ignore.case = TRUE)) DBI::dbExecute(src, "PRAGMA enable_object_cache")
   NextMethod("tbl")
 }
