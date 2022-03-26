@@ -127,7 +127,7 @@ jobs:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
-    needs: linux-release-64
+ #   needs: linux-release-64
     env:
       GEN: ninja
       BUILD_VISUALIZER: 1
@@ -202,6 +202,11 @@ jobs:
       run: |
         make
         rm build/release/src/libduckdb*
+
+    - name: Build External Extensions
+      run: |
+         mkdir -p build/release/extension/out_of_tree
+         python3.7 scripts/build_out_of_tree_extensions.py --output build/release/extension/out_of_tree
 
     - name: Deploy
       run: |
