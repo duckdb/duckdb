@@ -83,6 +83,7 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	case PhysicalOperatorType::HASH_JOIN:
 	case PhysicalOperatorType::CROSS_PRODUCT:
 	case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
+	case PhysicalOperatorType::IE_JOIN:
 	case PhysicalOperatorType::DELIM_JOIN:
 	case PhysicalOperatorType::UNION:
 	case PhysicalOperatorType::RECURSIVE_CTE:
@@ -238,7 +239,7 @@ void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t 
 	if (!enabled) {
 		return;
 	}
-	if (!Value::DoubleIsValid(time)) {
+	if (!Value::DoubleIsFinite(time)) {
 		return;
 	}
 	auto entry = timings.find(op);

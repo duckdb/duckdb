@@ -61,8 +61,6 @@ public:
 
 	static SQLLEN PointerSizeOf(SQLSMALLINT sql_type);
 
-	static SQLRETURN GetColumnSize(const duckdb::LogicalType &logical_type, SQLULEN *col_size_ptr);
-
 	static const std::vector<TypeInfo> &GetVectorTypesAddr();
 
 	static void WriteInfoTypesToQueryString(const std::vector<TypeInfo> &vec_types, string &query);
@@ -70,6 +68,56 @@ public:
 	static bool IsNumericDescriptorField(SQLSMALLINT field_identifier);
 
 	static bool IsNumericInfoType(SQLUSMALLINT info_type);
+
+	//! https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/display-size?view=sql-server-ver15
+	template <typename INT_TYPE>
+	SQLRETURN static GetColumnSize(const duckdb::LogicalType &logical_type, INT_TYPE *col_size_ptr) {
+		auto sql_type = FindRelatedSQLType(logical_type.id());
+		switch (sql_type) {
+		case SQL_DECIMAL:
+		case SQL_NUMERIC:
+			*col_size_ptr = duckdb::DecimalType::GetWidth(logical_type) + duckdb::DecimalType::GetScale(logical_type);
+			return SQL_SUCCESS;
+		case SQL_BIT:
+			*col_size_ptr = 1;
+			return SQL_SUCCESS;
+		case SQL_TINYINT:
+			*col_size_ptr = 3;
+			return SQL_SUCCESS;
+		case SQL_SMALLINT:
+			*col_size_ptr = 5;
+			return SQL_SUCCESS;
+		case SQL_INTEGER:
+			*col_size_ptr = 11;
+			return SQL_SUCCESS;
+		case SQL_BIGINT:
+			*col_size_ptr = 20;
+			return SQL_SUCCESS;
+		case SQL_REAL:
+			*col_size_ptr = 14;
+			return SQL_SUCCESS;
+		case SQL_FLOAT:
+		case SQL_DOUBLE:
+			*col_size_ptr = 24;
+			return SQL_SUCCESS;
+		case SQL_TYPE_DATE:
+			*col_size_ptr = 10;
+			return SQL_SUCCESS;
+		case SQL_TYPE_TIME:
+			*col_size_ptr = 9;
+			return SQL_SUCCESS;
+		case SQL_TYPE_TIMESTAMP:
+			*col_size_ptr = 20;
+			return SQL_SUCCESS;
+		case SQL_VARCHAR:
+		case SQL_VARBINARY:
+			// we don't know the number of characters
+			*col_size_ptr = 0;
+			return SQL_SUCCESS;
+		default:
+			return SQL_ERROR;
+		}
+	}
 
 }; // end ApiInfo struct
 

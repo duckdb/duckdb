@@ -1,0 +1,156 @@
+# name: test/sql/catalog/function/test_table_macro_args.test
+# description: Test table macros with default args
+# group: [function]
+
+statement ok
+CREATE TABLE cards_tbl  (val int, name string, suit string);
+
+statement ok
+INSERT INTO cards_tbl values (1, 'ace', 'clubs'),    (11,'jack', 'clubs' ),
+(12, 'queen', 'clubs' ),     (13, 'king', 'clubs');
+
+statement ok
+INSERT INTO cards_tbl values (1, 'ace', 'diamonds'), (11,'jack', 'diamonds' ),
+(12, 'queen', 'diamonds' ),  (13, 'king', 'diamonds');
+
+statement ok
+INSERT INTO cards_tbl values (1, 'ace', 'hearts'),   (11,'jack', 'hearts' ),
+(12, 'queen', 'hearts' ),    (13, 'king', 'hearts');
+
+statement ok
+INSERT INTO cards_tbl values (1, 'ace', 'spades'),   (11,'jack', 'spades' ),
+(12, 'queen', 'spades' ),    (13, 'king', 'spades');
+
+
+
+statement ok
+CREATE MACRO card_select(_val_min:=1, _val_max:=1,  _name:='%', _suit:='%')
+as TABLE SELECT * FROM  cards_tbl WHERE val>=_val_min AND val<=_val_max AND name like  _name AND suit like _suit;
+
+
+# try out macro with default args
+query I
+SELECT DISTINCT val from card_select();
+----
+1
+
+# a single args
+query III
+SELECT  * FROM  card_select(_suit:='clubs');
+----
+1	ace	clubs
+
+# args in wrong order 
+query III
+SELECT * FROM  card_select(_name:='king', _val_max:=13) ORDER BY suit;
+----
+13	king	clubs
+13	king	diamonds
+13	king	hearts
+13  	king	spades
+
+query I
+SELECT count(suit) FROM  card_select() GROUP BY ALL;
+----
+4
+
+# use every arg
+query III
+SELECT * FROM card_select(_name:='king', _val_max:=13, _suit:='hearts', _val_min:=10);
+----
+13	king	hearts
+
+
+# try a macro again  with regular args and default args
+statement ok
+CREATE MACRO card_select_args(_val_min, _val_max,  _name:='%', _suit:='%')
+as TABLE SELECT * FROM  cards_tbl WHERE val>=_val_min AND val<=_val_max AND name like  _name AND suit like _suit;
+
+# default args before positional args
+statement error
+SELECT * FROM  card_select_args(_name:='king',1, 13);
+
+
+# correct arg order
+query I
+SELECT suit FROM card_select_args(1, 13, _name:='king' ) ORDER BY suit;
+----
+clubs
+diamonds
+hearts
+spades
+
+
+
+# create macro without any args
+statement ok
+CREATE MACRO card_dfl() as TABLE SELECT DISTINCT suit FROM cards_tbl where suit='hearts';
+
+query I
+SELECT * FROM card_dfl();
+----
+hearts
+
+
+
+# check order by , limit with expressions
+statement ok
+CREATE MACRO  sc(aorder, border, nlimit) AS TABLE SELECT * FROM cards_tbl ORDER BY aorder,border LIMIT nlimit;
+
+query III
+SELECT * FROM sc(name, suit, 4);
+----
+1	ace	clubs
+1	ace	diamonds
+1	ace	hearts
+1	ace	spades
+
+# check limit PERCENT and offset
+statement ok
+CREATE MACRO sc2(dlimit, noffset) AS TABLE SELECT DISTINCT  suit from cards_tbl limit dlimit% offset noffset;
+
+query I
+SELECT * FROM sc2(50.0, 2);
+----
+hearts
+spades
+
+
+statement ok
+CREATE MACRO sc3(col) AS TABLE SELECT DISTINCT ON (col) col FROM cards_tbl ORDER BY col;
+
+query I
+SELECT * FROM sc3(name);
+----
+ace
+jack
+king
+queen
+
+query I
+SELECT * FROM sc3(suit);
+----
+clubs
+diamonds
+hearts
+spades
+
+
+# create macro with non existing table
+statement ok
+CREATE MACRO card_no_tbl() as TABLE SELECT * FROM suit_tbl;
+
+statement error
+SELECT * FROM card_no_tbl();
+
+
+# wrong arg order
+statement error
+CREATE MACRO card_select_args(_val_min, _name:='%', _suit:='%', _val_max)
+as TABLE SELECT * FROM  cards_tbl WHERE val>=_val_min AND val<=_val_max AND name like  _name AND suit like _suit;
+
+
+# positional parameter repeated
+# should give error but is parsed !!!
+statement ok
+CREATE MACRO card_select_val(_val_min, _val_min) as TABLE SELECT * FROM cards_tbl WHERE val>=_val_min AND val<=_val_max;

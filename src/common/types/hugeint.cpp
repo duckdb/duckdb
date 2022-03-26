@@ -3,6 +3,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/windows_undefs.hpp"
+#include "duckdb/common/types/value.hpp"
 
 #include <cmath>
 #include <limits>
@@ -543,6 +544,9 @@ bool Hugeint::TryConvert(float value, hugeint_t &result) {
 
 template <class REAL_T>
 bool ConvertFloatingToBigint(REAL_T value, hugeint_t &result) {
+	if (!Value::IsFinite<REAL_T>(value)) {
+		return false;
+	}
 	if (value <= -170141183460469231731687303715884105728.0 || value >= 170141183460469231731687303715884105727.0) {
 		return false;
 	}

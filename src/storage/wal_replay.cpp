@@ -1,4 +1,4 @@
-#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -58,6 +58,9 @@ private:
 
 	void ReplayCreateMacro();
 	void ReplayDropMacro();
+
+	void ReplayCreateTableMacro();
+	void ReplayDropTableMacro();
 
 	void ReplayUseTable();
 	void ReplayInsert();
@@ -192,6 +195,12 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 		break;
 	case WALType::DROP_MACRO:
 		ReplayDropMacro();
+		break;
+	case WALType::CREATE_TABLE_MACRO:
+		ReplayCreateTableMacro();
+		break;
+	case WALType::DROP_TABLE_MACRO:
+		ReplayDropTableMacro();
 		break;
 	case WALType::USE_TABLE:
 		ReplayUseTable();
@@ -387,7 +396,7 @@ void ReplayState::ReplaySequenceValue() {
 // Replay Macro
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateMacro() {
-	auto entry = MacroCatalogEntry::Deserialize(source);
+	auto entry = ScalarMacroCatalogEntry::Deserialize(source);
 	if (deserialize_only) {
 		return;
 	}
@@ -399,6 +408,32 @@ void ReplayState::ReplayCreateMacro() {
 void ReplayState::ReplayDropMacro() {
 	DropInfo info;
 	info.type = CatalogType::MACRO_ENTRY;
+	info.schema = source.Read<string>();
+	info.name = source.Read<string>();
+	if (deserialize_only) {
+		return;
+	}
+
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.DropEntry(context, &info);
+}
+
+//===--------------------------------------------------------------------===//
+// Replay Table Macro
+//===--------------------------------------------------------------------===//
+void ReplayState::ReplayCreateTableMacro() {
+	auto entry = TableMacroCatalogEntry::Deserialize(source);
+	if (deserialize_only) {
+		return;
+	}
+
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateFunction(context, entry.get());
+}
+
+void ReplayState::ReplayDropTableMacro() {
+	DropInfo info;
+	info.type = CatalogType::TABLE_MACRO_ENTRY;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 	if (deserialize_only) {

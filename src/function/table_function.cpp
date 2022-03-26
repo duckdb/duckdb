@@ -5,6 +5,9 @@ namespace duckdb {
 FunctionOperatorData::~FunctionOperatorData() {
 }
 
+TableFunctionInfo::~TableFunctionInfo() {
+}
+
 TableFilterCollection::TableFilterCollection(TableFilterSet *table_filters) : table_filters(table_filters) {
 }
 

@@ -146,6 +146,97 @@ public class TestDuckDBJDBC {
 
 	}
 
+	public static void test_enum() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs;
+	
+		// Test 8 bit enum + different access ways
+		stmt.execute("CREATE TYPE enum_test AS ENUM ('Enum1', 'enum2', '1üöñ');");
+		stmt.execute("CREATE TABLE t (id INT, e1 enum_test);");
+		stmt.execute("INSERT INTO t (id, e1) VALUES (1, 'Enum1');");
+		stmt.execute("INSERT INTO t (id, e1) VALUES (2, 'enum2');");
+		stmt.execute("INSERT INTO t (id, e1) VALUES (3, '1üöñ');");
+
+		PreparedStatement ps = conn.prepareStatement("SELECT e1 FROM t WHERE id = ?");
+		ps.setObject(1, 1);
+		rs = ps.executeQuery();
+		rs.next();
+		assertTrue(rs.getObject(1, String.class).equals("Enum1"));
+		assertTrue(rs.getString(1).equals("Enum1"));
+		assertTrue(rs.getString("e1").equals("Enum1"));
+		rs.close();
+
+		ps.setObject(1, 2);
+		rs = ps.executeQuery();
+		rs.next();
+		assertTrue(rs.getObject(1, String.class).equals("enum2"));
+		assertTrue(rs.getObject(1).equals("enum2"));
+		rs.close();
+
+		ps.setObject(1, 3);
+		rs = ps.executeQuery();
+		rs.next();
+		assertTrue(rs.getObject(1, String.class).equals("1üöñ"));
+		assertTrue(rs.getObject(1).equals("1üöñ"));
+		assertTrue(rs.getObject("e1").equals("1üöñ"));
+		rs.close();
+
+		ps = conn.prepareStatement("SELECT e1 FROM t WHERE e1 = ?");
+		ps.setObject(1, "1üöñ");
+		rs = ps.executeQuery();
+		rs.next();
+		assertTrue(rs.getObject(1, String.class).equals("1üöñ"));
+		assertTrue(rs.getString(1).equals("1üöñ"));
+		assertTrue(rs.getString("e1").equals("1üöñ"));
+		rs.close();
+
+		// Test 16 bit enum
+		stmt.execute("CREATE TYPE enum_long AS ENUM ('enum0' ,'enum1' ,'enum2' ,'enum3' ,'enum4' ,'enum5' ,'enum6'" 
+		+ ",'enum7' ,'enum8' ,'enum9' ,'enum10' ,'enum11' ,'enum12' ,'enum13' ,'enum14' ,'enum15' ,'enum16' ,'enum17'" 
+		+ ",'enum18' ,'enum19' ,'enum20' ,'enum21' ,'enum22' ,'enum23' ,'enum24' ,'enum25' ,'enum26' ,'enum27' ,'enum28'" 
+		+ ",'enum29' ,'enum30' ,'enum31' ,'enum32' ,'enum33' ,'enum34' ,'enum35' ,'enum36' ,'enum37' ,'enum38' ,'enum39'" 
+		+ ",'enum40' ,'enum41' ,'enum42' ,'enum43' ,'enum44' ,'enum45' ,'enum46' ,'enum47' ,'enum48' ,'enum49' ,'enum50'" 
+		+ ",'enum51' ,'enum52' ,'enum53' ,'enum54' ,'enum55' ,'enum56' ,'enum57' ,'enum58' ,'enum59' ,'enum60' ,'enum61'" 
+		+ ",'enum62' ,'enum63' ,'enum64' ,'enum65' ,'enum66' ,'enum67' ,'enum68' ,'enum69' ,'enum70' ,'enum71' ,'enum72'" 
+		+ ",'enum73' ,'enum74' ,'enum75' ,'enum76' ,'enum77' ,'enum78' ,'enum79' ,'enum80' ,'enum81' ,'enum82' ,'enum83'" 
+		+ ",'enum84' ,'enum85' ,'enum86' ,'enum87' ,'enum88' ,'enum89' ,'enum90' ,'enum91' ,'enum92' ,'enum93' ,'enum94'" 
+		+ ",'enum95' ,'enum96' ,'enum97' ,'enum98' ,'enum99' ,'enum100' ,'enum101' ,'enum102' ,'enum103' ,'enum104' "
+		+ ",'enum105' ,'enum106' ,'enum107' ,'enum108' ,'enum109' ,'enum110' ,'enum111' ,'enum112' ,'enum113' ,'enum114'" 
+		+ ",'enum115' ,'enum116' ,'enum117' ,'enum118' ,'enum119' ,'enum120' ,'enum121' ,'enum122' ,'enum123' ,'enum124'" 
+		+ ",'enum125' ,'enum126' ,'enum127' ,'enum128' ,'enum129' ,'enum130' ,'enum131' ,'enum132' ,'enum133' ,'enum134'" 
+		+ ",'enum135' ,'enum136' ,'enum137' ,'enum138' ,'enum139' ,'enum140' ,'enum141' ,'enum142' ,'enum143' ,'enum144'" 
+		+ ",'enum145' ,'enum146' ,'enum147' ,'enum148' ,'enum149' ,'enum150' ,'enum151' ,'enum152' ,'enum153' ,'enum154'" 
+		+ ",'enum155' ,'enum156' ,'enum157' ,'enum158' ,'enum159' ,'enum160' ,'enum161' ,'enum162' ,'enum163' ,'enum164'" 
+		+ ",'enum165' ,'enum166' ,'enum167' ,'enum168' ,'enum169' ,'enum170' ,'enum171' ,'enum172' ,'enum173' ,'enum174'" 
+		+ ",'enum175' ,'enum176' ,'enum177' ,'enum178' ,'enum179' ,'enum180' ,'enum181' ,'enum182' ,'enum183' ,'enum184'" 
+		+ ",'enum185' ,'enum186' ,'enum187' ,'enum188' ,'enum189' ,'enum190' ,'enum191' ,'enum192' ,'enum193' ,'enum194'" 
+		+ ",'enum195' ,'enum196' ,'enum197' ,'enum198' ,'enum199' ,'enum200' ,'enum201' ,'enum202' ,'enum203' ,'enum204'" 
+		+ ",'enum205' ,'enum206' ,'enum207' ,'enum208' ,'enum209' ,'enum210' ,'enum211' ,'enum212' ,'enum213' ,'enum214'" 
+		+ ",'enum215' ,'enum216' ,'enum217' ,'enum218' ,'enum219' ,'enum220' ,'enum221' ,'enum222' ,'enum223' ,'enum224'" 
+		+ ",'enum225' ,'enum226' ,'enum227' ,'enum228' ,'enum229' ,'enum230' ,'enum231' ,'enum232' ,'enum233' ,'enum234'" 
+		+ ",'enum235' ,'enum236' ,'enum237' ,'enum238' ,'enum239' ,'enum240' ,'enum241' ,'enum242' ,'enum243' ,'enum244'" 
+		+ ",'enum245' ,'enum246' ,'enum247' ,'enum248' ,'enum249' ,'enum250' ,'enum251' ,'enum252' ,'enum253' ,'enum254'" 
+		+ ",'enum255' ,'enum256' ,'enum257' ,'enum258' ,'enum259' ,'enum260' ,'enum261' ,'enum262' ,'enum263' ,'enum264'" 
+		+ ",'enum265' ,'enum266' ,'enum267' ,'enum268' ,'enum269' ,'enum270' ,'enum271' ,'enum272' ,'enum273' ,'enum274'" 
+		+ ",'enum275' ,'enum276' ,'enum277' ,'enum278' ,'enum279' ,'enum280' ,'enum281' ,'enum282' ,'enum283' ,'enum284'" 
+		+ ",'enum285' ,'enum286' ,'enum287' ,'enum288' ,'enum289' ,'enum290' ,'enum291' ,'enum292' ,'enum293' ,'enum294'" 
+		+ ",'enum295' ,'enum296' ,'enum297' ,'enum298' ,'enum299');");
+		
+		stmt.execute("CREATE TABLE t2 (id INT, e1 enum_long);");
+		stmt.execute("INSERT INTO t2 (id, e1) VALUES (1, 'enum290');");
+	
+		ps = conn.prepareStatement("SELECT e1 FROM t2 WHERE id = ?");
+		ps.setObject(1, 1);
+		rs = ps.executeQuery();
+		rs.next();
+		assertTrue(rs.getObject(1, String.class).equals("enum290"));
+		assertTrue(rs.getString(1).equals("enum290"));
+		assertTrue(rs.getString("e1").equals("enum290"));
+		rs.close();
+	}
+
 	public static void test_timestamp_tz() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();

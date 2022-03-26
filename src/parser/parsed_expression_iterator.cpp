@@ -143,6 +143,52 @@ void ParsedExpressionIterator::EnumerateChildren(
 	}
 }
 
+void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
+    QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
+
+	for (auto &modifier : node.modifiers) {
+		switch (modifier->type) {
+		case ResultModifierType::LIMIT_MODIFIER: {
+			auto &limit_modifier = (LimitModifier &)*modifier;
+			if (limit_modifier.limit) {
+				callback(limit_modifier.limit);
+			}
+			if (limit_modifier.offset) {
+				callback(limit_modifier.offset);
+			}
+		} break;
+
+		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+			auto &limit_modifier = (LimitPercentModifier &)*modifier;
+			if (limit_modifier.limit) {
+				callback(limit_modifier.limit);
+			}
+			if (limit_modifier.offset) {
+				callback(limit_modifier.offset);
+			}
+		} break;
+
+		case ResultModifierType::ORDER_MODIFIER: {
+			auto &order_modifier = (OrderModifier &)*modifier;
+			for (auto &order : order_modifier.orders) {
+				callback(order.expression);
+			}
+		} break;
+
+		case ResultModifierType::DISTINCT_MODIFIER: {
+			auto &distinct_modifier = (DistinctModifier &)*modifier;
+			for (auto &target : distinct_modifier.distinct_on_targets) {
+				callback(target);
+			}
+		} break;
+
+		// do nothing
+		default:
+			break;
+		}
+	}
+}
+
 void ParsedExpressionIterator::EnumerateTableRefChildren(
     TableRef &ref, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
 	switch (ref.type) {
@@ -226,6 +272,11 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	default:
 		throw NotImplementedException("QueryNode type not implemented for traversal");
 	}
+
+	if (!node.modifiers.empty()) {
+		EnumerateQueryNodeModifiers(node, callback);
+	}
+
 	for (auto &kv : node.cte_map) {
 		EnumerateQueryNodeChildren(*kv.second->query->node, callback);
 	}

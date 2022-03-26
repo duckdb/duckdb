@@ -122,17 +122,20 @@ template <class OP, bool NO_MATCH_SEL>
 static void TemplatedMatchNested(Vector &col, Vector &rows, const idx_t vcount, SelectionVector &sel, idx_t &count,
                                  const idx_t col_offset, const idx_t col_no, SelectionVector *no_match,
                                  idx_t &no_match_count) {
-	// Gather a scattered Vector containing the column values being matched
+	// Gather a dense Vector containing the column values being matched
 	Vector key(col.GetType());
-	RowOperations::Gather(rows, sel, key, sel, count, col_offset, col_no);
+	RowOperations::Gather(rows, sel, key, *FlatVector::IncrementalSelectionVector(), count, col_offset, col_no);
+
+	// Densify the input column
+	Vector sliced(col, sel, count);
 
 	if (NO_MATCH_SEL) {
 		SelectionVector no_match_sel_offset(no_match->data() + no_match_count);
-		auto match_count = SelectComparison<OP>(col, key, vcount, sel, count, &sel, &no_match_sel_offset);
+		auto match_count = SelectComparison<OP>(sliced, key, count, sel, count, &sel, &no_match_sel_offset);
 		no_match_count += count - match_count;
 		count = match_count;
 	} else {
-		count = SelectComparison<OP>(col, key, vcount, sel, count, &sel, nullptr);
+		count = SelectComparison<OP>(sliced, key, count, sel, count, &sel, nullptr);
 	}
 }
 
