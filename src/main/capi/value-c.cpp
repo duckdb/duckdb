@@ -153,7 +153,7 @@ RESULT_TYPE TryCastCInternal(duckdb_result *result, idx_t col, idx_t row) {
 	return result_value;
 }
 
-static bool CanFetchValue(duckdb_result *result, idx_t col, idx_t row) {
+static bool CanUseDeprecatedFetch(duckdb_result *result, idx_t col, idx_t row) {
 	if (!result) {
 		return false;
 	}
@@ -161,6 +161,13 @@ static bool CanFetchValue(duckdb_result *result, idx_t col, idx_t row) {
 		return false;
 	}
 	if (col >= result->__deprecated_column_count || row >= result->__deprecated_row_count) {
+		return false;
+	}
+	return true;
+}
+
+static bool CanFetchValue(duckdb_result *result, idx_t col, idx_t row) {
+	if (!CanUseDeprecatedFetch(result, col, row)) {
 		return false;
 	}
 	if (result->__deprecated_columns[col].__deprecated_nullmask[row]) {
@@ -342,7 +349,7 @@ duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
 }
 
 bool duckdb_value_is_null(duckdb_result *result, idx_t col, idx_t row) {
-	if (!CanFetchValue(result, col, row)) {
+	if (!CanUseDeprecatedFetch(result, col, row)) {
 		return false;
 	}
 	return result->__deprecated_columns[col].__deprecated_nullmask[row];
