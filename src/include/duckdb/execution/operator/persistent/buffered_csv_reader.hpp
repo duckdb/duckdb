@@ -114,6 +114,8 @@ enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DA
 class BufferedCSVReader {
 	//! Initial buffer read size; can be extended for long lines
 	static constexpr idx_t INITIAL_BUFFER_SIZE = 16384;
+	//! For High latency filesystems such as fs, the buffer size will instead use this max value
+	static constexpr idx_t INITIAL_BUFFER_SIZE_MAX = 1 << 26; // 64MB
 	ParserMode mode;
 
 public:

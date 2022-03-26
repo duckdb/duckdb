@@ -128,6 +128,11 @@ public:
 		this->reset_enabled = false;
 	}
 
+	// For high latency file systems a larger buffer size is used
+	bool ShouldUseLargeBuffers() {
+		return file_handle->file_system.GetName() == "HTTPFileSystem";
+	}
+
 private:
 	unique_ptr<FileHandle> file_handle;
 	bool reset_enabled = true;
@@ -1528,12 +1533,15 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 
 	// the remaining part of the last buffer
 	idx_t remaining = buffer_size - start;
-	idx_t buffer_read_size = INITIAL_BUFFER_SIZE;
+
+	idx_t buffer_read_size = file_handle->ShouldUseLargeBuffers() && mode == ParserMode::PARSING ? INITIAL_BUFFER_SIZE_MAX : INITIAL_BUFFER_SIZE;
+	idx_t maximum_line_size = file_handle->ShouldUseLargeBuffers() && mode == ParserMode::PARSING ? 2*INITIAL_BUFFER_SIZE_MAX : options.maximum_line_size;
+
 	while (remaining > buffer_read_size) {
 		buffer_read_size *= 2;
 	}
-	if (remaining + buffer_read_size > options.maximum_line_size) {
-		throw InvalidInputException("Maximum line size of %llu bytes exceeded!", options.maximum_line_size);
+	if (remaining + buffer_read_size > maximum_line_size) {
+		throw InvalidInputException("Maximum line size of %llu bytes exceeded!", maximum_line_size);
 	}
 	buffer = unique_ptr<char[]>(new char[buffer_read_size + remaining + 1]);
 	buffer_size = remaining + buffer_read_size;
@@ -1541,6 +1549,9 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 		// remaining from last buffer: copy it here
 		memcpy(buffer.get(), old_buffer.get() + start, remaining);
 	}
+
+	// TODO: prefetch next buffer async
+
 	idx_t read_count = file_handle->Read(buffer.get() + remaining, buffer_read_size);
 
 	bytes_in_chunk += read_count;
