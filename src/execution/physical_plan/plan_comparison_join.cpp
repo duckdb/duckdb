@@ -194,7 +194,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		default:
 			throw NotImplementedException("Unimplemented comparison join");
 		}
-
 	}
 
 	unique_ptr<PhysicalOperator> plan;

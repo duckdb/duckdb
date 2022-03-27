@@ -650,13 +650,13 @@ void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
 	                                    StrfTimeFunctionDate<false>, false, false, StrfTimeBindFunction<false>));
 
 	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionTimestamp<false>, false,false, StrfTimeBindFunction<false>));
+	                                    StrfTimeFunctionTimestamp<false>, false, false, StrfTimeBindFunction<false>));
 
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionDate<true>, false,false, StrfTimeBindFunction<true>));
+	                                    StrfTimeFunctionDate<true>, false, false, StrfTimeBindFunction<true>));
 
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionTimestamp<true>, false,false, StrfTimeBindFunction<true>));
+	                                    StrfTimeFunctionTimestamp<true>, false, false, StrfTimeBindFunction<true>));
 
 	set.AddFunction(strftime);
 }
