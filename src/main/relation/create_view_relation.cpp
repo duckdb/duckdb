@@ -2,7 +2,6 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 

@@ -1,8 +1,5 @@
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/common/windows.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/string_util.hpp"
 
 #if defined(BUILD_ICU_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)

@@ -8,7 +8,6 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
