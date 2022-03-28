@@ -22,7 +22,7 @@ function _destroy_config(config::Config)
     return
 end
 
-function SetConfig(config::Config, name::AbstractString, option::AbstractString)
+function set_config(config::Config, name::AbstractString, option::AbstractString)
     if duckdb_set_config(config.handle, name, option) != DuckDBSuccess
         throw(QueryException(string("Unrecognized configuration option \"", name, "\"")))
     end

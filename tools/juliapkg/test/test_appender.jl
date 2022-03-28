@@ -18,10 +18,10 @@ end
 
     appender = DuckDB.Appender(db, "integers")
     for i in 0:9
-        DuckDB.Append(appender, i)
-        DuckDB.EndRow(appender)
+        DuckDB.append(appender, i)
+        DuckDB.end_row(appender)
     end
-    DuckDB.Flush(appender)
+    DuckDB.flush(appender)
 
     results = DBInterface.execute(db, "SELECT * FROM integers")
     df = DataFrame(results)

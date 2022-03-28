@@ -110,6 +110,7 @@ public:
 	bool IsPrepared() {
 		return stmt != nullptr;
 	}
+	void FillIRD();
 
 public:
 	OdbcHandleDbc *dbc;

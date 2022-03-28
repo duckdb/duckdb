@@ -4,7 +4,11 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
+#include "duckdb/function/table_macro_function.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
+
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -169,7 +173,7 @@ struct AggregateFunctionExtractor {
 };
 
 struct MacroExtractor {
-	static idx_t FunctionCount(MacroCatalogEntry &entry) {
+	static idx_t FunctionCount(ScalarMacroCatalogEntry &entry) {
 		return 1;
 	}
 
@@ -177,15 +181,15 @@ struct MacroExtractor {
 		return Value("macro");
 	}
 
-	static Value GetFunctionDescription(MacroCatalogEntry &entry, idx_t offset) {
+	static Value GetFunctionDescription(ScalarMacroCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
 
-	static Value GetReturnType(MacroCatalogEntry &entry, idx_t offset) {
+	static Value GetReturnType(ScalarMacroCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
 
-	static Value GetParameters(MacroCatalogEntry &entry, idx_t offset) {
+	static Value GetParameters(ScalarMacroCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (auto &param : entry.function->parameters) {
 			D_ASSERT(param->type == ExpressionType::COLUMN_REF);
@@ -198,7 +202,7 @@ struct MacroExtractor {
 		return Value::LIST(LogicalType::VARCHAR, move(results));
 	}
 
-	static Value GetParameterTypes(MacroCatalogEntry &entry, idx_t offset) {
+	static Value GetParameterTypes(ScalarMacroCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (idx_t i = 0; i < entry.function->parameters.size(); i++) {
 			results.emplace_back(LogicalType::VARCHAR);
@@ -209,12 +213,70 @@ struct MacroExtractor {
 		return Value::LIST(LogicalType::VARCHAR, move(results));
 	}
 
-	static Value GetVarArgs(MacroCatalogEntry &entry, idx_t offset) {
+	static Value GetVarArgs(ScalarMacroCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
 
-	static Value GetMacroDefinition(MacroCatalogEntry &entry, idx_t offset) {
-		return entry.function->expression->ToString();
+	static Value GetMacroDefinition(ScalarMacroCatalogEntry &entry, idx_t offset) {
+		if (entry.function->type == MacroType::SCALAR_MACRO) {
+			auto &func = (ScalarMacroFunction &)*entry.function;
+			return func.expression->ToString();
+		}
+		return Value();
+	}
+};
+
+struct TableMacroExtractor {
+	static idx_t FunctionCount(TableMacroCatalogEntry &entry) {
+		return 1;
+	}
+
+	static Value GetFunctionType() {
+		return Value("table_macro");
+	}
+
+	static Value GetFunctionDescription(TableMacroCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
+
+	static Value GetReturnType(TableMacroCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
+
+	static Value GetParameters(TableMacroCatalogEntry &entry, idx_t offset) {
+		vector<Value> results;
+		for (auto &param : entry.function->parameters) {
+			D_ASSERT(param->type == ExpressionType::COLUMN_REF);
+			auto &colref = (ColumnRefExpression &)*param;
+			results.emplace_back(colref.GetColumnName());
+		}
+		for (auto &param_entry : entry.function->default_parameters) {
+			results.emplace_back(param_entry.first);
+		}
+		return Value::LIST(LogicalType::VARCHAR, move(results));
+	}
+
+	static Value GetParameterTypes(TableMacroCatalogEntry &entry, idx_t offset) {
+		vector<Value> results;
+		for (idx_t i = 0; i < entry.function->parameters.size(); i++) {
+			results.emplace_back(LogicalType::VARCHAR);
+		}
+		for (idx_t i = 0; i < entry.function->default_parameters.size(); i++) {
+			results.emplace_back(LogicalType::VARCHAR);
+		}
+		return Value::LIST(LogicalType::VARCHAR, move(results));
+	}
+
+	static Value GetVarArgs(TableMacroCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
+
+	static Value GetMacroDefinition(TableMacroCatalogEntry &entry, idx_t offset) {
+		if (entry.function->type == MacroType::SCALAR_MACRO) {
+			auto &func = (ScalarMacroFunction &)*entry.function;
+			return func.expression->ToString();
+		}
+		return Value();
 	}
 };
 
@@ -375,9 +437,14 @@ void DuckDBFunctionsFunction(ClientContext &context, const FunctionData *bind_da
 			finished = ExtractFunctionData<AggregateFunctionCatalogEntry, AggregateFunctionExtractor>(
 			    standard_entry, data.offset_in_entry, output, count);
 			break;
+		case CatalogType::TABLE_MACRO_ENTRY:
+			finished = ExtractFunctionData<TableMacroCatalogEntry, TableMacroExtractor>(
+			    standard_entry, data.offset_in_entry, output, count);
+			break;
+
 		case CatalogType::MACRO_ENTRY:
-			finished = ExtractFunctionData<MacroCatalogEntry, MacroExtractor>(standard_entry, data.offset_in_entry,
-			                                                                  output, count);
+			finished = ExtractFunctionData<ScalarMacroCatalogEntry, MacroExtractor>(
+			    standard_entry, data.offset_in_entry, output, count);
 			break;
 		case CatalogType::TABLE_FUNCTION_ENTRY:
 			finished = ExtractFunctionData<TableFunctionCatalogEntry, TableFunctionExtractor>(

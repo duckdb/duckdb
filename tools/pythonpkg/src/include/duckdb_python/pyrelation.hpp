@@ -60,8 +60,8 @@ public:
 	static unique_ptr<DuckDBPyRelation>
 	FromParquetDefault(const string &filename, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
-	static unique_ptr<DuckDBPyRelation>
-	FromArrowTable(py::object &table, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	static unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object,
+	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Project(const string &expr);
 

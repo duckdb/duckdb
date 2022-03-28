@@ -58,6 +58,7 @@ std::unique_ptr<duckdb::QueryResult> ArrowToDuck(duckdb::Connection &conn, arrow
 	duckdb::vector<duckdb::Value> params;
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
+	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::GetSchema));
 	params.push_back(duckdb::Value::UBIGINT(1000000));
 	if (query.empty()) {
 		return conn.TableFunction("arrow_scan", params)->Execute();
@@ -120,13 +121,12 @@ TEST_CASE("Test Parquet File NaN", "[arrow]") {
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
 
-	//! Impossible to round-trip NaNs so we just validate that the duckdb table is correct-o
 	std::string parquet_path = "data/parquet-testing/nan-float.parquet";
 	auto table = ReadParquetFile(parquet_path);
 
 	auto result = ArrowToDuck(conn, *table);
 	REQUIRE(result->success);
-	REQUIRE(CHECK_COLUMN(result, 0, {-1, nullptr, 2.5}));
+	REQUIRE(CHECK_COLUMN(result, 0, {-1, std::numeric_limits<double>::infinity(), 2.5}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"foo", "bar", "baz"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {true, false, true}));
 }

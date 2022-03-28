@@ -4,6 +4,10 @@ duckdb_logical_type duckdb_create_logical_type(duckdb_type type) {
 	return new duckdb::LogicalType(duckdb::ConvertCTypeToCPP(type));
 }
 
+duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t scale) {
+	return new duckdb::LogicalType(duckdb::LogicalType::DECIMAL(width, scale));
+}
+
 duckdb_type duckdb_get_type_id(duckdb_logical_type type) {
 	if (!type) {
 		return DUCKDB_TYPE_INVALID;

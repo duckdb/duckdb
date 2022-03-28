@@ -5,7 +5,7 @@
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
@@ -33,6 +33,7 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -188,7 +189,12 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 		break;
 	case CatalogType::MACRO_ENTRY:
 		// create a macro function
-		function = make_unique_base<StandardEntry, MacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
+		function = make_unique_base<StandardEntry, ScalarMacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
+		break;
+
+	case CatalogType::TABLE_MACRO_ENTRY:
+		// create a macro function
+		function = make_unique_base<StandardEntry, TableMacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
 		break;
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		D_ASSERT(info->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
@@ -320,6 +326,7 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 	case CatalogType::INDEX_ENTRY:
 		return indexes;
 	case CatalogType::TABLE_FUNCTION_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY:
 		return table_functions;
 	case CatalogType::COPY_FUNCTION_ENTRY:
 		return copy_functions;

@@ -1013,19 +1013,6 @@ bool TryCast::Operation(string_t input, uint64_t &result, bool strict) {
 }
 
 template <class T>
-bool CheckDoubleValidity(T value);
-
-template <>
-bool CheckDoubleValidity(float value) {
-	return Value::FloatIsValid(value);
-}
-
-template <>
-bool CheckDoubleValidity(double value) {
-	return Value::DoubleIsValid(value);
-}
-
-template <class T>
 static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
 	while (len > 0 && StringUtil::CharacterIsSpace(*buf)) {
@@ -1041,9 +1028,6 @@ static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 	}
 	auto endptr = buf + len;
 	auto parse_result = duckdb_fast_float::from_chars(buf, buf + len, result);
-	if (!CheckDoubleValidity<T>(result)) {
-		return false;
-	}
 	if (parse_result.ec != std::errc()) {
 		return false;
 	}
