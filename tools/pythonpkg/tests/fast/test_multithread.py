@@ -268,12 +268,12 @@ def from_df(duckdb_conn, queue):
     except:
         queue.put(False)
 
-def from_arrow_table(duckdb_conn, queue):
+def from_arrow(duckdb_conn, queue):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     arrow_tbl = pa.Table.from_pydict({'my_column':pa.array([1,2,3,4,5],type=pa.int64())})
     try:
-        out = duckdb_conn.from_arrow_table(arrow_tbl)
+        out = duckdb_conn.from_arrow(arrow_tbl)
         queue.put(True)
     except:
         queue.put(False)
@@ -411,10 +411,10 @@ class TestDuckMultithread(object):
         duck_threads = DuckDBThreaded(10,from_df)
         duck_threads.multithread_test() 
 
-    def test_from_arrow_table(self, duckdb_cursor):
+    def test_from_arrow(self, duckdb_cursor):
         if not can_run:
             return
-        duck_threads = DuckDBThreaded(10,from_arrow_table)
+        duck_threads = DuckDBThreaded(10,from_arrow)
         duck_threads.multithread_test()
  
     def test_from_csv_auto(self, duckdb_cursor):

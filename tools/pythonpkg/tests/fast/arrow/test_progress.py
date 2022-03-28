@@ -20,7 +20,7 @@ class TestProgressBarArrow(object):
         duckdb_conn.execute("PRAGMA disable_print_progress_bar")
 
         tbl = pyarrow.Table.from_arrays([data],['a'])
-        rel = duckdb_conn.from_arrow_table(tbl)
+        rel = duckdb_conn.from_arrow(tbl)
         result = rel.aggregate('sum(a)')
         assert (result.execute().fetchone()[0] == 49999995000000)
         # Multiple Threads
@@ -30,7 +30,7 @@ class TestProgressBarArrow(object):
 
         # More than one batch
         tbl = pyarrow.Table.from_batches(pyarrow.Table.from_arrays([data],['a']).to_batches(100))
-        rel = duckdb_conn.from_arrow_table(tbl)
+        rel = duckdb_conn.from_arrow(tbl)
         result = rel.aggregate('sum(a)')
         assert (result.execute().fetchone()[0] == 49999995000000)
 
@@ -48,6 +48,6 @@ class TestProgressBarArrow(object):
         duckdb_conn.execute("PRAGMA disable_print_progress_bar")
 
         tbl = pyarrow.Table.from_arrays([data],['a'])
-        rel = duckdb_conn.from_arrow_table(tbl)
+        rel = duckdb_conn.from_arrow(tbl)
         result = rel.aggregate('sum(a)')
         assert (result.execute().fetchone()[0] == None)

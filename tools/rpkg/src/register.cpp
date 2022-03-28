@@ -71,6 +71,19 @@ public:
 		return res;
 	}
 
+	static void GetSchema(uintptr_t factory_p, ArrowSchemaWrapper &schema) {
+
+		RProtector r;
+		auto res = make_unique<ArrowArrayStreamWrapper>();
+		auto factory = (RArrowTabularStreamFactory *)factory_p;
+		auto schema_ptr_sexp =
+		    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&schema.arrow_schema))));
+
+		cpp11::function export_fun = VECTOR_ELT(factory->export_fun, 4);
+
+		export_fun(factory->arrow_scannable, schema_ptr_sexp);
+	}
+
 	SEXP arrow_scannable;
 	SEXP export_fun;
 
@@ -196,6 +209,8 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(ClientContext &context
 			children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)R_ExternalPtrAddr(e.second))));
 			children.push_back(
 			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));
+			children.push_back(
+			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::GetSchema)));
 			children.push_back(make_unique<ConstantExpression>(Value::UBIGINT(100000)));
 			table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
 			return table_function;
