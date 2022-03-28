@@ -32,6 +32,24 @@ unique_ptr<FunctionData> ListAggregatesBindData::Copy() {
 ListAggregatesBindData::~ListAggregatesBindData() {
 }
 
+struct StateVector {
+	StateVector(idx_t count_p, unique_ptr<Expression> aggr_expr_p)
+	    : count(count_p), aggr_expr(move(aggr_expr_p)), state_vector(Vector(LogicalType::POINTER, count_p)) {
+	}
+
+	~StateVector() {
+		// destroy objects within the aggregate states
+		auto &aggr = (BoundAggregateExpression &)*aggr_expr;
+		if (aggr.function.destructor) {
+			aggr.function.destructor(state_vector, count);
+		}
+	}
+
+	idx_t count;
+	unique_ptr<Expression> aggr_expr;
+	Vector state_vector;
+};
+
 static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	D_ASSERT(args.ColumnCount() == 2);
@@ -69,15 +87,15 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto state_buffer = unique_ptr<data_t[]>(new data_t[size * count]);
 
 	// state vector for initialize and finalize
-	Vector state_vector = Vector(LogicalType::POINTER, count);
-	auto states = FlatVector::GetData<data_ptr_t>(state_vector);
+	StateVector state_vector(count, info.aggr_expr->Copy());
+	auto states = FlatVector::GetData<data_ptr_t>(state_vector.state_vector);
 
 	// state vector of STANDARD_VECTOR_SIZE holds the pointers to the states
 	Vector state_vector_update = Vector(LogicalType::POINTER);
 	auto states_update = FlatVector::GetData<data_ptr_t>(state_vector_update);
 
 	// selection vector pointing to the data
-	SelectionVector sel_vector = SelectionVector(STANDARD_VECTOR_SIZE);
+	SelectionVector sel_vector(STANDARD_VECTOR_SIZE);
 	idx_t states_idx = 0;
 
 	for (idx_t i = 0; i < count; i++) {
@@ -131,12 +149,7 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 	}
 
 	// finalize all the aggregate states
-	aggr.function.finalize(state_vector, aggr.bind_info.get(), result, count, 0);
-
-	// destroy objects within the aggregate states
-	if (aggr.function.destructor) {
-		aggr.function.destructor(state_vector, count);
-	}
+	aggr.function.finalize(state_vector.state_vector, aggr.bind_info.get(), result, count, 0);
 }
 
 static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, ScalarFunction &bound_function,
