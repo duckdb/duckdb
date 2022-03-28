@@ -157,9 +157,9 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 		case SQL_ATTR_TRACEFILE:
 		case SQL_ATTR_TRANSLATE_LIB:
 		case SQL_ATTR_TRANSLATE_OPTION:
-		case SQL_ATTR_TXN_ISOLATION:
-			dbc->error_messages.emplace_back("Optional feature not supported.");
-			return SQL_ERROR;
+		case SQL_ATTR_TXN_ISOLATION: {
+			return SQL_SUCCESS;
+		}
 		default:
 			return SQL_ERROR;
 		}

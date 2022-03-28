@@ -42,9 +42,10 @@ duckdb_bind_internal(stmt::Stmt, i::Integer, val::UInt32) = duckdb_bind_uint32(s
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::UInt64) = duckdb_bind_uint64(stmt.handle, i, val);
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::Float32) = duckdb_bind_float(stmt.handle, i, val);
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::Float64) = duckdb_bind_double(stmt.handle, i, val);
-duckdb_bind_internal(stmt::Stmt, i::Integer, val::Date) = duckdb_bind_date(stmt.handle, i, ValueToDuckDB(val));
-duckdb_bind_internal(stmt::Stmt, i::Integer, val::Time) = duckdb_bind_time(stmt.handle, i, ValueToDuckDB(val));
-duckdb_bind_internal(stmt::Stmt, i::Integer, val::DateTime) = duckdb_bind_timestamp(stmt.handle, i, ValueToDuckDB(val));
+duckdb_bind_internal(stmt::Stmt, i::Integer, val::Date) = duckdb_bind_date(stmt.handle, i, value_to_duckdb(val));
+duckdb_bind_internal(stmt::Stmt, i::Integer, val::Time) = duckdb_bind_time(stmt.handle, i, value_to_duckdb(val));
+duckdb_bind_internal(stmt::Stmt, i::Integer, val::DateTime) =
+    duckdb_bind_timestamp(stmt.handle, i, value_to_duckdb(val));
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::Missing) = duckdb_bind_null(stmt.handle, i);
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::Nothing) = duckdb_bind_null(stmt.handle, i);
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::AbstractString) = duckdb_bind_varchar(stmt.handle, i, val);
@@ -57,7 +58,7 @@ function duckdb_bind_internal(stmt::Stmt, i::Integer, val::Any)
     throw(NotImplementedException("unsupported type for bind"))
 end
 
-function BindParameters(stmt::Stmt, params::DBInterface.StatementParams)
+function bind_parameters(stmt::Stmt, params::DBInterface.StatementParams)
     i = 1
     for param in params
         if duckdb_bind_internal(stmt, i, param) != DuckDBSuccess

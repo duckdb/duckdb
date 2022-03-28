@@ -121,7 +121,7 @@ struct NumericAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
-			if (!Value::DoubleIsValid(state->value)) {
+			if (!Value::DoubleIsFinite(state->value)) {
 				throw OutOfRangeException("AVG is out of range!");
 			}
 			target[idx] = (state->value / state->count);
@@ -135,7 +135,7 @@ struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, Kaha
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
-			if (!Value::DoubleIsValid(state->value)) {
+			if (!Value::DoubleIsFinite(state->value)) {
 				throw OutOfRangeException("AVG is out of range!");
 			}
 			target[idx] = (state->value / state->count) + (state->err / state->count);

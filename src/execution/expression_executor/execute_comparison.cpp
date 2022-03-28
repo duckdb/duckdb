@@ -150,45 +150,63 @@ idx_t NestedSelector::Select<duckdb::GreaterThanEquals>(Vector &left, Vector &ri
 	return VectorOperations::NestedGreaterThanEquals(left, right, vcount, sel, count, true_sel, false_sel);
 }
 
-static inline idx_t SelectNotNull(VectorData &lvdata, VectorData &rvdata, const idx_t count,
-                                  OptionalSelection &false_vec, SelectionVector &maybe_vec) {
+static inline idx_t SelectNotNull(Vector &left, Vector &right, const idx_t count, const SelectionVector &sel,
+                                  SelectionVector &maybe_vec, OptionalSelection &false_opt) {
+
+	VectorData lvdata, rvdata;
+	left.Orrify(count, lvdata);
+	right.Orrify(count, rvdata);
+
+	auto &lmask = lvdata.validity;
+	auto &rmask = rvdata.validity;
 
 	// For top-level comparisons, NULL semantics are in effect,
 	// so filter out any NULLs
-	if (!lvdata.validity.AllValid() || !rvdata.validity.AllValid()) {
-		idx_t true_count = 0;
-		idx_t false_count = 0;
+	idx_t remaining = 0;
+	if (lmask.AllValid() && rmask.AllValid()) {
+		//	None are NULL, distinguish values.
 		for (idx_t i = 0; i < count; ++i) {
-			const auto lidx = lvdata.sel->get_index(i);
-			const auto ridx = rvdata.sel->get_index(i);
-			if (!lvdata.validity.RowIsValid(lidx) || !rvdata.validity.RowIsValid(ridx)) {
-				false_vec.Append(false_count, i);
-			} else {
-				maybe_vec.set_index(true_count++, i);
-			}
+			const auto idx = sel.get_index(i);
+			maybe_vec.set_index(remaining++, idx);
 		}
-		false_vec.Advance(false_count);
-
-		return true_count;
-	} else {
-		for (idx_t i = 0; i < count; ++i) {
-			maybe_vec.set_index(i, i);
-		}
-		return count;
+		return remaining;
 	}
+
+	// Slice the Vectors down to the rows that are not determined (i.e., neither is NULL)
+	SelectionVector slicer(count);
+	idx_t false_count = 0;
+	for (idx_t i = 0; i < count; ++i) {
+		const auto result_idx = sel.get_index(i);
+		const auto lidx = lvdata.sel->get_index(i);
+		const auto ridx = rvdata.sel->get_index(i);
+		if (!lmask.RowIsValid(lidx) || !rmask.RowIsValid(ridx)) {
+			false_opt.Append(false_count, result_idx);
+		} else {
+			//	Neither is NULL, distinguish values.
+			slicer.set_index(remaining, i);
+			maybe_vec.set_index(remaining++, result_idx);
+		}
+	}
+	false_opt.Advance(false_count);
+
+	if (remaining && remaining < count) {
+		left.Slice(slicer, remaining);
+		right.Slice(slicer, remaining);
+	}
+
+	return remaining;
 }
 
-static void ScatterSelection(SelectionVector *target, const idx_t count, const SelectionVector *sel,
-                             const SelectionVector &dense_vec) {
+static void ScatterSelection(SelectionVector *target, const idx_t count, const SelectionVector &dense_vec) {
 	if (target) {
 		for (idx_t i = 0; i < count; ++i) {
-			target->set_index(i, sel->get_index(dense_vec.get_index(i)));
+			target->set_index(i, dense_vec.get_index(i));
 		}
 	}
 }
 
 template <typename OP>
-static idx_t NestedSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t vcount,
+static idx_t NestedSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                    SelectionVector *true_sel, SelectionVector *false_sel) {
 	// The Select operations all use a dense pair of input vectors to partition
 	// a selection vector in a single pass. But to implement progressive comparisons,
@@ -196,47 +214,34 @@ static idx_t NestedSelectOperation(Vector &left, Vector &right, const SelectionV
 	// and then scatter the output selections when we are done.
 	SelectionVector owned_sel;
 	if (!sel) {
-		sel = FlatVector::IncrementalSelectionVector(vcount, owned_sel);
+		sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
 	}
 
-	VectorData lvdata, rvdata;
-	left.Orrify(vcount, lvdata);
-	right.Orrify(vcount, rvdata);
-
-	// Make real selections for progressive comparisons
-	SelectionVector true_vec(vcount);
+	// Make buffered selections for progressive comparisons
+	// TODO: Remove unnecessary allocations
+	SelectionVector true_vec(count);
 	OptionalSelection true_opt(&true_vec);
 
-	SelectionVector false_vec(vcount);
+	SelectionVector false_vec(count);
 	OptionalSelection false_opt(&false_vec);
 
-	SelectionVector maybe_vec(vcount);
-	auto count = SelectNotNull(lvdata, rvdata, vcount, false_opt, maybe_vec);
-	auto no_match_count = vcount - count;
+	SelectionVector maybe_vec(count);
 
-	// If everything was NULL, fill in false_sel with sel
-	if (count == 0) {
-		SelectionVector owned_flat_sel;
-		auto flat_sel = FlatVector::IncrementalSelectionVector(vcount, owned_sel);
-		ScatterSelection(false_sel, no_match_count, sel, *flat_sel);
-		return count;
-	}
+	// Handle NULL nested values
+	Vector l_not_null(left);
+	Vector r_not_null(right);
+
+	auto match_count = SelectNotNull(l_not_null, r_not_null, count, *sel, maybe_vec, false_opt);
+	auto no_match_count = count - match_count;
+	count = match_count;
 
 	//	Now that we have handled the NULLs, we can use the recursive nested comparator for the rest.
-	auto match_count = NestedSelector::Select<OP>(left, right, vcount, maybe_vec, count, true_opt, false_opt);
+	match_count = NestedSelector::Select<OP>(l_not_null, r_not_null, count, maybe_vec, count, true_opt, false_opt);
 	no_match_count += (count - match_count);
 
-	// Sort the optional selections if we would overwrite.
-	if (true_sel == sel) {
-		std::sort(true_vec.data(), true_vec.data() + match_count);
-	}
-	if (false_sel == sel) {
-		std::sort(false_vec.data(), false_vec.data() + no_match_count);
-	}
-
-	// Scatter the original selection to the output selections
-	ScatterSelection(true_sel, match_count, sel, true_vec);
-	ScatterSelection(false_sel, no_match_count, sel, false_vec);
+	// Copy the buffered selections to the output selections
+	ScatterSelection(true_sel, match_count, true_vec);
+	ScatterSelection(false_sel, no_match_count, false_vec);
 
 	return match_count;
 }

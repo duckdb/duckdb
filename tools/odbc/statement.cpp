@@ -258,8 +258,9 @@ SQLRETURN SQL_API SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQ
 		string table_filter = OdbcUtils::ParseStringFilter("\"TABLE_NAME\"", table_n, stmt->dbc->sql_attr_metadata_id);
 
 		auto table_tp = OdbcUtils::ReadString(table_type, name_length4);
-		table_tp = std::regex_replace(table_tp, std::regex("^('TABLE'|TABLE)"), "'BASE TABLE'");
-		table_tp = std::regex_replace(table_tp, std::regex(",[ \t]*('TABLE'|TABLE)"), ",'BASE TABLE'");
+		table_tp = std::regex_replace(table_tp, std::regex("('TABLE'|TABLE)"), "'BASE TABLE'");
+		table_tp = std::regex_replace(table_tp, std::regex("('VIEW'|VIEW)"), "'VIEW'");
+		table_tp = std::regex_replace(table_tp, std::regex("('%'|%)"), "'%'");
 
 		// special cases
 		if (catalog_n == std::string(SQL_ALL_CATALOGS) && name_length2 == 0 && name_length3 == 0) {
@@ -305,7 +306,6 @@ SQLRETURN SQL_API SQLColumns(SQLHSTMT statement_handle, SQLCHAR *catalog_name, S
                              SQLSMALLINT name_length3, SQLCHAR *column_name, SQLSMALLINT name_length4) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
 		// TODO see SQL_ATTR_METADATA_ID, parameters case
-
 		auto catalog_n = OdbcUtils::ReadString(catalog_name, name_length1);
 		string catalog_filter;
 		if (catalog_n.empty()) {
@@ -330,6 +330,7 @@ SQLRETURN SQL_API SQLColumns(SQLHSTMT statement_handle, SQLCHAR *catalog_name, S
 
 		string sql_columns =
 		    OdbcUtils::GetQueryDuckdbColumns(catalog_filter, schema_filter, table_filter, column_filter);
+
 		auto ret = duckdb::ExecDirectStmt(statement_handle, (SQLCHAR *)sql_columns.c_str(), sql_columns.size());
 		if (!SQL_SUCCEEDED(ret)) {
 			return ret;
@@ -349,6 +350,7 @@ SQLRETURN SQL_API SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column
 		}
 
 		duckdb::idx_t col_idx = column_number - 1;
+		auto desc_record = stmt->row_desc->GetIRD()->GetDescRecord(col_idx);
 
 		switch (field_identifier) {
 		case SQL_DESC_LABEL: {
@@ -393,8 +395,7 @@ SQLRETURN SQL_API SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column
 			return SQL_SUCCESS;
 		}
 		case SQL_DESC_DISPLAY_SIZE: {
-			auto ret =
-			    duckdb::ApiInfo::GetColumnSize(stmt->stmt->GetTypes()[col_idx], (SQLULEN *)numeric_attribute_ptr);
+			auto ret = duckdb::ApiInfo::GetColumnSize(stmt->stmt->GetTypes()[col_idx], numeric_attribute_ptr);
 			if (ret == SQL_ERROR) {
 				stmt->error_messages.emplace_back("Unsupported type for display size.");
 				return SQL_ERROR;
@@ -412,6 +413,29 @@ SQLRETURN SQL_API SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column
 			default:
 				*numeric_attribute_ptr = SQL_FALSE;
 			}
+			return SQL_SUCCESS;
+		}
+		case SQL_DESC_CONCISE_TYPE: {
+			if (numeric_attribute_ptr) {
+				duckdb::Store<SQLLEN>(desc_record->sql_desc_concise_type, (duckdb::data_ptr_t)numeric_attribute_ptr);
+			}
+			return SQL_SUCCESS;
+		}
+		case SQL_DESC_NULLABLE: {
+			if (numeric_attribute_ptr) {
+				duckdb::Store<SQLLEN>(desc_record->sql_desc_nullable, (duckdb::data_ptr_t)numeric_attribute_ptr);
+			}
+			return SQL_SUCCESS;
+		}
+		case SQL_DESC_PRECISION: {
+			if (numeric_attribute_ptr) {
+				duckdb::Store<SQLLEN>(desc_record->sql_desc_precision, (duckdb::data_ptr_t)numeric_attribute_ptr);
+			}
+			return SQL_SUCCESS;
+		}
+		case SQL_DESC_NAME: {
+			duckdb::OdbcUtils::WriteString(desc_record->sql_desc_name, (SQLCHAR *)character_attribute_ptr,
+			                               buffer_length, string_length_ptr);
 			return SQL_SUCCESS;
 		}
 		default:

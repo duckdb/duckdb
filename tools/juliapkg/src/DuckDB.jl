@@ -8,6 +8,7 @@ using Dates
 using DataFrames
 using Tables
 using UUIDs
+using FixedPointDecimals
 
 export DBInterface, DuckDBException
 

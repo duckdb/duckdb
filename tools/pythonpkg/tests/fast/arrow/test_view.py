@@ -16,6 +16,6 @@ class TestArrowView(object):
         duckdb_conn = duckdb.connect()
         userdata_parquet_table = pyarrow.parquet.read_table(parquet_filename)
         userdata_parquet_table.validate(full=True)
-        duckdb_conn.from_arrow_table(userdata_parquet_table).create_view('arrow_view')
+        duckdb_conn.from_arrow(userdata_parquet_table).create_view('arrow_view')
         assert (duckdb_conn.execute("PRAGMA show_tables").fetchone() == ('arrow_view',))
         assert(duckdb_conn.execute("select avg(salary)::INT from arrow_view").fetchone()[0] == 149005)
