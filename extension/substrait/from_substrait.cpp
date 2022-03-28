@@ -58,7 +58,7 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformLiteralExpr(const subst
 	case substrait::Expression_Literal::LiteralTypeCase::kI64:
 		dval = Value::BIGINT(slit.i64());
 		break;
-	case substrait::Expression_Literal::LiteralTypeCase::kDate:{
+	case substrait::Expression_Literal::LiteralTypeCase::kDate: {
 		date_t date(slit.date());
 		dval = Value::DATE(date);
 		break;
@@ -94,7 +94,7 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 		return make_unique<CastExpression>(cast.cast_type, move(children[0]));
 	} else if (function_name == "or") {
 		return make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, move(children));
-	} else if (function_name == "lessthan") {
+	} else if (function_name == "lessthan" || function_name == "less") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, move(children[0]),
 		                                         move(children[1]));
 	} else if (function_name == "equal" || function_name == "equals") {
@@ -105,16 +105,26 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 	} else if (function_name == "lessthanequal") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, move(children[0]),
 		                                         move(children[1]));
-	} else if (function_name == "greaterthanequal") {
+	} else if (function_name == "greaterthanequal" || function_name == "greater_equal") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, move(children[0]),
 		                                         move(children[1]));
-	} else if (function_name == "greaterthan") {
+	} else if (function_name == "greaterthan" || function_name == "greater") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN, move(children[0]),
 		                                         move(children[1]));
 	} else if (function_name == "is_not_null") {
 		return make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, move(children[0]));
+	} else if (function_name == "between") {
+		return make_unique<BetweenExpression>(move(children[0]), move(children[1]), move(children[2]));
 	}
-
+	if (function_name == "multiply") {
+		function_name = "*";
+	}
+	if (function_name == "subtract") {
+		function_name = "-";
+	}
+	if (function_name == "add") {
+		function_name = "+";
+	}
 	return make_unique<FunctionExpression>(function_name, move(children));
 }
 
@@ -254,13 +264,12 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformProjectOp(const substrait::Rel 
 shared_ptr<Relation> SubstraitToDuckDB::TransformAggregateOp(const substrait::Rel &sop) {
 	vector<unique_ptr<ParsedExpression>> groups, expressions;
 
-	if (sop.aggregate().groupings_size() > 1) {
-		throw InternalException("Only single grouping sets are supported for now");
-	}
 	if (sop.aggregate().groupings_size() > 0) {
-		for (auto &sgrpexpr : sop.aggregate().groupings(0).grouping_expressions()) {
-			groups.push_back(TransformExpr(sgrpexpr));
-			expressions.push_back(TransformExpr(sgrpexpr));
+		for (auto &sgrp : sop.aggregate().groupings()) {
+			for (auto &sgrpexpr : sgrp.grouping_expressions()) {
+				groups.push_back(TransformExpr(sgrpexpr));
+				expressions.push_back(TransformExpr(sgrpexpr));
+			}
 		}
 	}
 
@@ -269,8 +278,11 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformAggregateOp(const substrait::Re
 		for (auto &sarg : smeas.measure().args()) {
 			children.push_back(TransformExpr(sarg));
 		}
-		expressions.push_back(
-		    make_unique<FunctionExpression>(FindFunction(smeas.measure().function_reference()), move(children)));
+		auto function_name = FindFunction(smeas.measure().function_reference());
+		if (function_name == "count" && children.empty()) {
+			function_name = "count_star";
+		}
+		expressions.push_back(make_unique<FunctionExpression>(function_name, move(children)));
 	}
 
 	return make_shared<AggregateRelation>(TransformOp(sop.aggregate().input()), move(expressions), move(groups));

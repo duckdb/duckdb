@@ -191,6 +191,9 @@ void AvgFun::RegisterFunction(BuiltinFunctions &set) {
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(avg);
 
+	avg.name = "mean";
+	set.AddFunction(avg);
+
 	AggregateFunctionSet favg("favg");
 	favg.AddFunction(AggregateFunction::UnaryAggregate<KahanAvgState, double, double, KahanAverageOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
