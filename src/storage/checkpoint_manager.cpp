@@ -24,6 +24,7 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -172,38 +173,41 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 		}
 	});
 
+	FieldWriter writer(*metadata_writer);
+	writer.WriteField<uint32_t>(custom_types.size());
+	writer.WriteField<uint32_t>(sequences.size());
+	writer.WriteField<uint32_t>(tables.size());
+	writer.WriteField<uint32_t>(views.size());
+	writer.WriteField<uint32_t>(macros.size());
+	writer.WriteField<uint32_t>(table_macros.size());
+	writer.Finalize();
+
 	// write the custom_types
-	metadata_writer->Write<uint32_t>(custom_types.size());
 	for (auto &custom_type : custom_types) {
 		WriteType(*custom_type);
 	}
 
 	// write the sequences
-	metadata_writer->Write<uint32_t>(sequences.size());
 	for (auto &seq : sequences) {
 		WriteSequence(*seq);
 	}
 	// reorder tables because of foreign key constraint
 	ReorderTableEntries(tables);
 	// now write the tables
-	metadata_writer->Write<uint32_t>(tables.size());
 	for (auto &table : tables) {
 		WriteTable(*table);
 	}
 	// now write the views
-	metadata_writer->Write<uint32_t>(views.size());
 	for (auto &view : views) {
 		WriteView(*view);
 	}
 
 	// finally write the macro's
-	metadata_writer->Write<uint32_t>(macros.size());
 	for (auto &macro : macros) {
 		WriteMacro(*macro);
 	}
 
 	// finally write the macro's
-	metadata_writer->Write<uint32_t>(table_macros.size());
 	for (auto &macro : table_macros) {
 		WriteTableMacro(*macro);
 	}
@@ -218,35 +222,39 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateSchema(context, info.get());
 
+	// first read all the counts
+	FieldReader field_reader(reader);
+	uint32_t enum_count = field_reader.ReadRequired<uint32_t>();
+	uint32_t seq_count = field_reader.ReadRequired<uint32_t>();
+	uint32_t table_count = field_reader.ReadRequired<uint32_t>();
+	uint32_t view_count = field_reader.ReadRequired<uint32_t>();
+	uint32_t macro_count = field_reader.ReadRequired<uint32_t>();
+	uint32_t table_macro_count = field_reader.ReadRequired<uint32_t>();
+	field_reader.Finalize();
+
 	// now read the enums
-	uint32_t enum_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < enum_count; i++) {
 		ReadType(context, reader);
 	}
 
 	// read the sequences
-	uint32_t seq_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < seq_count; i++) {
 		ReadSequence(context, reader);
 	}
 	// read the table count and recreate the tables
-	uint32_t table_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < table_count; i++) {
 		ReadTable(context, reader);
 	}
 	// now read the views
-	uint32_t view_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < view_count; i++) {
 		ReadView(context, reader);
 	}
 
 	// finally read the macro's
-	uint32_t macro_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < macro_count; i++) {
 		ReadMacro(context, reader);
 	}
 
-	uint32_t table_macro_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < table_macro_count; i++) {
 		ReadTableMacro(context, reader);
 	}

@@ -77,7 +77,7 @@ public:
 		return aux_data.get();
 	}
 
-	void SetAuxiliaryData(unique_ptr<VectorAuxiliaryData> aux_data_p, VectorAuxiliaryDataType aux_type_p) {
+	void SetAuxiliaryData(unique_ptr<VectorAuxiliaryData> aux_data_p) {
 		aux_data = move(aux_data_p);
 	}
 

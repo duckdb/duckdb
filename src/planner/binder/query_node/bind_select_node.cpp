@@ -55,6 +55,9 @@ unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 		result->limit = BindDelimiter(context, move(limit_mod.limit), LogicalType::BIGINT, val);
 		if (!result->limit) {
 			result->limit_val = val.GetValue<int64_t>();
+			if (result->limit_val < 0) {
+				throw BinderException("LIMIT cannot be negative");
+			}
 		}
 	}
 	if (limit_mod.offset) {
@@ -62,6 +65,9 @@ unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 		result->offset = BindDelimiter(context, move(limit_mod.offset), LogicalType::BIGINT, val);
 		if (!result->offset) {
 			result->offset_val = val.GetValue<int64_t>();
+			if (result->offset_val < 0) {
+				throw BinderException("OFFSET cannot be negative");
+			}
 		}
 	}
 	return move(result);

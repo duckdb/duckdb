@@ -10,7 +10,7 @@ mutable struct DFBindInfo
     end
 end
 
-function DFResultType(df, entry)
+function df_result_type(df, entry)
     column_type = eltype(df[!, entry])
     if typeof(column_type) == Union
         # remove Missing type from the union
@@ -19,7 +19,7 @@ function DFResultType(df, entry)
     return column_type
 end
 
-function DFJuliaType(column_type)
+function df_julia_type(column_type)
     if column_type == Date
         column_type = Int32
     elseif column_type == Time
@@ -30,158 +30,165 @@ function DFJuliaType(column_type)
     return column_type
 end
 
-ValueToDuckDB(val::T) where {T <: Date} = convert(Int32, Dates.date2epochdays(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
-ValueToDuckDB(val::T) where {T <: Time} = convert(Int64, Dates.value(val) / 1000)
-ValueToDuckDB(val::T) where {T <: DateTime} =
+value_to_duckdb(val::T) where {T <: Date} =
+    convert(Int32, Dates.date2epochdays(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
+value_to_duckdb(val::T) where {T <: Time} = convert(Int64, Dates.value(val) / 1000)
+value_to_duckdb(val::T) where {T <: DateTime} =
     convert(Int64, (Dates.datetime2epochms(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_MS) * 1000)
-function ValueToDuckDB(val::T) where {T <: AbstractString}
+function value_to_duckdb(val::T) where {T <: AbstractString}
     throw(
         NotImplementedException(
-            "Cannot use ValueToDuckDB to convert string values - use DuckDB.AssignStringElement on a vector instead"
+            "Cannot use value_to_duckdb to convert string values - use DuckDB.assign_string_element on a vector instead"
         )
     )
 end
-function ValueToDuckDB(val::T) where {T}
+function value_to_duckdb(val::T) where {T}
     return val
 end
 
-function DFScanColumn(
+function df_scan_column(
     df::DataFrame,
     df_offset::Int64,
     col_idx::Int64,
+    result_idx::Int64,
     scan_count::Int64,
     output::DuckDB.DataChunk,
     ::Type{T}
 ) where {T}
-    vector = DuckDB.GetVector(output, col_idx)
-    result_array::Vector{T} = DuckDB.GetArray(vector, T)
-    validity = DuckDB.GetValidity(vector)
+    vector = DuckDB.get_vector(output, result_idx)
+    result_array::Vector{T} = DuckDB.get_array(vector, T)
+    validity = DuckDB.get_validity(vector)
     input_column = df[!, col_idx]
     for i in 1:scan_count
         if input_column[df_offset + i] === missing
-            DuckDB.SetInvalid(validity, i)
+            DuckDB.setinvalid(validity, i)
         else
-            result_array[i] = ValueToDuckDB(input_column[df_offset + i])
+            result_array[i] = value_to_duckdb(input_column[df_offset + i])
         end
     end
 end
 
-function DFScanStringColumn(
+function df_scan_string_column(
     df::DataFrame,
     df_offset::Int64,
     col_idx::Int64,
+    result_idx::Int64,
     scan_count::Int64,
     output::DuckDB.DataChunk,
     ::Type{T}
 ) where {T}
-    vector = DuckDB.GetVector(output, col_idx)
-    validity = DuckDB.GetValidity(vector)
+    vector = DuckDB.get_vector(output, result_idx)
+    validity = DuckDB.get_validity(vector)
     input_column = df[!, col_idx]
     for i in 1:scan_count
         if input_column[df_offset + i] === missing
-            DuckDB.SetInvalid(validity, i)
+            DuckDB.setinvalid(validity, i)
         else
-            DuckDB.AssignStringElement(vector, i, input_column[df_offset + i])
+            DuckDB.assign_string_element(vector, i, input_column[df_offset + i])
         end
     end
 end
 
-function DFScanFunction(df, entry)
-    result_type = DFResultType(df, entry)
+function df_scan_function(df, entry)
+    result_type = df_result_type(df, entry)
     if result_type <: AbstractString
-        return DFScanStringColumn
+        return df_scan_string_column
     end
-    return DFScanColumn
+    return df_scan_column
 end
 
-function DFBindFunction(info::DuckDB.BindInfo)
+function df_bind_function(info::DuckDB.BindInfo)
     # fetch the df name from the function parameters
-    parameter = DuckDB.GetParameter(info, 0)
-    name = DuckDB.GetValue(parameter, String)
+    parameter = DuckDB.get_parameter(info, 0)
+    name = DuckDB.getvalue(parameter, String)
     # fetch the actual df using the function name
-    extra_data = DuckDB.GetExtraData(info)
+    extra_data = DuckDB.get_extra_data(info)
     df = extra_data[name]
 
     # register the result columns
     result_types::Vector{Type} = Vector()
     scan_functions::Vector{Function} = Vector()
     for entry in names(df)
-        result_type = DFResultType(df, entry)
-        scan_function = DFScanFunction(df, entry)
-        push!(result_types, DFJuliaType(result_type))
+        result_type = df_result_type(df, entry)
+        scan_function = df_scan_function(df, entry)
+        push!(result_types, df_julia_type(result_type))
         push!(scan_functions, scan_function)
 
-        DuckDB.AddResultColumn(info, entry, result_type)
+        DuckDB.add_result_column(info, entry, result_type)
     end
     return DFBindInfo(df, result_types, scan_functions)
 end
 
 mutable struct DFInitInfo
     pos::Int64
+    columns::Vector{Int64}
 
-    function DFInitInfo()
-        return new(0)
+    function DFInitInfo(columns)
+        return new(0, columns)
     end
 end
 
-function DFInitFunction(info::DuckDB.InitInfo)
-    return DFInitInfo()
+function df_init_function(info::DuckDB.InitInfo)
+    return DFInitInfo(DuckDB.get_projected_columns(info))
 end
 
-function DFScanFunction(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
-    bind_info = DuckDB.GetBindInfo(info, DFBindInfo)
-    init_info = DuckDB.GetInitInfo(info, DFInitInfo)
+function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
+    bind_info = DuckDB.get_bind_info(info, DFBindInfo)
+    init_info = DuckDB.get_init_info(info, DFInitInfo)
 
-    column_count = size(names(bind_info.df), 1)
     row_count = size(bind_info.df, 1)
     scan_count = DuckDB.VECTOR_SIZE
     if init_info.pos + scan_count >= row_count
         scan_count = row_count - init_info.pos
     end
 
-    for col_idx in 1:column_count
+    result_idx = 1
+    for col_idx in init_info.columns
         bind_info.scan_functions[col_idx](
             bind_info.df,
             init_info.pos,
             col_idx,
+            result_idx,
             scan_count,
             output,
             bind_info.result_types[col_idx]
         )
+        result_idx += 1
     end
     init_info.pos += scan_count
-    DuckDB.SetSize(output, scan_count)
+    DuckDB.set_size(output, scan_count)
     return
 end
 
-function RegisterDataFrame(con::Connection, df::DataFrame, name::AbstractString)
-    con.db.data_frames[name] = df
+function register_data_frame(con::Connection, df::DataFrame, name::AbstractString)
+    con.db.registered_objects[name] = df
     DBInterface.execute(
         con,
         string("CREATE OR REPLACE VIEW \"", name, "\" AS SELECT * FROM julia_df_scan('", name, "')")
     )
     return
 end
-RegisterDataFrame(db::DB, df::DataFrame, name::AbstractString) = RegisterDataFrame(db.main_connection, df, name)
+register_data_frame(db::DB, df::DataFrame, name::AbstractString) = register_data_frame(db.main_connection, df, name)
 
-function UnregisterDataFrame(con::Connection, name::AbstractString)
-    pop!(con.db.data_frames, name)
+function unregister_data_frame(con::Connection, name::AbstractString)
+    pop!(con.db.registered_objects, name)
     DBInterface.execute(con, string("DROP VIEW IF EXISTS \"", name, "\""))
     return
 end
-UnregisterDataFrame(db::DB, name::AbstractString) = UnregisterDataFrame(db.main_connection, name)
+unregister_data_frame(db::DB, name::AbstractString) = unregister_data_frame(db.main_connection, name)
 
 
-function AddDataFrameScan(db::DB)
+function _add_data_frame_scan(db::DB)
     # add the data frame scan function
-    DuckDB.CreateTableFunction(
+    DuckDB.create_table_function(
         db.main_connection,
         "julia_df_scan",
         [String],
-        DFBindFunction,
-        DFInitFunction,
-        DFScanFunction,
-        db.handle.data_frames
+        df_bind_function,
+        df_init_function,
+        df_scan_function,
+        db.handle.registered_objects,
+        true
     )
     return
 end

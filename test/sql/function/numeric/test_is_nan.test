@@ -1,0 +1,33 @@
+# name: test/sql/function/numeric/test_is_nan.test
+# description: isnan test
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+foreach type FLOAT DOUBLE
+
+query III
+SELECT isnan(3::${type}), isnan('nan'::${type}), isnan(NULL::${type})
+----
+false	true	NULL
+
+statement ok
+CREATE TABLE floats(f ${type})
+
+statement ok
+INSERT INTO floats VALUES (3), ('nan'), ('inf'), ('-inf'), (NULL)
+
+query IIII
+SELECT f, isnan(f), isinf(f), isfinite(f) FROM floats ORDER BY f
+----
+NULL	NULL	NULL	NULL
+-inf	False	True	False
+3	False	False	True
+inf	False	True	False
+nan	True	False	False
+
+statement ok
+DROP TABLE floats
+
+endloop

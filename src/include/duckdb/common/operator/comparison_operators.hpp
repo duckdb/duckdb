@@ -30,15 +30,17 @@ struct Equals {
 struct NotEquals {
 	template <class T>
 	static inline bool Operation(T left, T right) {
-		return left != right;
+		return !Equals::Operation(left, right);
 	}
 };
+
 struct GreaterThan {
 	template <class T>
 	static inline bool Operation(T left, T right) {
 		return left > right;
 	}
 };
+
 struct GreaterThanEquals {
 	template <class T>
 	static inline bool Operation(T left, T right) {
@@ -49,15 +51,31 @@ struct GreaterThanEquals {
 struct LessThan {
 	template <class T>
 	static inline bool Operation(T left, T right) {
-		return left < right;
+		return GreaterThan::Operation(right, left);
 	}
 };
+
 struct LessThanEquals {
 	template <class T>
 	static inline bool Operation(T left, T right) {
-		return left <= right;
+		return GreaterThanEquals::Operation(right, left);
 	}
 };
+
+template <>
+bool Equals::Operation(float left, float right);
+template <>
+bool Equals::Operation(double left, double right);
+
+template <>
+bool GreaterThan::Operation(float left, float right);
+template <>
+bool GreaterThan::Operation(double left, double right);
+
+template <>
+bool GreaterThanEquals::Operation(float left, float right);
+template <>
+bool GreaterThanEquals::Operation(double left, double right);
 
 // Distinct semantics are from Postgres record sorting. NULL = NULL and not-NULL < NULL
 // Deferring to the non-distinct operations removes the need for further specialisation.
@@ -65,14 +83,14 @@ struct LessThanEquals {
 struct DistinctFrom {
 	template <class T>
 	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
-		return (left_null != right_null) || (!left_null && !right_null && (left != right));
+		return (left_null != right_null) || (!left_null && !right_null && NotEquals::Operation(left, right));
 	}
 };
 
 struct NotDistinctFrom {
 	template <class T>
 	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
-		return (left_null && right_null) || (!left_null && !right_null && (left == right));
+		return (left_null && right_null) || (!left_null && !right_null && Equals::Operation(left, right));
 	}
 };
 

@@ -123,6 +123,7 @@ static BOOL RemoveMyDriver(const char *drivername) {
 	rc = SHGetValue(HKEY_LOCAL_MACHINE, buf, "UsageCount", &valtype, &usagecount, &valsize);
 	if (rc == ERROR_FILE_NOT_FOUND) {
 		/* not installed, do nothing */
+		PrintInfoMsg(drivername, "Driver removed already.", 0);
 		exit(0);
 	}
 	if (rc != ERROR_SUCCESS) {
@@ -234,13 +235,14 @@ static BOOL Uninstall(const char *dsn, const char *drivername) {
 	return TRUE;
 }
 
-void ElevateToAdminPrivileges() {
+void ElevatePrivilegesAsAdmin(char **parameters) {
 	char szPath[MAX_PATH];
 	if (GetModuleFileName(NULL, szPath, ARRAYSIZE(szPath))) {
 		// Launch itself as admin
 		SHELLEXECUTEINFO sei = {sizeof(sei)};
 		sei.lpVerb = "runas";
 		sei.lpFile = szPath;
+		sei.lpParameters = *parameters;
 		sei.hwnd = NULL;
 		sei.nShow = SW_NORMAL;
 		if (!ShellExecuteEx(&sei)) {
@@ -257,10 +259,28 @@ void ElevateToAdminPrivileges() {
 	}
 }
 
+void CopyParameters(int argc, char **argv, char **parameters) {
+	size_t alloc_size, last_alloc_pos = 0;
+	for (int i = 1; i < argc; i++) {
+		alloc_size = strlen(argv[i]) + 1;
+		*parameters = (char *)realloc(*parameters, alloc_size);
+		strcat(*parameters, argv[i]);
+		if ((i + 1) != argc) {
+			strcat(*parameters, " ");
+		}
+	}
+}
+
 int main(int argc, char **argv) {
 	if (argc > 5) {
 		PrintMsg(argv[0], "/CI [/Install | /Uninstall]", 0);
 		exit(1);
+	}
+
+	char *parameters = NULL;
+	if (!IsUserAnAdmin()) {
+		CopyParameters(argc, argv, &parameters);
+		ElevatePrivilegesAsAdmin(&parameters);
 	}
 
 	char *install_cmd = "/Install";
@@ -275,10 +295,6 @@ int main(int argc, char **argv) {
 		if (is_ci) {
 			show_msg_box = false;
 		}
-	}
-
-	if (!IsUserAnAdmin()) {
-		ElevateToAdminPrivileges();
 	}
 
 	/* after /Install or /Uninstall we optionally accept the DSN and the driver name */
@@ -327,7 +343,6 @@ int main(int argc, char **argv) {
 			exit(1);
 		} else {
 			PrintInfoMsg(argv[0], "ODBC Installation completed successfully", 0);
-			exit(0);
 		}
 	} else if (strcmp("/Uninstall", cmd) == 0) {
 		/* remove file we've installed in previous versions of this program */
@@ -339,11 +354,13 @@ int main(int argc, char **argv) {
 			exit(1);
 		} else {
 			PrintInfoMsg(argv[0], "ODBC Uninstall completed successfully", 0);
-			exit(0);
 		}
 	} else {
 		PrintMsg(argv[0], "[/Install | /Uninstall]", 0);
 		exit(1);
+	}
+	if (parameters) {
+		free(parameters);
 	}
 	return 0;
 }

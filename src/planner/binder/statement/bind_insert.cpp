@@ -130,57 +130,15 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	if (!stmt.returning_list.empty()) {
 		insert->return_chunk = true;
-		// clear result type and names because returning list will update them
 		result.types.clear();
 		result.names.clear();
-
 		auto insert_table_index = GenerateTableIndex();
 		insert->table_index = insert_table_index;
+		unique_ptr<LogicalOperator> index_as_logicaloperator = move(insert);
 
-		auto binder = Binder::CreateBinder(context);
-		auto types = table->GetTypes();
-		vector<std::string> names;
-		for (auto &col : table->columns) {
-			names.push_back(col.name);
-		}
-
-		binder->bind_context.AddGenericBinding(insert->table_index, stmt.table, names, types);
-		ReturningBinder returning_binder(*binder, context);
-
-		unique_ptr<LogicalOperator> insert_as_logicaloperator = move(insert);
-
-		vector<unique_ptr<Expression>> projection_expressions;
-		LogicalType result_type;
-		for (auto &returning_expr : stmt.returning_list) {
-			auto expr_type = returning_expr->GetExpressionType();
-			if (expr_type == ExpressionType::STAR) {
-				auto generated_star_list = vector<unique_ptr<ParsedExpression>>();
-				binder->bind_context.GenerateAllColumnExpressions((StarExpression &)*returning_expr,
-				                                                  generated_star_list);
-
-				for (auto &star_column : generated_star_list) {
-					auto star_expr = returning_binder.Bind(star_column, &result_type);
-					result.types.push_back(result_type);
-					result.names.push_back(star_expr->GetName());
-					projection_expressions.push_back(move(star_expr));
-				}
-			} else {
-				auto expr = returning_binder.Bind(returning_expr, &result_type);
-				result.names.push_back(expr->GetName());
-				result.types.push_back(result_type);
-				projection_expressions.push_back(move(expr));
-			}
-		}
-
-		auto projection = make_unique<LogicalProjection>(GenerateTableIndex(), move(projection_expressions));
-		projection->AddChild(move(insert_as_logicaloperator));
-		result.plan = move(projection);
-		D_ASSERT(result.types.size() == result.names.size());
-		this->allow_stream_result = true;
-		return result;
+		return BindReturning(move(stmt.returning_list), table, insert_table_index, move(index_as_logicaloperator),
+		                     move(result));
 	} else {
-		insert->table_index = 0;
-		insert->return_chunk = false;
 		D_ASSERT(result.types.size() == result.names.size());
 		result.plan = move(insert);
 		this->allow_stream_result = false;
