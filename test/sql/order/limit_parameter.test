@@ -49,3 +49,27 @@ EXECUTE v1(5)
 9998
 9997
 9996
+
+statement ok
+PREPARE v1 AS SELECT * FROM generate_series(0, 10000, 1) tbl(i) ORDER BY i DESC LIMIT ?::VARCHAR %
+
+query I
+EXECUTE v1('0.05')
+----
+10000
+9999
+9998
+9997
+9996
+
+statement ok
+CREATE TABLE doubles AS SELECT 0.05 d
+
+query I
+SELECT * FROM generate_series(0, 10000, 1) tbl(i) ORDER BY i DESC LIMIT (SELECT d FROM doubles) %
+----
+10000
+9999
+9998
+9997
+9996
