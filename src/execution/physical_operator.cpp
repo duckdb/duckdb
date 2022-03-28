@@ -32,8 +32,12 @@ unique_ptr<OperatorState> PhysicalOperator::GetOperatorState(ClientContext &cont
 	return make_unique<OperatorState>();
 }
 
+unique_ptr<GlobalOperatorState> PhysicalOperator::GetGlobalOperatorState(ClientContext &context) const {
+	return make_unique<GlobalOperatorState>();
+}
+
 OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                             OperatorState &state) const {
+                                             GlobalOperatorState &gstate, OperatorState &state) const {
 	throw InternalException("Calling Execute on a node that is not an operator!");
 }
 // LCOV_EXCL_STOP

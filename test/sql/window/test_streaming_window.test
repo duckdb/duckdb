@@ -131,3 +131,33 @@ query TT
 explain select last_value(i) over (order by j), first_value(i) over () from integers
 ----
 physical_plan	<REGEX>:.*STREAMING_WINDOW.*WINDOW.*
+
+
+statement ok
+CREATE TABLE v1(id bigint);
+
+statement ok
+CREATE TABLE v2(id bigint);
+
+statement ok
+INSERT INTO v1 VALUES (11),  (12),  (13);
+
+statement ok
+INSERT INTO v2 VALUES (21),  (22);
+
+statement ok
+CREATE VIEW vertices_view AS
+  SELECT * FROM v1
+  UNION ALL
+  SELECT * FROM v2;
+
+query II
+SELECT id AS sparse_id, row_number() OVER () AS rnum
+FROM vertices_view;
+----
+11	1
+12	2
+13	3
+21	4
+22	5
+
