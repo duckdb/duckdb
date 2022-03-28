@@ -589,3 +589,8 @@ select channel,i_brand_id,sum_sales,number_sales from mytable;
      ''',
      extra_commands=['-csv', ':memory:'],
      err='''42''')
+
+     test('''
+     copy (select 42) to '/dev/stdout
+     ''',
+     out='''42''')
