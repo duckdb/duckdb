@@ -41,7 +41,7 @@ struct FlattenDependentJoins {
 
 private:
 	unique_ptr<LogicalOperator> PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan,
-	                                                          bool parent_propagate_null_values = true);
+	                                                          bool &parent_propagate_null_values);
 };
 
 } // namespace duckdb
