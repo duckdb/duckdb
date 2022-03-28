@@ -4,6 +4,7 @@
 #include "duckdb/common/arrow_wrapper.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/table_function.hpp"

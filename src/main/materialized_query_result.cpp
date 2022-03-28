@@ -1,4 +1,5 @@
 #include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
