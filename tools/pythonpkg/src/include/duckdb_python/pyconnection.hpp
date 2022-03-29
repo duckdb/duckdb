@@ -84,7 +84,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromArrowTable(py::object &table, const idx_t rows_per_tuple = 1000000);
 
-	unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
+	unique_ptr<DuckDBPyRelation> FromSubstrait(py::str &proto);
 
 	unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query);
 

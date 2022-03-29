@@ -18,7 +18,10 @@
 
 namespace duckdb {
 SubstraitToDuckDB::SubstraitToDuckDB(Connection &con_p, string &serialized) : con(con_p) {
-	plan.ParseFromString(serialized);
+	auto sucess = plan.ParseFromString(serialized);
+	if (!sucess){
+		throw std::runtime_error("Was not possible to convert binary into Substrait plan");
+	}
 	for (auto &sext : plan.extensions()) {
 		if (!sext.has_extension_function()) {
 			continue;
@@ -358,6 +361,7 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformRootOp(const substrait::RelRoot
 }
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformPlan() {
+	D_ASSERT(!plan.relations().empty());
 	return TransformRootOp(plan.relations(0).root());
 }
 
