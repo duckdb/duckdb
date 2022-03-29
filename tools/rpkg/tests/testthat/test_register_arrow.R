@@ -27,6 +27,43 @@ test_that("duckdb_register_arrow() works", {
   #   expect_error(duckdb_register_arrow(con, "asdf", data.frame()))
 })
 
+test_that("duckdb_register_arrow() works with record_batch_readers", {
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  res <- arrow::read_parquet("data/userdata1.parquet", as_data_frame = TRUE)
+  res <- arrow::record_batch(res)
+  duckdb::duckdb_register_arrow(con, "myreader", res)
+  res1 <- dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 10")
+  res2 <- dbGetQuery(con, "SELECT first_name, last_name FROM parquet_scan('data/userdata1.parquet') LIMIT 10")
+  expect_true(identical(res1, res2))
+  # we can re-read
+  res3 <- dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 10")
+  expect_true(identical(res2, res3))
+  duckdb::duckdb_unregister_arrow(con, "myreader")
+  # cant read after unregister
+  expect_error(dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 100"))
+})
+
+test_that("duckdb_register_arrow() works with scanner", {
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  res <- arrow::read_parquet("data/userdata1.parquet", as_data_frame = FALSE)
+  res <- arrow::Scanner$create(res)
+  duckdb::duckdb_register_arrow(con, "myreader", res)
+  res1 <- dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 10")
+  res2 <- dbGetQuery(con, "SELECT first_name, last_name FROM parquet_scan('data/userdata1.parquet') LIMIT 10")
+  expect_true(identical(res1, res2))
+  # we can re-read
+  res3 <- dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 10")
+  expect_true(identical(res2, res3))
+  duckdb::duckdb_unregister_arrow(con, "myreader")
+  # cant read after unregister
+  expect_error(dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 100"))
+})
+
+
 test_that("duckdb_register_arrow() works with datasets", {
   con <- dbConnect(duckdb::duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
