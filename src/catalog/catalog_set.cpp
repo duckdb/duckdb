@@ -279,10 +279,10 @@ void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
 			auto index = mapping_entry->second->index;
 			auto entry = entries.find(index);
 			D_ASSERT(entry != entries.end());
-			D_ASSERT(entry->second.get() == parent);
-
-			mapping.erase(mapping_entry);
-			entries.erase(entry);
+			if (entry->second.get() == parent) {
+				mapping.erase(mapping_entry);
+				entries.erase(entry);
+			}
 		}
 	}
 }
