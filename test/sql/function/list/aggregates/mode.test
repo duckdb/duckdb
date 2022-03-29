@@ -1,0 +1,116 @@
+# name: test/sql/function/list/aggregates/mode.test
+# description: Test the list_mode aggregate function
+# group: [aggregates]
+
+# incorrect usage
+statement error
+select list_mode()
+
+# integers
+statement ok
+CREATE TABLE range AS SELECT LIST(2) AS i FROM range(100) t1(i)
+
+query I
+SELECT list_mode(i) FROM range;
+----
+2
+
+# strings
+statement ok
+create table names (name string[])
+
+statement ok
+insert into names values (['pedro', 'pedro', 'pedro', 'hannes', 'hannes', 'mark', NULL]);
+
+query I
+select list_mode(name) from names;
+----
+pedro
+
+require vector_size 512
+
+# temporal types
+
+# date
+statement ok
+create table dates (v date[])
+
+statement ok
+insert into dates values (['2021-05-02', '2021-05-02', '2021-05-02', '2020-02-29', '2020-02-29', '2004-09-01', NULL]);
+
+query I
+select list_mode(v) from dates;
+----
+2021-05-02
+
+# time
+statement ok
+create table times (v time[])
+
+statement ok
+insert into times values (['12:11:49.5', '12:11:49.5', '12:11:49.5', '06:30:00', '06:30:00', '21:15:22', NULL]);
+
+query I
+select list_mode(v) from times;
+----
+12:11:49.5
+
+# timestamp
+statement ok
+create table timestamps (v timestamp[])
+
+statement ok
+insert into timestamps values (['2021-05-02 12:11:49.5', '2021-05-02 12:11:49.5', '2021-05-02 12:11:49.5',
+    '2020-02-29 06:30:00', '2020-02-29 06:30:00', '2004-09-01 21:15:22', NULL]);
+
+query I
+select list_mode(v) from timestamps;
+----
+2021-05-02 12:11:49.5
+
+# interval
+statement ok
+create table intervals (v interval[])
+
+statement ok
+insert into intervals values
+    ([INTERVAL '5 months 2 days 12 hours 11 minutes 49 seconds',
+    INTERVAL '5 months 2 days 12 hours 11 minutes 49 seconds',
+    INTERVAL '5 months 2 days 12 hours 11 minutes 49 seconds',
+    INTERVAL '2 months 29 days 6 hours 30 minutes',
+    INTERVAL '2 months 29 days 6 hours 30 minutes',
+    INTERVAL '9 months 1 day 21 hours 15 minutes 22 seconds',
+    NULL]);
+
+query I
+select list_mode(v) from intervals;
+----
+5 months 2 days 12:11:49
+
+# huge integers
+statement ok
+create table hugeints (v hugeint[])
+
+statement ok
+insert into hugeints values ([5, 5, 5, 2, 2, 1, NULL]);
+
+query I
+select list_mode(v) from hugeints;
+----
+5
+
+# decimals
+statement ok
+create table aggr (v decimal(10,2)[]);
+
+statement ok
+insert into aggr values ([10, 10, 20, 21]), ([20, 20, 25, 30]), ([NULL]), ([]), (NULL);
+
+query I
+select list_mode(v) from aggr;
+----
+10
+20
+NULL
+NULL
+NULL

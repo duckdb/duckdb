@@ -32,9 +32,9 @@ CreateScalarFunctionInfo JSONFunctions::GetExtractFunction() {
 	// Generic extract function
 	ScalarFunctionSet set("json_extract");
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::JSON, ExtractFunction, false,
-	                               JSONReadFunctionData::Bind, nullptr, nullptr));
+	                               false, JSONReadFunctionData::Bind, nullptr, nullptr));
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::LIST(LogicalType::VARCHAR)},
-	                               LogicalType::LIST(LogicalType::JSON), ExtractManyFunction, false,
+	                               LogicalType::LIST(LogicalType::JSON), ExtractManyFunction, false, false,
 	                               JSONReadManyFunctionData::Bind, nullptr, nullptr));
 
 	return CreateScalarFunctionInfo(set);
@@ -44,9 +44,9 @@ CreateScalarFunctionInfo JSONFunctions::GetExtractStringFunction() {
 	// String extract function
 	ScalarFunctionSet set("json_extract_string");
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                               ExtractStringFunction, false, JSONReadFunctionData::Bind, nullptr, nullptr));
+	                               ExtractStringFunction, false, false, JSONReadFunctionData::Bind, nullptr, nullptr));
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::LIST(LogicalType::VARCHAR)},
-	                               LogicalType::LIST(LogicalType::VARCHAR), ExtractStringManyFunction, false,
+	                               LogicalType::LIST(LogicalType::VARCHAR), ExtractStringManyFunction, false, false,
 	                               JSONReadManyFunctionData::Bind, nullptr, nullptr));
 
 	return CreateScalarFunctionInfo(set);

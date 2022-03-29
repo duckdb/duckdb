@@ -3,7 +3,6 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
@@ -14,7 +13,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 
 #include <cmath>
-#include <map>
 
 namespace duckdb {
 

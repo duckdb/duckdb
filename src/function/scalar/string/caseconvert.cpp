@@ -175,7 +175,7 @@ void LowerFun::RegisterFunction(BuiltinFunctions &set) {
 void UpperFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"upper", "ucase"},
 	                ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<true>, false,
-	                               nullptr, nullptr, CaseConvertPropagateStats<true>));
+	                               false, nullptr, nullptr, CaseConvertPropagateStats<true>));
 }
 
 } // namespace duckdb

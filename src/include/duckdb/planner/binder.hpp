@@ -188,9 +188,10 @@ private:
 private:
 	//! Bind the default values of the columns of a table
 	void BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults);
-	//! Bind a delimiter value (LIMIT or OFFSET)
-	unique_ptr<Expression> BindDelimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
-	                                     const LogicalType &type, Value &delimiter_value);
+	//! Bind a limit value (LIMIT or OFFSET)
+	unique_ptr<Expression> BindDelimiter(ClientContext &context, OrderBinder &order_binder,
+	                                     unique_ptr<ParsedExpression> delimiter, const LogicalType &type,
+	                                     Value &delimiter_value);
 
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
@@ -251,10 +252,6 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundExpressionListRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCTERef &ref);
 
-	unique_ptr<LogicalOperator> BindTable(TableCatalogEntry &table, BaseTableRef &ref);
-	unique_ptr<LogicalOperator> BindView(ViewCatalogEntry &view, BaseTableRef &ref);
-	unique_ptr<LogicalOperator> BindTableOrView(BaseTableRef &ref);
-
 	BoundStatement BindCopyTo(CopyStatement &stmt);
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
 
@@ -262,8 +259,8 @@ private:
 	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index);
 
 	BoundStatement BindSummarize(ShowStatement &stmt);
-	unique_ptr<BoundResultModifier> BindLimit(LimitModifier &limit_mod);
-	unique_ptr<BoundResultModifier> BindLimitPercent(LimitPercentModifier &limit_mod);
+	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
+	unique_ptr<BoundResultModifier> BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);
 
 	unique_ptr<LogicalOperator> PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root);
