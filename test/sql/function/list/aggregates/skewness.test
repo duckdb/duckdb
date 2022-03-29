@@ -20,10 +20,9 @@ select list_skewness (i) from skew
 ----
 NULL
 
-query I
+# out of range
+statement error
 select list_skewness([-2e307, 0, 2e307])
-----
-NULL
 
 statement ok
 create table aggr(k int[], v decimal(10,2)[], v2 decimal(10, 2)[]);
