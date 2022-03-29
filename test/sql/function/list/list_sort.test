@@ -1,0 +1,8 @@
+# name: test/sql/function/list/list_sort.test
+# description: Test list_sort function
+# group: [list]
+
+query I
+SELECT list_sort([1, 2])
+----
+[2, 1]
