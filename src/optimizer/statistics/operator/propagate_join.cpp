@@ -15,7 +15,9 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		auto stats_left = PropagateExpression(condition.left);
 		auto stats_right = PropagateExpression(condition.right);
 		if (stats_left && stats_right) {
-			if (condition.null_values_are_equal && stats_left->CanHaveNull() && stats_right->CanHaveNull()) {
+			if ((condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
+			     condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) &&
+			    stats_left->CanHaveNull() && stats_right->CanHaveNull()) {
 				// null values are equal in this join, and both sides can have null values
 				// nothing to do here
 				continue;
@@ -103,7 +105,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		// anti joins have inverse statistics propagation
 		// (i.e. if we have an anti join on i: [0, 100] and j: [0, 25], the resulting stats are i:[25,100])
 		// for now we don't handle anti joins
-		if (condition.null_values_are_equal) {
+		if (condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
+		    condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// skip update when null values are equal (for now?)
 			continue;
 		}
