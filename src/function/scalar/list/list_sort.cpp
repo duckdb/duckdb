@@ -1,5 +1,6 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -37,6 +38,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &result_validity = FlatVector::Validity(result);
+	auto result_entries = FlatVector::GetData<list_entry_t>(result);
 
 	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
 		result_validity.SetInvalid(0);
@@ -46,7 +48,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (ListSortBindData &)*func_expr.bind_info;
 
-	// get the order and null order
+	// get the order, null order and data type
 	vector<OrderType> order_types;
 	order_types.emplace_back(info.order_type);
 	vector<OrderByNullType> null_orders;
@@ -67,14 +69,22 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	lists.Orrify(count, lists_data);
 	auto list_entries = (list_entry_t *)lists_data.data;
 
+	idx_t offset = 0;
 	for (idx_t i = 0; i < count; i++) {
 
 		auto lists_index = lists_data.sel->get_index(i);
 		const auto &list_entry = list_entries[lists_index];
+		result_entries[i].offset = offset;
+		result_entries[i].length = 0;
 
 		// nothing to do for this list
 		if (!lists_data.validity.RowIsValid(lists_index)) {
 			result_validity.SetInvalid(i);
+			continue;
+		}
+
+		// empty list, no sorting required
+		if (list_entry.length == 0) {
 			continue;
 		}
 
@@ -90,7 +100,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		DataChunk data_chunk;
 		data_chunk.InitializeEmpty(child_types);
 		data_chunk.data[0].Reference(slice);
-		data_chunk.SetCardinality(list_entries->length);
+		data_chunk.SetCardinality(list_entry.length);
 
 		// append the data chunk to a chunk collection
 		ChunkCollection chunk_collection;
@@ -102,12 +112,14 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		chunk_collection.Sort(order_types, null_orders, reordering.data());
 		chunk_collection.Reorder(reordering.data());
 
-		// append the data to the result vector
+		// append the sorted data to the result vector
+		result_entries[i].length += list_entry.length;
+		offset += result_entries[i].length;
 		auto sorted_vector = chunk_collection.GetChunk(0).data.data();
-		
-		// TODO: append the sorted data to the result vector
-		//ListVector::Append(result, ..)
+		ListVector::Append(result, *sorted_vector, list_entry.length);
 	}
+
+	D_ASSERT(ListVector::GetListSize(result) == offset);
 }
 
 static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,

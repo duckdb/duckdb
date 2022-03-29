@@ -2,7 +2,254 @@
 # description: Test list_sort function
 # group: [list]
 
+# test NULL or empty
+
+query I
+SELECT list_sort(NULL)
+----
+NULL
+
+query I
+SELECT list_sort([NULL])
+----
+[NULL]
+
+query I
+SELECT list_sort([])
+----
+[]
+
+query I
+SELECT list_sort([]) WHERE 1 = 0
+----
+
+# test incorrect syntax
+
+statement error
+SELECT list_sort()
+
+statement error
+SELECT list_sort(*)
+
+# test incorrect parameter type
+
+foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval json blob
+
+statement error
+SELECT list_sort(NULL::${type})
+
+endloop
+
+# other tests
+
 query I
 SELECT list_sort([1, 2])
 ----
 [2, 1]
+
+query I
+SELECT list_sort(list_sort([1, 2]))
+----
+[2, 1]
+
+query I
+SELECT list_sort([1, 3, NULL, 5, NULL, -5])
+----
+[NULL, NULL, 5, 3, 1, -5]
+
+statement ok
+CREATE TABLE integers AS SELECT LIST(i) AS i FROM range(1, 10, 1) t1(i)
+
+statement ok
+INSERT INTO integers VALUES ([NULL]), (NULL), ([])
+
+query I
+SELECT list_sort(i) FROM integers
+----
+[9, 8, 7, 6, 5, 4, 3, 2, 1]
+[NULL]
+NULL
+[]
+
+# test aliases
+
+query I
+SELECT array_sort([1, 2])
+----
+[2, 1]
+
+# test all types
+
+# BOOLEAN
+query I
+SELECT list_sort([True, False, NULL, True, True, NULL])
+----
+[NULL, NULL, True, True, True, False]
+
+query I
+SELECT list_sort([NULL::BOOLEAN])
+----
+[NULL]
+
+# VARCHAR
+query I
+SELECT list_sort(['aa', 'a', 'cd', NULL, '42'])
+----
+[NULL, cd, aa, a, 42]
+
+query I
+SELECT list_sort([NULL::VARCHAR])
+----
+[NULL]
+
+# INTEGER types
+foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+
+query I
+SELECT list_sort([1::${type}, NULL, 2::${type}])
+----
+[NULL, 2, 1]
+
+query I
+SELECT list_sort([NULL::${type}])
+----
+[NULL]
+
+endloop
+
+# FLOAT, DOUBLE and DECIMAL types
+
+foreach type float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
+
+statement ok
+SELECT list_sort([1::${type}])
+
+query I
+SELECT list_sort([NULL::${type}])
+----
+[NULL]
+
+endloop
+
+# TEMPORAL types
+
+# date
+query I
+SELECT list_sort(['2021-08-20'::DATE])
+----
+[2021-08-20]
+
+# time
+query I
+SELECT list_sort(['14:59:37'::TIME])
+----
+[14:59:37]
+
+# timestamp
+query I
+SELECT list_sort(['2021-08-20'::TIMESTAMP])
+----
+[2021-08-20 00:00:00]
+
+# timestamp s
+query I
+SELECT list_sort(['2021-08-20'::TIMESTAMP_S])
+----
+[2021-08-20 00:00:00]
+
+# timestamp ms
+query I
+SELECT list_sort(['2021-08-20 00:00:00.123'::TIMESTAMP_MS])
+----
+[2021-08-20 00:00:00.123]
+
+# timestamp ns
+query I
+SELECT list_sort(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS])
+----
+[2021-08-20 00:00:00.123456]
+
+# time with time zone
+query I
+SELECT list_sort(['14:59:37'::TIMETZ])
+----
+[14:59:37+00]
+
+# timestamp with time zone
+query I
+SELECT list_sort(['2021-08-20'::TIMESTAMPTZ])
+----
+[2021-08-20 00:00:00+00]
+
+# interval
+query I
+SELECT list_sort([INTERVAL 1 YEAR])
+----
+[1 year]
+
+foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval
+
+query I
+SELECT list_sort([NULL::${type}])
+----
+[NULL]
+
+endloop
+
+# JSON
+
+query I
+SELECT list_sort(['{a: 1}'::JSON, '{a: 3}'::JSON])
+----
+[{a: 3}, {a: 1}]
+
+query I
+SELECT list_sort([NULL::JSON])
+----
+[NULL]
+
+# BLOB
+
+query I
+SELECT list_sort(['{a: 1}'::BLOB, '{a: 3}'::BLOB])
+----
+[{a: 3}, {a: 1}]
+
+query I
+SELECT list_sort([NULL::BLOB])
+----
+[NULL]
+
+# ENUMS
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')
+
+statement ok
+CREATE TABLE enums (e mood[])
+
+statement ok
+INSERT INTO enums VALUES (['happy', 'sad'])
+
+query I
+SELECT list_sort(e) FROM enums
+----
+[happy, sad]
+
+# NESTED types
+# TODO: this throws a 'Not implemented Error: Type for comparison'
+# chunk_collection.cpp, line 222
+
+mode skip
+
+query I
+SELECT list_sort([[1], [2, 3], NULL, [NULL], [], [5]])
+----
+[1]
+
+query I
+SELECT list_sort([{'a': 1}, {'b': 5, 'c': 10}, {'a': 3}])
+----
+{'a': 1}
+
+mode unskip

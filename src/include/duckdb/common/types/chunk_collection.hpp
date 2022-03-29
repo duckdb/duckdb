@@ -83,6 +83,9 @@ public:
 
 	//! Gets a reference to the chunk at the given index
 	DUCKDB_API DataChunk &GetChunk(idx_t chunk_index) {
+		if (chunk_index >= chunks.size()) {
+			D_ASSERT(chunk_index < chunks.size());
+		}
 		D_ASSERT(chunk_index < chunks.size());
 		return *chunks[chunk_index];
 	}
