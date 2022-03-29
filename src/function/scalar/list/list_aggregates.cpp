@@ -175,7 +175,7 @@ static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, Scalar
 
 	// get the function name
 	Value function_value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-	auto function_name = StringValue::Get(function_value);
+	auto function_name = function_value.ToString();
 
 	vector<LogicalType> types;
 	types.push_back(list_child_type);
