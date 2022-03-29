@@ -1,6 +1,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -31,7 +32,7 @@ ListSortBindData::~ListSortBindData() {
 
 static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
-	D_ASSERT(args.ColumnCount() == 1);
+	D_ASSERT(args.ColumnCount() == 1 || args.ColumnCount() == 3);
 	auto count = args.size();
 	Vector &lists = args.data[0];
 
@@ -124,8 +125,8 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments) {
 
-	D_ASSERT(bound_function.arguments.size() == 1);
-	D_ASSERT(arguments.size() == 1);
+	D_ASSERT(bound_function.arguments.size() == 1 || bound_function.arguments.size() == 3);
+	D_ASSERT(arguments.size() == 1 || arguments.size() == 3);
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
@@ -135,21 +136,71 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 
 	bound_function.arguments[0] = arguments[0]->return_type;
 	bound_function.return_type = arguments[0]->return_type;
-
 	auto child_type = ListType::GetChildType(arguments[0]->return_type);
 
-	// default values for order and null order
-	return make_unique<ListSortBindData>(OrderType::ORDER_DEFAULT, OrderByNullType::ORDER_DEFAULT,
-	                                     bound_function.return_type, child_type);
-}
+	// mimic SQLite default behavior
+	auto order = OrderType::ASCENDING;
+	auto null_order = OrderByNullType::NULLS_FIRST;
 
-ScalarFunction ListSortFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
-	                      false, ListSortBind, nullptr, nullptr, nullptr);
+	// get custom order and null order
+	if (arguments.size() == 3) {
+		if (!arguments[1]->IsFoldable()) {
+			throw InvalidInputException("Sorting order must be a constant");
+		}
+		if (!arguments[2]->IsFoldable()) {
+			throw InvalidInputException("Null sorting order must be a constant");
+		}
+
+		Value order_value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+		auto order_name = order_value.ToString();
+		std::transform(order_name.begin(), order_name.end(), order_name.begin(), ::toupper);
+		if (order_name != "DESC" && order_name != "ASC") {
+			throw InvalidInputException("Sorting order must be either ASC or DESC");
+		}
+
+		Value null_order_value = ExpressionExecutor::EvaluateScalar(*arguments[2]);
+		auto null_order_name = null_order_value.ToString();
+		std::transform(null_order_name.begin(), null_order_name.end(), null_order_name.begin(), ::toupper);
+		if (null_order_name != "NULLS FIRST" && null_order_name != "NULLS LAST") {
+			throw InvalidInputException("Null sorting order must be either NULLS FIRST or NULLS LAST");
+		}
+
+		if (null_order_name == "NULLS LAST") {
+			null_order = OrderByNullType::NULLS_LAST;
+		}
+		// FIXME: according to sorted_aggregate_function.cpp, line 8 the collection sorting does
+		// not handle OrderByNullType correctly, so this is a hack
+		if (order_name == "DESC") {
+			order = OrderType::DESCENDING;
+			if (null_order_name == "NULLS LAST") {
+				null_order = OrderByNullType::NULLS_FIRST;
+			} else {
+				null_order = OrderByNullType::NULLS_LAST;
+			}
+		}
+	}
+
+	return make_unique<ListSortBindData>(order, null_order, bound_function.return_type, child_type);
 }
 
 void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_sort", "array_sort"}, GetFunction());
+
+	ScalarFunction list({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
+	                    false, ListSortBind, nullptr, nullptr, nullptr);
+
+	ScalarFunction list_custom_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                                 LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, ListSortBind,
+	                                 nullptr, nullptr, nullptr);
+
+	ScalarFunctionSet list_sort("list_sort");
+	list_sort.AddFunction(list);
+	list_sort.AddFunction(list_custom_order);
+	set.AddFunction(list_sort);
+
+	ScalarFunctionSet array_sort("array_sort");
+	array_sort.AddFunction(list);
+	array_sort.AddFunction(list_custom_order);
+	set.AddFunction(array_sort);
 }
 
 } // namespace duckdb

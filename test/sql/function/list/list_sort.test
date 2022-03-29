@@ -31,6 +31,18 @@ SELECT list_sort()
 statement error
 SELECT list_sort(*)
 
+statement error
+SELECT list_sort([1, 2], 'ASC')
+
+statement error
+SELECT list_sort([1, 2], 'NULLS FIRST')
+
+statement error
+SELECT list_sort([1, 2], 'DESC', 2)
+
+statement error 
+SELECT list_sort([1, 2], 2, 2)
+
 # test incorrect parameter type
 
 foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval json blob
@@ -45,17 +57,17 @@ endloop
 query I
 SELECT list_sort([1, 2])
 ----
-[2, 1]
+[1, 2]
 
 query I
 SELECT list_sort(list_sort([1, 2]))
 ----
-[2, 1]
+[1, 2]
 
 query I
 SELECT list_sort([1, 3, NULL, 5, NULL, -5])
 ----
-[NULL, NULL, 5, 3, 1, -5]
+[NULL, NULL, -5, 1, 3, 5]
 
 statement ok
 CREATE TABLE integers AS SELECT LIST(i) AS i FROM range(1, 10, 1) t1(i)
@@ -66,17 +78,50 @@ INSERT INTO integers VALUES ([NULL]), (NULL), ([])
 query I
 SELECT list_sort(i) FROM integers
 ----
-[9, 8, 7, 6, 5, 4, 3, 2, 1]
+[1, 2, 3, 4, 5, 6, 7, 8, 9]
 [NULL]
 NULL
 []
+
+statement error
+SELECT list_sort(l, l, l)
+
+statement error
+SELECT list_sort(l, 'ASC', l)
 
 # test aliases
 
 query I
 SELECT array_sort([1, 2])
 ----
-[2, 1]
+[1, 2]
+
+# test custom ordering
+
+query I
+SELECT list_sort([1, 3, NULL, 2], 'DESC', 'NULLS LAST')
+----
+[3, 2, 1, NULL]
+
+query I
+SELECT list_sort([1, 3, NULL, 2], 'deSc', 'nuLls LAST')
+----
+[3, 2, 1, NULL]
+
+query I
+SELECT list_sort([1, 3, NULL, 2], 'DESC', 'NULLS FIRST')
+----
+[NULL, 3, 2, 1]
+
+query I
+SELECT list_sort([1, 3, NULL, 2], 'ASC', 'NULLS FIRST')
+----
+[NULL, 1, 2, 3]
+
+query I
+SELECT list_sort([1, 3, NULL, 2], 'ASC', 'NULLS LAST')
+----
+[1, 2, 3, NULL]
 
 # test all types
 
@@ -84,7 +129,7 @@ SELECT array_sort([1, 2])
 query I
 SELECT list_sort([True, False, NULL, True, True, NULL])
 ----
-[NULL, NULL, True, True, True, False]
+[NULL, NULL, False, True, True, True]
 
 query I
 SELECT list_sort([NULL::BOOLEAN])
@@ -95,7 +140,7 @@ SELECT list_sort([NULL::BOOLEAN])
 query I
 SELECT list_sort(['aa', 'a', 'cd', NULL, '42'])
 ----
-[NULL, cd, aa, a, 42]
+[NULL, 42, a, aa, cd]
 
 query I
 SELECT list_sort([NULL::VARCHAR])
@@ -108,7 +153,7 @@ foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger
 query I
 SELECT list_sort([1::${type}, NULL, 2::${type}])
 ----
-[NULL, 2, 1]
+[NULL, 1, 2]
 
 query I
 SELECT list_sort([NULL::${type}])
@@ -201,7 +246,7 @@ endloop
 query I
 SELECT list_sort(['{a: 1}'::JSON, '{a: 3}'::JSON])
 ----
-[{a: 3}, {a: 1}]
+[{a: 1}, {a: 3}]
 
 query I
 SELECT list_sort([NULL::JSON])
@@ -213,7 +258,7 @@ SELECT list_sort([NULL::JSON])
 query I
 SELECT list_sort(['{a: 1}'::BLOB, '{a: 3}'::BLOB])
 ----
-[{a: 3}, {a: 1}]
+[{a: 1}, {a: 3}]
 
 query I
 SELECT list_sort([NULL::BLOB])
@@ -234,7 +279,7 @@ INSERT INTO enums VALUES (['happy', 'sad'])
 query I
 SELECT list_sort(e) FROM enums
 ----
-[happy, sad]
+[sad, happy]
 
 # NESTED types
 # TODO: this throws a 'Not implemented Error: Type for comparison'
@@ -243,13 +288,13 @@ SELECT list_sort(e) FROM enums
 mode skip
 
 query I
-SELECT list_sort([[1], [2, 3], NULL, [NULL], [], [5]])
+SELECT list_sort([[1], [1, 2], NULL, [NULL], [], [1, 2, 3]])
 ----
-[1]
+[NULL, [NULL], [], [1], [1, 2], [1, 2, 3]]
 
 query I
-SELECT list_sort([{'a': 1}, {'b': 5, 'c': 10}, {'a': 3}])
+SELECT list_sort([{'a': 1}, {'b': 5}, {'a': 3}])
 ----
-{'a': 1}
+[{'a': 1}, {'a': 3}, {'b': 5}]
 
 mode unskip
