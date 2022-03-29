@@ -5,6 +5,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/limits.hpp"
+
 namespace duckdb {
 
 struct PragmaDetailedProfilingOutputOperatorData : public FunctionOperatorData {
