@@ -27,6 +27,9 @@ string BoundFunctionExpression::ToString() const {
 	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), function.name,
 	                                                                         is_operator);
 }
+bool BoundFunctionExpression::PropagatesNullValues() const {
+	return !function.propagates_null_values ? false : Expression::PropagatesNullValues();
+}
 
 hash_t BoundFunctionExpression::Hash() const {
 	hash_t result = Expression::Hash();

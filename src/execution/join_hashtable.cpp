@@ -19,7 +19,8 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
 		if (condition.comparison == ExpressionType::COMPARE_EQUAL ||
-		    condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		    condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
+		    condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
 			// all equality conditions should be at the front
 			// all other conditions at the back
 			// this assert checks that
@@ -28,10 +29,8 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
 		}
 
 		predicates.push_back(condition.comparison);
-		null_values_are_equal.push_back(condition.null_values_are_equal ||
+		null_values_are_equal.push_back(condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
 		                                condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-		D_ASSERT(!condition.null_values_are_equal ||
-		         (condition.null_values_are_equal && condition.comparison == ExpressionType::COMPARE_EQUAL));
 
 		condition_types.push_back(type);
 	}

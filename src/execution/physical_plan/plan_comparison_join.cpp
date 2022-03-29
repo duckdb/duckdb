@@ -73,7 +73,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	}
 	// with equality condition and null values not equal
 	for (auto &&condition : op.conditions) {
-		if (condition.comparison != ExpressionType::COMPARE_EQUAL || condition.null_values_are_equal) {
+		if (condition.comparison != ExpressionType::COMPARE_EQUAL) {
 			return;
 		}
 	}
@@ -193,10 +193,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			break;
 		default:
 			throw NotImplementedException("Unimplemented comparison join");
-		}
-		if (cond.null_values_are_equal) {
-			D_ASSERT(cond.comparison == ExpressionType::COMPARE_EQUAL ||
-			         cond.comparison == ExpressionType::COMPARE_DISTINCT_FROM);
 		}
 	}
 
