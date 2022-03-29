@@ -167,6 +167,8 @@ jobs:
         run: |
           rm build/release/src/libduckdb*
           zip -j httpfs.duckdb_extension.zip build/release/extension/httpfs/httpfs.duckdb_extension
+          zip -j out-of-tree-extensions.zip build/release/extension/out_of_tree/*.duckdb_extension
+
           if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
             ./scripts/extension-upload.sh osx_amd64
@@ -181,3 +183,4 @@ jobs:
           name: duckdb-binaries-osx
           path: |
             httpfs.duckdb_extension.zip
+            out-of-tree-extensions.zip
