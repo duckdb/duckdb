@@ -7,7 +7,6 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include <cstring>
 
 namespace duckdb {

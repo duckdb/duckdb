@@ -104,36 +104,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		PlanSubqueries(&expr, &root);
 	}
 
-	for (size_t i = 0; i < statement.modifiers.size(); i++) {
-		auto &modifier = statement.modifiers[i];
-		unique_ptr<LogicalOperator> limit = nullptr;
-		if (modifier->type == ResultModifierType::LIMIT_MODIFIER) {
-			auto &limit_modifier = (BoundLimitModifier &)*modifier;
-			if (limit_modifier.limit || limit_modifier.offset) {
-				PlanSubqueries(&limit_modifier.limit, &root);
-				PlanSubqueries(&limit_modifier.offset, &root);
-				limit = make_unique<LogicalLimit>(limit_modifier.limit_val, limit_modifier.offset_val,
-				                                  move(limit_modifier.limit), move(limit_modifier.offset));
-			}
-		} else if (modifier->type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
-			auto &limit_modifier = (BoundLimitPercentModifier &)*modifier;
-			if (limit_modifier.limit || limit_modifier.offset) {
-				PlanSubqueries(&limit_modifier.limit, &root);
-				PlanSubqueries(&limit_modifier.offset, &root);
-				limit = make_unique<LogicalLimitPercent>(limit_modifier.limit_percent, limit_modifier.offset_val,
-				                                         move(limit_modifier.limit), move(limit_modifier.offset));
-			}
-		}
-		if (limit) {
-			limit->AddChild(move(root));
-			root = move(limit);
-			// Delete from modifiers
-			std::swap(statement.modifiers[i], statement.modifiers.back());
-			statement.modifiers.erase(statement.modifiers.end() - 1);
-			i--;
-		}
-	}
-
 	// create the projection
 	auto proj = make_unique<LogicalProjection>(statement.projection_index, move(statement.select_list));
 	auto &projection = *proj;

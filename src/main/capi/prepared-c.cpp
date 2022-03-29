@@ -1,5 +1,4 @@
 #include "duckdb/main/capi_internal.hpp"
-#include "duckdb/common/assert.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 
