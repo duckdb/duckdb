@@ -138,6 +138,13 @@ public:
 	idx_t position;
 	idx_t start = 0;
 
+	unique_ptr<char[]> read_ahead_buffer;
+	idx_t ra_buffer_size;
+	bool ra_is_eof = false;
+	bool ra_fetch_in_progress = false;
+	std::mutex ra_fetch_lock;
+	std::condition_variable ra_fetch_cv;
+
 	idx_t linenr = 0;
 	bool linenr_estimated = false;
 
