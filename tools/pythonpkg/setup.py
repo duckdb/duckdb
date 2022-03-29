@@ -91,6 +91,9 @@ if 'BUILD_HTTPFS' in os.environ:
     libraries += ['crypto', 'ssl']
     extensions += ['httpfs']
 
+if 'GLIBCXX_USE_CXX11_ABI' in os.environ and os.environ['GLIBCXX_USE_CXX11_ABI'] == '0':
+    toolchain_args.append('-DGLIBCXX_USE_CXX11_ABI=0')
+
 for ext in extensions:
     toolchain_args.extend(['-DBUILD_{}_EXTENSION'.format(ext.upper())])
 

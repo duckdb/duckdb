@@ -60,6 +60,13 @@ string DuckDB::Platform() {
 #if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64)
 	arch = "arm64";
 #endif
+
+#if defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI==0
+	if (os == "linux") {
+		arch += "_old-cxx11-abi";
+	}
+#endif
+
 	return os + "_" + arch;
 }
 

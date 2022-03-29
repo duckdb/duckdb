@@ -105,6 +105,7 @@ jobs:
       TWINE_USERNAME: 'hfmuehleisen'
       PYTEST_TIMEOUT: '600'
       DUCKDB_BUILD_UNITY: 1
+      GLIBCXX_USE_CXX11_ABI: 0
 
     steps:
     - uses: actions/checkout@v2
@@ -143,6 +144,13 @@ jobs:
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
         fi
+
+    # For testing, remove
+    - uses: actions/upload-artifact@v2
+      with:
+        name: test upload
+        path: |
+          tools/pythonpkg/wheelhouse/*.whl
 
    osx-python3:
       if: github.ref == 'refs/heads/master'

@@ -128,6 +128,9 @@ jobs:
     runs-on: ubuntu-latest
     container: ubuntu:16.04
     needs: linux-release-64
+    strategy:
+      matrix:
+        USE_CXX11_ABI: [ false, true ]
     env:
       GEN: ninja
       BUILD_VISUALIZER: 1
@@ -142,6 +145,7 @@ jobs:
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
       STATIC_OPENSSL: 1
+      GLIBCXX_USE_CXX11_ABI: ${{USE_CXX11_ABI && 1 || 0}}
       DISABLE_BUILTIN_EXTENSIONS: 1
       OPENSSL_ROOT_DIR: /usr/local/ssl
       AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
@@ -206,11 +210,18 @@ jobs:
     - name: Deploy
       run: |
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          ./scripts/extension-upload.sh linux_amd64
+          ./scripts/extension-upload.sh ${{USE_CXX11_ABI && 'linux_amd64' : 'linux_amd64_old-cxx11-abi'}}
           ./scripts/extension-upload-test.sh
         else
           ./scripts/extension-upload-test.sh local
         fi
+    # For testing, remove
+    - uses: actions/upload-artifact@v2
+      with:
+        name: test upload
+        path: |
+          ./build/release/extension/httpfs/httpfs.duckdb_extension
+          ./build/release/extension/json/json.duckdb_extension
 
 
 
