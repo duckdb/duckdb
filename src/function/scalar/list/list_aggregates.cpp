@@ -211,7 +211,7 @@ static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, Scalar
 
 ScalarFunction ListAggregateFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
-	                      ListAggregateFunction, false, ListAggregateBind, nullptr, nullptr, nullptr);
+	                      ListAggregateFunction, false, false, ListAggregateBind, nullptr, nullptr, nullptr);
 }
 
 void ListAggregateFun::RegisterFunction(BuiltinFunctions &set) {
