@@ -30,7 +30,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
 	case CatalogType::MACRO_ENTRY:
 		// macro function
-		return BindMacro(function, (MacroCatalogEntry *)func, depth, expr_ptr);
+		return BindMacro(function, (ScalarMacroCatalogEntry *)func, depth, expr_ptr);
 	default:
 		// aggregate function
 		return BindAggregate(function, (AggregateFunctionCatalogEntry *)func, depth);

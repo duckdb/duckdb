@@ -2,6 +2,7 @@ using DataFrames
 using DuckDB
 using Test
 using Dates
+using FixedPointDecimals
 using UUIDs
 
 test_files = [
@@ -16,7 +17,8 @@ test_files = [
     "test_replacement_scan.jl",
     "test_table_function.jl",
     "test_old_interface.jl",
-    "test_all_types.jl"
+    "test_all_types.jl",
+    "test_decimals.jl"
 ]
 
 if size(ARGS)[1] > 0

@@ -9,7 +9,7 @@ except:
 def check_equal(duckdb_conn):
     true_result = duckdb_conn.execute("SELECT * from test").fetchall()
     duck_tbl = duckdb_conn.table("test")
-    duck_from_arrow = duckdb_conn.from_arrow_table(duck_tbl.arrow())
+    duck_from_arrow = duckdb_conn.from_arrow(duck_tbl.arrow())
     duck_from_arrow.create("testarrow")
     arrow_result = duckdb_conn.execute("SELECT * from testarrow").fetchall()
 

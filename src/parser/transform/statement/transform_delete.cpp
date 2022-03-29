@@ -21,6 +21,10 @@ unique_ptr<DeleteStatement> Transformer::TransformDelete(duckdb_libpgquery::PGNo
 			result->using_clauses.push_back(move(using_entry));
 		}
 	}
+
+	if (stmt->returningList) {
+		Transformer::TransformExpressionList(*(stmt->returningList), result->returning_list);
+	}
 	return result;
 }
 

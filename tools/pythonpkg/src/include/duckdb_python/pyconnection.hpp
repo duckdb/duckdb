@@ -82,7 +82,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename, bool binary_as_string);
 
-	unique_ptr<DuckDBPyRelation> FromArrowTable(py::object &table, const idx_t rows_per_tuple = 1000000);
+	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object, const idx_t rows_per_tuple = 1000000);
 
 	unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
 
@@ -124,6 +124,8 @@ public:
 
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;
+
+	static bool IsAcceptedArrowObject(string &py_object_type);
 };
 
 } // namespace duckdb

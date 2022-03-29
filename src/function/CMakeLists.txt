@@ -11,6 +11,8 @@ add_library_unity(
   function.cpp
   pragma_function.cpp
   macro_function.cpp
+  scalar_macro_function.cpp
+  table_macro_function.cpp
   scalar_function.cpp
   table_function.cpp
   udf_function.cpp)

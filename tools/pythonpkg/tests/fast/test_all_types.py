@@ -15,6 +15,25 @@ def get_all_types():
 
 all_types = get_all_types()
 
+# we need to write our own equality function that considers nan==nan for testing purposes
+def recursive_equality(o1, o2):
+	import math
+	if o1 == o2:
+		return True
+	if type(o1) != type(o2):
+		return False
+	if type(o1) == float and math.isnan(o1) and math.isnan(o2):
+		return True
+	try:
+		if len(o1) != len(o2):
+			return False
+		for i in range(len(o1)):
+			if not recursive_equality(o1[i], o2[i]):
+				return False
+		return True
+	except:
+		return False
+
 class TestAllTypes(object):
 	def test_fetchall(self, duckdb_cursor):
 		conn = duckdb.connect()
@@ -41,12 +60,13 @@ class TestAllTypes(object):
 			, 'varchar': [('🦆🦆🦆🦆🦆🦆',), ('goose',), (None,)], 'json': [('🦆🦆🦆🦆🦆🦆',), ('goose',), (None,)], 'blob': [(b'thisisalongblob\x00withnullbytes',), (b'\\x00\\x00\\x00a',), (None,)]
 			, 'small_enum':[('DUCK_DUCK_ENUM',), ('GOOSE',), (None,)], 'medium_enum': [('enum_0',), ('enum_299',), (None,)], 'large_enum': [('enum_0',), ('enum_69999',), (None,)]
 			, 'int_array': [([],), ([42, 999, None, None, -42],), (None,)], 'varchar_array': [([],), (['🦆🦆🦆🦆🦆🦆', 'goose', None, ''],), (None,)]
+			, 'double_array': [([],), ([42.0, float('nan'), float('inf'), float('-inf'), None, -42.0],), (None,)]
 			, 'nested_int_array': [([],), ([[], [42, 999, None, None, -42], None, [], [42, 999, None, None, -42]],), (None,)], 'struct': [({'a': None, 'b': None},), ({'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'},), (None,)]
 			, 'struct_of_arrays': [({'a': None, 'b': None},), ({'a': [42, 999, None, None, -42], 'b': ['🦆🦆🦆🦆🦆🦆', 'goose', None, '']},), (None,)]
 			, 'array_of_structs': [([],), ([{'a': None, 'b': None}, {'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}, None],), (None,)], 'map':[({'key': [], 'value': []},), ({'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},), (None,)]
 			, 'time_tz':[(datetime.time(0, 0),), (datetime.time(23, 59, 59, 999999),), (None,)], 'interval': [(datetime.timedelta(0),), (datetime.timedelta(days=30969, seconds=999, microseconds=999999),), (None,)]
 			, 'timestamp':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'date':[(datetime.date(1990, 1, 1),)], 'timestamp_s':[(datetime.datetime(1990, 1, 1, 0, 0),)]
-			, 'timestamp_ns':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'timestamp_ms':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'timestamp_tz':[(datetime.datetime(1990, 1, 1, 0, 0),)]}
+			, 'timestamp_ns':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'timestamp_ms':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'timestamp_tz':[(datetime.datetime(1990, 1, 1, 0, 0),)],}
 
 		for cur_type in all_types:
 			if cur_type in replacement_values:
@@ -54,7 +74,7 @@ class TestAllTypes(object):
 			else:
 				result = conn.execute("select "+cur_type+" from test_all_types()").fetchall()
 			correct_result = correct_answer_map[cur_type]
-			assert result == correct_result
+			assert recursive_equality(result, correct_result)
 
 	def test_arrow(self, duckdb_cursor):
 		try:
@@ -64,7 +84,7 @@ class TestAllTypes(object):
 		# We skip those since the extreme ranges are not supported in arrow.
 		replacement_values = {'interval': "INTERVAL '2 years'"}
 		# We do not round trip enum types
-		enum_types = {'small_enum', 'medium_enum', 'large_enum'}
+		enum_types = {'small_enum', 'medium_enum', 'large_enum', 'double_array'}
 		conn = duckdb.connect()
 		for cur_type in all_types:
 			if cur_type in replacement_values:
@@ -75,7 +95,7 @@ class TestAllTypes(object):
 				round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
 				result_arrow = conn.execute("select * from arrow_table").fetchall()
 				result_roundtrip = conn.execute("select * from round_trip_arrow_table").fetchall()
-				assert result_arrow == result_roundtrip
+				assert recursive_equality(result_arrow, result_roundtrip)
 			else:
 				round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
 				assert arrow_table.equals(round_trip_arrow_table, check_metadata=True)
@@ -98,4 +118,4 @@ class TestAllTypes(object):
 			round_trip_dataframe = conn.execute("select * from dataframe").df()
 			result_dataframe = conn.execute("select * from dataframe").fetchall()
 			result_roundtrip = conn.execute("select * from round_trip_dataframe").fetchall()
-			assert result_dataframe == result_roundtrip
+			assert recursive_equality(result_dataframe, result_roundtrip)

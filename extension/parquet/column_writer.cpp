@@ -53,11 +53,7 @@ static void VarintEncode(uint32_t val, Serializer &ser) {
 static uint8_t GetVarintSize(uint32_t val) {
 	uint8_t res = 0;
 	do {
-		uint8_t byte = val & 127;
 		val >>= 7;
-		if (val != 0) {
-			byte |= 128;
-		}
 		res++;
 	} while (val != 0);
 	return res;

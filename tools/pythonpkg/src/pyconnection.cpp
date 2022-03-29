@@ -77,8 +77,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("query"), py::arg("alias") = "query_relation")
 	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	         py::arg("df") = py::none())
-	    .def("from_arrow_table", &DuckDBPyConnection::FromArrowTable, "Create a relation object from an Arrow table",
-	         py::arg("table"), py::arg("rows_per_thread") = 1000000)
+	    .def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
+	         py::arg("arrow_object"), py::arg("rows_per_thread") = 1000000)
 	    .def("df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df (alias of from_df)",
 	         py::arg("df"))
 	    .def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
@@ -187,17 +187,18 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		// keep a reference
 		auto object = make_unique<RegisteredObject>(python_object);
 		registered_objects[name] = move(object);
-	} else if (py_object_type == "Table" || py_object_type == "FileSystemDataset" ||
-	           py_object_type == "InMemoryDataset") {
+	} else if (IsAcceptedArrowObject(py_object_type)) {
 		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr());
 
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
+		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 		{
 			py::gil_scoped_release release;
 			connection
 			    ->TableFunction("arrow_scan",
 			                    {Value::POINTER((uintptr_t)stream_factory.get()),
-			                     Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)})
+			                     Value::POINTER((uintptr_t)stream_factory_produce),
+			                     Value::POINTER((uintptr_t)stream_factory_get_schema), Value::UBIGINT(rows_per_tuple)})
 			    ->CreateView(name, true, true);
 		}
 		auto object = make_unique<RegisteredArrow>(move(stream_factory), move(python_object));
@@ -312,23 +313,29 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filen
 	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(filename));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &table, const idx_t rows_per_tuple) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_object, const idx_t rows_per_tuple) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
 	py::gil_scoped_acquire acquire;
 	string name = "arrow_table_" + GenerateRandomName();
-
-	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
+	auto py_object_type = string(py::str(arrow_object.get_type().attr("__name__")));
+	if (!IsAcceptedArrowObject(py_object_type)) {
+		throw std::runtime_error("Python Object Type " + py_object_type + " is not an accepted Arrow Object.");
+	}
+	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(arrow_object.ptr());
 
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
+	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
+
 	auto rel = make_unique<DuckDBPyRelation>(
 	    connection
 	        ->TableFunction("arrow_scan",
 	                        {Value::POINTER((uintptr_t)stream_factory.get()),
-	                         Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)})
+	                         Value::POINTER((uintptr_t)stream_factory_produce),
+	                         Value::POINTER((uintptr_t)stream_factory_get_schema), Value::UBIGINT(rows_per_tuple)})
 	        ->Alias(name));
-	registered_objects[name] = make_unique<RegisteredArrow>(move(stream_factory), table);
+	registered_objects[name] = make_unique<RegisteredArrow>(move(stream_factory), arrow_object);
 	return rel;
 }
 
@@ -470,13 +477,15 @@ TryReplacement(py::dict &dict, py::str &table_name,
 		// keep a reference
 		auto object = make_unique<RegisteredObject>(entry);
 		registered_objects[name] = move(object);
-	} else if (py_object_type == "Table" || py_object_type == "FileSystemDataset" ||
-	           py_object_type == "InMemoryDataset") {
+	} else if (DuckDBPyConnection::IsAcceptedArrowObject(py_object_type)) {
 		string name = "arrow_" + GenerateRandomName();
 		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr());
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
+		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
+
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory.get())));
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_produce)));
+		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_get_schema)));
 		children.push_back(make_unique<ConstantExpression>(Value::UBIGINT(1000000)));
 		table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
 		registered_objects[name] = make_unique<RegisteredArrow>(move(stream_factory), entry);
@@ -654,6 +663,14 @@ DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
 
 void DuckDBPyConnection::Cleanup() {
 	default_connection.reset();
+}
+
+bool DuckDBPyConnection::IsAcceptedArrowObject(string &py_object_type) {
+	if (py_object_type == "Table" || py_object_type == "FileSystemDataset" || py_object_type == "InMemoryDataset" ||
+	    py_object_type == "RecordBatchReader" || py_object_type == "Scanner") {
+		return true;
+	}
+	return false;
 }
 
 } // namespace duckdb

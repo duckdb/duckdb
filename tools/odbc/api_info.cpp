@@ -227,17 +227,17 @@ SQLSMALLINT ApiInfo::FindRelatedSQLType(duckdb::LogicalTypeId type_id) {
 	case LogicalTypeId::DOUBLE:
 		return SQL_DOUBLE;
 	case LogicalTypeId::DATE:
-		return SQL_DATE;
+		return SQL_TYPE_DATE;
 	case LogicalTypeId::TIMESTAMP:
-		return SQL_TIMESTAMP;
+		return SQL_TYPE_TIMESTAMP;
 	case LogicalTypeId::TIME:
-		return SQL_TIME;
+		return SQL_TYPE_TIME;
 	case LogicalTypeId::VARCHAR:
 		return SQL_VARCHAR;
 	case LogicalTypeId::BLOB:
 		return SQL_VARBINARY;
 	case LogicalTypeId::INTERVAL:
-		return SQL_TIME;
+		return SQL_INTERVAL;
 	default:
 		return SQL_UNKNOWN_TYPE;
 	}
@@ -296,55 +296,6 @@ SQLLEN ApiInfo::PointerSizeOf(SQLSMALLINT sql_type) {
 	case SQL_C_CHAR:
 	default:
 		return -1;
-	}
-}
-
-//! https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/display-size?view=sql-server-ver15
-SQLRETURN ApiInfo::GetColumnSize(const duckdb::LogicalType &logical_type, SQLULEN *col_size_ptr) {
-	auto sql_type = FindRelatedSQLType(logical_type.id());
-	switch (sql_type) {
-	case SQL_DECIMAL:
-	case SQL_NUMERIC:
-		*col_size_ptr = duckdb::DecimalType::GetWidth(logical_type) + duckdb::DecimalType::GetScale(logical_type);
-		return SQL_SUCCESS;
-	case SQL_BIT:
-		*col_size_ptr = 1;
-		return SQL_SUCCESS;
-	case SQL_TINYINT:
-		*col_size_ptr = 3;
-		return SQL_SUCCESS;
-	case SQL_SMALLINT:
-		*col_size_ptr = 5;
-		return SQL_SUCCESS;
-	case SQL_INTEGER:
-		*col_size_ptr = 11;
-		return SQL_SUCCESS;
-	case SQL_BIGINT:
-		*col_size_ptr = 20;
-		return SQL_SUCCESS;
-	case SQL_REAL:
-		*col_size_ptr = 14;
-		return SQL_SUCCESS;
-	case SQL_FLOAT:
-	case SQL_DOUBLE:
-		*col_size_ptr = 24;
-		return SQL_SUCCESS;
-	case SQL_TYPE_DATE:
-		*col_size_ptr = 10;
-		return SQL_SUCCESS;
-	case SQL_TYPE_TIME:
-		*col_size_ptr = 9;
-		return SQL_SUCCESS;
-	case SQL_TYPE_TIMESTAMP:
-		*col_size_ptr = 20;
-		return SQL_SUCCESS;
-	case SQL_VARCHAR:
-	case SQL_VARBINARY:
-		// we don't know the number of characters
-		*col_size_ptr = 0;
-		return SQL_SUCCESS;
-	default:
-		return SQL_ERROR;
 	}
 }
 

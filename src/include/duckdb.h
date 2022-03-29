@@ -987,9 +987,19 @@ The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 This should not be used with `DUCKDB_TYPE_DECIMAL`.
 
 * type: The primitive type to create.
-* returns: The logical type type.
+* returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_logical_type(duckdb_type type);
+
+/*!
+Creates a `duckdb_logical_type` of type decimal with the specified width and scale
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* width: The width of the decimal type
+* scale: The scale of the decimal type
+* returns: The logical type.
+*/
+DUCKDB_API duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t scale);
 
 /*!
 Retrieves the type class of a `duckdb_logical_type`.
@@ -1388,6 +1398,18 @@ DUCKDB_API void duckdb_table_function_set_function(duckdb_table_function table_f
                                                    duckdb_table_function_t function);
 
 /*!
+Sets whether or not the given table function supports projection pushdown.
+
+If this is set to true, the system will provide a list of all required columns in the `init` stage through
+the `duckdb_init_get_column_count` and `duckdb_init_get_column_index` functions.
+If this is set to false (the default), the system will expect all columns to be projected.
+
+* table_function: The table function
+* pushdown: True if the table function supports projection pushdown, false otherwise.
+*/
+DUCKDB_API void duckdb_table_function_supports_projection_pushdown(duckdb_table_function table_function, bool pushdown);
+
+/*!
 Register the table function object within the given connection.
 
 The function requires at least a name, a bind function, an init function and a main function.
@@ -1487,6 +1509,27 @@ Sets the user-provided init data in the init object. This object can be retrieve
 * destroy: The callback that will be called to destroy the init data (if any)
 */
 DUCKDB_API void duckdb_init_set_init_data(duckdb_init_info info, void *init_data, duckdb_delete_callback_t destroy);
+
+/*!
+Returns the number of projected columns.
+
+This function must be used if projection pushdown is enabled to figure out which columns to emit.
+
+* info: The info object
+* returns: The number of projected columns.
+*/
+DUCKDB_API idx_t duckdb_init_get_column_count(duckdb_init_info info);
+
+/*!
+Returns the column index of the projected column at the specified position.
+
+This function must be used if projection pushdown is enabled to figure out which columns to emit.
+
+* info: The info object
+* column_index: The index at which to get the projected column index, from 0..duckdb_init_get_column_count(info)
+* returns: The column index of the projected column.
+*/
+DUCKDB_API idx_t duckdb_init_get_column_index(duckdb_init_info info, idx_t column_index);
 
 /*!
 Report that an error has occurred while calling init.
