@@ -6,7 +6,7 @@ namespace duckdb {
 
 struct ListSortBindData : public FunctionData {
 	ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, LogicalType &return_type_p,
-		LogicalType &child_type_p);
+	                 LogicalType &child_type_p);
 	~ListSortBindData() override;
 
 	OrderType order_type;
@@ -17,10 +17,9 @@ struct ListSortBindData : public FunctionData {
 	unique_ptr<FunctionData> Copy() override;
 };
 
-ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, 
-	LogicalType &return_type_p, LogicalType &child_type_p) 
-	: order_type(order_type_p), null_order(null_order_p), return_type(return_type_p),
-	child_type(child_type_p) {
+ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, LogicalType &return_type_p,
+                                   LogicalType &child_type_p)
+    : order_type(order_type_p), null_order(null_order_p), return_type(return_type_p), child_type(child_type_p) {
 }
 
 unique_ptr<FunctionData> ListSortBindData::Copy() {
@@ -123,8 +122,8 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 }
 
 static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
-	
+                                             vector<unique_ptr<Expression>> &arguments) {
+
 	D_ASSERT(bound_function.arguments.size() == 1);
 	D_ASSERT(arguments.size() == 1);
 
@@ -140,13 +139,13 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 	auto child_type = ListType::GetChildType(arguments[0]->return_type);
 
 	// default values for order and null order
-	return make_unique<ListSortBindData>(OrderType::ORDER_DEFAULT, OrderByNullType::ORDER_DEFAULT, 
-		bound_function.return_type, child_type);
+	return make_unique<ListSortBindData>(OrderType::ORDER_DEFAULT, OrderByNullType::ORDER_DEFAULT,
+	                                     bound_function.return_type, child_type);
 }
 
 ScalarFunction ListSortFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
-	                      ListSortFunction, false, ListSortBind, nullptr, nullptr, nullptr);
+	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
+	                      false, ListSortBind, nullptr, nullptr, nullptr);
 }
 
 void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
