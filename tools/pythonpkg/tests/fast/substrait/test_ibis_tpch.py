@@ -1,51 +1,75 @@
 import duckdb
 import os
 
-def munge(cell):
-    try:
-        cell = round(float(cell), 2)
-    except (ValueError, TypeError):
-        cell = str(cell)
-    return cell
-
-def check_result(result,answers):
-    for q_res in answers:
-        db_result = result.fetchone()
-        cq_results = q_res.split("|")
-        # The end of the rows, continue
-        if cq_results == [''] and str(db_result) == 'None' or str(db_result[0]) == 'None':
-            continue
-        ans_result = [munge(cell) for cell in cq_results]
-        db_result = [munge(cell) for cell in db_result]
-        assert ans_result == db_result
-    return True
-
 def get_query_binary(query_number):
     bin_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'ibis_tpch_binary',str(query_number)+".bin")
     file=open(bin_file_path,"r")
-    query_string = file.readline()
-    binary = query_string
-    # print (query_string)
-    # binary = bytes(query_string,'ascii')
-    # print(binary)
-    # binary = b'\x02\x08\x01\x12\x0c\x1a\n\x08\x01\x10\x01\x1a\x04less\x12\x0c\x1a\n\x08\x01\x10\x02\x1a\x04mean\x12\x0c\x1a\n\x08\x01\x10\x03\x1a\x04mean\x12\r\x1a\x0b\x08\x01\x10\x04\x1a\x05count\x12\x0b\x1a\t\x08\x01\x10\x05\x1a\x03sum\x12\x10\x1a\x0e\x08\x01\x10\x06\x1a\x08multiply\x12\x10\x1a\x0e\x08\x01\x10\x07\x1a\x08subtract\x12\x0b\x1a\t\x08\x01\x10\x08\x1a\x03add\x12\x0b\x1a\t\x08\x01\x10\t\x1a\x03sum\x12\x0e\x1a\x0c\x08\x01\x10\n\x1a\x06equals\x12\x0b\x1a\t\x08\x01\x10\x0b\x1a\x03and\x12\x17\x1a\x15\x08\x01\x10\x0c\x1a\x0fstring_sql_like\x12\x0e\x1a\x0c\x08\x01\x10\r\x1a\x06equals\x12\x0e\x1a\x0c\x08\x01\x10\x0e\x1a\x06equals\x12\x0b\x1a\t\x08\x01\x10\x0f\x1a\x03min\x12\x0f\x1a\r\x08\x01\x10\x10\x1a\x07greater\x12\x0b\x1a\t\x08\x01\x10\x11\x1a\x03any\x12\x15\x1a\x13\x08\x01\x10\x12\x1a\rgreater_equal\x12\x0f\x1a\r\x08\x01\x10\x13\x1a\x07between\x12\x0c\x1a\n\x08\x01\x10\x14\x1a\x04less\x1a\xc3\x97\x04\x12\xc3\x94\x04\n\xc3\x88\x04"\xc3\x85\x04\x12\xc2\x8a\x04\x12\xc2\x87\x04\x12\xc3\x8c\x02\n\xc3\x89\x02\x12\xc2\xba\x02\n\nl_orderkey\n\tl_partkey\n\tl_suppkey\n\x0cl_linenumber\n\nl_quantity\n\x0fl_extendedprice\n\nl_discount\n\x05l_tax\n\x0cl_returnflag\n\x0cl_linestatus\n\nl_shipdate\n\x0cl_commitdate\n\rl_receiptdate\n\x0el_shipinstruct\n\nl_shipmode\n\tl_comment\x12l\n\x04*\x02\x10\x01\n\x04*\x02\x10\x01\n\x04*\x02\x10\x01\n\x04*\x02\x10\x01\n\x04*\x02\x10\x01\n\x07\xc3\x82\x01\x04\x08\x02\x10\x0f\n\x07\xc3\x82\x01\x04\x08\x02\x10\x0f\n\x07\xc3\x82\x01\x04\x08\x02\x10\x0f\n\x04b\x02\x10\x01\n\x04b\x02\x10\x01\n\x05\xc2\x82\x01\x02\x10\x01\n\x05\xc2\x82\x01\x02\x10\x01\n\x05\xc2\x82\x01\x02\x10\x01\n\x04b\x02\x10\x01\n\x04b\x02\x10\x01\n\x04b\x02\x10\x01:\n\n\x08lineitem\x1a\xc2\xb5\x01\x1a\xc2\xb2\x01\x08\x0b\x12\xc2\x89\x01\x1a\xc2\x86\x01\x08\x0b\x12J\x1aH\x08\x0b\x12\x1e\x1a\x1c\x08\x12\x12\n\x12\x08\n\x04\x12\x02\x08\n"\x00\x12\x06\n\x04\xc2\x80\x01\xc2\xbeD\x1a\x04\n\x02\x10\x01\x12\x1e\x1a\x1c\x08\x01\x12\n\x12\x08\n\x04\x12\x02\x08\n"\x00\x12\x06\n\x04\xc2\x80\x01\xc2\xabG\x1a\x04\n\x02\x10\x01\x1a\x04\n\x02\x10\x01\x120\x1a.\x08\x13\x12\n\x12\x08\n\x04\x12\x02\x08\x06"\x00\x12\x0b\n\tY\xc2\x9a\xc2\x99\xc2\x99\xc2\x99\xc2\x99\xc2\x99\xc2\xa9?\x12\x0b\n\tY\xc3\xacQ\xc2\xb8\x1e\xc2\x85\xc3\xab\xc2\xb1?\x1a\x04\n\x02\x10\x01\x1a\x04\n\x02\x10\x01\x12\x1c\x1a\x1a\x08\x14\x12\n\x12\x08\n\x04\x12\x02\x08\x04"\x00\x12\x04\n\x02(\x18\x1a\x04\n\x02\x10\x01\x1a\x04\n\x02\x10\x01"6\n4\x08\x05\x12%\x1a#\x08\x06\x12\n\x12\x08\n\x04\x12\x02\x08\x05"\x00\x12\n\x12\x08\n\x04\x12\x02\x08\x06"\x00\x1a\x07\xc3\x82\x01\x04\x08\x02\x10\x0f \x03*\x07\xc3\x82\x01\x04\x08\x02\x10&\x12\x07revenue'
-    print(binary)
-
-    return binary
+    return file.readline()
 
 def execute_substrait(duckdb_cursor, query_number):
     proto_bytes = get_query_binary(query_number)
-    result = duckdb_cursor.from_substrait(proto_bytes).fetchall()
-    answer = duckdb_cursor.execute("select answer from tpch_answers() where scale_factor = 0.01 and query_nr="+str(query_number)).fetchone()[0].split("\n")[1:]
-    check_result(result,answer)
+    result = duckdb_cursor.execute("CALL from_substrait("+proto_bytes+"::BLOB)").df().sort_index(ascending=False, axis=1)
+    query = duckdb_cursor.execute("select query from tpch_queries() where query_nr="+str(query_number)).fetchone()[0]
+    answers = duckdb_cursor.execute(query).df().sort_index(ascending=False, axis=1)
+    assert result.equals(answers)
 
 class TestTPCHIbisSubstrait(object):
+    # Ibis has a < instead of <= in the filter
     # def test_q01(self,duckdb_cursor):
     #     execute_substrait(duckdb_cursor,1)
+    
+    def test_q03(self,duckdb_cursor):
+        execute_substrait(duckdb_cursor,3)
+
+    # We are missing any
+    # def test_q04(self,duckdb_cursor):
+    #     execute_substrait(duckdb_cursor,4)
+
+    # We are missing any
+    # def test_q05(self,duckdb_cursor):
+    #     execute_substrait(duckdb_cursor,5)  
 
     def test_q06(self,duckdb_cursor):
         execute_substrait(duckdb_cursor,6)
 
-duckdb_cursor = duckdb.connect()
-duckdb_cursor.execute("CALL dbgen(sf=0.01)")
-execute_substrait(duckdb_cursor,6)
+    # It seems that Ibis is exporting a cast function with only one child?
+    # def test_q09(self,duckdb_cursor):
+    #     execute_substrait(duckdb_cursor,9)
+
+    def test_q10(self,duckdb_cursor):
+        execute_substrait(duckdb_cursor,10)
+
+# # FAILED test_ibis_tpch.py::TestTPCHIbisSubstrait::test_q11 - We seem to be missing a sum aggregation somewhere
+#     def test_q11(self,duckdb_cursor):
+#         execute_substrait(duckdb_cursor,11)
+
+# # FAILED test_ibis_tpch.py::TestTPCHIbisSubstrait::test_q12 - RuntimeError: Catalog Error: Scalar Function with name value_list does not exist!
+#     def test_q12(self,duckdb_cursor):
+#         execute_substrait(duckdb_cursor,12)
+# # FAILED test_ibis_tpch.py::TestTPCHIbisSubstrait::test_q13 - RuntimeError: Catalog Error: Scalar Function with name not does not exist!
+#     def test_q13(self,duckdb_cursor):
+#         execute_substrait(duckdb_cursor,13)
+
+# FAILED test_ibis_tpch.py::TestTPCHIbisSubstrait::test_q16 - RuntimeError: Parser Error: syntax error at or near "\"
+# FAILED test_ibis_tpch.py::TestTPCHIbisSubstrait::test_q18 - RuntimeError: Parser Error: syntax error at or near "\"
+# FAILED test_ibis_tpch.py::TestTPCHIbisSubstrait::test_q19 - RuntimeError: Parser Error: syntax error at or near "\"
+# FAILED test_ibis_tpch.py::TestTPCHIbisSubstrait::test_q20 - RuntimeError: Parser Error: syntax error at or near "\"
+# FAILED test_ibis_tpch.py::TestTPCHIbisSubstrait::test_q21 - RuntimeError: Parser Error: syntax error at or near "\"
+# FAILED test_ibis_tpch.py::TestTPCHIbisSubstrait::test_q22 - RuntimeError: Parser Error: syntax error at or near "\"
+    # def test_q16(self,duckdb_cursor):
+    #     execute_substrait(duckdb_cursor,16)
+
+    # def test_q18(self,duckdb_cursor):
+    #     execute_substrait(duckdb_cursor,18)
+
+    # def test_q19(self,duckdb_cursor):
+    #     execute_substrait(duckdb_cursor,19)
+
+    # def test_q20(self,duckdb_cursor):
+    #     execute_substrait(duckdb_cursor,20)
+
+    # def test_q21(self,duckdb_cursor):
+    #     execute_substrait(duckdb_cursor,21)
+
+    # def test_q22(self,duckdb_cursor):
+    #     execute_substrait(duckdb_cursor,22)

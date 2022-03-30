@@ -332,22 +332,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 	return rel;
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::str &proto) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	py::bytes proto_value = py::bytes(proto);
-
 	string name = "substrait_" + GenerateRandomName();
 	vector<Value> params;
 	params.emplace_back(Value::BLOB_RAW(proto));
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("from_substrait", params)->Alias(name));
 }
-
-//unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::str &str_proto) {
-//    auto proto = py::bytes(str_proto);
-//    return FromSubstrait(proto);
-//}
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &query) {
 	if (!connection) {

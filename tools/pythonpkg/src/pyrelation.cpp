@@ -177,7 +177,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquetDefault(const string &
 	return conn->FromParquet(filename, binary_as_string);
 }
 
-
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrowTable(py::object &table, DuckDBPyConnection *conn) {
 	return conn->FromArrowTable(table);
 }

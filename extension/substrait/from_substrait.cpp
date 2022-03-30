@@ -18,8 +18,7 @@
 
 namespace duckdb {
 SubstraitToDuckDB::SubstraitToDuckDB(Connection &con_p, string &serialized) : con(con_p) {
-	auto sucess = plan.ParseFromString(serialized);
-	if (!sucess){
+	if (!plan.ParseFromString(serialized)) {
 		throw std::runtime_error("Was not possible to convert binary into Substrait plan");
 	}
 	for (auto &sext : plan.extensions()) {
@@ -237,9 +236,9 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformCrossProductOp(const substrait:
 	                                         TransformOp(sub_cross.right())->Alias("right"));
 }
 
-shared_ptr<Relation> SubstraitToDuckDB::TransformFetchOp(const substrait::Rel &sop, vector<string> *aliases) {
+shared_ptr<Relation> SubstraitToDuckDB::TransformFetchOp(const substrait::Rel &sop) {
 	auto &slimit = sop.fetch();
-	return make_shared<LimitRelation>(TransformOp(slimit.input(), aliases), slimit.count(), slimit.offset());
+	return make_shared<LimitRelation>(TransformOp(slimit.input()), slimit.count(), slimit.offset());
 }
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformFilterOp(const substrait::Rel &sop) {
@@ -247,21 +246,17 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformFilterOp(const substrait::Rel &
 	return make_shared<FilterRelation>(TransformOp(sfilter.input()), TransformExpr(sfilter.condition()));
 }
 
-shared_ptr<Relation> SubstraitToDuckDB::TransformProjectOp(const substrait::Rel &sop, vector<string> *aliases) {
+shared_ptr<Relation> SubstraitToDuckDB::TransformProjectOp(const substrait::Rel &sop) {
 	vector<unique_ptr<ParsedExpression>> expressions;
 	for (auto &sexpr : sop.project().expressions()) {
 		expressions.push_back(TransformExpr(sexpr));
 	}
-	if (aliases) {
-		return make_shared<ProjectionRelation>(TransformOp(sop.project().input()), move(expressions), *aliases);
-	} else {
-		vector<string> mock_aliases;
-		for (size_t i = 0; i < expressions.size(); i++) {
-			mock_aliases.push_back("expr_" + to_string(i));
-		}
-		return make_shared<ProjectionRelation>(TransformOp(sop.project().input()), move(expressions),
-		                                       move(mock_aliases));
+
+	vector<string> mock_aliases;
+	for (size_t i = 0; i < expressions.size(); i++) {
+		mock_aliases.push_back("expr_" + to_string(i));
 	}
+	return make_shared<ProjectionRelation>(TransformOp(sop.project().input()), move(expressions), move(mock_aliases));
 }
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformAggregateOp(const substrait::Rel &sop) {
@@ -320,44 +315,46 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformReadOp(const substrait::Rel &so
 	return scan;
 }
 
-shared_ptr<Relation> SubstraitToDuckDB::TransformSortOp(const substrait::Rel &sop, vector<string> *aliases) {
+shared_ptr<Relation> SubstraitToDuckDB::TransformSortOp(const substrait::Rel &sop) {
 	vector<OrderByNode> order_nodes;
 	for (auto &sordf : sop.sort().sorts()) {
 		order_nodes.push_back(TransformOrder(sordf));
 	}
-	return make_shared<OrderRelation>(TransformOp(sop.sort().input(), aliases), move(order_nodes));
+	return make_shared<OrderRelation>(TransformOp(sop.sort().input()), move(order_nodes));
 }
-shared_ptr<Relation> SubstraitToDuckDB::TransformOp(const substrait::Rel &sop, vector<string> *aliases) {
+shared_ptr<Relation> SubstraitToDuckDB::TransformOp(const substrait::Rel &sop) {
 	switch (sop.rel_type_case()) {
 	case substrait::Rel::RelTypeCase::kJoin:
 		return TransformJoinOp(sop);
 	case substrait::Rel::RelTypeCase::kCross:
 		return TransformCrossProductOp(sop);
 	case substrait::Rel::RelTypeCase::kFetch:
-		return TransformFetchOp(sop, aliases);
+		return TransformFetchOp(sop);
 	case substrait::Rel::RelTypeCase::kFilter:
 		return TransformFilterOp(sop);
 	case substrait::Rel::RelTypeCase::kProject:
-		return TransformProjectOp(sop, aliases);
+		return TransformProjectOp(sop);
 	case substrait::Rel::RelTypeCase::kAggregate:
 		return TransformAggregateOp(sop);
 	case substrait::Rel::RelTypeCase::kRead:
 		return TransformReadOp(sop);
 	case substrait::Rel::RelTypeCase::kSort:
-		return TransformSortOp(sop, aliases);
+		return TransformSortOp(sop);
 	default:
 		throw InternalException("Unsupported relation type " + to_string(sop.rel_type_case()));
 	}
 }
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformRootOp(const substrait::RelRoot &sop) {
-	const auto &rel = sop.input();
 	vector<string> aliases;
 	auto column_names = sop.names();
+	vector<unique_ptr<ParsedExpression>> expressions;
+	int id = 1;
 	for (auto &column_name : column_names) {
 		aliases.push_back(column_name);
+		expressions.push_back(make_unique<PositionalReferenceExpression>(id++));
 	}
-	return TransformOp(rel, &aliases);
+	return make_shared<ProjectionRelation>(TransformOp(sop.input()), move(expressions), aliases);
 }
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformPlan() {
