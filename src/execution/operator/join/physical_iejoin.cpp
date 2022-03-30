@@ -828,8 +828,11 @@ bool IEJoinUnion::NextRow() {
 				break;
 			}
 			const auto p2 = p[off2->GetIndex()];
-			bit_mask.SetValid(p2);
-			bloom_filter.SetValid(p2 / BLOOM_CHUNK_BITS);
+			if (li[p2] < 0) {
+				// Only mark rhs matches.
+				bit_mask.SetValid(p2);
+				bloom_filter.SetValid(p2 / BLOOM_CHUNK_BITS);
+			}
 		}
 
 		// 9.  if (op1 ∈ {≤,≥} and op2 ∈ {≤,≥}) eqOff = 0
