@@ -9,8 +9,11 @@ class TestExtensions(object):
         # Paths to search for extensions
         extension_search_patterns = [
             "../../../../build/release/extension/*/*.duckdb_extension",
-            "/tmp/duckdb_python_test_extensions/*.duckdb_extension"
+            "/tmp/duckdb_python_test_extensions/*/*.duckdb_extension"
         ]
+
+        # Depending on the env var, the test will fail on not finding any extensions
+        must_test_extension_load = os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False)
 
         dirname = os.path.dirname(__file__)
         extension_paths_found = []
@@ -39,6 +42,9 @@ class TestExtensions(object):
                 'last_name': ['Jordan', 'Freeman', 'Morgan']
             })
             assert(result_df.equals(exp_result))
+
+        if (must_test_extension_load and not extension_paths_found):
+            raise Exception("Env var DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED was set, but no extensions were found to test with!");
 
         for path in extension_paths_found:
             conn = duckdb.connect()

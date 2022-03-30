@@ -44,6 +44,7 @@ jobs:
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
       PYTEST_TIMEOUT: '600'
+      DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED: true
 
     steps:
     - uses: actions/checkout@v2
@@ -156,6 +157,7 @@ jobs:
       PYTEST_TIMEOUT: '600'
       DUCKDB_BUILD_UNITY: 1
       GLIBCXX_USE_CXX11_ABI: 0
+      DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED: true
 
     steps:
     - uses: actions/checkout@v2
