@@ -5,10 +5,20 @@ import pandas as pd
 
 class TestExtensions(object):
     def test_extensions(self, duckdb_cursor):
-        extension_base_path = "../../../../build/release/extension"
+
+        # Paths to search for extensions
+        extension_search_patterns = [
+            "../../../../build/release/extension/*/*.duckdb_extension",
+            "/tmp/duckdb_python_test_extensions/*.duckdb_extension"
+        ]
 
         dirname = os.path.dirname(__file__)
-        extension_base_path_abs = os.path.join(dirname, extension_base_path)
+        extension_paths_found = []
+
+        for pattern in extension_search_patterns:
+            extension_pattern_abs = os.path.join(dirname, pattern)
+            for path in glob.glob(extension_pattern_abs):
+                extension_paths_found.append(path)
 
         def test_httpfs(duckdb_cursor):
             try:
@@ -30,9 +40,9 @@ class TestExtensions(object):
             })
             assert(result_df.equals(exp_result))
 
-        for name in glob.glob(f"{extension_base_path_abs}/*/*.duckdb_extension"):
+        for path in extension_paths_found:
             conn = duckdb.connect()
-            conn.execute(f"LOAD '{name}'")
+            conn.execute(f"LOAD '{path}'")
 
-            if (name.endswith("httpfs.duckdb_extension")):
+            if (path.endswith("httpfs.duckdb_extension")):
                 test_httpfs(conn)
