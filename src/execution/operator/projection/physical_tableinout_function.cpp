@@ -23,7 +23,7 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ClientCon
 }
 
 OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                       OperatorState &state_p) const {
+                                                       GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (TableInOutFunctionState &)state_p;
 
 	if (!state.initialized) {
