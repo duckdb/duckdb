@@ -1,0 +1,52 @@
+# name: test/sql/binder/test_select_alias.test
+# description: Test filter on alias
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# simple refer to a previous alias
+query II
+SELECT i % 2 as k, k*2 FROM integers;
+----
+1	2
+0	0
+1	2
+NULL	NULL
+
+# refer to an aliased aggregate
+query II
+select sum(i+1) as ii, ii+1 from integers group by null
+----
+9	10
+
+# refer to an aliased aggregate in a window function
+query IIR
+select
+    (i % 2 = 0) as is_even,
+	sum(i) as subtotal,
+	subtotal::double/(sum(subtotal) over ()) as proportion
+from integers group by is_even order by is_even
+----
+NULL	NULL	NULL
+0	4	0.666667
+1	2	0.333333
+
+# refer to an alias in a window
+query III
+select
+    (i % 2 = 0) as is_even,
+	i,
+	sum(i) over (partition by is_even),
+from integers order by i
+----
+NULL	NULL	NULL
+0	1	4
+1	2	2
+0	3	4
