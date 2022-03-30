@@ -9,8 +9,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -208,17 +206,11 @@ void BaseAppender::Append(string_t value) {
 
 template <>
 void BaseAppender::Append(float value) {
-	if (!Value::FloatIsValid(value)) {
-		throw InvalidInputException("Float value is out of range!");
-	}
 	AppendValueInternal<float>(value);
 }
 
 template <>
 void BaseAppender::Append(double value) {
-	if (!Value::DoubleIsValid(value)) {
-		throw InvalidInputException("Double value is out of range!");
-	}
 	AppendValueInternal<double>(value);
 }
 

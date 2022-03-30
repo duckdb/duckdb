@@ -79,7 +79,7 @@ struct VarSampOperation : public STDDevBaseOperation {
 			mask.SetInvalid(idx);
 		} else {
 			target[idx] = state->dsquared / (state->count - 1);
-			if (!Value::DoubleIsValid(target[idx])) {
+			if (!Value::DoubleIsFinite(target[idx])) {
 				throw OutOfRangeException("VARSAMP is out of range!");
 			}
 		}
@@ -93,7 +93,7 @@ struct VarPopOperation : public STDDevBaseOperation {
 			mask.SetInvalid(idx);
 		} else {
 			target[idx] = state->count > 1 ? (state->dsquared / state->count) : 0;
-			if (!Value::DoubleIsValid(target[idx])) {
+			if (!Value::DoubleIsFinite(target[idx])) {
 				throw OutOfRangeException("VARPOP is out of range!");
 			}
 		}
@@ -107,7 +107,7 @@ struct STDDevSampOperation : public STDDevBaseOperation {
 			mask.SetInvalid(idx);
 		} else {
 			target[idx] = sqrt(state->dsquared / (state->count - 1));
-			if (!Value::DoubleIsValid(target[idx])) {
+			if (!Value::DoubleIsFinite(target[idx])) {
 				throw OutOfRangeException("STDDEV_SAMP is out of range!");
 			}
 		}
@@ -121,7 +121,7 @@ struct STDDevPopOperation : public STDDevBaseOperation {
 			mask.SetInvalid(idx);
 		} else {
 			target[idx] = state->count > 1 ? sqrt(state->dsquared / state->count) : 0;
-			if (!Value::DoubleIsValid(target[idx])) {
+			if (!Value::DoubleIsFinite(target[idx])) {
 				throw OutOfRangeException("STDDEV_POP is out of range!");
 			}
 		}
@@ -135,7 +135,7 @@ struct StandardErrorOfTheMeanOperation : public STDDevBaseOperation {
 			mask.SetInvalid(idx);
 		} else {
 			target[idx] = sqrt(state->dsquared / state->count) / sqrt((state->count));
-			if (!Value::DoubleIsValid(target[idx])) {
+			if (!Value::DoubleIsFinite(target[idx])) {
 				throw OutOfRangeException("SEM is out of range!");
 			}
 		}

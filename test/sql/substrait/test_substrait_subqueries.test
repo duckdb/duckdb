@@ -28,3 +28,10 @@ CALL get_substrait('select i, exists (select * from integers where i > 2) from i
 # Self-Join
 statement ok
 CALL get_substrait('select i1.i from integers i1 inner join integers i2 on (i1.i = i2.i)')
+
+#Double subquery
+statement ok
+CALL get_substrait('select i from integers where i >= (select min (i) from integers) and i <= (select max (i) from integers) ')
+
+statement ok
+CALL get_substrait('select i from integers where i in (select i from integers where i <= 4)  and i = (select min (i) from integers)  ')

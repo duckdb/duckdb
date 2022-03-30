@@ -7,7 +7,6 @@
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/common/tree_renderer.hpp"
-#include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -239,7 +238,7 @@ void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t 
 	if (!enabled) {
 		return;
 	}
-	if (!Value::DoubleIsValid(time)) {
+	if (!Value::DoubleIsFinite(time)) {
 		return;
 	}
 	auto entry = timings.find(op);
