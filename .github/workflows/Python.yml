@@ -178,10 +178,11 @@ jobs:
     - name: Prepare extension folder
       run: mkdir /tmp/duckdb_python_test_extensions
 
-    - uses: actions/download-artifact@v3
-      with:
-        name: python-test-extensions-${{ matrix.arch }}
-        path: /tmp/duckdb_python_test_extensions
+    # Python build tests should now fail
+#    - uses: actions/download-artifact@v3
+#      with:
+#        name: python-test-extensions-${{ matrix.arch }}
+#        path: /tmp/duckdb_python_test_extensions
 
     - name: check extensions for testing
       run: |
