@@ -46,6 +46,21 @@ bool Expression::HasSideEffects() const {
 	return has_side_effects;
 }
 
+bool Expression::PropagatesNullValues() const {
+	if (type == ExpressionType::OPERATOR_IS_NULL || type == ExpressionType::OPERATOR_IS_NOT_NULL ||
+	    type == ExpressionType::COMPARE_NOT_DISTINCT_FROM || type == ExpressionType::COMPARE_DISTINCT_FROM ||
+	    type == ExpressionType::CONJUNCTION_OR || type == ExpressionType::CONJUNCTION_AND) {
+		return false;
+	}
+	bool propagate_null_values = true;
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
+		if (!child.PropagatesNullValues()) {
+			propagate_null_values = false;
+		}
+	});
+	return propagate_null_values;
+}
+
 bool Expression::IsFoldable() const {
 	bool is_foldable = true;
 	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
