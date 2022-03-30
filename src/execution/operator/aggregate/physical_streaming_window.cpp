@@ -12,9 +12,18 @@ PhysicalStreamingWindow::PhysicalStreamingWindow(vector<LogicalType> types, vect
     : PhysicalOperator(type, move(types), estimated_cardinality), select_list(move(select_list)) {
 }
 
+class StreamingWindowGlobalState : public GlobalOperatorState {
+public:
+	StreamingWindowGlobalState() : row_number(1) {
+	}
+
+	//! The next row number.
+	std::atomic<int64_t> row_number;
+};
+
 class StreamingWindowState : public OperatorState {
 public:
-	StreamingWindowState() : initialized(false), row_number(1) {
+	StreamingWindowState() : initialized(false) {
 	}
 
 	void Initialize(DataChunk &input, const vector<unique_ptr<Expression>> &expressions) {
@@ -45,16 +54,20 @@ public:
 
 public:
 	bool initialized;
-	int64_t row_number;
 	vector<unique_ptr<Vector>> const_vectors;
 };
+
+unique_ptr<GlobalOperatorState> PhysicalStreamingWindow::GetGlobalOperatorState(ClientContext &context) const {
+	return make_unique<StreamingWindowGlobalState>();
+}
 
 unique_ptr<OperatorState> PhysicalStreamingWindow::GetOperatorState(ClientContext &context) const {
 	return make_unique<StreamingWindowState>();
 }
 
 OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                    OperatorState &state_p) const {
+                                                    GlobalOperatorState &gstate_p, OperatorState &state_p) const {
+	auto &gstate = (StreamingWindowGlobalState &)gstate_p;
 	auto &state = (StreamingWindowState &)state_p;
 	if (!state.initialized) {
 		state.Initialize(input, select_list);
@@ -81,7 +94,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			// Set row numbers
 			auto rdata = FlatVector::GetData<int64_t>(chunk.data[col_idx]);
 			for (idx_t i = 0; i < count; i++) {
-				rdata[i] = state.row_number + i;
+				rdata[i] = gstate.row_number + i;
 			}
 			break;
 		}
@@ -89,7 +102,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			throw NotImplementedException("%s for StreamingWindow", ExpressionTypeToString(expr.GetExpressionType()));
 		}
 	}
-	state.row_number += count;
+	gstate.row_number += count;
 	chunk.SetCardinality(count);
 	return OperatorResultType::NEED_MORE_INPUT;
 }
