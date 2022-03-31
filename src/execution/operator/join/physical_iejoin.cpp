@@ -594,6 +594,7 @@ struct IEJoinUnion {
 	IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, SortedTable &t1, const idx_t b1, SortedTable &t2,
 	            const idx_t b2);
 
+	void SearchL1(idx_t pos);
 	bool NextRow();
 
 	//! Inverted loop
@@ -812,6 +813,54 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	(void)NextRow();
 }
 
+void IEJoinUnion::SearchL1(idx_t pos) {
+	// Perform an exponential search in the appropriate direction
+	op1->SetIndex(pos);
+	off1->SetIndex(pos);
+
+	idx_t step = 1;
+	auto hi = pos;
+	auto lo = pos;
+	if (op1->Compare(*off1)) {
+		// Scan left for loose inequality
+		if (pos) {
+			lo -= MinValue(step, lo);
+			step *= 2;
+			off1->SetIndex(lo);
+		}
+		while (off1->GetIndex() > 0 && op1->Compare(*off1)) {
+			hi = off1->GetIndex();
+			lo -= MinValue(step, lo);
+			step *= 2;
+			off1->SetIndex(lo);
+		}
+	} else {
+		// Scan right for strict inequality
+		hi += MinValue(step, n - hi);
+		step *= 2;
+		off1->SetIndex(hi);
+		while (off1->GetIndex() < n && !op1->Compare(*off1)) {
+			lo = hi;
+			hi += MinValue(step, n - hi);
+			step *= 2;
+			off1->SetIndex(hi);
+		}
+	}
+
+	// Binary search the target area
+	while (lo < hi) {
+		const auto mid = lo + (hi - lo) / 2;
+		off1->SetIndex(mid);
+		if (op1->Compare(*off1)) {
+			hi = mid;
+		} else {
+			lo = mid + 1;
+		}
+	}
+
+	off1->SetIndex(lo);
+}
+
 bool IEJoinUnion::NextRow() {
 	for (; i < n; ++i) {
 		// 12. pos ← P[i]
@@ -838,15 +887,10 @@ bool IEJoinUnion::NextRow() {
 		// 9.  if (op1 ∈ {≤,≥} and op2 ∈ {≤,≥}) eqOff = 0
 		// 10. else eqOff = 1
 		// No, because there could be more than one equal value.
-		// Scan the neighborhood instead
-		op1->SetIndex(pos);
-		off1->SetIndex(pos);
-		for (; off1->GetIndex() > 0 && op1->Compare(*off1); --(*off1)) {
-			continue;
-		}
-		for (; off1->GetIndex() < n && !op1->Compare(*off1); ++(*off1)) {
-			continue;
-		}
+		// Find the leftmost off1 where L1[pos] op1 L1[off1..n]
+		// These are the rows that satisfy the op1 condition
+		// and that is where we should start scanning B from
+		SearchL1(pos);
 
 		return true;
 	}
