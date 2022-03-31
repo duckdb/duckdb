@@ -426,6 +426,7 @@ void Executor::AddChildPipeline(Pipeline *current) {
 
 void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 	D_ASSERT(current);
+	op->op_state.reset();
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
 		op->sink_state.reset();
