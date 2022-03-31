@@ -24,7 +24,7 @@ PhysicalProjection::PhysicalProjection(vector<LogicalType> types, vector<unique_
 }
 
 OperatorResultType PhysicalProjection::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                               OperatorState &state_p) const {
+                                               GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (ProjectionState &)state_p;
 	state.executor.Execute(input, chunk);
 	return OperatorResultType::NEED_MORE_INPUT;

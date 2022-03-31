@@ -30,6 +30,12 @@ public:
 	}
 };
 
+class GlobalOperatorState {
+public:
+	virtual ~GlobalOperatorState() {
+	}
+};
+
 class GlobalSinkState {
 public:
 	GlobalSinkState() : state(SinkFinalizeType::READY) {
@@ -83,6 +89,8 @@ public:
 	idx_t estimated_cardinality;
 	//! The global sink state of this operator
 	unique_ptr<GlobalSinkState> sink_state;
+	//! The global state of this operator
+	unique_ptr<GlobalOperatorState> op_state;
 
 public:
 	virtual string GetName() const;
@@ -104,8 +112,9 @@ public:
 public:
 	// Operator interface
 	virtual unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const;
+	virtual unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const;
 	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                                   OperatorState &state) const;
+	                                   GlobalOperatorState &gstate, OperatorState &state) const;
 
 	virtual bool ParallelOperator() const {
 		return false;

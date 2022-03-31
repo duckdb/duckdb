@@ -21,7 +21,7 @@ unique_ptr<OperatorState> PhysicalExpressionScan::GetOperatorState(ClientContext
 }
 
 OperatorResultType PhysicalExpressionScan::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                   OperatorState &state_p) const {
+                                                   GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (ExpressionScanState &)state_p;
 
 	for (; chunk.size() + input.size() <= STANDARD_VECTOR_SIZE && state.expression_index < expressions.size();
