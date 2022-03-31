@@ -242,7 +242,7 @@ jobs:
      - name: Build External Extensions
        run: |
          mkdir -p build/release/extension/out_of_tree
-         python scripts/build_out_of_tree_extensions.py --build build/release/src/Release --output build/release/extension/out_of_tree
+         python scripts/build_out_of_tree_extensions.py --library ../build/release/src/Release --output build/release/extension/out_of_tree
 
      - name: Deploy
        run: |
