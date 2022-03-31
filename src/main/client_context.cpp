@@ -252,6 +252,11 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartPhase("planner");
 	Planner planner(*this);
+	if (values) {
+		for (auto &value : *values) {
+			planner.parameter_types.push_back(value.type());
+		}
+	}
 	planner.CreatePlan(move(statement));
 	D_ASSERT(planner.plan);
 	profiler.EndPhase();
@@ -572,6 +577,7 @@ ClientContext::PendingStatementOrPreparedStatement(ClientContextLock &lock, cons
 				D_ASSERT(new_prepared->bound_all_parameters);
 				new_prepared->unbound_statement = move(prepared->unbound_statement);
 				prepared = move(new_prepared);
+				prepared->bound_all_parameters = false;
 			}
 			result = PendingPreparedStatement(lock, prepared, *values);
 		}
