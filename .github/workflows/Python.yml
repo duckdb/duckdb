@@ -44,7 +44,6 @@ jobs:
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
       PYTEST_TIMEOUT: '600'
-      DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED: true
 
     steps:
     - uses: actions/checkout@v2
@@ -81,7 +80,7 @@ jobs:
         cibuildwheel --output-dir wheelhouse duckdb_tarball
 
    test-extensions:
-    name: Build Python test extensions
+    name: Build extensions for wheel tests
     runs-on: ubuntu-20.04
 #    needs: linux-python3-9
     strategy:
@@ -127,7 +126,7 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: python-test-extensions-${{ matrix.arch }}
+        name: python-wheel-test-extensions-${{ matrix.arch }}
         path: |
           build/release/extension/*/*.duckdb_extension
 
@@ -179,7 +178,7 @@ jobs:
 
     - uses: actions/download-artifact@v3
       with:
-        name: python-test-extensions-${{ matrix.arch }}
+        name: python-wheel-test-extensions-${{ matrix.arch }}
         path: /tmp/duckdb_python_test_extensions
 
     - name: check extensions for testing
@@ -196,6 +195,7 @@ jobs:
         cp /tmp/duckdb_python_test_extensions/*/*.duckdb_extension duckdb_tarball
         ls duckdb_tarball
         cibuildwheel --output-dir wheelhouse duckdb_tarball
+        ls wheelhouse
 
     - name: Deploy aarch64
       if: ${{ matrix.arch == 'aarch64' }}

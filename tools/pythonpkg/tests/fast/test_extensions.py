@@ -6,11 +6,11 @@ import pandas as pd
 class TestExtensions(object):
     def test_extensions(self, duckdb_cursor):
 
-        # Paths to search for extensions
+        # Paths to search for extensions, relative to this file
         extension_search_patterns = [
             "../../../../build/release/extension/*/*.duckdb_extension",
             "/tmp/duckdb_python_test_extensions/*/*.duckdb_extension",
-            "./*.duckdb_extension"
+            "./../../*.duckdb_extension"
         ]
 
         # Depending on the env var, the test will fail on not finding any extensions

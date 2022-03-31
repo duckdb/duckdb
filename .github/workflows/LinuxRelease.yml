@@ -130,7 +130,7 @@ jobs:
 #    needs: linux-release-64
     strategy:
       matrix:
-        USE_CXX11_ABI: [ false, true ]
+        GLIBCXX_USE_CXX11_ABI: [ false, true ]
     env:
       GEN: ninja
       BUILD_VISUALIZER: 1
@@ -181,6 +181,7 @@ jobs:
         tar -xf openssl-1.1.1c.tar.gz
         cd openssl-1.1.1c
         ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl -static zlib
+        make
         make install
         echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
         ldconfig -v
@@ -209,20 +210,11 @@ jobs:
     - name: Deploy
       run: |
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          ./scripts/extension-upload.sh ${{matrix.USE_CXX11_ABI && 'linux_amd64' || 'linux_amd64_old-cxx11-abi'}}
+          ./scripts/extension-upload.sh ${{matrix.GLIBCXX_USE_CXX11_ABI && 'linux_amd64' || 'linux_amd64_old-cxx11-abi'}}
           ./scripts/extension-upload-test.sh
         else
           ./scripts/extension-upload-test.sh local
         fi
-    # For testing, remove
-    - uses: actions/upload-artifact@v2
-      with:
-        name: test-upload-extension-${{matrix.USE_CXX11_ABI}}
-        path: |
-          ./build/release/extension/httpfs/httpfs.duckdb_extension
-          ./build/release/extension/json/json.duckdb_extension
-
-
 
  linux-release-32:
     name: Linux (32 Bit)

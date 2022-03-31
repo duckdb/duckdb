@@ -9,7 +9,7 @@ import multiprocessing.pool
 from setuptools import setup, Extension
 
 lib_name = 'duckdb'
-extension_name = f'_{lib_name}_extension'
+extension_name = '_duckdb_extension'
 
 extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer', 'json', 'excel', 'substrait']
 
