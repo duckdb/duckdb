@@ -5,7 +5,6 @@
 
 #include "duckdb/common/sort/sort.hpp"
 
-
 namespace duckdb {
 
 struct ListSortBindData : public FunctionData {
@@ -26,8 +25,8 @@ struct ListSortBindData : public FunctionData {
 
 ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, LogicalType &return_type_p,
                                    LogicalType &child_type_p, ClientContext &context_p)
-    : order_type(order_type_p), null_order(null_order_p), return_type(return_type_p), 
-	child_type(child_type_p), context(context_p) {
+    : order_type(order_type_p), null_order(null_order_p), return_type(return_type_p), child_type(child_type_p),
+      context(context_p) {
 }
 
 unique_ptr<FunctionData> ListSortBindData::Copy() {
@@ -38,10 +37,10 @@ ListSortBindData::~ListSortBindData() {
 }
 
 // create the key_chunk and the payload_chunk and sink them into the local_sort_state
-void SinkDataChunk(Vector *child_vector, SelectionVector &sel, idx_t offset_lists_indices,
-	vector<LogicalType> &types, vector<LogicalType> &payload_types, Vector &payload_vector,
-	LocalSortState &local_sort_state, bool &data_to_sort, Vector &lists_indices) {
-	
+void SinkDataChunk(Vector *child_vector, SelectionVector &sel, idx_t offset_lists_indices, vector<LogicalType> &types,
+                   vector<LogicalType> &payload_types, Vector &payload_vector, LocalSortState &local_sort_state,
+                   bool &data_to_sort, Vector &lists_indices) {
+
 	// slice the child vector
 	Vector slice(*child_vector, sel, offset_lists_indices);
 
@@ -121,7 +120,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto list_entries = (list_entry_t *)lists_data.data;
 
 	// create the lists_indices vector, this contains an element for each list's entry,
-	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4] 
+	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4]
 	// lists_indices contains [0, 0, 0, 1, 1]
 	Vector lists_indices(LogicalType::USMALLINT);
 	auto lists_indices_data = FlatVector::GetData<u_int16_t>(lists_indices);
@@ -163,8 +162,8 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 			// lists_indices vector is full, sink
 			if (offset_lists_indices == STANDARD_VECTOR_SIZE) {
-				SinkDataChunk(&child_vector, sel, offset_lists_indices, types, payload_types, 
-					payload_vector, local_sort_state, data_to_sort, lists_indices);
+				SinkDataChunk(&child_vector, sel, offset_lists_indices, types, payload_types, payload_vector,
+				              local_sort_state, data_to_sort, lists_indices);
 				offset_lists_indices = 0;
 			}
 
@@ -178,8 +177,8 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 
 	if (offset_lists_indices != 0) {
-		SinkDataChunk(&child_vector, sel, offset_lists_indices, types, payload_types, 
-			payload_vector, local_sort_state, data_to_sort, lists_indices);
+		SinkDataChunk(&child_vector, sel, offset_lists_indices, types, payload_types, payload_vector, local_sort_state,
+		              data_to_sort, lists_indices);
 	}
 
 	if (data_to_sort) {
@@ -273,8 +272,7 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 		}
 	}
 
-	return make_unique<ListSortBindData>(order, null_order, bound_function.return_type, 
-		child_type, context);
+	return make_unique<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
 }
 
 void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
