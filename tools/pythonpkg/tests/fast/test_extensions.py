@@ -2,25 +2,37 @@ import duckdb
 import os
 import glob
 import pandas as pd
+from os.path import abspath
 
 class TestExtensions(object):
     def test_extensions(self, duckdb_cursor):
+
+        print(f"TestExtensions: This file is at{__file__}")
 
         # Paths to search for extensions, relative to this file
         extension_search_patterns = [
             "../../../../build/release/extension/*/*.duckdb_extension",
             "/tmp/duckdb_python_test_extensions/*/*.duckdb_extension",
-            "./../../*.duckdb_extension"
+            "../../*.duckdb_extension"
         ]
+
+        # DUCKDB_PYTHON_TEST_EXTENSION_PATH can be used to add a path for the extension test to search for extensions
+        if 'DUCKDB_PYTHON_TEST_EXTENSION_PATH' in os.environ:
+            env_extension_path = os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_PATH');
+            env_extension_path = env_extension_path.rstrip('/')
+            extension_search_patterns.append(env_extension_path + '/*/*.duckdb_extension')
+            extension_search_patterns.append(env_extension_path + '/*.duckdb_extension')
+        else:
+            print("ENV not found!")
 
         # Depending on the env var, the test will fail on not finding any extensions
         must_test_extension_load = os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False)
 
-        dirname = os.path.dirname(__file__)
         extension_paths_found = []
 
         for pattern in extension_search_patterns:
-            extension_pattern_abs = os.path.join(dirname, pattern)
+            extension_pattern_abs = abspath(pattern)
+            print(f"Searching path: {extension_pattern_abs}")
             for path in glob.glob(extension_pattern_abs):
                 extension_paths_found.append(path)
 
