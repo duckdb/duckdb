@@ -208,7 +208,7 @@ SELECT b, SUM(a) FROM test GROUP BY b QUALIFY row_number() OVER (PARTITION BY b)
 
 # alias conflicts with underlying column
 query TI
-SELECT b, a*10 as aa from qt qualify aa >= 10 and count(*) over () > 0
+SELECT b, a*10 as a from qt qualify a >= 10 and count(*) over () > 0
 ----
 A	10
 A	20

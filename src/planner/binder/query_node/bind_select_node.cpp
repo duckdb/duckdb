@@ -360,7 +360,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	// bind the QUALIFY clause, if any
 	if (statement.qualify) {
-		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
+		ExpressionBinder::QualifyColumnNames(*this, statement.qualify, true);
 		QualifyBinder qualify_binder(*this, context, *result, alias_map, info);
 		result->qualify = qualify_binder.Bind(statement.qualify);
 	}
