@@ -9,7 +9,8 @@ class TestExtensions(object):
         # Paths to search for extensions
         extension_search_patterns = [
             "../../../../build/release/extension/*/*.duckdb_extension",
-            "/tmp/duckdb_python_test_extensions/*/*.duckdb_extension"
+            "/tmp/duckdb_python_test_extensions/*/*.duckdb_extension",
+            "./*.duckdb_extension"
         ]
 
         # Depending on the env var, the test will fail on not finding any extensions
