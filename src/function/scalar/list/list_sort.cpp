@@ -2,6 +2,7 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 #include "duckdb/common/sort/sort.hpp"
 
@@ -123,13 +124,13 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4]
 	// lists_indices contains [0, 0, 0, 1, 1]
 	Vector lists_indices(LogicalType::USMALLINT);
-	auto lists_indices_data = FlatVector::GetData<u_int16_t>(lists_indices);
+	auto lists_indices_data = FlatVector::GetData<uint16_t>(lists_indices);
 
 	// create the payload_vector, this is just a vector containing incrementing integers
 	// this will later be used as the 'new' selection vector of the child_vector, after
 	// rearranging the payload according to the sorting order
 	Vector payload_vector(LogicalType::UINTEGER);
-	auto payload_vector_data = FlatVector::GetData<u_int32_t>(payload_vector);
+	auto payload_vector_data = FlatVector::GetData<uint32_t>(payload_vector);
 
 	// selection vector pointing to the data of the child vector,
 	// used for slicing the child_vector correctly
@@ -168,7 +169,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			}
 
 			sel.set_index(offset_lists_indices, source_idx + child_idx);
-			lists_indices_data[offset_lists_indices] = (u_int32_t)i;
+			lists_indices_data[offset_lists_indices] = (uint32_t)i;
 			payload_vector_data[offset_lists_indices] = incr_payload_count;
 			offset_lists_indices++;
 			incr_payload_count++;
@@ -204,7 +205,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 			// construct the selection vector with the new order from the result vectors
 			Vector result_vector(result_chunk.data[0]);
-			auto result_data = FlatVector::GetData<u_int32_t>(result_vector);
+			auto result_data = FlatVector::GetData<uint32_t>(result_vector);
 			auto row_count = result_chunk.size();
 
 			for (idx_t i = 0; i < row_count; i++) {
