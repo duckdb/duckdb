@@ -136,6 +136,8 @@ SELECT list_sort([NULL::BOOLEAN])
 ----
 [NULL]
 
+mode skip
+
 # VARCHAR
 query I
 SELECT list_sort(['aa', 'a', 'cd', NULL, '42'])
@@ -146,6 +148,8 @@ query I
 SELECT list_sort([NULL::VARCHAR])
 ----
 [NULL]
+
+mode unskip
 
 # INTEGER types
 foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
@@ -243,6 +247,8 @@ endloop
 
 # JSON
 
+mode skip
+
 query I
 SELECT list_sort(['{a: 1}'::JSON, '{a: 3}'::JSON])
 ----
@@ -252,6 +258,8 @@ query I
 SELECT list_sort([NULL::JSON])
 ----
 [NULL]
+
+mode unskip
 
 # BLOB
 
@@ -282,8 +290,6 @@ SELECT list_sort(e) FROM enums
 [sad, happy]
 
 # NESTED types
-# TODO: this throws a 'Not implemented Error: Type for comparison'
-# chunk_collection.cpp, line 222
 
 mode skip
 
@@ -292,9 +298,9 @@ SELECT list_sort([[1], [1, 2], NULL, [NULL], [], [1, 2, 3]])
 ----
 [NULL, [NULL], [], [1], [1, 2], [1, 2, 3]]
 
-query I
-SELECT list_sort([{'a': 1}, {'b': 5}, {'a': 3}])
-----
-[{'a': 1}, {'a': 3}, {'b': 5}]
-
 mode unskip
+
+query I
+SELECT list_sort([{'a': 1}, {'a': 5}, {'a': 3}])
+----
+[{'a': 1}, {'a': 3}, {'a': 5}]

@@ -112,6 +112,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	idx_t offset_lists_indices = 0;
 	uint32_t incr_payload_count = 0;
+	bool data_to_sort = false;
 
 	for (idx_t i = 0; i < count; i++) {
 
@@ -154,6 +155,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 				// sink and reset
 				local_sort_state.SinkChunk(key_chunk, payload_chunk);
+				data_to_sort = true;
 				offset_lists_indices = 0;
 			}
 
@@ -188,48 +190,54 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 		// sink
 		local_sort_state.SinkChunk(key_chunk, payload_chunk);
+		data_to_sort = true;
 	}
 
-	// add local state to global state, which sorts the data
-	global_sort_state.AddLocalState(local_sort_state);
-	global_sort_state.PrepareMergePhase();
+	if (data_to_sort) {
 
-	// create a vector containing the payload and the key types
-	vector<LogicalType> all_types;
-	all_types.insert(all_types.end(), payload_types.begin(), payload_types.end());
-	all_types.insert(all_types.end(), types.begin(), types.end());
+		// add local state to global state, which sorts the data
+		global_sort_state.AddLocalState(local_sort_state);
+		global_sort_state.PrepareMergePhase();
 
-	// selection vector that is to be filled with the 'sorted' payload
-	SelectionVector sel_sorted(incr_payload_count);
-	idx_t sel_sorted_idx = 0;
+		// create a vector containing the payload and the key types
+		vector<LogicalType> all_types;
+		all_types.insert(all_types.end(), payload_types.begin(), payload_types.end());
+		all_types.insert(all_types.end(), types.begin(), types.end());
 
-	// scan the sorted row data
-	PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
-	for (;;) {
-		DataChunk result_chunk;
-		result_chunk.Initialize(all_types);
-		result_chunk.SetCardinality(0);
-		scanner.Scan(result_chunk);
-		if (result_chunk.size() == 0) {
-			break;
+		// selection vector that is to be filled with the 'sorted' payload
+		SelectionVector sel_sorted(incr_payload_count);
+		idx_t sel_sorted_idx = 0;
+
+		// scan the sorted row data
+		PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
+		for (;;) {
+			DataChunk result_chunk;
+			result_chunk.Initialize(all_types);
+			result_chunk.SetCardinality(0);
+			scanner.Scan(result_chunk);
+			if (result_chunk.size() == 0) {
+				break;
+			}
+
+			// split into two, result_chunk then contains the payload
+			DataChunk key_chunk;
+			result_chunk.Split(key_chunk, payload_types.size());
+
+			Vector result_vector(result_chunk.data[0]);
+			auto result_data = FlatVector::GetData<u_int32_t>(result_vector);
+			auto row_count = result_chunk.size();
+
+			for (idx_t i = 0; i < row_count; i++) {
+				sel_sorted.set_index(sel_sorted_idx, result_data[i]);
+				sel_sorted_idx++;
+			}
 		}
 
-		// split into two, result_chunk then contains the payload
-		DataChunk key_chunk;
-		result_chunk.Split(key_chunk, payload_types.size());
-
-		Vector result_vector(result_chunk.data[0]);
-		auto result_data = FlatVector::GetData<u_int32_t>(result_vector);
-		auto row_count = result_chunk.size();
-
-		for (idx_t i = 0; i < row_count; i++) {
-			sel_sorted.set_index(sel_sorted_idx, result_data[i]);
-			sel_sorted_idx++;
-		}
+		D_ASSERT(sel_sorted_idx == incr_payload_count);
+		//auto sel_data = child_data.sel->Slice(sel_sorted, sel_sorted_idx;
+		child_vector.Slice(sel_sorted, sel_sorted_idx);
 	}
 
-	D_ASSERT(sel_sorted_idx == incr_payload_count);
-	child_data.sel->Slice(sel_sorted, sel_sorted_idx);
 	result.Reference(lists);
 }
 
@@ -255,39 +263,33 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 
 	// get custom order and null order
 	if (arguments.size() == 3) {
+
+		// get the sorting order
 		if (!arguments[1]->IsFoldable()) {
 			throw InvalidInputException("Sorting order must be a constant");
 		}
-		if (!arguments[2]->IsFoldable()) {
-			throw InvalidInputException("Null sorting order must be a constant");
-		}
-
 		Value order_value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 		auto order_name = order_value.ToString();
 		std::transform(order_name.begin(), order_name.end(), order_name.begin(), ::toupper);
 		if (order_name != "DESC" && order_name != "ASC") {
 			throw InvalidInputException("Sorting order must be either ASC or DESC");
 		}
+		if (order_name == "DESC") {
+			order = OrderType::DESCENDING;
+		}
 
+		// get the null sorting order
+		if (!arguments[2]->IsFoldable()) {
+			throw InvalidInputException("Null sorting order must be a constant");
+		}
 		Value null_order_value = ExpressionExecutor::EvaluateScalar(*arguments[2]);
 		auto null_order_name = null_order_value.ToString();
 		std::transform(null_order_name.begin(), null_order_name.end(), null_order_name.begin(), ::toupper);
 		if (null_order_name != "NULLS FIRST" && null_order_name != "NULLS LAST") {
 			throw InvalidInputException("Null sorting order must be either NULLS FIRST or NULLS LAST");
 		}
-
 		if (null_order_name == "NULLS LAST") {
 			null_order = OrderByNullType::NULLS_LAST;
-		}
-		// FIXME: according to sorted_aggregate_function.cpp, line 8 the collection sorting does
-		// not handle OrderByNullType correctly, so this is a hack
-		if (order_name == "DESC") {
-			order = OrderType::DESCENDING;
-			if (null_order_name == "NULLS LAST") {
-				null_order = OrderByNullType::NULLS_FIRST;
-			} else {
-				null_order = OrderByNullType::NULLS_LAST;
-			}
 		}
 	}
 
