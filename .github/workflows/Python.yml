@@ -40,7 +40,7 @@ jobs:
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
       CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow==7.0" || true)'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+      CIBW_TEST_COMMAND: 'DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
       PYTEST_TIMEOUT: '600'
@@ -66,9 +66,9 @@ jobs:
         chmod +x cmake-3.21.3-linux-x86_64.sh
         sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
-    - name: Build extensions to test
-      run: |
-        GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
+#    - name: Build extensions to test
+#      run: |
+#        GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
 
     - name: Install
       run: pip install cibuildwheel twine
@@ -151,13 +151,12 @@ jobs:
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
       CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy && pip install --prefer-binary "requests>=2.26"'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
+      CIBW_TEST_COMMAND: 'DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests/fast'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
       PYTEST_TIMEOUT: '600'
       DUCKDB_BUILD_UNITY: 1
       GLIBCXX_USE_CXX11_ABI: 0
-      DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED: true
 
     steps:
     - uses: actions/checkout@v2

@@ -240,7 +240,8 @@ setup(
     data_files = data_files,
     packages=[
         'duckdb_query_graph',
-        'duckdb-stubs'
+        'duckdb-stubs',
+        'duckdb'
     ],
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.6.0'],
