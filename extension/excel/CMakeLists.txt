@@ -12,9 +12,6 @@ add_library(
   excel_extension STATIC excel-extension.cpp ${NUMFORMAT_OBJECT_FILES}
                          ${VARIANT_OBJECT_FILES})
 
-build_loadable_extension(excel excel-extension.cpp ${NUMFORMAT_OBJECT_FILES}
-                         ${VARIANT_OBJECT_FILES})
-
 install(
   TARGETS excel_extension
   EXPORT "${DUCKDB_EXPORT_SET}"
