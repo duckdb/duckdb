@@ -90,6 +90,8 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "array_push_back", {"arr", "e", nullptr}, "list_concat(arr, list_value(e))"},
 	{DEFAULT_SCHEMA, "array_push_front", {"arr", "e", nullptr}, "list_concat(list_value(e), arr)"},
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, "unnest(generate_series(1, array_length(arr, dim)))"},
+	{DEFAULT_SCHEMA, "list_reverse_sort", {"l", nullptr}, "list_sort(l, 'DESC', 'NULLS LAST')"},
+	{DEFAULT_SCHEMA, "array_reverse_sort", {"arr", nullptr}, "list_sort(arr, 'DESC', 'NULLS LAST')"},
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, "floor(x/y)"},
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
 

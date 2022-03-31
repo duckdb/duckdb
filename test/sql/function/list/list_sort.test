@@ -96,6 +96,16 @@ SELECT array_sort([1, 2])
 ----
 [1, 2]
 
+query I
+SELECT list_reverse_sort([1, 2])
+----
+[2, 1]
+
+query I
+SELECT array_reverse_sort([1, 2])
+----
+[2, 1]
+
 # test custom ordering
 
 query I
@@ -136,8 +146,6 @@ SELECT list_sort([NULL::BOOLEAN])
 ----
 [NULL]
 
-mode skip
-
 # VARCHAR
 query I
 SELECT list_sort(['aa', 'a', 'cd', NULL, '42'])
@@ -148,8 +156,6 @@ query I
 SELECT list_sort([NULL::VARCHAR])
 ----
 [NULL]
-
-mode unskip
 
 # INTEGER types
 foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
@@ -247,8 +253,6 @@ endloop
 
 # JSON
 
-mode skip
-
 query I
 SELECT list_sort(['{a: 1}'::JSON, '{a: 3}'::JSON])
 ----
@@ -258,8 +262,6 @@ query I
 SELECT list_sort([NULL::JSON])
 ----
 [NULL]
-
-mode unskip
 
 # BLOB
 
@@ -291,14 +293,10 @@ SELECT list_sort(e) FROM enums
 
 # NESTED types
 
-mode skip
-
 query I
 SELECT list_sort([[1], [1, 2], NULL, [NULL], [], [1, 2, 3]])
 ----
-[NULL, [NULL], [], [1], [1, 2], [1, 2, 3]]
-
-mode unskip
+[NULL, [], [1], [1, 2], [1, 2, 3], [NULL]]
 
 query I
 SELECT list_sort([{'a': 1}, {'a': 5}, {'a': 3}])

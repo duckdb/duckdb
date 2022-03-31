@@ -37,6 +37,32 @@ unique_ptr<FunctionData> ListSortBindData::Copy() {
 ListSortBindData::~ListSortBindData() {
 }
 
+// create the key_chunk and the payload_chunk and sink them into the local_sort_state
+void SinkDataChunk(Vector *child_vector, SelectionVector &sel, idx_t offset_lists_indices,
+	vector<LogicalType> &types, vector<LogicalType> &payload_types, Vector &payload_vector,
+	LocalSortState &local_sort_state, bool &data_to_sort, Vector &lists_indices) {
+	
+	// slice the child vector
+	Vector slice(*child_vector, sel, offset_lists_indices);
+
+	// initialize and fill key_chunk
+	DataChunk key_chunk;
+	key_chunk.InitializeEmpty(types);
+	key_chunk.data[0].Reference(lists_indices);
+	key_chunk.data[1].Reference(slice);
+	key_chunk.SetCardinality(offset_lists_indices);
+
+	// initialize and fill key_chunk and payload_chunk
+	DataChunk payload_chunk;
+	payload_chunk.InitializeEmpty(payload_types);
+	payload_chunk.data[0].Reference(payload_vector);
+	payload_chunk.SetCardinality(offset_lists_indices);
+
+	// sink
+	local_sort_state.SinkChunk(key_chunk, payload_chunk);
+	data_to_sort = true;
+}
+
 static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	D_ASSERT(args.ColumnCount() == 1 || args.ColumnCount() == 3);
@@ -77,7 +103,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	payload_layout.Initialize(payload_types);
 
 	// initialize the global and local sorting state
-	BufferManager &buffer_manager = BufferManager::GetBufferManager(info.context);
+	auto &buffer_manager = BufferManager::GetBufferManager(info.context);
 	info.global_sort_state = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
 	auto &global_sort_state = *info.global_sort_state;
 	LocalSortState local_sort_state;
@@ -97,18 +123,18 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	// create the lists_indices vector, this contains an element for each list's entry,
 	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4] 
 	// lists_indices contains [0, 0, 0, 1, 1]
-	Vector lists_indices = Vector(LogicalType::USMALLINT);
+	Vector lists_indices(LogicalType::USMALLINT);
 	auto lists_indices_data = FlatVector::GetData<u_int16_t>(lists_indices);
 
 	// create the payload_vector, this is just a vector containing incrementing integers
 	// this will later be used as the 'new' selection vector of the child_vector, after
 	// rearranging the payload according to the sorting order
-	Vector payload_vector = Vector(LogicalType::UINTEGER);
+	Vector payload_vector(LogicalType::UINTEGER);
 	auto payload_vector_data = FlatVector::GetData<u_int32_t>(payload_vector);
 
 	// selection vector pointing to the data of the child vector,
 	// used for slicing the child_vector correctly
-	SelectionVector sel_vector(STANDARD_VECTOR_SIZE);
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
 
 	idx_t offset_lists_indices = 0;
 	uint32_t incr_payload_count = 0;
@@ -137,29 +163,12 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 			// lists_indices vector is full, sink
 			if (offset_lists_indices == STANDARD_VECTOR_SIZE) {
-
-				// slice the child vector
-				Vector slice = Vector(child_vector, sel_vector, offset_lists_indices);
-
-				// initialize and fill key_chunk and payload_chunk
-				DataChunk key_chunk;
-				key_chunk.InitializeEmpty(types);
-				key_chunk.data[0].Reference(lists_indices);
-				key_chunk.data[1].Reference(slice);
-				key_chunk.SetCardinality(STANDARD_VECTOR_SIZE);
-
-				DataChunk payload_chunk;
-				payload_chunk.InitializeEmpty(payload_types);
-				payload_chunk.data[0].Reference(payload_vector);
-				payload_chunk.SetCardinality(STANDARD_VECTOR_SIZE);
-
-				// sink and reset
-				local_sort_state.SinkChunk(key_chunk, payload_chunk);
-				data_to_sort = true;
+				SinkDataChunk(&child_vector, sel, offset_lists_indices, types, payload_types, 
+					payload_vector, local_sort_state, data_to_sort, lists_indices);
 				offset_lists_indices = 0;
 			}
 
-			sel_vector.set_index(offset_lists_indices, source_idx + child_idx);
+			sel.set_index(offset_lists_indices, source_idx + child_idx);
 			lists_indices_data[offset_lists_indices] = (u_int32_t)i;
 			payload_vector_data[offset_lists_indices] = incr_payload_count;
 			offset_lists_indices++;
@@ -168,29 +177,9 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		}
 	}
 
-	// TODO: put this code in a function to decrease redundancy/improve code quality
 	if (offset_lists_indices != 0) {
-
-		// slice the child vector
-		Vector slice = Vector(child_vector, sel_vector, offset_lists_indices);
-		lists_indices.Resize(offset_lists_indices, offset_lists_indices); // TODO: is this redundant?
-		payload_vector.Resize(offset_lists_indices, offset_lists_indices); // TODO: is this redundant?
-
-		// initialize and reference key_chunk and payload_chunk
-		DataChunk key_chunk;
-		key_chunk.InitializeEmpty(types);
-		key_chunk.data[0].Reference(lists_indices);
-		key_chunk.data[1].Reference(slice);
-		key_chunk.SetCardinality(offset_lists_indices);
-
-		DataChunk payload_chunk;
-		payload_chunk.InitializeEmpty(payload_types);
-		payload_chunk.data[0].Reference(payload_vector);
-		payload_chunk.SetCardinality(offset_lists_indices);
-
-		// sink
-		local_sort_state.SinkChunk(key_chunk, payload_chunk);
-		data_to_sort = true;
+		SinkDataChunk(&child_vector, sel, offset_lists_indices, types, payload_types, 
+			payload_vector, local_sort_state, data_to_sort, lists_indices);
 	}
 
 	if (data_to_sort) {
@@ -198,11 +187,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		// add local state to global state, which sorts the data
 		global_sort_state.AddLocalState(local_sort_state);
 		global_sort_state.PrepareMergePhase();
-
-		// create a vector containing the payload and the key types
-		vector<LogicalType> all_types;
-		all_types.insert(all_types.end(), payload_types.begin(), payload_types.end());
-		all_types.insert(all_types.end(), types.begin(), types.end());
 
 		// selection vector that is to be filled with the 'sorted' payload
 		SelectionVector sel_sorted(incr_payload_count);
@@ -212,17 +196,14 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 		for (;;) {
 			DataChunk result_chunk;
-			result_chunk.Initialize(all_types);
+			result_chunk.Initialize(payload_types);
 			result_chunk.SetCardinality(0);
 			scanner.Scan(result_chunk);
 			if (result_chunk.size() == 0) {
 				break;
 			}
 
-			// split into two, result_chunk then contains the payload
-			DataChunk key_chunk;
-			result_chunk.Split(key_chunk, payload_types.size());
-
+			// construct the selection vector with the new order from the result vectors
 			Vector result_vector(result_chunk.data[0]);
 			auto result_data = FlatVector::GetData<u_int32_t>(result_vector);
 			auto row_count = result_chunk.size();
@@ -234,7 +215,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		}
 
 		D_ASSERT(sel_sorted_idx == incr_payload_count);
-		//auto sel_data = child_data.sel->Slice(sel_sorted, sel_sorted_idx;
 		child_vector.Slice(sel_sorted, sel_sorted_idx);
 	}
 
@@ -261,7 +241,7 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 	auto order = OrderType::ASCENDING;
 	auto null_order = OrderByNullType::NULLS_FIRST;
 
-	// get custom order and null order
+	// get custom order and null order (if provided)
 	if (arguments.size() == 3) {
 
 		// get the sorting order
