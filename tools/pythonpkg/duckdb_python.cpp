@@ -17,8 +17,8 @@
 #include <random>
 #include <stdlib.h>
 
-#ifndef DUCKDB_PYTHON_LIB_NAME
-#define DUCKDB_PYTHON_LIB_NAME duckdb
+#ifndef DUCKDB_PYTHON_EXTENSION_NAME
+#define DUCKDB_PYTHON_EXTENSION_NAME _duckdb_extension
 #endif
 
 namespace py = pybind11;
@@ -65,7 +65,7 @@ static py::object PyTokenize(const string &query) {
 	return move(result);
 }
 
-PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
+PYBIND11_MODULE(DUCKDB_PYTHON_EXTENSION_NAME, m) {
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyResult::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
@@ -73,7 +73,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	py::options pybind_opts;
 
 	m.doc() = "DuckDB is an embeddable SQL OLAP Database Management System";
-	m.attr("__package__") = "duckdb";
+	m.attr("__package__") = "_duckdb";
 	m.attr("__version__") = DuckDB::LibraryVersion();
 	m.attr("__git_revision__") = DuckDB::SourceID();
 	m.attr("default_connection") = DuckDBPyConnection::DefaultConnection();
@@ -92,7 +92,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	      py::arg("query"));
 	py::enum_<PySQLTokenType>(m, "token_type", py::module_local())
 	    .value("identifier", PySQLTokenType::PY_SQL_TOKEN_IDENTIFIER)
-	    .value("numeric_const", PySQLTokenType::PY_SQL_TOKEN_NUMERIC_CONSTANT)
+	    .value("numeqric_const", PySQLTokenType::PY_SQL_TOKEN_NUMERIC_CONSTANT)
 	    .value("string_const", PySQLTokenType::PY_SQL_TOKEN_STRING_CONSTANT)
 	    .value("operator", PySQLTokenType::PY_SQL_TOKEN_OPERATOR)
 	    .value("keyword", PySQLTokenType::PY_SQL_TOKEN_KEYWORD)
