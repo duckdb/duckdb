@@ -226,10 +226,16 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 }
 
 string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table_name, string &column_name) {
-	idx_t current_position = ref.index - 1;
 	idx_t total_columns = 0;
+	idx_t current_position = ref.index - 1;
 	for (auto &entry : bindings_list) {
 		idx_t entry_column_count = entry.second->names.size();
+		if (ref.index == 0) {
+			// this is a row id
+			table_name = entry.first;
+			column_name = "rowid";
+			return string();
+		}
 		if (current_position < entry_column_count) {
 			table_name = entry.first;
 			column_name = entry.second->names[current_position];

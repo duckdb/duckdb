@@ -65,7 +65,7 @@ static void GenerateUUIDFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 void UUIDFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction uuid_function({}, LogicalType::UUID, GenerateUUIDFunction, true, UUIDRandomBind);
+	ScalarFunction uuid_function({}, LogicalType::UUID, GenerateUUIDFunction, false, true, UUIDRandomBind);
 	// generate a random uuid
 	set.AddFunction({"uuid", "gen_random_uuid"}, uuid_function);
 }
