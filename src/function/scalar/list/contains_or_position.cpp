@@ -183,7 +183,6 @@ static unique_ptr<FunctionData> ListContainsOrPositionBind(ClientContext &contex
 	} else {
 		auto const &child_type = ListType::GetChildType(arguments[0]->return_type);
 		auto max_child_type = LogicalType::MaxLogicalType(child_type, value);
-		ExpressionBinder::ResolveParameterType(max_child_type);
 		auto list_type = LogicalType::LIST(max_child_type);
 
 		bound_function.arguments[0] = list_type;

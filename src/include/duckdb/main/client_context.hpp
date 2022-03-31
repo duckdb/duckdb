@@ -208,7 +208,8 @@ private:
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData> CreatePreparedStatement(ClientContextLock &lock, const string &query,
-	                                                          unique_ptr<SQLStatement> statement);
+	                                                          unique_ptr<SQLStatement> statement,
+	                                                          vector<Value> *values = nullptr);
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,

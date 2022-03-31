@@ -244,7 +244,8 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 }
 
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query,
-                                                                         unique_ptr<SQLStatement> statement) {
+                                                                         unique_ptr<SQLStatement> statement,
+                                                                         vector<Value> *values) {
 	StatementType statement_type = statement->type;
 	auto result = make_shared<PreparedStatementData>(statement_type);
 
@@ -267,6 +268,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	result->types = planner.types;
 	result->value_map = move(planner.value_map);
 	result->catalog_version = Transaction::GetTransaction(*this).catalog_version;
+	result->bound_all_parameters = planner.bound_all_parameters;
 
 	if (config.enable_optimizer) {
 		profiler.StartPhase("optimizer");
@@ -560,13 +562,14 @@ ClientContext::PendingStatementOrPreparedStatement(ClientContextLock &lock, cons
 			result = PendingStatementInternal(lock, query, move(statement));
 		} else {
 			auto &catalog = Catalog::GetCatalog(*this);
-			if (prepared->unbound_statement && catalog.GetCatalogVersion() != prepared->catalog_version) {
-				D_ASSERT(prepared->unbound_statement.get());
+			if (prepared->unbound_statement &&
+			    (catalog.GetCatalogVersion() != prepared->catalog_version || !prepared->bound_all_parameters)) {
 				// catalog was modified: rebind the statement before execution
-				auto new_prepared = CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy());
-				if (prepared->types != new_prepared->types) {
+				auto new_prepared = CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), values);
+				if (prepared->types != new_prepared->types && prepared->bound_all_parameters) {
 					throw BinderException("Rebinding statement after catalog change resulted in change of types");
 				}
+				D_ASSERT(new_prepared->bound_all_parameters);
 				new_prepared->unbound_statement = move(prepared->unbound_statement);
 				prepared = move(new_prepared);
 			}

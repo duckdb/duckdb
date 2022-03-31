@@ -1,0 +1,96 @@
+# name: test/sql/prepared/test_prepare_ambiguous_type.test
+# description: PREPARE of ambiguous types
+# group: [prepared]
+
+# typeof
+statement ok
+PREPARE v1 AS SELECT typeof(?)
+
+query I
+EXECUTE v1(3::int)
+----
+INTEGER
+
+query I
+EXECUTE v1('hello')
+----
+VARCHAR
+
+query I
+EXECUTE v1([1, 2, 3])
+----
+INTEGER[]
+
+# direct select without cast
+statement ok
+PREPARE v2 AS SELECT ?
+
+query I
+EXECUTE v2(3::int)
+----
+3
+
+query I
+EXECUTE v2('hello')
+----
+hello
+
+query I
+EXECUTE v2([1, 2, 3])
+----
+[1, 2, 3]
+
+# ambiguous comparison
+statement ok
+PREPARE v3 AS SELECT ?=?
+
+query I
+EXECUTE v3(3::int, 4::bigint)
+----
+false
+
+query I
+EXECUTE v3('hello', 'hello')
+----
+true
+
+query I
+EXECUTE v3([1, 2, 3], [1, 2, 3])
+----
+true
+
+mode skip
+
+# ambiguous function usage
+statement ok
+PREPARE v4 AS SELECT extract(year from ?)
+
+statement error
+EXECUTE v4(3::int)
+
+# printf
+statement ok
+PREPARE v5 AS SELECT printf("%s", ?)
+
+statement ok
+PREPARE v6 AS SELECT printf("%d", ?)
+
+# lists and structs
+statement ok
+PREPARE v7 AS SELECT [?]
+
+statement ok
+PREPARE v8 AS SELECT [?, ?, ?]
+
+statement ok
+PREPARE v9 AS SELECT {'a': ?}
+
+statement ok
+PREPARE v10 AS SELECT {'a': ?, 'b': 42, 'c': ?}
+
+statement ok
+PREPARE v11 AS SELECT ROW(?, ?)
+
+statement ok
+PREPARE v12 AS SELECT ? IS NULL
+

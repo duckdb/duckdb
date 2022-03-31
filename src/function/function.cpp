@@ -412,14 +412,7 @@ void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> 
 		auto cast_result = RequiresCast(children[i]->return_type, target_type);
 		// except for one special case: if the function accepts ANY argument
 		// in that case we don't add a cast
-		if (cast_result == LogicalTypeComparisonResult::TARGET_IS_ANY) {
-			if (children[i]->return_type.id() == LogicalTypeId::UNKNOWN) {
-				// UNLESS the child is a prepared statement parameter
-				// in that case we default the prepared statement parameter to VARCHAR
-				children[i]->return_type =
-				    ExpressionBinder::ExchangeType(target_type, LogicalTypeId::ANY, LogicalType::VARCHAR);
-			}
-		} else if (cast_result == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
+		if (cast_result == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
 			children[i] = BoundCastExpression::AddCastToType(move(children[i]), target_type);
 		}
 	}
