@@ -838,28 +838,15 @@ bool IEJoinUnion::NextRow() {
 		// 9.  if (op1 ∈ {≤,≥} and op2 ∈ {≤,≥}) eqOff = 0
 		// 10. else eqOff = 1
 		// No, because there could be more than one equal value.
-		// Find the leftmost off1 where L1[pos] op1 L1[off1..n]
-		// These are the rows that satisfy the op1 condition
-		// and that is where we should start scanning B from
+		// Scan the neighborhood instead
 		op1->SetIndex(pos);
 		off1->SetIndex(pos);
-		idx_t lo = 0;
-		auto hi = n;
-		if (op1->Compare(*off1)) {
-			hi = pos;
-		} else {
-			lo = pos + 1;
+		for (; off1->GetIndex() > 0 && op1->Compare(*off1); --(*off1)) {
+			continue;
 		}
-		while (lo < hi) {
-			const auto mid = lo + (hi - lo) / 2;
-			off1->SetIndex(mid);
-			if (op1->Compare(*off1)) {
-				hi = mid;
-			} else {
-				lo = mid + 1;
-			}
+		for (; off1->GetIndex() < n && !op1->Compare(*off1); ++(*off1)) {
+			continue;
 		}
-		off1->SetIndex(lo);
 
 		return true;
 	}
