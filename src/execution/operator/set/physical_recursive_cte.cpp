@@ -115,6 +115,11 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 			// reset the sink state for any intermediate sinks
 			sink->sink_state = sink->GetGlobalSinkState(context.client);
 		}
+		for (auto &op : pipeline->GetOperators()) {
+			if (op) {
+				op->op_state = op->GetGlobalOperatorState(context.client);
+			}
+		}
 		pipeline->Reset();
 	}
 	auto &executor = pipelines[0]->executor;

@@ -434,9 +434,9 @@ struct VectorMinMaxBase {
 			const auto sidx = sdata.sel->get_index(i);
 			auto state = states[sidx];
 			if (!state->value) {
-				Assign(state, input, idx);
+				Assign(state, input, i);
 			} else {
-				OP::template Execute(state, input, idx, count);
+				OP::template Execute(state, input, i, count);
 			}
 		}
 	}
@@ -455,10 +455,19 @@ struct VectorMinMaxBase {
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->value) {
-			// we need to use FlatVector::SetNull here
+			// we need to use SetNull here
 			// since for STRUCT columns only setting the validity mask of the struct is incorrect
 			// as for a struct column, we need to also set ALL child columns to NULL
-			FlatVector::SetNull(result, idx, true);
+			switch (result.GetVectorType()) {
+			case VectorType::FLAT_VECTOR:
+				FlatVector::SetNull(result, idx, true);
+				break;
+			case VectorType::CONSTANT_VECTOR:
+				ConstantVector::SetNull(result, true);
+				break;
+			default:
+				throw InternalException("Invalid result vector type for nested min/max");
+			}
 		} else {
 			VectorOperations::Copy(*state->value, result, 1, 0, idx);
 		}

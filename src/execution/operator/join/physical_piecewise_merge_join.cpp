@@ -934,7 +934,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 }
 
 OperatorResultType PhysicalPiecewiseMergeJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                       OperatorState &state) const {
+                                                       GlobalOperatorState &gstate_p, OperatorState &state) const {
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 
 	if (gstate.Count() == 0) {

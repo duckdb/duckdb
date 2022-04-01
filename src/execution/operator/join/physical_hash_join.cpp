@@ -216,7 +216,7 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ClientContext &cont
 }
 
 OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                             OperatorState &state_p) const {
+                                             GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (PhysicalHashJoinState &)state_p;
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 	D_ASSERT(sink.finalized);
