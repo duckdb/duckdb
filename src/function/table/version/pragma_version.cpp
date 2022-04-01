@@ -49,6 +49,7 @@ const char *DuckDB::LibraryVersion() {
 	return DUCKDB_VERSION;
 }
 
+// TODO should we add 32 bits architectures? We support it on python?
 string DuckDB::Platform() {
 	string os = "linux";
 	string arch = "amd64";

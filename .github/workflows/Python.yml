@@ -79,85 +79,64 @@ jobs:
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         cibuildwheel --output-dir wheelhouse duckdb_tarball
 
+   # TODO build both 32 bit and 64 bit extensions?
    test-extensions:
-    name: Build extensions for wheel tests
+    name: CentOS 7
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
-#    needs: linux-python3-9
-    strategy:
-      matrix:
-        arch: [ auto ]
+    container: centos:7
+#   needs: linux-python3-9
     env:
-      GEN: ninja
       DISABLE_MAIN_DUCKDB_LIBRARY: 1
       BUILD_HTTPFS: 1
       STATIC_OPENSSL: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
-      OPENSSL_ROOT_DIR: /usr/local/ssl
-      GLIBCXX_USE_CXX11_ABI: 1
+      OPENSSL_ROOT_DIR: /usr/local
       DISABLE_BUILTIN_EXTENSIONS: 1
+      LD_LIBRARY_PATH: /usr/local/lib:/usr/local/lib64
 
     steps:
-    - name: Install
-      run: |
-        apt-get update -y -qq
-        apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:git-core/ppa
-        apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libffi-dev
-
-    - name: Install Python 3.7
-      run: |
-        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
-        tar xvf Python-3.7.12.tgz
-        cd Python-3.7.12
-        mkdir -p pythonbin
-        ./configure --with-ensurepip=install
-        make -j
-        make install
-        python3.7 --version
-        python3.7 -m pip install pip
-        python3.7 -m pip install requests awscli
-
-    - name: Install OpenSSL 1.1.1
-      run: |
-        apt-get install build-essential checkinstall zlib1g-dev -y -qq
-        wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
-        tar -xf openssl-1.1.1c.tar.gz
-        cd openssl-1.1.1c
-        ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl -static zlib
-        make
-        make install
-        echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
-        ldconfig -v
-
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
 
+    - name: Install dependencies
+      run: |
+        yum install -y gcc gcc-c++ git cmake make
+        yum install -y epel-release
+        yum install -y openssl11 openssl11-libs openssl11-devel
+        yum install -y make gcc perl-core pcre-devel wget zlib-devel
+
+    # the weird openssl findreplace fix with version numbers is from: https://github.com/h2o/h2o/issues/213
+    - name: Install OpenSSL 1.1.1k
+      run: |
+        yum install -y gcc gcc-c++ git cmake make
+        yum install -y epel-release
+        yum install -y openssl11 openssl11-libs openssl11-devel
+        yum install -y make gcc perl-core pcre-devel wget zlib-devel
+        wget https://ftp.openssl.org/source/openssl-1.1.1k.tar.gz --no-check-certificate
+        tar -xzvf openssl-1.1.1k.tar.gz
+        cd openssl-1.1.1k
+        find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
+        ./config --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic
+        make
+        make install
+
     - name: Version Check
       run: |
+        cmake --version
         ldd --version ldd
-        python3.7 --version
-        git --version
 
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
-
-    - name: Build extensions to test
-      run: |
-        make
+    - name: Build
+      run: make
 
     - uses: actions/upload-artifact@v2
       with:
-        name: python-wheel-test-extensions-${{ matrix.arch }}
+        name: python-wheel-test-extensions-centos
         path: |
           build/release/extension/*/*.duckdb_extension
 
+   # TODO: {wheel} can be used to distinguish between the different extensions to be loaded.
    linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
@@ -177,12 +156,8 @@ jobs:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_MANYLINUX_X86_64_IMAGE: 'manylinux_2_24'
-      CIBW_MANYLINUX_I686_IMAGE: 'manylinux_2_24'
-      CIBW_MANYLINUX_PYPY_X86_64_IMAGE: 'manylinux_2_24'
-      CIBW_MANYLINUX_PYPY_I686_IMAGE: 'manylinux_2_24'
       CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy && pip install --prefer-binary "requests>=2.26"'
-      CIBW_TEST_COMMAND: 'ls {project} && pwd && DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests/fast'
+      CIBW_TEST_COMMAND: 'echo "{wheel}" && ls {project} && pwd && DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests/fast'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
       PYTEST_TIMEOUT: '600'
@@ -210,7 +185,7 @@ jobs:
 
     - uses: actions/download-artifact@v3
       with:
-        name: python-wheel-test-extensions-${{ matrix.arch }}
+        name: python-wheel-test-extensions-centos
         path: /tmp/duckdb_python_test_extensions
 
     - name: check extensions for testing
