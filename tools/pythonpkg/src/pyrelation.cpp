@@ -185,8 +185,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstrait(py::bytes &proto, D
 	return conn->FromSubstrait(proto);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrowTable(py::object &table, DuckDBPyConnection *conn) {
-	return conn->FromArrowTable(table);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrow(py::object &arrow_object, DuckDBPyConnection *conn) {
+	return conn->FromArrow(arrow_object);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {

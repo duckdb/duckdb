@@ -4,8 +4,6 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/helper.hpp"
 
-#include <cmath>
-
 namespace duckdb {
 
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info,

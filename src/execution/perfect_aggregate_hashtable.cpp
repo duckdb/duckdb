@@ -1,6 +1,5 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 
 namespace duckdb {

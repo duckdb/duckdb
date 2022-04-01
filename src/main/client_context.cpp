@@ -17,9 +17,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
-#include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
-#include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
@@ -32,7 +30,6 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/planner/pragma_handler.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 

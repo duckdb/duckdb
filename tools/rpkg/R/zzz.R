@@ -6,4 +6,5 @@
   s3_register("dbplyr::sql_expr_matches", "duckdb_connection")
   s3_register("dbplyr::sql_escape_date", "duckdb_connection")
   s3_register("dbplyr::sql_escape_datetime", "duckdb_connection")
+  s3_register("dplyr::tbl", "duckdb_connection")
 }

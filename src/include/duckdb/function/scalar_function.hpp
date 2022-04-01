@@ -38,12 +38,13 @@ public:
 	                          scalar_function_t function, bool has_side_effects = false,
 	                          bind_scalar_function_t bind = nullptr, dependency_function_t dependency = nullptr,
 	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
-	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
+	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
+	                          bool propagate_null_values = false);
 
 	DUCKDB_API ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
-	                          bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
-	                          dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
-	                          init_local_state_t init_local_state = nullptr,
+	                          bool propagate_null_values = false, bool has_side_effects = false,
+	                          bind_scalar_function_t bind = nullptr, dependency_function_t dependency = nullptr,
+	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 
 	//! The main scalar function to execute

@@ -158,6 +158,13 @@ void Pipeline::Reset() {
 	if (sink && !sink->sink_state) {
 		sink->sink_state = sink->GetGlobalSinkState(GetClientContext());
 	}
+
+	for (auto &op : operators) {
+		if (op && !op->op_state) {
+			op->op_state = op->GetGlobalOperatorState(GetClientContext());
+		}
+	}
+
 	ResetSource();
 }
 

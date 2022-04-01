@@ -23,7 +23,7 @@ void LocalTableStorage::InitializeScan(LocalScanState &state, TableFilterSet *ta
 		// nothing to scan
 		return;
 	}
-	state.SetStorage(this);
+	state.SetStorage(shared_from_this());
 
 	state.chunk_index = 0;
 	state.max_index = collection.ChunkCount() - 1;
@@ -47,12 +47,12 @@ LocalScanState::~LocalScanState() {
 	SetStorage(nullptr);
 }
 
-void LocalScanState::SetStorage(LocalTableStorage *new_storage) {
-	if (storage != nullptr) {
+void LocalScanState::SetStorage(shared_ptr<LocalTableStorage> new_storage) {
+	if (storage) {
 		D_ASSERT(storage->active_scans > 0);
 		storage->active_scans--;
 	}
-	storage = new_storage;
+	storage = move(new_storage);
 	if (storage) {
 		storage->active_scans++;
 	}
@@ -166,7 +166,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 	auto entry = table_storage.find(table);
 	LocalTableStorage *storage;
 	if (entry == table_storage.end()) {
-		auto new_storage = make_unique<LocalTableStorage>(*table);
+		auto new_storage = make_shared<LocalTableStorage>(*table);
 		storage = new_storage.get();
 		table_storage.insert(make_pair(table, move(new_storage)));
 	} else {

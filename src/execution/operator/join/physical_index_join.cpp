@@ -174,7 +174,7 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &inpu
 }
 
 OperatorResultType PhysicalIndexJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                              OperatorState &state_p) const {
+                                              GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (IndexJoinOperatorState &)state_p;
 
 	state.result_size = 0;
