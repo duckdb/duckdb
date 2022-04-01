@@ -59,15 +59,17 @@ EXECUTE v3([1, 2, 3], [1, 2, 3])
 ----
 true
 
-# ambiguous function usage still requires a cast
-statement error
-PREPARE v4 AS SELECT extract(year from ?)
-
+# ambiguous function usage (date_part)
 statement ok
-PREPARE v4 AS SELECT extract(year from ?::DATE)
+PREPARE v4 AS SELECT extract(year from ?)
 
 query I
 EXECUTE v4(DATE '1992-01-01')
+----
+1992
+
+query I
+EXECUTE v4(TIMESTAMP '1992-01-01 23:00:20')
 ----
 1992
 
@@ -212,3 +214,56 @@ query I
 EXECUTE v13([1, 2, 3])
 ----
 [1, 2, 3]
+
+
+# ambiguous aggregate usage
+statement ok
+PREPARE v14 AS SELECT SUM(?) FROM RANGE(100)
+
+query I
+EXECUTE v14(2)
+----
+200
+
+query I
+EXECUTE v14(2::HUGEINT)
+----
+200
+
+query I
+EXECUTE v14(0.005)
+----
+0.5
+
+# ambiguous function usage (addition)
+statement ok
+PREPARE v15 AS SELECT ?+?
+
+query I
+EXECUTE v15(0.25, 0.25)
+----
+0.5
+
+query I
+EXECUTE v15(1000000000000000000000000000000000000::hugeint, 1000000000000000000000000000000000000::hugeint)
+----
+2000000000000000000000000000000000000
+
+# ambiguous window function usage
+statement ok
+PREPARE v16 AS SELECT SUM(?) OVER ()
+
+query I
+EXECUTE v16(2)
+----
+2
+
+query I
+EXECUTE v16(2::HUGEINT)
+----
+2
+
+query I
+EXECUTE v16(0.5)
+----
+0.5
