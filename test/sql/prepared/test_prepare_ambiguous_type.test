@@ -267,3 +267,49 @@ query I
 EXECUTE v16(0.5)
 ----
 0.5
+
+# array contains usage
+statement ok
+PREPARE v17 AS SELECT ARRAY_CONTAINS(?, ?)
+
+query I
+EXECUTE v17([1, 2, 3], 1)
+----
+true
+
+query I
+EXECUTE v17([], 1)
+----
+false
+
+query I
+EXECUTE v17(['hello', NULL, 'world'], 'world')
+----
+true
+
+statement ok
+PREPARE v18 AS SELECT ARRAY_CONTAINS([1, 2, 3], ?)
+
+query I
+EXECUTE v18(1)
+----
+true
+
+query I
+EXECUTE v18(0)
+----
+false
+
+statement error
+EXECUTE v18([1])
+
+statement ok
+PREPARE v19 AS SELECT ARRAY_CONTAINS(?, 1)
+
+query I
+EXECUTE v19([1, 2, 3])
+----
+true
+
+statement error
+EXECUTE v19(0)
