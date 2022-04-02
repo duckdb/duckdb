@@ -1,6 +1,6 @@
 # name: test/issues/fuzz/recursive_view_expression_assertion.test
 # description: Issue #3354: Assertion Failed at expression_iterator.cpp:187
-# group: [general]
+# group: [fuzz]
 
 statement ok
 PRAGMA enable_verification
