@@ -1,0 +1,15 @@
+# name: test/issues/fuzz/function_pointer_crash_in_subquery.test
+# description: Issue 3351: NullPointer at duckdb/src/function/function.cpp:368:29
+# group: [fuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE strings(a INTEGER);
+
+statement ok
+CREATE TABLE c0(test2 tinyint, s1 smallint, s2 integer, test1 bigint, i double, id real, c1 varchar);
+
+statement error
+SELECT * FROM c0 s1 INNER JOIN c0 s2 ON (SELECT s1.s2=s2 FROM c0 WHERE s2.s2=s2) ORDER BY s1.s2;
