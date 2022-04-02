@@ -159,9 +159,9 @@ string ExpressionTypeToOperator(ExpressionType type) {
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		return ">=";
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		return "IS DISTINCT FROM";
+		return " IS DISTINCT FROM ";
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		return "IS NOT DISTINCT FROM";
+		return " IS NOT DISTINCT FROM ";
 	case ExpressionType::CONJUNCTION_AND:
 		return "AND";
 	case ExpressionType::CONJUNCTION_OR:
