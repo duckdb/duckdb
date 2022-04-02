@@ -26,6 +26,7 @@
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -241,9 +242,17 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				for (auto &keyname : fk.pk_columns) {
 					auto entry = pk_table_entry_ptr->name_map.find(keyname);
 					if (entry == pk_table_entry_ptr->name_map.end()) {
-						throw ParserException("column \"%s\" named in key does not exist", keyname);
+						throw BinderException("column \"%s\" named in key does not exist", keyname);
 					}
 					fk.info.pk_keys.push_back(entry->second);
+				}
+				auto index = pk_table_entry_ptr->storage->info->indexes.FindForeignKeyIndex(
+				    fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);
+				if (!index) {
+					auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
+					throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
+					                      "present on these columns",
+					                      pk_table_entry_ptr->name, fk_column_names);
 				}
 			}
 		}
