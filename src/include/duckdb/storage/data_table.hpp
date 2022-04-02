@@ -76,6 +76,8 @@ public:
 		return indexes.size();
 	}
 
+	Index *FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyType fk_type);
+
 private:
 	//! Indexes associated with the current table
 	mutex indexes_lock;
