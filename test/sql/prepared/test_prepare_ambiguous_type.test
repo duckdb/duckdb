@@ -249,25 +249,6 @@ EXECUTE v15(1000000000000000000000000000000000000::hugeint, 10000000000000000000
 ----
 2000000000000000000000000000000000000
 
-# ambiguous window function usage
-statement ok
-PREPARE v16 AS SELECT SUM(?) OVER ()
-
-query I
-EXECUTE v16(2)
-----
-2
-
-query I
-EXECUTE v16(2::HUGEINT)
-----
-2
-
-query I
-EXECUTE v16(0.5)
-----
-0.5
-
 # array contains usage
 statement ok
 PREPARE v17 AS SELECT ARRAY_CONTAINS(?, ?)

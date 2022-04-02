@@ -178,7 +178,7 @@ struct ICUDateAdd : public ICUDateFunc {
 	template <typename TA, typename TB, typename TR, typename OP>
 	inline static ScalarFunction GetBinaryDateFunction(const LogicalTypeId &left_type, const LogicalTypeId &right_type,
 	                                                   const LogicalTypeId &result_type) {
-		return ScalarFunction({left_type, right_type}, result_type, ExecuteBinary<TA, TB, TR, OP>,false, false, Bind);
+		return ScalarFunction({left_type, right_type}, result_type, ExecuteBinary<TA, TB, TR, OP>, false, false, Bind);
 	}
 
 	template <typename TA, typename TB, typename OP>
