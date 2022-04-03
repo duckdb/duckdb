@@ -138,14 +138,31 @@ void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 // << [bitwise_left_shift]
 //===--------------------------------------------------------------------===//
 template <class T>
-bool ShiftInRange(T shift) {
-	return shift >= 0 && shift < T(sizeof(T) * 8);
+bool LeftShiftInRange(T input, T shift) {
+	T max_shift = T(sizeof(T) * 8);
+	if (input < 0) {
+		throw OutOfRangeException("Cannot left-shift negative number %d", input);
+	}
+	if (shift < 0) {
+		throw OutOfRangeException("Cannot left-shift by negative number %d", shift);
+	}
+	if (shift >= max_shift) {
+		if (input == 0) {
+			return true;
+		}
+		throw OutOfRangeException("Left-shift value %d is out of range", shift);
+	}
+	T max_value = (T(1) << (max_shift - shift - 1));
+	return input < max_value;
 }
 
 struct BitwiseShiftLeftOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA input, TB shift) {
-		return ShiftInRange(shift) ? input << shift : 0;
+		if (!LeftShiftInRange<TA>(input, shift)) {
+			throw OutOfRangeException("Overflow in left shift (%d << %d)", input, shift);
+		}
+		return input << shift;
 	}
 };
 
@@ -161,10 +178,15 @@ void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // >> [bitwise_right_shift]
 //===--------------------------------------------------------------------===//
+template <class T>
+bool RightShiftInRange(T shift) {
+	return shift >= 0 && shift < T(sizeof(T) * 8);
+}
+
 struct BitwiseShiftRightOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA input, TB shift) {
-		return ShiftInRange(shift) ? input >> shift : 0;
+		return RightShiftInRange(shift) ? input >> shift : 0;
 	}
 };
 
