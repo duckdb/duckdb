@@ -594,7 +594,7 @@ struct IEJoinUnion {
 	IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, SortedTable &t1, const idx_t b1, SortedTable &t2,
 	            const idx_t b2);
 
-	void SearchL1(idx_t pos);
+	idx_t SearchL1(idx_t pos);
 	bool NextRow();
 
 	//! Inverted loop
@@ -623,6 +623,7 @@ struct IEJoinUnion {
 	//! Iteration state
 	idx_t n;
 	idx_t i;
+	idx_t j;
 	unique_ptr<SBIterator> op1;
 	unique_ptr<SBIterator> off1;
 	unique_ptr<SBIterator> op2;
@@ -810,26 +811,24 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	op2 = make_unique<SBIterator>(l2->global_sort_state, cmp2);
 	off2 = make_unique<SBIterator>(l2->global_sort_state, cmp2);
 	i = 0;
+	j = 0;
 	(void)NextRow();
 }
 
-void IEJoinUnion::SearchL1(idx_t pos) {
+idx_t IEJoinUnion::SearchL1(idx_t pos) {
 	// Perform an exponential search in the appropriate direction
 	op1->SetIndex(pos);
-	off1->SetIndex(pos);
 
 	idx_t step = 1;
 	auto hi = pos;
 	auto lo = pos;
-	if (op1->Compare(*off1)) {
+	if (!op1->cmp) {
 		// Scan left for loose inequality
-		if (pos) {
-			lo -= MinValue(step, lo);
-			step *= 2;
-			off1->SetIndex(lo);
-		}
-		while (off1->GetIndex() > 0 && op1->Compare(*off1)) {
-			hi = off1->GetIndex();
+		lo -= MinValue(step, lo);
+		step *= 2;
+		off1->SetIndex(lo);
+		while (lo > 0 && op1->Compare(*off1)) {
+			hi = lo;
 			lo -= MinValue(step, lo);
 			step *= 2;
 			off1->SetIndex(lo);
@@ -839,7 +838,7 @@ void IEJoinUnion::SearchL1(idx_t pos) {
 		hi += MinValue(step, n - hi);
 		step *= 2;
 		off1->SetIndex(hi);
-		while (off1->GetIndex() < n && !op1->Compare(*off1)) {
+		while (hi < n && !op1->Compare(*off1)) {
 			lo = hi;
 			hi += MinValue(step, n - hi);
 			step *= 2;
@@ -859,6 +858,8 @@ void IEJoinUnion::SearchL1(idx_t pos) {
 	}
 
 	off1->SetIndex(lo);
+
+	return lo;
 }
 
 bool IEJoinUnion::NextRow() {
@@ -890,7 +891,7 @@ bool IEJoinUnion::NextRow() {
 		// Find the leftmost off1 where L1[pos] op1 L1[off1..n]
 		// These are the rows that satisfy the op1 condition
 		// and that is where we should start scanning B from
-		SearchL1(pos);
+		j = SearchL1(pos);
 
 		return true;
 	}
@@ -946,7 +947,6 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 		// 13. for (j ← pos+eqOff to n) do
 		for (;;) {
 			// 14. if B[j] = 1 then
-			auto j = off1->GetIndex();
 
 			//	Use the Bloom filter to find candidate blocks
 			while (j < n) {
@@ -963,10 +963,10 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 			if (j >= n) {
 				break;
 			}
-			off1->SetIndex(j + 1);
 
 			// Filter out tuples with the same sign (they come from the same table)
 			const auto rrid = li[j];
+			++j;
 
 			// 15. add tuples w.r.t. (L1[j], L1[i]) to join result
 			if (lrid > 0 && rrid < 0) {
