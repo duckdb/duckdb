@@ -32,6 +32,7 @@ end
 
 
 create_value(val::T) where {T <: Int64} = Value(duckdb_create_int64(val))
+create_value(val::T) where {T <: AbstractString} = Value(duckdb_create_varchar_length(val, length(val)))
 function create_value(val::T) where {T}
     throw(NotImplementedException("Unsupported type for getvalue"))
 end

@@ -100,6 +100,11 @@ SELECT strftime(DATE '1992-01-01', 'hello world');
 ----
 hello world
 
+query I
+SELECT strftime('2019-01-23'::DATE, 42);
+----
+42
+
 # non-constant format not supported
 statement error
 SELECT strftime(d, d::VARCHAR) FROM dates ORDER BY d;

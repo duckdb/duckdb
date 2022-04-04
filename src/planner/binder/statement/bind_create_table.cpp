@@ -113,7 +113,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				for (auto &keyname : fk.pk_columns) {
 					auto entry = info.name_map.find(keyname);
 					if (entry == info.name_map.end()) {
-						throw ParserException("column \"%s\" named in key does not exist", keyname);
+						throw BinderException("column \"%s\" named in key does not exist", keyname);
 					}
 					fk.info.pk_keys.push_back(entry->second);
 				}
@@ -122,7 +122,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				for (auto &keyname : fk.fk_columns) {
 					auto entry = info.name_map.find(keyname);
 					if (entry == info.name_map.end()) {
-						throw ParserException("column \"%s\" named in key does not exist", keyname);
+						throw BinderException("column \"%s\" named in key does not exist", keyname);
 					}
 					fk.info.fk_keys.push_back(entry->second);
 				}
