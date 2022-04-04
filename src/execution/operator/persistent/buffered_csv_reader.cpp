@@ -62,10 +62,6 @@ public:
 		return plain_file_source;
 	}
 
-	bool HighLatencyMode() {
-		return !plain_file_source;
-	}
-
 	idx_t FileSize() {
 		return file_size;
 	}
@@ -1535,26 +1531,19 @@ final_state:
 	return true;
 }
 
-// TODO:
-//  - exponential increase?
-//  - refactor?
 bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 	auto old_buffer = move(buffer);
 	idx_t read_count;
 	// the remaining part of the last buffer
 	idx_t remaining = buffer_size - start;
 
-	// If RA thread is in progress we wait for it.
 	if (ra_fetch_in_progress) {
 		std::unique_lock<std::mutex> lck(ra_fetch_lock);
 		ra_fetch_cv.wait(lck, [&] { return !ra_fetch_in_progress; });
 	}
-
-	idx_t buffer_read_size = file_handle->HighLatencyMode() && mode == ParserMode::PARSING ? INITIAL_BUFFER_SIZE_MAX : INITIAL_BUFFER_SIZE;
-	idx_t maximum_line_size = file_handle->HighLatencyMode() && mode == ParserMode::PARSING ? 2*INITIAL_BUFFER_SIZE_MAX : options.maximum_line_size;
-
-	// commented out is to disable the copy-less version and switched to a copying version, that works, apparently there are other values who use offsets
-	// Or pointers, it could very well be the CSV file handle thingy?
+	bool use_large_buffers = !file_handle->PlainFileSource() && mode == ParserMode::PARSING;
+	idx_t buffer_read_size = use_large_buffers ? INITIAL_BUFFER_SIZE_MAX : INITIAL_BUFFER_SIZE;
+	idx_t maximum_line_size = use_large_buffers ? 2*INITIAL_BUFFER_SIZE_MAX : options.maximum_line_size;
 
 	if (read_ahead_buffer) {
 		read_count = ra_buffer_size;
@@ -1570,7 +1559,7 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 			memcpy(buffer.get() + options.maximum_line_size - remaining, old_buffer.get() + start, remaining);
 		}
 
-		start = 0;
+		start = options.maximum_line_size - remaining;
 		position = options.maximum_line_size;
 
 		read_ahead_buffer = nullptr;
@@ -1592,7 +1581,9 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 			buffer_read_size *= 2;
 		}
 		if (remaining + buffer_read_size > maximum_line_size) {
-			throw InvalidInputException("Maximum line size of %llu bytes exceeded!", maximum_line_size);
+			// Note that while use_large_buffers == true, we actually allow larger line sizes. This should not matter to
+			// the user though.
+			throw InvalidInputException("Maximum line size of %llu bytes exceeded!", options.maximum_line_size);
 		}
 		buffer = unique_ptr<char[]>(new char[buffer_read_size + remaining + 1]);
 		if (remaining > 0) {
@@ -1606,11 +1597,11 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 		buffer_size = remaining + read_count;
 	}
 
-	// Prefetch next Buffer Asyncronously
-	if (mode == ParserMode::PARSING && !ra_is_eof && file_handle->HighLatencyMode() && read_count == buffer_read_size) {
-		D_ASSERT(read_ahead_buffer == nullptr);
-		size_t read_ahead_buffer_read_size = INITIAL_BUFFER_SIZE_MAX;
-		size_t read_ahead_buffer_alloc_size = INITIAL_BUFFER_SIZE_MAX + options.maximum_line_size + 1;
+	// During parsing, we prefetch the next Buffer Asynchronously
+	if (use_large_buffers && !ra_is_eof && read_count == buffer_read_size) {
+		// Note that we reserve an extra options.maximum_line_size here to prevent an extra copy later as this guarantees
+		// we can copy the remaining bytes into this buffer
+		size_t read_ahead_buffer_alloc_size = buffer_read_size + options.maximum_line_size + 1;
 
 		ra_fetch_in_progress = true;
 		thread t([&](size_t read_size, size_t alloc_size) {
@@ -1619,7 +1610,8 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 		  	ra_is_eof = ra_buffer_size != read_size;
 		  	ra_fetch_in_progress = false;
 		  	ra_fetch_cv.notify_one();
-		}, read_ahead_buffer_read_size, read_ahead_buffer_alloc_size);
+		}, buffer_read_size, read_ahead_buffer_alloc_size);
+
 		t.detach();
 	}
 
