@@ -107,7 +107,7 @@ jobs:
       run: |
         yum install -y gcc gcc-c++ git cmake make
         yum install -y epel-release
-        yum install -y make gcc perl-core pcre-devel wget zlib-devel
+        yum install -y make gcc perl-core pcre-devel wget zlib-devel glibc-devel.i686
 
     # the weird openssl findreplace fix with version numbers is from: https://github.com/h2o/h2o/issues/213
     - name: Install OpenSSL 1.1.1k
