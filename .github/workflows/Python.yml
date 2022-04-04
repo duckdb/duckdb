@@ -94,7 +94,6 @@ jobs:
       STATIC_OPENSSL: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
-      OPENSSL_ROOT_DIR: /usr/local
       DISABLE_BUILTIN_EXTENSIONS: 1
       FORCE_32_BIT: ${{ matrix.force_32_bit}}
 
@@ -107,9 +106,14 @@ jobs:
       run: |
         yum install -y gcc gcc-c++ git cmake make
         yum install -y epel-release
-        yum install -y make gcc perl-core pcre-devel wget zlib-devel glibc-devel.i686 libgcc.i686
+        yum install -y make gcc perl-core pcre-devel wget zlib-devel
 
-    # the weird openssl findreplace fix with version numbers is from: https://github.com/h2o/h2o/issues/213
+    - name: Install 32 bit dependencies
+      if: ${{matrix.force_32_bit == 1}}
+      run: |
+        yum install -y glibc-devel.i686 libgcc.i686 libstdc++-devel.i686 ncurses-devel.i686
+
+      # the weird openssl findreplace fix with version numbers is from: https://github.com/h2o/h2o/issues/213
     - name: Download OpenSSL 1.1.1k
       run: |
         yum install -y gcc gcc-c++ git cmake make
@@ -151,11 +155,13 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: python-wheel-test-extensions-centos-${{ matrix.force_32_bit == 0 && 'i686' || 'x86_64' }}
+        name: python-wheel-test-extensions-centos-${{ matrix.force_32_bit == 1 && 'i686' || 'x86_64' }}
         path: |
           build/release/extension/*/*.duckdb_extension
+   # TODO: we should release the CentOS extensions here as well probably?
 
    # TODO: optimize this: it could be run basically half the times if we know how to pass files to each specific wheel test
+   # TODO: check out which paths are actually used and which can be removed
    linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
@@ -228,7 +234,7 @@ jobs:
           twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
         fi
 
-    # For testing, remove
+    # For testing, remove after determining the wheels do not contain the extension files
     - uses: actions/upload-artifact@v2
       with:
         name: test-upload
