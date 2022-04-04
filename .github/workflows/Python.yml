@@ -40,7 +40,7 @@ jobs:
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
       CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow==7.0" || true)'
-      CIBW_TEST_COMMAND: 'DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests'
+      CIBW_TEST_COMMAND: 'DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} python -m pytest {project}/tests'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
       PYTEST_TIMEOUT: '600'
@@ -77,6 +77,7 @@ jobs:
         cd tools/pythonpkg
         python setup.py sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        cp /tmp/duckdb_python_test_extensions/*/*.duckdb_extension .
         cibuildwheel --output-dir wheelhouse duckdb_tarball
 
    # All extensions uploaded by this job will be tested by the test_extensions.py test during the linux-python3 job.
@@ -180,6 +181,7 @@ jobs:
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_ARCHS: ${{ matrix.arch}}
+      CIBW_SKIP: '*musllinux*' # TODO: we can enable this by adding a toml file
       CIBW_BEFORE_BUILD: 'echo {package} && pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
       CIBW_BEFORE_TEST: 'echo {package} && pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy && pip install --prefer-binary "requests>=2.26"'
@@ -248,15 +250,6 @@ jobs:
       strategy:
        matrix:
         python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*]
-        isMaster:
-          - ${{ github.ref == 'refs/heads/master' }}
-        exclude:
-          - isMaster: false
-            python_build: 'cp37-*'
-          - isMaster: false
-            python_build: 'cp38-*'
-          - isMaster: false
-            python_build: 'cp39-*'
       needs: linux-python3-9
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
