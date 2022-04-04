@@ -87,7 +87,7 @@ jobs:
 #   needs: linux-python3-9
     strategy:
       matrix:
-        force_32_bits: [0, 1]
+        force_32_bit: [0, 1]
     env:
       DISABLE_MAIN_DUCKDB_LIBRARY: 1
       BUILD_HTTPFS: 1
@@ -96,7 +96,7 @@ jobs:
       FORCE_WARN_UNUSED: 1
       OPENSSL_ROOT_DIR: /usr/local
       DISABLE_BUILTIN_EXTENSIONS: 1
-      FORCE_32_BIT: ${{ matrix.force_32_bits}}
+      FORCE_32_BIT: ${{ matrix.force_32_bit}}
 
     steps:
     - uses: actions/checkout@v2
@@ -107,10 +107,10 @@ jobs:
       run: |
         yum install -y gcc gcc-c++ git cmake make
         yum install -y epel-release
-        yum install -y make gcc perl-core pcre-devel wget zlib-devel glibc-devel.i686
+        yum install -y make gcc perl-core pcre-devel wget zlib-devel glibc-devel.i686 libgcc.i686
 
     # the weird openssl findreplace fix with version numbers is from: https://github.com/h2o/h2o/issues/213
-    - name: Install OpenSSL 1.1.1k
+    - name: Download OpenSSL 1.1.1k
       run: |
         yum install -y gcc gcc-c++ git cmake make
         yum install -y epel-release
@@ -120,7 +120,24 @@ jobs:
         tar -xzvf openssl-1.1.1k.tar.gz
         cd openssl-1.1.1k
         find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
+
+    - name: Configure OpenSSL 64bit
+      if: ${{matrix.force_32_bit == 0}}
+      run: |
+        cd openssl-1.1.1k
+        find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
         ./config --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic
+
+    - name: Configure OpenSSL 32bit
+      if: ${{matrix.force_32_bit == 1}}
+      run: |
+        cd openssl-1.1.1k
+        find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
+        ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic -m32 linux-generic32
+
+    - name: Build OpenSSL
+      run: |
+        cd openssl-1.1.1k
         make
         make install
 
@@ -134,7 +151,7 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: python-wheel-test-extensions-centos-${{ matrix.force_32_bits == 0 && 'i686' || 'x86_64' }}
+        name: python-wheel-test-extensions-centos-${{ matrix.force_32_bit == 0 && 'i686' || 'x86_64' }}
         path: |
           build/release/extension/*/*.duckdb_extension
 
