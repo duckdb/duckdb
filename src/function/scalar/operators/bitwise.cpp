@@ -138,32 +138,28 @@ void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // << [bitwise_left_shift]
 //===--------------------------------------------------------------------===//
-template <class T>
-bool LeftShiftInRange(T input, T shift) {
-	T max_shift = T(sizeof(T) * 8);
-	if (input < 0) {
-		throw OutOfRangeException("Cannot left-shift negative number %s", NumericHelper::ToString(input));
-	}
-	if (shift < 0) {
-		throw OutOfRangeException("Cannot left-shift by negative number %s", NumericHelper::ToString(shift));
-	}
-	if (shift >= max_shift) {
-		if (input == 0) {
-			return true;
-		}
-		throw OutOfRangeException("Left-shift value %s is out of range", NumericHelper::ToString(shift));
-	}
-	if (shift == 0) {
-		return true;
-	}
-	T max_value = (T(1) << (max_shift - shift - 1));
-	return input < max_value;
-}
 
 struct BitwiseShiftLeftOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA input, TB shift) {
-		if (!LeftShiftInRange<TA>(input, shift)) {
+		TA max_shift = TA(sizeof(TA) * 8);
+		if (input < 0) {
+			throw OutOfRangeException("Cannot left-shift negative number %s", NumericHelper::ToString(input));
+		}
+		if (shift < 0) {
+			throw OutOfRangeException("Cannot left-shift by negative number %s", NumericHelper::ToString(shift));
+		}
+		if (shift >= max_shift) {
+			if (input == 0) {
+				return 0;
+			}
+			throw OutOfRangeException("Left-shift value %s is out of range", NumericHelper::ToString(shift));
+		}
+		if (shift == 0) {
+			return true;
+		}
+		TA max_value = (TA(1) << (max_shift - shift - 1));
+		if (input >= max_value) {
 			throw OutOfRangeException("Overflow in left shift (%s << %s)", NumericHelper::ToString(input),
 			                          NumericHelper::ToString(shift));
 		}
