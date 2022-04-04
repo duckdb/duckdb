@@ -126,6 +126,13 @@ end
     @test df.a == [1, 2, 3]
     @test df.a_1 == [1, 2, 3]
 
+    results = DBInterface.execute(con, "SELECT COUNT(*) cnt FROM my_df")
+    GC.gc()
+    df = DataFrame(results)
+    @test names(df) == ["cnt"]
+    @test size(df, 1) == 1
+    @test df.cnt == [3]
+
     GC.gc()
 
     DBInterface.close!(con)
