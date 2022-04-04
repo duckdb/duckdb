@@ -79,12 +79,15 @@ jobs:
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         cibuildwheel --output-dir wheelhouse duckdb_tarball
 
-   # TODO build both 32 bit and 64 bit extensions?
+   # All extensions built by this CI will be tested by the test_extensions.py test in the linux-python3 job.
    test-extensions:
     name: CentOS 7
     runs-on: ubuntu-latest
     container: centos:7
 #   needs: linux-python3-9
+    strategy:
+      matrix:
+        force_32_bits: [0, 1]
     env:
       DISABLE_MAIN_DUCKDB_LIBRARY: 1
       BUILD_HTTPFS: 1
@@ -94,6 +97,7 @@ jobs:
       OPENSSL_ROOT_DIR: /usr/local
       DISABLE_BUILTIN_EXTENSIONS: 1
       LD_LIBRARY_PATH: /usr/local/lib:/usr/local/lib64
+      FORCE_32_BIT_FLAG: ${{ matrix.force_32_bits}}
 
     steps:
     - uses: actions/checkout@v2
@@ -104,7 +108,6 @@ jobs:
       run: |
         yum install -y gcc gcc-c++ git cmake make
         yum install -y epel-release
-        yum install -y openssl11 openssl11-libs openssl11-devel
         yum install -y make gcc perl-core pcre-devel wget zlib-devel
 
     # the weird openssl findreplace fix with version numbers is from: https://github.com/h2o/h2o/issues/213
@@ -132,17 +135,17 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: python-wheel-test-extensions-centos
+        name: python-wheel-test-extensions-centos-${{ matrix.force_32_bits == 0 && 'i686' || 'x86_64' }}
         path: |
           build/release/extension/*/*.duckdb_extension
 
-   # TODO: {wheel} can be used to distinguish between the different extensions to be loaded.
+   # TODO: optimize this: it could be run basically half the times if we know how to pass files to each specific wheel test
    linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        arch: [auto]
+        arch: [auto64, auto32]
         python_build: [cp37-*, cp38-*, cp39-*,cp310-*]
         isMaster:
           - ${{ github.ref == 'refs/heads/master' }}
@@ -154,10 +157,11 @@ jobs:
     needs: test-extensions
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
-      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+      CIBW_ARCHS: ${{ matrix.arch}}
+      CIBW_BEFORE_BUILD: 'echo {package} && pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy && pip install --prefer-binary "requests>=2.26"'
-      CIBW_TEST_COMMAND: 'echo "{wheel}" && ls {project} && pwd && DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests/fast'
+      CIBW_BEFORE_TEST: 'echo {package} && pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy && pip install --prefer-binary "requests>=2.26"'
+      CIBW_TEST_COMMAND: 'echo "{wheel}" && ls {project} && pwd && DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests/fast/test_extensions.py'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
       PYTEST_TIMEOUT: '600'
@@ -185,7 +189,7 @@ jobs:
 
     - uses: actions/download-artifact@v3
       with:
-        name: python-wheel-test-extensions-centos
+        name: python-wheel-test-extensions-centos-${{ matrix.arch == 'auto32' && 'i686' || 'x86_64' }}
         path: /tmp/duckdb_python_test_extensions
 
     - name: check extensions for testing
@@ -205,15 +209,7 @@ jobs:
         cibuildwheel --output-dir wheelhouse duckdb_tarball
         ls wheelhouse
 
-    - name: Deploy aarch64
-      if: ${{ matrix.arch == 'aarch64' }}
-      run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
-        fi
-
-    - name: Deploy regular
-      if: ${{ matrix.arch != 'aarch64' }}
+    - name: Deploy
       run: |
         python scripts/asset-upload-gha.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
