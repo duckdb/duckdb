@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &column_name, string &error_message) {
+unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &column_name, string &error_message, bool prioritise_current_aliases) {
 	auto using_binding = binder.bind_context.GetUsingBinding(column_name);
 	if (using_binding) {
 		// we are referencing a USING column
@@ -52,12 +52,12 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	}
 }
 
-void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
+void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, bool prioritise_current_aliases) {
 	switch (expr->type) {
 	case ExpressionType::COLUMN_REF: {
 		auto &colref = (ColumnRefExpression &)*expr;
 		string error_message;
-		auto new_expr = QualifyColumnName(colref, error_message);
+		auto new_expr = QualifyColumnName(colref, error_message, prioritise_current_aliases);
 		if (new_expr) {
 			if (!expr->alias.empty()) {
 				new_expr->alias = expr->alias;
@@ -81,12 +81,12 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 		break;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyColumnNames(child); });
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyColumnNames(child, prioritise_current_aliases); });
 }
 
-void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr) {
+void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr, bool prioritise_current_aliases) {
 	WhereBinder where_binder(binder, binder.context);
-	where_binder.QualifyColumnNames(expr);
+	where_binder.QualifyColumnNames(expr, prioritise_current_aliases);
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<ParsedExpression> base,
@@ -98,7 +98,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 	return move(extract_fun);
 }
 
-unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &colref, string &error_message) {
+unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &colref, string &error_message, bool prioritise_current_aliases) {
 	idx_t column_parts = colref.column_names.size();
 	// column names can have an arbitrary amount of dots
 	// here is how the resolution works:
@@ -106,7 +106,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		// no dots (i.e. "part1")
 		// -> part1 refers to a column
 		// check if we can qualify the column name with the table name
-		return QualifyColumnName(colref.GetColumnName(), error_message);
+		return QualifyColumnName(colref.GetColumnName(), error_message, prioritise_current_aliases);
 	} else if (column_parts == 2) {
 		// one dot (i.e. "part1.part2")
 		// EITHER:
@@ -121,7 +121,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 			// otherwise check if we can turn this into a struct extract
 			auto new_colref = make_unique<ColumnRefExpression>(colref.column_names[0]);
 			string other_error;
-			auto qualified_colref = QualifyColumnName(colref.column_names[0], other_error);
+			auto qualified_colref = QualifyColumnName(colref.column_names[0], other_error, prioritise_current_aliases);
 			if (!qualified_colref) {
 				// we could not! bail
 				return nullptr;
@@ -160,7 +160,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		} else {
 			// part1 could be a column
 			string col_error;
-			result_expr = QualifyColumnName(colref.column_names[0], col_error);
+			result_expr = QualifyColumnName(colref.column_names[0], col_error, prioritise_current_aliases);
 			if (!result_expr) {
 				// it is not! return the error
 				return nullptr;
@@ -180,7 +180,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 		return BindResult(make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
 	string error_message;
-	auto expr = QualifyColumnName(colref_p, error_message);
+	auto expr = QualifyColumnName(colref_p, error_message, false);
 	if (!expr) {
 		return BindResult(binder.FormatError(colref_p, error_message));
 	}

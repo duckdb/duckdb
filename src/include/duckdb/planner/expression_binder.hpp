@@ -78,12 +78,15 @@ public:
 	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, string field_name);
 	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
 
-	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, string &error_message);
-	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &colref, string &error_message);
+	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, string &error_message,
+	                                               bool prioritise_current_aliases);
+	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &colref, string &error_message,
+	                                               bool prioritise_current_aliases);
 
 	// Bind table names to ColumnRefExpressions
-	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr);
-	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr);
+	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr, bool prioritise_current_aliases);
+	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr,
+	                               bool prioritise_current_aliases = false);
 
 	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source,
 	                                            const string &collation, bool equality_only = false);
