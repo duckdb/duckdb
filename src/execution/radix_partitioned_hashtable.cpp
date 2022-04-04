@@ -341,17 +341,21 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
 	if (gstate.is_empty && grouping_set.empty()) {
-		D_ASSERT(chunk.ColumnCount() == op.aggregates.size());
+		D_ASSERT(chunk.ColumnCount() == null_groups.size() + op.aggregates.size());
 		// for each column in the aggregates, set to initial state
 		chunk.SetCardinality(1);
-		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
+		for (auto null_group : null_groups) {
+			chunk.data[null_group].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(chunk.data[null_group], true);
+		}
+		for (idx_t i = 0; i < op.aggregates.size(); i++) {
 			D_ASSERT(op.aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*op.aggregates[i];
 			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
 			aggr.function.initialize(aggr_state.get());
 
 			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
-			aggr.function.finalize(state_vector, aggr.bind_info.get(), chunk.data[i], 1, 0);
+			aggr.function.finalize(state_vector, aggr.bind_info.get(), chunk.data[null_groups.size() + i], 1, 0);
 			if (aggr.function.destructor) {
 				aggr.function.destructor(state_vector, 1);
 			}
