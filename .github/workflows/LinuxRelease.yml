@@ -361,7 +361,20 @@ jobs:
     name: CentOS 7
     runs-on: ubuntu-latest
     container: centos:7
-    needs: linux-release-64
+#    needs: linux-release-64
+    env:
+      BUILD_VISUALIZER: 1
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+#      BUILD_HTTPFS: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      BUILD_SUBSTRAIT_EXTENSION: 1
+      TREAT_WARNINGS_AS_ERRORS: 1
+      FORCE_WARN_UNUSED: 1
+#      STATIC_OPENSSL: 1
     steps:
     - uses: actions/checkout@v2
       with:

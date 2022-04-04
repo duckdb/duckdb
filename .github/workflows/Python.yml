@@ -79,9 +79,9 @@ jobs:
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         cibuildwheel --output-dir wheelhouse duckdb_tarball
 
-   # All extensions built by this CI will be tested by the test_extensions.py test in the linux-python3 job.
+   # All extensions uploaded by this job will be tested by the test_extensions.py test during the linux-python3 job.
    test-extensions:
-    name: CentOS 7
+    name: CentOS 7 Extensions
     runs-on: ubuntu-latest
     container: centos:7
 #   needs: linux-python3-9
@@ -96,8 +96,7 @@ jobs:
       FORCE_WARN_UNUSED: 1
       OPENSSL_ROOT_DIR: /usr/local
       DISABLE_BUILTIN_EXTENSIONS: 1
-      LD_LIBRARY_PATH: /usr/local/lib:/usr/local/lib64
-      FORCE_32_BIT_FLAG: ${{ matrix.force_32_bits}}
+      FORCE_32_BIT: ${{ matrix.force_32_bits}}
 
     steps:
     - uses: actions/checkout@v2
@@ -176,10 +175,6 @@ jobs:
     - uses: actions/setup-python@v2
       with:
         python-version: '3.7'
-
-    - uses: docker/setup-qemu-action@v1
-      if: ${{ matrix.arch == 'aarch64' }}
-      name: Set up QEMU
 
     - name: Install
       run: pip install cibuildwheel twine
