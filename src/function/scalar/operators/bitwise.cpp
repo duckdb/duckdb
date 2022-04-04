@@ -156,7 +156,7 @@ struct BitwiseShiftLeftOperator {
 			throw OutOfRangeException("Left-shift value %s is out of range", NumericHelper::ToString(shift));
 		}
 		if (shift == 0) {
-			return true;
+			return input;
 		}
 		TA max_value = (TA(1) << (max_shift - shift - 1));
 		if (input >= max_value) {
