@@ -208,7 +208,6 @@ jobs:
         cd tools/pythonpkg
         python setup.py sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        cp /tmp/duckdb_python_test_extensions/*/*.duckdb_extension .
         ls duckdb_tarball
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
         ls wheelhouse
