@@ -6,9 +6,6 @@ import platform
 if platform.system() != 'Windows':
     old_flags = sys.getdlopenflags()
     sys.setdlopenflags(os.RTLD_GLOBAL | os.RTLD_NOW)
-    print("duckdb loaded with RTLD_GLOBAL")
-else:
-    print("duckdb loaded with default rtld flags")
 
 from _duckdb_extension import *
 import _duckdb_extension
