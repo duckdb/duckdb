@@ -81,22 +81,23 @@ duckdb_register_arrow <- function(conn, name, arrow_scannable, use_async = NULL)
   # create some R functions to pass to c-land
   export_fun <- function(arrow_scannable, stream_ptr, projection = NULL, filter = TRUE) {
     # If we get a scanner we must transform it to a record batch reader first
-    if(class(arrow_scannable)[1] == "Scanner"){
-      arrow_scannable<-arrow_scannable$ToRecordBatchReader()
+    if (class(arrow_scannable)[1] == "Scanner") {
+      arrow_scannable <- arrow_scannable$ToRecordBatchReader()
     }
     arrow::Scanner$create(arrow_scannable, projection, filter)$ToRecordBatchReader()$export_to_c(stream_ptr)
   }
 
   get_schema_fun <- function(arrow_scannable, stream_ptr) {
-    if(class(arrow_scannable)[1] == "arrow_dplyr_query"){
+    if (class(arrow_scannable)[1] == "arrow_dplyr_query") {
+      collapse <- pkg_method("collapse", "dplyr")
       collapse(arrow_scannable)$.data$schema$export_to_c(stream_ptr)
-    } else{
+    } else {
       schema <- arrow_scannable$schema$export_to_c(stream_ptr)
     }
   }
 
   # pass some functions to c land so we don't have to look them up there
-  function_list <- list(export_fun, arrow::Expression$create, arrow::Expression$field_ref, arrow::Expression$scalar,get_schema_fun)
+  function_list <- list(export_fun, arrow::Expression$create, arrow::Expression$field_ref, arrow::Expression$scalar, get_schema_fun)
   rapi_register_arrow(conn@conn_ref, enc2utf8(as.character(name)), function_list, arrow_scannable)
   invisible(TRUE)
 }

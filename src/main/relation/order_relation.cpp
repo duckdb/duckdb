@@ -1,24 +1,27 @@
 #include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 
 namespace duckdb {
 
 OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> orders)
     : Relation(child_p->context, RelationType::ORDER_RELATION), orders(move(orders)), child(move(child_p)) {
 	// bind the expressions
-	vector<ColumnDefinition> dummy_columns;
-	context.GetContext()->TryBindRelation(*this, dummy_columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> OrderRelation::GetQueryNode() {
-	auto child_node = child->GetQueryNode();
+	auto select = make_unique<SelectNode>();
+	select->from_table = child->GetTableRef();
+	select->select_list.push_back(make_unique<StarExpression>());
 	auto order_node = make_unique<OrderModifier>();
 	for (idx_t i = 0; i < orders.size(); i++) {
 		order_node->orders.emplace_back(orders[i].type, orders[i].null_order, orders[i].expression->Copy());
 	}
-	child_node->modifiers.push_back(move(order_node));
-	return child_node;
+	select->modifiers.push_back(move(order_node));
+	return move(select);
 }
 
 string OrderRelation::GetAlias() {
@@ -26,7 +29,7 @@ string OrderRelation::GetAlias() {
 }
 
 const vector<ColumnDefinition> &OrderRelation::Columns() {
-	return child->Columns();
+	return columns;
 }
 
 string OrderRelation::ToString(idx_t depth) {

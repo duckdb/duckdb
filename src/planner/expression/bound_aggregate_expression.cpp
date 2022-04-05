@@ -56,6 +56,10 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_p) const {
 	return true;
 }
 
+bool BoundAggregateExpression::PropagatesNullValues() const {
+	return !function.propagates_null_values ? false : Expression::PropagatesNullValues();
+}
+
 unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	vector<unique_ptr<Expression>> new_children;
 	for (auto &child : children) {

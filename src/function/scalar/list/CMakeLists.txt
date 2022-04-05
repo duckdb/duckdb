@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   list_concat.cpp
   contains_or_position.cpp
+  list_aggregates.cpp
   array_slice.cpp
   list_extract.cpp
   list_value.cpp

@@ -151,8 +151,7 @@ static void CreateDelimJoinConditions(LogicalDelimJoin &delim_join, vector<Corre
 		JoinCondition cond;
 		cond.left = make_unique<BoundColumnRefExpression>(col.name, col.type, col.binding);
 		cond.right = make_unique<BoundColumnRefExpression>(col.name, col.type, bindings[base_offset + i]);
-		cond.comparison = ExpressionType::COMPARE_EQUAL;
-		cond.null_values_are_equal = true;
+		cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 		delim_join.conditions.push_back(move(cond));
 	}
 }
@@ -243,7 +242,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// LHS
 		delim_join->AddChild(move(root));
 		// RHS
-		FlattenDependentJoins flatten(binder, correlated_columns);
+		FlattenDependentJoins flatten(binder, correlated_columns, true);
 		flatten.DetectCorrelatedExpressions(plan.get());
 		auto dependent_join = flatten.PushDownDependentJoin(move(plan));
 

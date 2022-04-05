@@ -221,6 +221,7 @@ jobs:
         CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" mypy'
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+        SETUPTOOLS_USE_DISTUTILS: 'stdlib'
         TWINE_USERNAME: 'hfmuehleisen'
         DUCKDB_BUILD_UNITY: 1
 

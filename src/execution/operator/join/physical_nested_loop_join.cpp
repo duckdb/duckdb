@@ -237,7 +237,7 @@ unique_ptr<OperatorState> PhysicalNestedLoopJoin::GetOperatorState(ClientContext
 }
 
 OperatorResultType PhysicalNestedLoopJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                   OperatorState &state_p) const {
+                                                   GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
 	if (gstate.right_chunks.Count() == 0) {

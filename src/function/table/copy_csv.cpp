@@ -8,7 +8,6 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/common/windows_undefs.hpp"
 #include <limits>
 
 namespace duckdb {

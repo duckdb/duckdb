@@ -861,3 +861,21 @@ TEST_CASE("Test query relation", "[relation_api]") {
 	// not a select statement
 	REQUIRE_THROWS(con.RelationFromQuery("DELETE FROM tbl"));
 }
+
+TEST_CASE("Test TopK relation", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	unique_ptr<QueryResult> result;
+	shared_ptr<Relation> tbl;
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (i integer,j VARCHAR, k varchar )"));
+	REQUIRE_NO_FAIL(con.Query("insert into test values (10,'a','a'), (20,'a','b')"));
+
+	REQUIRE_NOTHROW(tbl = con.Table("test"));
+	REQUIRE_NOTHROW(tbl = tbl->Filter("k < 'f' and k is not null")
+	                          ->Project("#3,#2,#1")
+	                          ->Project("#2,#3")
+	                          ->Order("(#2-10)::UTINYINT ASC")
+	                          ->Limit(1));
+}

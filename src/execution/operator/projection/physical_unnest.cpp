@@ -150,7 +150,7 @@ unique_ptr<OperatorState> PhysicalUnnest::GetOperatorState(ClientContext &contex
 }
 
 OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                           OperatorState &state_p) const {
+                                           GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (UnnestOperatorState &)state_p;
 	do {
 		if (state.first_fetch) {

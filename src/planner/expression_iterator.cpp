@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
 #include "duckdb/planner/tableref/list.hpp"
 
 namespace duckdb {
@@ -167,10 +168,13 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 		EnumerateQueryNodeChildren(*bound_subquery.subquery, callback);
 		break;
 	}
-	default:
-		D_ASSERT(ref.type == TableReferenceType::TABLE_FUNCTION || ref.type == TableReferenceType::BASE_TABLE ||
-		         ref.type == TableReferenceType::EMPTY);
+	case TableReferenceType::TABLE_FUNCTION:
+	case TableReferenceType::EMPTY:
+	case TableReferenceType::BASE_TABLE:
+	case TableReferenceType::CTE:
 		break;
+	default:
+		throw NotImplementedException("Unimplemented table reference type in ExpressionIterator");
 	}
 }
 
@@ -183,8 +187,13 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 		EnumerateQueryNodeChildren(*bound_setop.right, callback);
 		break;
 	}
-	default:
-		D_ASSERT(node.type == QueryNodeType::SELECT_NODE);
+	case QueryNodeType::RECURSIVE_CTE_NODE: {
+		auto &cte_node = (BoundRecursiveCTENode &)node;
+		EnumerateQueryNodeChildren(*cte_node.left, callback);
+		EnumerateQueryNodeChildren(*cte_node.right, callback);
+		break;
+	}
+	case QueryNodeType::SELECT_NODE: {
 		auto &bound_select = (BoundSelectNode &)node;
 		for (idx_t i = 0; i < bound_select.select_list.size(); i++) {
 			EnumerateExpression(bound_select.select_list[i], callback);
@@ -207,6 +216,9 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 			EnumerateTableRefChildren(*bound_select.from_table, callback);
 		}
 		break;
+	}
+	default:
+		throw NotImplementedException("Unimplemented query node in ExpressionIterator");
 	}
 	for (idx_t i = 0; i < node.modifiers.size(); i++) {
 		switch (node.modifiers[i]->type) {

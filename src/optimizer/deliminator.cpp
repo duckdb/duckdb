@@ -19,7 +19,6 @@ public:
 	void VisitExpression(unique_ptr<Expression> *expression) override;
 	//! Whether the operator has one or more children of type DELIM_GET
 	bool HasChildDelimGet(LogicalOperator &op);
-
 	expression_map_t<Expression *> expr_map;
 	column_binding_map_t<bool> projection_map;
 	unique_ptr<LogicalOperator> temp_ptr;
@@ -28,12 +27,12 @@ public:
 void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
 	VisitOperatorExpressions(op);
-	// now check if this is a delim join that can be removed
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN && !HasChildDelimGet(op)) {
 		auto &delim_join = (LogicalDelimJoin &)op;
 		auto decs = &delim_join.duplicate_eliminated_columns;
 		for (auto &cond : delim_join.conditions) {
-			if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
+			if (cond.comparison != ExpressionType::COMPARE_EQUAL &&
+			    cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 				continue;
 			}
 			auto &colref = (BoundColumnRefExpression &)*cond.right;
@@ -47,7 +46,7 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 					}
 				}
 				// whether we applied an IS NOT NULL filter
-				cond.null_values_are_equal = true; // projection_map[colref.binding];
+				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 			}
 		}
 		// change type if there are no more duplicate-eliminated columns
@@ -144,6 +143,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, Deliminat
 	if (join.join_type != JoinType::INNER && join.join_type != JoinType::SEMI) {
 		return false;
 	}
+
 	// get the index (left or right) of the DelimGet side of the join
 	idx_t delim_idx = OperatorIsDelimGet(*join.children[0]) ? 0 : 1;
 	D_ASSERT(OperatorIsDelimGet(*join.children[delim_idx]));
@@ -160,7 +160,8 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, Deliminat
 	// check if joining with the DelimGet is redundant, and collect relevant column information
 	vector<Expression *> nulls_are_not_equal_exprs;
 	for (auto &cond : join.conditions) {
-		if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
+		if (cond.comparison != ExpressionType::COMPARE_EQUAL &&
+		    cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// non-equality join condition
 			return false;
 		}
@@ -172,7 +173,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, Deliminat
 			return false;
 		}
 		updater.expr_map[delim_side] = other_side;
-		if (!cond.null_values_are_equal) {
+		if (cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			nulls_are_not_equal_exprs.push_back(other_side);
 		}
 	}
