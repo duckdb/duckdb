@@ -61,7 +61,7 @@ jobs:
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
-   # All extensions uploaded by this job will be tested by the test_extensions.py test during the linux-python3 job.
+   # All extensions uploaded by this job will be loaded by the test_extensions.py test during the linux-python3 job.
    test-extensions:
     name: CentOS 7 Extensions
     runs-on: ubuntu-latest
@@ -109,10 +109,6 @@ jobs:
       # the weird openssl findreplace fix with version numbers is from: https://github.com/h2o/h2o/issues/213
     - name: Download OpenSSL 1.1.1k
       run: |
-        yum install -y gcc gcc-c++ git cmake make
-        yum install -y epel-release
-        yum install -y openssl11 openssl11-libs openssl11-devel
-        yum install -y make gcc perl-core pcre-devel wget zlib-devel
         wget https://ftp.openssl.org/source/openssl-1.1.1k.tar.gz --no-check-certificate
         tar -xzvf openssl-1.1.1k.tar.gz
         cd openssl-1.1.1k
@@ -122,14 +118,12 @@ jobs:
       if: ${{matrix.arch == 'x86_64'}}
       run: |
         cd openssl-1.1.1k
-        find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
         ./config --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic
 
     - name: Configure OpenSSL i686
       if: ${{matrix.arch == 'i686'}}
       run: |
         cd openssl-1.1.1k
-        find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
         ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic -m32 linux-generic32
 
     - name: Build OpenSSL
@@ -151,7 +145,7 @@ jobs:
         name: python-wheel-test-extensions-centos-${{ matrix.arch }}
         path: |
           build/release/extension/*/*.duckdb_extension
-    # TODO: do we want to test the extensions here as well?
+
     - name: Deploy
       run: |
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
@@ -218,13 +212,6 @@ jobs:
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
         fi
-
-    # For testing, remove after determining the wheels do not contain the extension files
-    - uses: actions/upload-artifact@v2
-      with:
-        name: test-upload
-        path: |
-          tools/pythonpkg/wheelhouse/*.whl
 
    osx-python3:
 #      if: github.ref == 'refs/heads/master'
