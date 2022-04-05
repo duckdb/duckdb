@@ -52,3 +52,7 @@ SELECT i % 2 AS k FROM integers WHERE k=k;
 # alias to an aggregate doesn't work.
 statement error
 SELECT i % 2 AS o, COUNT(i) AS c FROM integers WHERE c = 0 GROUP BY o;
+
+# alias to an expression with side effects doesn't work.
+statement error
+SELECT random() as r FROM integers WHERE r = 42;
