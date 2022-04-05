@@ -10,7 +10,7 @@ namespace duckdb {
 
 QualifyBinder::QualifyBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
                              const case_insensitive_map_t<idx_t> &alias_map, BoundGroupInformation &info)
-    : SelectBinder(binder, context, node, alias_map, info) {
+    : SelectBinder(binder, context, node, alias_map, info), column_alias_projection_binder(node.projection_index) {
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
@@ -20,8 +20,7 @@ BindResult QualifyBinder::BindColumnRef(ColumnRefExpression &expr, idx_t depth, 
 
 	auto alias_index = column_alias_lookup.TryBindAlias(expr);
 	if (alias_index != DConstants::INVALID_INDEX) {
-		return column_alias_binder.BindAliasByDuplicatingParsedTarget(this, (ParsedExpression &)expr, alias_index,
-		                                                              depth, root_expression);
+		return BindResult(column_alias_projection_binder.ResolveAliasWithProjection((ParsedExpression &)expr, alias_index));
 	}
 
 	auto non_alias_result = ExpressionBinder::BindExpression(expr, depth);

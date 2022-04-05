@@ -23,6 +23,8 @@ protected:
 	BindResult BindColumnRef(ColumnRefExpression &expr, idx_t depth, bool root_expression);
 	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
 	                          bool root_expression = false) override;
+protected:
+	ColumnAliasProjectionBinder column_alias_projection_binder;
 };
 
 } // namespace duckdb
