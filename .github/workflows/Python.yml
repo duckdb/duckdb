@@ -37,7 +37,7 @@ jobs:
 
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
-      CIBW_TEST_COMMAND: 'DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} python -m pytest {project}/tests'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
       PYTEST_TIMEOUT: '600'
@@ -51,21 +51,6 @@ jobs:
       with:
         python-version: '3.7'
 
-    - name: Install requirements
-      run: |
-        sudo apt-get update -y -qq
-        sudo apt-get install -y git ninja-build make gcc-multilib g++-multilib wget libssl-dev
-
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
-
-    - name: Build extensions to test
-      run: |
-        GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
-
     - name: Install
       run: pip install cibuildwheel twine
 
@@ -74,7 +59,6 @@ jobs:
         cd tools/pythonpkg
         python setup.py sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        cp ../../build/release/extension/*/*.duckdb_extension .
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
    # All extensions uploaded by this job will be tested by the test_extensions.py test during the linux-python3 job.
@@ -85,15 +69,26 @@ jobs:
 #   needs: linux-python3-9
     strategy:
       matrix:
-        build: ['i686', 'x86_64']
+        arch: ['i686', 'x86_64']
     env:
       DISABLE_MAIN_DUCKDB_LIBRARY: 1
       BUILD_HTTPFS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+#      BUILD_SUBSTRAIT_EXTENSION: 1
       STATIC_OPENSSL: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
       DISABLE_BUILTIN_EXTENSIONS: 1
-      FORCE_32_BIT: ${{ matrix.build == 'i686' && 1 || 0}}
+      FORCE_32_BIT: ${{ matrix.arch == 'i686' && 1 || 0}}
+      AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
+      AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+      AWS_DEFAULT_REGION: us-east-1
 
     steps:
     - uses: actions/checkout@v2
@@ -106,8 +101,8 @@ jobs:
         yum install -y epel-release
         yum install -y make gcc perl-core pcre-devel wget zlib-devel
 
-    - name: Install 32 bit dependencies
-      if: ${{matrix.build == 'i686'}}
+    - name: Install i686 dependencies
+      if: ${{matrix.arch == 'i686'}}
       run: |
         yum install -y glibc-devel.i686 libgcc.i686 libstdc++-devel.i686 ncurses-devel.i686
 
@@ -124,14 +119,14 @@ jobs:
         find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
 
     - name: Configure OpenSSL x86_64
-      if: ${{matrix.build == 'x86_64'}}
+      if: ${{matrix.arch == 'x86_64'}}
       run: |
         cd openssl-1.1.1k
         find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
         ./config --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic
 
     - name: Configure OpenSSL i686
-      if: ${{matrix.build == 'i686'}}
+      if: ${{matrix.arch == 'i686'}}
       run: |
         cd openssl-1.1.1k
         find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
@@ -153,19 +148,23 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: python-wheel-test-extensions-centos-${{ matrix.build == 'i686' && 'i686' || 'x86_64' }}
+        name: python-wheel-test-extensions-centos-${{ matrix.arch }}
         path: |
           build/release/extension/*/*.duckdb_extension
-   # TODO: we should release the CentOS extensions here as well probably?
+    # TODO: do we want to test the extensions here as well?
+    - name: Deploy
+      run: |
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          ./scripts/extension-upload.sh linux_${{matrix.arch == 'i686' && 'i686' || 'amd64'}}_gcc4
+        fi
 
-   # TODO: optimize this: it could be run basically half the times if we know how to pass files to each specific wheel test
-   # TODO: check out which paths are actually used and which can be removed
+
    linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        arch: [auto64, auto32]
+        arch: [i686, x86_64]
         python_build: [cp37-*, cp38-*, cp39-*,cp310-*]
         isMaster:
           - ${{ github.ref == 'refs/heads/master' }}
@@ -177,7 +176,7 @@ jobs:
     needs: test-extensions
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
-      CIBW_ARCHS: ${{ matrix.arch}}
+      CIBW_ARCHS: ${{ matrix.arch == 'i686' && 'auto32' || 'auto64'}}
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
       PYTEST_TIMEOUT: '600'
@@ -196,26 +195,20 @@ jobs:
     - name: Install
       run: pip install cibuildwheel twine
 
-    - name: Prepare extension folder
-      run: mkdir /tmp/duckdb_python_test_extensions
-
     - uses: actions/download-artifact@v3
       with:
-        name: python-wheel-test-extensions-centos-${{ matrix.arch == 'auto32' && 'i686' || 'x86_64' }}
-        path: /tmp/duckdb_python_test_extensions
+        name: python-wheel-test-extensions-centos-${{ matrix.arch }}
+        path: tools/pythonpkg
 
-    - name: check extensions for testing
+    - name: List extensions to be tested
       run: |
-        ls /tmp
-        ls /tmp/duckdb_python_test_extensions
-        ls /tmp/duckdb_python_test_extensions/httpfs
+        printf '%s\n' tools/pythonpkg/*.duckdb_extension
 
     - name: Build
       run: |
         cd tools/pythonpkg
         python setup.py sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        cp /tmp/duckdb_python_test_extensions/*/*.duckdb_extension duckdb_tarball
         cp /tmp/duckdb_python_test_extensions/*/*.duckdb_extension .
         ls duckdb_tarball
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball

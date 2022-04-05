@@ -1,6 +1,8 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/database.hpp"
 
+#include <cstdint>
+
 namespace duckdb {
 
 struct PragmaVersionData : public FunctionOperatorData {
@@ -49,10 +51,17 @@ const char *DuckDB::LibraryVersion() {
 	return DUCKDB_VERSION;
 }
 
-// TODO should we add 32 bits architectures? We support it on python?
 string DuckDB::Platform() {
 	string os = "linux";
+#if INTPTR_MAX == INT64_MAX
 	string arch = "amd64";
+#elif INTPTR_MAX == INT32_MAX
+	string arch = "i686";
+#else
+#error Unknown pointer size or missing size macros!
+#endif
+	string postfix = "";
+
 #ifdef _WIN32
 	os = "windows";
 #elif defined(__APPLE__)
@@ -62,13 +71,13 @@ string DuckDB::Platform() {
 	arch = "arm64";
 #endif
 
-#if defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI == 0
+#if defined(__GNUC__) && __GNUC__ == 4
 	if (os == "linux") {
-		arch += "_old-cxx11-abi";
+		postfix = "_gcc4";
 	}
 #endif
 
-	return os + "_" + arch;
+	return os + "_" + arch + postfix;
 }
 
 } // namespace duckdb

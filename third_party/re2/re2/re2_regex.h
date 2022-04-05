@@ -3,9 +3,10 @@
 #ifndef DUCKDB_RE2_REGEX_H
 #define DUCKDB_RE2_REGEX_H
 
-#include <re2/re2.h>
 #include <vector>
 #include <string>
+
+#include "re2/re2.h"
 
 namespace duckdb_re2 {
 
