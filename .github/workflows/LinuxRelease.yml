@@ -127,7 +127,7 @@ jobs:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
-#    needs: linux-release-64
+    needs: linux-release-64
     env:
       GEN: ninja
       BUILD_VISUALIZER: 1
@@ -357,7 +357,7 @@ jobs:
     name: CentOS 7
     runs-on: ubuntu-latest
     container: centos:7
-#    needs: linux-release-64
+    needs: linux-release-64
     env:
       BUILD_VISUALIZER: 1
       BUILD_ICU: 1
@@ -383,7 +383,7 @@ jobs:
         yum install -y epel-release
         yum install -y make gcc perl-core pcre-devel wget zlib-devel
 
-    - name: Download OpenSSL 1.1.1k
+    - name: Install OpenSSL 1.1.1k
       run: |
         wget https://ftp.openssl.org/source/openssl-1.1.1k.tar.gz --no-check-certificate
         tar -xzvf openssl-1.1.1k.tar.gz

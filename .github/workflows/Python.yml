@@ -62,11 +62,11 @@ jobs:
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
    # All extensions uploaded by this job will be loaded by the test_extensions.py test during the linux-python3 job.
-   test-extensions:
+   centos7-extensions:
     name: CentOS 7 Extensions
     runs-on: ubuntu-latest
     container: centos:7
-#   needs: linux-python3-9
+    needs: linux-python3-9
     strategy:
       matrix:
         arch: ['i686', 'x86_64']
@@ -142,7 +142,7 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: python-wheel-test-extensions-centos-${{ matrix.arch }}
+        name: python-wheel-centos7-extensions-centos-${{ matrix.arch }}
         path: |
           build/release/extension/*/*.duckdb_extension
 
@@ -167,7 +167,7 @@ jobs:
             python_build: 'cp38-*'
           - isMaster: false
             python_build: 'cp39-*'
-    needs: test-extensions
+    needs: centos7-extensions
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_ARCHS: ${{ matrix.arch == 'i686' && 'auto32' || 'auto64'}}
@@ -190,7 +190,7 @@ jobs:
 
     - uses: actions/download-artifact@v3
       with:
-        name: python-wheel-test-extensions-centos-${{ matrix.arch }}
+        name: python-wheel-centos7-extensions-centos-${{ matrix.arch }}
         path: tools/pythonpkg
 
     - name: List extensions to be tested
@@ -214,7 +214,7 @@ jobs:
         fi
 
    osx-python3:
-#      if: github.ref == 'refs/heads/master'
+      if: github.ref == 'refs/heads/master'
       name: Python 3 OSX
       runs-on: macos-latest
       strategy:
