@@ -121,7 +121,7 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformIfThenExpr(const substr
 		dcase->case_checks.push_back(move(dif));
 	}
 	dcase->else_expr = TransformExpr(scase.else_());
-	return dcase;
+	return move(dcase);
 }
 
 unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformExpr(const substrait::Expression &sexpr) {

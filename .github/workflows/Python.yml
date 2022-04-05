@@ -80,7 +80,7 @@ jobs:
       BUILD_FTS: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
-#      BUILD_SUBSTRAIT_EXTENSION: 1
+      BUILD_SUBSTRAIT_EXTENSION: 1
       STATIC_OPENSSL: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
@@ -227,7 +227,7 @@ jobs:
           tools/pythonpkg/wheelhouse/*.whl
 
    osx-python3:
-      if: github.ref == 'refs/heads/master'
+#      if: github.ref == 'refs/heads/master'
       name: Python 3 OSX
       runs-on: macos-latest
       strategy:
@@ -236,8 +236,8 @@ jobs:
       needs: linux-python3-9
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
+        CIBW_ARCHS: 'x86_64 universal2 arm64'
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
-        CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         TWINE_USERNAME: 'hfmuehleisen'
         DUCKDB_BUILD_UNITY: 1
@@ -286,6 +286,8 @@ jobs:
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
+        CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+        CIBW_TEST_REQUIRES: 'pytest'
         CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" mypy'
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
@@ -309,7 +311,7 @@ jobs:
           cd tools/pythonpkg
           python setup.py sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-          cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
+          cibuildwheel --output-dir wheelhouse duckdb_tarball
 
       - name: Deploy
         run: |
