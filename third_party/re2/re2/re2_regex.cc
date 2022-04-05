@@ -10,8 +10,8 @@ bool RegexSearchInternal(const char *input, Match &match, const Regex &r, RE2::A
                          size_t end) {
 	auto &regex = r.GetRegex();
 	std::vector<StringPiece> target_groups;
-	auto group_count = regex.NumberOfCapturingGroups();
-	target_groups.resize(group_count + 1);
+	auto group_count = regex.NumberOfCapturingGroups() + 1;
+	target_groups.resize(group_count);
 	match.groups.clear();
 	if (!regex.Match(StringPiece(input), start, end, anchor, target_groups.data(), group_count)) {
 		return false;
