@@ -13,8 +13,10 @@
 
 namespace duckdb {
 
-SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
-    : ExpressionBinder(binder, context), inside_window(false), node(node), info(info) {
+SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
+                           const case_insensitive_map_t<idx_t> &alias_map, BoundGroupInformation &info)
+    : ExpressionBinder(binder, context), column_alias_lookup(alias_map), column_alias_binder(node),
+      inside_window(false), node(node), info(info) {
 }
 
 BindResult SelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
@@ -29,33 +31,49 @@ BindResult SelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, 
 		return BindResult("SELECT clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
 		return BindWindow((WindowExpression &)expr, depth);
+	case ExpressionClass::COLUMN_REF:
+		return BindColumnRef((ColumnRefExpression &)expr, depth, root_expression);
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
 }
 
-idx_t SelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
-	// first check the group alias map, if expr is a ColumnRefExpression
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
-		if (!colref.IsQualified()) {
-			auto alias_entry = info.alias_map.find(colref.column_names[0]);
-			if (alias_entry != info.alias_map.end()) {
-				// found entry!
-				return alias_entry->second;
-			}
-		}
+BindResult SelectBinder::BindColumnRef(ColumnRefExpression &expr, idx_t depth, bool root_expression) {
+	auto result = ExpressionBinder::BindExpression(expr, depth);
+	if (!result.HasError()) {
+		return result;
 	}
-	// no alias reference found
+
+	auto alias_index = column_alias_lookup.TryBindAlias(expr);
+	if (alias_index != DConstants::INVALID_INDEX) {
+		return column_alias_binder.BindAliasByDuplicatingParsedTarget(this, (ParsedExpression &)expr, alias_index,
+		                                                              depth, root_expression);
+	}
+	return BindResult(StringUtil::Format("%s, and no existing column for \"%s\" found", result.error, expr.ToString()));
+}
+
+//! Attempt to bind to a grouping variable.
+//! Aliases must be resolved with QualifyColumnNames before calling this function.
+idx_t SelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
+	// check aliases for a match
+	ParsedExpression *resolved_expr = &expr;
+
+	unique_ptr<ParsedExpression> _resolved_expr;
+	auto alias_index = column_alias_lookup.TryBindAlias(expr);
+	if (alias_index != DConstants::INVALID_INDEX) {
+		_resolved_expr = column_alias_binder.ResolveAliasByDuplicatingParsedTarget(alias_index);
+		resolved_expr = &*_resolved_expr;
+	}
+
 	// check the list of group columns for a match
-	auto entry = info.map.find(&expr);
+	auto entry = info.map.find(resolved_expr);
 	if (entry != info.map.end()) {
 		return entry->second;
 	}
 #ifdef DEBUG
 	for (auto entry : info.map) {
-		D_ASSERT(!entry.first->Equals(&expr));
-		D_ASSERT(!expr.Equals(entry.first));
+		D_ASSERT(!entry.first->Equals(resolved_expr));
+		D_ASSERT(!resolved_expr->Equals(entry.first));
 	}
 #endif
 	return DConstants::INVALID_INDEX;

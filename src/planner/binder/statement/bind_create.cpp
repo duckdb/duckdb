@@ -108,7 +108,8 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	string error;
 	auto sel_node = make_unique<BoundSelectNode>();
 	auto group_info = make_unique<BoundGroupInformation>();
-	SelectBinder binder(*this, context, *sel_node, *group_info);
+	case_insensitive_map_t<idx_t> alias_map;
+	SelectBinder binder(*this, context, *sel_node, alias_map, *group_info);
 	error = binder.Bind(&expression, 0, false);
 
 	if (!error.empty()) {

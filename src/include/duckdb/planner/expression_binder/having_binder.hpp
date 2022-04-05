@@ -16,17 +16,13 @@ namespace duckdb {
 //! The HAVING binder is responsible for binding an expression within the HAVING clause of a SQL statement
 class HavingBinder : public SelectBinder {
 public:
-	HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
-	             case_insensitive_map_t<idx_t> &alias_map);
+	HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
+	             const case_insensitive_map_t<idx_t> &alias_map, BoundGroupInformation &info);
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
 	                          bool root_expression = false) override;
-
-private:
-	BindResult BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression);
-
-	ColumnAliasBinder column_alias_binder;
+	BindResult BindColumnRef(ColumnRefExpression &expr, idx_t depth, bool root_expression) override;
 };
 
 } // namespace duckdb

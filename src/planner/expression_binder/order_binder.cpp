@@ -11,25 +11,23 @@ namespace duckdb {
 
 OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, case_insensitive_map_t<idx_t> &alias_map,
                          expression_map_t<idx_t> &projection_map, idx_t max_count)
-    : binders(move(binders)), projection_index(projection_index), max_count(max_count), extra_list(nullptr),
-      alias_map(alias_map), projection_map(projection_map) {
+    : binders(move(binders)), column_alias_lookup(alias_map), column_alias_projection_binder(projection_index),
+      max_count(max_count), extra_list(nullptr), projection_map(projection_map) {
 }
 OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, SelectNode &node,
                          case_insensitive_map_t<idx_t> &alias_map, expression_map_t<idx_t> &projection_map)
-    : binders(move(binders)), projection_index(projection_index), alias_map(alias_map), projection_map(projection_map) {
+    : binders(move(binders)), column_alias_lookup(alias_map), column_alias_projection_binder(projection_index),
+      projection_map(projection_map) {
 	this->max_count = node.select_list.size();
 	this->extra_list = &node.select_list;
 }
 
 unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, idx_t index) {
-	string alias;
+	auto realiased_expr = expr.Copy();
 	if (extra_list && index < extra_list->size()) {
-		alias = extra_list->at(index)->ToString();
-	} else {
-		alias = expr.GetName();
+		realiased_expr->alias = extra_list->at(index)->ToString();
 	}
-	return make_unique<BoundColumnRefExpression>(move(alias), LogicalType::INVALID,
-	                                             ColumnBinding(projection_index, index));
+	return column_alias_projection_binder.ResolveAliasWithProjection(*realiased_expr, index);
 }
 
 unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpression> expr) {
@@ -67,17 +65,11 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		// COLUMN REF expression
 		// check if we can bind it to an alias in the select list
 		auto &colref = (ColumnRefExpression &)*expr;
-		// if there is an explicit table name we can't bind to an alias
-		if (colref.IsQualified()) {
+		auto alias_index = column_alias_lookup.TryBindAlias(colref);
+		if (alias_index == DConstants::INVALID_INDEX) {
 			break;
 		}
-		// check the alias list
-		auto entry = alias_map.find(colref.column_names[0]);
-		if (entry != alias_map.end()) {
-			// it does! point it to that entry
-			return CreateProjectionReference(*expr, entry->second);
-		}
-		break;
+		return column_alias_projection_binder.ResolveAliasWithProjection(colref, alias_index);
 	}
 	case ExpressionClass::POSITIONAL_REFERENCE: {
 		auto &posref = (PositionalReferenceExpression &)*expr;

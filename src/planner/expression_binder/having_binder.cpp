@@ -8,17 +8,18 @@
 
 namespace duckdb {
 
-HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
-                           case_insensitive_map_t<idx_t> &alias_map)
-    : SelectBinder(binder, context, node, info), column_alias_binder(node, alias_map) {
+HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
+                           const case_insensitive_map_t<idx_t> &alias_map, BoundGroupInformation &info)
+    : SelectBinder(binder, context, node, alias_map, info) {
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
-BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = (ColumnRefExpression &)**expr_ptr;
-	auto alias_result = column_alias_binder.BindAlias(*this, expr, depth, root_expression);
-	if (!alias_result.HasError()) {
-		return alias_result;
+BindResult HavingBinder::BindColumnRef(ColumnRefExpression &expr, idx_t depth, bool root_expression) {
+	auto alias_index = column_alias_lookup.TryBindAlias(expr);
+	if (alias_index != DConstants::INVALID_INDEX) {
+		// TODO: ResolveAliasWithProjection
+		return column_alias_binder.BindAliasByDuplicatingParsedTarget(this, (ParsedExpression &)expr, alias_index,
+		                                                              depth, root_expression);
 	}
 
 	return BindResult(StringUtil::Format(
@@ -36,7 +37,7 @@ BindResult HavingBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, 
 	case ExpressionClass::WINDOW:
 		return BindResult("HAVING clause cannot contain window functions!");
 	case ExpressionClass::COLUMN_REF:
-		return BindColumnRef(expr_ptr, depth, root_expression);
+		return BindColumnRef((ColumnRefExpression &)expr, depth, root_expression);
 	default:
 		return duckdb::SelectBinder::BindExpression(expr_ptr, depth);
 	}

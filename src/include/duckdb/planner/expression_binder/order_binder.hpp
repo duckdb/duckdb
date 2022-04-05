@@ -12,6 +12,7 @@
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_binder/column_alias_binder.hpp"
 
 namespace duckdb {
 class Binder;
@@ -40,11 +41,14 @@ private:
 
 private:
 	vector<Binder *> binders;
-	idx_t projection_index;
+	// idx_t projection_index;
 	idx_t max_count;
 	vector<unique_ptr<ParsedExpression>> *extra_list;
-	case_insensitive_map_t<idx_t> &alias_map;
+	// case_insensitive_map_t<idx_t> &alias_map;
 	expression_map_t<idx_t> &projection_map;
+
+	ColumnAliasLookup column_alias_lookup;
+	ColumnAliasProjectionBinder column_alias_projection_binder;
 };
 
 } // namespace duckdb

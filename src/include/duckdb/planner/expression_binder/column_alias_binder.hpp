@@ -16,18 +16,40 @@ namespace duckdb {
 class BoundSelectNode;
 class ColumnRefExpression;
 
-//! A helper binder for WhereBinder and HavingBinder which support alias as a columnref.
+//! A helper to allow binders to look up the index of a column alias.
+class ColumnAliasLookup {
+public:
+	ColumnAliasLookup(const case_insensitive_map_t<idx_t> &alias_map);
+
+	idx_t TryBindAlias(const ParsedExpression &expr);
+
+protected:
+	const case_insensitive_map_t<idx_t> &alias_map;
+};
+
+//! A helper to allow binders to resolve a column alias by duplicating the statement the alias refers to.
 class ColumnAliasBinder {
 public:
-	ColumnAliasBinder(BoundSelectNode &node, const case_insensitive_map_t<idx_t> &alias_map);
+	ColumnAliasBinder(const BoundSelectNode &node);
 
-	BindResult BindAlias(ExpressionBinder &enclosing_binder, ColumnRefExpression &expr, idx_t depth,
-	                     bool root_expression);
+	unique_ptr<ParsedExpression> ResolveAliasByDuplicatingParsedTarget(idx_t index);
+	BindResult BindAliasByDuplicatingParsedTarget(ExpressionBinder *binder, const ParsedExpression &expr, idx_t index,
+	                                              idx_t depth, bool root_expression);
 
-private:
-	BoundSelectNode &node;
-	const case_insensitive_map_t<idx_t> &alias_map;
-	bool in_alias;
+protected:
+	const BoundSelectNode &node;
+};
+
+//! A helper to allow binders to resolve a column alias by creating a projection reference to the statement the alias
+//! refers to.
+class ColumnAliasProjectionBinder {
+public:
+	ColumnAliasProjectionBinder(idx_t projection_index);
+
+	unique_ptr<Expression> ResolveAliasWithProjection(const ParsedExpression &expr, idx_t index);
+
+protected:
+	idx_t projection_index;
 };
 
 } // namespace duckdb

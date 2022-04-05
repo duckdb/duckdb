@@ -141,6 +141,8 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 				order.orders = move(new_orders);
 			}
 			for (auto &order_node : order.orders) {
+				// TODO
+				// ExpressionBinder::QualifyColumnNames(*this, order_node.expression, true);
 				auto order_expression = BindOrderExpression(order_binder, move(order_node.expression));
 				if (!order_expression) {
 					continue;
@@ -305,8 +307,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// first visit the WHERE clause
 	// the WHERE clause happens before the GROUP BY, PROJECTION or HAVING clauses
 	if (statement.where_clause) {
-		ColumnAliasBinder alias_binder(*result, alias_map);
-		WhereBinder where_binder(*this, context, &alias_binder);
+		ExpressionBinder::QualifyColumnNames(*this, statement.where_clause);
+		WhereBinder where_binder(*this, context, alias_map, *result);
 		unique_ptr<ParsedExpression> condition = move(statement.where_clause);
 		result->where_clause = where_binder.Bind(condition);
 	}
@@ -321,8 +323,10 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	if (!group_expressions.empty()) {
 		// the statement has a GROUP BY clause, bind it
 		unbound_groups.resize(group_expressions.size());
-		GroupBinder group_binder(*this, context, statement, result->group_index, alias_map, info.alias_map);
+		GroupBinder group_binder(*this, context, statement, *result, alias_map, result->group_index);
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
+			// Resolve table names and aliases
+			ExpressionBinder::QualifyColumnNames(*this, group_expressions[i]);
 
 			// we keep a copy of the unbound expression;
 			// we keep the unbound copy around to check for group references in the SELECT and HAVING clause
@@ -341,12 +345,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			    ExpressionBinder::PushCollation(context, move(bound_expr), StringType::GetCollation(group_type), true);
 			result->groups.group_expressions.push_back(move(bound_expr));
 
-			// in the unbound expression we DO bind the table names of any ColumnRefs
-			// we do this to make sure that "table.a" and "a" are treated the same
-			// if we wouldn't do this then (SELECT test.a FROM test GROUP BY a) would not work because "test.a" <> "a"
-			// hence we convert "a" -> "test.a" in the unbound expression
 			unbound_groups[i] = move(group_binder.unbound_expression);
-			ExpressionBinder::QualifyColumnNames(*this, unbound_groups[i]);
 			info.map[unbound_groups[i].get()] = i;
 		}
 	}
@@ -354,20 +353,20 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	// bind the HAVING clause, if any
 	if (statement.having) {
-		HavingBinder having_binder(*this, context, *result, info, alias_map);
 		ExpressionBinder::QualifyColumnNames(*this, statement.having);
+		HavingBinder having_binder(*this, context, *result, alias_map, info);
 		result->having = having_binder.Bind(statement.having);
 	}
 
 	// bind the QUALIFY clause, if any
 	if (statement.qualify) {
-		QualifyBinder qualify_binder(*this, context, *result, info, alias_map);
 		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
+		QualifyBinder qualify_binder(*this, context, *result, alias_map, info);
 		result->qualify = qualify_binder.Bind(statement.qualify);
 	}
 
 	// after that, we bind to the SELECT list
-	SelectBinder select_binder(*this, context, *result, info);
+	SelectBinder select_binder(*this, context, *result, alias_map, info);
 	vector<LogicalType> internal_sql_types;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		LogicalType result_type;
