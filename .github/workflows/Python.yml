@@ -181,7 +181,6 @@ jobs:
       TWINE_USERNAME: 'hfmuehleisen'
       PYTEST_TIMEOUT: '600'
       DUCKDB_BUILD_UNITY: 1
-      GLIBCXX_USE_CXX11_ABI: 0
 
     steps:
     - uses: actions/checkout@v2

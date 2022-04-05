@@ -5,7 +5,6 @@ set -x
 
 CMAKE_CONFIG=Release
 EXT_BASE_PATH=build/release
-GLIBCXX_USE_CXX11_ABI=${GLIBCXX_USE_CXX11_ABI:-1}
 
 FILES="${EXT_BASE_PATH}/extension/*/*.duckdb_extension"
 EXTENSION_LIST=""
@@ -16,7 +15,7 @@ do
 done
 mkdir -p testext
 cd testext
-cmake -DCMAKE_BUILD_TYPE=${CMAKE_CONFIG} -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" -DGLIBCXX_USE_CXX11_ABI=${GLIBCXX_USE_CXX11_ABI} ..
+cmake -DCMAKE_BUILD_TYPE=${CMAKE_CONFIG} -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ..
 cmake --build . --config ${CMAKE_CONFIG}
 cd ..
 

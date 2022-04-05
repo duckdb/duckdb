@@ -237,7 +237,6 @@ option(BUILD_ODBC_DRIVER "Build the DuckDB ODBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
-option(GLIBCXX_USE_CXX11_ABI "Can be used to switch between the old and new ABI for std::string and std::list" TRUE)
 
 option(BUILD_REST "Build the DuckDB REST server" FALSE)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
@@ -258,11 +257,6 @@ option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
-endif()
-
-# Used for binary compatibility with some python wheels, which requires loadable extension to be built with this flag
-if (NOT GLIBCXX_USE_CXX11_ABI)
-  add_compile_definitions(_GLIBCXX_USE_CXX11_ABI=0)
 endif()
 
 if (NOT BUILD_MAIN_DUCKDB_LIBRARY)

@@ -128,9 +128,6 @@ jobs:
     runs-on: ubuntu-latest
     container: ubuntu:16.04
 #    needs: linux-release-64
-    strategy:
-      matrix:
-        GLIBCXX_USE_CXX11_ABI: [ false, true ]
     env:
       GEN: ninja
       BUILD_VISUALIZER: 1
@@ -145,7 +142,6 @@ jobs:
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
       STATIC_OPENSSL: 1
-      GLIBCXX_USE_CXX11_ABI: ${{matrix.USE_CXX11_ABI && 1 || 0}}
       DISABLE_BUILTIN_EXTENSIONS: 1
       OPENSSL_ROOT_DIR: /usr/local/ssl
       AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
