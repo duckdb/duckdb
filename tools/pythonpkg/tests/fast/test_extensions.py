@@ -7,12 +7,9 @@ from os.path import abspath
 class TestExtensions(object):
     def test_extensions(self, duckdb_cursor):
 
-        print(f"TestExtensions: This file is at{__file__}")
-
-        # Paths to search for extensions, relative to this file
+        # Paths to search for extensions
         extension_search_patterns = [
             "../../../../build/release/extension/*/*.duckdb_extension",
-            "/tmp/duckdb_python_test_extensions/*/*.duckdb_extension",
             "../../*.duckdb_extension"
         ]
 
@@ -22,14 +19,11 @@ class TestExtensions(object):
             env_extension_path = env_extension_path.rstrip('/')
             extension_search_patterns.append(env_extension_path + '/*/*.duckdb_extension')
             extension_search_patterns.append(env_extension_path + '/*.duckdb_extension')
-        else:
-            print("ENV not found!")
 
         # Depending on the env var, the test will fail on not finding any extensions
         must_test_extension_load = os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False)
 
         extension_paths_found = []
-
         for pattern in extension_search_patterns:
             extension_pattern_abs = abspath(pattern)
             print(f"Searching path: {extension_pattern_abs}")

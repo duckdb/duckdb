@@ -201,7 +201,8 @@ jobs:
 
     - name: List extensions to be tested
       run: |
-        printf '%s\n' tools/pythonpkg/*.duckdb_extension
+        cd tools/pythonpkg
+        printf '%s\n' *.duckdb_extension
 
     - name: Build
       run: |
