@@ -13,8 +13,8 @@ enum class RegexOptions : uint8_t { NONE, CASE_INSENSITIVE };
 
 class Regex {
 public:
-	Regex(const std::string &pattern, RegexOptions options = RegexOptions::NONE);
-	Regex(const char *pattern, RegexOptions options = RegexOptions::NONE) : Regex(std::string(pattern)) {
+	DUCKDB_API Regex(const std::string &pattern, RegexOptions options = RegexOptions::NONE);
+	DUCKDB_API Regex(const char *pattern, RegexOptions options = RegexOptions::NONE) : Regex(std::string(pattern)) {
 	}
 	const duckdb_re2::RE2 &GetRegex() const {
 		return *regex;
@@ -63,10 +63,10 @@ struct Match {
 	}
 };
 
-bool RegexSearch(const std::string &input, Match &match, const Regex &regex);
-bool RegexMatch(const std::string &input, Match &match, const Regex &regex);
-bool RegexMatch(const char *start, const char *end, Match &match, const Regex &regex);
-bool RegexMatch(const std::string &input, const Regex &regex);
-std::vector<Match> RegexFindAll(const std::string &input, const Regex &regex);
+DUCKDB_API bool RegexSearch(const std::string &input, Match &match, const Regex &regex);
+DUCKDB_API bool RegexMatch(const std::string &input, Match &match, const Regex &regex);
+DUCKDB_API bool RegexMatch(const char *start, const char *end, Match &match, const Regex &regex);
+DUCKDB_API bool RegexMatch(const std::string &input, const Regex &regex);
+DUCKDB_API std::vector<Match> RegexFindAll(const std::string &input, const Regex &regex);
 
 } // namespace duckdb_re2

@@ -5,12 +5,11 @@ set -x
 
 CMAKE_CONFIG=Release
 EXT_BASE_PATH=build/release
-FORCE_32_BIT_FLAG=-DFORCE_32_BIT=1
 
-if [[ -z "${FORCE_32_BIT}" ]]; then
-  FORCE_32_BIT_FLAG=""
-else
+if [ "${FORCE_32_BIT:0}" == "1" ]; then
   FORCE_32_BIT_FLAG="-DFORCE_32_BIT=1"
+else
+  FORCE_32_BIT_FLAG=""
 fi
 
 FILES="${EXT_BASE_PATH}/extension/*/*.duckdb_extension"
