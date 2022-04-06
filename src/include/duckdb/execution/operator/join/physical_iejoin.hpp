@@ -29,7 +29,7 @@ public:
 public:
 	// Operator Interface
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                           OperatorState &state) const override;
+	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
 public:
 	// Source interface

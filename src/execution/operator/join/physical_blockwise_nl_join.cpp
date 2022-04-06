@@ -92,7 +92,7 @@ unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ClientContex
 }
 
 OperatorResultType PhysicalBlockwiseNLJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                    OperatorState &state_p) const {
+                                                    GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	D_ASSERT(input.size() > 0);
 	auto &state = (BlockwiseNLJoinState &)state_p;
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;

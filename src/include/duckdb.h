@@ -944,12 +944,21 @@ Destroys the value and de-allocates all memory allocated for that type.
 DUCKDB_API void duckdb_destroy_value(duckdb_value *value);
 
 /*!
-Creates a value from a varchar
+Creates a value from a null-terminated string
 
-* value: The varchar value
+* value: The null-terminated string
 * returns: The value. This must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_API duckdb_value duckdb_create_varchar(const char *text);
+
+/*!
+Creates a value from a string
+
+* value: The text
+* length: The length of the text
+* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_varchar_length(const char *text, idx_t length);
 
 /*!
 Creates a value from an int64

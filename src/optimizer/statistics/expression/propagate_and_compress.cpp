@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
 
@@ -69,23 +70,21 @@ unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr, 
 		return expr;
 	}
 
-	// Prevent signed integer overflow - we can't range map these
-	if (std::is_signed<T>() && signed_min_val < -((T)1 << (sizeof(T) * 8 - 2)) &&
-	    signed_max_val > ((T)1 << (sizeof(T) * 8 - 2))) {
+	// Compute range, cast to unsigned to prevent comparing signed with unsigned
+	T signed_range;
+	if (!TrySubtractOperator::Operation(signed_min_val, signed_max_val, signed_range)) {
+		// overflow in subtraction: cannot do any simplification
 		return expr;
 	}
-
-	// Compute range, cast to unsigned to prevent comparing signed with unsigned
-	auto signed_range = signed_max_val - signed_min_val;
 	auto range = static_cast<typename std::make_unsigned<decltype(signed_range)>::type>(signed_range);
 
 	// Check if this range fits in a smaller type
 	LogicalType cast_type;
-	if (range < NumericLimits<uint8_t>().Maximum()) {
+	if (range < NumericLimits<uint8_t>::Maximum()) {
 		cast_type = LogicalType::UTINYINT;
-	} else if (sizeof(T) > sizeof(uint16_t) && range < NumericLimits<uint16_t>().Maximum()) {
+	} else if (sizeof(T) > sizeof(uint16_t) && range < NumericLimits<uint16_t>::Maximum()) {
 		cast_type = LogicalType::USMALLINT;
-	} else if (sizeof(T) > sizeof(uint32_t) && range < NumericLimits<uint32_t>().Maximum()) {
+	} else if (sizeof(T) > sizeof(uint32_t) && range < NumericLimits<uint32_t>::Maximum()) {
 		cast_type = LogicalType::UINTEGER;
 	} else {
 		return expr;

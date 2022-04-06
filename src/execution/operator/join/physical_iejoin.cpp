@@ -1166,7 +1166,7 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &ch
 }
 
 OperatorResultType PhysicalIEJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                           OperatorState &state) const {
+                                           GlobalOperatorState &gstate, OperatorState &state) const {
 	return OperatorResultType::FINISHED;
 }
 
