@@ -150,8 +150,10 @@ jobs:
       run: |
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           ./scripts/extension-upload.sh linux_${{matrix.arch == 'i686' && 'i686' || 'amd64'}}_gcc4
+          ./scripts/extension-upload-test.sh
+        else
+          ./scripts/extension-upload-test.sh local
         fi
-
 
    linux-python3:
     name: Python 3 Linux
