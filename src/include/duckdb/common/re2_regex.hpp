@@ -1,30 +1,21 @@
 // RE2 compatibility layer with std::regex
 
-#ifndef DUCKDB_RE2_REGEX_H
-#define DUCKDB_RE2_REGEX_H
+#pragma once
 
 #include <vector>
 #include <string>
-
-#include "re2/re2.h"
+#include <stdexcept>
 
 namespace duckdb_re2 {
+class RE2;
 
-enum class RegexOptions : uint8_t {
-	NONE,
-	CASE_INSENSITIVE
-};
+enum class RegexOptions : uint8_t { NONE, CASE_INSENSITIVE };
 
 class Regex {
 public:
-	Regex(const std::string &pattern, RegexOptions options = RegexOptions::NONE) {
-		RE2::Options o;
-		o.set_case_sensitive(options == RegexOptions::CASE_INSENSITIVE);
-		regex = std::make_shared<duckdb_re2::RE2>(StringPiece(pattern), o);
-	}
+	Regex(const std::string &pattern, RegexOptions options = RegexOptions::NONE);
 	Regex(const char *pattern, RegexOptions options = RegexOptions::NONE) : Regex(std::string(pattern)) {
 	}
-
 	const duckdb_re2::RE2 &GetRegex() const {
 		return *regex;
 	}
@@ -33,12 +24,11 @@ private:
 	std::shared_ptr<duckdb_re2::RE2> regex;
 };
 
-
 struct GroupMatch {
 	std::string text;
 	uint32_t position;
 
-	const std::string& str() const {
+	const std::string &str() const {
 		return text;
 	}
 	operator std::string() const {
@@ -68,7 +58,7 @@ struct Match {
 		return GetGroup(index).text.size();
 	}
 
-	GroupMatch& operator [](uint64_t i) {
+	GroupMatch &operator[](uint64_t i) {
 		return GetGroup(i);
 	}
 };
@@ -79,6 +69,4 @@ bool RegexMatch(const char *start, const char *end, Match &match, const Regex &r
 bool RegexMatch(const std::string &input, const Regex &regex);
 std::vector<Match> RegexFindAll(const std::string &input, const Regex &regex);
 
-}
-
-#endif // DUCKDB_RE2_REGEX_H
+} // namespace duckdb_re2

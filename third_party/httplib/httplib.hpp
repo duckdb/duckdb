@@ -221,12 +221,13 @@ using socket_t = int;
 #include <memory>
 #include <mutex>
 #include <random>
-#include "re2/re2_regex.h"
 #include <set>
 #include <sstream>
 #include <string>
 #include <sys/stat.h>
 #include <thread>
+
+#include "duckdb/common/re2_regex.hpp"
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
 // these are defined in wincrypt.h and it breaks compilation if BoringSSL is

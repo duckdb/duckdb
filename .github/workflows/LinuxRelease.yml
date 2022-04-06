@@ -370,7 +370,6 @@ jobs:
       BUILD_SUBSTRAIT_EXTENSION: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
-      DISABLE_BUILTIN_EXTENSIONS: 1
       STATIC_OPENSSL: 1
     steps:
     - uses: actions/checkout@v2
