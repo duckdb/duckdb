@@ -63,12 +63,12 @@ jobs:
     - name: Build
       run: |
         make
-        git clone https://github.com/duckdb/duckdb.git
+        git clone https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb
         make
         cd ..
 
     - name: Regression Test
       run: |
-        cp -r benchmark duckdb/benchmark
+        cp -r benchmark duckdb/
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/${{ matrix.benchmark }}.csv --verbose --threads=2
