@@ -5,11 +5,12 @@ set -x
 
 CMAKE_CONFIG=Release
 EXT_BASE_PATH=build/release
+FORCE_32_BIT_FLAG=-DFORCE_32_BIT=1
 
 if [[ -z "${FORCE_32_BIT}" ]]; then
-  32_BIT_FLAG=""
+  FORCE_32_BIT_FLAG=""
 else
-  32_BIT_FLAG="-DFORCE_32_BIT=1"
+  FORCE_32_BIT_FLAG="-DFORCE_32_BIT=1"
 fi
 
 FILES="${EXT_BASE_PATH}/extension/*/*.duckdb_extension"
@@ -21,7 +22,7 @@ do
 done
 mkdir -p testext
 cd testext
-cmake -DCMAKE_BUILD_TYPE=${CMAKE_CONFIG} ${32_BIT_FLAG} -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ..
+cmake -DCMAKE_BUILD_TYPE=${CMAKE_CONFIG} ${FORCE_32_BIT_FLAG} -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ..
 cmake --build . --config ${CMAKE_CONFIG}
 cd ..
 
