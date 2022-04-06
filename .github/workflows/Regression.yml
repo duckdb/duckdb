@@ -31,7 +31,6 @@ jobs:
  regression-test-benchmark-runner:
   name: Regression Test (${{ matrix.benchmark }})
   runs-on: ubuntu-20.04
-  needs: regression-test-tpch
   strategy:
     fail-fast: false
     matrix:
