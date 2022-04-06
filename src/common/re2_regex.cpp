@@ -1,10 +1,16 @@
 #include <vector>
 #include <memory>
 
+#include "duckdb/common/re2_regex.hpp"
 #include "re2/re2.h"
-#include "re2/re2_regex.h"
 
 namespace duckdb_re2 {
+
+Regex::Regex(const std::string &pattern, RegexOptions options) {
+	RE2::Options o;
+	o.set_case_sensitive(options == RegexOptions::CASE_INSENSITIVE);
+	regex = std::make_shared<duckdb_re2::RE2>(StringPiece(pattern), o);
+}
 
 bool RegexSearchInternal(const char *input, Match &match, const Regex &r, RE2::Anchor anchor, size_t start,
                          size_t end) {

@@ -76,7 +76,6 @@ set(RE2_SOURCES
     re2/prefilter_tree.cc
     re2/prog.cc
     re2/re2.cc
-    re2/re2_regex.cc
     re2/regexp.cc
     re2/set.cc
     re2/simplify.cc
