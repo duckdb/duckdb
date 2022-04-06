@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/persistent/physical_update.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -14,12 +15,14 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class UpdateGlobalState : public GlobalSinkState {
 public:
-	UpdateGlobalState() : updated_count(0) {
+	UpdateGlobalState() : updated_count(0), returned_chunk_count(0) {
 	}
 
 	mutex lock;
 	idx_t updated_count;
 	unordered_set<row_t> updated_columns;
+	ChunkCollection return_chunk_collection;
+	idx_t returned_chunk_count;
 };
 
 class UpdateLocalState : public LocalSinkState {
@@ -99,9 +102,21 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 		}
 		table.Append(tableref, context.client, mock_chunk);
 	} else {
+		if (return_chunk) {
+			mock_chunk.SetCardinality(update_chunk);
+			for (idx_t i = 0; i < columns.size(); i++) {
+				mock_chunk.data[columns[i]].Reference(update_chunk.data[i]);
+			}
+		}
 		table.Update(tableref, context.client, row_ids, columns, update_chunk);
 	}
+
+	if (return_chunk) {
+		gstate.return_chunk_collection.Append(mock_chunk);
+	}
+
 	gstate.updated_count += chunk.size();
+
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -142,10 +157,22 @@ void PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	if (state.finished) {
 		return;
 	}
+	if (!return_chunk) {
+		chunk.SetCardinality(1);
+		chunk.SetValue(0, 0, Value::BIGINT(g.updated_count));
+		state.finished = true;
+	}
 
-	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(g.updated_count));
-	state.finished = true;
+	idx_t chunk_return = g.returned_chunk_count;
+	if (chunk_return >= g.return_chunk_collection.Chunks().size()) {
+		return;
+	}
+	chunk.Reference(g.return_chunk_collection.GetChunk(chunk_return));
+	chunk.SetCardinality((g.return_chunk_collection.GetChunk(chunk_return)).size());
+	g.returned_chunk_count += 1;
+	if (g.returned_chunk_count >= g.return_chunk_collection.Chunks().size()) {
+		state.finished = true;
+	}
 }
 
 } // namespace duckdb

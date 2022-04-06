@@ -13,6 +13,7 @@
 #include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -78,8 +79,12 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		log->WriteCreateSequence((SequenceCatalogEntry *)parent);
 		break;
 	case CatalogType::MACRO_ENTRY:
-		log->WriteCreateMacro((MacroCatalogEntry *)parent);
+		log->WriteCreateMacro((ScalarMacroCatalogEntry *)parent);
 		break;
+	case CatalogType::TABLE_MACRO_ENTRY:
+		log->WriteCreateTableMacro((TableMacroCatalogEntry *)parent);
+		break;
+
 	case CatalogType::TYPE_ENTRY:
 		log->WriteCreateType((TypeCatalogEntry *)parent);
 		break;
@@ -101,7 +106,10 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			log->WriteDropSequence((SequenceCatalogEntry *)entry);
 			break;
 		case CatalogType::MACRO_ENTRY:
-			log->WriteDropMacro((MacroCatalogEntry *)entry);
+			log->WriteDropMacro((ScalarMacroCatalogEntry *)entry);
+			break;
+		case CatalogType::TABLE_MACRO_ENTRY:
+			log->WriteDropTableMacro((TableMacroCatalogEntry *)entry);
 			break;
 		case CatalogType::TYPE_ENTRY:
 			log->WriteDropType((TypeCatalogEntry *)entry);

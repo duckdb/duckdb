@@ -3,7 +3,6 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 

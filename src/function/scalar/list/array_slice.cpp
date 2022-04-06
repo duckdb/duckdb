@@ -194,7 +194,7 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 void ArraySliceFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
-	                   ArraySliceFunction, false, ArraySliceBind);
+	                   ArraySliceFunction, false, false, ArraySliceBind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction({"array_slice", "list_slice"}, fun);
 }

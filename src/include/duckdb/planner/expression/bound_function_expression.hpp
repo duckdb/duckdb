@@ -34,7 +34,7 @@ public:
 	bool HasSideEffects() const override;
 	bool IsFoldable() const override;
 	string ToString() const override;
-
+	bool PropagatesNullValues() const override;
 	hash_t Hash() const override;
 	bool Equals(const BaseExpression *other) const override;
 

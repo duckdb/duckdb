@@ -34,24 +34,24 @@ static AggregateFunction GetUnaryAggregate(LogicalType type) {
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::BIGINT:
-		return AggregateFunction::UnaryAggregate<MinMaxState<int64_t>, int64_t, int64_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<int64_t>, int64_t, int64_t, OP>(type, type, true);
 	case LogicalTypeId::UTINYINT:
-		return AggregateFunction::UnaryAggregate<MinMaxState<uint8_t>, uint8_t, uint8_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<uint8_t>, uint8_t, uint8_t, OP>(type, type, true);
 	case LogicalTypeId::USMALLINT:
-		return AggregateFunction::UnaryAggregate<MinMaxState<uint16_t>, uint16_t, uint16_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<uint16_t>, uint16_t, uint16_t, OP>(type, type, true);
 	case LogicalTypeId::UINTEGER:
-		return AggregateFunction::UnaryAggregate<MinMaxState<uint32_t>, uint32_t, uint32_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<uint32_t>, uint32_t, uint32_t, OP>(type, type, true);
 	case LogicalTypeId::UBIGINT:
-		return AggregateFunction::UnaryAggregate<MinMaxState<uint64_t>, uint64_t, uint64_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<uint64_t>, uint64_t, uint64_t, OP>(type, type, true);
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::UUID:
-		return AggregateFunction::UnaryAggregate<MinMaxState<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type, true);
 	case LogicalTypeId::FLOAT:
-		return AggregateFunction::UnaryAggregate<MinMaxState<float>, float, float, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<float>, float, float, OP>(type, type, true);
 	case LogicalTypeId::DOUBLE:
-		return AggregateFunction::UnaryAggregate<MinMaxState<double>, double, double, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<double>, double, double, OP>(type, type, true);
 	case LogicalTypeId::INTERVAL:
-		return AggregateFunction::UnaryAggregate<MinMaxState<interval_t>, interval_t, interval_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<interval_t>, interval_t, interval_t, OP>(type, type, true);
 	default:
 		throw InternalException("Unimplemented type for min/max aggregate");
 	}
@@ -434,9 +434,9 @@ struct VectorMinMaxBase {
 			const auto sidx = sdata.sel->get_index(i);
 			auto state = states[sidx];
 			if (!state->value) {
-				Assign(state, input, idx);
+				Assign(state, input, i);
 			} else {
-				OP::template Execute(state, input, idx, count);
+				OP::template Execute(state, input, i, count);
 			}
 		}
 	}
@@ -455,10 +455,19 @@ struct VectorMinMaxBase {
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->value) {
-			// we need to use FlatVector::SetNull here
+			// we need to use SetNull here
 			// since for STRUCT columns only setting the validity mask of the struct is incorrect
 			// as for a struct column, we need to also set ALL child columns to NULL
-			FlatVector::SetNull(result, idx, true);
+			switch (result.GetVectorType()) {
+			case VectorType::FLAT_VECTOR:
+				FlatVector::SetNull(result, idx, true);
+				break;
+			case VectorType::CONSTANT_VECTOR:
+				ConstantVector::SetNull(result, true);
+				break;
+			default:
+				throw InternalException("Invalid result vector type for nested min/max");
+			}
 		} else {
 			VectorOperations::Copy(*state->value, result, 1, 0, idx);
 		}
@@ -532,7 +541,7 @@ static void AddMinMaxOperator(AggregateFunctionSet &set) {
 			    AggregateFunction::UnaryAggregateDestructor<MinMaxState<string_t>, string_t, string_t, OP_STRING>(
 			        type.id(), type.id()));
 		} else if (type.id() == LogicalTypeId::DECIMAL) {
-			set.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+			set.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, false, nullptr,
 			                                  BindDecimalMinMax<OP>));
 		} else if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP ||
 		           type.id() == LogicalTypeId::STRUCT) {

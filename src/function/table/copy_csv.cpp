@@ -8,7 +8,6 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/common/windows_undefs.hpp"
 #include <limits>
 
 namespace duckdb {
@@ -190,7 +189,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	string file_pattern = info.file_path;
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	bind_data->files = fs.Glob(file_pattern);
+	bind_data->files = fs.Glob(file_pattern, context);
 	if (bind_data->files.empty()) {
 		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
 	}

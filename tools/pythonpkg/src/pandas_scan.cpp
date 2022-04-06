@@ -52,13 +52,10 @@ PandasScanFunction::PandasScanFunction()
                     PandasScanParallelStateNext, true, false, PandasProgress) {
 }
 
-unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, vector<Value> &inputs,
-                                                            named_parameter_map_t &named_parameters,
-                                                            vector<LogicalType> &input_table_types,
-                                                            vector<string> &input_table_names,
+unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, TableFunctionBindInput &input,
                                                             vector<LogicalType> &return_types, vector<string> &names) {
 	py::gil_scoped_acquire acquire;
-	py::handle df((PyObject *)(inputs[0].GetPointer()));
+	py::handle df((PyObject *)(input.inputs[0].GetPointer()));
 
 	vector<PandasColumnBindData> pandas_bind_data;
 	VectorConversion::BindPandas(df, pandas_bind_data, return_types, names);

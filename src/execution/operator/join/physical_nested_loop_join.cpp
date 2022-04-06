@@ -237,7 +237,7 @@ unique_ptr<OperatorState> PhysicalNestedLoopJoin::GetOperatorState(ClientContext
 }
 
 OperatorResultType PhysicalNestedLoopJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                   OperatorState &state_p) const {
+                                                   GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
 	if (gstate.right_chunks.Count() == 0) {
@@ -340,6 +340,7 @@ OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &
 		}
 		if (state.fetch_next_left) {
 			// resolve the left join condition for the current chunk
+			state.left_condition.Reset();
 			state.lhs_executor.Execute(input, state.left_condition);
 
 			state.left_tuple = 0;

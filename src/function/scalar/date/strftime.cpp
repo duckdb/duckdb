@@ -164,7 +164,7 @@ char *StrfTimeFormat::Write2(char *target, uint8_t value) {
 }
 
 // write a value in the range of 0..99 padded to 2 digits
-char *StrfTimeFormat::WritePadded2(char *target, int32_t value) {
+char *StrfTimeFormat::WritePadded2(char *target, uint32_t value) {
 	D_ASSERT(value < 100);
 	auto index = static_cast<unsigned>(value * 2);
 	*target++ = duckdb_fmt::internal::data::digits[index];
@@ -187,9 +187,9 @@ char *StrfTimeFormat::WritePadded3(char *target, uint32_t value) {
 }
 
 // write a value in the range of 0..999999 padded to 6 digits
-char *StrfTimeFormat::WritePadded(char *target, int32_t value, int32_t padding) {
+char *StrfTimeFormat::WritePadded(char *target, uint32_t value, size_t padding) {
 	D_ASSERT(padding % 2 == 0);
-	for (int i = 0; i < padding / 2; i++) {
+	for (size_t i = 0; i < padding / 2; i++) {
 		int decimals = value % 100;
 		WritePadded2(target + padding - 2 * (i + 1), decimals);
 		value /= 100;
@@ -364,6 +364,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 }
 
 void StrfTimeFormat::FormatString(date_t date, int32_t data[7], char *target) {
+	D_ASSERT(specifiers.size() + 1 == literals.size());
 	idx_t i;
 	for (i = 0; i < specifiers.size(); i++) {
 		// first copy the current literal
@@ -581,14 +582,15 @@ struct StrfTimeBindData : public FunctionData {
 	}
 };
 
+template <bool REVERSED>
 static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
                                                      vector<unique_ptr<Expression>> &arguments) {
-	if (!arguments[1]->IsFoldable()) {
+	if (!arguments[REVERSED ? 0 : 1]->IsFoldable()) {
 		throw InvalidInputException("strftime format must be a constant");
 	}
-	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[REVERSED ? 0 : 1]);
 	StrfTimeFormat format;
-	if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
+	if (!options_str.IsNull()) {
 		auto format_string = options_str.GetValue<string>();
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {
@@ -598,16 +600,17 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, Sca
 	return make_unique<StrfTimeBindData>(format);
 }
 
+template <bool REVERSED>
 static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StrfTimeBindData &)*func_expr.bind_info;
 
-	if (ConstantVector::IsNull(args.data[1])) {
+	if (ConstantVector::IsNull(args.data[REVERSED ? 0 : 1])) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-	UnaryExecutor::Execute<date_t, string_t>(args.data[0], result, args.size(), [&](date_t input) {
+	UnaryExecutor::Execute<date_t, string_t>(args.data[REVERSED ? 1 : 0], result, args.size(), [&](date_t input) {
 		dtime_t time(0);
 		idx_t len = info.format.GetLength(input, time);
 		string_t target = StringVector::EmptyString(result, len);
@@ -617,36 +620,44 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 	});
 }
 
+template <bool REVERSED>
 static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StrfTimeBindData &)*func_expr.bind_info;
 
-	if (ConstantVector::IsNull(args.data[1])) {
+	if (ConstantVector::IsNull(args.data[REVERSED ? 0 : 1])) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(result, true);
 		return;
 	}
 
-	UnaryExecutor::Execute<timestamp_t, string_t>(args.data[0], result, args.size(), [&](timestamp_t input) {
-		date_t date;
-		dtime_t time;
-		Timestamp::Convert(input, date, time);
-		idx_t len = info.format.GetLength(date, time);
-		string_t target = StringVector::EmptyString(result, len);
-		info.format.FormatString(date, time, target.GetDataWriteable());
-		target.Finalize();
-		return target;
-	});
+	UnaryExecutor::Execute<timestamp_t, string_t>(args.data[REVERSED ? 1 : 0], result, args.size(),
+	                                              [&](timestamp_t input) {
+		                                              date_t date;
+		                                              dtime_t time;
+		                                              Timestamp::Convert(input, date, time);
+		                                              idx_t len = info.format.GetLength(date, time);
+		                                              string_t target = StringVector::EmptyString(result, len);
+		                                              info.format.FormatString(date, time, target.GetDataWriteable());
+		                                              target.Finalize();
+		                                              return target;
+	                                              });
 }
 
 void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet strftime("strftime");
 
 	strftime.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionDate, false, StrfTimeBindFunction));
+	                                    StrfTimeFunctionDate<false>, false, false, StrfTimeBindFunction<false>));
 
 	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionTimestamp, false, StrfTimeBindFunction));
+	                                    StrfTimeFunctionTimestamp<false>, false, false, StrfTimeBindFunction<false>));
+
+	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionDate<true>, false, false, StrfTimeBindFunction<true>));
+
+	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestamp<true>, false, false, StrfTimeBindFunction<true>));
 
 	set.AddFunction(strftime);
 }
@@ -1209,7 +1220,7 @@ void StrpTimeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet strptime("strptime");
 
 	strptime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
-	                                    StrpTimeFunction, false, StrpTimeBindFunction));
+	                                    StrpTimeFunction, false, false, StrpTimeBindFunction));
 
 	set.AddFunction(strptime);
 }

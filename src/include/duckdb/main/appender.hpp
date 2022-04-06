@@ -73,6 +73,7 @@ public:
 	DUCKDB_API idx_t CurrentColumn() {
 		return column;
 	}
+	DUCKDB_API void AppendDataChunk(DataChunk &value);
 
 protected:
 	void Destructor();

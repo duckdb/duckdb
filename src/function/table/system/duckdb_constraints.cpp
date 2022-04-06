@@ -11,6 +11,7 @@
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
@@ -24,10 +25,7 @@ struct DuckDBConstraintsData : public FunctionOperatorData {
 	idx_t constraint_offset;
 };
 
-static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, vector<Value> &inputs,
-                                                      named_parameter_map_t &named_parameters,
-                                                      vector<LogicalType> &input_table_types,
-                                                      vector<string> &input_table_names,
+static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, TableFunctionBindInput &input,
                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -171,7 +169,13 @@ void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_
 				column_index_list.push_back(bound_not_null.index);
 				break;
 			}
-			case ConstraintType::FOREIGN_KEY:
+			case ConstraintType::FOREIGN_KEY: {
+				auto &bound_foreign_key = (BoundForeignKeyConstraint &)bound_constraint;
+				for (auto &col_idx : bound_foreign_key.info.fk_keys) {
+					column_index_list.push_back(column_t(col_idx));
+				}
+				break;
+			}
 			default:
 				throw NotImplementedException("Unimplemented constraint for duckdb_constraints");
 			}
