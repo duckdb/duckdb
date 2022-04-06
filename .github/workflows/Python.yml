@@ -264,7 +264,7 @@ jobs:
           python-version: '3.7'
 
       - name: Install
-        run: pip install numpy pytest pandas mypy
+        run: pip install numpy pytest pandas mypy psutil
 
       - name: Build
         run: |

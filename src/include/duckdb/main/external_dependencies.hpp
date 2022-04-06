@@ -8,6 +8,8 @@
 
 #pragma once
 
+namespace duckdb {
+
 enum ExternalDependenciesType { PYTHON_DEPENDENCY };
 class ExternalDependency {
 public:
@@ -15,3 +17,5 @@ public:
 	virtual ~ExternalDependency() {};
 	ExternalDependenciesType type;
 };
+
+} // namespace duckdb
