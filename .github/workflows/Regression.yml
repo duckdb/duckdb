@@ -69,6 +69,6 @@ jobs:
         cd ..
 
     - name: Regression Test
-      run:
+      run: |
         cp -r benchmark duckdb/benchmark
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/${{ matrix.benchmark }}.csv --verbose --threads=2
