@@ -59,4 +59,4 @@ std::vector<Match> RegexFindAll(const std::string &input, const Regex &regex) {
 	return matches;
 }
 
-}
+} // namespace duckdb_re2

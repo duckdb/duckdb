@@ -8,10 +8,7 @@
 namespace duckdb_re2 {
 class RE2;
 
-enum class RegexOptions : uint8_t {
-	NONE,
-	CASE_INSENSITIVE
-};
+enum class RegexOptions : uint8_t { NONE, CASE_INSENSITIVE };
 
 class Regex {
 public:
@@ -26,12 +23,11 @@ private:
 	std::shared_ptr<duckdb_re2::RE2> regex;
 };
 
-
 struct GroupMatch {
 	std::string text;
 	uint32_t position;
 
-	const std::string& str() const {
+	const std::string &str() const {
 		return text;
 	}
 	operator std::string() const {
@@ -61,7 +57,7 @@ struct Match {
 		return GetGroup(index).text.size();
 	}
 
-	GroupMatch& operator [](uint64_t i) {
+	GroupMatch &operator[](uint64_t i) {
 		return GetGroup(i);
 	}
 };
@@ -72,4 +68,4 @@ bool RegexMatch(const char *start, const char *end, Match &match, const Regex &r
 bool RegexMatch(const std::string &input, const Regex &regex);
 std::vector<Match> RegexFindAll(const std::string &input, const Regex &regex);
 
-}
+} // namespace duckdb_re2

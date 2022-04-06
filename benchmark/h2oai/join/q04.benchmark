@@ -1,6 +1,6 @@
 # name: benchmark/h2oai/join/q04.benchmark
 # description: Run query 04 from the H2OAI join benchmark
-# group: [sf1]
+# group: [join]
 
 template benchmark/h2oai/join/h2oai.benchmark.in
 QUERY_NUMBER=4
