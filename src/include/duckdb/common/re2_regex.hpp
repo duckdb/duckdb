@@ -4,6 +4,7 @@
 
 #include <vector>
 #include <string>
+#include <stdexcept>
 
 namespace duckdb_re2 {
 class RE2;
