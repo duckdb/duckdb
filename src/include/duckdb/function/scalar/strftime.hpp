@@ -58,7 +58,7 @@ public:
 	virtual ~StrTimeFormat() {
 	}
 
-	static string ParseFormatSpecifier(const string &format_string, StrTimeFormat &format);
+	DUCKDB_API static string ParseFormatSpecifier(const string &format_string, StrTimeFormat &format);
 
 protected:
 	//! The format specifiers
@@ -78,9 +78,9 @@ protected:
 };
 
 struct StrfTimeFormat : public StrTimeFormat {
-	idx_t GetLength(date_t date, dtime_t time);
+	idx_t GetLength(date_t date, dtime_t time, const char *tz_name);
 
-	void FormatString(date_t date, int32_t data[7], char *target);
+	void FormatString(date_t date, int32_t data[7], const char *tz_name, char *target);
 	void FormatString(date_t date, dtime_t time, char *target);
 
 	DUCKDB_API static string Format(timestamp_t timestamp, const string &format);
@@ -94,7 +94,7 @@ protected:
 
 protected:
 	void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
-	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time);
+	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time, const char *tz_name);
 	char *WriteString(char *target, const string_t &str);
 	char *Write2(char *target, uint8_t value);
 	char *WritePadded2(char *target, uint32_t value);
@@ -102,7 +102,7 @@ protected:
 	char *WritePadded(char *target, uint32_t value, size_t padding);
 	bool IsDateSpecifier(StrTimeSpecifier specifier);
 	char *WriteDateSpecifier(StrTimeSpecifier specifier, date_t date, char *target);
-	char *WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], char *target);
+	char *WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], const char *tz_name, char *target);
 };
 
 struct StrpTimeFormat : public StrTimeFormat {
@@ -125,6 +125,7 @@ public:
 
 public:
 	DUCKDB_API static ParseResult Parse(const string &format, const string &text);
+	DUCKDB_API static string FormatError(ParseResult &result, string_t input, const string &format_specifier);
 
 	bool Parse(string_t str, ParseResult &result);
 

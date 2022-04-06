@@ -72,7 +72,7 @@ void StrfTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifi
 	StrTimeFormat::AddFormatSpecifier(move(preceding_literal), specifier);
 }
 
-idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time) {
+idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time, const char *tz_name) {
 	switch (specifier) {
 	case StrTimeSpecifier::FULL_WEEKDAY_NAME:
 		return Date::DAY_NAMES[Date::ExtractISODayOfTheWeek(date) % 7].GetSize();
@@ -92,6 +92,9 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 		// +00
 		return 3;
 	case StrTimeSpecifier::TZ_NAME:
+		if (tz_name) {
+			return strlen(tz_name);
+		}
 		// empty for now
 		return 0;
 	case StrTimeSpecifier::HOUR_24_DECIMAL:
@@ -136,11 +139,11 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 }
 
 //! Returns the total length of the date formatted by this format specifier
-idx_t StrfTimeFormat::GetLength(date_t date, dtime_t time) {
+idx_t StrfTimeFormat::GetLength(date_t date, dtime_t time, const char *tz_name) {
 	idx_t size = constant_size;
 	if (!var_length_specifiers.empty()) {
 		for (auto &specifier : var_length_specifiers) {
-			size += GetSpecifierLength(specifier, date, time);
+			size += GetSpecifierLength(specifier, date, time, tz_name);
 		}
 	}
 	return size;
@@ -253,7 +256,8 @@ char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date
 	return target;
 }
 
-char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], char *target) {
+char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], const char *tz_name,
+                                             char *target) {
 	// data contains [0] year, [1] month, [2] day, [3] hour, [4] minute, [5] second, [6] msec
 	switch (specifier) {
 	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
@@ -323,7 +327,11 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		*target++ = '0';
 		break;
 	case StrTimeSpecifier::TZ_NAME:
-		// always empty for now, FIXME when we have timestamp with tz
+		if (tz_name) {
+			while ((*target++ = *tz_name++)) {
+				continue;
+			}
+		}
 		break;
 	case StrTimeSpecifier::DAY_OF_MONTH: {
 		target = Write2(target, data[2] % 100);
@@ -363,7 +371,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 	return target;
 }
 
-void StrfTimeFormat::FormatString(date_t date, int32_t data[7], char *target) {
+void StrfTimeFormat::FormatString(date_t date, int32_t data[7], const char *tz_name, char *target) {
 	D_ASSERT(specifiers.size() + 1 == literals.size());
 	idx_t i;
 	for (i = 0; i < specifiers.size(); i++) {
@@ -374,7 +382,7 @@ void StrfTimeFormat::FormatString(date_t date, int32_t data[7], char *target) {
 		if (is_date_specifier[i]) {
 			target = WriteDateSpecifier(specifiers[i], date, target);
 		} else {
-			target = WriteStandardSpecifier(specifiers[i], data, target);
+			target = WriteStandardSpecifier(specifiers[i], data, tz_name, target);
 		}
 	}
 	// copy the final literal into the target
@@ -386,7 +394,7 @@ void StrfTimeFormat::FormatString(date_t date, dtime_t time, char *target) {
 	Date::Convert(date, data[0], data[1], data[2]);
 	Time::Convert(time, data[3], data[4], data[5], data[6]);
 
-	FormatString(date, data, target);
+	FormatString(date, data, nullptr, target);
 }
 
 string StrfTimeFormat::Format(timestamp_t timestamp, const string &format_str) {
@@ -396,7 +404,7 @@ string StrfTimeFormat::Format(timestamp_t timestamp, const string &format_str) {
 	auto date = Timestamp::GetDate(timestamp);
 	auto time = Timestamp::GetTime(timestamp);
 
-	auto len = format.GetLength(date, time);
+	auto len = format.GetLength(date, time, nullptr);
 	auto result = unique_ptr<char[]>(new char[len]);
 	format.FormatString(date, time, result.get());
 	return string(result.get(), len);
@@ -612,7 +620,7 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 	}
 	UnaryExecutor::Execute<date_t, string_t>(args.data[REVERSED ? 1 : 0], result, args.size(), [&](date_t input) {
 		dtime_t time(0);
-		idx_t len = info.format.GetLength(input, time);
+		idx_t len = info.format.GetLength(input, time, nullptr);
 		string_t target = StringVector::EmptyString(result, len);
 		info.format.FormatString(input, time, target.GetDataWriteable());
 		target.Finalize();
@@ -636,7 +644,7 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 		                                              date_t date;
 		                                              dtime_t time;
 		                                              Timestamp::Convert(input, date, time);
-		                                              idx_t len = info.format.GetLength(date, time);
+		                                              idx_t len = info.format.GetLength(date, time, nullptr);
 		                                              string_t target = StringVector::EmptyString(result, len);
 		                                              info.format.FormatString(date, time, target.GetDataWriteable());
 		                                              target.Finalize();
@@ -1174,6 +1182,10 @@ string StrpTimeFormat::ParseResult::FormatError(string_t input, const string &fo
 	return StringUtil::Format("Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s",
 	                          input.GetString(), format_specifier,
 	                          FormatStrpTimeError(input.GetString(), error_position), error_message);
+}
+
+string StrpTimeFormat::FormatError(ParseResult &result, string_t input, const string &format_specifier) {
+	return result.FormatError(input, format_specifier);
 }
 
 bool StrpTimeFormat::TryParseDate(string_t input, date_t &result, string &error_message) {
