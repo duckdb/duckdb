@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "duckdb/common/winapi.hpp"
 #include <vector>
 #include <string>
 #include <stdexcept>
