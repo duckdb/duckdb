@@ -65,6 +65,11 @@ jobs:
         chmod +x cmake-3.21.3-linux-x86_64.sh
         sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build extensions to test
       run: |
         GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
@@ -77,6 +82,8 @@ jobs:
         cd tools/pythonpkg
         python setup.py sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         cibuildwheel --output-dir wheelhouse duckdb_tarball
 
 
@@ -122,11 +129,18 @@ jobs:
     - name: Install
       run: pip install cibuildwheel twine
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
+
     - name: Build
       run: |
         cd tools/pythonpkg
         python setup.py sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         cibuildwheel --output-dir wheelhouse duckdb_tarball
 
     - name: Deploy aarch64
@@ -184,11 +198,18 @@ jobs:
       - name: Install
         run: pip install cibuildwheel twine
 
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}-${{ matrix.python_build }}
+
       - name: Build
         run: |
           cd tools/pythonpkg
           python setup.py sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+          # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
           cibuildwheel --output-dir wheelhouse duckdb_tarball
 
       - name: Deploy
@@ -237,11 +258,18 @@ jobs:
       - name: Install
         run: pip install cibuildwheel twine
 
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}-${{ matrix.python_build }}
+
       - name: Build
         run: |
           cd tools/pythonpkg
           python setup.py sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+          # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
           cibuildwheel --output-dir wheelhouse duckdb_tarball
 
       - name: Deploy
@@ -267,6 +295,11 @@ jobs:
       - name: Install
         run: pip install numpy pytest pandas mypy
 
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+
       - name: Build
         run: |
           python --version
@@ -277,5 +310,6 @@ jobs:
           unzip test-tarball.zip
           cd tools/pythonpkg
           export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
+          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           python setup.py install --user
           (cd tests/ && python -m pytest)

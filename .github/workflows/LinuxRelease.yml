@@ -55,13 +55,18 @@ jobs:
         apt-get update -y -qq
         apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Install Python 3.7
       run: |
         wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
         tar xvf Python-3.7.12.tgz
         cd Python-3.7.12
         mkdir -p pythonbin
-        ./configure --with-ensurepip=install
+        ./configure --with-ensurepip=install CC="ccache cc"
         make -j
         make install
         python3.7 --version
@@ -157,13 +162,18 @@ jobs:
         apt-get update -y -qq
         apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libffi-dev
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Install Python 3.7
       run: |
         wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
         tar xvf Python-3.7.12.tgz
         cd Python-3.7.12
         mkdir -p pythonbin
-        ./configure --with-ensurepip=install
+        ./configure --with-ensurepip=install CC="ccache cc"
         make -j
         make install
         python3.7 --version
@@ -176,7 +186,7 @@ jobs:
         wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
         tar -xf openssl-1.1.1c.tar.gz
         cd openssl-1.1.1c
-        ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl -static zlib
+        ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl -static zlib CC="ccache cc"
         make
         make install
         echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
@@ -231,13 +241,18 @@ jobs:
         apt-get update -y -qq
         apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk zip
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Install Python 3.7
       run: |
         wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
         tar xvf Python-3.7.12.tgz
         cd Python-3.7.12
         mkdir -p pythonbin
-        ./configure --with-ensurepip=install
+        ./configure --with-ensurepip=install CC="ccache cc"
         make -j
         make install
         python3.7 --version
@@ -302,6 +317,11 @@ jobs:
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
         git clone https://github.com/raspberrypi/tools --depth=1 rpi-tools
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: |
         export TOOLCHAIN=`pwd`/rpi-tools
@@ -349,6 +369,11 @@ jobs:
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: make release
 
@@ -364,6 +389,12 @@ jobs:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        variant: sccache
 
     - name: Install
       run: yum install -y gcc gcc-c++ git cmake make
@@ -399,6 +430,11 @@ jobs:
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: make relassert
 
@@ -424,6 +460,11 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Test
       run: python scripts/test_vector_sizes.py
 
@@ -441,6 +482,11 @@ jobs:
 
     - name: Setup
       run: ./scripts/wasm_configure.sh
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Build Library Module
       run: ./scripts/wasm_build_lib.sh Release
@@ -476,6 +522,11 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: make
 
@@ -503,6 +554,11 @@ jobs:
     - uses: actions/setup-node@v2
       with:
         node-version: '16'
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Build
       run: make

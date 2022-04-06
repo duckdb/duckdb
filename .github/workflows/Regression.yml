@@ -48,10 +48,16 @@ jobs:
   - name: Install
     run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
 
+  - name: Setup Ccache
+    uses: hendrikmuhs/ccache-action@main
+    with:
+      key: ${{ github.job }}
+
   - name: Build
     run: |
       git clone https://github.com/duckdb/duckdb.git
       cd duckdb/tools/pythonpkg
+      export DISTUTILS_C_COMPILER_LAUNCHER=ccache
       python setup.py install
       cd ../../../tools/pythonpkg
       python setup.py --package_name=duckcurrent install
@@ -80,10 +86,16 @@ jobs:
   - name: Install
     run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
 
+  - name: Setup Ccache
+    uses: hendrikmuhs/ccache-action@main
+    with:
+      key: ${{ github.job }}
+
   - name: Build
     run: |
       git clone https://github.com/duckdb/duckdb.git
       cd duckdb/tools/pythonpkg
+      export DISTUTILS_C_COMPILER_LAUNCHER=ccache
       python setup.py install
       cd ../../../tools/pythonpkg
       python setup.py --package_name=duckcurrent install
@@ -112,10 +124,16 @@ jobs:
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: |
         git clone https://github.com/duckdb/duckdb.git
         cd duckdb/tools/pythonpkg
+        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
         python setup.py install
         cd ../../../tools/pythonpkg
         python setup.py --package_name=duckcurrent install
@@ -145,6 +163,11 @@ jobs:
 
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Build
       run: |
