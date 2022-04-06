@@ -8,6 +8,8 @@
 #include "nodes/pg_list.hpp"
 #include "nodes/parsenodes.hpp"
 
+#define fprintf(...)
+
 namespace duckdb_libpgquery {
 
 typedef struct parse_result_str parse_result;
