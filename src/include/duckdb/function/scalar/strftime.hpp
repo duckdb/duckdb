@@ -110,6 +110,7 @@ public:
 	//! Type-safe parsing argument
 	struct ParseResult {
 		int32_t data[7];
+		string tz;
 		string error_message;
 		idx_t error_position = DConstants::INVALID_INDEX;
 

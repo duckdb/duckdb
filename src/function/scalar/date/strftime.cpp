@@ -1025,11 +1025,20 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				while (pos < size && StringUtil::CharacterIsSpace(data[pos])) {
 					pos++;
 				}
+				const auto tz_begin = data + pos;
 				// stop when we encounter a space or the end of the string
 				while (pos < size && !StringUtil::CharacterIsSpace(data[pos])) {
 					pos++;
 				}
-				// FIXME: actually use the timestamp...
+				const auto tz_end = data + pos;
+				// Can't fully validate without a list - caller's responsibility.
+				// But tz must not be empty.
+				if (tz_end == tz_begin) {
+					error_message = "Empty Time Zone name";
+					error_position = tz_begin - data;
+					return false;
+				}
+				result.tz.assign(tz_begin, tz_end);
 				break;
 			}
 			default:

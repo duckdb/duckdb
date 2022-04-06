@@ -7,6 +7,7 @@
 #include "include/icu-datesub.hpp"
 #include "include/icu-datetrunc.hpp"
 #include "include/icu-makedate.hpp"
+#include "include/icu-strptime.hpp"
 
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/connection.hpp"
@@ -338,6 +339,7 @@ void ICUExtension::Load(DuckDB &db) {
 	RegisterICUDateSubFunctions(*con.context);
 	RegisterICUDateTruncFunctions(*con.context);
 	RegisterICUMakeDateFunctions(*con.context);
+	RegisterICUStrptimeFunctions(*con.context);
 
 	// Calendars
 	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, SetICUCalendar);
