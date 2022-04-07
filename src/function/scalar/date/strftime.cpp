@@ -1184,10 +1184,6 @@ string StrpTimeFormat::ParseResult::FormatError(string_t input, const string &fo
 	                          FormatStrpTimeError(input.GetString(), error_position), error_message);
 }
 
-string StrpTimeFormat::FormatError(ParseResult &result, string_t input, const string &format_specifier) {
-	return result.FormatError(input, format_specifier);
-}
-
 bool StrpTimeFormat::TryParseDate(string_t input, date_t &result, string &error_message) {
 	ParseResult parse_result;
 	if (!Parse(input, parse_result)) {

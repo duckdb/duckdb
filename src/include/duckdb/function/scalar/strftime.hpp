@@ -74,13 +74,13 @@ protected:
 
 protected:
 	void AddLiteral(string literal);
-	virtual void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier);
+	DUCKDB_API virtual void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier);
 };
 
 struct StrfTimeFormat : public StrTimeFormat {
-	idx_t GetLength(date_t date, dtime_t time, const char *tz_name);
+	DUCKDB_API idx_t GetLength(date_t date, dtime_t time, const char *tz_name);
 
-	void FormatString(date_t date, int32_t data[7], const char *tz_name, char *target);
+	DUCKDB_API void FormatString(date_t date, int32_t data[7], const char *tz_name, char *target);
 	void FormatString(date_t date, dtime_t time, char *target);
 
 	DUCKDB_API static string Format(timestamp_t timestamp, const string &format);
@@ -93,7 +93,7 @@ protected:
 	vector<bool> is_date_specifier;
 
 protected:
-	void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
+	DUCKDB_API void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time, const char *tz_name);
 	char *WriteString(char *target, const string_t &str);
 	char *Write2(char *target, uint8_t value);
@@ -116,7 +116,7 @@ public:
 
 		date_t ToDate();
 		timestamp_t ToTimestamp();
-		string FormatError(string_t input, const string &format_specifier);
+		DUCKDB_API string FormatError(string_t input, const string &format_specifier);
 	};
 
 public:
@@ -124,10 +124,9 @@ public:
 	string format_specifier;
 
 public:
-	DUCKDB_API static ParseResult Parse(const string &format, const string &text);
-	DUCKDB_API static string FormatError(ParseResult &result, string_t input, const string &format_specifier);
+	static ParseResult Parse(const string &format, const string &text);
 
-	bool Parse(string_t str, ParseResult &result);
+	DUCKDB_API bool Parse(string_t str, ParseResult &result);
 
 	bool TryParseDate(string_t str, date_t &result, string &error_message);
 	bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message);
@@ -137,7 +136,7 @@ public:
 
 protected:
 	static string FormatStrpTimeError(const string &input, idx_t position);
-	void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
+	DUCKDB_API void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	int NumericSpecifierWidth(StrTimeSpecifier specifier);
 	int32_t TryParseCollection(const char *data, idx_t &pos, idx_t size, const string_t collection[],
 	                           idx_t collection_count);

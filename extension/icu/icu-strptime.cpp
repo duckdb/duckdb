@@ -26,7 +26,7 @@ struct ICUStrptime : public ICUDateFunc {
 		StrpTimeFormat::ParseResult parsed;
 		format.Parse(input, parsed);
 		if (!parsed.error_message.empty()) {
-			throw InvalidInputException(StrpTimeFormat::FormatError(parsed, input, format.format_specifier));
+			throw InvalidInputException(parsed.FormatError(input, format.format_specifier));
 		}
 
 		// Set TZ first, if any.
@@ -114,9 +114,9 @@ struct ICUStrftime : public ICUDateFunc {
 		data[5] = ExtractField(calendar, UCAL_SECOND);
 		data[6] = ExtractField(calendar, UCAL_MILLISECOND) * Interval::MICROS_PER_MSEC + micros;
 
-		date_t date;
+		date_t date(0);
 		Date::Convert(date, data[0], data[1], data[2]);
-		dtime_t time;
+		dtime_t time(0);
 		Time::Convert(time, data[3], data[4], data[5], data[6]);
 		auto len = format.GetLength(date, time, tz_name);
 		auto result = unique_ptr<char[]>(new char[len]);
