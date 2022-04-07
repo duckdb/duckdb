@@ -884,6 +884,11 @@ DUCKDB_API interval_t Value::GetValue() const {
 	return GetValueInternal<interval_t>();
 }
 
+template <>
+DUCKDB_API Value Value::GetValue() const {
+	return Value(*this);
+}
+
 uintptr_t Value::GetPointer() const {
 	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;

@@ -21,6 +21,7 @@ struct sqltype {
 	string name;
 	static map<string, struct sqltype *> typemap;
 	static struct sqltype *get(string s);
+	static const map<string, sqltype *> &get_types();
 	sqltype(string n) : name(n) {
 	}
 
