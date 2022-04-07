@@ -78,9 +78,9 @@ protected:
 };
 
 struct StrfTimeFormat : public StrTimeFormat {
-	DUCKDB_API idx_t GetLength(date_t date, dtime_t time, const char *tz_name);
+	DUCKDB_API idx_t GetLength(date_t date, dtime_t time, int32_t utc_offset, const char *tz_name);
 
-	DUCKDB_API void FormatString(date_t date, int32_t data[7], const char *tz_name, char *target);
+	DUCKDB_API void FormatString(date_t date, int32_t data[8], const char *tz_name, char *target);
 	void FormatString(date_t date, dtime_t time, char *target);
 
 	DUCKDB_API static string Format(timestamp_t timestamp, const string &format);
@@ -94,7 +94,8 @@ protected:
 
 protected:
 	DUCKDB_API void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
-	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time, const char *tz_name);
+	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time, int32_t utc_offset,
+	                                const char *tz_name);
 	char *WriteString(char *target, const string_t &str);
 	char *Write2(char *target, uint8_t value);
 	char *WritePadded2(char *target, uint32_t value);

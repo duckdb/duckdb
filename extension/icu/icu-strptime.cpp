@@ -106,7 +106,7 @@ struct ICUStrftime : public ICUDateFunc {
 		// Now get the parts in the given time zone
 		uint64_t micros = SetTime(calendar, input);
 
-		int32_t data[7];
+		int32_t data[8];
 		data[0] = ExtractField(calendar, UCAL_EXTENDED_YEAR); // strftime doesn't understand eras.
 		data[1] = ExtractField(calendar, UCAL_MONTH) + 1;
 		data[2] = ExtractField(calendar, UCAL_DATE);
@@ -115,10 +115,14 @@ struct ICUStrftime : public ICUDateFunc {
 		data[5] = ExtractField(calendar, UCAL_SECOND);
 		data[6] = ExtractField(calendar, UCAL_MILLISECOND) * Interval::MICROS_PER_MSEC + micros;
 
+		data[7] = ExtractField(calendar, UCAL_ZONE_OFFSET) + ExtractField(calendar, UCAL_DST_OFFSET);
+		data[7] /= Interval::MSECS_PER_SEC;
+		data[7] /= Interval::SECS_PER_MINUTE;
+
 		const auto date = Date::FromDate(data[0], data[1], data[2]);
 		const auto time = Time::FromTime(data[3], data[4], data[5], data[6]);
 
-		const auto len = format.GetLength(date, time, tz_name);
+		const auto len = format.GetLength(date, time, data[7], tz_name);
 		string_t target = StringVector::EmptyString(result, len);
 		format.FormatString(date, data, tz_name, target.GetDataWriteable());
 		target.Finalize();
