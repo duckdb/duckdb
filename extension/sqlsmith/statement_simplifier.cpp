@@ -10,20 +10,20 @@
 
 namespace duckdb {
 
-StatementSimplifier::StatementSimplifier(SelectStatement &statement_p, vector<string> &result_p) :
-	statement(statement_p), result(result_p) {}
-
+StatementSimplifier::StatementSimplifier(SelectStatement &statement_p, vector<string> &result_p)
+    : statement(statement_p), result(result_p) {
+}
 
 void StatementSimplifier::Simplification() {
 	result.push_back(statement.ToString());
 }
 
-template<class T>
+template <class T>
 void StatementSimplifier::SimplifyList(vector<T> &list, bool is_optional) {
 	if (list.size() <= (is_optional ? 0 : 1)) {
 		return;
 	}
-	for(idx_t i = 0; i < list.size(); i++) {
+	for (idx_t i = 0; i < list.size(); i++) {
 		auto n = move(list[i]);
 		list.erase(list.begin() + i);
 		Simplification();
@@ -31,7 +31,7 @@ void StatementSimplifier::SimplifyList(vector<T> &list, bool is_optional) {
 	}
 }
 
-template<class T>
+template <class T>
 void StatementSimplifier::SimplifyReplace(T &element, T &other) {
 	auto n = move(element);
 	element = move(other);
@@ -40,14 +40,14 @@ void StatementSimplifier::SimplifyReplace(T &element, T &other) {
 	element = move(n);
 }
 
-template<class T>
+template <class T>
 void StatementSimplifier::SimplifyListReplace(T &element, vector<T> &list) {
-	for(idx_t i = 0; i < list.size(); i++) {
+	for (idx_t i = 0; i < list.size(); i++) {
 		SimplifyReplace(element, list[i]);
 	}
 }
 
-template<class T>
+template <class T>
 void StatementSimplifier::SimplifyOptional(unique_ptr<T> &opt) {
 	if (!opt) {
 		return;
@@ -58,20 +58,20 @@ void StatementSimplifier::SimplifyOptional(unique_ptr<T> &opt) {
 }
 
 void StatementSimplifier::Simplify(TableRef &ref) {
-	switch(ref.type) {
+	switch (ref.type) {
 	case TableReferenceType::SUBQUERY: {
-		auto &subquery = (SubqueryRef &) ref;
+		auto &subquery = (SubqueryRef &)ref;
 		Simplify(*subquery.subquery->node);
 		break;
 	}
 	case TableReferenceType::CROSS_PRODUCT: {
-		auto &cp = (CrossProductRef &) ref;
+		auto &cp = (CrossProductRef &)ref;
 		Simplify(*cp.left);
 		Simplify(*cp.right);
 		break;
 	}
 	case TableReferenceType::JOIN: {
-		auto &cp = (JoinRef &) ref;
+		auto &cp = (JoinRef &)ref;
 		Simplify(*cp.left);
 		Simplify(*cp.right);
 		break;
@@ -84,9 +84,12 @@ void StatementSimplifier::Simplify(TableRef &ref) {
 void StatementSimplifier::Simplify(SelectNode &node) {
 	// simplify projection list
 	SimplifyList(node.select_list, false);
+	if (node.select_list.size() == 1 && node.select_list[0]->type != ExpressionType::VALUE_CONSTANT) {
+		unique_ptr<ParsedExpression> constant = make_unique<ConstantExpression>(Value::INTEGER(1));
+		SimplifyReplace(node.select_list[0], constant);
+	}
 	// from clause
 	SimplifyOptional(node.from_table);
-	Simplify(*node.from_table);
 	// simplify groups
 	SimplifyList(node.groups.grouping_sets);
 	// simplify filters
@@ -94,6 +97,8 @@ void StatementSimplifier::Simplify(SelectNode &node) {
 	SimplifyOptional(node.having);
 	SimplifyOptional(node.qualify);
 	SimplifyOptional(node.sample);
+
+	Simplify(*node.from_table);
 }
 
 void StatementSimplifier::Simplify(SetOperationNode &node) {
@@ -104,10 +109,10 @@ void StatementSimplifier::Simplify(SetOperationNode &node) {
 void StatementSimplifier::Simplify(QueryNode &node) {
 	// remove individual CTEs
 	vector<string> cte_keys;
-	for(auto &kv : node.cte_map) {
+	for (auto &kv : node.cte_map) {
 		cte_keys.push_back(kv.first);
 	}
-	for(idx_t i = 0; i < cte_keys.size(); i++) {
+	for (idx_t i = 0; i < cte_keys.size(); i++) {
 		auto n = move(node.cte_map[cte_keys[i]]);
 		node.cte_map.erase(cte_keys[i]);
 		Simplification();
@@ -116,12 +121,12 @@ void StatementSimplifier::Simplify(QueryNode &node) {
 		// simplify individual ctes
 		Simplify(*node.cte_map[cte_keys[i]]->query->node);
 	}
-	switch(node.type) {
+	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		Simplify((SelectNode &) node);
+		Simplify((SelectNode &)node);
 		break;
 	case QueryNodeType::SET_OPERATION_NODE:
-		Simplify((SetOperationNode &) node);
+		Simplify((SetOperationNode &)node);
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 	default:
@@ -131,38 +136,38 @@ void StatementSimplifier::Simplify(QueryNode &node) {
 }
 
 void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr) {
-	switch(expr->GetExpressionClass()) {
+	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::CONJUNCTION: {
-		auto &conj = (ConjunctionExpression &) *expr;
+		auto &conj = (ConjunctionExpression &)*expr;
 		SimplifyListReplace(expr, conj.children);
 		break;
 	}
 	case ExpressionClass::FUNCTION: {
-		auto &func = (FunctionExpression &) *expr;
+		auto &func = (FunctionExpression &)*expr;
 		SimplifyListReplace(expr, func.children);
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
-		auto &op = (OperatorExpression &) *expr;
+		auto &op = (OperatorExpression &)*expr;
 		SimplifyListReplace(expr, op.children);
 		break;
 	}
 	case ExpressionClass::CASE: {
-		auto &op = (CaseExpression &) *expr;
+		auto &op = (CaseExpression &)*expr;
 		SimplifyReplace(expr, op.else_expr);
-		for(auto &case_check : op.case_checks) {
+		for (auto &case_check : op.case_checks) {
 			SimplifyReplace(expr, case_check.then_expr);
 			SimplifyReplace(expr, case_check.when_expr);
 		}
 		break;
 	}
 	case ExpressionClass::CAST: {
-		auto &cast = (CastExpression &) *expr;
+		auto &cast = (CastExpression &)*expr;
 		SimplifyReplace(expr, cast.child);
 		break;
 	}
 	case ExpressionClass::COLLATE: {
-		auto &collate = (CollateExpression &) *expr;
+		auto &collate = (CollateExpression &)*expr;
 		SimplifyReplace(expr, collate.child);
 		break;
 	}
@@ -173,9 +178,8 @@ void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr)
 
 void StatementSimplifier::Simplify(SelectStatement &stmt) {
 	Simplify(*stmt.node);
-	ParsedExpressionIterator::EnumerateQueryNodeChildren(*stmt.node, [&](unique_ptr<ParsedExpression> &child) {
-		SimplifyExpression(child);
-	});
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(
+	    *stmt.node, [&](unique_ptr<ParsedExpression> &child) { SimplifyExpression(child); });
 }
 
-}
+} // namespace duckdb

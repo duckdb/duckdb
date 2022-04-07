@@ -84,7 +84,7 @@ struct ReduceSQLFunctionData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, TableFunctionBindInput &input,
-                                             vector<LogicalType> &return_types, vector<string> &names) {
+                                              vector<LogicalType> &return_types, vector<string> &names) {
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("sql");
 
@@ -95,14 +95,14 @@ static unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, TableFunct
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		throw InvalidInputException("reduce_sql_statement requires a single select statement as parameter");
 	}
-	auto &statement = (SelectStatement &) *parser.statements[0];
+	auto &statement = (SelectStatement &)*parser.statements[0];
 	StatementSimplifier simplifier(statement, result->statements);
 	simplifier.Simplify(statement);
 	return result;
 }
 
 static void ReduceSQLFunction(ClientContext &context, const FunctionData *bind_data,
-                             FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                              FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (ReduceSQLFunctionData &)*bind_data;
 	if (data.offset >= data.statements.size()) {
 		// finished returning values
@@ -135,7 +135,6 @@ void SQLSmithExtension::Load(DuckDB &db) {
 	sqlsmith_func.named_parameters["log"] = LogicalType::VARCHAR;
 	CreateTableFunctionInfo sqlsmith_info(sqlsmith_func);
 	catalog.CreateTableFunction(*con.context, &sqlsmith_info);
-
 
 	TableFunction reduce_sql_function("reduce_sql_statement", {LogicalType::VARCHAR}, ReduceSQLFunction, ReduceSQLBind);
 	CreateTableFunctionInfo reduce_sql_info(reduce_sql_function);

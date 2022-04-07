@@ -4,6 +4,7 @@ import sys
 import os
 import subprocess
 import re
+import reduce_sql
 
 if 'FUZZEROFDUCKSKEY' not in os.environ:
     print("FUZZEROFDUCKSKEY not found in environment variables")
@@ -106,7 +107,7 @@ def create_db_script(db):
 
 def run_fuzzer_script(fuzzer):
     if fuzzer == 'sqlsmith':
-        return "call sqlsmith(max_queries=${MAX_QUERIES}, verbose_output=1, log='${LAST_LOG_FILE}', complete_log='${COMPLETE_LOG_FILE}');"
+        return "call sqlsmith(max_queries=${MAX_QUERIES}, seed=42, verbose_output=1, log='${LAST_LOG_FILE}', complete_log='${COMPLETE_LOG_FILE}');"
     else:
         raise Exception("Unknown fuzzer type")
 
@@ -212,15 +213,29 @@ print("==========================================")
 
 error_msg = re.sub('Error: near line \d+: ', '', stderr)
 
+
+print("=========================================")
+print("         Reproduced successfully         ")
+print("=========================================")
+
 # check if this is a duplicate issue
 if error_msg in current_errors:
     print("Skip filing duplicate issue")
     print("Issue already exists: https://github.com/duckdb/duckdb-fuzzer/issues/" + str(current_errors[error_msg]['number']))
     exit(0)
 
+print("=========================================")
+print("        Attempting to reduce query       ")
+print("=========================================")
+
+# try to reduce the query as much as possible
+last_query = reduce_sql.reduce(last_query, load_script, shell, error_msg)
+cmd = load_script + '\n' + last_query + "\n"
+
 # issue is new, file it
 print("Filing new issue to Github")
 
 title = error_msg
 body = header + cmd + middle + error_msg + footer
+print(title, body)
 make_github_issue(title, body)

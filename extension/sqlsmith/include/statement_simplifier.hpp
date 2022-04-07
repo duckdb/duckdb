@@ -31,16 +31,16 @@ public:
 private:
 	void Simplification();
 
-	template<class T>
+	template <class T>
 	void SimplifyList(vector<T> &list, bool is_optional = true);
 
-	template<class T>
+	template <class T>
 	void SimplifyReplace(T &element, T &other);
 
-	template<class T>
+	template <class T>
 	void SimplifyListReplace(T &element, vector<T> &list);
 
-	template<class T>
+	template <class T>
 	void SimplifyOptional(unique_ptr<T> &opt);
 
 	void Simplify(TableRef &ref);
@@ -52,5 +52,4 @@ private:
 	void SimplifyExpression(unique_ptr<ParsedExpression> &expr);
 };
 
-
-}
+} // namespace duckdb

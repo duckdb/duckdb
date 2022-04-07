@@ -6,8 +6,8 @@ include_directories(include)
 include_directories(third_party/sqlsmith/include)
 add_subdirectory(third_party)
 
-set(SQLSMITH_SOURCES sqlsmith-extension.cpp statement_simplifier.cpp ${SQLSMITH_OBJECT_FILES})
-
+set(SQLSMITH_SOURCES sqlsmith-extension.cpp statement_simplifier.cpp
+                     ${SQLSMITH_OBJECT_FILES})
 
 add_library(sqlsmith_extension STATIC ${SQLSMITH_SOURCES})
 
