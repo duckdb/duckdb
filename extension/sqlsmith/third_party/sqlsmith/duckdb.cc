@@ -72,7 +72,8 @@ schema_duckdb::schema_duckdb(duckdb::DatabaseInstance &database, bool no_catalog
 	auto query_result = con.Query(R"(
 SELECT function_name, parameter_types, return_type, function_type
 FROM duckdb_functions()
-WHERE function_type='aggregate' or function_type='scalar';
+WHERE NOT(has_side_effects)
+ AND (function_type='aggregate' or function_type='scalar');
     )");
 
 	for (auto &row : *query_result) {

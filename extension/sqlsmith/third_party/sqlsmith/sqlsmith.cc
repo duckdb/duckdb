@@ -133,66 +133,61 @@ int32_t run_sqlsmith(duckdb::DatabaseInstance &database, SQLSmithOptions opt) {
 		}
 		while (1) /* Loop to recover connection loss */
 		{
-			try {
-				while (1) { /* Main loop */
+			while (1) { /* Main loop */
 
-					if (opt.max_queries >= 0 && (++queries_generated > opt.max_queries)) {
-						if (global_cerr_logger)
-							global_cerr_logger->report();
-						return 0;
-					}
+				if (opt.max_queries >= 0 && (++queries_generated > opt.max_queries)) {
+					if (global_cerr_logger)
+						global_cerr_logger->report();
+					return 0;
+				}
 
-					/* Invoke top-level production to generate AST */
-					shared_ptr<prod> gen = statement_factory(&scope);
+				/* Invoke top-level production to generate AST */
+				shared_ptr<prod> gen = statement_factory(&scope);
 
+				for (auto l : loggers)
+					l->generated(*gen);
+
+				/* Generate SQL from AST */
+				ostringstream s;
+				gen->out(s);
+
+				// write the query to the complete log that has all the
+				// queries
+				if (has_complete_log) {
+					complete_log << s.str() << endl;
+					complete_log.flush();
+				}
+
+				// write the last-executed query to a separate log file
+				if (has_log) {
+					ofstream out_file;
+					out_file.open(opt.log);
+					out_file << s.str() << endl;
+					out_file.close();
+				}
+
+				/* Try to execute it */
+				try {
+					dut->test(s.str());
 					for (auto l : loggers)
-						l->generated(*gen);
-
-					/* Generate SQL from AST */
-					ostringstream s;
-					gen->out(s);
-
-					// write the query to the complete log that has all the
-					// queries
-					if (has_complete_log) {
-						complete_log << s.str() << endl;
-						complete_log.flush();
-					}
-
-					// write the last-executed query to a separate log file
-					if (has_log) {
-						ofstream out_file;
-						out_file.open(opt.log);
-						out_file << s.str() << endl;
-						out_file.close();
-					}
-
-					/* Try to execute it */
-					try {
-						dut->test(s.str());
-						for (auto l : loggers)
-							l->executed(*gen);
-					} catch (const dut::failure &e) {
-						for (auto l : loggers)
-							try {
-								l->error(*gen, e);
-							} catch (runtime_error &e) {
-								cerr << endl << "log failed: " << typeid(*l).name() << ": " << e.what() << endl;
-							}
-						if ((dynamic_cast<const dut::broken *>(&e))) {
-							/* re-throw to outer loop to recover session. */
-							throw;
+						l->executed(*gen);
+				} catch (const dut::failure &e) {
+					for (auto l : loggers)
+						try {
+							l->error(*gen, e);
+						} catch (runtime_error &e) {
+							cerr << endl << "log failed: " << typeid(*l).name() << ": " << e.what() << endl;
 						}
+					if ((dynamic_cast<const dut::broken *>(&e))) {
+						/* re-throw to outer loop */
+						throw;
 					}
 				}
-			} catch (const dut::broken &e) {
-				/* Give server some time to recover. */
-				this_thread::sleep_for(milliseconds(1000));
 			}
 		}
 	} catch (const exception &e) {
 		cerr << e.what() << endl;
-		return 1;
+		exit(1);
 	}
 }
 
