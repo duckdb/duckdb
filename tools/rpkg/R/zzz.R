@@ -8,12 +8,12 @@
   s3_register("dbplyr::sql_escape_datetime", "duckdb_connection")
   s3_register("dplyr::tbl", "duckdb_connection")
 
-  dllinfo <- library.dynam("duckdb", "duckdb", lib.loc=NULL, local=FALSE)
-  routines <- getDLLRegisteredRoutines( dllinfo)
   duckdb_env <- asNamespace("duckdb")
-
-  invisible(lapply(routines$.Call, function(symbol) {
+  dllinfo <- library.dynam("duckdb", "duckdb", lib.loc=.libPaths(), local=FALSE)
+  routines <- getDLLRegisteredRoutines(dllinfo)
+  lapply(routines$.Call, function(symbol) {
    assign(symbol$name, symbol, envir=duckdb_env)
-  }))
+  })
+  NULL
 }
 
