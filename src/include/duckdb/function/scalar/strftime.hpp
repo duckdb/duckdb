@@ -124,7 +124,7 @@ public:
 	string format_specifier;
 
 public:
-	static ParseResult Parse(const string &format, const string &text);
+	DUCKDB_API static ParseResult Parse(const string &format, const string &text);
 
 	DUCKDB_API bool Parse(string_t str, ParseResult &result);
 
