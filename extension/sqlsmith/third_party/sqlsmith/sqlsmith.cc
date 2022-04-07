@@ -154,7 +154,7 @@ int32_t run_sqlsmith(duckdb::DatabaseInstance &database, SQLSmithOptions opt) {
 				// write the query to the complete log that has all the
 				// queries
 				if (has_complete_log) {
-					complete_log << s.str() << endl;
+					complete_log << s.str() << ";" << endl;
 					complete_log.flush();
 				}
 
@@ -162,7 +162,7 @@ int32_t run_sqlsmith(duckdb::DatabaseInstance &database, SQLSmithOptions opt) {
 				if (has_log) {
 					ofstream out_file;
 					out_file.open(opt.log);
-					out_file << s.str() << endl;
+					out_file << s.str() << ";" << endl;
 					out_file.close();
 				}
 

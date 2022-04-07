@@ -99,7 +99,7 @@ def close_github_issue(number):
 
 def create_db_script(db):
     if db == 'alltypes':
-        return 'create table all_types as select * from test_all_types();'
+        return 'create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();'
     elif db == 'tpch':
         return 'call dbgen(sf=0.1);'
     else:
@@ -107,7 +107,7 @@ def create_db_script(db):
 
 def run_fuzzer_script(fuzzer):
     if fuzzer == 'sqlsmith':
-        return "call sqlsmith(max_queries=${MAX_QUERIES}, seed=42, verbose_output=1, log='${LAST_LOG_FILE}', complete_log='${COMPLETE_LOG_FILE}');"
+        return "call sqlsmith(max_queries=${MAX_QUERIES}, seed=47, verbose_output=1, log='${LAST_LOG_FILE}', complete_log='${COMPLETE_LOG_FILE}');"
     else:
         raise Exception("Unknown fuzzer type")
 
@@ -223,6 +223,8 @@ if error_msg in current_errors:
     print("Skip filing duplicate issue")
     print("Issue already exists: https://github.com/duckdb/duckdb-fuzzer/issues/" + str(current_errors[error_msg]['number']))
     exit(0)
+
+print(last_query)
 
 print("=========================================")
 print("        Attempting to reduce query       ")

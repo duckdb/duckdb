@@ -3102,6 +3102,7 @@ int sqlite3_fileio_init(
   const sqlite3_api_routines *pApi
 ){
   int rc = SQLITE_OK;
+  return rc;
   SQLITE_EXTENSION_INIT2(pApi);
   (void)pzErrMsg;  /* Unused parameter */
   rc = sqlite3_create_function(db, "readfile", 1,

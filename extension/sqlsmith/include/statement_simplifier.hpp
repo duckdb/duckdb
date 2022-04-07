@@ -11,7 +11,11 @@
 #include "duckdb.hpp"
 
 namespace duckdb {
+class SQLStatement;
 class SelectStatement;
+class InsertStatement;
+class UpdateStatement;
+class DeleteStatement;
 class TableRef;
 class SelectNode;
 class SetOperationNode;
@@ -20,15 +24,20 @@ class ParsedExpression;
 
 class StatementSimplifier {
 public:
-	StatementSimplifier(SelectStatement &statement_p, vector<string> &result_p);
+	StatementSimplifier(SQLStatement &statement_p, vector<string> &result_p);
 
-	SelectStatement &statement;
+	SQLStatement &statement;
 	vector<string> &result;
 
 public:
-	void Simplify(SelectStatement &stmt);
+	void Simplify(SQLStatement &stmt);
 
 private:
+	void Simplify(SelectStatement &stmt);
+	void Simplify(InsertStatement &stmt);
+	void Simplify(UpdateStatement &stmt);
+	void Simplify(DeleteStatement &stmt);
+
 	void Simplification();
 
 	template <class T>

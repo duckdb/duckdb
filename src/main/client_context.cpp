@@ -523,7 +523,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		// create a copy of the statement, and use the copy
 		// this way we verify that the copy correctly copies all properties
 		auto copied_statement = statement->Copy();
-		if (statement->type == StatementType::SELECT_STATEMENT) {
+		switch (statement->type) {
+		case StatementType::SELECT_STATEMENT: {
 			// in case this is a select query, we verify the original statement
 			string error;
 			try {
@@ -535,8 +536,22 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 				// error in verifying query
 				return make_unique<PendingQueryResult>(error);
 			}
+			statement = move(copied_statement);
+			break;
 		}
-		statement = move(copied_statement);
+		case StatementType::INSERT_STATEMENT:
+		case StatementType::DELETE_STATEMENT:
+		case StatementType::UPDATE_STATEMENT: {
+			auto sql = statement->ToString();
+			Parser parser;
+			parser.ParseQuery(sql);
+			statement = move(parser.statements[0]);
+			break;
+		}
+		default:
+			statement = move(copied_statement);
+			break;
+		}
 	}
 	return PendingStatementOrPreparedStatement(lock, query, move(statement), prepared, values);
 }

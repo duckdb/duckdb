@@ -92,10 +92,10 @@ static unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, TableFunct
 	auto sql = input.inputs[0].ToString();
 	Parser parser;
 	parser.ParseQuery(sql);
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
-		throw InvalidInputException("reduce_sql_statement requires a single select statement as parameter");
+	if (parser.statements.size() != 1) {
+		throw InvalidInputException("reduce_sql_statement requires a single statement as parameter");
 	}
-	auto &statement = (SelectStatement &)*parser.statements[0];
+	auto &statement = *parser.statements[0];
 	StatementSimplifier simplifier(statement, result->statements);
 	simplifier.Simplify(statement);
 	return result;

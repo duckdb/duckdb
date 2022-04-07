@@ -6,11 +6,15 @@
 #include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/list.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 #endif
 
 namespace duckdb {
 
-StatementSimplifier::StatementSimplifier(SelectStatement &statement_p, vector<string> &result_p)
+StatementSimplifier::StatementSimplifier(SQLStatement &statement_p, vector<string> &result_p)
     : statement(statement_p), result(result_p) {
 }
 
@@ -76,6 +80,15 @@ void StatementSimplifier::Simplify(TableRef &ref) {
 		Simplify(*cp.right);
 		break;
 	}
+	case TableReferenceType::EXPRESSION_LIST: {
+		auto &expr_list = (ExpressionListRef &)ref;
+		if (expr_list.values.size() == 1) {
+			SimplifyList(expr_list.values[0]);
+		} else if (expr_list.values.size() > 1) {
+			SimplifyList(expr_list.values, false);
+		}
+		break;
+	}
 	default:
 		break;
 	}
@@ -136,6 +149,9 @@ void StatementSimplifier::Simplify(QueryNode &node) {
 }
 
 void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr) {
+	if (!expr) {
+		return;
+	}
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::CONJUNCTION: {
 		auto &conj = (ConjunctionExpression &)*expr;
@@ -171,6 +187,11 @@ void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr)
 		SimplifyReplace(expr, collate.child);
 		break;
 	}
+	case ExpressionClass::SUBQUERY: {
+		unique_ptr<ParsedExpression> constant = make_unique<ConstantExpression>(Value());
+		SimplifyReplace(expr, constant);
+		break;
+	}
 	default:
 		break;
 	}
@@ -180,6 +201,59 @@ void StatementSimplifier::Simplify(SelectStatement &stmt) {
 	Simplify(*stmt.node);
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	    *stmt.node, [&](unique_ptr<ParsedExpression> &child) { SimplifyExpression(child); });
+}
+
+void StatementSimplifier::Simplify(InsertStatement &stmt) {
+	Simplify(*stmt.select_statement);
+	SimplifyList(stmt.returning_list);
+}
+
+void StatementSimplifier::Simplify(DeleteStatement &stmt) {
+	SimplifyOptional(stmt.condition);
+	SimplifyExpression(stmt.condition);
+	SimplifyList(stmt.using_clauses);
+}
+
+void StatementSimplifier::Simplify(UpdateStatement &stmt) {
+	if (stmt.from_table) {
+		Simplify(*stmt.from_table);
+	}
+	SimplifyOptional(stmt.condition);
+	SimplifyExpression(stmt.condition);
+	if (stmt.columns.size() > 1) {
+		for (idx_t i = 0; i < stmt.columns.size(); i++) {
+			auto col = move(stmt.columns[i]);
+			auto expr = move(stmt.expressions[i]);
+			stmt.columns.erase(stmt.columns.begin() + i);
+			stmt.expressions.erase(stmt.expressions.begin() + i);
+			Simplification();
+			stmt.columns.insert(stmt.columns.begin() + i, move(col));
+			stmt.expressions.insert(stmt.expressions.begin() + i, move(expr));
+		}
+	}
+	for (auto &expr : stmt.expressions) {
+		SimplifyExpression(expr);
+	}
+	SimplifyList(stmt.returning_list);
+}
+
+void StatementSimplifier::Simplify(SQLStatement &stmt) {
+	switch (stmt.type) {
+	case StatementType::SELECT_STATEMENT:
+		Simplify((SelectStatement &)stmt);
+		break;
+	case StatementType::INSERT_STATEMENT:
+		Simplify((InsertStatement &)stmt);
+		break;
+	case StatementType::UPDATE_STATEMENT:
+		Simplify((UpdateStatement &)stmt);
+		break;
+	case StatementType::DELETE_STATEMENT:
+		Simplify((DeleteStatement &)stmt);
+		break;
+	default:
+		throw InvalidInputException("Expected a single SELECT, INSERT or UPDATE statement");
+	}
 }
 
 } // namespace duckdb
