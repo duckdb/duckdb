@@ -1,5 +1,4 @@
 #include "duckdb.hh"
-#include "tpch-extension.hpp"
 
 #include <cassert>
 #include <cstring>
@@ -15,10 +14,9 @@ using namespace std;
 
 static regex e_syntax("syntax error at or near .*");
 
-sqlsmith_duckdb_connection::sqlsmith_duckdb_connection(string &conninfo) {
+sqlsmith_duckdb_connection::sqlsmith_duckdb_connection(duckdb::DatabaseInstance &database) {
 	// in-memory database
-	database = make_unique<DuckDB>(nullptr);
-	connection = make_unique<Connection>(*database);
+	connection = make_unique<Connection>(database);
 }
 
 void sqlsmith_duckdb_connection::q(const char *query) {
@@ -28,11 +26,11 @@ void sqlsmith_duckdb_connection::q(const char *query) {
 	}
 }
 
-schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : sqlsmith_duckdb_connection(conninfo) {
+schema_duckdb::schema_duckdb(duckdb::DatabaseInstance &database, bool no_catalog, bool verbose_output)
+    : sqlsmith_duckdb_connection(database) {
 	// generate empty TPC-H schema
-	connection->Query("CALL dbgen(sf=0)");
-
-	cerr << "Loading tables...";
+	if (verbose_output)
+		cerr << "Loading tables...";
 	auto result = connection->Query("SELECT * FROM sqlite_master WHERE type IN ('table', 'view')");
 	if (!result->success) {
 		throw runtime_error(result->error);
@@ -44,13 +42,14 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : sqlsmith_
 		table tab(name, "main", !view, !view);
 		tables.push_back(tab);
 	}
-	cerr << "done." << endl;
+	if (verbose_output)
+		cerr << "done." << endl;
 
 	if (tables.size() == 0) {
 		throw std::runtime_error("No tables available in catalog!");
 	}
-
-	cerr << "Loading columns and constraints...";
+	if (verbose_output)
+		cerr << "Loading columns and constraints...";
 
 	for (auto t = tables.begin(); t != tables.end(); ++t) {
 		result = connection->Query("PRAGMA table_info('" + t->name + "')");
@@ -65,7 +64,8 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : sqlsmith_
 		}
 	}
 
-	cerr << "done." << endl;
+	if (verbose_output)
+		cerr << "done." << endl;
 
 #define BINOP(n, t)                                                                                                    \
 	do {                                                                                                               \
@@ -199,14 +199,10 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : sqlsmith_
 	true_literal = "1";
 	false_literal = "0";
 
-	generate_indexes();
+	generate_indexes(verbose_output);
 }
 
-dut_duckdb::dut_duckdb(std::string &conninfo) : sqlsmith_duckdb_connection(conninfo) {
-	cerr << "Generating TPC-H...";
-	connection->Query("CALL dbgen(sf=0.01)");
-	cerr << "done." << endl;
-	// q("PRAGMA main.auto_vacuum = 2");
+dut_duckdb::dut_duckdb(duckdb::DatabaseInstance &database) : sqlsmith_duckdb_connection(database) {
 }
 
 volatile bool is_active = false;

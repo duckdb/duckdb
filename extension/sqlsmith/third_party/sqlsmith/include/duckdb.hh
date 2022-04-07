@@ -16,11 +16,11 @@ struct sqlsmith_duckdb_connection {
 	char *zErrMsg = 0;
 	int rc;
 	void q(const char *query);
-	sqlsmith_duckdb_connection(std::string &conninfo);
+	sqlsmith_duckdb_connection(duckdb::DatabaseInstance &database);
 };
 
 struct schema_duckdb : schema, sqlsmith_duckdb_connection {
-	schema_duckdb(std::string &conninfo, bool no_catalog);
+	schema_duckdb(duckdb::DatabaseInstance &database, bool no_catalog, bool verbose_output);
 	virtual std::string quote_name(const std::string &id) {
 		return id;
 	}
@@ -28,6 +28,6 @@ struct schema_duckdb : schema, sqlsmith_duckdb_connection {
 
 struct dut_duckdb : dut_base, sqlsmith_duckdb_connection {
 	virtual void test(const std::string &stmt);
-	dut_duckdb(std::string &conninfo);
+	dut_duckdb(duckdb::DatabaseInstance &database);
 };
 #endif

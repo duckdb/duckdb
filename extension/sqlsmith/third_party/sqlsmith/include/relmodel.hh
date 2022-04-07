@@ -87,7 +87,7 @@ struct table : named_relation {
 	virtual string ident() {
 		return schema + "." + name;
 	}
-	virtual ~table(){};
+	virtual ~table() {};
 };
 
 struct scope {

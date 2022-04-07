@@ -1,0 +1,12 @@
+# name: test/fuzzer/test_sqlsmith.test
+# group: [fuzzer]
+
+require tpch
+
+require sqlsmith
+
+statement ok
+CALL dbgen(sf=0.1);
+
+statement ok
+call sqlsmith(max_queries=1000, verbose_output=1);
