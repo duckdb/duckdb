@@ -34,15 +34,30 @@ select strptime_icu('2022-03-05 17:59:17.877', '%Y-%m-%d %H:%M:%S.%g');
 ----
 2022-03-06 01:59:17.877+00
 
-# Same string, multiple TZ names
-query II
-SELECT strptime_icu('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
-FROM (
+#
+# Same date, multiple TZ names
+#
+
+statement ok
+CREATE TABLE zones AS (
 	SELECT median(name) as tz_name
 	FROM pg_timezone_names()
 	GROUP BY ALL
 	ORDER BY utc_offset
-	) tz
+);
+
+statement ok
+CREATE TABLE abbrevs AS (
+	SELECT median(abbrev) as tz_name
+	FROM pg_timezone_names()
+	GROUP BY ALL
+	ORDER BY utc_offset
+);
+
+# Full zone names
+query II
+SELECT strptime_icu('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
+FROM zones
 ORDER BY tstz
 ----
 2022-03-05 03:59:17.877+00	Pacific/Apia
@@ -84,14 +99,10 @@ ORDER BY tstz
 2022-03-06 04:59:17.877+00	Pacific/Niue
 2022-03-06 05:59:17.877+00	Etc/GMT+12
 
+# Abbreviations
 query II
 SELECT strptime_icu('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
-FROM (
-	SELECT median(abbrev) as tz_name
-	FROM pg_timezone_names()
-	GROUP BY ALL
-	ORDER BY utc_offset
-	) tz
+FROM abbrevs
 ORDER BY tstz
 ----
 2022-03-05 03:59:17.877+00	MIT
@@ -132,6 +143,76 @@ ORDER BY tstz
 2022-03-06 03:59:17.877+00	Pacific/Johnston
 2022-03-06 04:59:17.877+00	Pacific/Niue
 2022-03-06 05:59:17.877+00	Etc/GMT+12
+
+#
+# UTC Offsets
+#
+
+statement ok
+CREATE TABLE offsets AS (
+	SELECT
+		CASE WHEN EXTRACT(MINUTE FROM utc_offset) <> 0
+		THEN
+			CASE WHEN utc_offset < INTERVAL 0 SECOND
+				THEN LEFT(utc_offset, 6)
+				ELSE '+' || LEFT(utc_offset, 5)
+			END
+		ELSE
+			CASE WHEN utc_offset < INTERVAL 0 SECOND
+				THEN LEFT(utc_offset, 3)
+				ELSE '+' || LEFT(utc_offset, 2)
+			END
+		END AS utc_offset
+	FROM (
+		SELECT DISTINCT utc_offset
+		FROM pg_timezone_names()
+		ORDER BY ALL
+	) z
+);
+
+query II
+SELECT strptime_icu('2022-03-05 17:59:17.877 ' || utc_offset, '%Y-%m-%d %H:%M:%S.%g %z') tstz, utc_offset
+FROM offsets
+ORDER BY tstz
+----
+2022-03-05 02:59:17.877+00	+14
+2022-03-05 03:59:17.877+00	+13
+2022-03-05 04:14:17.877+00	+12:45
+2022-03-05 04:59:17.877+00	+12
+2022-03-05 05:59:17.877+00	+11
+2022-03-05 06:29:17.877+00	+10:30
+2022-03-05 06:59:17.877+00	+10
+2022-03-05 07:29:17.877+00	+09:30
+2022-03-05 07:59:17.877+00	+09
+2022-03-05 08:14:17.877+00	+08:45
+2022-03-05 08:59:17.877+00	+08
+2022-03-05 09:59:17.877+00	+07
+2022-03-05 10:29:17.877+00	+06:30
+2022-03-05 10:59:17.877+00	+06
+2022-03-05 11:14:17.877+00	+05:45
+2022-03-05 11:29:17.877+00	+05:30
+2022-03-05 11:59:17.877+00	+05
+2022-03-05 12:29:17.877+00	+04:30
+2022-03-05 12:59:17.877+00	+04
+2022-03-05 13:29:17.877+00	+03:30
+2022-03-05 13:59:17.877+00	+03
+2022-03-05 14:59:17.877+00	+02
+2022-03-05 15:59:17.877+00	+01
+2022-03-05 16:59:17.877+00	+00
+2022-03-05 17:59:17.877+00	-01
+2022-03-05 18:59:17.877+00	-02
+2022-03-05 19:59:17.877+00	-03
+2022-03-05 20:29:17.877+00	-03:30
+2022-03-05 20:59:17.877+00	-04
+2022-03-05 21:59:17.877+00	-05
+2022-03-05 22:59:17.877+00	-06
+2022-03-05 23:59:17.877+00	-07
+2022-03-06 00:59:17.877+00	-08
+2022-03-06 01:59:17.877+00	-09
+2022-03-06 02:29:17.877+00	-09:30
+2022-03-06 02:59:17.877+00	-10
+2022-03-06 03:59:17.877+00	-11
+2022-03-06 04:59:17.877+00	-12
 
 # Multiple formats
 statement ok

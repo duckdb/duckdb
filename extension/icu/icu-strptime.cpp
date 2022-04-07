@@ -45,6 +45,13 @@ struct ICUStrptime : public ICUDateFunc {
 		calendar->set(UCAL_MINUTE, parsed.data[4]);
 		calendar->set(UCAL_SECOND, parsed.data[5]);
 		calendar->set(UCAL_MILLISECOND, parsed.data[6] / Interval::MICROS_PER_MSEC);
+
+		// This overrides the TZ setting, so only use it if an offset was parsed.
+		// Note that we don't bother/worry about the DST setting because the two just combine.
+		if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
+			calendar->set(UCAL_ZONE_OFFSET, parsed.data[7] * Interval::MSECS_PER_SEC * Interval::SECS_PER_MINUTE);
+		}
+
 		return GetTime(calendar, micros);
 	}
 
@@ -168,6 +175,8 @@ struct ICUStrftime : public ICUDateFunc {
 	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+		                               ICUStrftimeFunction<timestamp_t>, false, false, Bind));
+		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 		                               ICUStrftimeFunction<timestamp_t>, false, false, Bind));
 
 		CreateScalarFunctionInfo func_info(set);

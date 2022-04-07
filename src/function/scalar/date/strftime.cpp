@@ -397,7 +397,7 @@ void StrfTimeFormat::FormatString(date_t date, int32_t data[8], const char *tz_n
 }
 
 void StrfTimeFormat::FormatString(date_t date, dtime_t time, char *target) {
-	int32_t data[8]; // year, month, day, hour, min, sec, msec, offset
+	int32_t data[8]; // year, month, day, hour, min, sec, µs, offset
 	Date::Convert(date, data[0], data[1], data[2]);
 	Time::Convert(time, data[3], data[4], data[5], data[6]);
 	data[7] = 0;
@@ -760,6 +760,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 	result_data[4] = 0;
 	result_data[5] = 0;
 	result_data[6] = 0;
+	result_data[7] = 0;
 
 	auto data = str.GetDataUnsafe();
 	idx_t size = str.GetSize();
@@ -1032,8 +1033,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					error_position = pos;
 					return false;
 				}
-				result_data[3] -= hour_offset;
-				result_data[4] -= minute_offset;
+				result_data[7] = hour_offset * Interval::MINS_PER_HOUR + minute_offset;
 				break;
 			}
 			case StrTimeSpecifier::TZ_NAME: {
@@ -1182,7 +1182,9 @@ date_t StrpTimeFormat::ParseResult::ToDate() {
 
 timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {
 	date_t date = Date::FromDate(data[0], data[1], data[2]);
-	dtime_t time = Time::FromTime(data[3], data[4], data[5], data[6]);
+	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
+	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;
+	dtime_t time = Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], data[6]);
 	return Timestamp::FromDatetime(date, time);
 }
 

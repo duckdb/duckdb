@@ -60,6 +60,10 @@ public:
 
 	DUCKDB_API static string ParseFormatSpecifier(const string &format_string, StrTimeFormat &format);
 
+	inline bool HasFormatSpecifier(StrTimeSpecifier s) const {
+		return std::find(specifiers.begin(), specifiers.end(), s) != specifiers.end();
+	}
+
 protected:
 	//! The format specifiers
 	vector<StrTimeSpecifier> specifiers;
@@ -110,7 +114,7 @@ struct StrpTimeFormat : public StrTimeFormat {
 public:
 	//! Type-safe parsing argument
 	struct ParseResult {
-		int32_t data[7];
+		int32_t data[8]; // year, month, day, hour, min, sec, µs, offset
 		string tz;
 		string error_message;
 		idx_t error_position = DConstants::INVALID_INDEX;
