@@ -131,7 +131,8 @@ public:
 class BaseScalarFunction : public SimpleFunction {
 public:
 	DUCKDB_API BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
-	                              bool has_side_effects, LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
+	                              bool has_side_effects, LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
+	                              bool propagates_null_values = false);
 	DUCKDB_API ~BaseScalarFunction() override;
 
 	//! Return type of the function
@@ -139,6 +140,8 @@ public:
 	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
 	//! with side-effects cannot be constant-folded.
 	bool has_side_effects;
+	//! Whether or not the function propagates null values
+	bool propagates_null_values;
 
 public:
 	DUCKDB_API hash_t Hash() const;

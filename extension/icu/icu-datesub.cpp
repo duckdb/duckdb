@@ -122,7 +122,7 @@ struct ICUCalendarSub : public ICUDateFunc {
 
 	template <typename TA>
 	static ScalarFunction GetFunction(const LogicalTypeId &type) {
-		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateSubFunction<TA>, false,
+		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateSubFunction<TA>, false, false,
 		                      Bind);
 	}
 
@@ -239,7 +239,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 
 	template <typename TA>
 	static ScalarFunction GetFunction(const LogicalTypeId &type) {
-		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateDiffFunction<TA>, false,
+		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateDiffFunction<TA>, false, false, 
 		                      Bind);
 	}
 

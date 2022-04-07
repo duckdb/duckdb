@@ -23,6 +23,7 @@ bool BoundComparisonExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(right.get(), other->right.get())) {
 		return false;
 	}
+
 	return true;
 }
 

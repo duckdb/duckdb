@@ -27,7 +27,7 @@ public:
 	// Operator interface
 	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                           OperatorState &state) const override;
+	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
 	bool ParallelOperator() const override {
 		return true;

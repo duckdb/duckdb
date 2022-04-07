@@ -1223,14 +1223,26 @@ function duckdb_destroy_value(handle)
 end
 
 """
-Creates a value from a string
+Creates a value from a null-terminated string
 
-* value: The varchar value
+* value: The null-terminated string
 * returns: The value. This must be destroyed with `duckdb_destroy_value`.
 """
 function duckdb_create_varchar(handle)
     return ccall((:duckdb_create_varchar, libduckdb), duckdb_value, (Ptr{UInt8},), handle)
 end
+
+"""
+Creates a value from a string
+
+* value: The text
+* length: The length of the text
+* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+"""
+function duckdb_create_varchar_length(text, len)
+    return ccall((:duckdb_create_varchar_length, libduckdb), duckdb_value, (Ptr{UInt8}, UInt64), text, len)
+end
+
 
 """
 Creates a value from an int64
