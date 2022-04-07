@@ -328,9 +328,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		break;
 	case StrTimeSpecifier::TZ_NAME:
 		if (tz_name) {
-			while ((*target++ = *tz_name++)) {
-				continue;
-			}
+			strncpy(target, tz_name, strlen(tz_name));
 		}
 		break;
 	case StrTimeSpecifier::DAY_OF_MONTH: {

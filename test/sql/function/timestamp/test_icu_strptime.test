@@ -28,7 +28,7 @@ select strptime_icu(NULL, '%Y-%m-%d %H:%M:%S.%g %Z');
 ----
 NULL
 
-# No TZ_NAME should use client setting
+# Missing TZ_NAME should use client setting
 query I
 select strptime_icu('2022-03-05 17:59:17.877', '%Y-%m-%d %H:%M:%S.%g');
 ----

@@ -38,7 +38,7 @@ struct ICUStrptime : public ICUDateFunc {
 
 		// Now get the parts in the given time zone
 		uint64_t micros = 0;
-		calendar->set(UCAL_YEAR, parsed.data[0]);
+		calendar->set(UCAL_EXTENDED_YEAR, parsed.data[0]); // strptime doesn't understand eras
 		calendar->set(UCAL_MONTH, parsed.data[1] - 1);
 		calendar->set(UCAL_DATE, parsed.data[2]);
 		calendar->set(UCAL_HOUR_OF_DAY, parsed.data[3]);
@@ -101,12 +101,13 @@ struct ICUStrftime : public ICUDateFunc {
 		}
 	}
 
-	static string Operation(icu::Calendar *calendar, timestamp_t input, const char *tz_name, StrfTimeFormat &format) {
+	static string_t Operation(icu::Calendar *calendar, timestamp_t input, const char *tz_name, StrfTimeFormat &format,
+	                          Vector &result) {
 		// Now get the parts in the given time zone
 		uint64_t micros = SetTime(calendar, input);
 
 		int32_t data[7];
-		data[0] = ExtractField(calendar, UCAL_YEAR);
+		data[0] = ExtractField(calendar, UCAL_EXTENDED_YEAR); // strftime doesn't understand eras.
 		data[1] = ExtractField(calendar, UCAL_MONTH) + 1;
 		data[2] = ExtractField(calendar, UCAL_DATE);
 		data[3] = ExtractField(calendar, UCAL_HOUR_OF_DAY);
@@ -114,19 +115,15 @@ struct ICUStrftime : public ICUDateFunc {
 		data[5] = ExtractField(calendar, UCAL_SECOND);
 		data[6] = ExtractField(calendar, UCAL_MILLISECOND) * Interval::MICROS_PER_MSEC + micros;
 
-		date_t date(0);
-		Date::Convert(date, data[0], data[1], data[2]);
-		dtime_t time(0);
-		Time::Convert(time, data[3], data[4], data[5], data[6]);
-		auto len = format.GetLength(date, time, tz_name);
-		auto result = unique_ptr<char[]>(new char[len]);
+		const auto date = Date::FromDate(data[0], data[1], data[2]);
+		const auto time = Time::FromTime(data[3], data[4], data[5], data[6]);
 
-		format.FormatString(date, data, tz_name, result.get());
-		return string(result.get(), len);
-	}
+		const auto len = format.GetLength(date, time, tz_name);
+		string_t target = StringVector::EmptyString(result, len);
+		format.FormatString(date, data, tz_name, target.GetDataWriteable());
+		target.Finalize();
 
-	static string Operation(icu::Calendar *calendar, date_t input, const char *tz_name, StrfTimeFormat &format) {
-		return Operation(calendar, Timestamp::FromDatetime(input, dtime_t(0)), tz_name, format);
+		return target;
 	}
 
 	template <typename TA>
@@ -150,7 +147,7 @@ struct ICUStrftime : public ICUDateFunc {
 				ParseFormatSpecifier(*ConstantVector::GetData<string_t>(fmt_arg), format);
 
 				UnaryExecutor::Execute<TA, string_t>(src_arg, result, args.size(), [&](TA input) {
-					return Operation(calendar.get(), input, tz_name, format);
+					return Operation(calendar.get(), input, tz_name, format, result);
 				});
 			}
 		} else {
@@ -158,8 +155,8 @@ struct ICUStrftime : public ICUDateFunc {
 			    src_arg, fmt_arg, result, args.size(), [&](TA input, string_t format_specifier) {
 				    StrfTimeFormat format;
 				    ParseFormatSpecifier(format_specifier, format);
-				    SetTimeZone(calendar.get(), info.tz_setting);
-				    return Operation(calendar.get(), input, tz_name, format);
+
+				    return Operation(calendar.get(), input, tz_name, format, result);
 			    });
 		}
 	}
@@ -168,8 +165,6 @@ struct ICUStrftime : public ICUDateFunc {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 		                               ICUStrftimeFunction<timestamp_t>, false, false, Bind));
-		set.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-		                               ICUStrftimeFunction<date_t>, false, false, Bind));
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetCatalog(context);
