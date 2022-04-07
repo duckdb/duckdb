@@ -16,5 +16,7 @@ SELECT * FROM reduce_sql_statement('SELECT a, b FROM tbl WHERE a AND b') ORDER B
 ----
 SELECT a FROM tbl WHERE (a AND b)
 SELECT a, b FROM tbl
+SELECT a, b FROM tbl WHERE a
+SELECT a, b FROM tbl WHERE b
 SELECT a, b WHERE (a AND b)
 SELECT b FROM tbl WHERE (a AND b)
