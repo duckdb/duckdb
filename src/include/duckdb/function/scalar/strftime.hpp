@@ -11,6 +11,8 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/common/vector.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 enum class StrTimeSpecifier : uint8_t {
