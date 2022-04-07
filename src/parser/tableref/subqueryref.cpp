@@ -5,6 +5,11 @@
 
 namespace duckdb {
 
+string SubqueryRef::ToString() const {
+	string result = "(" + subquery->ToString() + ")";
+	return BaseToString(result, column_name_alias);
+}
+
 SubqueryRef::SubqueryRef(unique_ptr<SelectStatement> subquery_p, string alias_p)
     : TableRef(TableReferenceType::SUBQUERY), subquery(move(subquery_p)) {
 	this->alias = move(alias_p);

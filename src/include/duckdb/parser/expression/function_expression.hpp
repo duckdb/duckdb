@@ -82,8 +82,9 @@ public:
 		if (distinct) {
 			result += "DISTINCT ";
 		}
-		result += StringUtil::Join(entry.children, entry.children.size(), ", ",
-		                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+		result += StringUtil::Join(entry.children, entry.children.size(), ", ", [](const unique_ptr<BASE> &child) {
+			return child->alias.empty() ? child->ToString() : child->alias + " := " + child->ToString();
+		});
 		// ordered aggregate
 		if (order_bys && !order_bys->orders.empty()) {
 			if (entry.children.empty()) {
