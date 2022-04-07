@@ -2,15 +2,12 @@
 
 #include "sqlsmith-extension.hpp"
 #include "sqlsmith.hh"
+#include "statement_simplifier.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-//#include "duckdb/parser/parsed_data/create_view_info.hpp"
-//#include "duckdb/parser/parser.hpp"
-//#include "duckdb/parser/statement/select_statement.hpp"
-//#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
-//#include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/parser.hpp"
 #endif
 
 namespace duckdb {
@@ -78,6 +75,50 @@ static void SQLSmithFunction(ClientContext &context, const FunctionData *bind_da
 	data.finished = true;
 }
 
+struct ReduceSQLFunctionData : public TableFunctionData {
+	ReduceSQLFunctionData() {
+	}
+
+	vector<string> statements;
+	idx_t offset = 0;
+};
+
+static unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, TableFunctionBindInput &input,
+                                             vector<LogicalType> &return_types, vector<string> &names) {
+	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("sql");
+
+	auto result = make_unique<ReduceSQLFunctionData>();
+	auto sql = input.inputs[0].ToString();
+	Parser parser;
+	parser.ParseQuery(sql);
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
+		throw InvalidInputException("reduce_sql_statement requires a single select statement as parameter");
+	}
+	auto &statement = (SelectStatement &) *parser.statements[0];
+	StatementSimplifier simplifier(statement, result->statements);
+	simplifier.Simplify(statement);
+	return result;
+}
+
+static void ReduceSQLFunction(ClientContext &context, const FunctionData *bind_data,
+                             FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+	auto &data = (ReduceSQLFunctionData &)*bind_data;
+	if (data.offset >= data.statements.size()) {
+		// finished returning values
+		return;
+	}
+	// start returning values
+	// either fill up the chunk or return all the remaining columns
+	idx_t count = 0;
+	while (data.offset < data.statements.size() && count < STANDARD_VECTOR_SIZE) {
+		auto &entry = data.statements[data.offset++];
+		output.data[0].SetValue(count, Value(entry));
+		count++;
+	}
+	output.SetCardinality(count);
+}
+
 void SQLSmithExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
@@ -93,9 +134,12 @@ void SQLSmithExtension::Load(DuckDB &db) {
 	sqlsmith_func.named_parameters["complete_log"] = LogicalType::VARCHAR;
 	sqlsmith_func.named_parameters["log"] = LogicalType::VARCHAR;
 	CreateTableFunctionInfo sqlsmith_info(sqlsmith_func);
-
-	// create the sqlsmith function
 	catalog.CreateTableFunction(*con.context, &sqlsmith_info);
+
+
+	TableFunction reduce_sql_function("reduce_sql_statement", {LogicalType::VARCHAR}, ReduceSQLFunction, ReduceSQLBind);
+	CreateTableFunctionInfo reduce_sql_info(reduce_sql_function);
+	catalog.CreateTableFunction(*con.context, &reduce_sql_info);
 
 	con.Commit();
 }
