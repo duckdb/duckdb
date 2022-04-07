@@ -1,0 +1,63 @@
+# name: test/sql/storage/compression/rle_optimized/rle_basic_sort.test
+# description: Test sorting before RLE compression
+# group: [rle]
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+statement ok
+PRAGMA disable_sort_compression
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+INSERT INTO test VALUES (1);
+INSERT INTO test VALUES (2);
+INSERT INTO test VALUES (1);
+INSERT INTO test VALUES (2);
+INSERT INTO test VALUES (1);
+INSERT INTO test VALUES (2);
+
+statement ok
+checkpoint
+
+query I
+SELECT * FROM test;
+----
+1
+2
+1
+2
+1
+2
+
+statement ok
+PRAGMA enable_sort_compression
+
+statement ok
+DROP TABLE IF EXISTS test;
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+INSERT INTO test VALUES (1);
+INSERT INTO test VALUES (2);
+INSERT INTO test VALUES (1);
+INSERT INTO test VALUES (2);
+INSERT INTO test VALUES (1);
+INSERT INTO test VALUES (2);
+
+statement ok
+checkpoint
+
+query I
+SELECT * FROM test;
+----
+1
+1
+1
+2
+2
+2

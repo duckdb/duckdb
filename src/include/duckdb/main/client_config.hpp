@@ -49,6 +49,8 @@ struct ClientConfig {
 	bool force_index_join = false;
 	//! Force out-of-core computation for operators that support it, used for testing
 	bool force_external = false;
+	//! Enable sorting before compression
+	bool sort_compression = false;
 	//! Maximum bits allowed for using a perfect hash table (i.e. the perfect HT can hold up to 2^perfect_ht_threshold
 	//! elements)
 	idx_t perfect_ht_threshold = 12;
