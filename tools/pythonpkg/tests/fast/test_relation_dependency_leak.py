@@ -19,7 +19,8 @@ def check_memory(function_to_check):
 
 def from_df():
     df = pd.DataFrame({"x": np.random.rand(1_000_000)})
-    rel = duckdb.from_df(df)
+    return duckdb.from_df(df)
+
 
 def from_arrow():
     data = pa.array(np.random.rand(1_000_000), type=pa.float32())
@@ -34,4 +35,11 @@ class TestRelationDependencyMemoryLeak(object):
 
     def test_from_df_leak(self, duckdb_cursor):
         check_memory(from_df)
+
+    def test_relation_view_leak(self, duckdb_cursor):
+        rel = from_df()
+        rel.create_view("bla")
+        duckdb.default_connection.unregister("bla")
+        assert rel.query("bla", "select count(*) from bla").fetchone()[0] == 1_000_000
+
    

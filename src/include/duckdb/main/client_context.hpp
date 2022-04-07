@@ -67,7 +67,7 @@ public:
 	//! Whether or not the query is interrupted
 	atomic<bool> interrupted;
 	//! External Objects (e.g., Python objects) that views depend of
-	unordered_map<string, vector<unique_ptr<ExternalDependency>>> external_dependencies;
+	unordered_map<string, vector<shared_ptr<ExternalDependency>>> external_dependencies;
 
 	unique_ptr<SchemaCatalogEntry> temporary_objects;
 	unordered_map<string, shared_ptr<PreparedStatementData>> prepared_statements;

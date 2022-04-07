@@ -185,8 +185,8 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		}
 
 		// keep a reference
-		vector<unique_ptr<ExternalDependency>> dependencies;
-		dependencies.push_back(make_unique<PythonDependencies>(make_unique<RegisteredObject>(python_object)));
+		vector<shared_ptr<ExternalDependency>> dependencies;
+		dependencies.push_back(make_shared<PythonDependencies>(make_unique<RegisteredObject>(python_object)));
 		connection->context->external_dependencies[name] = move(dependencies);
 	} else if (IsAcceptedArrowObject(py_object_type)) {
 		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr());
@@ -202,9 +202,9 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 			                     Value::POINTER((uintptr_t)stream_factory_get_schema), Value::UBIGINT(rows_per_tuple)})
 			    ->CreateView(name, true, true);
 		}
-		vector<unique_ptr<ExternalDependency>> dependencies;
+		vector<shared_ptr<ExternalDependency>> dependencies;
 		dependencies.push_back(
-		    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), python_object)));
+		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), python_object)));
 		connection->context->external_dependencies[name] = move(dependencies);
 	} else {
 		throw std::runtime_error("Python Object " + py_object_type + " not suitable to be registered as a view");
@@ -466,7 +466,7 @@ py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) co
 }
 static unique_ptr<TableFunctionRef>
 TryReplacement(py::dict &dict, py::str &table_name,
-               unordered_map<string, vector<unique_ptr<ExternalDependency>>> &registered_objects) {
+               unordered_map<string, vector<shared_ptr<ExternalDependency>>> &registered_objects) {
 	if (!dict.contains(table_name)) {
 		// not present in the globals
 		return nullptr;
@@ -480,8 +480,8 @@ TryReplacement(py::dict &dict, py::str &table_name,
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)entry.ptr())));
 		table_function->function = make_unique<FunctionExpression>("pandas_scan", move(children));
 		// keep a reference
-		vector<unique_ptr<ExternalDependency>> external_dependency;
-		auto object = make_unique<PythonDependencies>(make_unique<RegisteredObject>(entry));
+		vector<shared_ptr<ExternalDependency>> external_dependency;
+		auto object = make_shared<PythonDependencies>(make_unique<RegisteredObject>(entry));
 		external_dependency.push_back(move(object));
 		registered_objects[name] = move(external_dependency);
 	} else if (DuckDBPyConnection::IsAcceptedArrowObject(py_object_type)) {
@@ -495,8 +495,8 @@ TryReplacement(py::dict &dict, py::str &table_name,
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_get_schema)));
 		children.push_back(make_unique<ConstantExpression>(Value::UBIGINT(1000000)));
 		table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
-		vector<unique_ptr<ExternalDependency>> external_dependency;
-		auto object = make_unique<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), entry));
+		vector<shared_ptr<ExternalDependency>> external_dependency;
+		auto object = make_shared<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), entry));
 		external_dependency.push_back(move(object));
 		registered_objects[name] = move(external_dependency);
 	} else {
@@ -506,7 +506,7 @@ TryReplacement(py::dict &dict, py::str &table_name,
 }
 
 struct ReplacementRegisteredObjects : public ReplacementScanData {
-	unordered_map<string, vector<unique_ptr<ExternalDependency>>> *registered_objects;
+	unordered_map<string, vector<shared_ptr<ExternalDependency>>> *registered_objects;
 };
 
 static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, const string &table_name,

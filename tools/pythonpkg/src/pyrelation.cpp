@@ -542,7 +542,7 @@ void DuckDBPyRelation::InsertInto(const string &table) {
 	} else {
 		//! Schema defined, we try to insert into it.
 		rel->Insert(parsed_info.schema, parsed_info.name);
-	};
+	}
 }
 
 void DuckDBPyRelation::Insert(py::object params) {

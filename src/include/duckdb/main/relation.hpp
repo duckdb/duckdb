@@ -43,7 +43,7 @@ public:
 
 	RelationType type;
 
-	unique_ptr<ExternalDependency> extra_dependencies;
+	shared_ptr<ExternalDependency> extra_dependencies;
 
 public:
 	DUCKDB_API virtual const vector<ColumnDefinition> &Columns() = 0;
@@ -143,17 +143,7 @@ public:
 	DUCKDB_API virtual Relation *ChildRelation() {
 		return nullptr;
 	}
-	DUCKDB_API vector<unique_ptr<ExternalDependency>> GetAllDependencies() {
-		vector<unique_ptr<ExternalDependency>> all_dependencies;
-		Relation *cur = this;
-		while (cur) {
-			if (cur->extra_dependencies) {
-				all_dependencies.push_back(move(cur->extra_dependencies));
-			}
-			cur = ChildRelation();
-		}
-		return all_dependencies;
-	}
+	DUCKDB_API vector<shared_ptr<ExternalDependency>> GetAllDependencies();
 
 protected:
 	DUCKDB_API string RenderWhitespace(idx_t depth);
