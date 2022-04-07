@@ -1,11 +1,11 @@
 #!/bin/bash
 
 function Usage() {
-    printf "Usage: $0 <command> [options]\n\n"
+    printf "Usage: $0 <level> [options]\n\n"
     printf "Example: $0 -u -db ~/database_path -D ~/driver_path/libduckdb_odbc.so\n\n"
-    echo "Command:"
-    echo "-s:  using 'sudo' to add DuckDB connection to the system-level: /etc/odbc[inst].ini"
-    echo "-u:  add DuckDB connection to the user-level ~/odbc[inst].ini file."
+    echo "Level:"
+    echo "-s: System-level, using 'sudo' to configure DuckDB ODBC at the system-level, changing the files: /etc/odbc[inst].ini"
+    echo "-u: User-level, configuring the DuckDB ODBC at the user-level, changing the files: ~/.odbc[inst].ini."
     printf "\nOptions:\n"
     echo "-db database_path>: the DuckDB database file path, the default is ':memory:' if not provided."
     echo "-D driver_path: the driver file path (i.e., the path for libduckdb_odbc.so), the default is using the base script directory"
