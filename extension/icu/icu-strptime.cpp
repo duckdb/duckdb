@@ -137,7 +137,6 @@ struct ICUStrftime : public ICUDateFunc {
 		return target;
 	}
 
-	template <typename TA>
 	static void ICUStrftimeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
 		auto &src_arg = args.data[0];
@@ -157,13 +156,13 @@ struct ICUStrftime : public ICUDateFunc {
 				StrfTimeFormat format;
 				ParseFormatSpecifier(*ConstantVector::GetData<string_t>(fmt_arg), format);
 
-				UnaryExecutor::Execute<TA, string_t>(src_arg, result, args.size(), [&](TA input) {
+				UnaryExecutor::Execute<timestamp_t, string_t>(src_arg, result, args.size(), [&](timestamp_t input) {
 					return Operation(calendar.get(), input, tz_name, format, result);
 				});
 			}
 		} else {
-			BinaryExecutor::Execute<TA, string_t, string_t>(
-			    src_arg, fmt_arg, result, args.size(), [&](TA input, string_t format_specifier) {
+			BinaryExecutor::Execute<timestamp_t, string_t, string_t>(
+			    src_arg, fmt_arg, result, args.size(), [&](timestamp_t input, string_t format_specifier) {
 				    StrfTimeFormat format;
 				    ParseFormatSpecifier(format_specifier, format);
 
@@ -175,9 +174,7 @@ struct ICUStrftime : public ICUDateFunc {
 	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-		                               ICUStrftimeFunction<timestamp_t>, false, false, Bind));
-		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-		                               ICUStrftimeFunction<timestamp_t>, false, false, Bind));
+		                               ICUStrftimeFunction, false, false, Bind));
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetCatalog(context);
@@ -187,7 +184,7 @@ struct ICUStrftime : public ICUDateFunc {
 
 void RegisterICUStrptimeFunctions(ClientContext &context) {
 	ICUStrptime::AddBinaryTimestampFunction("strptime_icu", context);
-	ICUStrftime::AddBinaryTimestampFunction("strftime_icu", context);
+	ICUStrftime::AddBinaryTimestampFunction("strftime", context);
 }
 
 } // namespace duckdb

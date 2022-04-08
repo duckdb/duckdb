@@ -25,7 +25,7 @@ CREATE TABLE timestamps AS SELECT ts::TIMESTAMPTZ AS ts FROM (VALUES
 ) tbl(ts);
 
 query II
-SELECT ts, strftime_icu(ts, '%Y-%m-%d %H:%M:%S.%f %Z') FROM timestamps;
+SELECT ts, strftime(ts, '%Y-%m-%d %H:%M:%S.%f %Z') FROM timestamps;
 ----
 0044-03-13 (BC) 09:33:41.987654+00	-43-03-15 01:40:43.987654 America/Los_Angeles
 1962-07-31 12:20:48.123456+00	1962-07-31 05:20:48.123456 America/Los_Angeles
@@ -99,7 +99,7 @@ INSERT INTO formats VALUES
 ;
 
 query I
-SELECT strftime_icu('2022-04-07 18:12:15.123456+00'::TIMESTAMPTZ, f)
+SELECT strftime('2022-04-07 18:12:15.123456+00'::TIMESTAMPTZ, f)
 FROM formats
 ----
 2022-04-07 11:12:15.123456 America/Los_Angeles
@@ -162,7 +162,7 @@ statement ok
 SET TimeZone='Asia/Kathmandu';
 
 query II
-SELECT ts, strftime_icu(ts, '%Y-%m-%d %H:%M:%S.%f %Z') FROM timestamps;
+SELECT ts, strftime(ts, '%Y-%m-%d %H:%M:%S.%f %Z') FROM timestamps;
 ----
 0044-03-13 (BC) 09:33:41.987654+00	-43-03-15 15:14:57.987654 Asia/Kathmandu
 1962-07-31 12:20:48.123456+00	1962-07-31 17:50:48.123456 Asia/Kathmandu
@@ -175,7 +175,7 @@ SELECT ts, strftime_icu(ts, '%Y-%m-%d %H:%M:%S.%f %Z') FROM timestamps;
 NULL	NULL
 
 query II
-SELECT ts, strftime_icu(ts, '%Y-%m-%d %H:%M:%S.%f %z') FROM timestamps;
+SELECT ts, strftime(ts, '%Y-%m-%d %H:%M:%S.%f %z') FROM timestamps;
 ----
 0044-03-13 (BC) 09:33:41.987654+00	-43-03-15 15:14:57.987654 +05:41
 1962-07-31 12:20:48.123456+00	1962-07-31 17:50:48.123456 +05:30
@@ -191,7 +191,7 @@ statement ok
 SET TimeZone='Canada/Newfoundland';
 
 query II
-SELECT ts, strftime_icu(ts, '%Y-%m-%d %H:%M:%S.%f %Z') FROM timestamps;
+SELECT ts, strftime(ts, '%Y-%m-%d %H:%M:%S.%f %Z') FROM timestamps;
 ----
 0044-03-13 (BC) 09:33:41.987654+00	-43-03-15 06:02:49.987654 Canada/Newfoundland
 1962-07-31 12:20:48.123456+00	1962-07-31 09:50:48.123456 Canada/Newfoundland
@@ -204,7 +204,7 @@ SELECT ts, strftime_icu(ts, '%Y-%m-%d %H:%M:%S.%f %Z') FROM timestamps;
 NULL	NULL
 
 query II
-SELECT ts, strftime_icu(ts, '%Y-%m-%d %H:%M:%S.%f %z') FROM timestamps;
+SELECT ts, strftime(ts, '%Y-%m-%d %H:%M:%S.%f %z') FROM timestamps;
 ----
 0044-03-13 (BC) 09:33:41.987654+00	-43-03-15 06:02:49.987654 -03:30
 1962-07-31 12:20:48.123456+00	1962-07-31 09:50:48.123456 -02:30
@@ -220,4 +220,4 @@ NULL	NULL
 # Errors/Coverage
 #
 statement error
-SELECT ts, strftime_icu(ts, '%C') FROM timestamps;
+SELECT ts, strftime(ts, '%C') FROM timestamps;
