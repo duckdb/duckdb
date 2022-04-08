@@ -88,12 +88,6 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 	// TODO simplify this
 	if (function_name == "and") {
 		return make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(children));
-	} else if (function_name == "cast") {
-		D_ASSERT(children[1]->type == ExpressionType::VALUE_CONSTANT);
-		auto &constant_expr = (ConstantExpression &)*children[1];
-		auto expr = Parser::ParseExpressionList(StringUtil::Format("asdf::%s", constant_expr.value.ToString()));
-		auto &cast = (CastExpression &)*expr[0];
-		return make_unique<CastExpression>(cast.cast_type, move(children[0]));
 	} else if (function_name == "or") {
 		return make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, move(children));
 	} else if (function_name == "lessthan" || function_name == "less") {
@@ -101,7 +95,7 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 		                                         move(children[1]));
 	} else if (function_name == "equal" || function_name == "equals") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(children[0]), move(children[1]));
-	} else if (function_name == "notequal") {
+	} else if (function_name == "notequal" || function_name == "not_equals") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOTEQUAL, move(children[0]),
 		                                         move(children[1]));
 	} else if (function_name == "lessthanequal") {
@@ -117,6 +111,15 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 		return make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, move(children[0]));
 	} else if (function_name == "between") {
 		return make_unique<BetweenExpression>(move(children[0]), move(children[1]), move(children[2]));
+	} else if (function_name == "any") {
+		// Uh this is a subquery
+		D_ASSERT(children.size() == 1);
+		//		auto subquery = make_unique<SubqueryExpression>();
+		//		subquery->subquery = make_unique<SelectStatement>();
+		//		subquery->subquery->node = children[0]->GetQueryNode();
+		//		subquery->subquery_type = SubqueryType::SCALAR;
+		//		children.push_back(move(subquery));
+		//		return subquery;
 	}
 	if (function_name == "multiply") {
 		function_name = "*";
@@ -142,6 +145,64 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformIfThenExpr(const substr
 	dcase->else_expr = TransformExpr(scase.else_());
 	return dcase;
 }
+LogicalType SubstraitToDuckDB::SubstraitToDuckType(const ::substrait::Type &s_type) {
+
+	if (s_type.has_bool_()) {
+		return LogicalType(LogicalTypeId::BOOLEAN);
+	} else if (s_type.has_i32()) {
+		return LogicalType(LogicalTypeId::INTEGER);
+	} else if (s_type.has_decimal()) {
+		return LogicalType(LogicalTypeId::DECIMAL);
+	} else if (s_type.has_i64()) {
+		return LogicalType(LogicalTypeId::BIGINT);
+	} else if (s_type.has_date()) {
+		return LogicalType(LogicalTypeId::DATE);
+	} else if (s_type.has_varchar()) {
+		return LogicalType(LogicalTypeId::VARCHAR);
+	} else if (s_type.has_fp64()) {
+		return LogicalType(LogicalTypeId::DOUBLE);
+	} else {
+		throw InternalException("Substrait type not yet supported");
+	}
+}
+
+//      bool boolean = 1;
+//      int32 i8 = 2;
+//      int32 i16 = 3;
+//      int32 i32 = 5;
+//      int64 i64 = 7;
+//      float fp32 = 10;
+//      double fp64 = 11;
+//      string string = 12;
+//      bytes binary = 13;
+//      // Timestamp in units of microseconds since the UNIX epoch.
+//      int64 timestamp = 14;
+//      // Date in units of days since the UNIX epoch.
+//      int32 date = 16;
+//      // Time in units of microseconds past midnight
+//      int64 time = 17;
+//      IntervalYearToMonth interval_year_to_month = 19;
+//      IntervalDayToSecond interval_day_to_second = 20;
+//      string fixed_char = 21;
+//      VarChar var_char = 22;
+//      bytes fixed_binary = 23;
+//      Decimal decimal = 24;
+//      Struct struct = 25;
+//      Map map = 26;
+//      // Timestamp in units of microseconds since the UNIX epoch.
+//      int64 timestamp_tz = 27;
+//      bytes uuid = 28;
+//      Type null = 29; // a typed null literal
+//      List list = 30;
+//      Type.List empty_list = 31;
+//      Type.Map empty_map = 32;
+
+unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformCastExpr(const substrait::Expression &sexpr) {
+	const auto &scast = sexpr.cast();
+	auto cast_type = SubstraitToDuckType(scast.type());
+	auto cast_child = TransformExpr(scast.input());
+	return make_unique<CastExpression>(cast_type, move(cast_child));
+}
 
 unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformExpr(const substrait::Expression &sexpr) {
 	switch (sexpr.rex_type_case()) {
@@ -153,6 +214,9 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformExpr(const substrait::E
 		return TransformScalarFunctionExpr(sexpr);
 	case substrait::Expression::RexTypeCase::kIfThen:
 		return TransformIfThenExpr(sexpr);
+	case substrait::Expression::RexTypeCase::kCast:
+		return TransformCastExpr(sexpr);
+	case substrait::Expression::RexTypeCase::kSubquery:
 	default:
 		throw InternalException("Unsupported expression type " + to_string(sexpr.rex_type_case()));
 	}
@@ -359,7 +423,9 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformRootOp(const substrait::RelRoot
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformPlan() {
 	D_ASSERT(!plan.relations().empty());
-	return TransformRootOp(plan.relations(0).root());
+	auto d_plan = TransformRootOp(plan.relations(0).root());
+	d_plan->Print();
+	return d_plan;
 }
 
 } // namespace duckdb

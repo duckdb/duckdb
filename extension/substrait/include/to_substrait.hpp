@@ -68,6 +68,8 @@ private:
 	void TransformNotNullExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr, uint64_t col_offset);
 	void TransformCaseExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr);
 
+	//! Transforms a DuckDB Logical Type into a Substrait Type
+	::substrait::Type DuckToSubstraitType(LogicalType &d_type);
 	//! Methods to transform DuckDB Filters to Substrait Expression
 	substrait::Expression *TransformFilter(uint64_t col_idx, duckdb::TableFilter &dfilter);
 	substrait::Expression *TransformIsNotNullFilter(uint64_t col_idx, duckdb::TableFilter &dfilter);

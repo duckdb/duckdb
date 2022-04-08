@@ -75,6 +75,87 @@ void DuckDBToSubstrait::TransformVarchar(Value &dval, substrait::Expression &sex
 	string duck_str = dval.GetValue<string>();
 	sval.set_string(dval.GetValue<string>());
 }
+::substrait::Type DuckDBToSubstrait::DuckToSubstraitType(LogicalType &d_type) {
+	::substrait::Type s_type;
+	switch (d_type.id()) {
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::DECIMAL: {
+		auto s_decimal = new substrait::Type_Decimal();
+		s_type.set_allocated_decimal(s_decimal);
+		break;
+	}
+	case LogicalTypeId::UTINYINT: {
+		// FIXME: Support for unsigned integer types?
+		auto s_integer = new substrait::Type_I32();
+		s_type.set_allocated_i32(s_integer);
+		break;
+	}
+	case LogicalTypeId::INTEGER: {
+		auto s_integer = new substrait::Type_I32();
+		s_type.set_allocated_i32(s_integer);
+		break;
+	}
+	case LogicalTypeId::DOUBLE: {
+		auto s_double = new substrait::Type_FP64();
+		s_type.set_allocated_fp64(s_double);
+		break;
+	}
+	case LogicalTypeId::BIGINT: {
+		auto s_bigint = new substrait::Type_I64();
+		s_type.set_allocated_i64(s_bigint);
+		break;
+	}
+	case LogicalTypeId::DATE: {
+		auto s_date = new substrait::Type_Date();
+		s_type.set_allocated_date(s_date);
+		break;
+	}
+	case LogicalTypeId::VARCHAR: {
+		auto s_varchar = new substrait::Type_VarChar();
+		s_type.set_allocated_varchar(s_varchar);
+		break;
+	}
+	case LogicalTypeId::BOOLEAN: {
+		auto s_bool = new substrait::Type_Boolean();
+		s_type.set_allocated_bool_(s_bool);
+		break;
+	}
+	default:
+		throw InternalException("Type not supported: " + d_type.ToString());
+	}
+	return s_type;
+}
+
+//      bool boolean = 1;
+//      int32 i8 = 2;
+//      int32 i16 = 3;
+//      int32 i32 = 5;
+//      int64 i64 = 7;
+//      float fp32 = 10;
+//      double fp64 = 11;
+//      string string = 12;
+//      bytes binary = 13;
+//      // Timestamp in units of microseconds since the UNIX epoch.
+//      int64 timestamp = 14;
+//      // Date in units of days since the UNIX epoch.
+//      int32 date = 16;
+//      // Time in units of microseconds past midnight
+//      int64 time = 17;
+//      IntervalYearToMonth interval_year_to_month = 19;
+//      IntervalDayToSecond interval_day_to_second = 20;
+//      string fixed_char = 21;
+//      VarChar var_char = 22;
+//      bytes fixed_binary = 23;
+//      Decimal decimal = 24;
+//      Struct struct = 25;
+//      Map map = 26;
+//      // Timestamp in units of microseconds since the UNIX epoch.
+//      int64 timestamp_tz = 27;
+//      bytes uuid = 28;
+//      Type null = 29; // a typed null literal
+//      List list = 30;
+//      Type.List empty_list = 31;
+//      Type.Map empty_map = 32;
 
 void DuckDBToSubstrait::TransformHugeInt(Value &dval, substrait::Expression &sexpr) {
 	// Must create a cast from decimal to hugeint
@@ -134,10 +215,9 @@ void DuckDBToSubstrait::TransformBoundRefExpression(Expression &dexpr, substrait
 
 void DuckDBToSubstrait::TransformCastExpression(Expression &dexpr, substrait::Expression &sexpr, uint64_t col_offset) {
 	auto &dcast = (BoundCastExpression &)dexpr;
-	auto sfun = sexpr.mutable_scalar_function();
-	sfun->set_function_reference(RegisterFunction("cast"));
-	TransformExpr(*dcast.child, *sfun->add_args(), col_offset);
-	sfun->add_args()->mutable_literal()->set_string(dcast.return_type.ToString());
+	auto scast = sexpr.mutable_cast();
+	TransformExpr(*dcast.child, *scast->mutable_input(), col_offset);
+	*scast->mutable_type() = DuckToSubstraitType(dcast.return_type);
 }
 
 void DuckDBToSubstrait::TransformFunctionExpression(Expression &dexpr, substrait::Expression &sexpr,
