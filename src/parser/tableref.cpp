@@ -3,6 +3,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/tableref/list.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
