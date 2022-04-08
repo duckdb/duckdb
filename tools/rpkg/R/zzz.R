@@ -1,4 +1,4 @@
-.onLoad <- function(...) {
+.onLoad <- function(libname, pkgname) {
   s3_register("dbplyr::dbplyr_edition", "duckdb_connection")
   s3_register("dbplyr::db_connection_describe", "duckdb_connection")
   s3_register("dbplyr::sql_translation", "duckdb_connection")
@@ -9,10 +9,10 @@
   s3_register("dplyr::tbl", "duckdb_connection")
 
   duckdb_env <- asNamespace("duckdb")
-  dllinfo <- library.dynam("duckdb", "duckdb", lib.loc=.libPaths(), local=FALSE)
+  dllinfo <- library.dynam(pkgname, pkgname, lib.loc=libname, local=FALSE)
   routines <- getDLLRegisteredRoutines(dllinfo)
   lapply(routines$.Call, function(symbol) {
-   assign(symbol$name, symbol, envir=duckdb_env)
+    assign(symbol$name, symbol, envir=duckdb_env)
   })
   NULL
 }
