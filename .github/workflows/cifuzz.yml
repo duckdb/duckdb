@@ -30,3 +30,30 @@ jobs:
       with:
         name: artifacts
         path: ./out/artifacts
+
+ sqlsmith-fuzzing:
+    name: SQLSmith Fuzzing
+    runs-on: ubuntu-latest
+    env:
+      BUILD_SQLSMITH: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_PARQUET: 1
+      GEN: ninja
+
+    steps:
+      - name: Dependencies
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
+
+      - name: Checkout Master
+        run: |
+            git clone https://github.com/duckdb/duckdb --depth=1
+
+      - name: Build
+        run: |
+            cd duckdb
+            make debug
+
+      - name: Fuzz
+        run: |
+            python3 scripts/run_fuzzer.py  --sqlsmith --alltypes --shell=build/debug/duckdb
