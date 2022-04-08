@@ -54,7 +54,8 @@ jobs:
         run: |
             cd duckdb
             make debug
+            cd ..
 
       - name: Fuzz
         run: |
-            python3 scripts/run_fuzzer.py  --sqlsmith --alltypes --shell=build/debug/duckdb
+            python3 scripts/run_fuzzer.py  --sqlsmith --alltypes --shell=duckdb/build/debug/duckdb
