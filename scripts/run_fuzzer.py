@@ -3,7 +3,6 @@ import requests
 import sys
 import os
 import subprocess
-import re
 import reduce_sql
 
 if 'FUZZEROFDUCKSKEY' not in os.environ:
@@ -16,6 +15,8 @@ TOKEN = os.environ['FUZZEROFDUCKSKEY']
 REPO_OWNER = 'duckdb'
 REPO_NAME = 'duckdb-fuzzer'
 
+seed = -1
+
 header = '''### To Reproduce
 ```sql
 '''
@@ -23,9 +24,11 @@ header = '''### To Reproduce
 middle = '''```
 
 ### Error Message
-```'''
+```
+'''
 
-footer = '```'
+footer = '''
+```'''
 
 fuzzer = None
 db = None
@@ -107,7 +110,7 @@ def create_db_script(db):
 
 def run_fuzzer_script(fuzzer):
     if fuzzer == 'sqlsmith':
-        return "call sqlsmith(max_queries=${MAX_QUERIES}, seed=47, verbose_output=1, log='${LAST_LOG_FILE}', complete_log='${COMPLETE_LOG_FILE}');"
+        return "call sqlsmith(max_queries=${MAX_QUERIES}, seed=${SEED}, verbose_output=1, log='${LAST_LOG_FILE}', complete_log='${COMPLETE_LOG_FILE}');"
     else:
         raise Exception("Unknown fuzzer type")
 
@@ -119,20 +122,20 @@ def run_shell_command(cmd):
     stderr = res.stderr.decode('utf8').strip()
     return (stdout, stderr, res.returncode)
 
-def extract_issue(body):
+def extract_issue(body, nr):
     try:
         splits = body.split(middle)
         sql = splits[0].lstrip(header)
         error = splits[1].rstrip(footer)
         return (sql, error)
     except:
-        print("Failed to extract SQL/error message from issue")
+        print(f"Failed to extract SQL/error message from issue {nr}")
         print(body)
         return None
 
 
 def test_reproducibility(issue, current_errors):
-    extract = extract_issue(issue['body'])
+    extract = extract_issue(issue['body'], issue['number'])
     if extract is None:
         # failed extract: leave the issue as-is
         return True
@@ -166,7 +169,7 @@ print(f'''==========================================
 ==========================================''')
 
 load_script = create_db_script(db)
-fuzzer = run_fuzzer_script(fuzzer).replace('${MAX_QUERIES}', str(max_queries)).replace('${LAST_LOG_FILE}', last_query_log_file).replace('${COMPLETE_LOG_FILE}', complete_log_file)
+fuzzer = run_fuzzer_script(fuzzer).replace('${MAX_QUERIES}', str(max_queries)).replace('${LAST_LOG_FILE}', last_query_log_file).replace('${COMPLETE_LOG_FILE}', complete_log_file).replace('${SEED}', str(seed))
 
 print(load_script)
 print(fuzzer)
@@ -211,7 +214,7 @@ print("==============  STDERR  =================")
 print(stderr)
 print("==========================================")
 
-error_msg = re.sub('Error: near line \d+: ', '', stderr)
+error_msg = reduce_sql.sanitize_error(stderr)
 
 
 print("=========================================")

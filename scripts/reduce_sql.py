@@ -1,11 +1,19 @@
 import re
 import subprocess
 import time
+import os
 
 
 get_reduced_query = '''
 SELECT * FROM reduce_sql_statement('${QUERY}');
 '''
+
+
+def sanitize_error(err):
+    err = re.sub('Error: near line \d+: ', '', err)
+    err = err.replace(os.getcwd() + '/', '')
+    err = err.replace(os.getcwd(), '')
+    return err
 
 def run_shell_command(shell, cmd):
     command = [shell, '-csv', '--batch', '-init', '/dev/null']
@@ -40,8 +48,8 @@ def reduce(sql_query, data_load, shell, error_msg, max_time_seconds=300):
                 break
 
             (stdout, stderr, returncode) = run_shell_command(shell, data_load + reduce_candidate)
-            new_error = re.sub('Error: near line \d+: ', '', stderr)
-            if returncode == 1 and new_error == error_msg:
+            new_error = sanitize_error(stderr)
+            if new_error == error_msg:
                 sql_query = reduce_candidate
                 found_new_candidate = True
                 print("Found new reduced query")

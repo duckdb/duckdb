@@ -50,6 +50,9 @@ private:
 	void SimplifyListReplace(T &element, vector<T> &list);
 
 	template <class T>
+	void SimplifyListReplaceNull(vector<T> &list);
+
+	template <class T>
 	void SimplifyOptional(unique_ptr<T> &opt);
 
 	void Simplify(TableRef &ref);

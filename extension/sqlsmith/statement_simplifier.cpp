@@ -23,6 +23,15 @@ void StatementSimplifier::Simplification() {
 }
 
 template <class T>
+void StatementSimplifier::SimplifyReplace(T &element, T &other) {
+	auto n = move(element);
+	element = move(other);
+	Simplification();
+	other = move(element);
+	element = move(n);
+}
+
+template <class T>
 void StatementSimplifier::SimplifyList(vector<T> &list, bool is_optional) {
 	if (list.size() <= (is_optional ? 0 : 1)) {
 		return;
@@ -36,12 +45,11 @@ void StatementSimplifier::SimplifyList(vector<T> &list, bool is_optional) {
 }
 
 template <class T>
-void StatementSimplifier::SimplifyReplace(T &element, T &other) {
-	auto n = move(element);
-	element = move(other);
-	Simplification();
-	other = move(element);
-	element = move(n);
+void StatementSimplifier::SimplifyListReplaceNull(vector<T> &list) {
+	for (idx_t i = 0; i < list.size(); i++) {
+		unique_ptr<ParsedExpression> constant = make_unique<ConstantExpression>(Value());
+		SimplifyReplace(list[i], constant);
+	}
 }
 
 template <class T>
@@ -97,10 +105,6 @@ void StatementSimplifier::Simplify(TableRef &ref) {
 void StatementSimplifier::Simplify(SelectNode &node) {
 	// simplify projection list
 	SimplifyList(node.select_list, false);
-	if (node.select_list.size() == 1 && node.select_list[0]->type != ExpressionType::VALUE_CONSTANT) {
-		unique_ptr<ParsedExpression> constant = make_unique<ConstantExpression>(Value::INTEGER(1));
-		SimplifyReplace(node.select_list[0], constant);
-	}
 	// from clause
 	SimplifyOptional(node.from_table);
 	// simplify groups
@@ -152,7 +156,17 @@ void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr)
 	if (!expr) {
 		return;
 	}
-	switch (expr->GetExpressionClass()) {
+	auto expr_class = expr->GetExpressionClass();
+	switch (expr_class) {
+	case ExpressionClass::COLUMN_REF:
+	case ExpressionClass::CONSTANT:
+		return;
+	default:
+		break;
+	}
+	unique_ptr<ParsedExpression> constant = make_unique<ConstantExpression>(Value());
+	SimplifyReplace(expr, constant);
+	switch (expr_class) {
 	case ExpressionClass::CONJUNCTION: {
 		auto &conj = (ConjunctionExpression &)*expr;
 		SimplifyListReplace(expr, conj.children);
@@ -161,6 +175,7 @@ void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr)
 	case ExpressionClass::FUNCTION: {
 		auto &func = (FunctionExpression &)*expr;
 		SimplifyListReplace(expr, func.children);
+		SimplifyListReplaceNull(func.children);
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
@@ -185,11 +200,6 @@ void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr)
 	case ExpressionClass::COLLATE: {
 		auto &collate = (CollateExpression &)*expr;
 		SimplifyReplace(expr, collate.child);
-		break;
-	}
-	case ExpressionClass::SUBQUERY: {
-		unique_ptr<ParsedExpression> constant = make_unique<ConstantExpression>(Value());
-		SimplifyReplace(expr, constant);
 		break;
 	}
 	default:
