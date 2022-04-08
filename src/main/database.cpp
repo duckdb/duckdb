@@ -218,6 +218,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	}
 	config.load_extensions = new_config.load_extensions;
 	config.force_compression = new_config.force_compression;
+	config.force_compression_sorting = new_config.force_compression_sorting;
 	config.allocator = move(new_config.allocator);
 	config.checkpoint_wal_size = new_config.checkpoint_wal_size;
 	config.use_direct_io = new_config.use_direct_io;

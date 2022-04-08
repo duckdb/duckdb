@@ -98,14 +98,6 @@ static void PragmaDisableOptimizer(ClientContext &context, const FunctionParamet
 	ClientConfig::GetConfig(context).enable_optimizer = false;
 }
 
-static void PragmaEnableSortCompression(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).sort_compression = true;
-}
-
-static void PragmaDisableSortCompression(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).sort_compression = false;
-}
-
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
@@ -136,9 +128,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_checkpoint_on_shutdown", PragmaEnableCheckpointOnShutdown));
 	set.AddFunction(
 	    PragmaFunction::PragmaStatement("disable_checkpoint_on_shutdown", PragmaDisableCheckpointOnShutdown));
-	
-	set.AddFunction(PragmaFunction::PragmaStatement("enable_sort_compression", PragmaEnableSortCompression));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_sort_compression", PragmaDisableSortCompression));
 }
 
 } // namespace duckdb

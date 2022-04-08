@@ -38,6 +38,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(EnableProgressBarSetting),
                                                  DUCKDB_LOCAL(ExplainOutputSetting),
                                                  DUCKDB_GLOBAL(ForceCompressionSetting),
+                                                 DUCKDB_GLOBAL(ForceCompressionSortingSetting),
                                                  DUCKDB_LOCAL(LogQueryPathSetting),
                                                  DUCKDB_GLOBAL(MaximumMemorySetting),
                                                  DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),

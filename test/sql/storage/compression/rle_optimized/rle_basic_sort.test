@@ -2,11 +2,14 @@
 # description: Test sorting before RLE compression
 # group: [rle]
 
-statement ok
-PRAGMA force_compression = 'rle'
+# load the DB from disk
+load __TEST_DIR__/test_rle.db
 
 statement ok
-PRAGMA disable_sort_compression
+PRAGMA force_checkpoint;
+
+statement ok
+PRAGMA force_compression = 'rle'
 
 statement ok
 CREATE TABLE test (a INTEGER);
@@ -33,7 +36,7 @@ SELECT * FROM test;
 2
 
 statement ok
-PRAGMA enable_sort_compression
+PRAGMA force_compression_sorting = true
 
 statement ok
 DROP TABLE IF EXISTS test;
