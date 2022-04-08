@@ -1,6 +1,8 @@
 recursive-include tests *.py
 recursive-include duckdb_query_graph *.js *.css
-recursive-include duckdb *.h *.hpp *.cpp
+recursive-include _duckdb_extension *.h *.hpp *.cpp
+recursive-include duckdb *.py
 include duckdb_python.cpp
 recursive-include src *.h *.hpp *.cpp
 recursive-include duckdb-stubs *.pyi
+include cibw.toml
