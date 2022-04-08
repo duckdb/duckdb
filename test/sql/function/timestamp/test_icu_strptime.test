@@ -13,24 +13,24 @@ PRAGMA enable_verification
 
 # Parse TZ
 query I
-select strptime_icu('2022-03-05 17:59:17.877 CST', '%Y-%m-%d %H:%M:%S.%g %Z');
+select strptime_tz('2022-03-05 17:59:17.877 CST', '%Y-%m-%d %H:%M:%S.%g %Z');
 ----
 2022-03-05 23:59:17.877+00
 
 # NULLs
 query I
-select strptime_icu('2022-03-05 17:59:17.877 CST', NULL);
+select strptime_tz('2022-03-05 17:59:17.877 CST', NULL);
 ----
 NULL
 
 query I
-select strptime_icu(NULL, '%Y-%m-%d %H:%M:%S.%g %Z');
+select strptime_tz(NULL, '%Y-%m-%d %H:%M:%S.%g %Z');
 ----
 NULL
 
 # Missing TZ_NAME should use client setting
 query I
-select strptime_icu('2022-03-05 17:59:17.877', '%Y-%m-%d %H:%M:%S.%g');
+select strptime_tz('2022-03-05 17:59:17.877', '%Y-%m-%d %H:%M:%S.%g');
 ----
 2022-03-06 01:59:17.877+00
 
@@ -56,7 +56,7 @@ CREATE TABLE abbrevs AS (
 
 # Full zone names
 query II
-SELECT strptime_icu('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
+SELECT strptime_tz('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
 FROM zones
 ORDER BY tstz
 ----
@@ -101,7 +101,7 @@ ORDER BY tstz
 
 # Abbreviations
 query II
-SELECT strptime_icu('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
+SELECT strptime_tz('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
 FROM abbrevs
 ORDER BY tstz
 ----
@@ -171,7 +171,7 @@ CREATE TABLE offsets AS (
 );
 
 query II
-SELECT strptime_icu('2022-03-05 17:59:17.877 ' || utc_offset, '%Y-%m-%d %H:%M:%S.%g %z') tstz, utc_offset
+SELECT strptime_tz('2022-03-05 17:59:17.877 ' || utc_offset, '%Y-%m-%d %H:%M:%S.%g %z') tstz, utc_offset
 FROM offsets
 ORDER BY tstz
 ----
@@ -225,7 +225,7 @@ INSERT INTO multiples VALUES
 ;
 
 query I
-SELECT strptime_icu(s, f) FROM multiples;
+SELECT strptime_tz(s, f) FROM multiples;
 ----
 2022-03-05 23:59:17.877+00
 2022-03-06 01:59:17.877+00
@@ -236,8 +236,8 @@ SELECT strptime_icu(s, f) FROM multiples;
 
 # Invalid format
 statement error
-select strptime_icu('2022-03-05 17:59:17.877 CST', '%C');
+select strptime_tz('2022-03-05 17:59:17.877 CST', '%C');
 
 # Parse error
 statement error
-select strptime_icu('2022-03-05 17:59:17.877 CST', '%Y-%m-%d %H:%M:%S.%g');
+select strptime_tz('2022-03-05 17:59:17.877 CST', '%Y-%m-%d %H:%M:%S.%g');

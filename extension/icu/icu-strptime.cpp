@@ -183,7 +183,7 @@ struct ICUStrftime : public ICUDateFunc {
 };
 
 void RegisterICUStrptimeFunctions(ClientContext &context) {
-	ICUStrptime::AddBinaryTimestampFunction("strptime_icu", context);
+	ICUStrptime::AddBinaryTimestampFunction("strptime_tz", context);
 	ICUStrftime::AddBinaryTimestampFunction("strftime", context);
 }
 
