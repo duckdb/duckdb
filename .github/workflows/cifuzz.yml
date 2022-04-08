@@ -1,5 +1,5 @@
 name: CIFuzz
-on: [pull_request]
+on: [push, pull_request]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -10,6 +10,7 @@ env:
 
 jobs:
   Fuzzing:
+    name: OSSFuzz
     runs-on: ubuntu-latest
     steps:
     - name: Build Fuzzers
