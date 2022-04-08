@@ -31,7 +31,7 @@ jobs:
         name: artifacts
         path: ./out/artifacts
 
- sqlsmith-fuzzing:
+  sqlsmith-fuzzing:
     name: SQLSmith Fuzzing
     runs-on: ubuntu-latest
     env:
