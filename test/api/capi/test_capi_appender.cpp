@@ -418,6 +418,12 @@ TEST_CASE("Test append timestamp in C API", "[capi]") {
 	status = duckdb_appender_flush(appender);
 	REQUIRE(status == DuckDBSuccess);
 
+	status = duckdb_appender_close(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_destroy(&appender);
+	REQUIRE(status == DuckDBSuccess);
+
 	result = tester.Query("SELECT * FROM test");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Fetch<string>(0, 0) == "2022-04-09 15:56:37.544");
