@@ -4,8 +4,6 @@
 #include "duckdb/common/file_system.hpp"
 #include "sqllogic_test_runner.hpp"
 
-using namespace duckdb;
-
 namespace duckdb {
 
 bool TestForceStorage() {
@@ -19,7 +17,7 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Usage: sql_extractor /path/to/test.text\n");
 		return 1;
 	}
-	SQLLogicTestRunner runner(":memory:");
+	duckdb::SQLLogicTestRunner runner(":memory:");
 	runner.output_sql = true;
 	runner.ExecuteFile(argv[1]);
 	return 0;
