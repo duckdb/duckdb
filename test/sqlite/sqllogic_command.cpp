@@ -108,6 +108,10 @@ void Query::ExecuteInternal() {
 		TestResultHelper::PrintLineSep();
 	}
 
+	if (runner.output_sql) {
+		fprintf(stdout, "%s;\n", sql_query.c_str());
+		return;
+	}
 	auto result = ExecuteQuery(connection, file_name, query_line, sql_query);
 
 	TestResultHelper helper(*this, *result);
@@ -129,6 +133,10 @@ void Statement::ExecuteInternal() {
 	}
 
 	query_break(query_line);
+	if (runner.output_sql) {
+		fprintf(stdout, "%s;\n", sql_query.c_str());
+		return;
+	}
 	auto result = ExecuteQuery(connection, file_name, query_line, sql_query);
 
 	TestResultHelper helper(*this, *result);
