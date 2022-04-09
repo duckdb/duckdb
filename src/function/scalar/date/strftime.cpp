@@ -1151,6 +1151,9 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 		if (!error.empty()) {
 			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
 		}
+		if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
+			bound_function.return_type = LogicalType::TIMESTAMP_TZ;
+		}
 	}
 	return make_unique<StrpTimeBindData>(format);
 }
