@@ -130,6 +130,22 @@ void BaseAppender::AppendValueInternal(T input) {
 	case LogicalTypeId::DOUBLE:
 		AppendValueInternal<T, double>(col, input);
 		break;
+	case LogicalTypeId::DECIMAL:
+		switch (col.GetType().InternalType()) {
+		case PhysicalType::INT8:
+			AppendValueInternal<T, int8_t>(col, input);
+			break;
+		case PhysicalType::INT16:
+			AppendValueInternal<T, int16_t>(col, input);
+			break;
+		case PhysicalType::INT32:
+			AppendValueInternal<T, int32_t>(col, input);
+			break;
+		default:
+			AppendValueInternal<T, int64_t>(col, input);
+			break;
+		}
+		break;
 	case LogicalTypeId::DATE:
 		AppendValueInternal<T, date_t>(col, input);
 		break;
