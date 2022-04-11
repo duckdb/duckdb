@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/main/config.hpp"
 
 #include "duckdb/common/sort/sort.hpp"
 
@@ -18,8 +19,13 @@ struct ListSortBindData : public FunctionData {
 	LogicalType return_type;
 	LogicalType child_type;
 
+	vector<LogicalType> types;
+	vector<LogicalType> payload_types;
+
 	ClientContext &context;
 	unique_ptr<GlobalSortState> global_sort_state;
+	RowLayout payload_layout;
+	vector<BoundOrderByNode> orders;
 
 	unique_ptr<FunctionData> Copy() override;
 };
@@ -28,6 +34,24 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
                                    LogicalType &child_type_p, ClientContext &context_p)
     : order_type(order_type_p), null_order(null_order_p), return_type(return_type_p), child_type(child_type_p),
       context(context_p) {
+
+	// get the vector types
+	types.emplace_back(LogicalType::USMALLINT);
+	types.emplace_back(child_type);
+	D_ASSERT(types.size() == 2);
+
+	// get the payload types
+	payload_types.emplace_back(LogicalType::UINTEGER);
+	D_ASSERT(payload_types.size() == 1);
+
+	// initialize the payload layout
+	payload_layout.Initialize(payload_types);
+
+	// get the BoundOrderByNode
+	auto idx_col_expr = make_unique_base<Expression, BoundReferenceExpression>(LogicalType::USMALLINT, 0);
+	auto lists_col_expr = make_unique_base<Expression, BoundReferenceExpression>(child_type, 1);
+	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, move(idx_col_expr));
+	orders.emplace_back(order_type, null_order, move(lists_col_expr));
 }
 
 unique_ptr<FunctionData> ListSortBindData::Copy() {
@@ -65,7 +89,7 @@ void SinkDataChunk(Vector *child_vector, SelectionVector &sel, idx_t offset_list
 
 static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
-	D_ASSERT(args.ColumnCount() == 1 || args.ColumnCount() == 3);
+	D_ASSERT(args.ColumnCount() >= 1 && args.ColumnCount() <= 3);
 	auto count = args.size();
 	Vector &lists = args.data[0];
 
@@ -80,31 +104,9 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (ListSortBindData &)*func_expr.bind_info;
 
-	// get the vector types
-	vector<LogicalType> types;
-	types.emplace_back(LogicalType::USMALLINT);
-	types.emplace_back(info.child_type);
-	D_ASSERT(types.size() == 2);
-
-	// get the payload types
-	vector<LogicalType> payload_types;
-	payload_types.emplace_back(LogicalType::UINTEGER);
-	D_ASSERT(payload_types.size() == 1);
-
-	// get the BoundOrderByNode
-	vector<BoundOrderByNode> orders;
-	auto idx_col_expr = make_unique_base<Expression, BoundReferenceExpression>(LogicalType::USMALLINT, 0);
-	auto lists_col_expr = make_unique_base<Expression, BoundReferenceExpression>(info.child_type, 1);
-	orders.emplace_back(info.order_type, info.null_order, move(idx_col_expr));
-	orders.emplace_back(info.order_type, info.null_order, move(lists_col_expr));
-
-	// initialize the payload layout
-	RowLayout payload_layout;
-	payload_layout.Initialize(payload_types);
-
 	// initialize the global and local sorting state
 	auto &buffer_manager = BufferManager::GetBufferManager(info.context);
-	info.global_sort_state = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
+	info.global_sort_state = make_unique<GlobalSortState>(buffer_manager, info.orders, info.payload_layout);
 	auto &global_sort_state = *info.global_sort_state;
 	LocalSortState local_sort_state;
 	local_sort_state.Initialize(global_sort_state, buffer_manager);
@@ -163,7 +165,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 			// lists_indices vector is full, sink
 			if (offset_lists_indices == STANDARD_VECTOR_SIZE) {
-				SinkDataChunk(&child_vector, sel, offset_lists_indices, types, payload_types, payload_vector,
+				SinkDataChunk(&child_vector, sel, offset_lists_indices, info.types, info.payload_types, payload_vector,
 				              local_sort_state, data_to_sort, lists_indices);
 				offset_lists_indices = 0;
 			}
@@ -178,8 +180,8 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 
 	if (offset_lists_indices != 0) {
-		SinkDataChunk(&child_vector, sel, offset_lists_indices, types, payload_types, payload_vector, local_sort_state,
-		              data_to_sort, lists_indices);
+		SinkDataChunk(&child_vector, sel, offset_lists_indices, info.types, info.payload_types, payload_vector,
+		              local_sort_state, data_to_sort, lists_indices);
 	}
 
 	if (data_to_sort) {
@@ -196,7 +198,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 		for (;;) {
 			DataChunk result_chunk;
-			result_chunk.Initialize(payload_types);
+			result_chunk.Initialize(info.payload_types);
 			result_chunk.SetCardinality(0);
 			scanner.Scan(result_chunk);
 			if (result_chunk.size() == 0) {
@@ -222,10 +224,8 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 }
 
 static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
-
-	D_ASSERT(bound_function.arguments.size() == 1 || bound_function.arguments.size() == 3);
-	D_ASSERT(arguments.size() == 1 || arguments.size() == 3);
+                                             vector<unique_ptr<Expression>> &arguments, OrderType &order,
+                                             OrderByNullType &null_order) {
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
@@ -237,14 +237,41 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 	bound_function.return_type = arguments[0]->return_type;
 	auto child_type = ListType::GetChildType(arguments[0]->return_type);
 
-	// mimic SQLite default behavior
-	auto order = OrderType::ASCENDING;
-	auto null_order = OrderByNullType::NULLS_FIRST;
+	return make_unique<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
+}
 
-	// get custom order and null order (if provided)
-	if (arguments.size() == 3) {
+OrderByNullType GetNullOrder(vector<unique_ptr<Expression>> &arguments, idx_t idx) {
 
-		// get the sorting order
+	if (!arguments[idx]->IsFoldable()) {
+		throw InvalidInputException("Null sorting order must be a constant");
+	}
+	Value null_order_value = ExpressionExecutor::EvaluateScalar(*arguments[idx]);
+	auto null_order_name = null_order_value.ToString();
+	std::transform(null_order_name.begin(), null_order_name.end(), null_order_name.begin(), ::toupper);
+	if (null_order_name != "NULLS FIRST" && null_order_name != "NULLS LAST") {
+		throw InvalidInputException("Null sorting order must be either NULLS FIRST or NULLS LAST");
+	}
+
+	if (null_order_name == "NULLS LAST") {
+		return OrderByNullType::NULLS_LAST;
+	}
+	return OrderByNullType::NULLS_FIRST;
+}
+
+static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
+
+	D_ASSERT(bound_function.arguments.size() >= 1 && bound_function.arguments.size() <= 3);
+	D_ASSERT(arguments.size() >= 1 && arguments.size() <= 3);
+
+	// set default values
+	auto &config = DBConfig::GetConfig(context);
+	auto order = config.default_order_type;
+	auto null_order = config.default_null_order;
+
+	// get the sorting order
+	if (arguments.size() >= 2) {
+
 		if (!arguments[1]->IsFoldable()) {
 			throw InvalidInputException("Sorting order must be a constant");
 		}
@@ -256,43 +283,86 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 		}
 		if (order_name == "DESC") {
 			order = OrderType::DESCENDING;
-		}
-
-		// get the null sorting order
-		if (!arguments[2]->IsFoldable()) {
-			throw InvalidInputException("Null sorting order must be a constant");
-		}
-		Value null_order_value = ExpressionExecutor::EvaluateScalar(*arguments[2]);
-		auto null_order_name = null_order_value.ToString();
-		std::transform(null_order_name.begin(), null_order_name.end(), null_order_name.begin(), ::toupper);
-		if (null_order_name != "NULLS FIRST" && null_order_name != "NULLS LAST") {
-			throw InvalidInputException("Null sorting order must be either NULLS FIRST or NULLS LAST");
-		}
-		if (null_order_name == "NULLS LAST") {
-			null_order = OrderByNullType::NULLS_LAST;
+		} else {
+			order = OrderType::ASCENDING;
 		}
 	}
 
-	return make_unique<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
+	// get the null sorting order
+	if (arguments.size() == 3) {
+		null_order = GetNullOrder(arguments, 2);
+	}
+
+	return ListSortBind(context, bound_function, arguments, order, null_order);
+}
+
+static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, ScalarFunction &bound_function,
+                                                    vector<unique_ptr<Expression>> &arguments) {
+
+	D_ASSERT(bound_function.arguments.size() == 1 || bound_function.arguments.size() == 2);
+	D_ASSERT(arguments.size() == 1 || arguments.size() == 2);
+
+	// set (reverse) default values
+	auto &config = DBConfig::GetConfig(context);
+	auto order = (config.default_order_type == OrderType::ASCENDING) ? OrderType::DESCENDING : OrderType::ASCENDING;
+	auto null_order = config.default_null_order;
+
+	// get the null sorting order
+	if (arguments.size() == 2) {
+		null_order = GetNullOrder(arguments, 1);
+	}
+
+	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 
 void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
 
-	ScalarFunction list({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
-	                    false, false, ListSortBind);
+	// normal sort
 
-	ScalarFunction list_custom_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                 LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false, ListSortBind);
+	// one parameter: list
+	ScalarFunction sort({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
+	                    false, false, ListNormalSortBind);
+
+	// two parameters: list, order
+	ScalarFunction sort_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
+	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false, ListNormalSortBind);
+
+	// three parameters: list, order, null order
+	ScalarFunction sort_orders({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false, ListNormalSortBind);
 
 	ScalarFunctionSet list_sort("list_sort");
-	list_sort.AddFunction(list);
-	list_sort.AddFunction(list_custom_order);
+	list_sort.AddFunction(sort);
+	list_sort.AddFunction(sort_order);
+	list_sort.AddFunction(sort_orders);
 	set.AddFunction(list_sort);
 
 	ScalarFunctionSet array_sort("array_sort");
-	array_sort.AddFunction(list);
-	array_sort.AddFunction(list_custom_order);
+	array_sort.AddFunction(sort);
+	array_sort.AddFunction(sort_order);
+	array_sort.AddFunction(sort_orders);
 	set.AddFunction(array_sort);
+
+	// reverse sort
+
+	// one parameter: list
+	ScalarFunction sort_reverse({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
+	                            ListSortFunction, false, false, ListReverseSortBind);
+
+	// two parameters: list, null order
+	ScalarFunction sort_reverse_null_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
+	                                       LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false,
+	                                       ListReverseSortBind);
+
+	ScalarFunctionSet list_reverse_sort("list_reverse_sort");
+	list_reverse_sort.AddFunction(sort_reverse);
+	list_reverse_sort.AddFunction(sort_reverse_null_order);
+	set.AddFunction(list_reverse_sort);
+
+	ScalarFunctionSet array_reverse_sort("array_reverse_sort");
+	array_reverse_sort.AddFunction(sort_reverse);
+	array_reverse_sort.AddFunction(sort_reverse_null_order);
+	set.AddFunction(array_reverse_sort);
 }
 
 } // namespace duckdb

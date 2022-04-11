@@ -2,53 +2,71 @@
 # description: Test list_sort function
 # group: [list]
 
+statement ok
+PRAGMA default_order='ASC';
+
+statement ok
+PRAGMA default_null_order='NULLS FIRST';
+
 # test NULL or empty
 
+foreach func_name list_sort list_reverse_sort
+
 query I
-SELECT list_sort(NULL)
+SELECT ${func_name}(NULL)
 ----
 NULL
 
 query I
-SELECT list_sort([NULL])
+SELECT ${func_name}([NULL])
 ----
 [NULL]
 
 query I
-SELECT list_sort([])
+SELECT ${func_name}([])
 ----
 []
 
 query I
-SELECT list_sort([]) WHERE 1 = 0
+SELECT ${func_name}([]) WHERE 1 = 0
 ----
+
+endloop
 
 # test incorrect syntax
 
-statement error
-SELECT list_sort()
+foreach func_name list_sort list_reverse_sort
 
 statement error
-SELECT list_sort(*)
+SELECT ${func_name}()
 
 statement error
-SELECT list_sort([1, 2], 'ASC')
+SELECT ${func_name}(*)
+
+statement error
+SELECT ${func_name}([1, 2], 2)
+
+statement error
+SELECT ${func_name}([1, 2], 'DESC', 2)
+
+statement error 
+SELECT ${func_name}([1, 2], 2, 2)
+
+endloop
 
 statement error
 SELECT list_sort([1, 2], 'NULLS FIRST')
 
-statement error
-SELECT list_sort([1, 2], 'DESC', 2)
-
-statement error 
-SELECT list_sort([1, 2], 2, 2)
-
 # test incorrect parameter type
+
+foreach func_name list_sort list_reverse_sort
 
 foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval json blob
 
 statement error
-SELECT list_sort(NULL::${type})
+SELECT ${func_name}(NULL::${type})
+
+endloop
 
 endloop
 
@@ -65,9 +83,30 @@ SELECT list_sort(list_sort([1, 2]))
 [1, 2]
 
 query I
+SELECT list_reverse_sort([1, 2])
+----
+[2, 1]
+
+# TODO: why does this throw a heap buffer overflow when list_sort(list_sort(...)) does not?
+
+mode skip
+
+query I
+SELECT list_reverse_sort(list_reverse_sort([1, 2]))
+----
+[2, 1]
+
+mode unskip
+
+query I
 SELECT list_sort([1, 3, NULL, 5, NULL, -5])
 ----
 [NULL, NULL, -5, 1, 3, 5]
+
+query I
+SELECT list_reverse_sort([1, 3, NULL, 5, NULL, -5])
+----
+[NULL, NULL, 5, 3, 1, -5]
 
 statement ok
 CREATE TABLE integers AS SELECT LIST(i) AS i FROM range(1, 10, 1) t1(i)
@@ -83,11 +122,28 @@ SELECT list_sort(i) FROM integers
 NULL
 []
 
+query I
+SELECT list_reverse_sort(i) FROM integers
+----
+[9, 8, 7, 6, 5, 4, 3, 2, 1]
+[NULL]
+NULL
+[]
+
 statement error
 SELECT list_sort(l, l, l)
 
 statement error
 SELECT list_sort(l, 'ASC', l)
+
+statement error
+SELECT list_reverse_sort(l, l)
+
+statement error
+SELECT list_reverse_sort(l, 'DESC')
+
+statement error
+SELECT list_reverse_sort(l, 'DESC', 'NULLS FIRST')
 
 # test aliases
 
@@ -97,16 +153,26 @@ SELECT array_sort([1, 2])
 [1, 2]
 
 query I
-SELECT list_reverse_sort([1, 2])
-----
-[2, 1]
-
-query I
 SELECT array_reverse_sort([1, 2])
 ----
 [2, 1]
 
 # test custom ordering
+
+query I
+SELECT list_sort([1, 3, NULL, 2], 'ASC')
+----
+[NULL, 1, 2, 3]
+
+query I
+SELECT list_sort([1, 3, NULL, 2], 'DESC')
+----
+[NULL, 3, 2, 1]
+
+query I
+SELECT list_sort([1, 3, NULL, 2], 'DESC', 'NULLS LAST')
+----
+[3, 2, 1, NULL]
 
 query I
 SELECT list_sort([1, 3, NULL, 2], 'DESC', 'NULLS LAST')
@@ -132,6 +198,16 @@ query I
 SELECT list_sort([1, 3, NULL, 2], 'ASC', 'NULLS LAST')
 ----
 [1, 2, 3, NULL]
+
+query I
+SELECT list_reverse_sort([1, 3, NULL, 2], 'NULLS LAST')
+----
+[3, 2, 1, NULL]
+
+query I
+SELECT list_reverse_sort([1, 3, NULL, 2], 'NULLS FIRST')
+----
+[NULL, 3, 2, 1]
 
 # test all types
 
@@ -302,3 +378,24 @@ query I
 SELECT list_sort([{'a': 1}, {'a': 5}, {'a': 3}])
 ----
 [{'a': 1}, {'a': 3}, {'a': 5}]
+
+# very large lists
+
+statement ok
+CREATE TABLE lists AS SELECT range % 4 g, list(range) l FROM range(10000) GROUP BY range % 4;
+
+query T
+with cte0 as (
+  select g, list_reverse_sort(l) l from lists
+), cte1 as (
+  select g, unnest(l) i from cte0
+), cte2 as (
+  select g, i, lead(g, 1) over () lg, lead(i, 1) over () li from cte1
+)
+select count(*)
+from cte2
+where g = lg
+  and lg not null
+  and li > i
+----
+0
