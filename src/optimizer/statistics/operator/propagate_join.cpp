@@ -168,11 +168,17 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 	}
 
 	auto join_type = join.join_type;
+	// depending on the join type, we might need to alter the statistics
+	// LEFT, FULL, RIGHT OUTER and SINGLE joins can introduce null values
+	// this requires us to alter the statistics after this point in the query plan
+	bool adds_null_on_left = IsRightOuterJoin(join_type);
+	bool adds_null_on_right = IsLeftOuterJoin(join_type) || join_type == JoinType::SINGLE;
+
 	vector<ColumnBinding> left_bindings, right_bindings;
-	if (IsRightOuterJoin(join_type)) {
+	if (adds_null_on_left) {
 		left_bindings = join.children[0]->GetColumnBindings();
 	}
-	if (IsLeftOuterJoin(join_type)) {
+	if (adds_null_on_right) {
 		right_bindings = join.children[1]->GetColumnBindings();
 	}
 
@@ -188,10 +194,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 		break;
 	}
 
-	// now depending on the join type, we might need to alter the statistics
-	// LEFT, FULL and RIGHT OUTER joins can introduce null values
-	// this requires us to alter the statistics after this point in the query plan
-	if (IsLeftOuterJoin(join_type)) {
+	if (adds_null_on_right) {
 		// left or full outer join: set IsNull() to true for all rhs statistics
 		for (auto &binding : right_bindings) {
 			auto stats = statistics_map.find(binding);
@@ -200,7 +203,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 			}
 		}
 	}
-	if (IsRightOuterJoin(join_type)) {
+	if (adds_null_on_left) {
 		// right or full outer join: set IsNull() to true for all lhs statistics
 		for (auto &binding : left_bindings) {
 			auto stats = statistics_map.find(binding);

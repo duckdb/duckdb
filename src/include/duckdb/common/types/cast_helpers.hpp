@@ -71,6 +71,11 @@ public:
 		result.Finalize();
 		return result;
 	}
+
+	template <class T>
+	static std::string ToString(T value) {
+		return std::to_string(value);
+	}
 };
 
 template <>
@@ -81,6 +86,9 @@ template <>
 int NumericHelper::UnsignedLength(uint32_t value);
 template <>
 int NumericHelper::UnsignedLength(uint64_t value);
+
+template <>
+std::string NumericHelper::ToString(hugeint_t value);
 
 struct DecimalToString {
 	template <class SIGNED, class UNSIGNED>

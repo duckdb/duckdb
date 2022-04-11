@@ -16,10 +16,8 @@ SELECT 27::HUGEINT << 0
 ----
 27
 
-query I
+statement error
 SELECT -27::HUGEINT << 1
-----
-0
 
 # large shifts
 query II
@@ -40,15 +38,17 @@ select 1::HUGEINT << 64;
 
 
 # out of bounds shifts
-query II
-select 1::HUGEINT << 200, '1329227995784915872903807060280344576'::HUGEINT << 50;
-----
-0	0
+statement error
+select 1::HUGEINT << 200
 
-query II
-SELECT 27::HUGEINT << -1, 100::HUGEINT << '1329227995784915872903807060280344576'::HUGEINT
-----
-0	0
+statement error
+SELECT '1329227995784915872903807060280344576'::HUGEINT << 50;
+
+statement error
+SELECT 27::HUGEINT << -1
+
+statement error
+SELECT 100::HUGEINT << '1329227995784915872903807060280344576'::HUGEINT
 
 # right-shift
 query I
@@ -147,12 +147,8 @@ select 1 >> 170141183460469231731687303715884105727::hugeint;
 ----
 0
 
-query I
+statement error
 select 1::hugeint << 1000;
-----
-0
 
-query I
+statement error
 select 1 << 170141183460469231731687303715884105727::hugeint;
-----
-0

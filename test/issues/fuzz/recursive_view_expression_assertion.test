@@ -1,0 +1,12 @@
+# name: test/issues/fuzz/recursive_view_expression_assertion.test
+# description: Issue #3354: Assertion Failed at expression_iterator.cpp:187
+# group: [fuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create view strings as (with recursive t(a) as (select 1 union select a+1 from t where a < 3) select * from t order by a);
+
+statement ok
+SELECT a, (SELECT a FROM strings i2 WHERE a=(SELECT SUM(a) FROM strings i2 WHERE i2.a>i1.a)) FROM strings i1 ORDER BY 1;
