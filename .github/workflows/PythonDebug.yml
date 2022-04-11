@@ -41,7 +41,7 @@ jobs:
         apt-get update -y -qq
         apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev
 
-    - name: Install Python 3.7
+    - name: Install Python 3.9
       run: |
         wget https://www.python.org/ftp/python/3.9.9/Python-3.9.9.tgz
         tar xvf Python-3.9.9.tgz
@@ -55,6 +55,12 @@ jobs:
         python3.9 -m pip install requests
         python3.9 -m pip install cibuildwheel
         python3.9 -m pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy "requests>=2.26" "pyarrow==7.0"
+
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+        chmod +x cmake-3.21.3-linux-x86_64.sh
+        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
     - name: Build
       run: make debug
