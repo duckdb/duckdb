@@ -98,6 +98,24 @@ void LoopCommand::ExecuteInternal() {
 	runner.running_loops.pop_back();
 }
 
+static void OutputSQLQuery(const string &sql_query) {
+	string query = sql_query;
+	if (StringUtil::EndsWith(sql_query, "\n")) {
+		// ends with a newline: don't add one
+		if (!StringUtil::EndsWith(sql_query, ";\n")) {
+			// no semicolon though
+			query[query.size() - 1] = ';';
+			query += "\n";
+		}
+	} else {
+		if (!StringUtil::EndsWith(sql_query, ";")) {
+			query += ";";
+		}
+		query += "\n";
+	}
+	fprintf(stderr, "%s", query.c_str());
+}
+
 void Query::ExecuteInternal() {
 	auto connection = CommandConnection();
 
@@ -109,7 +127,7 @@ void Query::ExecuteInternal() {
 	}
 
 	if (runner.output_sql) {
-		fprintf(stdout, "%s;\n", sql_query.c_str());
+		OutputSQLQuery(sql_query);
 		return;
 	}
 	auto result = ExecuteQuery(connection, file_name, query_line, sql_query);
@@ -134,7 +152,7 @@ void Statement::ExecuteInternal() {
 
 	query_break(query_line);
 	if (runner.output_sql) {
-		fprintf(stdout, "%s;\n", sql_query.c_str());
+		OutputSQLQuery(sql_query);
 		return;
 	}
 	auto result = ExecuteQuery(connection, file_name, query_line, sql_query);
