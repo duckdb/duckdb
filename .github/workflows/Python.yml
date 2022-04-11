@@ -99,7 +99,12 @@ jobs:
       run: |
         yum install -y gcc gcc-c++ git cmake make
         yum install -y epel-release
-        yum install -y make gcc perl-core pcre-devel wget zlib-devel
+        yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
+
+    - name: Install AWS CLI
+      run: |
+        python3 -m pip install awscli
+        aws --version
 
     - name: Install i686 dependencies
       if: ${{matrix.arch == 'i686'}}
