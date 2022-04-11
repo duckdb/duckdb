@@ -66,7 +66,6 @@ jobs:
     name: CentOS 7 Extensions
     runs-on: ubuntu-latest
     container: centos:7
-    needs: linux-python3-9
     strategy:
       matrix:
         arch: ['i686', 'x86_64']
@@ -113,6 +112,7 @@ jobs:
         python3.7 --version
         python3.7 -m pip install pip
         python3.7 -m pip install requests awscli
+        aws --version
 
     - name: Install i686 dependencies
       if: ${{matrix.arch == 'i686'}}
