@@ -101,6 +101,19 @@ jobs:
         yum install -y epel-release
         yum install -y make gcc perl-core pcre-devel wget zlib-devel
 
+    - name: Install Python 3.7
+      run: |
+        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
+        tar xvf Python-3.7.12.tgz
+        cd Python-3.7.12
+        mkdir -p pythonbin
+        ./configure --with-ensurepip=install
+        make -j
+        make install
+        python3.7 --version
+        python3.7 -m pip install pip
+        python3.7 -m pip install requests awscli
+
     - name: Install i686 dependencies
       if: ${{matrix.arch == 'i686'}}
       run: |
