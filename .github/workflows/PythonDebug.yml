@@ -29,6 +29,10 @@ jobs:
       FORCE_WARN_UNUSED: 1
 
     steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
     - name: Install
       run: |
         apt-get update -y -qq
