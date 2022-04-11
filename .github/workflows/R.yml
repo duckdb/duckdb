@@ -80,7 +80,6 @@ jobs:
     - name: Version Check
       run: |
         ldd --version ldd
-        python3.7 --version
         git --version
 
     - name: Install CMake
