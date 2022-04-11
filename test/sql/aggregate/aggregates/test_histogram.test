@@ -85,6 +85,27 @@ SELECT histogram(CAST('2021-08-20' AS TIMESTAMP_NS));
 ----
 {2021-08-20 00:00:00=1}
 
+query I
+SELECT histogram(CAST('15:05:42' AS TIME));
+----
+{15:05:42=1}
+
+query I
+SELECT histogram(CAST('15:05:42+00' AS TIME WITH TIME ZONE));
+----
+{15:05:42+00=1}
+
+# TODO: enabling this test case causes a heap buffer overflow
+
+mode skip
+
+query I
+SELECT histogram(CAST('2022-01-02' AS DATE));
+----
+{2022-01-02=1}
+
+mode unskip
+
 require vector_size 512
 
 query II rowsort

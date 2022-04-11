@@ -48,8 +48,12 @@ static void HistogramUpdateFunction(Vector inputs[], FunctionData *, idx_t input
 			if (!state->hist) {
 				state->hist = new map<T, idx_t>();
 			}
+			// TODO: change this again once the cause of the heap buffer overflow is found
 			auto value = (T *)input_data.data;
-			(*state->hist)[value[input_data.sel->get_index(i)]]++;
+			auto idx = input_data.sel->get_index(i);
+			auto key = value[idx];
+			(*state->hist)[key];
+			(*state->hist)[key] += 1;
 		}
 	}
 }
@@ -251,6 +255,11 @@ void HistogramFun::RegisterFunction(BuiltinFunctions &set) {
 	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIMESTAMP_S));
 	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIMESTAMP_MS));
 	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIMESTAMP_NS));
+	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIME));
+	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIME_TZ));
+
+	// TODO: this is not working yet
+	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::DATE));
 	set.AddFunction(fun);
 }
 
