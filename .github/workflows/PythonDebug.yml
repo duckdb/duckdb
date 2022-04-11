@@ -41,6 +41,7 @@ jobs:
         python3.7 -m pip install pip
         python3.7 -m pip install requests
         python3.7 -m pip install cibuildwheel
+        pwd
         cd ..
 
     - name: Build
