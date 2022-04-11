@@ -98,20 +98,11 @@ jobs:
       run: |
         yum install -y gcc gcc-c++ git cmake make
         yum install -y epel-release
-        yum install -y make gcc perl-core pcre-devel wget zlib-devel
+        yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
 
-    - name: Install Python 3.7
+    - name: Install AWS CLI
       run: |
-        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
-        tar xvf Python-3.7.12.tgz
-        cd Python-3.7.12
-        mkdir -p pythonbin
-        ./configure --with-ensurepip=install
-        make -j
-        make install
-        python3.7 --version
-        python3.7 -m pip install pip
-        python3.7 -m pip install requests awscli
+        python3 -m pip install awscli
         aws --version
 
     - name: Install i686 dependencies
