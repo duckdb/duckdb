@@ -30,10 +30,79 @@ env:
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
+
+  r-test-extension:
+    name: Extension for R test
+    runs-on: ubuntu-latest
+    container: ubuntu:16.04
+    env:
+      GEN: ninja
+      DISABLE_MAIN_DUCKDB_LIBRARY: 1
+      BUILD_VISUALIZER: 1
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_HTTPFS: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      BUILD_SUBSTRAIT_EXTENSION: 1
+      TREAT_WARNINGS_AS_ERRORS: 1
+      FORCE_WARN_UNUSED: 1
+      STATIC_OPENSSL: 1
+      OPENSSL_ROOT_DIR: /usr/local/ssl
+
+    steps:
+    - name: Install
+      run: |
+        apt-get update -y -qq
+        apt-get install -y -qq software-properties-common
+        add-apt-repository ppa:git-core/ppa
+        apt-get update -y -qq
+        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven
+
+    - name: Install OpenSSL 1.1.1
+      run: |
+        apt-get install build-essential checkinstall zlib1g-dev -y -qq
+        wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
+        tar -xf openssl-1.1.1c.tar.gz
+        cd openssl-1.1.1c
+        ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl -static zlib
+        make
+        make install
+        echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
+        ldconfig -v
+
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Version Check
+      run: |
+        ldd --version ldd
+        python3.7 --version
+        git --version
+
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+        chmod +x cmake-3.21.3-linux-x86_64.sh
+        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+
+    - name: Build
+      run: |
+        make
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: r-test-extensions
+        path: |
+          build/release/extension/*/*.duckdb_extension
+
   rstats-linux:
     name: R Package Linux
     runs-on: ubuntu-20.04
-
+    needs: r-test-extension
     env:
       LIBARROW_BINARY : 'false'
       ARROW_RUNTIME_SIMD_LEVEL : 'AVX2'
@@ -50,6 +119,11 @@ jobs:
       with:
         r-version: 'devel'
 
+    - uses: actions/download-artifact@v3
+      with:
+        name: r-test-extensions
+        path: /tmp
+
     - name: Install
       env:
         GITHUB_PAT: ${{ github.token }}
@@ -60,6 +134,7 @@ jobs:
 
     - name: Prepare
       run: |
+        find /tmp -maxdepth 2 -type f -name "*.duckdb_extension"
         cd tools/rpkg
         ./configure
         R CMD build .
@@ -68,7 +143,7 @@ jobs:
       run: |
         cd tools/rpkg
         R CMD INSTALL -d duckdb_*.tar.gz
-        (cd tests && R -f testthat.R)
+        (cd tests && DUCKDB_R_TEST_EXTENSION_REQUIRED=1 R -f testthat.R)
 
     - name: R CMD check
       run: |
