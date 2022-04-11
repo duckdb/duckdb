@@ -59,9 +59,9 @@ if os.name == 'nt':
     toolchain_args = ['/wd4244', '/wd4267', '/wd4200', '/wd26451', '/wd26495', '/D_CRT_SECURE_NO_WARNINGS']
 else:
     # macos/linux
-    toolchain_args = ['-std=c++11', '-g0']
+    toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g', '-fsanitize=address']
     if 'DUCKDEBUG' in os.environ:
-        toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g']
+        toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g', '-fsanitize=address']
 if 'DUCKDB_INSTALL_USER' in os.environ and 'install' in sys.argv:
     sys.argv.append('--user')
 
