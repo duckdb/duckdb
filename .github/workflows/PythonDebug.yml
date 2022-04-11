@@ -40,9 +40,8 @@ jobs:
         python3.7 --version
         python3.7 -m pip install pip
         python3.7 -m pip install requests
-
-    - name: PIP Install
-      run: pip install cibuildwheel twine
+        python3.7 -m pip install cibuildwheel
+        python3.7 -m pip install twine
 
     - name: Build
       run: |
