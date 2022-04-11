@@ -12,7 +12,7 @@ set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sqlite>
     PARENT_SCOPE)
 
-if(WIN32)
+if(NOT WIN32)
   add_executable(sql_extractor sql_extractor.cpp)
   target_link_libraries(sql_extractor duckdb test_helpers test_sqlite)
 endif()
