@@ -133,7 +133,7 @@ jobs:
 
     - name: Prepare
       run: |
-        find /tmp -maxdepth 2 -type f -name "*.duckdb_extension"
+        ls /tmp
         cd tools/rpkg
         ./configure
         R CMD build .
