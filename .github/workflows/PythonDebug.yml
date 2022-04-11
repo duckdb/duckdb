@@ -39,21 +39,21 @@ jobs:
 
     - name: Install Python 3.7
       run: |
-        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
-        tar xvf Python-3.7.12.tgz
-        cd Python-3.7.12
+        wget https://www.python.org/ftp/python/3.9.9/Python-3.9.9.tgz
+        tar xvf Python-3.9.9.tgz
+        cd Python-3.9.9
         mkdir -p pythonbin
         ./configure --with-ensurepip=install --with-pydebug  
         make -j
         make install
-        python3.7 --version
-        python3.7 -m pip install pip
-        python3.7 -m pip install requests
-        python3.7 -m pip install cibuildwheel
-        python3.7 -m pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy "requests>=2.26" "pyarrow==7.0"
+        python3.9 --version
+        python3.9 -m pip install pip
+        python3.9 -m pip install requests
+        python3.9 -m pip install cibuildwheel
+        python3.9 -m pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy "requests>=2.26" "pyarrow==7.0"
 
     - name: Build
       run: make debug
 
     - name: Run Tests
-      run: python3.7 -m pytest {project}/tests/fast
+      run: python3.9 -m pytest {project}/tests/fast
