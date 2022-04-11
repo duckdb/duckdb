@@ -53,7 +53,6 @@ private:
 	void TransformBigInt(duckdb::Value &dval, substrait::Expression &sexpr);
 	void TransformDate(duckdb::Value &dval, substrait::Expression &sexpr);
 	void TransformVarchar(duckdb::Value &dval, substrait::Expression &sexpr);
-	void TransformHugeInt(duckdb::Value &dval, substrait::Expression &sexpr);
 	void TransformBoolean(duckdb::Value &dval, substrait::Expression &sexpr);
 	void TransformDecimal(duckdb::Value &dval, substrait::Expression &sexpr);
 

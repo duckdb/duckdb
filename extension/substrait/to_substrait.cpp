@@ -78,9 +78,18 @@ void DuckDBToSubstrait::TransformVarchar(Value &dval, substrait::Expression &sex
 ::substrait::Type DuckDBToSubstrait::DuckToSubstraitType(LogicalType &d_type) {
 	::substrait::Type s_type;
 	switch (d_type.id()) {
-	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::HUGEINT: {
+		// FIXME: Support for hugeint types?
+		auto s_decimal = new substrait::Type_Decimal();
+		s_decimal->set_scale(38);
+		s_decimal->set_precision(0);
+		s_type.set_allocated_decimal(s_decimal);
+		break;
+	}
 	case LogicalTypeId::DECIMAL: {
 		auto s_decimal = new substrait::Type_Decimal();
+		s_decimal->set_scale(DecimalType::GetScale(d_type));
+		s_decimal->set_precision(DecimalType::GetWidth(d_type));
 		s_type.set_allocated_decimal(s_decimal);
 		break;
 	}
@@ -157,23 +166,6 @@ void DuckDBToSubstrait::TransformVarchar(Value &dval, substrait::Expression &sex
 //      Type.List empty_list = 31;
 //      Type.Map empty_map = 32;
 
-void DuckDBToSubstrait::TransformHugeInt(Value &dval, substrait::Expression &sexpr) {
-	// Must create a cast from decimal to hugeint
-	auto sfun = sexpr.mutable_scalar_function();
-	sfun->set_function_reference(RegisterFunction("cast"));
-	auto &sval = *sfun->add_args()->mutable_literal();
-	auto *allocated_decimal = new ::substrait::Expression_Literal_Decimal();
-	auto hugeint_str = dval.ToString();
-	allocated_decimal->set_scale(0);
-	allocated_decimal->set_precision((int32_t)hugeint_str.size());
-
-	auto *decimal_value = new string();
-	*decimal_value = hugeint_str;
-	allocated_decimal->set_allocated_value(decimal_value);
-	sval.set_allocated_decimal(allocated_decimal);
-	sfun->add_args()->mutable_literal()->set_string("HUGEINT");
-}
-
 void DuckDBToSubstrait::TransformBoolean(Value &dval, substrait::Expression &sexpr) {
 	auto &sval = *sexpr.mutable_literal();
 	sval.set_boolean(dval.GetValue<bool>());
@@ -195,9 +187,6 @@ void DuckDBToSubstrait::TransformConstant(Value &dval, substrait::Expression &se
 		break;
 	case LogicalTypeId::VARCHAR:
 		TransformVarchar(dval, sexpr);
-		break;
-	case LogicalTypeId::HUGEINT:
-		TransformHugeInt(dval, sexpr);
 		break;
 	case LogicalTypeId::BOOLEAN:
 		TransformBoolean(dval, sexpr);

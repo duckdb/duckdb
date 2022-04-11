@@ -13,6 +13,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types.hpp"
 
 #include "substrait/plan.pb.h"
 
@@ -152,7 +153,8 @@ LogicalType SubstraitToDuckDB::SubstraitToDuckType(const ::substrait::Type &s_ty
 	} else if (s_type.has_i32()) {
 		return LogicalType(LogicalTypeId::INTEGER);
 	} else if (s_type.has_decimal()) {
-		return LogicalType(LogicalTypeId::DECIMAL);
+		auto &s_decimal_type = s_type.decimal();
+		return LogicalType::DECIMAL(s_decimal_type.precision(), s_decimal_type.scale());
 	} else if (s_type.has_i64()) {
 		return LogicalType(LogicalTypeId::BIGINT);
 	} else if (s_type.has_date()) {
