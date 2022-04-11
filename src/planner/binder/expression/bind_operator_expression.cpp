@@ -86,9 +86,21 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	case ExpressionType::ARRAY_SLICE:
 		function_name = "array_slice";
 		break;
-	case ExpressionType::STRUCT_EXTRACT:
+	case ExpressionType::STRUCT_EXTRACT: {
+		D_ASSERT(op.children.size() == 2);
+		D_ASSERT(op.children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(op.children[1]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		auto &extract_exp = (BoundExpression &)*op.children[0];
+		auto &name_exp = (BoundExpression &)*op.children[1];
+		if (extract_exp.expr->return_type.id() != LogicalTypeId::STRUCT &&
+		    extract_exp.expr->return_type.id() != LogicalTypeId::SQLNULL) {
+			return BindResult(
+			    StringUtil::Format("Cannot extract field %s from expression \"%s\" because it is not a struct",
+			                       name_exp.ToString(), extract_exp.ToString()));
+		}
 		function_name = "struct_extract";
 		break;
+	}
 	case ExpressionType::ARRAY_CONSTRUCTOR:
 		function_name = "list_value";
 		break;

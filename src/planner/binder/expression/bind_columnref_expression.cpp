@@ -94,7 +94,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(move(base));
 	children.push_back(make_unique_base<ParsedExpression, ConstantExpression>(Value(move(field_name))));
-	auto extract_fun = make_unique<FunctionExpression>("struct_extract", move(children));
+	auto extract_fun = make_unique<OperatorExpression>(ExpressionType::STRUCT_EXTRACT, move(children));
 	return move(extract_fun);
 }
 
