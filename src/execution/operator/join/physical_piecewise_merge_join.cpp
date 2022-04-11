@@ -513,22 +513,19 @@ struct BlockMergeInfo {
 	GlobalSortState &state;
 	//! The block being scanned
 	const idx_t block_idx;
-	//! The start position being read from the block
-	const idx_t base_idx;
 	//! The number of not-NULL values in the block (they are at the end)
 	const idx_t not_null;
 	//! The current offset in the block
 	idx_t &entry_idx;
 	SelectionVector result;
 
-	BlockMergeInfo(GlobalSortState &state, idx_t block_idx, idx_t base_idx, idx_t &entry_idx, idx_t not_null)
-	    : state(state), block_idx(block_idx), base_idx(base_idx), not_null(not_null), entry_idx(entry_idx),
-	      result(STANDARD_VECTOR_SIZE) {
+	BlockMergeInfo(GlobalSortState &state, idx_t block_idx, idx_t &entry_idx, idx_t not_null)
+	    : state(state), block_idx(block_idx), not_null(not_null), entry_idx(entry_idx), result(STANDARD_VECTOR_SIZE) {
 	}
 };
 
-static idx_t SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const idx_t result_count,
-                                const idx_t left_cols = 0) {
+static void SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const idx_t result_count,
+                               const idx_t left_cols = 0) {
 	// There should only be one sorted block if they have been sorted
 	D_ASSERT(info.state.sorted_blocks.size() == 1);
 	SBScanState read_state(info.state.buffer_manager, info.state);
@@ -537,8 +534,7 @@ static idx_t SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const 
 
 	// We have to create pointers for the entire block
 	// because unswizzle works on ranges not selections.
-	const auto first_idx = info.result.get_index(0);
-	read_state.SetIndices(info.block_idx, info.base_idx + first_idx);
+	read_state.SetIndices(info.block_idx, 0);
 	read_state.PinData(sorted_data);
 	const auto data_ptr = read_state.DataPtr(sorted_data);
 
@@ -548,27 +544,27 @@ static idx_t SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const 
 
 	// Set up the data pointers for the values that are actually referenced
 	// and normalise the selection vector to zero
-	data_ptr_t row_ptr = data_ptr;
 	const idx_t &row_width = sorted_data.layout.GetRowWidth();
 
-	auto prev_idx = first_idx;
-	info.result.set_index(0, 0);
+	auto prev_idx = info.result.get_index(0);
+	SelectionVector gsel(result_count);
 	idx_t addr_count = 0;
-	data_pointers[addr_count++] = row_ptr;
+	gsel.set_index(0, addr_count);
+	data_pointers[addr_count] = data_ptr + prev_idx * row_width;
 	for (idx_t i = 1; i < result_count; ++i) {
 		const auto row_idx = info.result.get_index(i);
-		info.result.set_index(i, row_idx - first_idx);
-		if (row_idx == prev_idx) {
-			continue;
+		if (row_idx != prev_idx) {
+			data_pointers[++addr_count] = data_ptr + row_idx * row_width;
+			prev_idx = row_idx;
 		}
-		row_ptr += (row_idx - prev_idx) * row_width;
-		data_pointers[addr_count++] = row_ptr;
-		prev_idx = row_idx;
+		gsel.set_index(i, addr_count);
 	}
+	++addr_count;
+
 	// Unswizzle the offsets back to pointers (if needed)
 	if (!sorted_data.layout.AllConstant() && info.state.external) {
-		const auto next = prev_idx + 1;
-		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(), next);
+		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(),
+		                                 addr_count);
 	}
 
 	// Deserialize the payload data
@@ -577,10 +573,8 @@ static idx_t SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const 
 		const auto col_offset = sorted_data.layout.GetOffsets()[col_idx];
 		auto &col = payload.data[left_cols + col_idx];
 		RowOperations::Gather(addresses, *sel, col, *sel, addr_count, col_offset, col_idx);
-		col.Slice(info.result, result_count);
+		col.Slice(gsel, result_count);
 	}
-
-	return first_idx;
 }
 
 static void MergeJoinPinSortingBlock(SBScanState &scan, const idx_t block_idx) {
@@ -769,8 +763,8 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 
 			if (comp_res <= cmp) {
 				// left side smaller: found match
-				l.result.set_index(result_count, sel_t(l.entry_idx - l.base_idx));
-				r.result.set_index(result_count, sel_t(r.entry_idx - r.base_idx));
+				l.result.set_index(result_count, sel_t(l.entry_idx));
+				r.result.set_index(result_count, sel_t(r.entry_idx));
 				result_count++;
 				// move left side forward
 				l.entry_idx++;
@@ -852,13 +846,13 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		}
 
 		const auto lhs_not_null = state.lhs_count - state.lhs_has_null;
-		BlockMergeInfo left_info(*state.lhs_global_state, 0, 0, state.left_position, lhs_not_null);
+		BlockMergeInfo left_info(*state.lhs_global_state, 0, state.left_position, lhs_not_null);
 
 		const auto &rblock = rsorted.radix_sorting_data[state.right_chunk_index];
 		const auto rhs_not_null =
 		    SortedBlockNotNull(state.right_base, rblock.count, gstate.rhs_count - gstate.rhs_has_null);
 		BlockMergeInfo right_info(gstate.rhs_global_sort_state, state.right_chunk_index, state.right_position,
-		                          state.right_position, rhs_not_null);
+		                          rhs_not_null);
 
 		idx_t result_count = MergeJoinComplexBlocks(left_info, right_info, conditions[0].comparison);
 		if (result_count == 0) {
@@ -877,7 +871,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			for (idx_t c = 0; c < state.lhs_payload.ColumnCount(); ++c) {
 				chunk.data[c].Slice(state.lhs_payload.data[c], left_info.result, result_count);
 			}
-			const auto first_idx = SliceSortedPayload(chunk, right_info, result_count, left_cols);
+			SliceSortedPayload(chunk, right_info, result_count, left_cols);
 			chunk.SetCardinality(result_count);
 
 			auto sel = FlatVector::IncrementalSelectionVector();
@@ -921,9 +915,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			}
 			if (gstate.rhs_found_match) {
 				//	Absolute position of the block + start position inside that block
-				const idx_t base_index = right_info.base_idx + first_idx;
 				for (idx_t i = 0; i < result_count; i++) {
-					gstate.rhs_found_match[base_index + right_info.result[sel->get_index(i)]] = true;
+					gstate.rhs_found_match[state.right_base + right_info.result[sel->get_index(i)]] = true;
 				}
 			}
 			chunk.SetCardinality(result_count);
