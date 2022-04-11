@@ -444,6 +444,39 @@ void RowGroup::ScanCommitted(RowGroupScanState &state, DataChunk &result, TableS
 	}
 }
 
+void RowGroup::ScanToDataChunk(RowGroupScanState &state, DataChunk &result) {
+	auto &column_ids = state.parent.column_ids;
+	while (true) {
+		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row) {
+			// exceeded the amount of rows to scan
+			return;
+		}
+		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
+		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row - current_row);
+		
+		idx_t count;
+		SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
+		count = max_count;
+		
+		// scan all vectors completely: full scan without deletions or table filters
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			auto column = column_ids[i];
+			if (column == COLUMN_IDENTIFIER_ROW_ID) {
+				// scan row id
+				D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
+				result.data[i].Sequence(this->start + current_row, 1);
+			} else {
+				columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
+												   false);
+			}
+		}
+		
+		result.SetCardinality(count);
+		state.vector_index++;
+		break;
+	}
+}
+
 ChunkInfo *RowGroup::GetChunkInfo(idx_t vector_idx) {
 	if (!version_info) {
 		return nullptr;
@@ -649,7 +682,24 @@ void RowGroup::MergeStatistics(idx_t column_idx, BaseStatistics &other) {
 RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
-
+	vector<LogicalType> types;
+	vector<column_t> column_ids;
+	
+	// collect logical types by interating the columns
+	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
+		auto &column = columns[column_idx];
+		types.push_back(column->type);
+		column_ids.push_back(column->column_index);
+	}
+	
+	// scan row group and determine convert to datachunks
+	DataChunk result;
+	TableScanState scan_state;
+	scan_state.column_ids = column_ids;
+	scan_state.max_row = 4;
+	scan_state.row_group_scan_state.max_row = 4;
+	ScanToDataChunk(scan_state.row_group_scan_state, result);
+	
 	// checkpoint the individual columns of the row group
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		auto &column = columns[column_idx];

@@ -143,6 +143,8 @@ private:
 
 	template <TableScanType TYPE>
 	void TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result);
+	
+	void ScanToDataChunk(RowGroupScanState &state, DataChunk &result);
 
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
 	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);
