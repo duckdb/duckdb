@@ -1,0 +1,13 @@
+# name: test/sql/function/list/list_distinct.test
+# group: [list]
+
+query I
+SELECT list_aggr([1], 'histogram')
+----
+{1=1}
+
+
+query I
+SELECT list_distinct([1, 1, 2, 2, 2, 3])
+----
+[1, 2, 3]

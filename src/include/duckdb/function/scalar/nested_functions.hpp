@@ -77,6 +77,11 @@ struct ListAggregateFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ListDistinctFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct CardinalityFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

@@ -50,9 +50,8 @@ struct StateVector {
 	Vector state_vector;
 };
 
-static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &result, bool is_aggr) {
 
-	D_ASSERT(args.ColumnCount() == 2);
 	auto count = args.size();
 	Vector &lists = args.data[0];
 
@@ -148,16 +147,28 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 		aggr.function.update(&slice, aggr.bind_info.get(), 1, state_vector_update, states_idx);
 	}
 
-	// finalize all the aggregate states
-	aggr.function.finalize(state_vector.state_vector, aggr.bind_info.get(), result, count, 0);
+	if (is_aggr) {
+		// finalize all the aggregate states
+		aggr.function.finalize(state_vector.state_vector, aggr.bind_info.get(), result, count, 0);
+	} else {
+		// TODO: finalize manually, put the HistogramState into the header to use here
+	}
 }
 
-static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
-	// the list column and the name of the aggregate function
-	D_ASSERT(bound_function.arguments.size() == 2);
-	D_ASSERT(arguments.size() == 2);
+	D_ASSERT(args.ColumnCount() == 2);
+	return ListAggregatesFunction(args, state, result, true);
+}
+
+static void ListDistinctFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+
+	D_ASSERT(args.ColumnCount() == 1);
+	return ListAggregatesFunction(args, state, result, false);
+}
+
+static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments, bool is_aggr) {
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
@@ -167,15 +178,17 @@ static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, Scalar
 
 	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
 	auto list_child_type = ListType::GetChildType(arguments[0]->return_type);
-	bound_function.return_type = list_child_type;
+	// bound_function.return_type = arguments[0]->return_type;
 
-	if (!arguments[1]->IsFoldable()) {
-		throw InvalidInputException("Aggregate function name must be a constant");
+	std::string function_name = "histogram";
+	if (is_aggr) {
+		if (!arguments[1]->IsFoldable()) {
+			throw InvalidInputException("Aggregate function name must be a constant");
+		}
+		// get the function name
+		Value function_value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+		function_name = function_value.ToString();
 	}
-
-	// get the function name
-	Value function_value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-	auto function_name = StringValue::Get(function_value);
 
 	vector<LogicalType> types;
 	types.push_back(list_child_type);
@@ -203,19 +216,54 @@ static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, Scalar
 	auto &best_function = func->functions[best_function_idx];
 	auto bound_aggr_function = AggregateFunction::BindAggregateFunction(context, best_function, move(children));
 
-	bound_function.arguments[0] =
-	    LogicalType::LIST(bound_aggr_function->function.arguments[0]); // for proper casting of the vectors
+	// for proper casting of the vectors
+	bound_function.arguments[0] = LogicalType::LIST(bound_aggr_function->function.arguments[0]);
+
 	bound_function.return_type = bound_aggr_function->function.return_type;
+	// list_distinct returns a list without duplicates
+	if (!is_aggr) {
+		bound_function.return_type = arguments[0]->return_type;
+	}
+
 	return make_unique<ListAggregatesBindData>(bound_function.return_type, move(bound_aggr_function));
+}
+
+static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, ScalarFunction &bound_function,
+                                                  vector<unique_ptr<Expression>> &arguments) {
+
+	// the list column and the name of the aggregate function
+	D_ASSERT(bound_function.arguments.size() == 2);
+	D_ASSERT(arguments.size() == 2);
+
+	return ListAggregatesBind(context, bound_function, arguments, true);
+}
+
+static unique_ptr<FunctionData> ListDistinctBind(ClientContext &context, ScalarFunction &bound_function,
+                                                 vector<unique_ptr<Expression>> &arguments) {
+
+	// the list column
+	D_ASSERT(bound_function.arguments.size() == 1);
+	D_ASSERT(arguments.size() == 1);
+
+	return ListAggregatesBind(context, bound_function, arguments, false);
 }
 
 ScalarFunction ListAggregateFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
-	                      ListAggregateFunction, false, false, ListAggregateBind, nullptr, nullptr, nullptr);
+	                      ListAggregateFunction, false, false, ListAggregateBind);
+}
+
+ScalarFunction ListDistinctFun::GetFunction() {
+	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
+	                      ListDistinctFunction, false, false, ListDistinctBind);
 }
 
 void ListAggregateFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"list_aggregate", "array_aggregate", "list_aggr", "array_aggr"}, GetFunction());
+}
+
+void ListDistinctFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction({"list_distinct", "array_distinct"}, GetFunction());
 }
 
 } // namespace duckdb
