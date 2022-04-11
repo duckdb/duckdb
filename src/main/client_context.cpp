@@ -773,12 +773,12 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
 	auto parsed_statement = move(parser.statements[0]);
 
-	verify_statements.push_back(
-	    VerifyStatement(unique_ptr_cast<SQLStatement, SelectStatement>(move(statement)), "Original statement"));
-	verify_statements.push_back(VerifyStatement(move(copied_stmt), "Copied statement"));
-	verify_statements.push_back(VerifyStatement(move(deserialized_stmt), "Deserialized statement"));
-	verify_statements.push_back(VerifyStatement(unique_ptr_cast<SQLStatement, SelectStatement>(move(parsed_statement)),
-	                                            "Parsed statement", false));
+	verify_statements.emplace_back(unique_ptr_cast<SQLStatement, SelectStatement>(move(statement)),
+	                               "Original statement");
+	verify_statements.emplace_back(move(copied_stmt), "Copied statement");
+	verify_statements.emplace_back(move(deserialized_stmt), "Deserialized statement");
+	verify_statements.emplace_back(unique_ptr_cast<SQLStatement, SelectStatement>(move(parsed_statement)),
+	                               "Parsed statement", false);
 
 	// all the statements should be equal
 	for (idx_t i = 1; i < verify_statements.size(); i++) {
