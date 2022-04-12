@@ -135,37 +135,6 @@ void DuckDBToSubstrait::TransformVarchar(Value &dval, substrait::Expression &sex
 	return s_type;
 }
 
-//      bool boolean = 1;
-//      int32 i8 = 2;
-//      int32 i16 = 3;
-//      int32 i32 = 5;
-//      int64 i64 = 7;
-//      float fp32 = 10;
-//      double fp64 = 11;
-//      string string = 12;
-//      bytes binary = 13;
-//      // Timestamp in units of microseconds since the UNIX epoch.
-//      int64 timestamp = 14;
-//      // Date in units of days since the UNIX epoch.
-//      int32 date = 16;
-//      // Time in units of microseconds past midnight
-//      int64 time = 17;
-//      IntervalYearToMonth interval_year_to_month = 19;
-//      IntervalDayToSecond interval_day_to_second = 20;
-//      string fixed_char = 21;
-//      VarChar var_char = 22;
-//      bytes fixed_binary = 23;
-//      Decimal decimal = 24;
-//      Struct struct = 25;
-//      Map map = 26;
-//      // Timestamp in units of microseconds since the UNIX epoch.
-//      int64 timestamp_tz = 27;
-//      bytes uuid = 28;
-//      Type null = 29; // a typed null literal
-//      List list = 30;
-//      Type.List empty_list = 31;
-//      Type.Map empty_map = 32;
-
 void DuckDBToSubstrait::TransformBoolean(Value &dval, substrait::Expression &sexpr) {
 	auto &sval = *sexpr.mutable_literal();
 	sval.set_boolean(dval.GetValue<bool>());
@@ -235,19 +204,19 @@ void DuckDBToSubstrait::TransformComparisonExpression(Expression &dexpr, substra
 		fname = "equal";
 		break;
 	case ExpressionType::COMPARE_LESSTHAN:
-		fname = "lessthan";
+		fname = "lt";
 		break;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		fname = "lessthanequal";
+		fname = "lte";
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		fname = "greaterthan";
+		fname = "gt";
 		break;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		fname = "greaterthanequal";
+		fname = "gte";
 		break;
 	case ExpressionType::COMPARE_NOTEQUAL:
-		fname = "notequal";
+		fname = "not_equal";
 		break;
 	default:
 		throw InternalException(ExpressionTypeToString(dexpr.type));
@@ -376,23 +345,22 @@ substrait::Expression *DuckDBToSubstrait::TransformConstantComparisonFilter(uint
 	auto &constant_filter = (ConstantFilter &)dfilter;
 	CreateFieldRef(s_scalar->add_args(), col_idx);
 	TransformConstant(constant_filter.constant, *s_scalar->add_args());
-
 	uint64_t function_id;
 	switch (constant_filter.comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		function_id = RegisterFunction("equal");
 		break;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		function_id = RegisterFunction("lessthanequal");
+		function_id = RegisterFunction("lte");
 		break;
 	case ExpressionType::COMPARE_LESSTHAN:
-		function_id = RegisterFunction("lessthan");
+		function_id = RegisterFunction("lt");
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		function_id = RegisterFunction("greaterthan");
+		function_id = RegisterFunction("gt");
 		break;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		function_id = RegisterFunction("greaterthanequal");
+		function_id = RegisterFunction("gte");
 		break;
 	default:
 		throw InternalException(ExpressionTypeToString(constant_filter.comparison_type));
@@ -422,7 +390,7 @@ substrait::Expression *DuckDBToSubstrait::TransformJoinCond(JoinCondition &dcond
 		join_comparision = "equal";
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		join_comparision = "greaterthan";
+		join_comparision = "gt";
 		break;
 	default:
 		throw InternalException("Unsupported join comparision");
@@ -579,20 +547,12 @@ substrait::Rel *DuckDBToSubstrait::TransformComparisonJoin(LogicalOperator &dop)
 	case JoinType::RIGHT:
 		sjoin->set_type(substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_RIGHT);
 		break;
-		//	case JoinType::SINGLE:
-		//		sjoin->set_type(substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_SINGLE);
-		//		break;
 	case JoinType::SEMI:
 		sjoin->set_type(substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_SEMI);
 		break;
-		//	case JoinType::MARK:
-		//		sjoin->set_type(substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_MARK);
-		//		sjoin->set_mark_index(djoin.mark_index);
-		//		break;
 	default:
 		throw InternalException("Unsupported join type " + JoinTypeToString(djoin.join_type));
 	}
-
 	// somewhat odd semantics on our side
 	if (djoin.left_projection_map.empty()) {
 		for (uint64_t i = 0; i < dop.children[0]->types.size(); i++) {
@@ -666,10 +626,16 @@ substrait::Rel *DuckDBToSubstrait::TransformGet(LogicalOperator &dop) {
 		sget->mutable_projection()->mutable_select()->add_struct_items()->set_field((int32_t)column_index);
 	}
 
-	// TODO add schema
+	// Add Table Schema
 	sget->mutable_named_table()->add_names(table_scan_bind_data.table->name);
-	//		sget->mutable_common()->mutable_direct();
-
+	auto base_schema = new ::substrait::NamedStruct();
+	for (idx_t i = 0; i < dget.names.size(); i ++){
+		if (dget.types[i].id() == LogicalTypeId::STRUCT){
+			throw std::runtime_error("Structs are not yet accepted in table scans");
+		}
+		base_schema->add_names(dget.names[i]);
+	}
+	sget->set_allocated_base_schema(base_schema);
 	return res;
 }
 
@@ -697,26 +663,12 @@ substrait::Rel *DuckDBToSubstrait::TransformOp(LogicalOperator &dop) {
 		return TransformProjection(dop);
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		return TransformComparisonJoin(dop);
-		//	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-		//		auto &djoin = (LogicalDelimJoin &)dop;
-		//		auto sjoin_rel = new substrait::Rel();
-		//		auto sjoin = sjoin_rel->mutable_join();
-		//		sjoin->set_delim_join(true);
-		//		for (auto &dexpr : djoin.duplicate_eliminated_columns) {
-		//			TransformExpr(*dexpr, *sjoin->add_duplicate_eliminated_columns());
-		//		}
-		//		ComparisonJoinTransform(dop, sop, sjoin, sjoin_rel);
-		//		return;
-		//	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		return TransformAggregateGroup(dop);
-
 	case LogicalOperatorType::LOGICAL_GET:
 		return TransformGet(dop);
-
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		return TransformCrossProduct(dop);
-
 	default:
 		throw InternalException(LogicalOperatorToString(dop.type));
 	}

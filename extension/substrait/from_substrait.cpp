@@ -91,45 +91,28 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 		return make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(children));
 	} else if (function_name == "or") {
 		return make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, move(children));
-	} else if (function_name == "lessthan" || function_name == "less") {
+	} else if (function_name == "lt") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, move(children[0]),
 		                                         move(children[1]));
-	} else if (function_name == "equal" || function_name == "equals") {
+	} else if (function_name == "equal") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(children[0]), move(children[1]));
-	} else if (function_name == "notequal" || function_name == "not_equals") {
+	} else if (function_name == "not_equals") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOTEQUAL, move(children[0]),
 		                                         move(children[1]));
-	} else if (function_name == "lessthanequal") {
+	} else if (function_name == "lte") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, move(children[0]),
 		                                         move(children[1]));
-	} else if (function_name == "greaterthanequal" || function_name == "greater_equal") {
+	} else if (function_name == "gte") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, move(children[0]),
 		                                         move(children[1]));
-	} else if (function_name == "greaterthan" || function_name == "greater") {
+	} else if (function_name == "gt") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN, move(children[0]),
 		                                         move(children[1]));
 	} else if (function_name == "is_not_null") {
 		return make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, move(children[0]));
 	} else if (function_name == "between") {
+		//! FIXME: ADD between to substrait extension
 		return make_unique<BetweenExpression>(move(children[0]), move(children[1]), move(children[2]));
-	} else if (function_name == "any") {
-		// Uh this is a subquery
-		D_ASSERT(children.size() == 1);
-		//		auto subquery = make_unique<SubqueryExpression>();
-		//		subquery->subquery = make_unique<SelectStatement>();
-		//		subquery->subquery->node = children[0]->GetQueryNode();
-		//		subquery->subquery_type = SubqueryType::SCALAR;
-		//		children.push_back(move(subquery));
-		//		return subquery;
-	}
-	if (function_name == "multiply") {
-		function_name = "*";
-	}
-	if (function_name == "subtract") {
-		function_name = "-";
-	}
-	if (function_name == "add") {
-		function_name = "+";
 	}
 	return make_unique<FunctionExpression>(function_name, move(children));
 }
@@ -167,37 +150,6 @@ LogicalType SubstraitToDuckDB::SubstraitToDuckType(const ::substrait::Type &s_ty
 		throw InternalException("Substrait type not yet supported");
 	}
 }
-
-//      bool boolean = 1;
-//      int32 i8 = 2;
-//      int32 i16 = 3;
-//      int32 i32 = 5;
-//      int64 i64 = 7;
-//      float fp32 = 10;
-//      double fp64 = 11;
-//      string string = 12;
-//      bytes binary = 13;
-//      // Timestamp in units of microseconds since the UNIX epoch.
-//      int64 timestamp = 14;
-//      // Date in units of days since the UNIX epoch.
-//      int32 date = 16;
-//      // Time in units of microseconds past midnight
-//      int64 time = 17;
-//      IntervalYearToMonth interval_year_to_month = 19;
-//      IntervalDayToSecond interval_day_to_second = 20;
-//      string fixed_char = 21;
-//      VarChar var_char = 22;
-//      bytes fixed_binary = 23;
-//      Decimal decimal = 24;
-//      Struct struct = 25;
-//      Map map = 26;
-//      // Timestamp in units of microseconds since the UNIX epoch.
-//      int64 timestamp_tz = 27;
-//      bytes uuid = 28;
-//      Type null = 29; // a typed null literal
-//      List list = 30;
-//      Type.List empty_list = 31;
-//      Type.Map empty_map = 32;
 
 unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformCastExpr(const substrait::Expression &sexpr) {
 	const auto &scast = sexpr.cast();
@@ -274,22 +226,12 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformJoinOp(const substrait::Rel &so
 	case substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_RIGHT:
 		djointype = JoinType::RIGHT;
 		break;
-		//		case substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_MARK:
-		//			djointype = JoinType::MARK;
-		//			break;
-		//		case substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_SINGLE:
-		//			djointype = JoinType::SINGLE;
-		//			break;
 	case substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_SEMI:
 		djointype = JoinType::SEMI;
 		break;
 	default:
 		throw InternalException("Unsupported join type");
 	}
-	vector<unique_ptr<ParsedExpression>> expressions;
-	//		for (auto &sexpr : sjoin.duplicate_eliminated_columns()) {
-	//			expressions.push_back(TransformExpr(sexpr));
-	//		}
 	return make_shared<JoinRelation>(TransformOp(sjoin.left())->Alias("left"),
 	                                 TransformOp(sjoin.right())->Alias("right"), TransformExpr(sjoin.expression()),
 	                                 djointype);
