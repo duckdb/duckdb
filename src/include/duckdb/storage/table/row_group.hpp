@@ -145,8 +145,9 @@ private:
 	void TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result);
 
 	bool ScanToDataChunk(RowGroupScanState &state, DataChunk &result);
-	
-//	void SortChunksLexico(DataChunk &input, )
+
+	void SortChunksLexico(DataChunk &keys, DataChunk &payload, vector<LogicalType> &types, vector<column_t> &indexes,
+	                      SelectionVector &sel_sorted);
 
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
 	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);

@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/row_group.hpp"
+#include <utility>
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/exception.hpp"
@@ -12,11 +13,57 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/common/sort/sort.hpp"
 
 namespace duckdb {
 
 constexpr const idx_t RowGroup::ROW_GROUP_VECTOR_COUNT;
 constexpr const idx_t RowGroup::ROW_GROUP_SIZE;
+
+struct RowGroupSortBindData : public FunctionData {
+	RowGroupSortBindData(vector<LogicalType> types, vector<column_t> indexes, BufferManager &buffer_manager);
+	~RowGroupSortBindData() override;
+
+	vector<LogicalType> types;
+	vector<column_t> indexes;
+	
+	BufferManager buffer_manager;
+	unique_ptr<GlobalSortState> global_sort_state;
+	RowLayout payload_layout;
+	vector<BoundOrderByNode> orders;
+
+	unique_ptr<FunctionData> Copy() override;
+};
+
+RowGroupSortBindData::RowGroupSortBindData(vector<LogicalType> types, vector<column_t> indexes,
+                                           BufferManager &buffer_manager)
+    : types(move(types)), indexes(move(indexes)) {
+	
+	// TODO: Pass in a buffer manager or do this differently
+	// create BoundOrderByNode per column to sort
+	vector<BoundOrderByNode> orders;
+	for (int i = 0; i < types.size(); ++i) {
+		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, 
+		                    make_unique<BoundReferenceExpression>(types[i], indexes[i]));
+	}
+	
+	// create payload layout
+	RowLayout payload_layout;
+	payload_layout.Initialize(types);
+	
+	// initialize the sorting states	
+	auto global_sort_state = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
+	auto &global_sort_state_ref = *global_sort_state;
+	LocalSortState local_sort_state;
+	local_sort_state.Initialize(global_sort_state_ref, buffer_manager);
+}
+
+unique_ptr<FunctionData> RowGroupSortBindData::Copy() {
+	return make_unique<RowGroupSortBindData>(types, indexes);
+}
+
+RowGroupSortBindData::~RowGroupSortBindData() {
+}
 
 RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count)
     : SegmentBase(start, count), db(db), table_info(table_info) {
@@ -475,6 +522,22 @@ void RowGroup::ScanToDataChunk(RowGroupScanState &state, DataChunk &result) {
 		break;
 	}
 	return true;
+}
+
+void RowGroup::SortChunksLexico(DataChunk &keys, DataChunk &payload, vector<LogicalType> &types,
+                                vector<column_t> &indexes, SelectionVector &sel_sorted) {
+
+	
+	// sink chunks
+	local_sort_state.SinkChunk(keys, payload);
+	
+	// add local state to global state, which sorts the data
+	global_sort_state_ref.AddLocalState(local_sort_state);
+	global_sort_state_ref.PrepareMergePhase();
+	
+	// selection vector that is to be filled with the 'sorted' payload
+	SelectionVector sel_sorted(incr_payload_count);
+	idx_t sel_sorted_idx = 0;
 }
 
 ChunkInfo *RowGroup::GetChunkInfo(idx_t vector_idx) {
