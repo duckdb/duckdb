@@ -15,6 +15,42 @@
 
 namespace duckdb {
 
+PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(const PhysicalRangeJoin &op, const idx_t child)
+    : op(op), has_null(0), count(0) {
+	// Initialize order clause expression executor and key DataChunk
+	vector<LogicalType> types;
+	for (const auto &cond : op.conditions) {
+		const auto &expr = child ? cond.right : cond.left;
+		executor.AddExpression(*expr);
+
+		types.push_back(expr->return_type);
+	}
+	keys.Initialize(types);
+}
+
+void PhysicalRangeJoin::LocalSortedTable::Sink(DataChunk &input, GlobalSortState &global_sort_state) {
+	// Initialize local state (if necessary)
+	if (!local_sort_state.initialized) {
+		local_sort_state.Initialize(global_sort_state, global_sort_state.buffer_manager);
+	}
+
+	// Obtain sorting columns
+	keys.Reset();
+	executor.Execute(input, keys);
+
+	// Count the NULLs so we can exclude them later
+	has_null += op.MergeNulls(keys);
+	count += keys.size();
+
+	//	Only sort the primary key
+	DataChunk join_head;
+	join_head.data.emplace_back(Vector(keys.data[0]));
+	join_head.SetCardinality(keys.size());
+
+	// Sink the data into the local sort state
+	local_sort_state.SinkChunk(join_head, input);
+}
+
 PhysicalRangeJoin::PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType type, unique_ptr<PhysicalOperator> left,
                                      unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                      idx_t estimated_cardinality)

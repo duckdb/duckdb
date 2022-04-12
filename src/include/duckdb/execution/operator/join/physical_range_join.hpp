@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/common/sort/sort.hpp"
 
 namespace duckdb {
 
@@ -18,6 +19,31 @@ struct GlobalSortState;
 //! PhysicalRangeJoin represents one or more inequality range join predicates between
 //! two tables
 class PhysicalRangeJoin : public PhysicalComparisonJoin {
+public:
+	class LocalSortedTable {
+	public:
+		LocalSortedTable(const PhysicalRangeJoin &op, const idx_t child);
+
+		void Sink(DataChunk &input, GlobalSortState &global_sort_state);
+
+		inline void Sort(GlobalSortState &global_sort_state) {
+			local_sort_state.Sort(global_sort_state, true);
+		}
+
+		//! The hosting operator
+		const PhysicalRangeJoin &op;
+		//! The local sort state
+		LocalSortState local_sort_state;
+		//! Local copy of the sorting expression executor
+		ExpressionExecutor executor;
+		//! Holds a vector of incoming sorting columns
+		DataChunk keys;
+		//! The number of NULL values
+		idx_t has_null;
+		//! The total number of rows
+		idx_t count;
+	};
+
 public:
 	PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType type, unique_ptr<PhysicalOperator> left,
 	                  unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
