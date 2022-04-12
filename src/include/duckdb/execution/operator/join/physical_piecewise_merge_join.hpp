@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/execution/operator/join/physical_comparison_join.hpp"
+#include "duckdb/execution/operator/join/physical_range_join.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
@@ -17,7 +17,7 @@ class MergeJoinGlobalState;
 
 //! PhysicalPiecewiseMergeJoin represents a piecewise merge loop join between
 //! two tables
-class PhysicalPiecewiseMergeJoin : public PhysicalComparisonJoin {
+class PhysicalPiecewiseMergeJoin : public PhysicalRangeJoin {
 public:
 	PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
 	                           unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
