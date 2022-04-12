@@ -79,13 +79,23 @@ SELECT list_histogram(['2021-08-20'::TIMESTAMPTZ])
 ----
 {2021-08-20 00:00:00+00=1}
 
-# types date, time, timetz
-foreach type date time timetz
+# date
+query I
+SELECT list_histogram(['2022-01-02'::DATE])
+----
+{2022-01-02=1}
 
-statement error
-SELECT list_histogram(['2021-08-20'::${type}])
+# time
+query I
+SELECT list_histogram(['15:00:07'::TIME])
+----
+{15:00:07=1}
 
-endloop
+# timetz
+query I
+SELECT list_histogram(['15:00:07'::TIMETZ])
+----
+{15:00:07+00=1}
 
 # interval
 statement error
