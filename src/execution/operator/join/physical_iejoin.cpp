@@ -67,62 +67,13 @@ PhysicalIEJoin::PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator>
 //===--------------------------------------------------------------------===//
 class IEJoinLocalState : public LocalSinkState {
 public:
-	explicit IEJoinLocalState(const PhysicalRangeJoin &op, const idx_t child) : op(op), has_null(0), count(0) {
-		// Initialize order clause expression executor and key DataChunk
-		vector<LogicalType> types;
-		for (const auto &cond : op.conditions) {
-			const auto &expr = child ? cond.right : cond.left;
-			executor.AddExpression(*expr);
+	using LocalSortedTable = PhysicalRangeJoin::LocalSortedTable;
 
-			types.push_back(expr->return_type);
-		}
-		keys.Initialize(types);
+	IEJoinLocalState(const PhysicalRangeJoin &op, const idx_t child) : table(op, child) {
 	}
 
-	//! The hosting operator
-	const PhysicalRangeJoin &op;
 	//! The local sort state
-	LocalSortState local_sort_state;
-	//! Local copy of the sorting expression executor
-	ExpressionExecutor executor;
-	//! Holds a vector of incoming sorting columns
-	DataChunk keys;
-	//! The number of NULL values
-	idx_t has_null;
-	//! The total number of rows
-	idx_t count;
-
-	void Sink(DataChunk &input, GlobalSortState &global_sort_state) {
-		// Initialize local state (if necessary)
-		if (!local_sort_state.initialized) {
-			local_sort_state.Initialize(global_sort_state, global_sort_state.buffer_manager);
-		}
-
-		// Obtain sorting columns
-		keys.Reset();
-		executor.Execute(input, keys);
-
-		// Count the NULLs so we can exclude them later
-		has_null += op.MergeNulls(keys);
-		count += keys.size();
-
-		// Sink the data into the local sort state
-		D_ASSERT(keys.ColumnCount() > 1);
-		//	Only sort the primary key
-		DataChunk join_head;
-		join_head.data.emplace_back(Vector(keys.data[0]));
-		join_head.SetCardinality(keys.size());
-
-		local_sort_state.SinkChunk(join_head, input);
-	}
-
-	void Sort(GlobalSortState &gss) {
-		local_sort_state.Sort(gss, true);
-	}
-	void Reset() {
-		has_null = 0;
-		count = 0;
-	}
+	LocalSortedTable table;
 };
 
 class IEJoinSortedTable {
@@ -159,9 +110,9 @@ public:
 	}
 
 	inline void Combine(IEJoinLocalState &lstate) {
-		global_sort_state.AddLocalState(lstate.local_sort_state);
-		has_null += lstate.has_null;
-		count += lstate.count;
+		global_sort_state.AddLocalState(lstate.table.local_sort_state);
+		has_null += lstate.table.has_null;
+		count += lstate.table.count;
 	}
 
 	inline void IntializeMatches() {
@@ -218,10 +169,10 @@ public:
 	void Sink(DataChunk &input, IEJoinLocalState &lstate) {
 		auto &table = *tables[child];
 		auto &global_sort_state = table.global_sort_state;
-		auto &local_sort_state = lstate.local_sort_state;
+		auto &local_sort_state = lstate.table.local_sort_state;
 
 		// Sink the data into the local sort state
-		lstate.Sink(input, global_sort_state);
+		lstate.table.Sink(input, global_sort_state);
 
 		// When sorting data reaches a certain size, we sort it
 		if (local_sort_state.SizeInBytes() >= table.memory_per_thread) {
@@ -263,7 +214,7 @@ void PhysicalIEJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 	gstate.tables[gstate.child]->Combine(lstate);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
-	context.thread.profiler.Flush(this, &lstate.executor, gstate.child ? "rhs_executor" : "lhs_executor", 1);
+	context.thread.profiler.Flush(this, &lstate.table.executor, gstate.child ? "rhs_executor" : "lhs_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 }
 
