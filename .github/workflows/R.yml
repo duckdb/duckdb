@@ -118,11 +118,6 @@ jobs:
       with:
         r-version: 'devel'
 
-    - uses: actions/download-artifact@v3
-      with:
-        name: r-test-extensions
-        path: /tmp
-
     - name: Install
       env:
         GITHUB_PAT: ${{ github.token }}
@@ -133,13 +128,19 @@ jobs:
 
     - name: Prepare
       run: |
-        ls /tmp
+        mkdir -p /tmp/duckdb_extensions
         cd tools/rpkg
         ./configure
         R CMD build .
 
+    - uses: actions/download-artifact@v3
+      with:
+        name: r-test-extensions
+        path: /tmp/duckdb_extensions
+
     - name: Tests
       run: |
+        ls /tmp/duckdb_extensions
         cd tools/rpkg
         R CMD INSTALL -d duckdb_*.tar.gz
         (cd tests && DUCKDB_R_TEST_EXTENSION_REQUIRED=1 R -f testthat.R)
