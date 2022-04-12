@@ -6,7 +6,7 @@
 load __TEST_DIR__/test_rle.db
 
 statement ok
-PRAGMA force_checkpoint;
+PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
 PRAGMA force_compression = 'rle'
@@ -15,12 +15,7 @@ statement ok
 CREATE TABLE test (a INTEGER);
 
 statement ok
-INSERT INTO test VALUES (1);
-INSERT INTO test VALUES (2);
-INSERT INTO test VALUES (1);
-INSERT INTO test VALUES (2);
-INSERT INTO test VALUES (1);
-INSERT INTO test VALUES (2);
+INSERT INTO test VALUES (1),(2),(1),(2),(1),(2);
 
 statement ok
 checkpoint

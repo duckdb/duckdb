@@ -449,13 +449,12 @@ void RowGroup::ScanToDataChunk(RowGroupScanState &state, DataChunk &result) {
 	while (true) {
 		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row) {
 			// exceeded the amount of rows to scan
-			return;
+			return false;
 		}
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
 		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row - current_row);
 		
 		idx_t count;
-		SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
 		count = max_count;
 		
 		// scan all vectors completely: full scan without deletions or table filters
@@ -475,6 +474,7 @@ void RowGroup::ScanToDataChunk(RowGroupScanState &state, DataChunk &result) {
 		state.vector_index++;
 		break;
 	}
+	return true;
 }
 
 ChunkInfo *RowGroup::GetChunkInfo(idx_t vector_idx) {
@@ -692,13 +692,22 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 		column_ids.push_back(column->column_index);
 	}
 	
-	// scan row group and determine convert to datachunks
+	// scan row group and convert to datachunks with correct types
 	DataChunk result;
+	result.Initialize(types);
+	
 	TableScanState scan_state;
 	scan_state.column_ids = column_ids;
-	scan_state.max_row = 4;
-	scan_state.row_group_scan_state.max_row = 4;
-	ScanToDataChunk(scan_state.row_group_scan_state, result);
+	scan_state.max_row = count;
+	bool next_chunk = true;
+	
+	InitializeScan(scan_state.row_group_scan_state);
+	while (next_chunk) {
+		next_chunk = ScanToDataChunk(scan_state.row_group_scan_state, result);
+	}
+	
+	// sort the datachunks 
+	
 	
 	// checkpoint the individual columns of the row group
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
