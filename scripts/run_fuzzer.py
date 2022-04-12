@@ -12,6 +12,14 @@ if 'FUZZEROFDUCKSKEY' not in os.environ:
 USERNAME = 'fuzzerofducks'
 TOKEN = os.environ['FUZZEROFDUCKSKEY']
 
+if len(TOKEN) == 0:
+    print("FUZZEROFDUCKSKEY is set but is empty")
+    exit(1)
+
+if len(TOKEN) != 40:
+    print("Incorrect length for FUZZEROFDUCKSKEY")
+    exit(1)
+
 REPO_OWNER = 'duckdb'
 REPO_NAME = 'duckdb-fuzzer'
 

@@ -5,9 +5,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
-env:
-  FUZZEROFDUCKSKEY: ${{ secrets.FUZZEROFDUCKSKEY }}
-
 jobs:
   Fuzzing:
     name: OSSFuzz
@@ -43,6 +40,7 @@ jobs:
       BUILD_TPCDS: 1
       BUILD_PARQUET: 1
       GEN: ninja
+      FUZZEROFDUCKSKEY: ${{ secrets.FUZZEROFDUCKSKEY }}
 
     steps:
       - name: Dependencies
