@@ -73,6 +73,7 @@ idx_t PhysicalRangeJoin::MergeNulls(DataChunk &keys) const {
 		//	Normalify the primary, as it will need to merge arbitrary validity masks
 		primary.Normalify(count);
 		auto &pvalidity = FlatVector::Validity(primary);
+		D_ASSERT(keys.ColumnCount() == conditions.size());
 		for (size_t c = 1; c < keys.data.size(); ++c) {
 			// Skip comparisons that accept NULLs
 			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {

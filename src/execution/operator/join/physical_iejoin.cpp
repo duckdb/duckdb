@@ -18,35 +18,8 @@ namespace duckdb {
 PhysicalIEJoin::PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                idx_t estimated_cardinality)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::IE_JOIN, move(cond), join_type, estimated_cardinality) {
-	// Reorder the conditions so that ranges are at the front.
-	// TODO: use stats to improve the choice?
-	// TODO: Prefer fixed length types?
-	auto conditions_p = std::move(conditions);
-	conditions.resize(conditions_p.size());
-	idx_t range_position = 0;
-	idx_t other_position = conditions_p.size();
-	for (idx_t i = 0; i < conditions_p.size(); ++i) {
-		switch (conditions_p[i].comparison) {
-		case ExpressionType::COMPARE_LESSTHAN:
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		case ExpressionType::COMPARE_GREATERTHAN:
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			conditions[range_position++] = std::move(conditions_p[i]);
-			break;
-		case ExpressionType::COMPARE_NOTEQUAL:
-		case ExpressionType::COMPARE_DISTINCT_FROM:
-			// Allowed in multi-predicate joins, but can't be first/sort.
-			conditions[--other_position] = std::move(conditions_p[i]);
-			break;
-		default:
-			// COMPARE EQUAL not supported with iejoin join
-			throw NotImplementedException("Unimplemented join type for IEJoin");
-		}
-	}
-
-	// IEJoin requires at least two comparisons.
-	D_ASSERT(range_position > 1);
+    : PhysicalRangeJoin(op, PhysicalOperatorType::IE_JOIN, move(left), move(right), move(cond), join_type,
+                        estimated_cardinality) {
 
 	// 1. let L1 (resp. L2) be the array of column X (resp. Y)
 	D_ASSERT(conditions.size() >= 2);
@@ -71,9 +44,12 @@ PhysicalIEJoin::PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator>
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 			sense = i ? OrderType::ASCENDING : OrderType::DESCENDING;
 			break;
-		default:
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			sense = i ? OrderType::DESCENDING : OrderType::ASCENDING;
 			break;
+		default:
+			throw NotImplementedException("Unimplemented join type for IEJoin");
 		}
 		lhs_orders[i].emplace_back(BoundOrderByNode(sense, OrderByNullType::NULLS_LAST, move(left)));
 		rhs_orders[i].emplace_back(BoundOrderByNode(sense, OrderByNullType::NULLS_LAST, move(right)));
@@ -84,9 +60,6 @@ PhysicalIEJoin::PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator>
 		D_ASSERT(cond.left->return_type == cond.right->return_type);
 		join_key_types.push_back(cond.left->return_type);
 	}
-
-	children.push_back(move(left));
-	children.push_back(move(right));
 }
 
 //===--------------------------------------------------------------------===//
@@ -94,12 +67,10 @@ PhysicalIEJoin::PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator>
 //===--------------------------------------------------------------------===//
 class IEJoinLocalState : public LocalSinkState {
 public:
-	explicit IEJoinLocalState(const vector<JoinCondition> &conditions, const idx_t child) : has_null(0), count(0) {
+	explicit IEJoinLocalState(const PhysicalRangeJoin &op, const idx_t child) : op(op), has_null(0), count(0) {
 		// Initialize order clause expression executor and key DataChunk
 		vector<LogicalType> types;
-		for (const auto &cond : conditions) {
-			comparisons.emplace_back(cond.comparison);
-
+		for (const auto &cond : op.conditions) {
 			const auto &expr = child ? cond.right : cond.left;
 			executor.AddExpression(*expr);
 
@@ -108,20 +79,18 @@ public:
 		keys.Initialize(types);
 	}
 
+	//! The hosting operator
+	const PhysicalRangeJoin &op;
 	//! The local sort state
 	LocalSortState local_sort_state;
 	//! Local copy of the sorting expression executor
 	ExpressionExecutor executor;
 	//! Holds a vector of incoming sorting columns
 	DataChunk keys;
-	//! The comparison list (for null merging)
-	vector<ExpressionType> comparisons;
 	//! The number of NULL values
 	idx_t has_null;
 	//! The total number of rows
 	idx_t count;
-
-	idx_t MergeKeyNulls();
 
 	void Sink(DataChunk &input, GlobalSortState &global_sort_state) {
 		// Initialize local state (if necessary)
@@ -134,7 +103,7 @@ public:
 		executor.Execute(input, keys);
 
 		// Count the NULLs so we can exclude them later
-		has_null += MergeKeyNulls();
+		has_null += op.MergeNulls(keys);
 		count += keys.size();
 
 		// Sink the data into the local sort state
@@ -155,61 +124,6 @@ public:
 		count = 0;
 	}
 };
-
-idx_t IEJoinLocalState::MergeKeyNulls() {
-	// Merge the validity masks of the comparison keys into the primary
-	// Return the number of NULLs in the resulting chunk
-	D_ASSERT(keys.ColumnCount() > 0);
-	const auto count = keys.size();
-
-	size_t all_constant = 0;
-	for (auto &v : keys.data) {
-		all_constant += int(v.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	}
-
-	auto &primary = keys.data[0];
-	if (all_constant == keys.data.size()) {
-		//	Either all NULL or no NULLs
-		for (auto &v : keys.data) {
-			if (ConstantVector::IsNull(v)) {
-				ConstantVector::SetNull(primary, true);
-				return count;
-			}
-		}
-		return 0;
-	} else if (keys.ColumnCount() > 1) {
-		//	Normalify the primary, as it will need to merge arbitrary validity masks
-		primary.Normalify(count);
-		auto &pvalidity = FlatVector::Validity(primary);
-		D_ASSERT(keys.ColumnCount() == comparisons.size());
-		for (size_t c = 1; c < keys.data.size(); ++c) {
-			// Skip comparisons that accept NULLs
-			if (comparisons[c] == ExpressionType::COMPARE_DISTINCT_FROM) {
-				continue;
-			}
-			//	Orrify the rest, as the sort code will do this anyway.
-			auto &v = keys.data[c];
-			VectorData vdata;
-			v.Orrify(count, vdata);
-			auto &vvalidity = vdata.validity;
-			if (vvalidity.AllValid()) {
-				continue;
-			}
-			pvalidity.EnsureWritable();
-			auto pmask = pvalidity.GetData();
-			if (v.GetVectorType() == VectorType::FLAT_VECTOR) {
-				//	Merge entire entries
-				const auto entry_count = pvalidity.EntryCount(count);
-				for (idx_t entry_idx = 0; entry_idx < entry_count; ++entry_idx) {
-					pmask[entry_idx] &= vvalidity.GetValidityEntry(entry_idx);
-				}
-			}
-		}
-		return count - pvalidity.CountValid(count);
-	} else {
-		return count - VectorOperations::CountNotNull(primary, count);
-	}
-}
 
 class IEJoinSortedTable {
 public:
@@ -330,7 +244,7 @@ unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &c
 		const auto &ie_sink = (IEJoinGlobalState &)*sink_state;
 		sink_child = ie_sink.child;
 	}
-	return make_unique<IEJoinLocalState>(conditions, sink_child);
+	return make_unique<IEJoinLocalState>(*this, sink_child);
 }
 
 SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
@@ -991,60 +905,10 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 
 class IEJoinState : public OperatorState {
 public:
-	explicit IEJoinState(const PhysicalIEJoin &op) : local_left(op.conditions, 0) {};
+	explicit IEJoinState(const PhysicalIEJoin &op) : local_left(op, 0) {};
 
 	IEJoinLocalState local_left;
 };
-
-static void SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,
-                               const SelectionVector &result, const idx_t result_count, const idx_t left_cols = 0) {
-	// There should only be one sorted block if they have been sorted
-	D_ASSERT(state.sorted_blocks.size() == 1);
-	SBScanState read_state(state.buffer_manager, state);
-	read_state.sb = state.sorted_blocks[0].get();
-	auto &sorted_data = *read_state.sb->payload_data;
-
-	read_state.SetIndices(block_idx, 0);
-	read_state.PinData(sorted_data);
-	const auto data_ptr = read_state.DataPtr(sorted_data);
-
-	// Set up a batch of pointers to scan data from
-	Vector addresses(LogicalType::POINTER, result_count);
-	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
-
-	// Set up the data pointers for the values that are actually referenced
-	const idx_t &row_width = sorted_data.layout.GetRowWidth();
-
-	auto prev_idx = result.get_index(0);
-	SelectionVector gsel(result_count);
-	idx_t addr_count = 0;
-	gsel.set_index(0, addr_count);
-	data_pointers[addr_count] = data_ptr + prev_idx * row_width;
-	for (idx_t i = 1; i < result_count; ++i) {
-		const auto row_idx = result.get_index(i);
-		if (row_idx != prev_idx) {
-			data_pointers[++addr_count] = data_ptr + row_idx * row_width;
-			prev_idx = row_idx;
-		}
-		gsel.set_index(i, addr_count);
-	}
-	++addr_count;
-
-	// Unswizzle the offsets back to pointers (if needed)
-	if (!sorted_data.layout.AllConstant() && state.external) {
-		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(),
-		                                 addr_count);
-	}
-
-	// Deserialize the payload data
-	auto sel = FlatVector::IncrementalSelectionVector();
-	for (idx_t col_idx = 0; col_idx < sorted_data.layout.ColumnCount(); col_idx++) {
-		const auto col_offset = sorted_data.layout.GetOffsets()[col_idx];
-		auto &col = payload.data[left_cols + col_idx];
-		RowOperations::Gather(addresses, *sel, col, *sel, addr_count, col_offset, col_idx);
-		col.Slice(gsel, result_count);
-	}
-}
 
 class IEJoinLocalSourceState : public LocalSourceState {
 public:
