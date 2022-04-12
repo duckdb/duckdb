@@ -4,9 +4,8 @@ library("testthat")
 test_that("extensions can be loaded", {
   con <- dbConnect(duckdb::duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
-
   matches = list.files(pattern='*.duckdb_extension', recursive=FALSE, full.names=TRUE)
-  matches <- c(matches, list.files('/tmp/*/*.duckdb_extension', recursive=FALSE, full.names=TRUE))
+  matches <- c(matches, list.files(path='/tmp/duckdb_extensions', pattern='*.duckdb_extension', recursive=TRUE, full.names=TRUE))
 
   require_variable <- Sys.getenv("DUCKDB_R_TEST_EXTENSION_REQUIRED")
 
