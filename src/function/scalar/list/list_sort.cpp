@@ -158,9 +158,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			continue;
 		}
 
-		auto source_idx = child_data.sel->get_index(list_entry.offset);
 		idx_t child_idx = 0;
-
 		while (child_idx < list_entry.length) {
 
 			// lists_indices vector is full, sink
@@ -170,7 +168,8 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 				offset_lists_indices = 0;
 			}
 
-			sel.set_index(offset_lists_indices, source_idx + child_idx);
+			auto source_idx = child_data.sel->get_index(list_entry.offset + child_idx);
+			sel.set_index(offset_lists_indices, source_idx);
 			lists_indices_data[offset_lists_indices] = (uint32_t)i;
 			payload_vector_data[offset_lists_indices] = incr_payload_count;
 			offset_lists_indices++;
