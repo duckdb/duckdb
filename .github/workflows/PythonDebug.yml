@@ -64,7 +64,9 @@ jobs:
         ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
     - name: Build
-      run: make debug
+      run: |
+        cd tools/pythonpkg
+        python3.9 setup.py sdist
 
     - name: Run Tests
       run: python3.9 -m pytest {project}/tests/fast
