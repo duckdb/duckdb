@@ -1,5 +1,6 @@
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
 
@@ -137,15 +138,32 @@ void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // << [bitwise_left_shift]
 //===--------------------------------------------------------------------===//
-template <class T>
-bool ShiftInRange(T shift) {
-	return shift >= 0 && shift < T(sizeof(T) * 8);
-}
 
 struct BitwiseShiftLeftOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA input, TB shift) {
-		return ShiftInRange(shift) ? input << shift : 0;
+		TA max_shift = TA(sizeof(TA) * 8);
+		if (input < 0) {
+			throw OutOfRangeException("Cannot left-shift negative number %s", NumericHelper::ToString(input));
+		}
+		if (shift < 0) {
+			throw OutOfRangeException("Cannot left-shift by negative number %s", NumericHelper::ToString(shift));
+		}
+		if (shift >= max_shift) {
+			if (input == 0) {
+				return 0;
+			}
+			throw OutOfRangeException("Left-shift value %s is out of range", NumericHelper::ToString(shift));
+		}
+		if (shift == 0) {
+			return input;
+		}
+		TA max_value = (TA(1) << (max_shift - shift - 1));
+		if (input >= max_value) {
+			throw OutOfRangeException("Overflow in left shift (%s << %s)", NumericHelper::ToString(input),
+			                          NumericHelper::ToString(shift));
+		}
+		return input << shift;
 	}
 };
 
@@ -161,10 +179,15 @@ void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // >> [bitwise_right_shift]
 //===--------------------------------------------------------------------===//
+template <class T>
+bool RightShiftInRange(T shift) {
+	return shift >= 0 && shift < T(sizeof(T) * 8);
+}
+
 struct BitwiseShiftRightOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA input, TB shift) {
-		return ShiftInRange(shift) ? input >> shift : 0;
+		return RightShiftInRange(shift) ? input >> shift : 0;
 	}
 };
 

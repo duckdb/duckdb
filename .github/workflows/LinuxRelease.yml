@@ -111,7 +111,7 @@ jobs:
         zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
         zip -j duckdb_rest-linux-amd64.zip build/release/tools/rest/duckdb_rest_server
-        zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so
+        zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh
         python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_rest-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar duckdb_odbc-linux-amd64.zip
 
     - uses: actions/upload-artifact@v2
@@ -211,8 +211,6 @@ jobs:
         else
           ./scripts/extension-upload-test.sh local
         fi
-
-
 
  linux-release-32:
     name: Linux (32 Bit)
@@ -354,25 +352,6 @@ jobs:
 
     - name: Test
       run: make allunit
-
- centos:
-    name: CentOS 7
-    runs-on: ubuntu-latest
-    container: centos:7
-    needs: linux-release-64
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: yum install -y gcc gcc-c++ git cmake make
-
-    - name: Build
-      run: make release
-
-    - name: Test
-      run: ./build/release/test/unittest
 
  release-assert:
     name: Release Assertions

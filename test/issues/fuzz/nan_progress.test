@@ -1,0 +1,17 @@
+# name: test/issues/fuzz/nan_progress.test
+# description: Issue 3366: NaN in progress bar
+# group: [fuzz]
+
+statement ok
+SET enable_progress_bar=true;
+
+statement ok
+WITH RECURSIVE t AS
+(
+	SELECT 1 AS x
+UNION
+	SELECT t1.x + t2.x + t3.x AS x
+	FROM t t1, t t2, t t3
+	WHERE t1.x < 100
+)
+SELECT * FROM t ORDER BY 1;

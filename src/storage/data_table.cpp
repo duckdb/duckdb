@@ -437,11 +437,17 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	}
 }
 
-static bool FindColumnIndex(const vector<idx_t> *keys_ptr, const vector<column_t> &index_column_ids) {
-	for (idx_t i = 0; i < keys_ptr->size(); i++) {
+static bool IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, ForeignKeyType fk_type) {
+	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !index.IsUnique() : !index.IsForeign()) {
+		return false;
+	}
+	if (fk_keys.size() != index.column_ids.size()) {
+		return false;
+	}
+	for (auto &fk_key : fk_keys) {
 		bool is_found = false;
-		for (idx_t j = 0; j < index_column_ids.size(); j++) {
-			if ((*keys_ptr)[i] == index_column_ids[j]) {
+		for (auto &index_key : index.column_ids) {
+			if (fk_key == index_key) {
 				is_found = true;
 				break;
 			}
@@ -450,8 +456,18 @@ static bool FindColumnIndex(const vector<idx_t> *keys_ptr, const vector<column_t
 			return false;
 		}
 	}
-
 	return true;
+}
+
+Index *TableIndexList::FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyType fk_type) {
+	Index *result = nullptr;
+	Scan([&](Index &index) {
+		if (IsForeignKeyIndex(fk_keys, index, fk_type)) {
+			result = &index;
+		}
+		return false;
+	});
+	return result;
 }
 
 static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context, DataChunk &chunk,
@@ -492,26 +508,24 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 	err_msgs.resize(count);
 	tran_err_msgs.resize(count);
 
+	auto fk_type = is_append ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 	// check whether or not the chunk can be inserted or deleted into the referenced table' storage
-	TableIndexList &table_indices = data_table->info->indexes;
-	table_indices.Scan([&](Index &index) {
-		if (FindColumnIndex(dst_keys_ptr, index.column_ids)) {
-			if (is_append) {
-				index.VerifyAppendForeignKey(dst_chunk, err_msgs.data());
-			} else {
-				index.VerifyDeleteForeignKey(dst_chunk, err_msgs.data());
-			}
-		}
-		return false;
-	});
-
+	auto index = data_table->info->indexes.FindForeignKeyIndex(*dst_keys_ptr, fk_type);
+	if (!index) {
+		throw InternalException("Internal Foreign Key error: could not find index to verify...");
+	}
+	if (is_append) {
+		index->VerifyAppendForeignKey(dst_chunk, err_msgs.data());
+	} else {
+		index->VerifyDeleteForeignKey(dst_chunk, err_msgs.data());
+	}
 	// check whether or not the chunk can be inserted or deleted into the referenced table' transaction local storage
 	auto &transaction = Transaction::GetTransaction(context);
 	bool transaction_check = transaction.storage.Find(data_table);
 	if (transaction_check) {
 		vector<unique_ptr<Index>> &transact_index_vec = transaction.storage.GetIndexes(data_table);
 		for (idx_t i = 0; i < transact_index_vec.size(); i++) {
-			if (FindColumnIndex(dst_keys_ptr, transact_index_vec[i]->column_ids)) {
+			if (IsForeignKeyIndex(*dst_keys_ptr, *transact_index_vec[i], fk_type)) {
 				if (is_append) {
 					transact_index_vec[i]->VerifyAppendForeignKey(dst_chunk, tran_err_msgs.data());
 				} else {

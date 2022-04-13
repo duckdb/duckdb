@@ -173,7 +173,7 @@ endloop
 
 # TEMPORAL types
 # exceptions: 
-# histogram (works only with timestamp and timestamp_tz)
+# histogram (works with everything except interval)
 # mad (works with everything except interval)
 
 # specific result
