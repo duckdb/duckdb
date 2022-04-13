@@ -242,12 +242,7 @@ setup(
     ],
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.6.0'],
-    use_scm_version = {
-         'version_scheme': 'post-release',
-         'local_scheme': 'node-and-date',
-         'relative_to': __file__,
-         'root': "../..",
-    },
+    use_scm_version = setuptools_scm_conf,
     tests_require=['pytest'],
     classifiers = [
         'Topic :: Database :: Database Engines/Servers',
