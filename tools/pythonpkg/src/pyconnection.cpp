@@ -89,6 +89,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
 	         py::arg("proto"))
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
+	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
+	         py::arg("query"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names");
 
@@ -356,6 +358,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &quer
 	vector<Value> params;
 	params.emplace_back(query);
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("get_substrait", params)->Alias(query));
+}
+
+unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
+	if (!connection) {
+		throw std::runtime_error("connection closed");
+	}
+	return connection->GetTableNames(query);
 }
 
 DuckDBPyConnection *DuckDBPyConnection::UnregisterPythonObject(const string &name) {
