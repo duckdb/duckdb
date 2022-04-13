@@ -1,13 +1,210 @@
 # name: test/sql/function/list/list_distinct.test
+# description: Test the list_distinct function
 # group: [list]
 
-query I
-SELECT list_aggr([1], 'histogram')
-----
-{1=1}
+# test null or empty
 
+query I
+SELECT list_distinct(NULL)
+----
+NULL
+
+query I
+SELECT list_distinct([NULL])
+----
+[]
+
+query I
+SELECT list_distinct([])
+----
+[]
+
+query I
+SELECT list_distinct([]) WHERE 1 = 0
+----
+
+# test incorrect syntax
+
+statement error
+SELECT list_distinct()
+
+statement error
+SELECT list_distinct(*)
+
+statement error
+SELECT list_distinct([1, 2], 2)
+
+# test incorrect parameter type
+
+foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval json blob
+
+statement error
+SELECT list_distinct(NULL::${type})
+
+endloop
+
+# other tests
 
 query I
 SELECT list_distinct([1, 1, 2, 2, 2, 3])
 ----
 [1, 2, 3]
+
+query I
+SELECT list_distinct([1, 1, NULL, 2, 2, 2, 3, NULL, NULL])
+----
+[1, 2, 3]
+
+query I
+SELECT list_distinct(list_distinct([1, 1, -5, 10, 10, 2]))
+----
+[1, -5, 10, 2]
+
+statement ok
+CREATE TABLE integers (l integer[])
+
+statment ok
+INSERT INTO integers VALUES ([1, 1, 2, 2, 2, 3]), ([1, NULL, 1, NULL])
+
+statement ok
+INSERT INTO integers VALUES ([NULL]), (NULL), ([])
+
+query I
+SELECT list_distinct(l) FROM integers
+----
+[1, 2, 3]
+[1]
+[]
+NULL
+[]
+
+# aliases
+
+query I
+SELECT array_distinct([1, 2, 2, NULL])
+----
+[1, 2]
+
+# test all types
+
+# BOOLEAN
+query I
+SELECT list_distinct([True, False, NULL, True, True, NULL])
+----
+[True, False]
+
+query I
+SELECT list_distinct([NULL::BOOLEAN])
+----
+[]
+
+# VARCHAR
+query I
+SELECT list_distinct(['aa', 'aa', 'cd', NULL, '42'])
+----
+[aa, cd, 42]
+
+query I
+SELECT list_distinct([NULL::VARCHAR])
+----
+[]
+
+# INTEGER types
+foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+
+query I
+SELECT list_distinct([1::${type}, NULL, 1::${type}])
+----
+[1]
+
+query I
+SELECT list_distinct([NULL::${type}])
+----
+[]
+
+endloop
+
+# FLOAT, DOUBLE and DECIMAL types
+
+foreach type float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
+
+statement ok
+SELECT list_distinct([1::${type}])
+
+query I
+SELECT list_distinct([NULL::${type}])
+----
+[]
+
+endloop
+
+# TEMPORAL types
+
+# date
+query I
+SELECT list_distinct(['2021-08-20'::DATE])
+----
+[2021-08-20]
+
+# time
+query I
+SELECT list_distinct(['14:59:37'::TIME])
+----
+[14:59:37]
+
+# timestamp
+query I
+SELECT list_distinct(['2021-08-20'::TIMESTAMP])
+----
+[2021-08-20 00:00:00]
+
+# timestamp s
+query I
+SELECT list_distinct(['2021-08-20'::TIMESTAMP_S])
+----
+[2021-08-20 00:00:00]
+
+# timestamp ms
+query I
+SELECT list_distinct(['2021-08-20 00:00:00.123'::TIMESTAMP_MS])
+----
+[2021-08-20 00:00:00.123]
+
+# timestamp ns
+query I
+SELECT list_distinct(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS])
+----
+[2021-08-20 00:00:00.123456]
+
+# time with time zone
+query I
+SELECT list_distinct(['14:59:37'::TIMETZ])
+----
+[14:59:37+00]
+
+# timestamp with time zone
+query I
+SELECT list_distinct(['2021-08-20'::TIMESTAMPTZ])
+----
+[2021-08-20 00:00:00+00]
+
+foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz
+
+query I
+SELECT list_distinct([NULL::${type}])
+----
+[]
+
+endloop
+
+# JSON
+
+query I
+SELECT list_distinct(['{a: 1}'::JSON, '{a: 1}'::JSON])
+----
+[{a: 1}]
+
+query I
+SELECT list_distinct([NULL::JSON])
+----
+[]

@@ -178,6 +178,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	if (is_aggr) {
 		// finalize all the aggregate states
 		aggr.function.finalize(state_vector.state_vector, aggr.bind_info.get(), result, count, 0);
+
 	} else {
 		// finalize manually to use the map
 		D_ASSERT(aggr.function.arguments.size() == 1);
@@ -201,6 +202,39 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 			break;
 		case LogicalType::BIGINT:
 			ListExecuteDistinct<uint64_t>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::FLOAT:
+			ListExecuteDistinct<float>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::DOUBLE:
+			ListExecuteDistinct<double>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::VARCHAR:
+			ListExecuteDistinct<string>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::TIMESTAMP:
+			ListExecuteDistinct<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::TIMESTAMP_TZ:
+			ListExecuteDistinct<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::TIMESTAMP_S:
+			ListExecuteDistinct<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::TIMESTAMP_MS:
+			ListExecuteDistinct<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::TIMESTAMP_NS:
+			ListExecuteDistinct<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::TIME:
+			ListExecuteDistinct<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::TIME_TZ:
+			ListExecuteDistinct<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::DATE:
+			ListExecuteDistinct<int32_t>(result, state_vector.state_vector, count);
 			break;
 		default:
 			throw InternalException("Unimplemented histogram aggregate");
