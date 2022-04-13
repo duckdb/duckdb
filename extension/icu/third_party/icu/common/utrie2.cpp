@@ -136,7 +136,7 @@ utrie2_openFromSerialized(UTrie2ValueBits valueBits,
     UTrie2 tempTrie;
     UTrie2 *trie;
 
-    if(U_FAILURE(*pErrorCode)) {
+    if (U_FAILURE(*pErrorCode)) {
         return 0;
     }
 
