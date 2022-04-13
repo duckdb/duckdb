@@ -9,10 +9,10 @@
 #pragma once
 
 #include "duckdb.hpp"
-#include "icu-collate.hpp"
 
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "unicode/calendar.h"
 
 namespace duckdb {
 

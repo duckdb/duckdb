@@ -1,7 +1,13 @@
 #define DUCKDB_EXTENSION_MAIN
 
+#include "unicode/ucol.h"
+#include "unicode/stringpiece.h"
+#include "unicode/coll.h"
+#include "unicode/sortkey.h"
+#include "unicode/timezone.h"
+#include "unicode/calendar.h"
+
 #include "include/icu-extension.hpp"
-#include "include/icu-collate.hpp"
 #include "include/icu-dateadd.hpp"
 #include "include/icu-datepart.hpp"
 #include "include/icu-datesub.hpp"
