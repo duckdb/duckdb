@@ -99,7 +99,12 @@ jobs:
       run: |
         yum install -y gcc gcc-c++ git cmake make
         yum install -y epel-release
-        yum install -y make gcc perl-core pcre-devel wget zlib-devel
+        yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
+
+    - name: Install AWS CLI
+      run: |
+        python3 -m pip install awscli
+        aws --version
 
     - name: Install i686 dependencies
       if: ${{matrix.arch == 'i686'}}
@@ -162,12 +167,12 @@ jobs:
       matrix:
         arch: [i686, x86_64]
         python_build: [cp37-*, cp38-*, cp39-*,cp310-*]
-        isMaster:
-          - ${{ github.ref == 'refs/heads/master' }}
+        isRelease:
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
-          - isMaster: false
+          - isRelease: false
             python_build: 'cp38-*'
-          - isMaster: false
+          - isRelease: false
             python_build: 'cp39-*'
     needs: centos7-extensions
     env:
@@ -216,7 +221,7 @@ jobs:
         fi
 
    osx-python3:
-      if: github.ref == 'refs/heads/master'
+      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
       name: Python 3 OSX
       runs-on: macos-latest
       strategy:
@@ -262,14 +267,14 @@ jobs:
       strategy:
        matrix:
         python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*]
-        isMaster:
-          - ${{ github.ref == 'refs/heads/master' }}
+        isRelease:
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
-          - isMaster: false
+          - isRelease: false
             python_build: 'cp37-*'
-          - isMaster: false
+          - isRelease: false
             python_build: 'cp38-*'
-          - isMaster: false
+          - isRelease: false
             python_build: 'cp39-*'
       needs: linux-python3-9
 
