@@ -50,6 +50,35 @@ struct StateVector {
 	Vector state_vector;
 };
 
+template <class T>
+static void ListExecuteDistinct(Vector &result, Vector &state_vector, idx_t count) {
+
+	VectorData sdata;
+	state_vector.Orrify(count, sdata);
+	auto states = (HistogramAggState<T> **)sdata.data;
+
+	auto result_data = FlatVector::GetData<list_entry_t>(result);
+
+	idx_t offset = 0;
+	for (idx_t i = 0; i < count; i++) {
+
+		auto state = states[sdata.sel->get_index(i)];
+		result_data[i].offset = offset;
+		result_data[i].length = state->hist->size();
+		offset += state->hist->size();
+
+		if (!state->hist) {
+			continue;
+		}
+
+		for (auto &entry : *state->hist) {
+			auto bucket_value = Value::CreateValue(entry.first);
+			ListVector::PushBack(result, bucket_value);
+		}
+	}
+	result.Verify(count);
+}
+
 static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &result, bool is_aggr) {
 
 	auto count = args.size();
@@ -118,9 +147,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 			continue;
 		}
 
-		auto source_idx = child_data.sel->get_index(list_entry.offset);
 		idx_t child_idx = 0;
-
 		while (child_idx < list_entry.length) {
 
 			// states vector is full, update
@@ -134,7 +161,8 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 				states_idx = 0;
 			}
 
-			sel_vector.set_index(states_idx, source_idx + child_idx);
+			auto source_idx = child_data.sel->get_index(list_entry.offset + child_idx);
+			sel_vector.set_index(states_idx, source_idx);
 			states_update[states_idx] = state_ptr;
 			states_idx++;
 			child_idx++;
@@ -151,20 +179,45 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 		// finalize all the aggregate states
 		aggr.function.finalize(state_vector.state_vector, aggr.bind_info.get(), result, count, 0);
 	} else {
-		// TODO: finalize manually, put the HistogramState into the header to use here
+		// finalize manually to use the map
+		D_ASSERT(aggr.function.arguments.size() == 1);
+		auto key_type = aggr.function.arguments[0];
+
+		switch (key_type.id()) {
+		case LogicalType::USMALLINT:
+			ListExecuteDistinct<uint16_t>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::UINTEGER:
+			ListExecuteDistinct<uint32_t>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::UBIGINT:
+			ListExecuteDistinct<uint64_t>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::SMALLINT:
+			ListExecuteDistinct<uint16_t>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::INTEGER:
+			ListExecuteDistinct<uint32_t>(result, state_vector.state_vector, count);
+			break;
+		case LogicalType::BIGINT:
+			ListExecuteDistinct<uint64_t>(result, state_vector.state_vector, count);
+			break;
+		default:
+			throw InternalException("Unimplemented histogram aggregate");
+		}
 	}
 }
 
 static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	D_ASSERT(args.ColumnCount() == 2);
-	return ListAggregatesFunction(args, state, result, true);
+	ListAggregatesFunction(args, state, result, true);
 }
 
 static void ListDistinctFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	D_ASSERT(args.ColumnCount() == 1);
-	return ListAggregatesFunction(args, state, result, false);
+	ListAggregatesFunction(args, state, result, false);
 }
 
 static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFunction &bound_function,

@@ -3,14 +3,9 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/map.hpp"
 #include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
-template <class T>
-struct HistogramAggState {
-	map<T, idx_t> *hist;
-};
 
 struct HistogramFunction {
 	template <class STATE>

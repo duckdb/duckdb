@@ -10,6 +10,7 @@
 
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/common/map.hpp"
 
 namespace duckdb {
 
@@ -22,6 +23,11 @@ struct VariableReturnBindData : public FunctionData {
 	unique_ptr<FunctionData> Copy() override {
 		return make_unique<VariableReturnBindData>(stype);
 	}
+};
+
+template <class T>
+struct HistogramAggState {
+	map<T, idx_t> *hist;
 };
 
 struct ArraySliceFun {
