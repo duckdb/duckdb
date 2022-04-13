@@ -16,6 +16,8 @@
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/sort/sort.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -28,6 +30,7 @@ class UpdateSegment;
 class Vector;
 struct RowGroupPointer;
 struct VersionNode;
+struct RowGroupSortBindData;
 
 class RowGroup : public SegmentBase {
 public:
@@ -146,8 +149,8 @@ private:
 
 	bool ScanToDataChunk(RowGroupScanState &state, DataChunk &result);
 
-	void SortChunksLexico(DataChunk &keys, DataChunk &payload, vector<LogicalType> &types, vector<column_t> &indexes,
-	                      SelectionVector &sel_sorted);
+	void SinkChunks(DataChunk &keys, DataChunk &payload, GlobalSortState &global_sort_state,
+	                BufferManager &buffer_manager);
 
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
 	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);
