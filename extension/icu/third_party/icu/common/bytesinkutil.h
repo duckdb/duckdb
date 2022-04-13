@@ -4,6 +4,8 @@
 // bytesinkutil.h
 // created: 2017sep14 Markus W. Scherer
 
+#pragma once
+
 #include "unicode/utypes.h"
 #include "unicode/bytestream.h"
 #include "unicode/edits.h"
