@@ -119,9 +119,7 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 			continue;
 		}
 
-		auto source_idx = child_data.sel->get_index(list_entry.offset);
 		idx_t child_idx = 0;
-
 		while (child_idx < list_entry.length) {
 
 			// states vector is full, update
@@ -135,7 +133,8 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 				states_idx = 0;
 			}
 
-			sel_vector.set_index(states_idx, source_idx + child_idx);
+			auto source_idx = child_data.sel->get_index(list_entry.offset + child_idx);
+			sel_vector.set_index(states_idx, source_idx);
 			states_update[states_idx] = state_ptr;
 			states_idx++;
 			child_idx++;
