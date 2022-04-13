@@ -1963,16 +1963,16 @@ uhash_compareUnicodeString(const UElement key1, const UElement key2) {
     }
     return *str1 == *str2;
 }
-
- #ifdef U_STATIC_IMPLEMENTATION
- /*
- This should never be called. It is defined here to make sure that the
- virtual vector deleting destructor is defined within unistr.cpp.
- The vector deleting destructor is already a part of UObject,
- but defining it here makes sure that it is included with this object file.
- This makes sure that static library dependencies are kept to a minimum.
- */
- static void uprv_UnicodeStringDummy(void) {
-     delete [] (new UnicodeString[2]);
- }
- #endif
+//
+// #ifdef U_STATIC_IMPLEMENTATION
+// /*
+// This should never be called. It is defined here to make sure that the
+// virtual vector deleting destructor is defined within unistr.cpp.
+// The vector deleting destructor is already a part of UObject,
+// but defining it here makes sure that it is included with this object file.
+// This makes sure that static library dependencies are kept to a minimum.
+// */
+// static void uprv_UnicodeStringDummy(void) {
+//     delete [] (new UnicodeString[2]);
+// }
+// #endif
