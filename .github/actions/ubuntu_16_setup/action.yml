@@ -1,5 +1,7 @@
+
 runs:
   using: "composite"
+  shell: bash
   steps:
     - name: Install
       run: |
