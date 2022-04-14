@@ -16,22 +16,12 @@ runs:
         apt-get update -y -qq
         apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libc6-dev-i386 lib32readline6-dev libssl-dev libcurl4-gnutls-dev libexpat1-dev gettext unzip build-essential checkinstall
 
-    - name: Install ZLib 1.12
-      shell: bash
-      run: |
-        wget https://github.com/madler/zlib/archive/refs/tags/v1.2.12.tar.gz
-        tar xvf v1.2.12.tar.gz
-        cd zlib-1.2.12
-        ./configure
-        make
-        make install
-
     - name: Install Git 2.35.3
       shell: bash
       run: |
-        wget https://github.com/git/git/archive/refs/tags/v2.35.3.tar.gz
-        tar xvf v2.35.3.tar.gz
-        cd git-2.35.3
+        wget https://github.com/git/git/archive/refs/tags/v2.18.5.tar.gz
+        tar xvf v2.18.5.tar.gz
+        cd git-2.18.5
         make
         make install
         git --version
