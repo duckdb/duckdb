@@ -47,10 +47,10 @@ jobs:
       FORCE_WARN_UNUSED: 1
 
     steps:
-    - uses: ./.github/actions/ubuntu_16_setup
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+    - uses: ./.github/actions/ubuntu_16_setup
 
     - name: Version Check
       run: |
