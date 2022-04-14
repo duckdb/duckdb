@@ -52,12 +52,6 @@ jobs:
         fetch-depth: 0
     - uses: ./.github/actions/ubuntu_16_setup
 
-    - name: Version Check
-      run: |
-        ldd --version ldd
-        python3.7 --version
-        git --version
-
     - name: Build
       run: STATIC_LIBCPP=1 BUILD_ODBC=1 make
 
@@ -123,54 +117,12 @@ jobs:
       AWS_DEFAULT_REGION: us-east-1
 
     steps:
-    - name: Install
-      run: |
-        apt-get update -y -qq
-        apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:git-core/ppa
-        apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libffi-dev
-
-    - name: Install Python 3.7
-      run: |
-        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
-        tar xvf Python-3.7.12.tgz
-        cd Python-3.7.12
-        mkdir -p pythonbin
-        ./configure --with-ensurepip=install
-        make -j
-        make install
-        python3.7 --version
-        python3.7 -m pip install pip
-        python3.7 -m pip install requests awscli
-
-    - name: Install OpenSSL 1.1.1
-      run: |
-        apt-get install build-essential checkinstall zlib1g-dev -y -qq
-        wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
-        tar -xf openssl-1.1.1c.tar.gz
-        cd openssl-1.1.1c
-        ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl -static zlib
-        make
-        make install
-        echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
-        ldconfig -v
-
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-
-    - name: Version Check
-      run: |
-        ldd --version ldd
-        python3.7 --version
-        git --version
-
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+    - uses: ./.github/actions/ubuntu_16_setup
+      with:
+        openssl: 1
 
     - name: Build
       run: |
@@ -195,42 +147,10 @@ jobs:
       GEN: ninja
 
     steps:
-    - name: Install
-      run: |
-        apt-get update -y -qq
-        apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:git-core/ppa
-        apt-get update -y -qq
-        apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk zip
-
-    - name: Install Python 3.7
-      run: |
-        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
-        tar xvf Python-3.7.12.tgz
-        cd Python-3.7.12
-        mkdir -p pythonbin
-        ./configure --with-ensurepip=install
-        make -j
-        make install
-        python3.7 --version
-        python3.7 -m pip install pip
-        python3.7 -m pip install requests
-
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-
-    - name: Version Check
-      run: |
-        ldd --version ldd
-        python3.7 --version
-        git --version
-
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+    - uses: ./.github/actions/ubuntu_16_setup
 
     - name: Build
       run: |
@@ -296,8 +216,6 @@ jobs:
         path: |
           libduckdb-linux-rpi.zip
           duckdb_cli-linux-rpi.zip
-
-
 
 
  old-gcc:
