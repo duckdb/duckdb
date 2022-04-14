@@ -3,6 +3,10 @@
 
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/default/default_functions.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "json_functions.hpp"
 
 namespace duckdb {
@@ -13,6 +17,27 @@ static DefaultMacro json_macros[] = {
     {DEFAULT_SCHEMA, "json_group_structure", {"x", nullptr}, "json_structure(json_group_array(x))->0"},
     {DEFAULT_SCHEMA, "json", {"x", nullptr}, "json_extract(x, '$')"},
     {nullptr, nullptr, {nullptr}, nullptr}};
+
+static DefaultMacro table_macros[] = {
+    {DEFAULT_SCHEMA,
+     "read_json",
+     {"json_file", nullptr},
+     "SELECT * FROM read_csv(json_file, columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL)"},
+    {DEFAULT_SCHEMA, "read_ndjson", {"json_file", nullptr}, "SELECT * FROM read_json(json_file)"},
+    {nullptr, nullptr, {nullptr}, nullptr}};
+
+unique_ptr<TableFunctionRef> JSONScanReplacement(ClientContext &context, const string &table_name,
+                                                 ReplacementScanData *data) {
+	auto ltable = StringUtil::Lower(table_name);
+	if (!StringUtil::EndsWith(ltable, ".json") && (!StringUtil::EndsWith(ltable, ".ndjson"))) {
+		return nullptr;
+	}
+	auto table_function = make_unique<TableFunctionRef>();
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
+	table_function->function = make_unique<FunctionExpression>("read_json", move(children));
+	return table_function;
+}
 
 void JSONExtension::Load(DuckDB &db) {
 	Connection con(db);
@@ -27,6 +52,13 @@ void JSONExtension::Load(DuckDB &db) {
 		auto info = DefaultFunctionGenerator::CreateInternalMacroInfo(json_macros[index]);
 		catalog.CreateFunction(*con.context, info.get());
 	}
+	for (idx_t index = 0; table_macros[index].name != nullptr; index++) {
+		auto info = DefaultFunctionGenerator::CreateInternalTableMacroInfo(table_macros[index]);
+		catalog.CreateFunction(*con.context, info.get());
+	}
+
+	auto &config = DBConfig::GetConfig(*db.instance);
+	config.replacement_scans.emplace_back(JSONScanReplacement);
 
 	con.Commit();
 }
