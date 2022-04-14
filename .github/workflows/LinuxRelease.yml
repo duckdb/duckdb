@@ -68,7 +68,7 @@ jobs:
         python3.7 -m pip install pip
         python3.7 -m pip install requests
 
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -182,7 +182,7 @@ jobs:
         echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
         ldconfig -v
 
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -242,7 +242,7 @@ jobs:
         python3.7 -m pip install pip
         python3.7 -m pip install requests
 
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -287,7 +287,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-release-64
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -336,7 +336,7 @@ jobs:
       CXX: g++-4.8
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -371,7 +371,7 @@ jobs:
       DISABLE_SANITIZER: 1
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -395,7 +395,7 @@ jobs:
       CXX: g++-10
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -411,7 +411,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-release-64
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -447,7 +447,7 @@ jobs:
     needs: linux-release-64
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -471,7 +471,7 @@ jobs:
       S3_TEST_SERVER_AVAILABLE: 1
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -507,7 +507,7 @@ jobs:
       CXX: clang++
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
