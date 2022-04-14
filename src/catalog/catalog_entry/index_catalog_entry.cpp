@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 
@@ -20,6 +21,15 @@ string IndexCatalogEntry::ToSQL() {
 		throw InternalException("Cannot convert INDEX to SQL because it was not created with a SQL statement");
 	}
 	return sql;
+}
+
+idx_t IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &writer) {
+	if (index->type != IndexType::ART) {
+		throw NotImplementedException("The implementation of this index serialization does not exist.");
+	}
+	// We first do a DFS on the ART
+	auto art_index = (ART *)index;
+	return art_index->DepthFirstSearchCheckpoint(writer);
 }
 
 } // namespace duckdb

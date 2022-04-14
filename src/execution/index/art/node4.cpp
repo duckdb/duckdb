@@ -119,4 +119,26 @@ void Node4::Erase(ART &art, unique_ptr<Node> &node, int pos) {
 	}
 }
 
+idx_t Node4::Serialize(duckdb::MetaBlockWriter &writer) {
+	// Iterate through children and annotate their offsets
+	vector<idx_t> child_offsets;
+	for (auto &child_node : child) {
+		if (child_node) {
+			child_offsets.push_back(child_node->Serialize(writer));
+		}
+	}
+	auto offset = writer.offset;
+	// Write Node Type
+	writer.Write(4);
+	// Write Key values
+	for (auto &key_v : key) {
+		writer.Write(key_v);
+	}
+	// Write child offsets
+	for (auto &offsets : child_offsets) {
+		writer.Write(offsets);
+	}
+	return offset;
+}
+
 } // namespace duckdb

@@ -77,4 +77,30 @@ void Node256::Erase(ART &art, unique_ptr<Node> &node, int pos) {
 	}
 }
 
+idx_t Node256::Serialize(duckdb::MetaBlockWriter &writer) {
+	// Iterate through children and annotate their offsets
+	vector<idx_t> child_offsets;
+	vector<idx_t> valid_children;
+	idx_t child_id = 0;
+	for (auto &child_node : child) {
+		if (child_node) {
+			valid_children.push_back(child_id);
+			child_offsets.push_back(child_node->Serialize(writer));
+		}
+		child_id++;
+	}
+	auto offset = writer.offset;
+	// Write Node Type
+	writer.Write(256);
+	// Write Key values
+	for (auto &key_v : valid_children) {
+		writer.Write(key_v);
+	}
+	// Write child offsets
+	for (auto &offsets : child_offsets) {
+		writer.Write(offsets);
+	}
+	return offset;
+}
+
 } // namespace duckdb

@@ -496,6 +496,11 @@ void ART::SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size) {
 	result_size = leaf->num_elements;
 }
 
+idx_t ART::DepthFirstSearchCheckpoint(duckdb::MetaBlockWriter &writer) {
+	lock_guard<mutex> l(lock);
+	return tree->Serialize(writer);
+}
+
 Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 	auto node_val = node.get();
 

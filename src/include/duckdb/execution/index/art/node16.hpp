@@ -35,5 +35,8 @@ public:
 	static void Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child);
 	//! Shrink to node 4
 	static void Erase(ART &art, unique_ptr<Node> &node, int pos);
+
+	//! Serialize Node
+	idx_t Serialize(duckdb::MetaBlockWriter &writer) override;
 };
 } // namespace duckdb

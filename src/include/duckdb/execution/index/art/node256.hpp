@@ -35,5 +35,8 @@ public:
 
 	//! Shrink to node 48
 	static void Erase(ART &art, unique_ptr<Node> &node, int pos);
+
+	//! Serialize Node
+	idx_t Serialize(duckdb::MetaBlockWriter &writer) override;
 };
 } // namespace duckdb

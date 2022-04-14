@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
 enum class NodeType : uint8_t { N4 = 0, N16 = 1, N48 = 2, N256 = 3, NLeaf = 4 };
@@ -34,7 +35,6 @@ public:
 	//! compressed path (prefix)
 	unique_ptr<uint8_t[]> prefix;
 
-public:
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if not
 	//! exists
 	virtual idx_t GetChildPos(uint8_t k) {
@@ -47,6 +47,9 @@ public:
 	}
 	//! Get the position of the biggest element in node
 	virtual idx_t GetMin();
+
+	//! Serialize this Node
+	virtual idx_t Serialize(duckdb::MetaBlockWriter &writer) = 0;
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position. if pos ==
 	//! DConstants::INVALID_INDEX, then the first valid position in the node will be returned.
 	virtual idx_t GetNextPos(idx_t pos) {

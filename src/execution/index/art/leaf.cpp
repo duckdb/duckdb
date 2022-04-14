@@ -24,6 +24,27 @@ void Leaf::Insert(row_t row_id) {
 	row_ids[num_elements++] = row_id;
 }
 
+idx_t Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
+	auto offset = writer.offset;
+	// Write Node Type
+	writer.Write(0);
+	// Write value
+	// Write Value Length
+	writer.Write(value->len);
+	// Write Value Contents
+	for (idx_t i = 0; i < value->len; i++) {
+		writer.Write(value->data[i]);
+	}
+	// Write Row Ids
+	// Length
+	writer.Write(num_elements);
+	// Actual Row Ids
+	for (idx_t i = 0; i < num_elements; i++) {
+		writer.Write(row_ids[i]);
+	}
+	return offset;
+}
+
 void Leaf::Remove(row_t row_id) {
 	idx_t entry_offset = DConstants::INVALID_INDEX;
 	for (idx_t i = 0; i < num_elements; i++) {

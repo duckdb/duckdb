@@ -10,6 +10,7 @@
 
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
 
@@ -29,6 +30,7 @@ public:
 
 public:
 	string ToSQL() override;
+	idx_t Serialize(duckdb::MetaBlockWriter &writer);
 };
 
 } // namespace duckdb

@@ -22,6 +22,7 @@
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
 struct IteratorEntry {
@@ -111,6 +112,9 @@ public:
 	//! Search Equal used for Joins that do not need to fetch data
 	void SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size);
 
+	//! Search Equal used for Joins that do not need to fetch data
+	idx_t DepthFirstSearchCheckpoint(duckdb::MetaBlockWriter &writer);
+
 private:
 	DataChunk expression_result;
 
@@ -140,14 +144,13 @@ private:
 	bool SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,
 	                      vector<row_t> &result_ids);
 
-private:
 	template <bool HAS_BOUND, bool INCLUSIVE>
 	bool IteratorScan(ARTIndexScanState *state, Iterator *it, Key *upper_bound, idx_t max_count,
 	                  vector<row_t> &result_ids);
 
 	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);
 
-	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = NULL);
+	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = nullptr);
 };
 
 } // namespace duckdb

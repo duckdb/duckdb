@@ -23,6 +23,7 @@
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -171,6 +172,12 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 		}
 	});
 
+	vector<IndexCatalogEntry *> indexes;
+	schema.Scan(CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) {
+		D_ASSERT(!entry->internal);
+		indexes.push_back((IndexCatalogEntry *)entry);
+	});
+
 	FieldWriter writer(*metadata_writer);
 	writer.WriteField<uint32_t>(custom_types.size());
 	writer.WriteField<uint32_t>(sequences.size());
@@ -178,6 +185,7 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	writer.WriteField<uint32_t>(views.size());
 	writer.WriteField<uint32_t>(macros.size());
 	writer.WriteField<uint32_t>(table_macros.size());
+	writer.WriteField<uint32_t>(indexes.size());
 	writer.Finalize();
 
 	// write the custom_types
@@ -191,23 +199,27 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	}
 	// reorder tables because of foreign key constraint
 	ReorderTableEntries(tables);
-	// now write the tables
+	// Write the tables
 	for (auto &table : tables) {
 		WriteTable(*table);
 	}
-	// now write the views
+	// Write the views
 	for (auto &view : views) {
 		WriteView(*view);
 	}
 
-	// finally write the macro's
+	// Write the macros
 	for (auto &macro : macros) {
 		WriteMacro(*macro);
 	}
 
-	// finally write the macro's
+	// Write the table's macros
 	for (auto &macro : table_macros) {
 		WriteTableMacro(*macro);
+	}
+	// Write the indexes
+	for (auto &index : indexes) {
+		WriteIndex(*index);
 	}
 }
 
@@ -284,6 +296,14 @@ void CheckpointManager::ReadSequence(ClientContext &context, MetaBlockReader &re
 
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateSequence(context, info.get());
+}
+
+//===--------------------------------------------------------------------===//
+// Indexes
+//===--------------------------------------------------------------------===//
+void CheckpointManager::WriteIndex(IndexCatalogEntry &index) {
+	auto root_offset = index.Serialize(*metadata_writer);
+	metadata_writer->Write(root_offset);
 }
 
 //===--------------------------------------------------------------------===//
