@@ -7,6 +7,11 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Git Check
+      shell: bash
+      run: |
+        git log -1 --format=%h
+
     - name: Install
       shell: bash
       run: |
@@ -58,3 +63,4 @@ runs:
         ldd --version ldd
         python3.7 --version
         git --version
+        git log -1 --format=%h
