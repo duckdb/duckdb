@@ -58,12 +58,12 @@ SELECT list_distinct([1, 1, NULL, 2, 2, 2, 3, NULL, NULL])
 query I
 SELECT list_distinct(list_distinct([1, 1, -5, 10, 10, 2]))
 ----
-[1, -5, 10, 2]
+[-5, 1, 2, 10]
 
 statement ok
 CREATE TABLE integers (l integer[])
 
-statment ok
+statement ok
 INSERT INTO integers VALUES ([1, 1, 2, 2, 2, 3]), ([1, NULL, 1, NULL])
 
 statement ok
@@ -87,22 +87,11 @@ SELECT array_distinct([1, 2, 2, NULL])
 
 # test all types
 
-# BOOLEAN
-query I
-SELECT list_distinct([True, False, NULL, True, True, NULL])
-----
-[True, False]
-
-query I
-SELECT list_distinct([NULL::BOOLEAN])
-----
-[]
-
 # VARCHAR
 query I
 SELECT list_distinct(['aa', 'aa', 'cd', NULL, '42'])
 ----
-[aa, cd, 42]
+[42, aa, cd]
 
 query I
 SELECT list_distinct([NULL::VARCHAR])

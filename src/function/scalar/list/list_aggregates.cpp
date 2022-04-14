@@ -10,6 +10,7 @@ namespace duckdb {
 
 // FIXME: use a local state for each thread to increase performance?
 // FIXME: benchmark the use of simple_update against using update (if applicable)
+// NOTE: by changing the histogram state to an unordered map there should be a speedup for list_distinct and list_unique
 
 struct ListAggregatesBindData : public FunctionData {
 	ListAggregatesBindData(const LogicalType &stype_p, unique_ptr<Expression> aggr_expr_p);
@@ -64,12 +65,14 @@ static void ListExecuteDistinct(Vector &result, Vector &state_vector, idx_t coun
 
 		auto state = states[sdata.sel->get_index(i)];
 		result_data[i].offset = offset;
-		result_data[i].length = state->hist->size();
-		offset += state->hist->size();
 
 		if (!state->hist) {
+			result_data[i].length = 0;
 			continue;
 		}
+
+		result_data[i].length = state->hist->size();
+		offset += state->hist->size();
 
 		for (auto &entry : *state->hist) {
 			auto bucket_value = Value::CreateValue(entry.first);
@@ -195,13 +198,13 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 			ListExecuteDistinct<uint64_t>(result, state_vector.state_vector, count);
 			break;
 		case LogicalType::SMALLINT:
-			ListExecuteDistinct<uint16_t>(result, state_vector.state_vector, count);
+			ListExecuteDistinct<int16_t>(result, state_vector.state_vector, count);
 			break;
 		case LogicalType::INTEGER:
-			ListExecuteDistinct<uint32_t>(result, state_vector.state_vector, count);
+			ListExecuteDistinct<int32_t>(result, state_vector.state_vector, count);
 			break;
 		case LogicalType::BIGINT:
-			ListExecuteDistinct<uint64_t>(result, state_vector.state_vector, count);
+			ListExecuteDistinct<int64_t>(result, state_vector.state_vector, count);
 			break;
 		case LogicalType::FLOAT:
 			ListExecuteDistinct<float>(result, state_vector.state_vector, count);
