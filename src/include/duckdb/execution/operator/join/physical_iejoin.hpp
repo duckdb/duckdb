@@ -13,8 +13,6 @@
 
 namespace duckdb {
 
-class IEJoinSortedTable;
-
 //! PhysicalIEJoin represents a two inequality range join between
 //! two tables
 class PhysicalIEJoin : public PhysicalRangeJoin {
@@ -57,7 +55,7 @@ public:
 	                          GlobalSinkState &gstate) const override;
 
 	//! Schedules tasks to merge sort the current child's data during a Finalize phase
-	static void ScheduleMergeTasks(Pipeline &pipeline, Event &event, IEJoinSortedTable &table);
+	static void ScheduleMergeTasks(Pipeline &pipeline, Event &event, GlobalSortedTable &table);
 
 	bool IsSink() const override {
 		return true;

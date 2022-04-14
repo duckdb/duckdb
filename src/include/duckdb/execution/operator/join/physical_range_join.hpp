@@ -44,6 +44,41 @@ public:
 		idx_t count;
 	};
 
+	class GlobalSortedTable {
+	public:
+		GlobalSortedTable(ClientContext &context, const vector<BoundOrderByNode> &orders, RowLayout &payload_layout);
+
+		inline idx_t Count() const {
+			return count;
+		}
+
+		inline idx_t BlockCount() const {
+			if (global_sort_state.sorted_blocks.empty()) {
+				return 0;
+			}
+			D_ASSERT(global_sort_state.sorted_blocks.size() == 1);
+			return global_sort_state.sorted_blocks[0]->radix_sorting_data.size();
+		}
+
+		inline idx_t BlockSize(idx_t i) const {
+			return global_sort_state.sorted_blocks[0]->radix_sorting_data[i].count;
+		}
+
+		void Combine(LocalSortedTable &ltable);
+		void IntializeMatches();
+		void Print();
+
+		GlobalSortState global_sort_state;
+		//! Whether or not the RHS has NULL values
+		atomic<idx_t> has_null;
+		//! The total number of rows in the RHS
+		atomic<idx_t> count;
+		//! A bool indicating for each tuple in the RHS if they found a match (only used in FULL OUTER JOIN)
+		unique_ptr<bool[]> found_match;
+		//! Memory usage per thread
+		idx_t memory_per_thread;
+	};
+
 public:
 	PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType type, unique_ptr<PhysicalOperator> left,
 	                  unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,

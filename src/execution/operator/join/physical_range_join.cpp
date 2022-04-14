@@ -51,6 +51,46 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(DataChunk &input, GlobalSortState
 	local_sort_state.SinkChunk(join_head, input);
 }
 
+PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &context, const vector<BoundOrderByNode> &orders,
+                                                        RowLayout &payload_layout)
+    : global_sort_state(BufferManager::GetBufferManager(context), orders, payload_layout), has_null(0), count(0),
+      memory_per_thread(0) {
+	D_ASSERT(orders.size() == 1);
+
+	// Set external (can be force with the PRAGMA)
+	auto &config = ClientConfig::GetConfig(context);
+	global_sort_state.external = config.force_external;
+	// Memory usage per thread should scale with max mem / num threads
+	// We take 1/4th of this, to be conservative
+	idx_t max_memory = global_sort_state.buffer_manager.GetMaxMemory();
+	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	memory_per_thread = (max_memory / num_threads) / 4;
+}
+
+void PhysicalRangeJoin::GlobalSortedTable::Combine(LocalSortedTable &ltable) {
+	global_sort_state.AddLocalState(ltable.local_sort_state);
+	has_null += ltable.has_null;
+	count += ltable.count;
+}
+
+void PhysicalRangeJoin::GlobalSortedTable::IntializeMatches() {
+	found_match = unique_ptr<bool[]>(new bool[Count()]);
+	memset(found_match.get(), 0, sizeof(bool) * Count());
+}
+
+void PhysicalRangeJoin::GlobalSortedTable::Print() {
+	PayloadScanner scanner(global_sort_state, false);
+	DataChunk chunk;
+	chunk.Initialize(scanner.GetPayloadTypes());
+	for (;;) {
+		scanner.Scan(chunk);
+		const auto count = chunk.size();
+		if (!count) {
+			break;
+		}
+		chunk.Print();
+	}
+}
 PhysicalRangeJoin::PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType type, unique_ptr<PhysicalOperator> left,
                                      unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                      idx_t estimated_cardinality)

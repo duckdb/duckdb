@@ -76,76 +76,10 @@ public:
 	LocalSortedTable table;
 };
 
-class IEJoinSortedTable {
-public:
-	IEJoinSortedTable(ClientContext &context, const vector<BoundOrderByNode> &orders, RowLayout &payload_layout)
-	    : global_sort_state(BufferManager::GetBufferManager(context), orders, payload_layout), has_null(0), count(0),
-	      memory_per_thread(0) {
-		D_ASSERT(orders.size() == 1);
-
-		// Set external (can be force with the PRAGMA)
-		auto &config = ClientConfig::GetConfig(context);
-		global_sort_state.external = config.force_external;
-		// Memory usage per thread should scale with max mem / num threads
-		// We take 1/4th of this, to be conservative
-		idx_t max_memory = global_sort_state.buffer_manager.GetMaxMemory();
-		idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-		memory_per_thread = (max_memory / num_threads) / 4;
-	}
-
-	inline idx_t Count() const {
-		return count;
-	}
-
-	inline idx_t BlockCount() const {
-		if (global_sort_state.sorted_blocks.empty()) {
-			return 0;
-		}
-		D_ASSERT(global_sort_state.sorted_blocks.size() == 1);
-		return global_sort_state.sorted_blocks[0]->radix_sorting_data.size();
-	}
-
-	inline idx_t BlockSize(idx_t i) const {
-		return global_sort_state.sorted_blocks[0]->radix_sorting_data[i].count;
-	}
-
-	inline void Combine(IEJoinLocalState &lstate) {
-		global_sort_state.AddLocalState(lstate.table.local_sort_state);
-		has_null += lstate.table.has_null;
-		count += lstate.table.count;
-	}
-
-	inline void IntializeMatches() {
-		found_match = unique_ptr<bool[]>(new bool[Count()]);
-		memset(found_match.get(), 0, sizeof(bool) * Count());
-	}
-
-	void Print() {
-		PayloadScanner scanner(global_sort_state, false);
-		DataChunk chunk;
-		chunk.Initialize(scanner.GetPayloadTypes());
-		for (;;) {
-			scanner.Scan(chunk);
-			const auto count = chunk.size();
-			if (!count) {
-				break;
-			}
-			chunk.Print();
-		}
-	}
-
-	GlobalSortState global_sort_state;
-	//! Whether or not the RHS has NULL values
-	atomic<idx_t> has_null;
-	//! The total number of rows in the RHS
-	atomic<idx_t> count;
-	//! A bool indicating for each tuple in the RHS if they found a match (only used in FULL OUTER JOIN)
-	unique_ptr<bool[]> found_match;
-	//! Memory usage per thread
-	idx_t memory_per_thread;
-};
-
 class IEJoinGlobalState : public GlobalSinkState {
+public:
+	using GlobalSortedTable = PhysicalRangeJoin::GlobalSortedTable;
+
 public:
 	IEJoinGlobalState(ClientContext &context, const PhysicalIEJoin &op) : child(0) {
 		tables.resize(2);
@@ -153,13 +87,13 @@ public:
 		lhs_layout.Initialize(op.children[0]->types);
 		vector<BoundOrderByNode> lhs_order;
 		lhs_order.emplace_back(op.lhs_orders[0][0].Copy());
-		tables[0] = make_unique<IEJoinSortedTable>(context, lhs_order, lhs_layout);
+		tables[0] = make_unique<GlobalSortedTable>(context, lhs_order, lhs_layout);
 
 		RowLayout rhs_layout;
 		rhs_layout.Initialize(op.children[1]->types);
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0][0].Copy());
-		tables[1] = make_unique<IEJoinSortedTable>(context, rhs_order, rhs_layout);
+		tables[1] = make_unique<GlobalSortedTable>(context, rhs_order, rhs_layout);
 	}
 
 	IEJoinGlobalState(IEJoinGlobalState &prev)
@@ -180,7 +114,7 @@ public:
 		}
 	}
 
-	vector<unique_ptr<IEJoinSortedTable>> tables;
+	vector<unique_ptr<GlobalSortedTable>> tables;
 	size_t child;
 };
 
@@ -211,7 +145,7 @@ SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, GlobalSinkState &
 void PhysicalIEJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
 	auto &gstate = (IEJoinGlobalState &)gstate_p;
 	auto &lstate = (IEJoinLocalState &)lstate_p;
-	gstate.tables[gstate.child]->Combine(lstate);
+	gstate.tables[gstate.child]->Combine(lstate.table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
 	context.thread.profiler.Flush(this, &lstate.table.executor, gstate.child ? "rhs_executor" : "lhs_executor", 1);
@@ -223,7 +157,10 @@ void PhysicalIEJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 //===--------------------------------------------------------------------===//
 class IEJoinFinalizeTask : public ExecutorTask {
 public:
-	IEJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, IEJoinSortedTable &table)
+	using GlobalSortedTable = PhysicalRangeJoin::GlobalSortedTable;
+
+public:
+	IEJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, GlobalSortedTable &table)
 	    : ExecutorTask(context), event(move(event_p)), context(context), table(table) {
 	}
 
@@ -240,16 +177,19 @@ public:
 private:
 	shared_ptr<Event> event;
 	ClientContext &context;
-	IEJoinSortedTable &table;
+	GlobalSortedTable &table;
 };
 
 class IEJoinFinalizeEvent : public Event {
 public:
-	IEJoinFinalizeEvent(IEJoinSortedTable &table_p, Pipeline &pipeline_p)
+	using GlobalSortedTable = PhysicalRangeJoin::GlobalSortedTable;
+
+public:
+	IEJoinFinalizeEvent(GlobalSortedTable &table_p, Pipeline &pipeline_p)
 	    : Event(pipeline_p.executor), table(table_p), pipeline(pipeline_p) {
 	}
 
-	IEJoinSortedTable &table;
+	GlobalSortedTable &table;
 	Pipeline &pipeline;
 
 public:
@@ -278,7 +218,7 @@ public:
 	}
 };
 
-void PhysicalIEJoin::ScheduleMergeTasks(Pipeline &pipeline, Event &event, IEJoinSortedTable &table) {
+void PhysicalIEJoin::ScheduleMergeTasks(Pipeline &pipeline, Event &event, GlobalSortedTable &table) {
 	// Initialize global sort state for a round of merging
 	table.global_sort_state.InitializeMergeRound();
 	auto new_event = make_shared<IEJoinFinalizeEvent>(table, pipeline);
@@ -415,7 +355,7 @@ struct SBIterator {
 };
 
 struct IEJoinUnion {
-	using SortedTable = IEJoinSortedTable;
+	using SortedTable = PhysicalRangeJoin::GlobalSortedTable;
 
 	static idx_t AppendKey(SortedTable &table, ExpressionExecutor &executor, SortedTable &marked, int64_t increment,
 	                       int64_t base, const idx_t block_idx);
