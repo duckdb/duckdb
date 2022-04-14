@@ -42,6 +42,10 @@ public:
 		idx_t has_null;
 		//! The total number of rows
 		idx_t count;
+
+	private:
+		// Merge the NULLs of all non-DISTINCT predicates into the primary so they sort to the end.
+		idx_t MergeNulls(const vector<JoinCondition> &conditions);
 	};
 
 	class GlobalSortedTable {
@@ -85,8 +89,6 @@ public:
 	                  idx_t estimated_cardinality);
 
 public:
-	// Merge the NULLs of all non-DISTINCT predicates into the primary so they sort to the end.
-	idx_t MergeNulls(DataChunk &keys) const;
 	// Gather the result values and slice the payload columns to those values.
 	static void SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,
 	                               const SelectionVector &result, const idx_t result_count, const idx_t left_cols = 0);

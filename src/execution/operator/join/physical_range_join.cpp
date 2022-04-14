@@ -39,7 +39,7 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(DataChunk &input, GlobalSortState
 	executor.Execute(input, keys);
 
 	// Count the NULLs so we can exclude them later
-	has_null += op.MergeNulls(keys);
+	has_null += MergeNulls(op.conditions);
 	count += keys.size();
 
 	//	Only sort the primary key
@@ -122,7 +122,7 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType t
 	children.push_back(move(right));
 }
 
-idx_t PhysicalRangeJoin::MergeNulls(DataChunk &keys) const {
+idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition> &conditions) {
 	// Merge the validity masks of the comparison keys into the primary
 	// Return the number of NULLs in the resulting chunk
 	D_ASSERT(keys.ColumnCount() > 0);
