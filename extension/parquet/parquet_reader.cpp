@@ -766,16 +766,26 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 		if (!state.filters) {
 			auto &group = GetGroup(state);
-			bool scans_enough = (group.total_compressed_size / (double)to_scan_compressed_bytes) >=
+			auto total_compressed_size = group.total_compressed_size;
+
+			// If the global total_compressed_size is not set, we can still calculate it
+			if (group.total_compressed_size == 0) {
+				auto root_reader = ((StructColumnReader *)state.root_reader.get());
+				for (auto& child_reader: root_reader->child_readers) {
+					total_compressed_size += child_reader->TotalCompressedSize();
+				}
+			}
+
+			bool scans_enough = (total_compressed_size / (double)to_scan_compressed_bytes) >=
 			                    ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN;
-			bool groups_small_enough = group.total_compressed_size < ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_LIMIT;
+			bool groups_small_enough = total_compressed_size < ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_LIMIT;
 
 			if (groups_small_enough && scans_enough) {
 				if (!state.have_prefetched_group || state.prefetched_group != state.current_group) {
 					auto &trans = (ThriftFileTransport &)*state.thrift_file_proto->getTransport();
 
-					if (group.total_compressed_size > 0) {
-						trans.Prefetch(group.file_offset, group.total_compressed_size);
+					if (total_compressed_size > 0) {
+						trans.Prefetch(group.file_offset, total_compressed_size);
 					}
 					state.have_prefetched_group = true;
 					state.prefetched_group = state.current_group;
