@@ -62,6 +62,7 @@ public:
 	idx_t FileIdx() const;
 	idx_t MaxDefine() const;
 	idx_t MaxRepeat() const;
+	size_t TotalCompressedSize() const;
 
 	virtual idx_t GroupRowsAvailable();
 

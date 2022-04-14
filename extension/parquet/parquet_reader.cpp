@@ -749,6 +749,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			return false;
 		}
 
+		size_t to_scan_compressed_bytes = 0;
 		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 			// this is a special case where we are not interested in the actual contents of the file
 			if (state.column_ids[out_col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
@@ -756,7 +757,32 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			}
 
 			PrepareRowGroupBuffer(state, out_col_idx);
+
+			auto file_col_idx = state.column_ids[out_col_idx];
+
+			auto root_reader = ((StructColumnReader *)state.root_reader.get());
+			to_scan_compressed_bytes += root_reader->GetChildReader(file_col_idx)->TotalCompressedSize();
 		}
+
+		if (!state.filters) {
+			auto &group = GetGroup(state);
+			bool scans_enough = (group.total_compressed_size / (double)to_scan_compressed_bytes) >=
+			                    ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN;
+			bool groups_small_enough = group.total_compressed_size < ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_LIMIT;
+
+			if (groups_small_enough && scans_enough) {
+				if (!state.have_prefetched_group || state.prefetched_group != state.current_group) {
+					auto &trans = (ThriftFileTransport &)*state.thrift_file_proto->getTransport();
+
+					if (group.total_compressed_size > 0) {
+						trans.Prefetch(group.file_offset, group.total_compressed_size);
+					}
+					state.have_prefetched_group = true;
+					state.prefetched_group = state.current_group;
+				}
+			}
+		}
+
 		return true;
 	}
 

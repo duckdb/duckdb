@@ -36,6 +36,23 @@ class ChunkCollection;
 class BaseStatistics;
 class TableFilterSet;
 
+// TODO: Types of prefetching:
+// 1. Small Row Groups: (num_threads * COMPRESSED_ROW_GROUP_SIZE < MAX_BUFFER_SIZE)
+// 		a) No filters: we just prefetch the whole row_group
+//		b) With filters: do some heurstics to determine if we want to still do it.
+// 2. Large Row Groups: (AVG(total_compressed_size) per column > 1MB)
+//		a) No filters: prefetch columns we will scan
+//		b) With filters: do some heurstics to determine if we want to still do it.
+struct ParquetReaderPrefetchConfig {
+	/// The upper limit below which whole row groups will be prefetched
+	static constexpr size_t WHOLE_GROUP_PREFETCH_LIMIT = 1 << 23; // 8 MiB
+	/// Percentage of data in a row group that should be scanned for enabling whole group prefetch
+	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.75;
+
+	/// The lower limit below which column chunks will not be cached
+	static constexpr size_t COLUMN_CHUNK_CACHE_LIMIT = 1 << 20; // 1 MiB
+};
+
 struct ParquetReaderScanState {
 	vector<idx_t> group_idx_list;
 	int64_t current_group;
@@ -51,6 +68,9 @@ struct ParquetReaderScanState {
 
 	ResizeableBuffer define_buf;
 	ResizeableBuffer repeat_buf;
+
+	bool have_prefetched_group = false;
+	idx_t prefetched_group;
 };
 
 struct ParquetOptions {
