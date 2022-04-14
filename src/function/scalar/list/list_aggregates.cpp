@@ -378,7 +378,7 @@ static unique_ptr<FunctionData> ListDistinctBind(ClientContext &context, ScalarF
 }
 
 static unique_ptr<FunctionData> ListUniqueBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+                                               vector<unique_ptr<Expression>> &arguments) {
 
 	D_ASSERT(bound_function.arguments.size() == 1);
 	D_ASSERT(arguments.size() == 1);
@@ -397,8 +397,8 @@ ScalarFunction ListDistinctFun::GetFunction() {
 }
 
 ScalarFunction ListUniqueFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::UBIGINT,
-	                      ListUniqueFunction, false, false, ListUniqueBind);
+	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::UBIGINT, ListUniqueFunction, false, false,
+	                      ListUniqueBind);
 }
 
 void ListAggregateFun::RegisterFunction(BuiltinFunctions &set) {
