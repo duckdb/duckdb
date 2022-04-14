@@ -43,7 +43,7 @@ jobs:
       PYTEST_TIMEOUT: '600'
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -91,7 +91,7 @@ jobs:
       AWS_DEFAULT_REGION: us-east-1
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -184,7 +184,7 @@ jobs:
       DUCKDB_BUILD_UNITY: 1
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -237,7 +237,7 @@ jobs:
         DUCKDB_BUILD_UNITY: 1
 
       steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -290,7 +290,7 @@ jobs:
         DUCKDB_BUILD_UNITY: 1
 
       steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -320,7 +320,7 @@ jobs:
       needs: linux-python3-9
 
       steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
