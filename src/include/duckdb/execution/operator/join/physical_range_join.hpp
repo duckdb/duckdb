@@ -72,6 +72,11 @@ public:
 		void IntializeMatches();
 		void Print();
 
+		//! Starts the sorting process.
+		void Finalize(Pipeline &pipeline, Event &event);
+		//! Schedules tasks to merge sort the current child's data during a Finalize phase
+		void ScheduleMergeTasks(Pipeline &pipeline, Event &event);
+
 		GlobalSortState global_sort_state;
 		//! Whether or not the RHS has NULL values
 		atomic<idx_t> has_null;

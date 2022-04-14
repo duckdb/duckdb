@@ -155,76 +155,6 @@ void PhysicalIEJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-class IEJoinFinalizeTask : public ExecutorTask {
-public:
-	using GlobalSortedTable = PhysicalRangeJoin::GlobalSortedTable;
-
-public:
-	IEJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, GlobalSortedTable &table)
-	    : ExecutorTask(context), event(move(event_p)), context(context), table(table) {
-	}
-
-	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		// Initialize iejoin sorted and iterate until done
-		auto &global_sort_state = table.global_sort_state;
-		MergeSorter merge_sorter(global_sort_state, BufferManager::GetBufferManager(context));
-		merge_sorter.PerformInMergeRound();
-		event->FinishTask();
-
-		return TaskExecutionResult::TASK_FINISHED;
-	}
-
-private:
-	shared_ptr<Event> event;
-	ClientContext &context;
-	GlobalSortedTable &table;
-};
-
-class IEJoinFinalizeEvent : public Event {
-public:
-	using GlobalSortedTable = PhysicalRangeJoin::GlobalSortedTable;
-
-public:
-	IEJoinFinalizeEvent(GlobalSortedTable &table_p, Pipeline &pipeline_p)
-	    : Event(pipeline_p.executor), table(table_p), pipeline(pipeline_p) {
-	}
-
-	GlobalSortedTable &table;
-	Pipeline &pipeline;
-
-public:
-	void Schedule() override {
-		auto &context = pipeline.GetClientContext();
-
-		// Schedule tasks equal to the number of threads, which will each iejoin multiple partitions
-		auto &ts = TaskScheduler::GetScheduler(context);
-		idx_t num_threads = ts.NumberOfThreads();
-
-		vector<unique_ptr<Task>> iejoin_tasks;
-		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-			iejoin_tasks.push_back(make_unique<IEJoinFinalizeTask>(shared_from_this(), context, table));
-		}
-		SetTasks(move(iejoin_tasks));
-	}
-
-	void FinishEvent() override {
-		auto &global_sort_state = table.global_sort_state;
-
-		global_sort_state.CompleteMergeRound(true);
-		if (global_sort_state.sorted_blocks.size() > 1) {
-			// Multiple blocks remaining: Schedule the next round
-			PhysicalIEJoin::ScheduleMergeTasks(pipeline, *this, table);
-		}
-	}
-};
-
-void PhysicalIEJoin::ScheduleMergeTasks(Pipeline &pipeline, Event &event, GlobalSortedTable &table) {
-	// Initialize global sort state for a round of merging
-	table.global_sort_state.InitializeMergeRound();
-	auto new_event = make_shared<IEJoinFinalizeEvent>(table, pipeline);
-	event.InsertEvent(move(new_event));
-}
-
 SinkFinalizeType PhysicalIEJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           GlobalSinkState &gstate_p) const {
 	auto &gstate = (IEJoinGlobalState &)gstate_p;
@@ -240,14 +170,10 @@ SinkFinalizeType PhysicalIEJoin::Finalize(Pipeline &pipeline, Event &event, Clie
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
 
-	// Prepare for child sort phase
-	global_sort_state.PrepareMergePhase();
+	// Sort the current input child
+	table.Finalize(pipeline, event);
 
-	// Start the iejoin phase or finish if a iejoin is not necessary
-	if (global_sort_state.sorted_blocks.size() > 1) {
-		PhysicalIEJoin::ScheduleMergeTasks(pipeline, event, table);
-	}
-
+	// Move to the next input child
 	++gstate.child;
 
 	return SinkFinalizeType::READY;

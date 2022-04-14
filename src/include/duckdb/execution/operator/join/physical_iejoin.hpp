@@ -54,9 +54,6 @@ public:
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          GlobalSinkState &gstate) const override;
 
-	//! Schedules tasks to merge sort the current child's data during a Finalize phase
-	static void ScheduleMergeTasks(Pipeline &pipeline, Event &event, GlobalSortedTable &table);
-
 	bool IsSink() const override {
 		return true;
 	}
