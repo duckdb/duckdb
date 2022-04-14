@@ -26,6 +26,10 @@ runs:
         make install
         git --version
 
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
     - name: Install Python 3.7
       shell: bash
       run: |
@@ -69,7 +73,3 @@ runs:
         python3.7 --version
         git --version
         git log -1 --format=%h
-
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
