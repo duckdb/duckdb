@@ -251,6 +251,9 @@ void HistogramFun::RegisterFunction(BuiltinFunctions &set) {
 	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIMESTAMP_S));
 	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIMESTAMP_MS));
 	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIMESTAMP_NS));
+	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIME));
+	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIME_TZ));
+	fun.AddFunction(GetHistogramFunction<int32_t>(LogicalType::DATE));
 	set.AddFunction(fun);
 }
 
