@@ -747,8 +747,10 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	}
 	
 	// scan row group and convert to datachunks with correct types
-	DataChunk result;
-	result.Initialize(types);
+	DataChunk keys;
+	DataChunk payload;
+	keys.Initialize(types);
+	payload.Initialize(types);
 
 	RowGroupSortBindData sort_state(types, column_ids, db);
 	auto &global_sort_state = *sort_state.global_sort_state;
@@ -760,11 +762,21 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	scan_state.max_row = count;
 	bool next_chunk = true;
 	uint32_t incr_payload_count = 0;
+	idx_t incr_payload_index_count = 0;
 	
 	InitializeScan(scan_state.row_group_scan_state);
 	while (next_chunk) {
-		next_chunk = ScanToDataChunk(scan_state.row_group_scan_state, result);
-		local_sort_state.SinkChunk(result, result);
+		next_chunk = ScanToDataChunk(scan_state.row_group_scan_state, keys);
+		
+		for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
+			for (idx_t i = 0; i < keys.size(); i++) {
+				payload.SetValue(column_idx, i, Value::INTEGER(incr_payload_index_count));
+				incr_payload_index_count++;
+			}
+		}
+		payload.SetCardinality(keys.size());
+		
+		local_sort_state.SinkChunk(keys, payload);
 		incr_payload_count += STANDARD_VECTOR_SIZE;
 	}
 	
@@ -787,7 +799,7 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 			break;
 		}
 		
-		// construct the selection vector with the new order from the result vectors
+		// construct the selection vector with the new order from the keys vectors
 		Vector result_vector(result_chunk.data[0]);
 		auto result_data = FlatVector::GetData<uint32_t>(result_vector);
 		auto row_count = result_chunk.size();
