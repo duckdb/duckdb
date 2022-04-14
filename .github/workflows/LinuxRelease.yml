@@ -53,7 +53,7 @@ jobs:
         apt-get install -y -qq software-properties-common
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libcurl-dev
+        apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libcurl4-gnutls-dev
 
     - name: Install Git 2.35.3
       run: |
