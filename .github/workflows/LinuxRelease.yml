@@ -53,7 +53,7 @@ jobs:
         apt-get install -y -qq software-properties-common
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev
+        apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libcurl-dev
 
     - name: Install Git 2.35.3
       run: |
@@ -77,6 +77,13 @@ jobs:
         python3.7 -m pip install pip
         python3.7 -m pip install requests
 
+    - name: Install CMake 3.21
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+        chmod +x cmake-3.21.3-linux-x86_64.sh
+        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+        cmake --version
+
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
@@ -86,12 +93,6 @@ jobs:
         ldd --version ldd
         python3.7 --version
         git --version
-
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
     - name: Build
       run: STATIC_LIBCPP=1 BUILD_ODBC=1 make
