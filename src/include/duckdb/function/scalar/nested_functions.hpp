@@ -88,6 +88,11 @@ struct ListDistinctFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ListUniqueFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct CardinalityFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

@@ -11,6 +11,7 @@ void BuiltinFunctions::RegisterNestedFunctions() {
 	Register<ListPositionFun>();
 	Register<ListAggregateFun>();
 	Register<ListDistinctFun>();
+	Register<ListUniqueFun>();
 	Register<ListValueFun>();
 	Register<ListExtractFun>();
 	Register<ListRangeFun>();
