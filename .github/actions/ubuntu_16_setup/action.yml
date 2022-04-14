@@ -1,5 +1,5 @@
-inputs:
-  name:
+name: "Setup Ubuntu 16"
+description: "Setup an Ubuntu 16 docker container with the required libraries"
 runs:
   using: "composite"
   steps:
