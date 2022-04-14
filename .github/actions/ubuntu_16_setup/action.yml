@@ -16,14 +16,14 @@ runs:
         apt-get update -y -qq
         apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libc6-dev-i386 lib32readline6-dev libssl-dev libcurl4-gnutls-dev libexpat1-dev gettext unzip build-essential checkinstall
 
-    - name: Install Git 2.35.3
+    - name: Install Git 2.18.5
       shell: bash
       run: |
         wget https://github.com/git/git/archive/refs/tags/v2.18.5.tar.gz
         tar xvf v2.18.5.tar.gz
         cd git-2.18.5
         make
-        make install
+        make prefix=/usr install
         git --version
 
     - uses: actions/checkout@v3
