@@ -7,11 +7,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Git Check
-      shell: bash
-      run: |
-        git log -1 --format=%h
-
     - name: Install
       shell: bash
       run: |
@@ -20,6 +15,11 @@ runs:
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
         apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libc6-dev-i386 lib32readline6-dev libssl-dev
+
+    - name: Git Check
+      shell: bash
+      run: |
+        git log -1 --format=%h
 
     - name: Install Python 3.7
       shell: bash
