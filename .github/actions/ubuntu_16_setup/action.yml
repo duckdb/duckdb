@@ -42,7 +42,7 @@ runs:
         make install
         python3.7 --version
         python3.7 -m pip install pip
-        python3.7 -m pip install requests
+        python3.7 -m pip install requests awscli
 
     - name: Install CMake 3.21
       shell: bash
