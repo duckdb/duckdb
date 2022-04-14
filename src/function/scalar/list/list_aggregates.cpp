@@ -119,8 +119,7 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 			continue;
 		}
 
-		idx_t child_idx = 0;
-		while (child_idx < list_entry.length) {
+		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
 
 			// states vector is full, update
 			if (states_idx == STANDARD_VECTOR_SIZE) {
@@ -137,7 +136,6 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 			sel_vector.set_index(states_idx, source_idx);
 			states_update[states_idx] = state_ptr;
 			states_idx++;
-			child_idx++;
 		}
 	}
 
