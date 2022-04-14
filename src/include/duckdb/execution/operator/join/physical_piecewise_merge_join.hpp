@@ -64,9 +64,6 @@ public:
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          GlobalSinkState &gstate) const override;
 
-	//! Schedules tasks to merge sort the RHS data during the Finalize phase
-	static void ScheduleMergeTasks(Pipeline &pipeline, Event &event, MergeJoinGlobalState &state);
-
 	bool IsSink() const override {
 		return true;
 	}

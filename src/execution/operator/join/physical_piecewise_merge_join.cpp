@@ -130,70 +130,6 @@ void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalSinkSt
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-class MergeJoinFinalizeTask : public ExecutorTask {
-public:
-	MergeJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, MergeJoinGlobalState &state)
-	    : ExecutorTask(context), event(move(event_p)), context(context), state(state) {
-	}
-
-	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		// Initialize merge sorted and iterate until done
-		auto &global_sort_state = state.table->global_sort_state;
-		MergeSorter merge_sorter(global_sort_state, BufferManager::GetBufferManager(context));
-		merge_sorter.PerformInMergeRound();
-		event->FinishTask();
-
-		return TaskExecutionResult::TASK_FINISHED;
-	}
-
-private:
-	shared_ptr<Event> event;
-	ClientContext &context;
-	MergeJoinGlobalState &state;
-};
-
-class MergeJoinFinalizeEvent : public Event {
-public:
-	MergeJoinFinalizeEvent(MergeJoinGlobalState &gstate_p, Pipeline &pipeline_p)
-	    : Event(pipeline_p.executor), gstate(gstate_p), pipeline(pipeline_p) {
-	}
-
-	MergeJoinGlobalState &gstate;
-	Pipeline &pipeline;
-
-public:
-	void Schedule() override {
-		auto &context = pipeline.GetClientContext();
-
-		// Schedule tasks equal to the number of threads, which will each merge multiple partitions
-		auto &ts = TaskScheduler::GetScheduler(context);
-		idx_t num_threads = ts.NumberOfThreads();
-
-		vector<unique_ptr<Task>> merge_tasks;
-		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-			merge_tasks.push_back(make_unique<MergeJoinFinalizeTask>(shared_from_this(), context, gstate));
-		}
-		SetTasks(move(merge_tasks));
-	}
-
-	void FinishEvent() override {
-		auto &global_sort_state = gstate.table->global_sort_state;
-
-		global_sort_state.CompleteMergeRound(true);
-		if (global_sort_state.sorted_blocks.size() > 1) {
-			// Multiple blocks remaining: Schedule the next round
-			PhysicalPiecewiseMergeJoin::ScheduleMergeTasks(pipeline, *this, gstate);
-		}
-	}
-};
-
-void PhysicalPiecewiseMergeJoin::ScheduleMergeTasks(Pipeline &pipeline, Event &event, MergeJoinGlobalState &gstate) {
-	// Initialize global sort state for a round of merging
-	gstate.table->global_sort_state.InitializeMergeRound();
-	auto new_event = make_shared<MergeJoinFinalizeEvent>(gstate, pipeline);
-	event.InsertEvent(move(new_event));
-}
-
 SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                       GlobalSinkState &gstate_p) const {
 	auto &gstate = (MergeJoinGlobalState &)gstate_p;
@@ -208,13 +144,9 @@ SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event 
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
 
-	// Prepare for merge sort phase
-	global_sort_state.PrepareMergePhase();
+	// Sort the current input child
+	gstate.table->Finalize(pipeline, event);
 
-	// Start the merge phase or finish if a merge is not necessary
-	if (global_sort_state.sorted_blocks.size() > 1) {
-		PhysicalPiecewiseMergeJoin::ScheduleMergeTasks(pipeline, event, gstate);
-	}
 	return SinkFinalizeType::READY;
 }
 
