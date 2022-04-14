@@ -32,7 +32,7 @@ jobs:
  linux-release-64:
     name: Linux (64 Bit)
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    container: centos:7
     env:
       GEN: ninja
       BUILD_BENCHMARK: 1
@@ -50,7 +50,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-    - uses: ./.github/actions/ubuntu_16_setup
+    - uses: ./.github/actions/centos_7_setup
 
     - name: Build
       run: STATIC_LIBCPP=1 BUILD_ODBC=1 make
@@ -94,7 +94,7 @@ jobs:
  linux-extensions-64:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    container: centos:7
 #    needs: linux-release-64
     env:
       GEN: ninja
@@ -120,7 +120,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-    - uses: ./.github/actions/ubuntu_16_setup
+    - uses: ./.github/actions/centos_7_setup
       with:
         openssl: 1
 
@@ -141,14 +141,14 @@ jobs:
  linux-release-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    container: centos:7
 #    needs: linux-release-64
     env:
       GEN: ninja
 
     steps:
     - uses: actions/checkout@v3
-    - uses: ./.github/actions/ubuntu_16_setup
+    - uses: ./.github/actions/centos_7_setup
 
     - name: Build
       run: |
