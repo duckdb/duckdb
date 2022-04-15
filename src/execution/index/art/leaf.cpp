@@ -24,7 +24,8 @@ void Leaf::Insert(row_t row_id) {
 	row_ids[num_elements++] = row_id;
 }
 
-idx_t Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
+std::pair<idx_t, idx_t> Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
+	auto block_id = writer.block->id;
 	auto offset = writer.offset;
 	// Write Node Type
 	writer.Write(0);
@@ -42,7 +43,10 @@ idx_t Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
 	for (idx_t i = 0; i < num_elements; i++) {
 		writer.Write(row_ids[i]);
 	}
-	return offset;
+	return {block_id, offset};
+}
+
+unique_ptr<Leaf> Leaf::Deserialize(Deserializer &source) {
 }
 
 void Leaf::Remove(row_t row_id) {

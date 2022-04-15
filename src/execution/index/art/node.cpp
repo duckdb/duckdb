@@ -4,11 +4,11 @@
 
 namespace duckdb {
 
-Node::Node(ART &art, NodeType type, size_t compressed_prefix_size) : prefix_length(0), count(0), type(type) {
+Node::Node(NodeType type, size_t compressed_prefix_size) : prefix_length(0), count(0), type(type) {
 	this->prefix = unique_ptr<uint8_t[]>(new uint8_t[compressed_prefix_size]);
 }
 
-void Node::CopyPrefix(ART &art, Node *src, Node *dst) {
+void Node::CopyPrefix(Node *src, Node *dst) {
 	dst->prefix_length = src->prefix_length;
 	memcpy(dst->prefix.get(), src->prefix.get(), src->prefix_length);
 }
@@ -25,7 +25,7 @@ idx_t Node::GetMin() {
 }
 // LCOV_EXCL_STOP
 
-uint32_t Node::PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth) {
+uint32_t Node::PrefixMismatch(Node *node, Key &key, uint64_t depth) {
 	uint64_t pos;
 	for (pos = 0; pos < node->prefix_length; pos++) {
 		if (key[depth + pos] != node->prefix[pos]) {
@@ -35,41 +35,41 @@ uint32_t Node::PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth) {
 	return pos;
 }
 
-void Node::InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &new_node) {
+void Node::InsertLeaf(unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &new_node) {
 	switch (node->type) {
 	case NodeType::N4:
-		Node4::Insert(art, node, key, new_node);
+		Node4::Insert(node, key, new_node);
 		break;
 	case NodeType::N16:
-		Node16::Insert(art, node, key, new_node);
+		Node16::Insert(node, key, new_node);
 		break;
 	case NodeType::N48:
-		Node48::Insert(art, node, key, new_node);
+		Node48::Insert(node, key, new_node);
 		break;
 	case NodeType::N256:
-		Node256::Insert(art, node, key, new_node);
+		Node256::Insert(node, key, new_node);
 		break;
 	default:
 		throw InternalException("Unrecognized leaf type for insert");
 	}
 }
 
-void Node::Erase(ART &art, unique_ptr<Node> &node, idx_t pos) {
+void Node::Erase(unique_ptr<Node> &node, idx_t pos) {
 	switch (node->type) {
 	case NodeType::N4: {
-		Node4::Erase(art, node, pos);
+		Node4::Erase(node, pos);
 		break;
 	}
 	case NodeType::N16: {
-		Node16::Erase(art, node, pos);
+		Node16::Erase(node, pos);
 		break;
 	}
 	case NodeType::N48: {
-		Node48::Erase(art, node, pos);
+		Node48::Erase(node, pos);
 		break;
 	}
 	case NodeType::N256:
-		Node256::Erase(art, node, pos);
+		Node256::Erase(node, pos);
 		break;
 	default:
 		throw InternalException("Unrecognized leaf type for erase");

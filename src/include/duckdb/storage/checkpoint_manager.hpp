@@ -92,6 +92,7 @@ private:
 	void ReadSequence(ClientContext &context, MetaBlockReader &reader);
 	void ReadMacro(ClientContext &context, MetaBlockReader &reader);
 	void ReadTableMacro(ClientContext &context, MetaBlockReader &reader);
+	void ReadIndex(ClientContext &context, MetaBlockReader &reader);
 	void ReadType(ClientContext &context, MetaBlockReader &reader);
 
 private:

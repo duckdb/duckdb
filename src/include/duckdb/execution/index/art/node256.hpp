@@ -13,7 +13,7 @@ namespace duckdb {
 
 class Node256 : public Node {
 public:
-	Node256(ART &art, size_t compression_length);
+	Node256(size_t compression_length);
 
 	unique_ptr<Node> child[256];
 
@@ -31,12 +31,12 @@ public:
 	idx_t GetMin() override;
 
 	//! Insert node From Node256
-	static void Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child);
+	static void Insert(unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child);
 
 	//! Shrink to node 48
-	static void Erase(ART &art, unique_ptr<Node> &node, int pos);
+	static void Erase(unique_ptr<Node> &node, int pos);
 
 	//! Serialize Node
-	idx_t Serialize(duckdb::MetaBlockWriter &writer) override;
+	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) override;
 };
 } // namespace duckdb

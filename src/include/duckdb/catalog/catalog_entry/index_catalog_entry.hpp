@@ -20,17 +20,21 @@ class Index;
 //! An index catalog entry
 class IndexCatalogEntry : public StandardEntry {
 public:
-	//! Create a real TableCatalogEntry and initialize storage for it
+	//! Create an IndexCatalogEntry and initialize storage for it
 	IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info);
 	~IndexCatalogEntry() override;
 
 	Index *index;
 	shared_ptr<DataTableInfo> info;
 	string sql;
+	vector<unique_ptr<ParsedExpression>> expressions;
 
 public:
 	string ToSQL() override;
-	idx_t Serialize(duckdb::MetaBlockWriter &writer);
+	void SerializeMetadata(duckdb::MetaBlockWriter &serializer);
+	static unique_ptr<CreateIndexInfo> DeserializeMetadata(Deserializer &source);
+	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer);
+	std::unique_ptr<Index> Deserialize(Deserializer &source);
 };
 
 } // namespace duckdb

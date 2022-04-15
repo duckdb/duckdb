@@ -49,7 +49,7 @@ public:
 	vector<PhysicalType> types;
 	//! The logical types of the expressions
 	vector<LogicalType> logical_types;
-	// ! constraint type
+	//! constraint type
 	IndexConstraintType constraint_type;
 
 public:

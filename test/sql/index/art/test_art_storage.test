@@ -20,13 +20,13 @@ INSERT INTO integers VALUES (1)
 
 statement ok
 checkpoint
-#
-#restart
-#
-#query I
-#SELECT * FROM integers;
-#----
-#1
-#
-#statement ok
-#DROP INDEX i_index
+
+restart
+
+query I
+SELECT * FROM integers;
+----
+1
+
+statement ok
+DROP INDEX i_index

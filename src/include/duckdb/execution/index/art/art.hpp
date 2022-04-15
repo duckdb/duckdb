@@ -113,7 +113,7 @@ public:
 	void SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size);
 
 	//! Search Equal used for Joins that do not need to fetch data
-	idx_t DepthFirstSearchCheckpoint(duckdb::MetaBlockWriter &writer);
+	std::pair<idx_t, idx_t> DepthFirstSearchCheckpoint(duckdb::MetaBlockWriter &writer);
 
 private:
 	DataChunk expression_result;

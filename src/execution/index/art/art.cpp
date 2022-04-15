@@ -496,7 +496,7 @@ void ART::SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size) {
 	result_size = leaf->num_elements;
 }
 
-idx_t ART::DepthFirstSearchCheckpoint(duckdb::MetaBlockWriter &writer) {
+std::pair<idx_t, idx_t> ART::DepthFirstSearchCheckpoint(duckdb::MetaBlockWriter &writer) {
 	lock_guard<mutex> l(lock);
 	return tree->Serialize(writer);
 }

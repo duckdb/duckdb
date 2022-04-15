@@ -240,6 +240,7 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	uint32_t view_count = field_reader.ReadRequired<uint32_t>();
 	uint32_t macro_count = field_reader.ReadRequired<uint32_t>();
 	uint32_t table_macro_count = field_reader.ReadRequired<uint32_t>();
+	uint32_t table_index_count = field_reader.ReadRequired<uint32_t>();
 	field_reader.Finalize();
 
 	// now read the enums
@@ -267,6 +268,9 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 
 	for (uint32_t i = 0; i < table_macro_count; i++) {
 		ReadTableMacro(context, reader);
+	}
+	for (uint32_t i = 0; i < table_index_count; i++) {
+		ReadIndex(context, reader);
 	}
 }
 
@@ -302,8 +306,55 @@ void CheckpointManager::ReadSequence(ClientContext &context, MetaBlockReader &re
 // Indexes
 //===--------------------------------------------------------------------===//
 void CheckpointManager::WriteIndex(IndexCatalogEntry &index) {
-	auto root_offset = index.Serialize(*metadata_writer);
-	metadata_writer->Write(root_offset);
+	// Write the index data
+	auto root_offset = index.Serialize(*tabledata_writer);
+	// Write the index metadata
+	// Serialize the necessary meta data for index catalog construction.
+	index.SerializeMetadata(*metadata_writer);
+	// Serialize the Block id and offset of root node
+	metadata_writer->Write(root_offset.first);
+	metadata_writer->Write(root_offset.second);
+}
+
+void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reader) {
+
+	// Deserialize the index meta data
+	auto info = IndexCatalogEntry::DeserializeMetadata(reader);
+
+	// Create index in the catalog
+	auto &catalog = Catalog::GetCatalog(db);
+	auto schema_catalog = catalog.GetSchema(context, info->schema);
+	auto table_catalog =
+	    (TableCatalogEntry *)catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name);
+	auto index_catalog = schema_catalog->CreateIndex(context, info.get(), table_catalog);
+
+	// Read the actual index data
+	auto root_block_id = reader.Read<idx_t>();
+	auto root_offset = reader.Read<idx_t>();
+
+	int i = 0;
+
+	//	// bind the info
+	//	auto binder = Binder::CreateBinder(context);
+	//	auto bound_info = binder->BindCreateViewInfo()
+	//
+	//	// now read the actual table data and place it into the create table info
+	//	auto block_id = reader.Read<block_id_t>();
+	//	auto offset = reader.Read<uint64_t>();
+	//	MetaBlockReader table_data_reader(db, block_id);
+	//	table_data_reader.offset = offset;
+	//	TableDataReader data_reader(table_data_reader, *bound_info);
+	//	data_reader.ReadTableData();
+	//
+	//	// finally create the table in the catalog
+	//	auto &catalog = Catalog::GetCatalog(db);
+	//	catalog.GetEntry()
+	//	catalog.
+	//	catalog.CreateTable(context, bound_info.get());
+	//
+	//	auto info = TableMacroCatalogEntry::Deserialize(reader);
+	//	auto &catalog = Catalog::GetCatalog(db);
+	//	catalog.CreateFunction(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//

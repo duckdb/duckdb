@@ -15,14 +15,12 @@
 namespace duckdb {
 enum class NodeType : uint8_t { N4 = 0, N16 = 1, N48 = 2, N256 = 3, NLeaf = 4 };
 
-class ART;
-
 class Node {
 public:
 	static const uint8_t EMPTY_MARKER = 48;
 
 public:
-	Node(ART &art, NodeType type, size_t compressed_prefix_size);
+	Node(NodeType type, size_t compressed_prefix_size);
 	virtual ~Node() {
 	}
 
@@ -49,7 +47,11 @@ public:
 	virtual idx_t GetMin();
 
 	//! Serialize this Node
-	virtual idx_t Serialize(duckdb::MetaBlockWriter &writer) = 0;
+	virtual std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) = 0;
+
+	//! Deserialize this Node
+	virtual unique_ptr<Node> Deserialize(duckdb::Deserializer &source) = 0;
+
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position. if pos ==
 	//! DConstants::INVALID_INDEX, then the first valid position in the node will be returned.
 	virtual idx_t GetNextPos(idx_t pos) {
@@ -60,15 +62,15 @@ public:
 	virtual unique_ptr<Node> *GetChild(idx_t pos);
 
 	//! Compare the key with the prefix of the node, return the number matching bytes
-	static uint32_t PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth);
+	static uint32_t PrefixMismatch(Node *node, Key &key, uint64_t depth);
 	//! Insert leaf into inner node
-	static void InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &new_node);
+	static void InsertLeaf(unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &new_node);
 	//! Erase entry from node
-	static void Erase(ART &art, unique_ptr<Node> &node, idx_t pos);
+	static void Erase(unique_ptr<Node> &node, idx_t pos);
 
 protected:
 	//! Copies the prefix from the source to the destination node
-	static void CopyPrefix(ART &art, Node *src, Node *dst);
+	static void CopyPrefix(Node *src, Node *dst);
 };
 
 } // namespace duckdb

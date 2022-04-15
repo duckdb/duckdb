@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-Node4::Node4(ART &art, size_t compression_length) : Node(art, NodeType::N4, compression_length) {
+Node4::Node4(size_t compression_length) : Node(NodeType::N4, compression_length) {
 	memset(key, 0, sizeof(key));
 }
 
@@ -48,7 +48,7 @@ unique_ptr<Node> *Node4::GetChild(idx_t pos) {
 	return &child[pos];
 }
 
-void Node4::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
+void Node4::Insert(unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
 	Node4 *n = static_cast<Node4 *>(node.get());
 
 	// Insert leaf into inner node
@@ -69,19 +69,19 @@ void Node4::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_pt
 		n->count++;
 	} else {
 		// Grow to Node16
-		auto new_node = make_unique<Node16>(art, n->prefix_length);
+		auto new_node = make_unique<Node16>(n->prefix_length);
 		new_node->count = 4;
-		CopyPrefix(art, node.get(), new_node.get());
+		CopyPrefix(node.get(), new_node.get());
 		for (idx_t i = 0; i < 4; i++) {
 			new_node->key[i] = n->key[i];
 			new_node->child[i] = move(n->child[i]);
 		}
 		node = move(new_node);
-		Node16::Insert(art, node, key_byte, child);
+		Node16::Insert(node, key_byte, child);
 	}
 }
 
-void Node4::Erase(ART &art, unique_ptr<Node> &node, int pos) {
+void Node4::Erase(unique_ptr<Node> &node, int pos) {
 	Node4 *n = static_cast<Node4 *>(node.get());
 	D_ASSERT(pos < n->count);
 
@@ -119,9 +119,10 @@ void Node4::Erase(ART &art, unique_ptr<Node> &node, int pos) {
 	}
 }
 
-idx_t Node4::Serialize(duckdb::MetaBlockWriter &writer) {
+std::pair<idx_t, idx_t> Node4::Serialize(duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
-	vector<idx_t> child_offsets;
+	auto block_id = writer.block->id;
+	vector<std::pair<idx_t, idx_t>> child_offsets;
 	for (auto &child_node : child) {
 		if (child_node) {
 			child_offsets.push_back(child_node->Serialize(writer));
@@ -136,9 +137,10 @@ idx_t Node4::Serialize(duckdb::MetaBlockWriter &writer) {
 	}
 	// Write child offsets
 	for (auto &offsets : child_offsets) {
-		writer.Write(offsets);
+		writer.Write(offsets.first);
+		writer.Write(offsets.second);
 	}
-	return offset;
+	return {block_id, offset};
 }
 
 } // namespace duckdb

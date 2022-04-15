@@ -27,7 +27,9 @@ public:
 public:
 	void Insert(row_t row_id);
 	void Remove(row_t row_id);
-	idx_t Serialize(duckdb::MetaBlockWriter &writer) override;
+	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) override;
+
+	unique_ptr<Leaf> Deserialize(duckdb::Deserializer &source) override;
 
 private:
 	unique_ptr<row_t[]> row_ids;

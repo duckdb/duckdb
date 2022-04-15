@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-Node16::Node16(ART &art, size_t compression_length) : Node(art, NodeType::N16, compression_length) {
+Node16::Node16(size_t compression_length) : Node(NodeType::N16, compression_length) {
 	memset(key, 16, sizeof(key));
 }
 
@@ -51,7 +51,7 @@ idx_t Node16::GetMin() {
 	return 0;
 }
 
-void Node16::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
+void Node16::Insert(unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
 	Node16 *n = static_cast<Node16 *>(node.get());
 
 	if (n->count < 16) {
@@ -71,22 +71,23 @@ void Node16::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_p
 		n->count++;
 	} else {
 		// Grow to Node48
-		auto new_node = make_unique<Node48>(art, n->prefix_length);
+		auto new_node = make_unique<Node48>(n->prefix_length);
 		for (idx_t i = 0; i < node->count; i++) {
 			new_node->child_index[n->key[i]] = i;
 			new_node->child[i] = move(n->child[i]);
 		}
-		CopyPrefix(art, n, new_node.get());
+		CopyPrefix(n, new_node.get());
 		new_node->count = node->count;
 		node = move(new_node);
 
-		Node48::Insert(art, node, key_byte, child);
+		Node48::Insert(node, key_byte, child);
 	}
 }
 
-idx_t Node16::Serialize(duckdb::MetaBlockWriter &writer) {
+std::pair<idx_t, idx_t> Node16::Serialize(duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
-	vector<idx_t> child_offsets;
+	auto block_id = writer.block->id;
+	vector<std::pair<idx_t, idx_t>> child_offsets;
 	for (auto &child_node : child) {
 		if (child_node) {
 			child_offsets.push_back(child_node->Serialize(writer));
@@ -101,12 +102,13 @@ idx_t Node16::Serialize(duckdb::MetaBlockWriter &writer) {
 	}
 	// Write child offsets
 	for (auto &offsets : child_offsets) {
-		writer.Write(offsets);
+		writer.Write(offsets.first);
+		writer.Write(offsets.second);
 	}
-	return offset;
+	return {block_id, offset};
 }
 
-void Node16::Erase(ART &art, unique_ptr<Node> &node, int pos) {
+void Node16::Erase(unique_ptr<Node> &node, int pos) {
 	Node16 *n = static_cast<Node16 *>(node.get());
 	// erase the child and decrease the count
 	n->child[pos].reset();
@@ -118,12 +120,12 @@ void Node16::Erase(ART &art, unique_ptr<Node> &node, int pos) {
 	}
 	if (node->count <= 3) {
 		// Shrink node
-		auto new_node = make_unique<Node4>(art, n->prefix_length);
+		auto new_node = make_unique<Node4>(n->prefix_length);
 		for (unsigned i = 0; i < n->count; i++) {
 			new_node->key[new_node->count] = n->key[i];
 			new_node->child[new_node->count++] = move(n->child[i]);
 		}
-		CopyPrefix(art, n, new_node.get());
+		CopyPrefix(n, new_node.get());
 		node = move(new_node);
 	}
 }

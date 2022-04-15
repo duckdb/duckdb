@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-Node48::Node48(ART &art, size_t compression_length) : Node(art, NodeType::N48, compression_length) {
+Node48::Node48(size_t compression_length) : Node(NodeType::N48, compression_length) {
 	for (idx_t i = 0; i < 256; i++) {
 		child_index[i] = Node::EMPTY_MARKER;
 	}
@@ -55,7 +55,7 @@ idx_t Node48::GetMin() {
 	return DConstants::INVALID_INDEX;
 }
 
-void Node48::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
+void Node48::Insert(unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
 	Node48 *n = static_cast<Node48 *>(node.get());
 
 	// Insert leaf into inner node
@@ -87,7 +87,7 @@ void Node48::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_p
 	}
 }
 
-void Node48::Erase(ART &art, unique_ptr<Node> &node, int pos) {
+void Node48::Erase(unique_ptr<Node> &node, int pos) {
 	Node48 *n = static_cast<Node48 *>(node.get());
 
 	n->child[n->child_index[pos]].reset();
@@ -106,9 +106,10 @@ void Node48::Erase(ART &art, unique_ptr<Node> &node, int pos) {
 	}
 }
 
-idx_t Node48::Serialize(duckdb::MetaBlockWriter &writer) {
+std::pair<idx_t, idx_t> Node48::Serialize(duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
-	vector<idx_t> child_offsets;
+	vector<std::pair<idx_t, idx_t>> child_offsets;
+	auto block_id = writer.block->id;
 	for (auto &child_node : child) {
 		if (child_node) {
 			child_offsets.push_back(child_node->Serialize(writer));
@@ -123,9 +124,10 @@ idx_t Node48::Serialize(duckdb::MetaBlockWriter &writer) {
 	}
 	// Write child offsets
 	for (auto &offsets : child_offsets) {
-		writer.Write(offsets);
+		writer.Write(offsets.first);
+		writer.Write(offsets.second);
 	}
-	return offset;
+	return {block_id, offset};
 }
 
 } // namespace duckdb
