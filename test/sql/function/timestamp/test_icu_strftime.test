@@ -37,6 +37,20 @@ SELECT ts, strftime(ts, '%Y-%m-%d %H:%M:%S.%f %Z') FROM timestamps;
 2021-12-24 22:00:00+00	2021-12-24 14:00:00.000000 America/Los_Angeles
 NULL	NULL
 
+# TZ at the start
+query II
+SELECT ts, strftime(ts, '%Z %Y-%m-%d %H:%M:%S.%f') FROM timestamps;
+----
+0044-03-13 (BC) 09:33:41.987654+00	America/Los_Angeles -43-03-15 01:40:43.987654
+1962-07-31 12:20:48.123456+00	America/Los_Angeles 1962-07-31 05:20:48.123456
+2021-01-01 00:00:00+00	America/Los_Angeles 2020-12-31 16:00:00.000000
+2021-02-02 00:00:00+00	America/Los_Angeles 2021-02-01 16:00:00.000000
+2021-11-26 10:15:13.123456+00	America/Los_Angeles 2021-11-26 02:15:13.123456
+2021-11-15 10:30:00+00	America/Los_Angeles 2021-11-15 02:30:00.000000
+2021-11-15 09:30:00+00	America/Los_Angeles 2021-11-15 01:30:00.000000
+2021-12-24 22:00:00+00	America/Los_Angeles 2021-12-24 14:00:00.000000
+NULL	NULL
+
 #
 # Multiple Formats from an exhaustive list
 #
