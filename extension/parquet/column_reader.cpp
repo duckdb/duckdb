@@ -80,6 +80,10 @@ size_t ColumnReader::TotalCompressedSize() const {
 	return chunk->meta_data.total_compressed_size;
 }
 
+idx_t ColumnReader::FileOffset() const {
+	return chunk->file_offset;
+}
+
 idx_t ColumnReader::GroupRowsAvailable() {
 	return group_rows_available;
 }

@@ -764,6 +764,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			to_scan_compressed_bytes += root_reader->GetChildReader(file_col_idx)->TotalCompressedSize();
 		}
 
+		// Prefetch type A: Small groups, no filter
+		// TODO what if we have limit clause? we scan way to much? Can we push down limit clauses to prevent this? Should we exponential increase?
 		if (!state.filters) {
 			auto &group = GetGroup(state);
 			auto total_compressed_size = group.total_compressed_size;
@@ -778,9 +780,10 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 			bool scans_enough = (total_compressed_size / (double)to_scan_compressed_bytes) >=
 			                    ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN;
-			bool groups_small_enough = total_compressed_size < ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_LIMIT;
+			bool groups_small_enough = total_compressed_size < ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MAX_SIZE;
 
 			if (groups_small_enough && scans_enough) {
+				// Prefetch type 1a: Prefetch whole row group
 				if (!state.have_prefetched_group || state.prefetched_group != state.current_group) {
 					auto &trans = (ThriftFileTransport &)*state.thrift_file_proto->getTransport();
 
@@ -790,7 +793,54 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 					state.have_prefetched_group = true;
 					state.prefetched_group = state.current_group;
 				}
+			} else if (to_scan_compressed_bytes / result.ColumnCount() > ParquetReaderPrefetchConfig::COLUMN_CHUNK_CACHE_LOWER_LIMIT && to_scan_compressed_bytes < ParquetReaderPrefetchConfig::COLUMN_CHUNK_CACHE_MAX_SIZE) {
+				// Prefetch type 2a: Prefetch columns-wise
+
+				// TODO: should we just prefetch all columns?
+
+				// TODO can we assume this is ordered? Prob not, meaning we have to have a map for both beginning and ending?
+				struct BufferToPrefetch {
+					idx_t pos;
+					size_t len;
+				};
+				std::map<idx_t, BufferToPrefetch> end_map;
+
+				for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
+					auto file_col_idx = state.column_ids[out_col_idx];
+					auto root_reader = ((StructColumnReader *)state.root_reader.get());
+					auto size = root_reader->GetChildReader(file_col_idx)->TotalCompressedSize();
+					auto offset = root_reader->GetChildReader(file_col_idx)->FileOffset();
+
+					std::cout << "Want to prefetch column from " << offset << " till " << offset + size << "\n";
+
+					idx_t end = size + offset;
+
+					// Lookup end to possibly merge this with another
+					auto end_lookup = end_map.find(offset);
+					if (end_lookup != end_map.end()) {
+						// We've found a buffer adjacent to thisone, merge it so we can fetch it all at once.
+						auto buffer = end_lookup->second;
+						end_map.erase(offset);
+						buffer.len += size;
+						end_map.insert(std::pair<idx_t, BufferToPrefetch>(end,buffer));
+					} else {
+						BufferToPrefetch buffer{offset, size};
+						end_map.insert(std::pair<idx_t, BufferToPrefetch>(end,buffer));
+					}
+				}
+
+				// Now end_map contains the smallest set of buffers we will scan in this row group, we prefetch them all
+				// TODO limit the memory this may use?
+				auto &trans = (ThriftFileTransport &)*state.thrift_file_proto->getTransport();
+				for (auto & buffer_to_prefetch: end_map) {
+					auto size = buffer_to_prefetch.second.len;
+					auto pos = buffer_to_prefetch.second.pos;
+					trans.PrefetchBuf(pos, size);
+				}
+			} else {
 			}
+		} else {
+			// We are going to filter: what do we do?
 		}
 
 		return true;
