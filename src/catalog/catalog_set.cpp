@@ -456,6 +456,19 @@ void CatalogSet::AdjustEnumDependency(CatalogEntry *entry, ColumnDefinition &col
 	}
 }
 
+void CatalogSet::AdjustCustomDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove) {
+	CatalogEntry *custom_type_catalog = (CatalogEntry *)CustomType::GetCatalog(column.type);
+	if (custom_type_catalog) {
+		if (remove) {
+			catalog.dependency_manager->dependents_map[custom_type_catalog].erase(entry->parent);
+			catalog.dependency_manager->dependencies_map[entry->parent].erase(custom_type_catalog);
+		} else {
+			catalog.dependency_manager->dependents_map[custom_type_catalog].insert(entry);
+			catalog.dependency_manager->dependencies_map[entry].insert(custom_type_catalog);
+		}
+	}
+}
+
 void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table, ColumnDefinition &column,
                                   bool remove) {
 	bool found = false;
@@ -468,6 +481,16 @@ void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table,
 		}
 		if (!found) {
 			AdjustEnumDependency(entry, column, remove);
+		}
+	} else if (column.type.id() == LogicalTypeId::CUSTOM) {
+		for (auto &old_column : table->columns) {
+			if (old_column.name == column.name && old_column.type.id() != LogicalTypeId::CUSTOM) {
+				AdjustCustomDependency(entry, column, remove);
+				found = true;
+			}
+		}
+		if (!found) {
+			AdjustCustomDependency(entry, column, remove);
 		}
 	}
 }

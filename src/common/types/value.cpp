@@ -27,6 +27,14 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hash.hpp"
 
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+
 namespace duckdb {
 
 Value::Value(LogicalType type) : type_(move(type)), is_null(true) {
@@ -167,6 +175,8 @@ Value Value::MinimumValue(const LogicalType &type) {
 	}
 	case LogicalTypeId::ENUM:
 		return Value::ENUM(0, type);
+	case LogicalTypeId::CUSTOM:
+		return MinimumValue(LogicalType(CustomType::GetInternalType(type)));
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
 	}
@@ -235,6 +245,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 	}
 	case LogicalTypeId::ENUM:
 		return Value::ENUM(EnumType::GetSize(type) - 1, type);
+	case LogicalTypeId::CUSTOM:
+		return MaximumValue(LogicalType(CustomType::GetInternalType(type)));
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
 	}
@@ -565,6 +577,87 @@ Value Value::BLOB(const string &data) {
 	result.str_value = Blob::ToBlob(string_t(data));
 	return result;
 }
+
+Value Value::CUSTOM(const_data_ptr_t data, idx_t len, LogicalType ctype) {
+	Value result(ctype);
+	result.is_null = false;
+	result.str_value = string((const char *)data, len);
+	return result;
+}
+
+
+Value Value::CUSTOM(const_data_ptr_t data, LogicalType ctype, idx_t index) {
+	Value result(ctype);
+	result.is_null = false;
+	switch (CustomType::GetInternalType(ctype)) {
+	case LogicalTypeId::BOOLEAN:
+		result.value_.boolean = ((bool *)data)[index];
+		break;
+	case LogicalTypeId::TINYINT:
+		result.value_.tinyint = ((int8_t *)data)[index];
+		break;
+	case LogicalTypeId::SMALLINT:
+		result.value_.smallint = ((int16_t *)data)[index];
+		break;
+	case LogicalTypeId::INTEGER:
+		result.value_.integer = ((int32_t *)data)[index];
+		break;
+	case LogicalTypeId::DATE:
+		result.value_.date = ((date_t *)data)[index];
+		break;
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
+		result.value_.time = ((dtime_t *)data)[index];
+		break;
+	case LogicalTypeId::BIGINT:
+		result.value_.bigint = ((int64_t *)data)[index];
+		break;
+	case LogicalTypeId::UTINYINT:
+		result.value_.utinyint = ((uint8_t *)data)[index];
+		break;
+	case LogicalTypeId::USMALLINT:
+		result.value_.usmallint = ((uint16_t *)data)[index];
+		break;
+	case LogicalTypeId::UINTEGER:
+		result.value_.uinteger = ((uint32_t *)data)[index];
+		break;
+	case LogicalTypeId::UBIGINT:
+		result.value_.ubigint = ((uint64_t *)data)[index];
+		break;
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_TZ:
+		result.value_.timestamp = ((timestamp_t *)data)[index];
+		break;
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UUID:
+		result.value_.hugeint = ((hugeint_t *)data)[index];
+		break;
+	case LogicalTypeId::HASH:
+		result.value_.hash = ((hash_t *)data)[index];
+		break;
+	case LogicalTypeId::POINTER:
+		result.value_.pointer = ((uintptr_t *)data)[index];
+		break;
+	case LogicalTypeId::FLOAT:
+		result.value_.float_ = ((float *)data)[index];
+		break;
+	case LogicalTypeId::DOUBLE:
+		result.value_.double_ = ((double *)data)[index];
+		break;
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB: {
+		auto str = ((string_t *)data)[index];
+		return Value::CUSTOM((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize(), ctype);
+	}
+	default:
+		throw InternalException("Unimplemented internal type for custom value access");
+	}
+	return result;
+}
+
 Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 	D_ASSERT(original_type.id() == LogicalTypeId::ENUM);
 	Value result(original_type);
@@ -1338,6 +1431,89 @@ string Value::ToString() const {
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
 		return values_insert_order.GetValue(enum_idx).ToString();
+	}
+	case LogicalTypeId::CUSTOM: {
+		auto context = CustomType::GetContext(type_);
+		if (!context) {
+			throw InternalException("Client Context invalid!");
+		}
+		auto internal_type = CustomType::GetInternalType(type_);
+		Value val;
+		switch (internal_type) {
+		case LogicalTypeId::VARCHAR: {
+			val = Value(string(str_value));
+		} break;
+		case LogicalTypeId::BOOLEAN: {
+			val = Value(value_.boolean);
+		} break;
+		case LogicalTypeId::TINYINT: {
+			val = Value(value_.tinyint);
+		} break;
+		case LogicalTypeId::SMALLINT: {
+			val = Value(value_.smallint);
+		} break;
+		case LogicalTypeId::INTEGER: {
+			val = Value(value_.integer);
+		} break;
+		case LogicalTypeId::BIGINT: {
+			val = Value(value_.bigint);
+		} break;
+		case LogicalTypeId::UTINYINT: {
+			val = Value(value_.utinyint);
+		} break;
+		case LogicalTypeId::USMALLINT: {
+			val = Value(value_.usmallint);
+		} break;
+		case LogicalTypeId::UINTEGER: {
+			val = Value::UINTEGER(value_.uinteger);
+		} break;
+		case LogicalTypeId::UBIGINT: {
+			val = Value::UBIGINT(value_.ubigint);
+		} break;
+		case LogicalTypeId::HUGEINT: {
+			val = Value::HUGEINT(value_.hugeint);
+		} break;
+		case LogicalTypeId::UUID: {
+			val = Value::UUID(value_.hugeint);
+		} break;
+		case LogicalTypeId::FLOAT: {
+			val = Value::FLOAT(value_.float_);
+		} break;
+		case LogicalTypeId::DOUBLE: {
+			val = Value::DOUBLE(value_.double_);
+		} break;
+		case LogicalTypeId::BLOB: {
+			auto str = string_t(string(str_value));
+			val = Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
+		} break;
+		default:
+			throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString());
+		}
+
+		Value result_value;
+		unique_ptr<ConstantExpression> expr = make_unique<ConstantExpression>(val);
+		string schema = INVALID_SCHEMA;
+		vector<unique_ptr<ParsedExpression>> children;
+		auto order_bys = make_unique<OrderModifier>();
+		auto lowercase_name = CustomType::GetOutputFunction(type_);
+		children.push_back(move(expr));
+		string error;
+		vector<unique_ptr<Expression>> bound_children;
+		for (idx_t i = 0; i < children.size(); i++) {
+			auto &expr_ref = *(children[i]);
+			auto child = (ConstantExpression &)expr_ref;
+			auto bound_child = make_unique<BoundConstantExpression>(child.value);
+			bound_children.push_back(move(make_unique<BoundExpression>(move(bound_child))->expr));
+		}
+		unique_ptr<Expression> function = ScalarFunction::BindScalarFunction(*context, DEFAULT_SCHEMA, lowercase_name,
+										move(bound_children), error, true);
+
+		// use an ExpressionExecutor to execute the expression
+		if (!ExpressionExecutor::TryEvaluateScalar(*function.get(), result_value)) {
+			return "NULL";
+		}
+
+		return result_value.ToString();
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString());

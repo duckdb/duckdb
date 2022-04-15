@@ -2028,6 +2028,23 @@ typedef struct PGCreateEnumStmt
 } PGCreateEnumStmt;
 
 
+/* ----------------------
+ *		Type Statement
+ * ----------------------
+ */
+
+typedef struct PGCreateTypeStmt
+{
+	PGNodeTag		type;
+	PGList	   *name;		/* qualified name (list of Value strings) */
+	PGList	   *vals;			/* enum values (list of Value strings) */
+} PGCreateTypeStmt;
+
+typedef struct PGCustomTypeArgExpr {
+	PGNodeTag type;
+	char *name;    /* the name */
+	char *func_name;
+} PGCustomTypeArgExpr;
 
 
 

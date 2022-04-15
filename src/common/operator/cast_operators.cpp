@@ -1299,6 +1299,23 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 }
 
 //===--------------------------------------------------------------------===//
+// Cast To Custom
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastToCustom::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
+                              bool strict) {
+	idx_t result_size;
+	if (!Blob::TryGetBlobSize(input, result_size, error_message)) {
+		return false;
+	}
+
+	result = StringVector::EmptyString(result_vector, result_size);
+	Blob::ToBlob(input, (data_ptr_t)result.GetDataWriteable());
+	result.Finalize();
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
 // Cast From UUID
 //===--------------------------------------------------------------------===//
 template <>

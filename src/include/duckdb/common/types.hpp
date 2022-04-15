@@ -12,7 +12,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/single_thread_ptr.hpp"
 #include "duckdb/common/vector.hpp"
-
+#include "duckdb/common/map.hpp"
 
 namespace duckdb {
 
@@ -20,7 +20,9 @@ class Serializer;
 class Deserializer;
 class Value;
 class TypeCatalogEntry;
+class CustomTypeCatalogEntry;
 class Vector;
+class ClientContext;
 //! Type used to represent dates (days since 1970-01-01)
 struct date_t {
 	int32_t days;
@@ -365,8 +367,22 @@ enum class LogicalTypeId : uint8_t {
 	LIST = 101,
 	MAP = 102,
 	TABLE = 103,
-	ENUM = 104
+	ENUM = 104,
+	CUSTOM = 105
 };
+
+//===--------------------------------------------------------------------===//
+// Custom Type Parameter Id
+//===--------------------------------------------------------------------===//
+enum class CustomTypeParameterId : uint8_t {
+	INVALID = 0,
+	INPUT_FUNCTION = 1,
+	OUTPUT_FUNCTION = 2
+};
+
+CustomTypeParameterId TransformStringToCustomTypeParameter(const string &str);
+
+string TransformCustomTypeParameterToString(const CustomTypeParameterId &p_id);
 
 struct ExtraTypeInfo;
 
@@ -420,6 +436,8 @@ struct LogicalType {
 	DUCKDB_API hash_t Hash() const;
 
 	DUCKDB_API static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);
+
+	DUCKDB_API void UpdateInternalType();
 
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
 	DUCKDB_API bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
@@ -477,6 +495,8 @@ public:
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
+	DUCKDB_API static LogicalType CUSTOM(const string &custom_name, map<CustomTypeParameterId, string> &parameters,
+		LogicalTypeId internal_type = LogicalTypeId::INVALID);	// NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> Numeric();
 	//! A list of all INTEGRAL types
@@ -523,6 +543,19 @@ struct StructType {
 struct MapType {
 	DUCKDB_API static const LogicalType &KeyType(const LogicalType &type);
 	DUCKDB_API static const LogicalType &ValueType(const LogicalType &type);
+};
+
+struct CustomType {
+	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
+	DUCKDB_API static const map<CustomTypeParameterId, string> &GetParameters(const LogicalType &type);
+	DUCKDB_API static const LogicalTypeId &GetInternalType(const LogicalType &type);
+	DUCKDB_API static const string &GetInputFunction(const LogicalType &type);
+	DUCKDB_API static const string &GetOutputFunction(const LogicalType &type);
+	DUCKDB_API static void SetInternalType(LogicalType &type, LogicalTypeId internal_type);
+	DUCKDB_API static void SetContext(LogicalType &type, ClientContext *context);
+	DUCKDB_API static ClientContext* GetContext(const LogicalType &type);
+	DUCKDB_API static void SetCatalog(LogicalType &type, CustomTypeCatalogEntry* catalog_entry);
+	DUCKDB_API static CustomTypeCatalogEntry* GetCatalog(const LogicalType &type);
 };
 
 

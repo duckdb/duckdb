@@ -640,6 +640,18 @@ template <>
 bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
                               bool strict);
 
+struct TryCastToCustom {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message,
+	                             bool strict = false) {
+		throw InternalException("Unsupported type for try cast to custom");
+	}
+};
+
+template <>
+bool TryCastToCustom::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
+                              bool strict);
+
 //===--------------------------------------------------------------------===//
 // UUID
 //===--------------------------------------------------------------------===//

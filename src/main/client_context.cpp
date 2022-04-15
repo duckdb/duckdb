@@ -790,7 +790,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	unique_ptr<MaterializedQueryResult> original_result =
 	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
 	                                    copied_result =
-	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+	                                        make_unique<MaterializedQueryResult>( StatementType::SELECT_STATEMENT),
 	                                    deserialized_result =
 	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
 	                                    unoptimized_result =

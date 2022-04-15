@@ -514,6 +514,10 @@ Value Vector::GetValue(idx_t index) const {
 		}
 		return Value::LIST(ListType::GetChildType(GetType()), move(children));
 	}
+	case LogicalTypeId::CUSTOM: {
+		return Value::CUSTOM(data, GetType(), index);
+
+	}
 	default:
 		throw InternalException("Unimplemented type for value access");
 	}

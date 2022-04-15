@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 
@@ -195,15 +196,15 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	auto bound_expr = (BoundExpression *)expr.get();
 	unique_ptr<Expression> result = move(bound_expr->expr);
 	if (target_type.id() != LogicalTypeId::INVALID) {
-		// the binder has a specific target type: add a cast to that type
-		result = BoundCastExpression::AddCastToType(move(result), target_type);
+		result = ExpressionBinder::BindAddCast(context, move(result), target_type);
 	} else {
 		if (!binder.can_contain_nulls) {
 			// SQL NULL type is only used internally in the binder
 			// cast to INTEGER if we encounter it outside of the binder
 			if (ContainsNullType(result->return_type)) {
 				auto result_type = ExchangeNullType(result->return_type);
-				result = BoundCastExpression::AddCastToType(move(result), result_type);
+				// result = BoundCastExpression::AddCastToType(move(result), result_type);
+				result = ExpressionBinder::BindAddCast(context, move(result), result_type);
 			}
 		}
 		// check if we failed to convert any parameters
@@ -212,6 +213,27 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	}
 	if (result_type) {
 		*result_type = result->return_type;
+	}
+	return result;
+}
+
+unique_ptr<Expression> ExpressionBinder::BindAddCast(ClientContext &context, unique_ptr<Expression> expr, const LogicalType &target_type) {
+	unique_ptr<Expression> result = move(expr);
+	if (target_type.id() != LogicalTypeId::CUSTOM) {
+		// the binder has a specific target type: add a cast to that type
+		result = BoundCastExpression::AddCastToType(move(result), target_type);	
+	} else if (result->return_type != target_type) {
+		string error;
+		auto input_name = CustomType::GetInputFunction(target_type);
+		vector<unique_ptr<Expression>> children;
+		children.emplace_back(move(result));
+		// result = move(ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, input_name, move(children), error, true));
+		auto function = ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, input_name, move(children), error, true);
+		result = move(function);
+		if (!result) {
+			throw BinderException(error);
+		}
+		result->return_type = target_type;
 	}
 	return result;
 }

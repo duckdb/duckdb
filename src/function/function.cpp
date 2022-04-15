@@ -403,7 +403,7 @@ LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, const L
 	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
 }
 
-void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &children) {
+void BaseScalarFunction::CastToFunctionArguments(ClientContext &context, vector<unique_ptr<Expression>> &children) {
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < this->arguments.size() ? this->arguments[i] : this->varargs;
 		target_type.Verify();
@@ -420,7 +420,8 @@ void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> 
 				    ExpressionBinder::ExchangeType(target_type, LogicalTypeId::ANY, LogicalType::VARCHAR);
 			}
 		} else if (cast_result == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
-			children[i] = BoundCastExpression::AddCastToType(move(children[i]), target_type);
+			// children[i] = BoundCastExpression::AddCastToType(move(children[i]), target_type);
+			children[i] = ExpressionBinder::BindAddCast(context, move(children[i]), target_type);
 		}
 	}
 }
@@ -459,7 +460,7 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 		bind_info = bound_function.bind(context, bound_function, children);
 	}
 	// check if we need to add casts to the children
-	bound_function.CastToFunctionArguments(children);
+	bound_function.CastToFunctionArguments(context, children);
 
 	// now create the function
 	auto return_type = bound_function.return_type;
@@ -479,7 +480,7 @@ AggregateFunction::BindAggregateFunction(ClientContext &context, AggregateFuncti
 	}
 
 	// check if we need to add casts to the children
-	bound_function.CastToFunctionArguments(children);
+	bound_function.CastToFunctionArguments(context, children);
 
 	// Special case: for ORDER BY aggregates, we wrap the aggregate function in a SortedAggregateFunction
 	// The children are the sort clauses and the binding contains the ordering data.

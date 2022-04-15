@@ -266,7 +266,8 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		}
 
 		// Cast all three to match
-		bound_order.expr = BoundCastExpression::AddCastToType(move(bound_order.expr), order_type);
+		// bound_order.expr = BoundCastExpression::AddCastToType(move(bound_order.expr), order_type);
+		bound_order.expr = ExpressionBinder::BindAddCast(context, move(bound_order.expr), order_type);
 		start_type = end_type = order_type;
 	}
 

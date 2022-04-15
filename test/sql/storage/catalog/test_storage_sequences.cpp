@@ -6,12 +6,13 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Use sequences over different runs without checkpointing", "[storage]") {
-	unique_ptr<QueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
 	{
+		unique_ptr<QueryResult> result;
+
 		// create a database and insert values
 		DuckDB db(storage_database);
 		Connection con(db);
@@ -32,6 +33,8 @@ TEST_CASE("Use sequences over different runs without checkpointing", "[storage]"
 		Connection con(db);
 	}
 	{
+		unique_ptr<QueryResult> result;
+
 		DuckDB db(storage_database);
 		Connection con(db);
 		result = con.Query("SELECT nextval('seq')");
@@ -45,6 +48,8 @@ TEST_CASE("Use sequences over different runs without checkpointing", "[storage]"
 	}
 	// reload again
 	{
+		unique_ptr<QueryResult> result;
+
 		DuckDB db(storage_database);
 		Connection con(db);
 		result = con.Query("SELECT nextval('seq'), nextval('seq');");
@@ -61,6 +66,7 @@ TEST_CASE("Use sequences over different runs without checkpointing", "[storage]"
 		REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq;"));
 	}
 	{
+		unique_ptr<QueryResult> result;
 		// reload
 		DuckDB db(storage_database);
 		Connection con(db);

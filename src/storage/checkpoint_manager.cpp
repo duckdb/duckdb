@@ -6,6 +6,7 @@
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/custom_type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/null_value.hpp"
@@ -145,9 +146,14 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	});
 
 	vector<TypeCatalogEntry *> custom_types;
+	vector<CustomTypeCatalogEntry *> new_custom_types;
 	schema.Scan(CatalogType::TYPE_ENTRY, [&](CatalogEntry *entry) {
 		D_ASSERT(!entry->internal);
-		custom_types.push_back((TypeCatalogEntry *)entry);
+		if (entry->type == CatalogType::TYPE_ENTRY) {
+			custom_types.push_back((TypeCatalogEntry *)entry);
+		} else if (entry->type == CatalogType::TYPE_CUSTOM_ENTRY) {
+			new_custom_types.push_back((CustomTypeCatalogEntry *)entry);
+		}
 	});
 
 	vector<MacroCatalogEntry *> macros;
@@ -164,6 +170,12 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	metadata_writer->Write<uint32_t>(custom_types.size());
 	for (auto &custom_type : custom_types) {
 		WriteType(*custom_type);
+	}
+
+	// write the new_custom_types
+	metadata_writer->Write<uint32_t>(new_custom_types.size());
+	for (auto &custom_type : new_custom_types) {
+		WriteCustomType(*custom_type);
 	}
 
 	// write the sequences
@@ -202,6 +214,12 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	uint32_t enum_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < enum_count; i++) {
 		ReadType(context, reader);
+	}
+
+	// now read the custom types
+	uint32_t custom_count = reader.Read<uint32_t>();
+	for (uint32_t i = 0; i < custom_count; i++) {
+		ReadCustomType(context, reader);
 	}
 
 	// read the sequences
@@ -267,6 +285,21 @@ void CheckpointManager::ReadType(ClientContext &context, MetaBlockReader &reader
 
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateType(context, info.get());
+}
+
+//===--------------------------------------------------------------------===//
+// New Custom Types
+//===--------------------------------------------------------------------===//
+void CheckpointManager::WriteCustomType(CustomTypeCatalogEntry &table) {
+	table.Serialize(*metadata_writer);
+}
+
+void CheckpointManager::ReadCustomType(ClientContext &context, MetaBlockReader &reader) {
+	auto info = CustomTypeCatalogEntry::Deserialize(reader);
+
+	auto &catalog = Catalog::GetCatalog(db);
+	CustomType::SetContext(info->type, &context);
+	catalog.CreateCustomType(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//

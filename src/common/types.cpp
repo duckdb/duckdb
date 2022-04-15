@@ -8,11 +8,13 @@
 #include "duckdb/common/types/string_type.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/value.hpp"
 
 #include <cmath>
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/custom_type_catalog_entry.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
@@ -132,6 +134,10 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::INVALID;
 	case LogicalTypeId::USER:
 		return PhysicalType::UNKNOWN;
+	case LogicalTypeId::CUSTOM: {
+		return LogicalType(CustomType::GetInternalType(*this)).GetInternalType();
+		// return PhysicalType::VARCHAR;
+	}
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
 	}
@@ -428,6 +434,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "ENUM";
 	case LogicalTypeId::USER:
 		return "USER";
+	case LogicalTypeId::CUSTOM:
+		return "CUSTOM";
 	}
 	return "UNDEFINED";
 }
@@ -709,6 +717,10 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 	}
 }
 
+void LogicalType::UpdateInternalType() {
+	physical_type_ = GetInternalType();
+}
+
 void LogicalType::Verify() const {
 #ifdef DEBUG
 	if (id_ == LogicalTypeId::DECIMAL) {
@@ -738,7 +750,8 @@ enum class ExtraTypeInfoType : uint8_t {
 	LIST_TYPE_INFO = 3,
 	STRUCT_TYPE_INFO = 4,
 	ENUM_TYPE_INFO = 5,
-	USER_TYPE_INFO = 6
+	USER_TYPE_INFO = 6,
+	CUSTOM_TYPE_INFO = 7
 };
 
 struct ExtraTypeInfo {
@@ -1133,6 +1146,93 @@ LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx
 	return LogicalType(LogicalTypeId::ENUM, info);
 }
 
+//===--------------------------------------------------------------------===//
+// Custom Type
+//===--------------------------------------------------------------------===//
+struct CustomTypeInfo : public ExtraTypeInfo {
+	explicit CustomTypeInfo(string custom_name_p, map<CustomTypeParameterId, string> parameters, LogicalTypeId internal_type)
+	    : ExtraTypeInfo(ExtraTypeInfoType::CUSTOM_TYPE_INFO), custom_name(move(custom_name_p)),
+	      internal_type(internal_type), parameters(parameters) {
+	}
+	string custom_name;
+	LogicalTypeId internal_type;
+	map<CustomTypeParameterId, string> parameters;
+	CustomTypeCatalogEntry *catalog_entry = nullptr;
+	ClientContext *context = nullptr;
+
+public:
+	// Equalities are only used in enums with different catalog entries
+	bool Equals(ExtraTypeInfo *other_p) const override {
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		auto &other = (CustomTypeInfo &)*other_p;
+
+		auto other_parameters = other.parameters;
+		if (custom_name.compare(other.custom_name) != 0) {
+			return false;
+		}
+		auto this_parameters = parameters;
+
+		if (this_parameters.size() != other_parameters.size()) {
+			return false;
+		}
+
+		// Now we must check if all strings are the same
+		auto size = this_parameters.size();
+		auto this_it = this_parameters.begin();
+		auto other_it = other_parameters.begin();
+		for (idx_t i = 0; i < size; i++) {
+			if (this_it->first != other_it->first) {
+				return false;
+			}
+
+			if (this_it->second.compare(other_it->second) != 0) {
+				return false;
+			}
+			this_it++;
+			other_it++;
+		}
+		return true;
+	}
+
+	void Serialize(FieldWriter &writer) const override {
+		writer.WriteString(custom_name);
+		writer.WriteField<int8_t>((int8_t)internal_type);
+		writer.WriteField<uint32_t>(parameters.size());
+		vector<int8_t> function_types;
+		vector<string> function_names;
+		for (auto &it: parameters) {
+			function_types.push_back((int8_t)it.first);
+			function_names.push_back(it.second);
+		}
+		writer.WriteList<int8_t>(function_types);
+		writer.WriteList<string>(function_names);
+	}
+
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
+		auto custom_name = reader.ReadRequired<string>();
+		auto internal_type = reader.ReadRequired<int8_t>();
+		map<CustomTypeParameterId, string> parameters;
+		idx_t parameter_size = reader.ReadRequired<uint32_t>();
+		vector<int8_t> function_types = reader.ReadRequiredList<int8_t>();
+		vector<string> function_names = reader.ReadRequiredList<string>();
+		for (idx_t i = 0; i < parameter_size; i++) {
+			parameters.insert(pair<CustomTypeParameterId, string>((CustomTypeParameterId)function_types[i], function_names[i]));
+		}
+		return make_shared<CustomTypeInfo>(move(custom_name), parameters, (LogicalTypeId)internal_type);
+	}	
+};
+
+LogicalType LogicalType::CUSTOM(const string &custom_name, map<CustomTypeParameterId, string> &parameters, LogicalTypeId internal_type) {
+	shared_ptr<ExtraTypeInfo> info;
+	info = make_shared<CustomTypeInfo>(custom_name, parameters, internal_type);
+	return LogicalType(LogicalTypeId::CUSTOM, info);
+}
+
 template <class T>
 int64_t TemplatedGetPos(unordered_map<string, T> &map, const string &key) {
 	auto it = map.find(key);
@@ -1200,6 +1300,88 @@ PhysicalType EnumType::GetPhysicalType(idx_t size) {
 	}
 }
 
+const string &CustomType::GetTypeName(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((CustomTypeInfo &)*info).custom_name;
+}
+
+const map<CustomTypeParameterId, string> &CustomType::GetParameters(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((CustomTypeInfo &)*info).parameters;
+}
+
+const LogicalTypeId &CustomType::GetInternalType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((CustomTypeInfo &)*info).internal_type;
+}
+
+const string &CustomType::GetInputFunction(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	auto parameters = ((CustomTypeInfo &)*info).parameters;
+	for (auto &it: parameters) {
+		if (it.first == CustomTypeParameterId::INPUT_FUNCTION) {
+			return it.second;
+		}
+	}
+	throw InternalException("Input funtion not found!");
+}
+
+const string &CustomType::GetOutputFunction(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	auto parameters = ((CustomTypeInfo &)*info).parameters;
+	for (auto &it: parameters) {
+		if (it.first == CustomTypeParameterId::OUTPUT_FUNCTION) {
+			return it.second;
+		}
+	}
+	throw InternalException("Output funtion not found!");
+}
+
+void CustomType::SetInternalType(LogicalType &type, LogicalTypeId internal_type) {
+	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	((CustomTypeInfo &)*info).internal_type = internal_type;
+	type.UpdateInternalType();
+}
+
+void CustomType::SetContext(LogicalType &type, ClientContext *context) {
+	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	((CustomTypeInfo &)*info).context = context;
+}
+
+ClientContext* CustomType::GetContext(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((CustomTypeInfo &)*info).context;
+}
+
+void CustomType::SetCatalog(LogicalType &type, CustomTypeCatalogEntry *catalog_entry) {
+	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	((CustomTypeInfo &)*info).catalog_entry = catalog_entry;
+}
+CustomTypeCatalogEntry *CustomType::GetCatalog(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((CustomTypeInfo &)*info).catalog_entry;
+}
+
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
@@ -1239,6 +1421,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 		default:
 			throw InternalException("Invalid Physical Type for ENUMs");
 		}
+	}
+	case ExtraTypeInfoType::CUSTOM_TYPE_INFO: {
+		return CustomTypeInfo::Deserialize(reader);
 	}
 	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
@@ -1282,6 +1467,33 @@ bool LogicalType::operator==(const LogicalType &rhs) const {
 		D_ASSERT(rhs.type_info_);
 		return rhs.type_info_->Equals(type_info_.get());
 	}
+}
+
+CustomTypeParameterId TransformStringToCustomTypeParameter(const string &str) {
+	auto lower_str = StringUtil::Lower(str);
+	if (lower_str == "input") {
+		return CustomTypeParameterId::INPUT_FUNCTION;
+	} else if (lower_str == "output") {
+		return CustomTypeParameterId::OUTPUT_FUNCTION;
+	} else {
+		return CustomTypeParameterId::INVALID;
+	}
+}
+
+string TransformCustomTypeParameterToString(const CustomTypeParameterId &p_id) {
+	switch (p_id)
+	{
+	case CustomTypeParameterId::INPUT_FUNCTION:
+		return "input";
+
+	case CustomTypeParameterId::OUTPUT_FUNCTION: 
+		return "output";
+	
+	default:
+		break;
+	}
+
+	throw InternalException("Unimplemented custom type parameter id in TransformCustomTypeParameterToString");
 }
 
 } // namespace duckdb

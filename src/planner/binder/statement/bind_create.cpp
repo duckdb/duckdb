@@ -2,6 +2,9 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/custom_type_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -9,6 +12,7 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_custom_type_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -133,13 +137,26 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 		}
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto &user_type_name = UserType::GetTypeName(type);
-		auto user_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY,
-		                                                                               schema, user_type_name, true);
-		if (!user_type_catalog) {
-			throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
+		// auto user_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY,
+		//                                                                                schema, user_type_name, true);
+		auto entry = context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY,
+																schema, user_type_name, true);
+		if (!entry || entry->type != CatalogType::TYPE_ENTRY) {
+			auto user_custom_type_catalog = (CustomTypeCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_CUSTOM_ENTRY,
+																						schema, user_type_name, true);
+			if (!user_custom_type_catalog) {
+				throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
+			}
+			type = user_custom_type_catalog->user_type;
+			CustomType::SetCatalog(type, user_custom_type_catalog);
+		} else {
+			auto user_type_catalog = (TypeCatalogEntry *)entry;
+			if (!user_type_catalog) {
+				throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
+			}
+			type = user_type_catalog->user_type;
+			EnumType::SetCatalog(type, user_type_catalog);
 		}
-		type = user_type_catalog->user_type;
-		EnumType::SetCatalog(type, user_type_catalog);
 	} else if (type.id() == LogicalTypeId::ENUM) {
 		auto &enum_type_name = EnumType::GetTypeName(type);
 		auto enum_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY,
@@ -227,6 +244,72 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::TYPE_ENTRY: {
 		auto schema = BindSchema(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, move(stmt.info), schema);
+		break;
+	}
+	case CatalogType::TYPE_CUSTOM_ENTRY: {
+		auto &base = (CreateCustomTypeInfo &)*stmt.info;
+		auto parameters = CustomType::GetParameters(base.type);
+		LogicalTypeId internal_type = CustomType::GetInternalType(base.type);
+		for (auto &iter: parameters) {
+			auto custom_type = iter.first;
+			switch (custom_type) {
+				case CustomTypeParameterId::INPUT_FUNCTION:
+				case CustomTypeParameterId::OUTPUT_FUNCTION: {
+					auto &catalog = Catalog::GetCatalog(context);
+					auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, iter.second, false);
+					switch (func->type)
+					{
+					case CatalogType::SCALAR_FUNCTION_ENTRY: {
+						auto function = (ScalarFunctionCatalogEntry *)func;
+						bool found = false;
+						for (auto child : function->functions) {
+							if (child.arguments.size() != 1) {
+								continue;
+							}
+							if (custom_type == CustomTypeParameterId::INPUT_FUNCTION) {
+								// if (child.arguments[0] != LogicalType::VARCHAR || child.return_type != LogicalType::VARCHAR) {
+								// 	continue;
+								// }
+								if (internal_type != LogicalTypeId::INVALID) {
+									if (child.return_type.id() != internal_type) {
+										continue;
+									}
+								} else {
+									internal_type = child.return_type.id();
+								}
+							} else if (custom_type == CustomTypeParameterId::OUTPUT_FUNCTION) {
+								if (internal_type != LogicalTypeId::INVALID) {
+									if (child.arguments[0].id() != internal_type) {
+										continue;
+									}
+								} else {
+									internal_type = child.arguments[0].id();
+								}
+							}
+							found = true;
+						}
+						if (!found) {
+							throw BinderException("function %s(%s) does not exist", func->name, (custom_type == CustomTypeParameterId::INPUT_FUNCTION)
+								? "VARCHAR" : base.name);
+						}
+					} break;
+					
+					default:
+						throw BinderException("Function type is not scalar function!");
+					}
+				} break;
+
+				default: {
+					throw BinderException("Invalid custom type parameter!");
+				}
+			}
+		}
+		if (internal_type != LogicalTypeId::INVALID) {
+			CustomType::SetInternalType(base.type, internal_type);
+		}
+		CustomType::SetContext(base.type, &context);
+		auto schema = BindSchema(base);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_CUSTOM_TYPE, move(stmt.info), schema);
 		break;
 	}
 	default:

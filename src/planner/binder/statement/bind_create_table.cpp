@@ -173,6 +173,13 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 				// Only if the ENUM comes from a create type
 				result->dependencies.insert(enum_dependency);
 			}
+		} else if (column.type.id() == LogicalTypeId::CUSTOM) {
+			// We add a catalog dependency
+			auto custom_dependency = CustomType::GetCatalog(column.type);
+			if (custom_dependency) {
+				// Only if the ENUM comes from a create type
+				result->dependencies.insert(custom_dependency);
+			}
 		}
 	}
 	this->allow_stream_result = false;

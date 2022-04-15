@@ -3404,8 +3404,9 @@ AexprConst: Iconst
 						n->indirection = check_indirection($2, yyscanner);
 						$$ = (PGNode *) n;
 					}
-					else
+					else {
 						$$ = makeStringConst($1, @1);
+					}
 				}
 			| BCONST
 				{

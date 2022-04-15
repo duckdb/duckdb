@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/custom_type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
@@ -51,6 +52,9 @@ private:
 
 	void ReplayCreateType();
 	void ReplayDropType();
+
+	void ReplayCreateCustomType();
+	void ReplayDropCustomType();
 
 	void ReplayCreateSequence();
 	void ReplayDropSequence();
@@ -214,6 +218,12 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 	case WALType::DROP_TYPE:
 		ReplayDropType();
 		break;
+	case WALType::CREATE_CUSTOM_TYPE:
+		ReplayCreateCustomType();
+		break;
+	case WALType::DROP_CUSTOM_TYPE:
+		ReplayDropCustomType();
+		break;
 
 	default:
 		throw InternalException("Invalid WAL entry type!");
@@ -329,6 +339,33 @@ void ReplayState::ReplayDropType() {
 	DropInfo info;
 
 	info.type = CatalogType::TYPE_ENTRY;
+	info.schema = source.Read<string>();
+	info.name = source.Read<string>();
+	if (deserialize_only) {
+		return;
+	}
+
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.DropEntry(context, &info);
+}
+
+//===--------------------------------------------------------------------===//
+// Replay Custom Type
+//===--------------------------------------------------------------------===//
+void ReplayState::ReplayCreateCustomType() {
+	auto info = CustomTypeCatalogEntry::Deserialize(source);
+	if (deserialize_only) {
+		return;
+	}
+
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateCustomType(context, info.get());
+}
+
+void ReplayState::ReplayDropCustomType() {
+	DropInfo info;
+
+	info.type = CatalogType::TYPE_CUSTOM_ENTRY;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 	if (deserialize_only) {

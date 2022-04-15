@@ -1,0 +1,61 @@
+# name: test/sql/types/custom/test_custom.test
+# description: CUSTOM tests
+# group: [custom]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE box (input := 'box_in', output := 'box_out');
+
+# Casts should work
+query I
+select 'happy'::box;
+----
+happy Box In Box Out
+
+# Postgres accept empty CUSTOM
+statement ok
+CREATE TYPE bla();
+
+#Customs with the same name shouldn't work
+statement error
+CREATE TYPE box (input := 'box_in', output := 'box_out');
+
+# Customs with error function key
+statement error
+CREATE TYPE box_2(test := 'box_in');
+
+# Customs with error input
+statement error
+CREATE TYPE box_2(input := 'box_error');
+
+# Delete Customs
+statement ok
+DROP TYPE box;
+
+statement ok
+DROP TYPE bla;
+
+#This won't work because box was already deleted
+statement error
+DROP TYPE box;
+
+# We can create box again
+statement ok
+CREATE TYPE box (input := 'box_in', output := 'box_out');
+
+#This will drop box
+statement ok
+DROP TYPE IF EXISTS box;
+
+#Customs in structs/lists/maps
+statement ok
+CREATE TYPE box (input := 'box_in', output := 'box_out');
+
+#query I
+#select ['happy']::box[]
+#----
+#[happy Box In Box Out]

@@ -101,7 +101,9 @@ generic_set:
 
 
 var_value:	opt_boolean_or_string
-				{ $$ = makeStringConst($1, @1); }
+				{ 
+					$$ = makeStringConst($1, @1);
+				}
 			| NumericOnly
 				{ $$ = makeAConst($1, @1); }
 		;

@@ -3,8 +3,10 @@
 #include "duckdb/execution/operator/schema/physical_create_sequence.hpp"
 #include "duckdb/execution/operator/schema/physical_create_type.hpp"
 #include "duckdb/execution/operator/schema/physical_create_view.hpp"
+#include "duckdb/execution/operator/schema/physical_create_custom_type.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_data/create_custom_type_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_create.hpp"
 
@@ -26,6 +28,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreate &op
 		                                           op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
 		return make_unique<PhysicalCreateType>(unique_ptr_cast<CreateInfo, CreateTypeInfo>(move(op.info)),
+		                                       op.estimated_cardinality);
+
+	case LogicalOperatorType::LOGICAL_CREATE_CUSTOM_TYPE:
+		return make_unique<PhysicalCreateCustomType>(unique_ptr_cast<CreateInfo, CreateCustomTypeInfo>(move(op.info)),
 		                                       op.estimated_cardinality);
 	default:
 		throw NotImplementedException("Unimplemented type for logical simple create");

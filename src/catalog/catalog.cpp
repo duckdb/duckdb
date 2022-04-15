@@ -20,6 +20,7 @@
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_data/create_custom_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
@@ -79,12 +80,21 @@ CatalogEntry *Catalog::CreateType(ClientContext &context, CreateTypeInfo *info) 
 	return CreateType(context, schema, info);
 }
 
+CatalogEntry *Catalog::CreateCustomType(ClientContext &context, CreateCustomTypeInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	return CreateCustomType(context, schema, info);
+}
+
 CatalogEntry *Catalog::CreateSequence(ClientContext &context, SchemaCatalogEntry *schema, CreateSequenceInfo *info) {
 	return schema->CreateSequence(context, info);
 }
 
 CatalogEntry *Catalog::CreateType(ClientContext &context, SchemaCatalogEntry *schema, CreateTypeInfo *info) {
 	return schema->CreateType(context, info);
+}
+
+CatalogEntry *Catalog::CreateCustomType(ClientContext &context, SchemaCatalogEntry *schema, CreateCustomTypeInfo *info) {
+	return schema->CreateCustomType(context, info);
 }
 
 CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info) {
@@ -176,6 +186,10 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 	auto lookup = LookupEntry(context, info->type, info->schema, info->name, info->if_exists);
 	if (!lookup.Found()) {
 		return;
+	} else if (info->type == CatalogType::TYPE_ENTRY) {
+		if (lookup.entry->type == CatalogType::TYPE_CUSTOM_ENTRY) {
+			info->type = CatalogType::TYPE_CUSTOM_ENTRY;
+		}
 	}
 
 	lookup.schema->DropEntry(context, info);
