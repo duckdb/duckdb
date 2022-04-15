@@ -50,6 +50,8 @@ public:
 	LogicalType type;
 	//! The parent column (if any)
 	ColumnData *parent;
+	//! Vector with reorder indices
+	SelectionVector sel_sorted;
 
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;

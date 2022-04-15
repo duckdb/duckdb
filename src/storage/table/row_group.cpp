@@ -776,7 +776,7 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 		}
 		payload.SetCardinality(keys.size());
 		
-		local_sort_state.SinkChunk(keys, payload);
+		local_sort_state.SinkChunk(keys, keys);
 		incr_payload_count += STANDARD_VECTOR_SIZE;
 	}
 	
@@ -813,6 +813,7 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	// checkpoint the individual columns of the row group
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		auto &column = columns[column_idx];
+		column->sel_sorted = sel_sorted;
 		ColumnCheckpointInfo checkpoint_info {writer.GetColumnCompressionType(column_idx)};
 		auto checkpoint_state = column->Checkpoint(*this, writer, checkpoint_info);
 		D_ASSERT(checkpoint_state);
