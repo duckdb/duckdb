@@ -19,6 +19,9 @@ string IndexCatalogEntry::ToSQL() {
 	if (sql.empty()) {
 		throw InternalException("Cannot convert INDEX to SQL because it was not created with a SQL statement");
 	}
+	if (sql[sql.size() - 1] != ';') {
+		sql += ";";
+	}
 	return sql;
 }
 

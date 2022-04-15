@@ -113,7 +113,7 @@ def include_package(pkg_name, pkg_dir, include_files, include_list, source_list)
 
     sys.path = original_path
 
-def build_package(target_dir, extensions, linenumbers = False, unity_count = 32):
+def build_package(target_dir, extensions, linenumbers = False, unity_count = 32, folder_name = 'duckdb'):
     if not os.path.isdir(target_dir):
         os.mkdir(target_dir)
 
@@ -209,7 +209,7 @@ def build_package(target_dir, extensions, linenumbers = False, unity_count = 32)
         idx = 1
         for entry in source_list:
             if not entry.startswith('src'):
-                new_source_files.append(os.path.join('duckdb', entry))
+                new_source_files.append(os.path.join(folder_name, entry))
                 continue
 
             current_files.append(entry)
@@ -228,7 +228,7 @@ def build_package(target_dir, extensions, linenumbers = False, unity_count = 32)
     if unity_count > 0:
         source_list = generate_unity_builds(source_list, unity_count, linenumbers)
     else:
-        source_list = [os.path.join('duckdb', source) for source in source_list]
+        source_list = [os.path.join(folder_name, source) for source in source_list]
 
     os.chdir(prev_wd)
     return ([convert_backslashes(x) for x in source_list if not file_is_excluded(x)],
