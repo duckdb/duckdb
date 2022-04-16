@@ -460,6 +460,9 @@ date_t Interval::Add(date_t left, interval_t right) {
 			throw OutOfRangeException("Date out of range");
 		}
 	}
+	if (!Date::IsFinite(result)) {
+		throw OutOfRangeException("Date out of range");
+	}
 	return result;
 }
 

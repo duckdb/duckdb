@@ -44,11 +44,15 @@ interval_t AddOperator::Operation(interval_t left, interval_t right) {
 
 template <>
 date_t AddOperator::Operation(date_t left, int32_t right) {
-	int32_t result;
-	if (!TryAddOperator::Operation(left.days, right, result)) {
+	int32_t days;
+	if (!TryAddOperator::Operation(left.days, right, days)) {
 		throw OutOfRangeException("Date out of range");
 	}
-	return date_t(result);
+	date_t result(days);
+	if (!Date::IsFinite(result)) {
+		throw OutOfRangeException("Date out of range");
+	}
+	return result;
 }
 
 template <>
@@ -60,6 +64,9 @@ template <>
 timestamp_t AddOperator::Operation(date_t left, dtime_t right) {
 	timestamp_t result;
 	if (!Timestamp::TryFromDatetime(left, right, result)) {
+		throw OutOfRangeException("Timestamp out of range");
+	}
+	if (!Timestamp::IsFinite(result)) {
 		throw OutOfRangeException("Timestamp out of range");
 	}
 	return result;

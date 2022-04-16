@@ -213,7 +213,24 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		}
 	}
 	if (!StringUtil::CharacterIsDigit(buf[pos])) {
-		return false;
+		// Check for special values
+		const auto remaining = len - pos;
+		if (remaining >= 8 && !strncmp("infinity", buf + pos, 8)) {
+			result = yearneg ? date_t::ninfinity() : date_t::infinity();
+			pos += 8;
+			return true;
+		} else if (remaining >= 5 && !strncmp("epoch", buf + pos, 5)) {
+			result = date_t::epoch();
+			pos += 5;
+			return true;
+		} else {
+			return false;
+		}
+		// skip trailing spaces
+		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
+			pos++;
+		}
+		return pos == len;
 	}
 	// first parse the year
 	for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++) {
@@ -314,6 +331,11 @@ date_t Date::FromString(const string &str, bool strict) {
 }
 
 string Date::ToString(date_t date) {
+	if (date == date_t::infinity()) {
+		return "infinity";
+	} else if (date == date_t::ninfinity()) {
+		return "-infinity";
+	}
 	int32_t date_units[3];
 	idx_t year_length;
 	bool add_bc;
