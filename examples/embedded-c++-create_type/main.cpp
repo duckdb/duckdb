@@ -79,15 +79,16 @@ int main() {
 
 	// std::cout << std::endl << std::endl << std::endl << "FUnction call ================ " << std::endl;
 	// auto f_call_rv = con.Query(
-	// 						   "select DATESUB('second', '2004-01-31 12:00:05'::TIMESTAMP, '2004-02-01 12:00:00'::TIMESTAMP);");
-	// f_call_rv->Print();
+	// 						   "select DATESUB('second', '2004-01-31 12:00:05'::TIMESTAMP, '2004-02-01
+	// 12:00:00'::TIMESTAMP);"); f_call_rv->Print();
 
 	// std::cout << std::endl << std::endl << std::endl << "Create function call table ================ " << std::endl;
 	// auto tf_type_rv = con.Query("CREATE TABLE function_table (id VARCHAR, abc VARCHAR)");
 	// tf_type_rv->Print();
 
 	// std::cout << std::endl << std::endl << std::endl << "Insert function call Table ================ " << std::endl;
-	// // auto if_type_rv = con.Query("INSERT INTO function_table VALUES (DATESUB('second', '2004-01-31 12:00:05'::TIMESTAMP, '2004-02-01 12:00:00'::TIMESTAMP))");
+	// // auto if_type_rv = con.Query("INSERT INTO function_table VALUES (DATESUB('second', '2004-01-31
+	// 12:00:05'::TIMESTAMP, '2004-02-01 12:00:00'::TIMESTAMP))");
 	// // auto if_type_rv = con.Query("INSERT INTO function_table VALUES (box_in('abc'))");
 	// // auto if_type_rv = con.Query("INSERT INTO function_table VALUES ('abc')");
 	// auto if_type_rv = con.Query("INSERT INTO function_table VALUES (1, 'abc')");
@@ -100,7 +101,6 @@ int main() {
 	// std::cout << std::endl << std::endl << std::endl << "Enum ================ " << std::endl;
 	// auto e_type_rv = con.Query("CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');");
 	// e_type_rv->Print();
-
 
 	// std::cout << std::endl << std::endl << std::endl << "Create table ================ " << std::endl;
 	// auto t_type_rv = con.Query("CREATE TABLE person_string (name text, current_mood mood)");
@@ -121,14 +121,13 @@ int main() {
 	// auto d_type_rv = con.Query("DROP TYPE mood;");
 	// d_type_rv->Print();
 
-
 	// std::cout << std::endl << std::endl << std::endl << "Enum ================ 2" << std::endl;
 	// auto e_type_rv_2 = con.Query("CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');");
 	// e_type_rv_2->Print();
 
 	// auto &catalog = Catalog::GetCatalog(context);
-	// auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.schema, function.function_name,
-	//                              false, error_context);
+	// auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.schema,
+	// function.function_name, false, error_context);
 
 	// std::cout << std::endl << std::endl << std::endl << "Create table custom type ================ " << std::endl;
 	// auto t_custom_type_rv = con.Query("CREATE TABLE nameint (name text, id int)");
@@ -147,7 +146,8 @@ int main() {
 	// std::cout << std::endl << std::endl << std::endl << "Test Table ================ " << std::endl;
 	// // auto sc1_type_rv = con.Query("CREATE TABLE t0(c0 INT);");
 	// // auto sc2_type_rv = con.Query("INSERT INTO t0 VALUES (NULL), (0), (1);");
-	// // auto sc3_type_rv = con.Query("SELECT COALESCE(CASE WHEN RANDOM()<100 THEN RANDOM() ELSE NULL END, NULL, 42) FROM range(10)");
+	// // auto sc3_type_rv = con.Query("SELECT COALESCE(CASE WHEN RANDOM()<100 THEN RANDOM() ELSE NULL END, NULL, 42)
+	// FROM range(10)");
 	// // sc3_type_rv->Print();
 	// auto storage_database = TestCreatePath("storage_test");
 
@@ -216,11 +216,9 @@ int main() {
 
 	// DeleteDatabase(storage_database);
 
-
-
 	// std::cout << std::endl << std::endl << std::endl << "Test Export Table ================ " << std::endl;
 	// DuckDB db(nullptr);
-	
+
 	// Connection con(db);
 	// auto sc0_type_rv = con.Query("BEGIN TRANSACTION");
 	// std::cout << "Create Apply function ========================= 1" << std::endl;
@@ -238,10 +236,9 @@ int main() {
 	// auto sc7_type_rv = con.Query("IMPORT DATABASE 'sub/export_test'");
 	// sc7_type_rv->Print();
 
-
 	std::cout << std::endl << std::endl << std::endl << "Test Create custom type ================ " << std::endl;
 	DuckDB db(nullptr);
-	
+
 	Connection con(db);
 
 	// std::cout << "Before Print Result ==================================== 0" << std::endl;
@@ -281,7 +278,8 @@ int main() {
 	// auto t_custom_type_rv1 = con.Query("ALTER TABLE person ALTER current_box SET DATA TYPE VARCHAR;");
 	// auto t_custom_type_rv1 = con.Query("ALTER TABLE person ADD COLUMN current_box box;");
 	// auto t_custom_type_rv1 = con.Query("ALTER TABLE person ALTER current_mood SET DATA TYPE VARCHAR;");
-	auto t_custom_type_rv1 = con.Query("INSERT INTO person VALUES ('Pedro', 'ok'), ('Mark', 'sad'),('Moe', 'happy'), ('Diego', NULL);");
+	auto t_custom_type_rv1 =
+	    con.Query("INSERT INTO person VALUES ('Pedro', 'ok'), ('Mark', 'sad'),('Moe', 'happy'), ('Diego', NULL);");
 	std::cout << "Before Print Result ==================================== 2 ----- 1" << std::endl;
 	// auto t_custom_type_rv2 = con.Query("ROLLBACK;");
 	// t_custom_type_rv1->Print();

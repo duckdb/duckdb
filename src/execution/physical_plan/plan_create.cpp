@@ -32,7 +32,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreate &op
 
 	case LogicalOperatorType::LOGICAL_CREATE_CUSTOM_TYPE:
 		return make_unique<PhysicalCreateCustomType>(unique_ptr_cast<CreateInfo, CreateCustomTypeInfo>(move(op.info)),
-		                                       		 op.estimated_cardinality);
+		                                             op.estimated_cardinality);
 	default:
 		throw NotImplementedException("Unimplemented type for logical simple create");
 	}

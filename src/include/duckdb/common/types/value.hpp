@@ -157,7 +157,7 @@ public:
 
 	//! Create a custom Value from a data pointer and a length: no bytes are interpreted
 	DUCKDB_API static Value CUSTOM(const_data_ptr_t data, idx_t len, LogicalType ctype);
-	DUCKDB_API static Value CUSTOM(const_data_ptr_t data, LogicalType ctype, idx_t index);
+	DUCKDB_API static Value CUSTOM(const_data_ptr_t data, const LogicalType &ctype, idx_t index);
 
 	template <class T>
 	T GetValue() const {

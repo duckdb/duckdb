@@ -44,7 +44,7 @@ string CustomTypeCatalogEntry::ToSQL() {
 	ss << " (";
 	auto parameters = CustomType::GetParameters(user_type);
 	idx_t i = 0;
-	for (auto iter : parameters) {
+	for (auto const &iter : parameters) {
 		ss << (i == 0 ? "" : ", ") << TransformCustomTypeParameterToString(iter.first) << " := '" << iter.second << "'";
 		i++;
 	}

@@ -1151,9 +1151,9 @@ LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx
 //===--------------------------------------------------------------------===//
 struct CustomTypeInfo : public ExtraTypeInfo {
 	explicit CustomTypeInfo(string custom_name_p, map<CustomTypeParameterId, string> parameters,
-							LogicalTypeId internal_type)
+	                        LogicalTypeId internal_type)
 	    : ExtraTypeInfo(ExtraTypeInfoType::CUSTOM_TYPE_INFO), custom_name(move(custom_name_p)),
-	      internal_type(internal_type), parameters(parameters) {
+	      internal_type(internal_type), parameters(move(parameters)) {
 	}
 	string custom_name;
 	LogicalTypeId internal_type;
@@ -1223,10 +1223,10 @@ public:
 		vector<string> function_names = reader.ReadRequiredList<string>();
 		for (idx_t i = 0; i < parameter_size; i++) {
 			parameters.insert(
-				pair<CustomTypeParameterId, string>((CustomTypeParameterId)function_types[i], function_names[i]));
+			    pair<CustomTypeParameterId, string>((CustomTypeParameterId)function_types[i], function_names[i]));
 		}
 		return make_shared<CustomTypeInfo>(move(custom_name), parameters, (LogicalTypeId)internal_type);
-	}	
+	}
 };
 
 LogicalType LogicalType::CUSTOM(const string &custom_name, map<CustomTypeParameterId, string> &parameters,
@@ -1378,6 +1378,7 @@ void CustomType::SetCatalog(LogicalType &type, CustomTypeCatalogEntry *catalog_e
 	D_ASSERT(info);
 	((CustomTypeInfo &)*info).catalog_entry = catalog_entry;
 }
+
 CustomTypeCatalogEntry *CustomType::GetCatalog(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
 	auto info = type.AuxInfo();

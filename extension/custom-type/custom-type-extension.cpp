@@ -102,8 +102,8 @@ void CustomTypeExtension::Load(DuckDB &db) {
 	// 		throw Exception("entry requires a custom type");
 	// 	}
 	// 	auto box_entry = (CustomTypeCatalogEntry *)entry;
-	// 	// std::cout << "Get Entry ============================= name ====== " << (int)box_entry->user_type.id() << std::endl;
-	// 	ScalarFunction box_test_func("box_test", {box_entry->user_type}, LogicalType::INTEGER,
+	// 	// std::cout << "Get Entry ============================= name ====== " << (int)box_entry->user_type.id() <<
+	// std::endl; 	ScalarFunction box_test_func("box_test", {box_entry->user_type}, LogicalType::INTEGER,
 	// 							BoxTestFunction);
 	// 	CreateScalarFunctionInfo box_test_info(box_test_func);
 	// 	catalog.CreateFunction(context, &box_test_info);

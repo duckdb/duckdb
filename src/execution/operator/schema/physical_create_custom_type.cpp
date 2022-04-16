@@ -25,7 +25,7 @@ unique_ptr<GlobalSourceState> PhysicalCreateCustomType::GetGlobalSourceState(Cli
 }
 
 void PhysicalCreateCustomType::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                 		LocalSourceState &lstate) const {
+                                       LocalSourceState &lstate) const {
 	auto &state = (CreateCustomTypeSourceState &)gstate;
 	if (state.finished) {
 		return;

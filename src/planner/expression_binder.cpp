@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -218,7 +219,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 }
 
 unique_ptr<Expression> ExpressionBinder::BindAddCast(ClientContext &context, unique_ptr<Expression> expr,
-													 const LogicalType &target_type) {
+                                                     const LogicalType &target_type) {
 	unique_ptr<Expression> result = move(expr);
 	if (target_type.id() != LogicalTypeId::CUSTOM) {
 		// the binder has a specific target type: add a cast to that type
@@ -230,7 +231,7 @@ unique_ptr<Expression> ExpressionBinder::BindAddCast(ClientContext &context, uni
 		children.emplace_back(move(result));
 		// result = move(ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, input_name, move(children), error,
 		// true));
-		auto function =
+		unique_ptr<Expression> function =
 		    ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, input_name, move(children), error, true);
 		if (!function) {
 			throw BinderException(error);
