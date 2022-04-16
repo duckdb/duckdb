@@ -3,6 +3,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/value.hpp"
 

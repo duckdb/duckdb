@@ -364,3 +364,27 @@ FROM dates
 ORDER BY 1;
 
 endloop
+
+#
+# Infinities
+#
+# PG returns numeric ±Infinity, but we have to return an integer,
+# so instead we return NULL, which is what PG used to do.
+
+# Unary functions
+foreach datatype DATE TIMESTAMP
+
+foreach unary year month day decade century millennium quarter dayofweek isodow dayofyear week isoyear era timezone timezone_hour timezone_minute epoch microsecond millisecond second minute hour yearweek dayofmonth weekday weekofyear last_day monthname dayname
+
+foreach special infinity -infinity
+
+query I
+SELECT ${unary}('${special}'::${datatype});
+----
+NULL
+
+endloop
+
+endloop
+
+endloop

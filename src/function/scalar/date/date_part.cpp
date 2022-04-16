@@ -154,13 +154,6 @@ DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType 
 	throw NotImplementedException("\"%s\" units \"%s\" not recognized", LogicalTypeIdToString(type.id()), specifier);
 }
 
-template <class T>
-static void LastYearFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	int32_t last_year = 0;
-	UnaryExecutor::Execute<T, int64_t>(args.data[0], result, args.size(),
-	                                   [&](T input) { return Date::ExtractYear(input, &last_year); });
-}
-
 template <class T, class OP>
 static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
 	// we can only propagate complex date part stats if the child has stats
@@ -201,6 +194,43 @@ static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<uniqu
 }
 
 struct DatePart {
+	struct IsFinite {
+		template <class TA>
+		static inline bool Operation(TA input) {
+			return true;
+		}
+
+		template <>
+		inline bool Operation(date_t input) {
+			return Date::IsFinite(input);
+		}
+
+		template <>
+		inline bool Operation(timestamp_t input) {
+			return Timestamp::IsFinite(input);
+		}
+	};
+
+	template <typename OP>
+	struct PartOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input, ValidityMask &mask, idx_t idx, void *dataptr) {
+			if (IsFinite::template Operation<TA>(input)) {
+				return OP::template Operation<TA, TR>(input);
+			} else {
+				mask.SetInvalid(idx);
+				return TR();
+			}
+		}
+	};
+
+	template <class TA, class TR, class OP>
+	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+		D_ASSERT(input.ColumnCount() >= 1);
+		using IOP = PartOperator<OP>;
+		UnaryExecutor::GenericExecute<TA, TR, IOP>(input.data[0], result, input.size(), nullptr, true);
+	}
+
 	struct YearOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
@@ -700,6 +730,20 @@ struct DatePart {
 		}
 	};
 };
+
+template <class T>
+static void LastYearFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	int32_t last_year = 0;
+	UnaryExecutor::ExecuteWithNulls<T, int64_t>(args.data[0], result, args.size(),
+	                                            [&](T input, ValidityMask &mask, idx_t idx) {
+		                                            if (DatePart::IsFinite::template Operation<T>(input)) {
+			                                            return Date::ExtractYear(input, &last_year);
+		                                            } else {
+			                                            mask.SetInvalid(idx);
+			                                            return 0;
+		                                            }
+	                                            });
+}
 
 template <>
 int64_t DatePart::YearOperator::Operation(timestamp_t input) {
@@ -1231,8 +1275,8 @@ void AddGenericDatePartOperator(BuiltinFunctions &set, const string &name, scala
 
 template <class OP>
 static void AddDatePartOperator(BuiltinFunctions &set, string name) {
-	AddGenericDatePartOperator(set, name, ScalarFunction::UnaryFunction<date_t, int64_t, OP>,
-	                           ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>,
+	AddGenericDatePartOperator(set, name, DatePart::UnaryFunction<date_t, int64_t, OP>,
+	                           DatePart::UnaryFunction<timestamp_t, int64_t, OP>,
 	                           ScalarFunction::UnaryFunction<interval_t, int64_t, OP>,
 	                           OP::template PropagateStatistics<date_t>, OP::template PropagateStatistics<timestamp_t>);
 }
@@ -1255,10 +1299,10 @@ void AddGenericTimePartOperator(BuiltinFunctions &set, const string &name, scala
 template <class OP>
 static void AddTimePartOperator(BuiltinFunctions &set, string name) {
 	AddGenericTimePartOperator(
-	    set, name, ScalarFunction::UnaryFunction<date_t, int64_t, OP>,
-	    ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>, ScalarFunction::UnaryFunction<interval_t, int64_t, OP>,
-	    ScalarFunction::UnaryFunction<dtime_t, int64_t, OP>, OP::template PropagateStatistics<date_t>,
-	    OP::template PropagateStatistics<timestamp_t>, OP::template PropagateStatistics<dtime_t>);
+	    set, name, DatePart::UnaryFunction<date_t, int64_t, OP>, DatePart::UnaryFunction<timestamp_t, int64_t, OP>,
+	    ScalarFunction::UnaryFunction<interval_t, int64_t, OP>, ScalarFunction::UnaryFunction<dtime_t, int64_t, OP>,
+	    OP::template PropagateStatistics<date_t>, OP::template PropagateStatistics<timestamp_t>,
+	    OP::template PropagateStatistics<dtime_t>);
 }
 
 struct LastDayOperator {
@@ -1490,25 +1534,25 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	//  register the last_day function
 	ScalarFunctionSet last_day("last_day");
 	last_day.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE,
-	                                    ScalarFunction::UnaryFunction<date_t, date_t, LastDayOperator>));
+	                                    DatePart::UnaryFunction<date_t, date_t, LastDayOperator>));
 	last_day.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::DATE,
-	                                    ScalarFunction::UnaryFunction<timestamp_t, date_t, LastDayOperator>));
+	                                    DatePart::UnaryFunction<timestamp_t, date_t, LastDayOperator>));
 	set.AddFunction(last_day);
 
 	//  register the monthname function
 	ScalarFunctionSet monthname("monthname");
 	monthname.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::VARCHAR,
-	                                     ScalarFunction::UnaryFunction<date_t, string_t, MonthNameOperator>));
+	                                     DatePart::UnaryFunction<date_t, string_t, MonthNameOperator>));
 	monthname.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
-	                                     ScalarFunction::UnaryFunction<timestamp_t, string_t, MonthNameOperator>));
+	                                     DatePart::UnaryFunction<timestamp_t, string_t, MonthNameOperator>));
 	set.AddFunction(monthname);
 
 	//  register the dayname function
 	ScalarFunctionSet dayname("dayname");
 	dayname.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::VARCHAR,
-	                                   ScalarFunction::UnaryFunction<date_t, string_t, DayNameOperator>));
+	                                   DatePart::UnaryFunction<date_t, string_t, DayNameOperator>));
 	dayname.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
-	                                   ScalarFunction::UnaryFunction<timestamp_t, string_t, DayNameOperator>));
+	                                   DatePart::UnaryFunction<timestamp_t, string_t, DayNameOperator>));
 	set.AddFunction(dayname);
 
 	// finally the actual date_part function
