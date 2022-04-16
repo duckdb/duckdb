@@ -516,7 +516,6 @@ Value Vector::GetValue(idx_t index) const {
 	}
 	case LogicalTypeId::CUSTOM: {
 		return Value::CUSTOM(data, GetType(), index);
-
 	}
 	default:
 		throw InternalException("Unimplemented type for value access");

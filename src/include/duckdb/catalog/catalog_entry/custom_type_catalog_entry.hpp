@@ -23,6 +23,7 @@ public:
 	CustomTypeCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateCustomTypeInfo *info);
 
 	LogicalType user_type;
+	
 public:
 	//! Serialize the meta information of the CustomTypeCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);

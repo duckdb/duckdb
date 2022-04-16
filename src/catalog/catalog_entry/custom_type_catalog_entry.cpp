@@ -40,15 +40,15 @@ unique_ptr<CreateCustomTypeInfo> CustomTypeCatalogEntry::Deserialize(Deserialize
 string CustomTypeCatalogEntry::ToSQL() {
 	std::stringstream ss;
 	ss << "CREATE TYPE ";
-    ss << KeywordHelper::WriteOptionallyQuoted(name);
-    ss << " (";
+	ss << KeywordHelper::WriteOptionallyQuoted(name);
+	ss << " (";
 	auto parameters = CustomType::GetParameters(user_type);
 	idx_t i = 0;
 	for (auto iter : parameters) {
 		ss << (i == 0 ? "" : ", ") << TransformCustomTypeParameterToString(iter.first) << " := '" << iter.second << "'";
 		i++;
 	}
-    ss << ");";
+	ss << ");";
 
 	return ss.str();
 }

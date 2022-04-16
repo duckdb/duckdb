@@ -1303,7 +1303,7 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastToCustom::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
-                              bool strict) {
+                              	bool strict) {
 	idx_t result_size;
 	if (!Blob::TryGetBlobSize(input, result_size, error_message)) {
 		return false;

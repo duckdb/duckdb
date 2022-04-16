@@ -122,8 +122,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		cond.left = move(expr.child);
 		// cond.right = BoundCastExpression::AddCastToType(
 		//     make_unique<BoundColumnRefExpression>(expr.child_type, plan_columns[0]), expr.child_target);
-		cond.right = ExpressionBinder::BindAddCast(binder.context, 
-			make_unique<BoundColumnRefExpression>(expr.child_type, plan_columns[0]), expr.child_target);
+		cond.right = ExpressionBinder::BindAddCast(
+			binder.context, make_unique<BoundColumnRefExpression>(expr.child_type, plan_columns[0]), expr.child_target);
 		cond.comparison = expr.comparison_type;
 		join->conditions.push_back(move(cond));
 		root = move(join);
@@ -259,8 +259,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		compare_cond.left = move(expr.child);
 		// compare_cond.right = BoundCastExpression::AddCastToType(
 		//     make_unique<BoundColumnRefExpression>(expr.child_type, plan_columns[0]), expr.child_target);
-		compare_cond.right = ExpressionBinder::BindAddCast(binder.context, 
-			make_unique<BoundColumnRefExpression>(expr.child_type, plan_columns[0]), expr.child_target);
+		compare_cond.right = ExpressionBinder::BindAddCast(
+			binder.context, make_unique<BoundColumnRefExpression>(expr.child_type, plan_columns[0]), expr.child_target);
 		compare_cond.comparison = expr.comparison_type;
 		delim_join->conditions.push_back(move(compare_cond));
 

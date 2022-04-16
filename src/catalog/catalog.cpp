@@ -93,7 +93,8 @@ CatalogEntry *Catalog::CreateType(ClientContext &context, SchemaCatalogEntry *sc
 	return schema->CreateType(context, info);
 }
 
-CatalogEntry *Catalog::CreateCustomType(ClientContext &context, SchemaCatalogEntry *schema, CreateCustomTypeInfo *info) {
+CatalogEntry *Catalog::CreateCustomType(ClientContext &context, SchemaCatalogEntry *schema,
+                                       	CreateCustomTypeInfo *info) {
 	return schema->CreateCustomType(context, info);
 }
 

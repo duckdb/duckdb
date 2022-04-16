@@ -1150,7 +1150,8 @@ LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx
 // Custom Type
 //===--------------------------------------------------------------------===//
 struct CustomTypeInfo : public ExtraTypeInfo {
-	explicit CustomTypeInfo(string custom_name_p, map<CustomTypeParameterId, string> parameters, LogicalTypeId internal_type)
+	explicit CustomTypeInfo(string custom_name_p, map<CustomTypeParameterId, string> parameters,
+							LogicalTypeId internal_type)
 	    : ExtraTypeInfo(ExtraTypeInfoType::CUSTOM_TYPE_INFO), custom_name(move(custom_name_p)),
 	      internal_type(internal_type), parameters(parameters) {
 	}
@@ -1205,7 +1206,7 @@ public:
 		writer.WriteField<uint32_t>(parameters.size());
 		vector<int8_t> function_types;
 		vector<string> function_names;
-		for (auto &it: parameters) {
+		for (auto &it : parameters) {
 			function_types.push_back((int8_t)it.first);
 			function_names.push_back(it.second);
 		}
@@ -1221,13 +1222,15 @@ public:
 		vector<int8_t> function_types = reader.ReadRequiredList<int8_t>();
 		vector<string> function_names = reader.ReadRequiredList<string>();
 		for (idx_t i = 0; i < parameter_size; i++) {
-			parameters.insert(pair<CustomTypeParameterId, string>((CustomTypeParameterId)function_types[i], function_names[i]));
+			parameters.insert(
+				pair<CustomTypeParameterId, string>((CustomTypeParameterId)function_types[i], function_names[i]));
 		}
 		return make_shared<CustomTypeInfo>(move(custom_name), parameters, (LogicalTypeId)internal_type);
 	}	
 };
 
-LogicalType LogicalType::CUSTOM(const string &custom_name, map<CustomTypeParameterId, string> &parameters, LogicalTypeId internal_type) {
+LogicalType LogicalType::CUSTOM(const string &custom_name, map<CustomTypeParameterId, string> &parameters,
+								LogicalTypeId internal_type) {
 	shared_ptr<ExtraTypeInfo> info;
 	info = make_shared<CustomTypeInfo>(custom_name, parameters, internal_type);
 	return LogicalType(LogicalTypeId::CUSTOM, info);
@@ -1326,7 +1329,7 @@ const string &CustomType::GetInputFunction(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	auto parameters = ((CustomTypeInfo &)*info).parameters;
-	for (auto &it: parameters) {
+	for (auto &it : parameters) {
 		if (it.first == CustomTypeParameterId::INPUT_FUNCTION) {
 			return it.second;
 		}
@@ -1339,7 +1342,7 @@ const string &CustomType::GetOutputFunction(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	auto parameters = ((CustomTypeInfo &)*info).parameters;
-	for (auto &it: parameters) {
+	for (auto &it : parameters) {
 		if (it.first == CustomTypeParameterId::OUTPUT_FUNCTION) {
 			return it.second;
 		}
@@ -1362,7 +1365,7 @@ void CustomType::SetContext(LogicalType &type, ClientContext *context) {
 	((CustomTypeInfo &)*info).context = context;
 }
 
-ClientContext* CustomType::GetContext(const LogicalType &type) {
+ClientContext *CustomType::GetContext(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
@@ -1481,14 +1484,11 @@ CustomTypeParameterId TransformStringToCustomTypeParameter(const string &str) {
 }
 
 string TransformCustomTypeParameterToString(const CustomTypeParameterId &p_id) {
-	switch (p_id)
-	{
+	switch (p_id) {
 	case CustomTypeParameterId::INPUT_FUNCTION:
 		return "input";
-
-	case CustomTypeParameterId::OUTPUT_FUNCTION: 
+	case CustomTypeParameterId::OUTPUT_FUNCTION:
 		return "output";
-	
 	default:
 		break;
 	}

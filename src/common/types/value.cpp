@@ -585,7 +585,6 @@ Value Value::CUSTOM(const_data_ptr_t data, idx_t len, LogicalType ctype) {
 	return result;
 }
 
-
 Value Value::CUSTOM(const_data_ptr_t data, LogicalType ctype, idx_t index) {
 	Value result(ctype);
 	result.is_null = false;
@@ -1506,7 +1505,7 @@ string Value::ToString() const {
 			bound_children.push_back(move(make_unique<BoundExpression>(move(bound_child))->expr));
 		}
 		unique_ptr<Expression> function = ScalarFunction::BindScalarFunction(*context, DEFAULT_SCHEMA, lowercase_name,
-										move(bound_children), error, true);
+																			move(bound_children), error, true);
 
 		// use an ExpressionExecutor to execute the expression
 		if (!ExpressionExecutor::TryEvaluateScalar(*function.get(), result_value)) {

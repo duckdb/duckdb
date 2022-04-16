@@ -150,7 +150,8 @@ public:
 	//! Creates a enum in the catalog.
 	DUCKDB_API CatalogEntry *CreateType(ClientContext &context, SchemaCatalogEntry *schema, CreateTypeInfo *info);
 	//! Creates a custom type in the catalog
-	DUCKDB_API CatalogEntry *CreateCustomType(ClientContext &context, SchemaCatalogEntry *schema, CreateCustomTypeInfo *info);
+	DUCKDB_API CatalogEntry *CreateCustomType(ClientContext &context, SchemaCatalogEntry *schema,
+											  CreateCustomTypeInfo *info);
 	//! Creates a collation in the catalog
 	DUCKDB_API CatalogEntry *CreateCollation(ClientContext &context, SchemaCatalogEntry *schema,
 	                                         CreateCollationInfo *info);

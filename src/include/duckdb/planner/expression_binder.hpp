@@ -63,7 +63,8 @@ public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
 	                            bool root_expression = true);
 	
-	static unique_ptr<Expression> BindAddCast(ClientContext &context, unique_ptr<Expression> expr, const LogicalType &target_type);
+	static unique_ptr<Expression> BindAddCast(ClientContext &context, unique_ptr<Expression> expr,
+											  const LogicalType &target_type);
 
 	//! Returns whether or not any columns have been bound by the expression binder
 	bool HasBoundColumns() {

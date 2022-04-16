@@ -31,7 +31,7 @@ void DeleteDatabase(string path) {
 
 int main() {
 	// DuckDB db(nullptr);
-	
+
 	// Connection con(db);
 
 	// SELECT 'a'::VARCHAR::BYTEA
@@ -73,15 +73,15 @@ int main() {
 	// auto drop_f_rv = con.Query("DROP FUNCTION box_in;");
 	// drop_f_rv->Print();
 
-
 	// std::cout << "Create function =======================" << std::endl;
 	// auto createfunc_rv = con.Query("create function apply(x, y) as x + y;");
 	// createfunc_rv->Print();
 
 	// std::cout << std::endl << std::endl << std::endl << "FUnction call ================ " << std::endl;
-	// auto f_call_rv = con.Query("select DATESUB('second', '2004-01-31 12:00:05'::TIMESTAMP, '2004-02-01 12:00:00'::TIMESTAMP);");
+	// auto f_call_rv = con.Query(
+	// 						   "select DATESUB('second', '2004-01-31 12:00:05'::TIMESTAMP, '2004-02-01 12:00:00'::TIMESTAMP);");
 	// f_call_rv->Print();
-	
+
 	// std::cout << std::endl << std::endl << std::endl << "Create function call table ================ " << std::endl;
 	// auto tf_type_rv = con.Query("CREATE TABLE function_table (id VARCHAR, abc VARCHAR)");
 	// tf_type_rv->Print();
@@ -130,7 +130,6 @@ int main() {
 	// auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.schema, function.function_name,
 	//                              false, error_context);
 
-
 	// std::cout << std::endl << std::endl << std::endl << "Create table custom type ================ " << std::endl;
 	// auto t_custom_type_rv = con.Query("CREATE TABLE nameint (name text, id int)");
 	// t_custom_type_rv->Print();
@@ -144,12 +143,6 @@ int main() {
 	// // auto sc_type_rv = con.Query("SELECT * FROM nameint WHERE id=1;");
 	// std::cout << "Select Table Result ================================== " << std::endl;
 	// sc_type_rv->Print();
-
-
-
-
-
-
 
 	// std::cout << std::endl << std::endl << std::endl << "Test Table ================ " << std::endl;
 	// // auto sc1_type_rv = con.Query("CREATE TABLE t0(c0 INT);");

@@ -217,18 +217,21 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	return result;
 }
 
-unique_ptr<Expression> ExpressionBinder::BindAddCast(ClientContext &context, unique_ptr<Expression> expr, const LogicalType &target_type) {
+unique_ptr<Expression> ExpressionBinder::BindAddCast(ClientContext &context, unique_ptr<Expression> expr,
+													 const LogicalType &target_type) {
 	unique_ptr<Expression> result = move(expr);
 	if (target_type.id() != LogicalTypeId::CUSTOM) {
 		// the binder has a specific target type: add a cast to that type
-		result = BoundCastExpression::AddCastToType(move(result), target_type);	
+		result = BoundCastExpression::AddCastToType(move(result), target_type);
 	} else if (result->return_type != target_type) {
 		string error;
 		auto input_name = CustomType::GetInputFunction(target_type);
 		vector<unique_ptr<Expression>> children;
 		children.emplace_back(move(result));
-		// result = move(ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, input_name, move(children), error, true));
-		auto function = ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, input_name, move(children), error, true);
+		// result = move(ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, input_name, move(children), error,
+		// true));
+		auto function =
+		    ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, input_name, move(children), error, true);
 		if (!function) {
 			throw BinderException(error);
 		}
