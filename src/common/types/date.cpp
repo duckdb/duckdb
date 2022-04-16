@@ -185,6 +185,18 @@ bool Date::ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &res
 	return false;
 }
 
+static bool TryConvertDateSpecial(const char *buf, idx_t len, idx_t &pos, const char *special) {
+	auto p = pos;
+	for (; p < len && *special; ++p) {
+		const auto s = *special++;
+		if (!s || StringUtil::CharacterToLower(buf[p]) != s) {
+			return false;
+		}
+	}
+	pos = p;
+	return true;
+}
+
 bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool strict) {
 	pos = 0;
 	if (len == 0) {
@@ -214,14 +226,11 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	}
 	if (!StringUtil::CharacterIsDigit(buf[pos])) {
 		// Check for special values
-		const auto remaining = len - pos;
-		if (remaining >= 8 && !strncmp("infinity", buf + pos, 8)) {
+		if (TryConvertDateSpecial(buf, len, pos, "infinity")) {
 			result = yearneg ? date_t::ninfinity() : date_t::infinity();
-			pos += 8;
 			return true;
-		} else if (remaining >= 5 && !strncmp("epoch", buf + pos, 5)) {
+		} else if (TryConvertDateSpecial(buf, len, pos, "epoch")) {
 			result = date_t::epoch();
-			pos += 5;
 			return true;
 		} else {
 			return false;
@@ -331,6 +340,8 @@ date_t Date::FromString(const string &str, bool strict) {
 }
 
 string Date::ToString(date_t date) {
+	// PG displays temporal infinities in lowercase,
+	// but numerics in Titlecase.
 	if (date == date_t::infinity()) {
 		return "infinity";
 	} else if (date == date_t::ninfinity()) {

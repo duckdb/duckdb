@@ -5,8 +5,27 @@
 statement ok
 PRAGMA enable_verification
 
+#
 # Special date and time values from
 # https://www.postgresql.org/docs/14/datatype-datetime.html#DATATYPE-DATETIME-SPECIAL-TABLE
+#
+
+# Case insensitivity
+foreach datatype TIMESTAMP TIMESTAMPTZ DATE
+
+foreach str infinity Infinity INFINITY inFinIty
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+query II
+SELECT '${str}'::${datatype}, '-${str}'::${datatype};
+----
+infinity	-infinity
+
+endloop
+
+endloop
+
+# Table insertion
 statement ok
 CREATE TABLE specials (ts TIMESTAMP, tstz TIMESTAMPTZ, dt DATE);
 
