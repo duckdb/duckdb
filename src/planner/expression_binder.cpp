@@ -229,11 +229,11 @@ unique_ptr<Expression> ExpressionBinder::BindAddCast(ClientContext &context, uni
 		children.emplace_back(move(result));
 		// result = move(ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, input_name, move(children), error, true));
 		auto function = ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, input_name, move(children), error, true);
-		result = move(function);
-		if (!result) {
+		if (!function) {
 			throw BinderException(error);
 		}
-		result->return_type = target_type;
+		function->return_type = target_type;
+		return move(function);
 	}
 	return result;
 }
