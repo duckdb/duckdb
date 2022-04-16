@@ -247,27 +247,27 @@ public:
 	}
 
 	inline void SetAll(idx_t count, bool valid, V v) {
-        if (count == 0) {
-            return;
-        }
+		if (count == 0) {
+			return;
+		}
 		EnsureWritable();
 		auto entry_count = ValidityBuffer::EntryCount(count);
 		for (idx_t i = 0; i < entry_count - 1; i++) {
 			validity_mask[i] = v;
 		}
 		for (idx_t i = (entry_count - 1) * BITS_PER_VALUE; i < count; i++) {
-		    Set(i, valid);
+			Set(i, valid);
 		}
 	}
 
 	//! Marks exactly "count" bits in the validity mask as invalid (null)
 	inline void SetAllInvalid(idx_t count) {
-	    SetAll(count, false, 0);
+		SetAll(count, false, 0);
 	}
 
 	//! Marks exactly "count" bits in the validity mask as valid (not null)
 	inline void SetAllValid(idx_t count) {
-        SetAll(count, true, ValidityBuffer::MAX_ENTRY);
+		SetAll(count, true, ValidityBuffer::MAX_ENTRY);
 	}
 
 	inline bool IsMaskSet() const {
