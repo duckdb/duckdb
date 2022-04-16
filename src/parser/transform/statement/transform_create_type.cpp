@@ -9,6 +9,18 @@
 
 namespace duckdb {
 
+vector<string> GetStringFromPgList(duckdb_libpgquery::PGList *column_list) {
+	vector<string> result;
+	if (!column_list) {
+		return result;
+	}
+	for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
+		auto target = (duckdb_libpgquery::PGResTarget *)(c->data.ptr_value);
+		result.emplace_back(target->name);
+	}
+	return result;
+}
+
 map<CustomTypeParameterId, string> ReadPgListToParameterMap(duckdb_libpgquery::PGList *vals) {
 	map<CustomTypeParameterId, string> result;
 	if (!vals) {
@@ -31,7 +43,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::
 	D_ASSERT(stmt);
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateCustomTypeInfo>();
-	auto name = ReadPgListToString(stmt->name)[0];
+	auto name = GetStringFromPgList(stmt->name)[0];
 	info->name = name;
 	map<CustomTypeParameterId, string> parameters;
 	if (stmt->vals) {
