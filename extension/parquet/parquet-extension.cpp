@@ -17,15 +17,10 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_custom_type_info.hpp"
-#include "duckdb/catalog/catalog_entry/custom_type_catalog_entry.hpp"
-#include "duckdb/parser/parsed_data/create_type_info.hpp"
 
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/main/config.hpp"
@@ -506,83 +501,6 @@ unique_ptr<TableFunctionRef> ParquetScanReplacement(const string &table_name, vo
 	return table_function;
 }
 
-static void BoxInFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &arg_vector = args.data[0];
-	UnaryExecutor::Execute<string_t, string_t>(
-	    arg_vector, result, args.size(),
-	    [&](string_t arg) {
-			auto str = arg.GetString() + " Box In";
-			auto str_len = str.size();
-			string_t rv = StringVector::EmptyString(result, str_len);
-			auto result_data = rv.GetDataWriteable();
-			memcpy(result_data, str.c_str(), str_len);
-			rv.Finalize();
-			return rv;
-		});
-}
-
-static void BoxOutFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &arg_vector = args.data[0];
-	UnaryExecutor::Execute<string_t, string_t>(
-	    arg_vector, result, args.size(),
-	    [&](string_t arg) {
-			auto str = arg.GetString() + " Box Out";
-			auto str_len = str.size();
-			string_t rv = StringVector::EmptyString(result, str_len);
-			auto result_data = rv.GetDataWriteable();
-			memcpy(result_data, str.c_str(), str_len);
-			rv.Finalize();
-			return rv;
-		});
-}
-
-static void BoxTestFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &arg_vector = args.data[0];
-	UnaryExecutor::Execute<string_t, int>(
-	    arg_vector, result, args.size(),
-	    [&](string_t arg) {
-			auto str = arg.GetString() + " Box Out";
-			auto str_len = str.size();
-			int rv = str_len;
-			return rv;
-		});
-}
-
-static void BoxAddEndFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &arg_vector = args.data[0];
-	UnaryExecutor::Execute<string_t, string_t>(
-	    arg_vector, result, args.size(),
-	    [&](string_t arg) {
-			auto str = arg.GetString() + " Add End";
-			auto str_len = str.size();
-			string_t rv = StringVector::EmptyString(result, str_len);
-			auto result_data = rv.GetDataWriteable();
-			memcpy(result_data, str.c_str(), str_len);
-			rv.Finalize();
-			return rv;
-		});
-}
-
-// static void BoxIntInFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-// 	auto &arg_vector = args.data[0];
-// 	UnaryExecutor::Execute<int, int>(
-// 	    arg_vector, result, args.size(),
-// 	    [&](int arg) {
-// 			int rv = arg * 2;
-// 			return rv;
-// 		});
-// }
-
-// static void BoxIntOutFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-// 	auto &arg_vector = args.data[0];
-// 	UnaryExecutor::Execute<int, int>(
-// 	    arg_vector, result, args.size(),
-// 	    [&](int arg) {
-// 			auto rv = arg * 3;
-// 			return rv;
-// 		});
-// }
-
 void ParquetExtension::Load(DuckDB &db) {
 	auto &fs = db.GetFileSystem();
 	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_unique<ZStdFileSystem>());
@@ -621,74 +539,6 @@ void ParquetExtension::Load(DuckDB &db) {
 	catalog.CreateTableFunction(context, &pq_scan);
 	catalog.CreateTableFunction(context, &meta_cinfo);
 	catalog.CreateTableFunction(context, &schema_cinfo);
-
-	// string custom_name = "box";
-
-	// auto entry = catalog.GetEntry(context, CatalogType::TYPE_ENTRY, DEFAULT_SCHEMA, custom_name, true);
-
-	// if (!entry) {
-
-		ScalarFunction box_in_func("box_in", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
-								BoxInFunction);
-		// ScalarFunction box_in_func("box_in", {LogicalType::INTEGER}, LogicalType::INTEGER,
-		//                          BoxIntInFunction);
-		CreateScalarFunctionInfo box_in_info(box_in_func);
-		catalog.CreateFunction(context, &box_in_info);
-
-		ScalarFunction box_out_func("box_out", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
-								BoxOutFunction);
-		// ScalarFunction box_out_func("box_out", {LogicalType::INTEGER}, LogicalType::INTEGER,
-		//                          BoxIntOutFunction);
-		CreateScalarFunctionInfo box_out_info(box_out_func);
-		catalog.CreateFunction(context, &box_out_info);
-
-	// 	map<CustomTypeParameterId, string> parameters;
-	// 	parameters.insert(pair<CustomTypeParameterId, string>(CustomTypeParameterId::INPUT_FUNCTION, "box_in"));
-	// 	parameters.insert(pair<CustomTypeParameterId, string>(CustomTypeParameterId::OUTPUT_FUNCTION, "box_out"));
-	// 	CreateCustomTypeInfo ctinfo;
-	// 	ctinfo.name = "box";
-	// 	ctinfo.type = LogicalType::CUSTOM("box", parameters, LogicalTypeId::VARCHAR);
-	// 	std::cout << "Create Custom Type =============================== 1" << std::endl;
-	// 	catalog.CreateCustomType(context, &ctinfo);
-
-	// 	auto entry = catalog.GetEntry(context, CatalogType::TYPE_CUSTOM_ENTRY, INVALID_SCHEMA, "box");
-	// 	if (entry->type != CatalogType::TYPE_CUSTOM_ENTRY) {
-	// 		throw Exception("entry requires a custom type");
-	// 	}
-	// 	auto box_entry = (CustomTypeCatalogEntry *)entry;
-	// 	// std::cout << "Get Entry ============================= name ====== " << (int)box_entry->user_type.id() << std::endl;
-	// 	ScalarFunction box_test_func("box_test", {box_entry->user_type}, LogicalType::INTEGER,
-	// 							BoxTestFunction);
-	// 	CreateScalarFunctionInfo box_test_info(box_test_func);
-	// 	catalog.CreateFunction(context, &box_test_info);
-
-	// 	ScalarFunction box_add_end_func("box_add_end", {box_entry->user_type}, box_entry->user_type,
-	// 							BoxAddEndFunction);
-	// 	CreateScalarFunctionInfo box_add_end_info(box_add_end_func);
-	// 	catalog.CreateFunction(context, &box_add_end_info);
-	// }
-
-	// string name = "enum_demo";
-	// auto entry = catalog.GetEntry(context, CatalogType::TYPE_ENTRY, DEFAULT_SCHEMA, name, true);
-	// if (!entry) {
-	// 	idx_t size = 4;
-	// 	Vector val_vec(LogicalType::VARCHAR, size);
-	// 	auto val_vec_ptr = FlatVector::GetData<string_t>(val_vec);
-	// 	string colour[4] = { "Blue", "Red",
-	// 							"Orange", "Yellow" };
-		
-	// 	auto enum_info = make_unique<CreateTypeInfo>();
-	// 	enum_info->name = name;
-	// 	size = 0;
-
-	// 	for (idx_t i = 0; i < 4; i++) {
-	// 		auto name = colour[i];
-	// 		val_vec_ptr[size++] = StringVector::AddStringOrBlob(val_vec, name);
-	// 	}
-	// 	enum_info->type = LogicalType::ENUM(enum_info->name, val_vec, size);
-
-	// 	catalog.CreateType(context, enum_info.get());
-	// }
 
 	con.Commit();
 

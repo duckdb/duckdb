@@ -6,6 +6,10 @@ if(${BUILD_PARQUET_EXTENSION})
   add_subdirectory(parquet)
 endif()
 
+if(${BUILD_CUSTOM_TYPE_EXTENSION})
+  add_subdirectory(custom-type)
+endif()
+
 if(${BUILD_TPCH_EXTENSION})
   add_subdirectory(tpch)
 endif()

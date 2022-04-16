@@ -13,6 +13,10 @@
 #include "parquet-extension.hpp"
 #endif
 
+#ifdef BUILD_CUSTOM_TYPE_EXTENSION
+#include "custom-type-extension.hpp"
+#endif
+
 #ifdef BUILD_TPCH_EXTENSION
 #include "tpch-extension.hpp"
 #endif
@@ -36,7 +40,7 @@
 namespace duckdb {
 
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
-	unordered_set<string> extensions {"parquet", "icu", "tpch", "tpcds", "fts", "httpfs", "visualizer"};
+	unordered_set<string> extensions {"parquet", "custom-type", "icu", "tpch", "tpcds", "fts", "httpfs", "visualizer"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -72,6 +76,13 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		db.LoadExtension<ParquetExtension>();
 #else
 		// parquet extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
+	} else if (extension == "custom-type") {
+#ifdef BUILD_CUSTOM_TYPE_EXTENSION
+		db.LoadExtension<CustomTypeExtension>();
+#else
+		// extension extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "icu") {

@@ -2,7 +2,7 @@
 # description: CUSTOM tests
 # group: [custom]
 
-require parquet
+require custom-type
 
 statement ok
 PRAGMA enable_verification
