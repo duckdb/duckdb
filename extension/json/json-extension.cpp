@@ -29,7 +29,8 @@ static DefaultMacro table_macros[] = {
 unique_ptr<TableFunctionRef> JSONScanReplacement(ClientContext &context, const string &table_name,
                                                  ReplacementScanData *data) {
 	auto ltable = StringUtil::Lower(table_name);
-	if (!StringUtil::EndsWith(ltable, ".json") && (!StringUtil::EndsWith(ltable, ".ndjson"))) {
+	if (!StringUtil::EndsWith(ltable, ".json") && !StringUtil::EndsWith(ltable, ".ndjson") &&
+	    !StringUtil::EndsWith(ltable, ".jsonl")) {
 		return nullptr;
 	}
 	auto table_function = make_unique<TableFunctionRef>();
