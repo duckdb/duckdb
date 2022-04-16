@@ -38,11 +38,19 @@ int64_t SubtractOperator::Operation(date_t left, date_t right) {
 
 template <>
 date_t SubtractOperator::Operation(date_t left, int32_t right) {
-	int32_t result;
-	if (!TrySubtractOperator::Operation(left.days, right, result)) {
+	if (!Date::IsFinite(left)) {
+		return left;
+	}
+	int32_t days;
+	if (!TrySubtractOperator::Operation(left.days, right, days)) {
 		throw OutOfRangeException("Date out of range");
 	}
-	return date_t(result);
+
+	date_t result(days);
+	if (!Date::IsFinite(result)) {
+		throw OutOfRangeException("Date out of range");
+	}
+	return result;
 }
 
 template <>

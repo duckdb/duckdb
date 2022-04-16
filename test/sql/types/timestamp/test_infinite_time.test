@@ -42,3 +42,129 @@ SELECT * FROM specials;
 infinity	infinity	infinity
 -infinity	-infinity	-infinity
 1970-01-01 00:00:00	1970-01-01 00:00:00+00	1970-01-01
+
+#
+# Comparisons
+#
+
+# TIMESTAMP
+query IIIIIIII
+SELECT lhs.ts, rhs.ts,
+	lhs.ts < rhs.ts, lhs.ts <= rhs.ts,
+	lhs.ts = rhs.ts, lhs.ts <> rhs.ts,
+	lhs.ts >= rhs.ts, lhs.ts > rhs.ts,
+FROM specials lhs, specials rhs
+----
+infinity	infinity	False	True	True	False	True	False
+-infinity	infinity	True	True	False	True	False	False
+1970-01-01 00:00:00	infinity	True	True	False	True	False	False
+infinity	-infinity	False	False	False	True	True	True
+-infinity	-infinity	False	True	True	False	True	False
+1970-01-01 00:00:00	-infinity	False	False	False	True	True	True
+infinity	1970-01-01 00:00:00	False	False	False	True	True	True
+-infinity	1970-01-01 00:00:00	True	True	False	True	False	False
+1970-01-01 00:00:00	1970-01-01 00:00:00	False	True	True	False	True	False
+
+# TIMESTAMPTZ
+query IIIIIIII
+SELECT lhs.tstz, rhs.tstz,
+	lhs.tstz < rhs.tstz, lhs.tstz <= rhs.tstz,
+	lhs.tstz = rhs.tstz, lhs.tstz <> rhs.tstz,
+	lhs.tstz >= rhs.tstz, lhs.tstz > rhs.tstz,
+FROM specials lhs, specials rhs
+----
+infinity	infinity	False	True	True	False	True	False
+-infinity	infinity	True	True	False	True	False	False
+1970-01-01 00:00:00+00	infinity	True	True	False	True	False	False
+infinity	-infinity	False	False	False	True	True	True
+-infinity	-infinity	False	True	True	False	True	False
+1970-01-01 00:00:00+00	-infinity	False	False	False	True	True	True
+infinity	1970-01-01 00:00:00+00	False	False	False	True	True	True
+-infinity	1970-01-01 00:00:00+00	True	True	False	True	False	False
+1970-01-01 00:00:00+00	1970-01-01 00:00:00+00	False	True	True	False	True	False
+
+# DATE
+query IIIIIIII
+SELECT lhs.dt, rhs.dt,
+	lhs.dt < rhs.dt, lhs.dt <= rhs.dt,
+	lhs.dt = rhs.dt, lhs.dt <> rhs.dt,
+	lhs.dt >= rhs.dt, lhs.dt > rhs.dt,
+FROM specials lhs, specials rhs
+----
+infinity	infinity	False	True	True	False	True	False
+-infinity	infinity	True	True	False	True	False	False
+1970-01-01	infinity	True	True	False	True	False	False
+infinity	-infinity	False	False	False	True	True	True
+-infinity	-infinity	False	True	True	False	True	False
+1970-01-01	-infinity	False	False	False	True	True	True
+infinity	1970-01-01	False	False	False	True	True	True
+-infinity	1970-01-01	True	True	False	True	False	False
+1970-01-01	1970-01-01	False	True	True	False	True	False
+
+#
+# Aggregates
+#
+query IIIIII
+SELECT MIN(ts), MAX(ts), MIN(tstz), MAX(tstz), MIN(dt), MAX(dt)
+FROM specials;
+----
+-infinity	infinity	-infinity	infinity	-infinity	infinity
+
+query III
+SELECT MEDIAN(ts), MEDIAN(tstz), MEDIAN(dt)
+FROM specials;
+----
+1970-01-01 00:00:00	1970-01-01 00:00:00+00	1970-01-01 00:00:00
+
+#
+# Arithmetic
+#
+
+foreach datatype TIMESTAMP DATE
+
+foreach datepart microsecond second minute hour day month year
+
+query I
+SELECT 'infinity'::${datatype} + INTERVAL (1) ${datepart};
+----
+infinity
+
+query I
+SELECT '-infinity'::${datatype} + INTERVAL (1) ${datepart};
+----
+-infinity
+
+query I
+SELECT 'infinity'::${datatype} - INTERVAL (1) ${datepart};
+----
+infinity
+
+query I
+SELECT '-infinity'::${datatype} - INTERVAL (1) ${datepart};
+----
+-infinity
+
+endloop
+
+endloop
+
+query I
+SELECT 'infinity'::DATE + 1;
+----
+infinity
+
+query I
+SELECT '-infinity'::DATE + 1;
+----
+-infinity
+
+query I
+SELECT 'infinity'::DATE - 1;
+----
+infinity
+
+query I
+SELECT '-infinity'::DATE - 1;
+----
+-infinity
+

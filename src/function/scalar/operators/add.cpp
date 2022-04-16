@@ -44,6 +44,9 @@ interval_t AddOperator::Operation(interval_t left, interval_t right) {
 
 template <>
 date_t AddOperator::Operation(date_t left, int32_t right) {
+	if (!Date::IsFinite(left)) {
+		return left;
+	}
 	int32_t days;
 	if (!TryAddOperator::Operation(left.days, right, days)) {
 		throw OutOfRangeException("Date out of range");

@@ -14,15 +14,6 @@
 
 namespace duckdb {
 
-struct timestamp_struct {
-	int32_t year;
-	int8_t month;
-	int8_t day;
-	int8_t hour;
-	int8_t min;
-	int8_t sec;
-	int16_t msec;
-};
 //! The Timestamp class is a static class that holds helper functions for the Timestamp
 //! type.
 class Timestamp {
