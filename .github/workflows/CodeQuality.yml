@@ -35,7 +35,7 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -61,7 +61,7 @@ jobs:
       TIDY_THREADS: 4
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -78,7 +78,7 @@ jobs:
     env:
       GEN: ninja
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 

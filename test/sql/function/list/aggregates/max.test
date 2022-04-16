@@ -67,10 +67,6 @@ statement ok
 DROP TABLE five_dates_tz
 
 # complex types
-
-# FIXME: remove this after fixing bug in min/max code for vector size 2
-mode skip
-
 statement ok
 CREATE TABLE five_complex AS
 	SELECT
@@ -88,8 +84,6 @@ FROM five_complex
 
 statement ok
 DROP TABLE five_complex
-
-mode unskip
 
 # decimals
 foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
