@@ -127,7 +127,6 @@ if len(existing_duckdb_dir) == 0:
         # copy all source files to the current directory
         sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
         import package_build
-
         (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, extension_name), extensions, False, unity_build, extension_name)
 
         duckdb_sources = [os.path.sep.join(package_build.get_relative_path(script_path, x).split('/')) for x in source_list]
