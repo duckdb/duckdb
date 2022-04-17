@@ -1244,21 +1244,21 @@ static int64_t ExtractElement(DatePartSpecifier type, T element) {
 	}
 }
 
-struct DatePartBinaryOperator {
-	template <class TA, class TB, class TR>
-	static inline TR Operation(TA specifier, TB date) {
-		return ExtractElement<TB>(GetDatePartSpecifier(specifier.GetString()), date);
-	}
-};
-
 template <typename T>
 static void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
-	auto &part_arg = args.data[0];
+	auto &spec_arg = args.data[0];
 	auto &date_arg = args.data[1];
 
-	BinaryExecutor::ExecuteStandard<string_t, T, int64_t, DatePartBinaryOperator>(part_arg, date_arg, result,
-	                                                                              args.size());
+	BinaryExecutor::ExecuteWithNulls<string_t, T, int64_t>(
+	    spec_arg, date_arg, result, args.size(), [&](string_t specifier, T date, ValidityMask &mask, idx_t idx) {
+		    if (DatePart::IsFinite::template Operation<T>(date)) {
+			    return ExtractElement<T>(GetDatePartSpecifier(specifier.GetString()), date);
+		    } else {
+			    mask.SetInvalid(idx);
+			    return int64_t(0);
+		    }
+	    });
 }
 
 void AddGenericDatePartOperator(BuiltinFunctions &set, const string &name, scalar_function_t date_func,

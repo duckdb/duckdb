@@ -16,6 +16,16 @@ INSERT INTO dates VALUES
 	('2022-01-01', 'isoyear'),
 	('044-03-15 (BC)', 'millennium');
 
+statement ok
+CREATE TABLE specifiers (specifier VARCHAR);
+
+foreach specifier era millennium century decade year quarter month day week weekday isodow dayofyear isoyear yearweek
+
+statement ok
+INSERT INTO specifiers VALUES ('${partcode}');
+
+endloop
+
 # test date_part with different combinations of constant/non-constant columns
 query I
 SELECT date_part(NULL::VARCHAR, NULL::TIMESTAMP) FROM dates;
@@ -371,13 +381,20 @@ endloop
 # PG returns numeric ±Infinity, but we have to return an integer,
 # so instead we return NULL, which is what PG used to do.
 
-# Unary functions
 foreach datatype DATE TIMESTAMP
-
-foreach unary year month day decade century millennium quarter dayofweek isodow dayofyear week isoyear era timezone timezone_hour timezone_minute epoch microsecond millisecond second minute hour yearweek dayofmonth weekday weekofyear last_day monthname dayname
 
 foreach special infinity -infinity
 
+# Binary function
+query I
+SELECT DATE_PART(specifier, '${special}'::${datatype}) AS result
+FROM specifiers
+WHERE result IS NOT NULL
+----
+
+foreach unary year month day decade century millennium quarter dayofweek isodow dayofyear week isoyear era timezone timezone_hour timezone_minute epoch microsecond millisecond second minute hour yearweek dayofmonth weekday weekofyear last_day monthname dayname
+
+# Unary functions
 query I
 SELECT ${unary}('${special}'::${datatype});
 ----
