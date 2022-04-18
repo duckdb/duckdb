@@ -6,7 +6,7 @@ include_directories(include)
 
 add_library(customtype_extension STATIC customtype-extension.cpp)
 
-build_loadable_extension(customtype customtype-extension.cpp)
+#build_loadable_extension(customtype customtype-extension.cpp)
 install(
   TARGETS customtype_extension
   EXPORT "${DUCKDB_EXPORT_SET}"
