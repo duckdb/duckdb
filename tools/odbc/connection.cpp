@@ -961,7 +961,7 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 	default:
 		return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) -> SQLRETURN {
 			duckdb::DiagRecord diag_rec("Unrecognized attribute.", SQLStateType::INVALID_ATTR_OPTION_ID,
-												dbc->GetDataSourceName());
+			                            dbc->GetDataSourceName());
 			// returning SQL_SUCESS, but with a record message
 			throw duckdb::OdbcException("SQLGetInfo", SQL_SUCCESS, diag_rec);
 		});

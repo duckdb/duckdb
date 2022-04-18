@@ -289,8 +289,9 @@ SQLRETURN SQL_API SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQ
 		    name_length3 == 0) {
 			if (!SQL_SUCCEEDED(duckdb::ExecDirectStmt(
 			        statement_handle,
-					(SQLCHAR *)"SELECT * FROM (VALUES(NULL, NULL, NULL, 'TABLE'),(NULL, NULL, NULL, 'VIEW')) AS tbl(TABLE_CAT, TABLE_SCHEM, TABLE_NAME, TABLE_TYPE)",
-					SQL_NTS))) {
+			        (SQLCHAR *)"SELECT * FROM (VALUES(NULL, NULL, NULL, 'TABLE'),(NULL, NULL, NULL, 'VIEW')) AS "
+			                   "tbl(TABLE_CAT, TABLE_SCHEM, TABLE_NAME, TABLE_TYPE)",
+			        SQL_NTS))) {
 				return SQL_ERROR;
 			}
 			return SQL_SUCCESS;
