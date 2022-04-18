@@ -137,10 +137,6 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 		}
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto &user_type_name = UserType::GetTypeName(type);
-		// auto user_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(context,
-		// 																			   CatalogType::TYPE_ENTRY, schema, user_type_name, true);
-		// 																			   CatalogType::TYPE_ENTRY, schema, user_type_name,
-		// true);
 		auto entry = context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY, schema, user_type_name, true);
 		if (!entry || entry->type != CatalogType::TYPE_ENTRY) {
 			auto user_custom_type_catalog = (CustomTypeCatalogEntry *)context.db->GetCatalog().GetEntry(
@@ -304,7 +300,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			default: {
 				throw BinderException("Invalid custom type parameter!");
 			}
- 			}
+			}
 		}
 		if (internal_type != LogicalTypeId::INVALID) {
 			CustomType::SetInternalType(base.type, internal_type);

@@ -81,8 +81,7 @@ void CustomTypeExtension::Load(DuckDB &db) {
 	CreateScalarFunctionInfo box_in_info(box_in_func);
 	catalog.CreateFunction(context, &box_in_info);
 
-	ScalarFunction box_out_func("box_out", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
-							BoxOutFunction);
+	ScalarFunction box_out_func("box_out", {LogicalType::VARCHAR}, LogicalType::VARCHAR, BoxOutFunction);
 	// ScalarFunction box_out_func("box_out", {LogicalType::INTEGER}, LogicalType::INTEGER,
 	//                          BoxIntOutFunction);
 	CreateScalarFunctionInfo box_out_info(box_out_func);

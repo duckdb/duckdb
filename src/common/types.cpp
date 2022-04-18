@@ -1230,7 +1230,7 @@ public:
 };
 
 LogicalType LogicalType::CUSTOM(const string &custom_name, map<CustomTypeParameterId, string> &parameters,
-								LogicalTypeId internal_type) {
+                                LogicalTypeId internal_type) {
 	shared_ptr<ExtraTypeInfo> info;
 	info = make_shared<CustomTypeInfo>(custom_name, parameters, internal_type);
 	return LogicalType(LogicalTypeId::CUSTOM, info);
