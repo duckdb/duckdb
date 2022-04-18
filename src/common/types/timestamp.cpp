@@ -154,6 +154,11 @@ string Timestamp::ToString(timestamp_t timestamp) {
 }
 
 date_t Timestamp::GetDate(timestamp_t timestamp) {
+	if (timestamp == timestamp_t::infinity()) {
+		return date_t::infinity();
+	} else if (timestamp == timestamp_t::ninfinity()) {
+		return date_t::ninfinity();
+	}
 	return date_t((timestamp.value + (timestamp.value < 0)) / Interval::MICROS_PER_DAY - (timestamp.value < 0));
 }
 

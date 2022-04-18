@@ -154,31 +154,6 @@ DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType 
 	throw NotImplementedException("\"%s\" units \"%s\" not recognized", LogicalTypeIdToString(type.id()), specifier);
 }
 
-template <class T, class OP>
-static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
-	// we can only propagate complex date part stats if the child has stats
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	auto &nstats = (NumericStatistics &)*child_stats[0];
-	if (nstats.min.IsNull() || nstats.max.IsNull()) {
-		return nullptr;
-	}
-	// run the operator on both the min and the max, this gives us the [min, max] bound
-	auto min = nstats.min.GetValueUnsafe<T>();
-	auto max = nstats.max.GetValueUnsafe<T>();
-	if (min > max) {
-		return nullptr;
-	}
-	auto min_part = OP::template Operation<T, int64_t>(min);
-	auto max_part = OP::template Operation<T, int64_t>(max);
-	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_part), Value::BIGINT(max_part));
-	if (child_stats[0]->validity_stats) {
-		result->validity_stats = child_stats[0]->validity_stats->Copy();
-	}
-	return move(result);
-}
-
 template <int64_t MIN, int64_t MAX>
 static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
 	// we can always propagate simple date part statistics
@@ -210,6 +185,36 @@ struct DatePart {
 			return Timestamp::IsFinite(input);
 		}
 	};
+
+	template <class T, class OP>
+	static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
+		// we can only propagate complex date part stats if the child has stats
+		if (!child_stats[0]) {
+			return nullptr;
+		}
+		auto &nstats = (NumericStatistics &)*child_stats[0];
+		if (nstats.min.IsNull() || nstats.max.IsNull()) {
+			return nullptr;
+		}
+		// run the operator on both the min and the max, this gives us the [min, max] bound
+		auto min = nstats.min.GetValueUnsafe<T>();
+		auto max = nstats.max.GetValueUnsafe<T>();
+		if (min > max) {
+			return nullptr;
+		}
+		// Infinities prevent is from computing generic ranges
+		if (!IsFinite::template Operation<T>(min) || !IsFinite::template Operation<T>(max)) {
+			return nullptr;
+		}
+		auto min_part = OP::template Operation<T, int64_t>(min);
+		auto max_part = OP::template Operation<T, int64_t>(max);
+		auto result =
+		    make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_part), Value::BIGINT(max_part));
+		if (child_stats[0]->validity_stats) {
+			result->validity_stats = child_stats[0]->validity_stats->Copy();
+		}
+		return move(result);
+	}
 
 	template <typename OP>
 	struct PartOperator {
@@ -1430,7 +1435,13 @@ struct StructDatePart {
 					}
 				}
 				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
-				DatePart::StructOperator::Operation(part_values.data(), tdata[0], 0, part_mask);
+				if (DatePart::IsFinite::template Operation<INPUT_TYPE>(tdata[0])) {
+					DatePart::StructOperator::Operation(part_values.data(), tdata[0], 0, part_mask);
+				} else {
+					for (auto &child_entry : child_entries) {
+						ConstantVector::SetNull(*child_entry, true);
+					}
+				}
 			}
 		} else {
 			VectorData rdata;
@@ -1465,7 +1476,13 @@ struct StructDatePart {
 			for (idx_t i = 0; i < count; ++i) {
 				const auto idx = rdata.sel->get_index(i);
 				if (arg_valid.RowIsValid(idx)) {
-					DatePart::StructOperator::Operation(part_values.data(), tdata[idx], idx, part_mask);
+					if (DatePart::IsFinite::template Operation<INPUT_TYPE>(tdata[idx])) {
+						DatePart::StructOperator::Operation(part_values.data(), tdata[idx], idx, part_mask);
+					} else {
+						for (auto &child_entry : child_entries) {
+							FlatVector::Validity(*child_entry).SetInvalid(idx);
+						}
+					}
 				} else {
 					res_valid.SetInvalid(idx);
 					for (auto &child_entry : child_entries) {
