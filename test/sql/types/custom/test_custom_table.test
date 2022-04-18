@@ -2,7 +2,7 @@
 # description: CUSTOM types used in table tests
 # group: [custom]
 
-require custom-type
+require customtype
 
 statement ok
 PRAGMA enable_verification

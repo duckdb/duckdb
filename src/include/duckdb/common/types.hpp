@@ -549,8 +549,8 @@ struct CustomType {
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
 	DUCKDB_API static const map<CustomTypeParameterId, string> &GetParameters(const LogicalType &type);
 	DUCKDB_API static const LogicalTypeId &GetInternalType(const LogicalType &type);
-	DUCKDB_API static const string &GetInputFunction(const LogicalType &type);
-	DUCKDB_API static const string &GetOutputFunction(const LogicalType &type);
+	DUCKDB_API static const string GetInputFunction(const LogicalType &type);
+	DUCKDB_API static const string GetOutputFunction(const LogicalType &type);
 	DUCKDB_API static void SetInternalType(LogicalType &type, LogicalTypeId internal_type);
 	DUCKDB_API static void SetContext(LogicalType &type, ClientContext *context);
 	DUCKDB_API static ClientContext* GetContext(const LogicalType &type);

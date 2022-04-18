@@ -1,6 +1,6 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
-#include "custom-type-extension.hpp"
+#include "customtype-extension.hpp"
 
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -117,6 +117,6 @@ void CustomTypeExtension::Load(DuckDB &db) {
 }
 
 std::string CustomTypeExtension::Name() {
-	return "custom-type";
+	return "customtype";
 }
 } // namespace duckdb

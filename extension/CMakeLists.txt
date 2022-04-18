@@ -6,8 +6,8 @@ if(${BUILD_PARQUET_EXTENSION})
   add_subdirectory(parquet)
 endif()
 
-if(${BUILD_CUSTOM_TYPE_EXTENSION})
-  add_subdirectory(custom-type)
+if(${BUILD_CUSTOMTYPE_EXTENSION})
+  add_subdirectory(customtype)
 endif()
 
 if(${BUILD_TPCH_EXTENSION})

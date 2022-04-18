@@ -4,11 +4,11 @@ project(CustomTypeExtension)
 
 include_directories(include)
 
-add_library(custom_type_extension STATIC custom-type-extension.cpp)
+add_library(customtype_extension STATIC customtype-extension.cpp)
 
-build_loadable_extension(custom_type custom-type-extension.cpp)
+build_loadable_extension(customtype customtype-extension.cpp)
 install(
-  TARGETS custom_type_extension
+  TARGETS customtype_extension
   EXPORT "${DUCKDB_EXPORT_SET}"
   LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
   ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")

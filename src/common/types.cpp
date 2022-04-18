@@ -1324,7 +1324,7 @@ const LogicalTypeId &CustomType::GetInternalType(const LogicalType &type) {
 	return ((CustomTypeInfo &)*info).internal_type;
 }
 
-const string &CustomType::GetInputFunction(const LogicalType &type) {
+const string CustomType::GetInputFunction(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
@@ -1337,7 +1337,7 @@ const string &CustomType::GetInputFunction(const LogicalType &type) {
 	throw InternalException("Input funtion not found!");
 }
 
-const string &CustomType::GetOutputFunction(const LogicalType &type) {
+const string CustomType::GetOutputFunction(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
