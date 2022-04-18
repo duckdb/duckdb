@@ -106,6 +106,7 @@ jobs:
     needs: xcode-debug
     env:
       BUILD_VISUALIZER: 1
+      BUILD_CUSTOMTYPE: 1
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1

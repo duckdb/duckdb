@@ -117,6 +117,7 @@ jobs:
     env:
       GEN: ninja
       BUILD_VISUALIZER: 1
+      BUILD_CUSTOMTYPE: 1
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
@@ -352,6 +353,7 @@ jobs:
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_VISUALIZER: 1
+      BUILD_CUSTOMTYPE: 1
       DISABLE_SANITIZER: 1
 
     steps:
@@ -451,6 +453,7 @@ jobs:
     needs: linux-release-64
     env:
       BUILD_VISUALIZER: 1
+      BUILD_CUSTOMTYPE: 1
       BUILD_HTTPFS: 1
 
     steps:
