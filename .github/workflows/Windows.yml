@@ -33,7 +33,7 @@ jobs:
     name: Windows (64 Bit)
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -82,7 +82,7 @@ jobs:
     needs: win-release-64
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -127,7 +127,7 @@ jobs:
        run:
          shell: msys2 {0}
      steps:
-       - uses: actions/checkout@v2
+       - uses: actions/checkout@v3
        - uses: msys2/setup-msys2@v2
          with:
            msystem: MINGW64
@@ -153,7 +153,7 @@ jobs:
     runs-on: windows-latest
     needs: win-release-64
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -220,7 +220,7 @@ jobs:
      AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
      AWS_DEFAULT_REGION: us-east-1
    steps:
-     - uses: actions/checkout@v2
+     - uses: actions/checkout@v3
        with:
          fetch-depth: 0
 

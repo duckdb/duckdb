@@ -119,10 +119,7 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 			continue;
 		}
 
-		auto source_idx = child_data.sel->get_index(list_entry.offset);
-		idx_t child_idx = 0;
-
-		while (child_idx < list_entry.length) {
+		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
 
 			// states vector is full, update
 			if (states_idx == STANDARD_VECTOR_SIZE) {
@@ -135,10 +132,10 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 				states_idx = 0;
 			}
 
-			sel_vector.set_index(states_idx, source_idx + child_idx);
+			auto source_idx = child_data.sel->get_index(list_entry.offset + child_idx);
+			sel_vector.set_index(states_idx, source_idx);
 			states_update[states_idx] = state_ptr;
 			states_idx++;
-			child_idx++;
 		}
 	}
 
@@ -175,7 +172,7 @@ static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, Scalar
 
 	// get the function name
 	Value function_value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-	auto function_name = StringValue::Get(function_value);
+	auto function_name = function_value.ToString();
 
 	vector<LogicalType> types;
 	types.push_back(list_child_type);
