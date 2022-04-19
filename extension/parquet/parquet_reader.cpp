@@ -805,39 +805,18 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				};
 				std::map<idx_t, BufferToPrefetch> end_map;
 
+				auto &trans = (ThriftFileTransport &)*state.thrift_file_proto->getTransport();
 				for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 					auto file_col_idx = state.column_ids[out_col_idx];
 					auto root_reader = ((StructColumnReader *)state.root_reader.get());
 					auto size = root_reader->GetChildReader(file_col_idx)->TotalCompressedSize();
 					auto offset = root_reader->GetChildReader(file_col_idx)->FileOffset();
 
-					std::cout << "Want to prefetch column from " << offset << " till " << offset + size << "\n";
-
-					idx_t end = size + offset;
-
-					// Lookup end to possibly merge this with another
-					auto end_lookup = end_map.find(offset);
-					if (end_lookup != end_map.end()) {
-						// We've found a buffer adjacent to thisone, merge it so we can fetch it all at once.
-						auto buffer = end_lookup->second;
-						end_map.erase(offset);
-						buffer.len += size;
-						end_map.insert(std::pair<idx_t, BufferToPrefetch>(end,buffer));
-					} else {
-						BufferToPrefetch buffer{offset, size};
-						end_map.insert(std::pair<idx_t, BufferToPrefetch>(end,buffer));
-					}
+					trans.RegisterPrefetch(offset, size);
 				}
-
-				// Now end_map contains the smallest set of buffers we will scan in this row group, we prefetch them all
-				// TODO limit the memory this may use?
-				auto &trans = (ThriftFileTransport &)*state.thrift_file_proto->getTransport();
-				for (auto & buffer_to_prefetch: end_map) {
-					auto size = buffer_to_prefetch.second.len;
-					auto pos = buffer_to_prefetch.second.pos;
-					trans.PrefetchBuf(pos, size);
-				}
+				trans.PrefetchRegistered();
 			} else {
+				// BIG MEM
 			}
 		} else {
 			// We are going to filter: what do we do?
