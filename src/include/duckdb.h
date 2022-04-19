@@ -1000,6 +1000,10 @@ This should not be used with `DUCKDB_TYPE_DECIMAL`.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_logical_type(duckdb_type type);
 
+DUCKDB_API duckdb_logical_type duckdb_create_list_logical_type(duckdb_logical_type type);
+DUCKDB_API duckdb_logical_type duckdb_create_map_logical_type(duckdb_logical_type key_type,
+                                                              duckdb_logical_type value_type);
+
 /*!
 Creates a `duckdb_logical_type` of type decimal with the specified width and scale
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
@@ -1078,6 +1082,9 @@ The result must be freed with `duckdb_destroy_logical_type`
 * returns: The child type of the list type. Must be destroyed with `duckdb_destroy_logical_type`.
 */
 DUCKDB_API duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type);
+
+DUCKDB_API duckdb_logical_type duckdb_map_type_key_type(duckdb_logical_type type);
+DUCKDB_API duckdb_logical_type duckdb_map_type_value_type(duckdb_logical_type type);
 
 /*!
 Returns the number of children of a struct type.
