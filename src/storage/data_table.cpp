@@ -143,6 +143,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	D_ASSERT(removed_column < column_definitions.size());
 	column_definitions.erase(column_definitions.begin() + removed_column);
 
+	for (idx_t i = 0; i < column_definitions.size(); i++) {
+		column_definitions[i].oid = i;
+	}
+
 	// alter the row_groups and remove the column from each of them
 	this->row_groups = make_shared<SegmentTree>();
 	auto current_row_group = (RowGroup *)parent.row_groups->GetRootSegment();
