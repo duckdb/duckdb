@@ -43,12 +43,8 @@ static void HistogramUpdateFunction(Vector inputs[], FunctionData *, idx_t input
 			if (!state->hist) {
 				state->hist = new map<T, idx_t>();
 			}
-			// TODO: change this again once the cause of the heap buffer overflow is found
 			auto value = (T *)input_data.data;
-			auto idx = input_data.sel->get_index(i);
-			auto key = value[idx];
-			(*state->hist)[key];
-			(*state->hist)[key] += 1;
+			(*state->hist)[value[input_data.sel->get_index(i)]]++;
 		}
 	}
 }
