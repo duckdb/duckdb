@@ -156,6 +156,7 @@ std::string BufferedCSVReaderOptions::ToString() const {
 	       ", HEADER=" + std::to_string(header) +
 	       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
 	       ", SAMPLE_SIZE=" + std::to_string(sample_chunk_size * sample_chunks) +
+		   ", IGNORE_ERRORS=" + std::to_string(ignore_errors) +
 	       ", ALL_VARCHAR=" + std::to_string(all_varchar);
 }
 
