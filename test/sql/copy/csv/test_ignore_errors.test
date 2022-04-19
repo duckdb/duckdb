@@ -6,13 +6,13 @@ statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER);
 
 statement ok
-COPY integers FROM 'test/sql/copy/csv/data/test/erroneous_integers.csv' (HEADER, IGNORE_ERRORS)
+COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, IGNORE_ERRORS)
 
 query II
 SELECT * FROM integers
 ----
-1    1
-2    2
-3    3
-4    4
-5    5
+1	1
+2	2
+3	3
+4	4
+5	5
