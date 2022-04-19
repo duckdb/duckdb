@@ -1,0 +1,99 @@
+name: "Build Extensions"
+description: "Build, test and deploy the in-tree DuckDB extensions"
+inputs:
+  run_tests:
+    description: 'Tests to run after build'
+    default: 1
+  deploy_as:
+    description: 'Binary name for deploy step'
+    default: ''
+  force_32_bit:
+    description: 'Force the 32 bit build'
+    default: 0
+  openssl_path:
+    description: 'Directory of OpenSSL installation'
+    default: '/usr/local/ssl'
+  post_install:
+    description: 'Post-install scripts to run'
+    default: ''
+  visualizer:
+    description: 'Build Visualizer'
+    default: 1
+  icu:
+    description: 'Build ICU'
+    default: 1
+  tpch:
+    description: 'Build TPCH'
+    default: 1
+  tpcds:
+    description: 'Build TPCDS'
+    default: 1
+  httpfs:
+    description: 'Build HTTPFS'
+    default: 1
+  fts:
+    description: 'Build FTS'
+    default: 1
+  json:
+    description: 'Build JSON'
+    default: 1
+  excel:
+    description: 'Build Excel'
+    default: 1
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build
+      shell: bash
+      env:
+        GEN: ninja
+        BUILD_VISUALIZER: ${{ inputs.visualizer }}
+        BUILD_ICU: ${{ inputs.icu }}
+        BUILD_TPCH: ${{ inputs.tpch }}
+        BUILD_TPCDS: ${{ inputs.tpcds }}
+        BUILD_FTS: ${{ inputs.fts }}
+        BUILD_HTTPFS: ${{ inputs.httpfs }}
+        BUILD_JSON: ${{ inputs.json }}
+        BUILD_EXCEL: ${{ inputs.excel }}
+        FORCE_32_BIT: ${{ inputs.force_32_bit }}
+        BUILD_SUBSTRAIT_EXTENSION: ${{ inputs.substrait }}
+        TREAT_WARNINGS_AS_ERRORS: 1
+        FORCE_WARN_UNUSED: 1
+        STATIC_OPENSSL: 1
+        DISABLE_BUILTIN_EXTENSIONS: 1
+        OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
+      run: |
+        make
+
+    - name: Run post-install scripts
+      if: inputs.post_install != ""
+      shell: bash
+      run: |
+        ${{ inputs.post_install }}
+
+    - name: Deploy
+      if: inputs.deploy_as != ""
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
+        AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+        AWS_DEFAULT_REGION: us-east-1
+      run: |
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          ./scripts/extension-upload.sh ${{ inputs.deploy_as }}
+        fi
+
+    - name: Test
+      if: inputs.run_tests
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
+        AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+        AWS_DEFAULT_REGION: us-east-1
+      run: |
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          ./scripts/extension-upload-test.sh
+        else
+          ./scripts/extension-upload-test.sh local
+        fi

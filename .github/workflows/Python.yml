@@ -71,24 +71,7 @@ jobs:
       matrix:
         arch: ['i686', 'x86_64']
     env:
-      DISABLE_MAIN_DUCKDB_LIBRARY: 1
-      BUILD_HTTPFS: 1
-      BUILD_VISUALIZER: 1
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
-      BUILD_SUBSTRAIT_EXTENSION: 1
-      STATIC_OPENSSL: 1
-      TREAT_WARNINGS_AS_ERRORS: 1
-      FORCE_WARN_UNUSED: 1
-      DISABLE_BUILTIN_EXTENSIONS: 1
       FORCE_32_BIT: ${{ matrix.arch == 'i686' && 1 || 0}}
-      AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-      AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
-      AWS_DEFAULT_REGION: us-east-1
 
     steps:
     - uses: actions/checkout@v3
@@ -142,23 +125,16 @@ jobs:
         cmake --version
         ldd --version ldd
 
-    - name: Build
-      run: make
+    - uses: ./.github/actions/build_extensions
+      with:
+        deploy_as: linux_${{matrix.arch == 'i686' && 'i686' || 'amd64'}}_gcc4
+        force_32_bit: ${{ matrix.arch == 'i686' && 1 || 0}}
 
     - uses: actions/upload-artifact@v2
       with:
         name: python-wheel-centos7-extensions-centos-${{ matrix.arch }}
         path: |
           build/release/extension/*/*.duckdb_extension
-
-    - name: Deploy
-      run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          ./scripts/extension-upload.sh linux_${{matrix.arch == 'i686' && 'i686' || 'amd64'}}_gcc4
-          ./scripts/extension-upload-test.sh
-        else
-          ./scripts/extension-upload-test.sh local
-        fi
 
    linux-python3:
     name: Python 3 Linux
