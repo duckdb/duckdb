@@ -1674,9 +1674,15 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	}
 
 	if (column < sql_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
-		throw InvalidInputException("Error on line %s: expected %lld values per row, but got %d. (%s)",
-		                            GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column,
-		                            options.ToString());
+		if (options.ignore_errors == true) {
+			column = 0;
+			return false;
+		}
+		else {
+			throw InvalidInputException("Error on line %s: expected %lld values per row, but got %d. (%s)",
+										GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column,
+										options.ToString());
+		}
 	}
 
 	if (mode == ParserMode::SNIFFING_DIALECT) {
