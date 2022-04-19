@@ -4,7 +4,7 @@ duckdb_logical_type duckdb_create_logical_type(duckdb_type type) {
 	return new duckdb::LogicalType(duckdb::ConvertCTypeToCPP(type));
 }
 
-duckdb_logical_type duckdb_create_list_logical_type(duckdb_logical_type type) {
+duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type) {
 	if (!type) {
 		return nullptr;
 	}
@@ -13,7 +13,7 @@ duckdb_logical_type duckdb_create_list_logical_type(duckdb_logical_type type) {
 	return ltype;
 }
 
-duckdb_logical_type duckdb_create_map_logical_type(duckdb_logical_type key_type, duckdb_logical_type value_type) {
+duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_logical_type value_type) {
 	if (!key_type || !value_type) {
 		return nullptr;
 	}

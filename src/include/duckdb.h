@@ -1000,9 +1000,23 @@ This should not be used with `DUCKDB_TYPE_DECIMAL`.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_logical_type(duckdb_type type);
 
-DUCKDB_API duckdb_logical_type duckdb_create_list_logical_type(duckdb_logical_type type);
-DUCKDB_API duckdb_logical_type duckdb_create_map_logical_type(duckdb_logical_type key_type,
-                                                              duckdb_logical_type value_type);
+/*!
+Creates a list type from its child type.
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* type: The child type of list type to create.
+* returns: The logical type.
+*/
+DUCKDB_API duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type);
+
+/*!
+Creates a map type from its key type and value type.
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* type: The key type and value type of map type to create.
+* returns: The logical type.
+*/
+DUCKDB_API duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_logical_type value_type);
 
 /*!
 Creates a `duckdb_logical_type` of type decimal with the specified width and scale
@@ -1083,7 +1097,24 @@ The result must be freed with `duckdb_destroy_logical_type`
 */
 DUCKDB_API duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type);
 
+/*!
+Retrieves the key type of the given map type.
+
+The result must be freed with `duckdb_destroy_logical_type`
+
+* type: The logical type object
+* returns: The key type of the map type. Must be destroyed with `duckdb_destroy_logical_type`.
+*/
 DUCKDB_API duckdb_logical_type duckdb_map_type_key_type(duckdb_logical_type type);
+
+/*!
+Retrieves the value type of the given map type.
+
+The result must be freed with `duckdb_destroy_logical_type`
+
+* type: The logical type object
+* returns: The value type of the map type. Must be destroyed with `duckdb_destroy_logical_type`.
+*/
 DUCKDB_API duckdb_logical_type duckdb_map_type_value_type(duckdb_logical_type type);
 
 /*!
