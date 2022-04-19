@@ -33,3 +33,19 @@ SELECT * FROM integers AS too_many_columns
 3	3
 4	4
 5	5
+
+statement ok
+DELETE FROM integers;
+
+statement ok
+COPY integers FROM 'test/sql/copy/csv/data/test/error_invalid_type.csv' (HEADER, IGNORE_ERRORS)
+
+# too many columns provided
+query II
+SELECT * FROM integers AS too_many_columns
+----
+1	1
+2	2
+3	3
+4	4
+5	5
