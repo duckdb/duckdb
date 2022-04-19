@@ -1,0 +1,18 @@
+# name: test/sql/copy/csv/test_ignore_errors.test
+# description: IGNORE_ERRORS test
+# group: [csv]
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER);
+
+statement ok
+COPY integers FROM 'test/sql/copy/csv/data/test/erroneous_integers.csv' (HEADER, IGNORE_ERRORS)
+
+query II
+SELECT * FROM integers
+----
+1    1
+2    2
+3    3
+4    4
+5    5
