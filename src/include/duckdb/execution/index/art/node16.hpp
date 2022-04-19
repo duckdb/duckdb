@@ -38,5 +38,7 @@ public:
 
 	//! Serialize Node
 	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) override;
+
+	static unique_ptr<Node16> Deserialize(duckdb::Deserializer &source);
 };
 } // namespace duckdb

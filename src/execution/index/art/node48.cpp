@@ -74,16 +74,16 @@ void Node48::Insert(unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &
 		n->count++;
 	} else {
 		// Grow to Node256
-		auto new_node = make_unique<Node256>(art, n->prefix_length);
+		auto new_node = make_unique<Node256>(n->prefix_length);
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
 				new_node->child[i] = move(n->child[n->child_index[i]]);
 			}
 		}
 		new_node->count = n->count;
-		CopyPrefix(art, n, new_node.get());
+		CopyPrefix(n, new_node.get());
 		node = move(new_node);
-		Node256::Insert(art, node, key_byte, child);
+		Node256::Insert( node, key_byte, child);
 	}
 }
 
@@ -94,8 +94,8 @@ void Node48::Erase(unique_ptr<Node> &node, int pos) {
 	n->child_index[pos] = Node::EMPTY_MARKER;
 	n->count--;
 	if (node->count <= 12) {
-		auto new_node = make_unique<Node16>(art, n->prefix_length);
-		CopyPrefix(art, n, new_node.get());
+		auto new_node = make_unique<Node16>(n->prefix_length);
+		CopyPrefix(n, new_node.get());
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
 				new_node->key[new_node->count] = i;

@@ -289,7 +289,7 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 	Key &key = *value;
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
-		node = make_unique<Leaf>(*this, move(value), row_id);
+		node = make_unique<Leaf>(move(value), row_id);
 		return true;
 	}
 
@@ -311,31 +311,31 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 			}
 		}
 
-		unique_ptr<Node> new_node = make_unique<Node4>(*this, new_prefix_length);
+		unique_ptr<Node> new_node = make_unique<Node4>(new_prefix_length);
 		new_node->prefix_length = new_prefix_length;
 		memcpy(new_node->prefix.get(), &key[depth], new_prefix_length);
-		Node4::Insert(*this, new_node, existing_key[depth + new_prefix_length], node);
-		unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
-		Node4::Insert(*this, new_node, key[depth + new_prefix_length], leaf_node);
+		Node4::Insert(new_node, existing_key[depth + new_prefix_length], node);
+		unique_ptr<Node> leaf_node = make_unique<Leaf>(move(value), row_id);
+		Node4::Insert(new_node, key[depth + new_prefix_length], leaf_node);
 		node = move(new_node);
 		return true;
 	}
 
 	// Handle prefix of inner node
 	if (node->prefix_length) {
-		uint32_t mismatch_pos = Node::PrefixMismatch(*this, node.get(), key, depth);
+		uint32_t mismatch_pos = Node::PrefixMismatch(node.get(), key, depth);
 		if (mismatch_pos != node->prefix_length) {
 			// Prefix differs, create new node
-			unique_ptr<Node> new_node = make_unique<Node4>(*this, mismatch_pos);
+			unique_ptr<Node> new_node = make_unique<Node4>(mismatch_pos);
 			new_node->prefix_length = mismatch_pos;
 			memcpy(new_node->prefix.get(), node->prefix.get(), mismatch_pos);
 			// Break up prefix
 			auto node_ptr = node.get();
-			Node4::Insert(*this, new_node, node->prefix[mismatch_pos], node);
+			Node4::Insert(new_node, node->prefix[mismatch_pos], node);
 			node_ptr->prefix_length -= (mismatch_pos + 1);
 			memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatch_pos + 1, node_ptr->prefix_length);
-			unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
-			Node4::Insert(*this, new_node, key[depth + mismatch_pos], leaf_node);
+			unique_ptr<Node> leaf_node = make_unique<Leaf>( move(value), row_id);
+			Node4::Insert(new_node, key[depth + mismatch_pos], leaf_node);
 			node = move(new_node);
 			return true;
 		}
@@ -348,8 +348,8 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		auto child = node->GetChild(pos);
 		return Insert(*child, move(value), depth + 1, row_id);
 	}
-	unique_ptr<Node> new_node = make_unique<Leaf>(*this, move(value), row_id);
-	Node::InsertLeaf(*this, node, key[depth], new_node);
+	unique_ptr<Node> new_node = make_unique<Leaf>(move(value), row_id);
+	Node::InsertLeaf(node, key[depth], new_node);
 	return true;
 }
 
@@ -407,7 +407,7 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 
 	// Handle prefix
 	if (node->prefix_length) {
-		if (Node::PrefixMismatch(*this, node.get(), key, depth) != node->prefix_length) {
+		if (Node::PrefixMismatch(node.get(), key, depth) != node->prefix_length) {
 			return;
 		}
 		depth += node->prefix_length;
@@ -424,7 +424,7 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 			leaf->Remove(row_id);
 			if (leaf->num_elements == 0) {
 				// Leaf is empty, delete leaf, decrement node counter and maybe shrink node
-				Node::Erase(*this, node, pos);
+				Node::Erase(node, pos);
 			}
 		} else {
 			// Recurse
@@ -668,7 +668,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 			}
 			return false;
 		}
-		uint32_t mismatch_pos = Node::PrefixMismatch(*this, node, key, depth);
+		uint32_t mismatch_pos = Node::PrefixMismatch(node, key, depth);
 		if (mismatch_pos != node->prefix_length) {
 			if (node->prefix[mismatch_pos] < key[depth + mismatch_pos]) {
 				// Less

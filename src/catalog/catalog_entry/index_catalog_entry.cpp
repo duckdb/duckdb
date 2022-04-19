@@ -35,13 +35,13 @@ pair<idx_t, idx_t> IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &writer)
 	return art_index->DepthFirstSearchCheckpoint(writer);
 }
 
-std::unique_ptr<Index> IndexCatalogEntry::Deserialize(Deserializer &source, idx_t block_id, idx_t offset) {
-	if (index->type != IndexType::ART) {
-		throw NotImplementedException("Don't know how to deserialize this index type");
-	}
-	auto art_index = make_unique<ART>();
-	return art_index->DepthFirstSearchCheckpoint(writer);
-}
+//std::unique_ptr<Index> IndexCatalogEntry::Deserialize(Deserializer &source, idx_t block_id, idx_t offset) {
+//	if (index->type != IndexType::ART) {
+//		throw NotImplementedException("Don't know how to deserialize this index type");
+//	}
+//	auto art_index = make_unique<ART>();
+//	return art_index->DepthFirstSearchCheckpoint(writer);
+//}
 
 void IndexCatalogEntry::SerializeMetadata(duckdb::MetaBlockWriter &serializer) {
 	// Here we serialize the index metadata in the following order:

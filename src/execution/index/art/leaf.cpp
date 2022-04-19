@@ -5,13 +5,21 @@
 
 namespace duckdb {
 
-Leaf::Leaf(ART &art, unique_ptr<Key> value, row_t row_id) : Node(art, NodeType::NLeaf, 0) {
+Leaf::Leaf(unique_ptr<Key> value, row_t row_id) : Node( NodeType::NLeaf, 0) {
 	this->value = move(value);
 	this->capacity = 1;
 	this->row_ids = unique_ptr<row_t[]>(new row_t[this->capacity]);
 	this->row_ids[0] = row_id;
 	this->num_elements = 1;
 }
+
+Leaf::Leaf( unique_ptr<Key> value, unique_ptr<row_t[]> row_ids, idx_t num_elements): Node( NodeType::NLeaf, 0) {
+	this->value = move(value);
+	this->capacity = num_elements;
+	this->row_ids = move(row_ids);
+	this->num_elements = num_elements;
+}
+
 
 void Leaf::Insert(row_t row_id) {
 	// Grow array
@@ -47,6 +55,20 @@ std::pair<idx_t, idx_t> Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
 }
 
 unique_ptr<Leaf> Leaf::Deserialize(Deserializer &source) {
+	auto value_length = source.Read<idx_t>();
+	unique_ptr<data_t[]> data = unique_ptr<data_t[]>(new data_t[value_length]);
+	for (idx_t i = 0; i < value_length; i ++){
+		data[i] = source.Read<data_t>();
+	}
+
+	unique_ptr<Key> key_value = make_unique<Key>(move(data),value_length);
+
+	auto num_elements = source.Read<idx_t>();
+	auto elements = unique_ptr<row_t[]>(new row_t[num_elements]);
+	for (idx_t i = 0; i < num_elements; i ++){
+		elements[i] = source.Read<row_t>();
+	}
+	return make_unique<Leaf>(move(key_value),move(elements),num_elements );
 }
 
 void Leaf::Remove(row_t row_id) {

@@ -143,4 +143,8 @@ std::pair<idx_t, idx_t> Node4::Serialize(duckdb::MetaBlockWriter &writer) {
 	return {block_id, offset};
 }
 
+unique_ptr<Node4> Node4::Deserialize(duckdb::Deserializer &source){
+
+}
+
 } // namespace duckdb

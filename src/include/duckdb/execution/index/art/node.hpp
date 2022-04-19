@@ -49,9 +49,6 @@ public:
 	//! Serialize this Node
 	virtual std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) = 0;
 
-	//! Deserialize this Node
-	virtual unique_ptr<Node> Deserialize(duckdb::Deserializer &source) = 0;
-
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position. if pos ==
 	//! DConstants::INVALID_INDEX, then the first valid position in the node will be returned.
 	virtual idx_t GetNextPos(idx_t pos) {
