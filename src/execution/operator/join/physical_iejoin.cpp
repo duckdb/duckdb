@@ -182,6 +182,14 @@ SinkFinalizeType PhysicalIEJoin::Finalize(Pipeline &pipeline, Event &event, Clie
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
+OperatorResultType PhysicalIEJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                           GlobalOperatorState &gstate, OperatorState &state) const {
+	return OperatorResultType::FINISHED;
+}
+
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
 struct SBIterator {
 	static int ComparisonValue(ExpressionType comparison) {
 		switch (comparison) {
@@ -752,9 +760,6 @@ public:
 		right_keys.Initialize(right_types);
 	}
 
-	idx_t SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right, const SelectionVector *sel,
-	                     idx_t count);
-
 	idx_t SelectOuterRows(bool *matches) {
 		idx_t count = 0;
 		for (; outer_idx < outer_count; ++outer_idx) {
@@ -796,30 +801,6 @@ public:
 	bool *right_matches;
 };
 
-idx_t IEJoinLocalSourceState::SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
-                                             const SelectionVector *sel, idx_t count) {
-	switch (condition) {
-	case ExpressionType::COMPARE_NOTEQUAL:
-		return VectorOperations::NotEquals(left, right, sel, count, &true_sel, nullptr);
-	case ExpressionType::COMPARE_LESSTHAN:
-		return VectorOperations::LessThan(left, right, sel, count, &true_sel, nullptr);
-	case ExpressionType::COMPARE_GREATERTHAN:
-		return VectorOperations::GreaterThan(left, right, sel, count, &true_sel, nullptr);
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return VectorOperations::LessThanEquals(left, right, sel, count, &true_sel, nullptr);
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return VectorOperations::GreaterThanEquals(left, right, sel, count, &true_sel, nullptr);
-	case ExpressionType::COMPARE_DISTINCT_FROM:
-		return VectorOperations::DistinctFrom(left, right, sel, count, &true_sel, nullptr);
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-	case ExpressionType::COMPARE_EQUAL:
-	default:
-		throw InternalException("Unsupported comparison type for PhysicalIEJoin");
-	}
-
-	return count;
-}
-
 void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk, LocalSourceState &state_p) const {
 	auto &state = (IEJoinLocalSourceState &)state_p;
 	auto &ie_sink = (IEJoinGlobalState &)*sink_state;
@@ -856,6 +837,7 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &ch
 			state.right_executor.SetChunk(right_chunk);
 
 			auto tail_count = result_count;
+			auto true_sel = &state.true_sel;
 			for (size_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
 				auto &left = state.left_keys.data[cmp_idx];
 				state.left_executor.ExecuteExpression(cmp_idx, left);
@@ -867,8 +849,8 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &ch
 					left.Slice(*sel, tail_count);
 					right.Slice(*sel, tail_count);
 				}
-				tail_count = state.SelectJoinTail(conditions[cmp_idx + 2].comparison, left, right, sel, tail_count);
-				sel = &state.true_sel;
+				tail_count = SelectJoinTail(conditions[cmp_idx + 2].comparison, left, right, sel, tail_count, true_sel);
+				sel = true_sel;
 			}
 			chunk.Fuse(right_chunk);
 
@@ -893,14 +875,6 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &ch
 	} while (chunk.size() == 0);
 }
 
-OperatorResultType PhysicalIEJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                           GlobalOperatorState &gstate, OperatorState &state) const {
-	return OperatorResultType::FINISHED;
-}
-
-//===--------------------------------------------------------------------===//
-// Source
-//===--------------------------------------------------------------------===//
 class IEJoinGlobalSourceState : public GlobalSourceState {
 public:
 	explicit IEJoinGlobalSourceState(const PhysicalIEJoin &op)
