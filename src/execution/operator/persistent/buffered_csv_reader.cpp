@@ -1730,6 +1730,9 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	if (parse_chunk.size() == 0) {
 		return;
 	}
+
+	bool conversion_error_ignored = false;
+
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
 	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
@@ -1771,6 +1774,10 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				success = VectorOperations::TryCast(parse_chunk.data[col_idx], insert_chunk.data[col_idx],
 				                                    parse_chunk.size(), &error_message);
 			}
+			if (options.ignore_errors == true && !success ) {
+				conversion_error_ignored = true;
+				continue;
+			}
 			if (!success) {
 				string col_name = to_string(col_idx);
 				if (col_idx < col_names.size()) {
@@ -1791,6 +1798,26 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				}
 			}
 		}
+	}
+	if (conversion_error_ignored && options.ignore_errors) {
+		SelectionVector succesful_rows;
+		succesful_rows.Initialize(parse_chunk.size());
+		idx_t sel_size = 0;
+
+		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
+			bool failed = false;
+			for (idx_t column_idx = 0; column_idx < sql_types.size(); column_idx++) {
+				if (insert_chunk.data[column_idx].GetValue(row_idx).IsNull()) {
+					failed = true;
+					break;
+				}
+			}
+			if (!failed) {
+				succesful_rows.set_index(sel_size++, row_idx);
+			}
+		}
+		insert_chunk.Slice(succesful_rows, sel_size);
+		// insert_chunk.Verify();
 	}
 	parse_chunk.Reset();
 }
