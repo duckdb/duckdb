@@ -136,7 +136,6 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::UNKNOWN;
 	case LogicalTypeId::CUSTOM: {
 		return LogicalType(CustomType::GetInternalType(*this)).GetInternalType();
-		// return PhysicalType::VARCHAR;
 	}
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
@@ -490,6 +489,9 @@ string LogicalType::ToString() const {
 	}
 	case LogicalTypeId::ENUM: {
 		return EnumType::GetTypeName(*this);
+	}
+	case LogicalTypeId::CUSTOM: {
+		return CustomType::GetTypeName(*this);
 	}
 	default:
 		return LogicalTypeIdToString(id_);

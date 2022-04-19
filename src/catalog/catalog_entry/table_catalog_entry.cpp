@@ -462,6 +462,7 @@ string TableCatalogEntry::ToSQL() {
 		ss << KeywordHelper::WriteOptionallyQuoted(column.name) << " ";
 		switch (column.type.id()) {
 		case LogicalTypeId::ENUM:
+		case LogicalTypeId::CUSTOM:
 			ss << KeywordHelper::WriteOptionallyQuoted(column.type.ToString());
 			break;
 		default:

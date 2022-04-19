@@ -676,6 +676,11 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 
 		break;
 	}
+	case LogicalTypeId::CUSTOM: {
+		auto internal_type = CustomType::GetInternalType(type);
+		SetArrowChild(child_holder, LogicalType(internal_type), data, size);
+		break;
+	}
 	default:
 		throw std::runtime_error("Unsupported type " + type.ToString());
 	}
