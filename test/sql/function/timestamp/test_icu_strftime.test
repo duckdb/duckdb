@@ -231,6 +231,20 @@ SELECT ts, strftime(ts, '%Y-%m-%d %H:%M:%S.%f %z') FROM timestamps;
 NULL	NULL
 
 #
+# Infinities
+#
+
+foreach special infinity -infinity
+
+# PG to_char returns NULL here
+query I
+SELECT strftime('${special}'::TIMESTAMPTZ, '%Y-%m-%d');
+----
+NULL
+
+endloop
+
+#
 # Errors/Coverage
 #
 statement error
