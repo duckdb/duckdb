@@ -77,6 +77,8 @@ struct BufferedCSVReaderOptions {
 	bool has_header = false;
 	//! Whether or not the file has a header line
 	bool header = false;
+	//! Whether or not we should ignore InvalidInput errors
+	bool ignore_errors = false;
 	//! Whether or not header names shall be normalized
 	bool normalize_names = false;
 	//! How many leading rows to skip
