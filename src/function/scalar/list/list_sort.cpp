@@ -158,8 +158,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			continue;
 		}
 
-		idx_t child_idx = 0;
-		while (child_idx < list_entry.length) {
+		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
 
 			// lists_indices vector is full, sink
 			if (offset_lists_indices == STANDARD_VECTOR_SIZE) {
@@ -174,7 +173,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			payload_vector_data[offset_lists_indices] = incr_payload_count;
 			offset_lists_indices++;
 			incr_payload_count++;
-			child_idx++;
 		}
 	}
 
@@ -217,6 +215,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 		D_ASSERT(sel_sorted_idx == incr_payload_count);
 		child_vector.Slice(sel_sorted, sel_sorted_idx);
+		child_vector.Normalify(sel_sorted_idx);
 	}
 
 	result.Reference(lists);

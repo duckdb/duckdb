@@ -87,16 +87,10 @@ SELECT list_reverse_sort([1, 2])
 ----
 [2, 1]
 
-# TODO: why does this throw a heap buffer overflow when list_sort(list_sort(...)) does not?
-
-mode skip
-
 query I
 SELECT list_reverse_sort(list_reverse_sort([1, 2]))
 ----
 [2, 1]
-
-mode unskip
 
 query I
 SELECT list_sort([1, 3, NULL, 5, NULL, -5])
