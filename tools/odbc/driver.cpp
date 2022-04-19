@@ -1,6 +1,7 @@
 #include "duckdb_odbc.hpp"
 #include "driver.hpp"
 #include "odbc_diagnostic.hpp"
+#include "odbc_exception.hpp"
 #include "odbc_fetch.hpp"
 #include "odbc_utils.hpp"
 
@@ -11,6 +12,7 @@
 
 using duckdb::OdbcDiagnostic;
 using duckdb::OdbcUtils;
+using duckdb::SQLStateType;
 using std::string;
 
 SQLRETURN duckdb::FreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
@@ -107,8 +109,9 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 			case SQL_CP_ONE_PER_HENV:
 				return SQL_SUCCESS;
 			default:
-				env->error_messages.emplace_back("Connection pool option not supported.");
-				return SQL_INVALID_HANDLE;
+				duckdb::DiagRecord diag_rec("Connection pooling not supported: " + std::to_string(attribute),
+				                            SQLStateType::INVALID_ATTR_OPTION_ID, "Unknown DSN");
+				throw duckdb::OdbcException("SQLSetConnectAttr", SQL_SUCCESS_WITH_INFO, diag_rec);
 			}
 		case SQL_ATTR_CP_MATCH:
 			env->error_messages.emplace_back("Optional feature not supported.");
