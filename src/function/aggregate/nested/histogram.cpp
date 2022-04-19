@@ -150,81 +150,72 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
 	return make_unique<VariableReturnBindData>(function.return_type);
 }
 
-template <typename T>
-AggregateFunction GetHistogramFunction(const LogicalType &type) {
-	using STATE_TYPE = HistogramAggState<T>;
+template <class T, class MAP_TYPE = map<T, idx_t>>
+static AggregateFunction GetHistogramFunction(const LogicalType &type) {
+
+	using STATE_TYPE = HistogramAggState<T, MAP_TYPE>;
+
+	if (type == LogicalType::VARCHAR) {
+		return AggregateFunction("histogram", {type}, LogicalTypeId::MAP, AggregateFunction::StateSize<STATE_TYPE>,
+		                         AggregateFunction::StateInitialize<STATE_TYPE, HistogramFunction>,
+		                         HistogramUpdateFunctionString, HistogramCombineFunction<T>, HistogramFinalize<T>,
+		                         nullptr, HistogramBindFunction,
+		                         AggregateFunction::StateDestroy<STATE_TYPE, HistogramFunction>);
+	}
+
 	return AggregateFunction("histogram", {type}, LogicalTypeId::MAP, AggregateFunction::StateSize<STATE_TYPE>,
 	                         AggregateFunction::StateInitialize<STATE_TYPE, HistogramFunction>,
 	                         HistogramUpdateFunction<T>, HistogramCombineFunction<T>, HistogramFinalize<T>, nullptr,
 	                         HistogramBindFunction, AggregateFunction::StateDestroy<STATE_TYPE, HistogramFunction>);
+};
+
+template <class T, bool IS_ORDERED>
+AggregateFunction GetMapType(const LogicalType &type) {
+
+	if (IS_ORDERED) {
+		return GetHistogramFunction<T>(type);
+	}
+	return GetHistogramFunction<T, unordered_map<T, idx_t>>(type);
 }
 
-AggregateFunction GetHistogramFunction(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::UINT16:
-		return AggregateFunction("histogram", {LogicalType::USMALLINT}, LogicalTypeId::MAP,
-		                         AggregateFunction::StateSize<HistogramAggState<uint16_t>>,
-		                         AggregateFunction::StateInitialize<HistogramAggState<uint16_t>, HistogramFunction>,
-		                         HistogramUpdateFunction<uint16_t>, HistogramCombineFunction<uint16_t>,
-		                         HistogramFinalize<uint16_t>, nullptr, HistogramBindFunction,
-		                         AggregateFunction::StateDestroy<HistogramAggState<uint16_t>, HistogramFunction>);
-	case PhysicalType::UINT32:
-		return AggregateFunction("histogram", {LogicalType::UINTEGER}, LogicalTypeId::MAP,
-		                         AggregateFunction::StateSize<HistogramAggState<uint32_t>>,
-		                         AggregateFunction::StateInitialize<HistogramAggState<uint32_t>, HistogramFunction>,
-		                         HistogramUpdateFunction<uint32_t>, HistogramCombineFunction<uint32_t>,
-		                         HistogramFinalize<uint32_t>, nullptr, HistogramBindFunction,
-		                         AggregateFunction::StateDestroy<HistogramAggState<uint32_t>, HistogramFunction>);
-	case PhysicalType::UINT64:
-		return AggregateFunction("histogram", {LogicalType::UBIGINT}, LogicalTypeId::MAP,
-		                         AggregateFunction::StateSize<HistogramAggState<uint64_t>>,
-		                         AggregateFunction::StateInitialize<HistogramAggState<uint64_t>, HistogramFunction>,
-		                         HistogramUpdateFunction<uint64_t>, HistogramCombineFunction<uint64_t>,
-		                         HistogramFinalize<uint64_t>, nullptr, HistogramBindFunction,
-		                         AggregateFunction::StateDestroy<HistogramAggState<uint64_t>, HistogramFunction>);
-	case PhysicalType::INT16:
-		return AggregateFunction("histogram", {LogicalType::SMALLINT}, LogicalTypeId::MAP,
-		                         AggregateFunction::StateSize<HistogramAggState<int16_t>>,
-		                         AggregateFunction::StateInitialize<HistogramAggState<int16_t>, HistogramFunction>,
-		                         HistogramUpdateFunction<int16_t>, HistogramCombineFunction<int16_t>,
-		                         HistogramFinalize<int16_t>, nullptr, HistogramBindFunction,
-		                         AggregateFunction::StateDestroy<HistogramAggState<int16_t>, HistogramFunction>);
-	case PhysicalType::INT32:
-		return AggregateFunction("histogram", {LogicalType::INTEGER}, LogicalTypeId::MAP,
-		                         AggregateFunction::StateSize<HistogramAggState<int32_t>>,
-		                         AggregateFunction::StateInitialize<HistogramAggState<int32_t>, HistogramFunction>,
-		                         HistogramUpdateFunction<int32_t>, HistogramCombineFunction<int32_t>,
-		                         HistogramFinalize<int32_t>, nullptr, HistogramBindFunction,
-		                         AggregateFunction::StateDestroy<HistogramAggState<int32_t>, HistogramFunction>);
-	case PhysicalType::INT64:
-		return AggregateFunction("histogram", {LogicalType::BIGINT}, LogicalTypeId::MAP,
-		                         AggregateFunction::StateSize<HistogramAggState<int64_t>>,
-		                         AggregateFunction::StateInitialize<HistogramAggState<int64_t>, HistogramFunction>,
-		                         HistogramUpdateFunction<int64_t>, HistogramCombineFunction<int64_t>,
-		                         HistogramFinalize<int64_t>, nullptr, HistogramBindFunction,
-		                         AggregateFunction::StateDestroy<HistogramAggState<int64_t>, HistogramFunction>);
-	case PhysicalType::FLOAT:
-		return AggregateFunction("histogram", {LogicalType::FLOAT}, LogicalTypeId::MAP,
-		                         AggregateFunction::StateSize<HistogramAggState<float>>,
-		                         AggregateFunction::StateInitialize<HistogramAggState<float>, HistogramFunction>,
-		                         HistogramUpdateFunction<float>, HistogramCombineFunction<float>,
-		                         HistogramFinalize<float>, nullptr, HistogramBindFunction,
-		                         AggregateFunction::StateDestroy<HistogramAggState<float>, HistogramFunction>);
-	case PhysicalType::DOUBLE:
-		return AggregateFunction("histogram", {LogicalType::DOUBLE}, LogicalTypeId::MAP,
-		                         AggregateFunction::StateSize<HistogramAggState<double>>,
-		                         AggregateFunction::StateInitialize<HistogramAggState<double>, HistogramFunction>,
-		                         HistogramUpdateFunction<double>, HistogramCombineFunction<double>,
-		                         HistogramFinalize<double>, nullptr, HistogramBindFunction,
-		                         AggregateFunction::StateDestroy<HistogramAggState<double>, HistogramFunction>);
-	case PhysicalType::VARCHAR:
-		return AggregateFunction("histogram", {LogicalType::VARCHAR}, LogicalTypeId::MAP,
-		                         AggregateFunction::StateSize<HistogramAggState<string>>,
-		                         AggregateFunction::StateInitialize<HistogramAggState<string>, HistogramFunction>,
-		                         HistogramUpdateFunctionString, HistogramCombineFunction<string>,
-		                         HistogramFinalize<string>, nullptr, HistogramBindFunction,
-		                         AggregateFunction::StateDestroy<HistogramAggState<string>, HistogramFunction>);
+template <bool IS_ORDERED = true>
+AggregateFunction GetHistogramFunction(const LogicalType &type) {
 
+	switch (type.id()) {
+	case LogicalType::USMALLINT:
+		return GetMapType<uint16_t, IS_ORDERED>(type);
+	case LogicalType::UINTEGER:
+		return GetMapType<uint32_t, IS_ORDERED>(type);
+	case LogicalType::UBIGINT:
+		return GetMapType<uint64_t, IS_ORDERED>(type);
+	case LogicalType::SMALLINT:
+		return GetMapType<int16_t, IS_ORDERED>(type);
+	case LogicalType::INTEGER:
+		return GetMapType<int32_t, IS_ORDERED>(type);
+	case LogicalType::BIGINT:
+		return GetMapType<int64_t, IS_ORDERED>(type);
+	case LogicalType::FLOAT:
+		return GetMapType<float, IS_ORDERED>(type);
+	case LogicalType::DOUBLE:
+		return GetMapType<double, IS_ORDERED>(type);
+	case LogicalType::VARCHAR:
+		return GetMapType<string, IS_ORDERED>(type);
+	case LogicalType::TIMESTAMP:
+		return GetMapType<int64_t, IS_ORDERED>(type);
+	case LogicalType::TIMESTAMP_TZ:
+		return GetMapType<int64_t, IS_ORDERED>(type);
+	case LogicalType::TIMESTAMP_S:
+		return GetMapType<int64_t, IS_ORDERED>(type);
+	case LogicalType::TIMESTAMP_MS:
+		return GetMapType<int64_t, IS_ORDERED>(type);
+	case LogicalType::TIMESTAMP_NS:
+		return GetMapType<int64_t, IS_ORDERED>(type);
+	case LogicalType::TIME:
+		return GetMapType<int64_t, IS_ORDERED>(type);
+	case LogicalType::TIME_TZ:
+		return GetMapType<int64_t, IS_ORDERED>(type);
+	case LogicalType::DATE:
+		return GetMapType<int32_t, IS_ORDERED>(type);
 	default:
 		throw InternalException("Unimplemented histogram aggregate");
 	}
@@ -232,24 +223,29 @@ AggregateFunction GetHistogramFunction(PhysicalType type) {
 
 void HistogramFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet fun("histogram");
-	fun.AddFunction(GetHistogramFunction(PhysicalType::UINT16));
-	fun.AddFunction(GetHistogramFunction(PhysicalType::UINT32));
-	fun.AddFunction(GetHistogramFunction(PhysicalType::UINT64));
-	fun.AddFunction(GetHistogramFunction(PhysicalType::INT16));
-	fun.AddFunction(GetHistogramFunction(PhysicalType::INT32));
-	fun.AddFunction(GetHistogramFunction(PhysicalType::INT64));
-	fun.AddFunction(GetHistogramFunction(PhysicalType::FLOAT));
-	fun.AddFunction(GetHistogramFunction(PhysicalType::DOUBLE));
-	fun.AddFunction(GetHistogramFunction(PhysicalType::VARCHAR));
-	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIMESTAMP));
-	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIMESTAMP_TZ));
-	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIMESTAMP_S));
-	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIMESTAMP_MS));
-	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIMESTAMP_NS));
-	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIME));
-	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIME_TZ));
-	fun.AddFunction(GetHistogramFunction<int32_t>(LogicalType::DATE));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::USMALLINT));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::UINTEGER));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::UBIGINT));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::SMALLINT));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::INTEGER));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::BIGINT));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::FLOAT));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::DOUBLE));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::VARCHAR));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIMESTAMP));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIMESTAMP_TZ));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIMESTAMP_S));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIMESTAMP_MS));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIMESTAMP_NS));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIME));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIME_TZ));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::DATE));
 	set.AddFunction(fun);
 }
+
+AggregateFunction HistogramFun::GetHistogramUnorderedMap(LogicalType &type) {
+	const auto const_type = type;
+	return GetHistogramFunction<false>(const_type);
+};
 
 } // namespace duckdb
