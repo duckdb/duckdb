@@ -177,12 +177,38 @@ FROM specials;
 ----
 -infinity	-infinity	-infinity
 
-# No interpolation, just values
 query III
 SELECT QUANTILE_DISC(ts, [0.0, 0.5, 1.0]), QUANTILE_DISC(tstz, [0.0, 0.5, 1.0]), QUANTILE_DISC(dt, [0.0, 0.5, 1.0])
 FROM specials;
 ----
 [-infinity, 1970-01-01 00:00:00, infinity]	[-infinity, 1970-01-01 00:00:00+00, infinity]	[-infinity, 1970-01-01, infinity]
+
+query III
+SELECT QUANTILE_CONT(ts, 0.25), QUANTILE_CONT(tstz, 0.25), QUANTILE_CONT(dt, 0.25)
+FROM specials;
+----
+144170-06-28 (BC) 09:59:32.612096	144170-06-28 (BC) 09:59:32.612096+00	144170-06-28 (BC) 09:59:32.612096
+
+query III
+SELECT QUANTILE_CONT(ts, [0.25, 0.5, 0.75]), QUANTILE_CONT(tstz, [0.25, 0.5, 0.75]), QUANTILE_CONT(dt, [0.25, 0.5, 0.75])
+FROM specials;
+----
+[144170-06-28 (BC) 09:59:32.612096, 1970-01-01 00:00:00, 148108-07-06 14:00:27.387904]
+[144170-06-28 (BC) 09:59:32.612096+00, 1970-01-01 00:00:00+00, 148108-07-06 14:00:27.387904+00]
+[144170-06-28 (BC) 09:59:32.612096, 1970-01-01 00:00:00, 148108-07-06 14:00:27.387904]
+
+
+query III
+SELECT MAD(ts), MAD(tstz), MAD(dt)
+FROM specials;
+----
+106751991 days 04:00:54.775807	106751991 days 04:00:54.775807	106751991 days 04:00:54.775807
+
+# Treated as physical type
+query III
+SELECT ENTROPY(ts), ENTROPY(tstz), ENTROPY(dt) FROM specials;
+----
+1.584963	1.584963	1.584963
 
 #
 # Arithmetic
