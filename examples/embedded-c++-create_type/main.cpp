@@ -12,5 +12,4 @@ int main() {
 	auto ic_type_rv = con.Query("INSERT INTO person_string VALUES ('Tuyen', 'sad'), ('Nga', 'happy')");
 	auto sc_type_rv = con.Query("SELECT * FROM person_string ORDER BY name;");
 	sc_type_rv->Print();
-
 }
