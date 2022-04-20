@@ -51,6 +51,15 @@ struct DebugForceExternal {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct DebugForceNoCrossProduct {
+	static constexpr const char *Name = "debug_force_no_cross_product";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct DebugManyFreeListBlocks {
 	static constexpr const char *Name = "debug_many_free_list_blocks";
 	static constexpr const char *Description = "DEBUG SETTING: add additional blocks to the free list";

@@ -1,15 +1,16 @@
 #include "duckdb/main/settings.hpp"
+
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
-#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -89,6 +90,17 @@ void DebugForceExternal::SetLocal(ClientContext &context, const Value &input) {
 
 Value DebugForceExternal::GetSetting(ClientContext &context) {
 	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_external);
+}
+
+//===--------------------------------------------------------------------===//
+// Debug Force NoCrossProduct
+//===--------------------------------------------------------------------===//
+void DebugForceNoCrossProduct::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).force_no_cross_product = input.GetValue<bool>();
+}
+
+Value DebugForceNoCrossProduct::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_no_cross_product);
 }
 
 //===--------------------------------------------------------------------===//
