@@ -44,7 +44,7 @@ interval_t AddOperator::Operation(interval_t left, interval_t right) {
 
 template <>
 date_t AddOperator::Operation(date_t left, int32_t right) {
-	if (!Date::IsFinite(left)) {
+	if (!Value::IsFinite(left)) {
 		return left;
 	}
 	int32_t days;
@@ -52,7 +52,7 @@ date_t AddOperator::Operation(date_t left, int32_t right) {
 		throw OutOfRangeException("Date out of range");
 	}
 	date_t result(days);
-	if (!Date::IsFinite(result)) {
+	if (!Value::IsFinite(result)) {
 		throw OutOfRangeException("Date out of range");
 	}
 	return result;
@@ -69,7 +69,7 @@ timestamp_t AddOperator::Operation(date_t left, dtime_t right) {
 	if (!Timestamp::TryFromDatetime(left, right, result)) {
 		throw OutOfRangeException("Timestamp out of range");
 	}
-	if (!Timestamp::IsFinite(result)) {
+	if (!Value::IsFinite(result)) {
 		throw OutOfRangeException("Timestamp out of range");
 	}
 	return result;

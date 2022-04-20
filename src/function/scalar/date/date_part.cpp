@@ -169,23 +169,6 @@ static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<uniqu
 }
 
 struct DatePart {
-	struct IsFinite {
-		template <class TA>
-		static inline bool Operation(TA input) {
-			return true;
-		}
-
-		template <>
-		inline bool Operation(date_t input) {
-			return Date::IsFinite(input);
-		}
-
-		template <>
-		inline bool Operation(timestamp_t input) {
-			return Timestamp::IsFinite(input);
-		}
-	};
-
 	template <class T, class OP>
 	static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
 		// we can only propagate complex date part stats if the child has stats
@@ -203,7 +186,7 @@ struct DatePart {
 			return nullptr;
 		}
 		// Infinities prevent is from computing generic ranges
-		if (!IsFinite::template Operation<T>(min) || !IsFinite::template Operation<T>(max)) {
+		if (!Value::IsFinite(min) || !Value::IsFinite(max)) {
 			return nullptr;
 		}
 		auto min_part = OP::template Operation<T, int64_t>(min);
@@ -220,7 +203,7 @@ struct DatePart {
 	struct PartOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input, ValidityMask &mask, idx_t idx, void *dataptr) {
-			if (IsFinite::template Operation<TA>(input)) {
+			if (Value::IsFinite(input)) {
 				return OP::template Operation<TA, TR>(input);
 			} else {
 				mask.SetInvalid(idx);
@@ -741,7 +724,7 @@ static void LastYearFunction(DataChunk &args, ExpressionState &state, Vector &re
 	int32_t last_year = 0;
 	UnaryExecutor::ExecuteWithNulls<T, int64_t>(args.data[0], result, args.size(),
 	                                            [&](T input, ValidityMask &mask, idx_t idx) {
-		                                            if (DatePart::IsFinite::template Operation<T>(input)) {
+		                                            if (Value::IsFinite(input)) {
 			                                            return Date::ExtractYear(input, &last_year);
 		                                            } else {
 			                                            mask.SetInvalid(idx);
@@ -1257,7 +1240,7 @@ static void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	BinaryExecutor::ExecuteWithNulls<string_t, T, int64_t>(
 	    spec_arg, date_arg, result, args.size(), [&](string_t specifier, T date, ValidityMask &mask, idx_t idx) {
-		    if (DatePart::IsFinite::template Operation<T>(date)) {
+		    if (Value::IsFinite(date)) {
 			    return ExtractElement<T>(GetDatePartSpecifier(specifier.GetString()), date);
 		    } else {
 			    mask.SetInvalid(idx);
@@ -1435,7 +1418,7 @@ struct StructDatePart {
 					}
 				}
 				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
-				if (DatePart::IsFinite::template Operation<INPUT_TYPE>(tdata[0])) {
+				if (Value::IsFinite(tdata[0])) {
 					DatePart::StructOperator::Operation(part_values.data(), tdata[0], 0, part_mask);
 				} else {
 					for (auto &child_entry : child_entries) {
@@ -1476,7 +1459,7 @@ struct StructDatePart {
 			for (idx_t i = 0; i < count; ++i) {
 				const auto idx = rdata.sel->get_index(i);
 				if (arg_valid.RowIsValid(idx)) {
-					if (DatePart::IsFinite::template Operation<INPUT_TYPE>(tdata[idx])) {
+					if (Value::IsFinite(tdata[idx])) {
 						DatePart::StructOperator::Operation(part_values.data(), tdata[idx], idx, part_mask);
 					} else {
 						for (auto &child_entry : child_entries) {

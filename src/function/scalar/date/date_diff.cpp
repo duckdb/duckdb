@@ -15,28 +15,11 @@ namespace duckdb {
 // This function is an implementation of the "period-crossing" date difference function from T-SQL
 // https://docs.microsoft.com/en-us/sql/t-sql/functions/datediff-transact-sql?view=sql-server-ver15
 struct DateDiff {
-	struct IsFinite {
-		template <class TA>
-		static inline bool Operation(TA input) {
-			return true;
-		}
-
-		template <>
-		inline bool Operation(date_t input) {
-			return Date::IsFinite(input);
-		}
-
-		template <>
-		inline bool Operation(timestamp_t input) {
-			return Timestamp::IsFinite(input);
-		}
-	};
-
 	template <class TA, class TB, class TR, class OP>
 	static inline void BinaryExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
 		BinaryExecutor::ExecuteWithNulls<TA, TB, TR>(
 		    left, right, result, count, [&](TA startdate, TB enddate, ValidityMask &mask, idx_t idx) {
-			    if (IsFinite::template Operation<TA>(startdate) && IsFinite::template Operation<TB>(enddate)) {
+			    if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
 				    return OP::template Operation<TA, TB, TR>(startdate, enddate);
 			    } else {
 				    mask.SetInvalid(idx);
@@ -352,7 +335,7 @@ static int64_t DifferenceDates(DatePartSpecifier type, TA startdate, TB enddate)
 struct DateDiffTernaryOperator {
 	template <typename TS, typename TA, typename TB, typename TR>
 	static inline TR Operation(TS part, TA startdate, TB enddate, ValidityMask &mask, idx_t idx) {
-		if (DateDiff::IsFinite::template Operation(startdate) && DateDiff::IsFinite::template Operation(enddate)) {
+		if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
 			return DifferenceDates<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
 		} else {
 			mask.SetInvalid(idx);

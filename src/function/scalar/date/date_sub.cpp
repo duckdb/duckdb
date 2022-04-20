@@ -13,28 +13,11 @@
 namespace duckdb {
 
 struct DateSub {
-	struct IsFinite {
-		template <class TA>
-		static inline bool Operation(TA input) {
-			return true;
-		}
-
-		template <>
-		inline bool Operation(date_t input) {
-			return Date::IsFinite(input);
-		}
-
-		template <>
-		inline bool Operation(timestamp_t input) {
-			return Timestamp::IsFinite(input);
-		}
-	};
-
 	template <class TA, class TB, class TR, class OP>
 	static inline void BinaryExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
 		BinaryExecutor::ExecuteWithNulls<TA, TB, TR>(
 		    left, right, result, count, [&](TA startdate, TB enddate, ValidityMask &mask, idx_t idx) {
-			    if (IsFinite::template Operation<TA>(startdate) && IsFinite::template Operation<TB>(enddate)) {
+			    if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
 				    return OP::template Operation<TA, TB, TR>(startdate, enddate);
 			    } else {
 				    mask.SetInvalid(idx);
@@ -370,7 +353,7 @@ static int64_t SubtractDateParts(DatePartSpecifier type, TA startdate, TB enddat
 struct DateSubTernaryOperator {
 	template <typename TS, typename TA, typename TB, typename TR>
 	static inline TR Operation(TS part, TA startdate, TB enddate, ValidityMask &mask, idx_t idx) {
-		if (DateSub::IsFinite::template Operation(startdate) && DateSub::IsFinite::template Operation(enddate)) {
+		if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
 			return SubtractDateParts<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
 		} else {
 			mask.SetInvalid(idx);

@@ -349,6 +349,16 @@ bool Value::IsFinite(double input) {
 	return Value::DoubleIsFinite(input);
 }
 
+template <>
+bool Value::IsFinite(date_t input) {
+	return Date::IsFinite(input);
+}
+
+template <>
+bool Value::IsFinite(timestamp_t input) {
+	return Timestamp::IsFinite(input);
+}
+
 bool Value::StringIsValid(const char *str, idx_t length) {
 	auto utf_type = Utf8Proc::Analyze(str, length);
 	return utf_type != UnicodeType::INVALID;

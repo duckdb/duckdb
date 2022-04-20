@@ -5,6 +5,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/string_util.hpp"
 
 // TODO date_trunc function should also handle interval data type when it is implemented. See
@@ -13,27 +14,10 @@
 namespace duckdb {
 
 struct DateTrunc {
-	struct IsFinite {
-		template <class TA>
-		static inline bool Operation(TA input) {
-			return true;
-		}
-
-		template <>
-		inline bool Operation(date_t input) {
-			return Date::IsFinite(input);
-		}
-
-		template <>
-		inline bool Operation(timestamp_t input) {
-			return Timestamp::IsFinite(input);
-		}
-	};
-
 	template <class TA, class TR, class OP>
 	static inline void UnaryExecute(Vector &left, Vector &result, idx_t count) {
 		UnaryExecutor::Execute<TA, TR>(left, result, count, [&](TA input) {
-			if (IsFinite::template Operation<TA>(input)) {
+			if (Value::IsFinite(input)) {
 				return OP::template Operation<TA, TR>(input);
 			} else {
 				return Cast::template Operation<TA, TR>(input);
@@ -249,7 +233,7 @@ timestamp_t DateTrunc::MicrosecondOperator::Operation(date_t input) {
 
 template <class TA, class TR>
 static TR TruncateElement(DatePartSpecifier type, TA element) {
-	if (!DateTrunc::IsFinite::template Operation(element)) {
+	if (!Value::IsFinite(element)) {
 		return Cast::template Operation<TA, TR>(element);
 	}
 
