@@ -146,7 +146,7 @@ void OdbcHandleStmt::FillIRD() {
 	ird->Reset();
 	ird->header.sql_desc_count = 0;
 	auto num_cols = stmt->ColumnCount();
-	for (duckdb::idx_t col_idx=0; col_idx < num_cols; ++col_idx) {
+	for (duckdb::idx_t col_idx = 0; col_idx < num_cols; ++col_idx) {
 		duckdb::DescRecord new_record;
 		auto col_type = stmt->GetTypes()[col_idx];
 
