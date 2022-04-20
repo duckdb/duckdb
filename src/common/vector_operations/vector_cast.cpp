@@ -828,48 +828,36 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 			return true;
 		}
 		switch (internal_type) {
-		case LogicalTypeId::BOOLEAN: {
+		case LogicalTypeId::BOOLEAN:
 			return NumericCastSwitch<bool>(source, result, count, error_message);
-		} break;
-		case LogicalTypeId::TINYINT: {
+		case LogicalTypeId::TINYINT:
 			return NumericCastSwitch<int8_t>(source, result, count, error_message);
-		} break;
-		case LogicalTypeId::SMALLINT: {
+		case LogicalTypeId::SMALLINT:
 			return NumericCastSwitch<int16_t>(source, result, count, error_message);
-		} break;
-		case LogicalTypeId::INTEGER: {
+		case LogicalTypeId::INTEGER:
 			return NumericCastSwitch<int32_t>(source, result, count, error_message);
-		} break;
-		case LogicalTypeId::BIGINT: {
+		case LogicalTypeId::BIGINT:
 			return NumericCastSwitch<int64_t>(source, result, count, error_message);
-		} break;
-		case LogicalTypeId::UTINYINT: {
+		case LogicalTypeId::UTINYINT:
 			return NumericCastSwitch<uint8_t>(source, result, count, error_message);
-		} break;
-		case LogicalTypeId::USMALLINT: {
+		case LogicalTypeId::USMALLINT:
 			return NumericCastSwitch<uint16_t>(source, result, count, error_message);
-		} break;
-		case LogicalTypeId::UINTEGER: {
+		case LogicalTypeId::UINTEGER:
 			return NumericCastSwitch<uint32_t>(source, result, count, error_message);
-		} break;
-		case LogicalTypeId::UBIGINT: {
+		case LogicalTypeId::UBIGINT:
 			return NumericCastSwitch<uint64_t>(source, result, count, error_message);
-		} break;
-		case LogicalTypeId::HUGEINT: {
+		case LogicalTypeId::HUGEINT:
 			return NumericCastSwitch<hugeint_t>(source, result, count, error_message);
-		} break;
-		case LogicalTypeId::UUID: {
+		case LogicalTypeId::UUID:
 			return UUIDCastSwitch(source, result, count, error_message);
-		} break;
-		case LogicalTypeId::FLOAT: {
+		case LogicalTypeId::FLOAT:
 			return NumericCastSwitch<float>(source, result, count, error_message);
-		} break;
-		case LogicalTypeId::DOUBLE: {
+		case LogicalTypeId::DOUBLE:
 			return NumericCastSwitch<double>(source, result, count, error_message);
-		} break;
-		case LogicalTypeId::BLOB: {
+		case LogicalTypeId::BLOB:
 			return BlobCastSwitch(source, result, count, error_message);
-		} break;
+		case LogicalTypeId::VARCHAR:
+			return StringCastSwitch(source, result, count, strict, error_message);
 		default:
 			return TryVectorNullCast(source, result, count, error_message);
 		}

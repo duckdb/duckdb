@@ -856,6 +856,41 @@ T Value::GetValueInternal() const {
 			throw InternalException("Invalid Internal Type for ENUMs");
 		}
 	}
+	case LogicalTypeId::CUSTOM: {
+		auto internal_type = CustomType::GetInternalType(type_);
+		switch (internal_type) {
+		case LogicalTypeId::BOOLEAN:
+			return Cast::Operation<bool, T>(value_.boolean);
+		case LogicalTypeId::TINYINT:
+			return Cast::Operation<int8_t, T>(value_.tinyint);
+		case LogicalTypeId::SMALLINT:
+			return Cast::Operation<int16_t, T>(value_.smallint);
+		case LogicalTypeId::UTINYINT:
+			return Cast::Operation<uint8_t, T>(value_.utinyint);
+		case LogicalTypeId::USMALLINT:
+			return Cast::Operation<uint16_t, T>(value_.usmallint);
+		case LogicalTypeId::INTEGER:
+			return Cast::Operation<int32_t, T>(value_.integer);
+		case LogicalTypeId::BIGINT:
+			return Cast::Operation<int64_t, T>(value_.bigint);
+		case LogicalTypeId::UINTEGER:
+			return Cast::Operation<uint32_t, T>(value_.uinteger);
+		case LogicalTypeId::UBIGINT:
+			return Cast::Operation<uint64_t, T>(value_.ubigint);
+		case LogicalTypeId::HUGEINT:
+		case LogicalTypeId::UUID:
+			return Cast::Operation<hugeint_t, T>(value_.hugeint);
+		case LogicalTypeId::FLOAT:
+			return Cast::Operation<float, T>(value_.float_);
+		case LogicalTypeId::DOUBLE:
+			return Cast::Operation<double, T>(value_.double_);
+		case LogicalTypeId::BLOB:
+		case LogicalTypeId::VARCHAR:
+			return Cast::Operation<string_t, T>(str_value.c_str());
+		default:
+			throw NotImplementedException("Unimplemented type \"%s\" for GetValue()", type_.ToString());
+		}
+	}
 
 	default:
 		throw NotImplementedException("Unimplemented type \"%s\" for GetValue()", type_.ToString());

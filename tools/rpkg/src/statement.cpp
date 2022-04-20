@@ -124,6 +124,43 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 		case LogicalTypeId::ENUM:
 			rtype = "factor";
 			break;
+		case LogicalTypeId::CUSTOM: {
+			auto internal_type = CustomType::GetInternalType(stype);
+			switch (internal_type) {
+			case LogicalTypeId::BOOLEAN: {
+				rtype = "logical";
+				break;
+			}
+			case LogicalTypeId::TINYINT:
+			case LogicalTypeId::SMALLINT:
+			case LogicalTypeId::UTINYINT:
+			case LogicalTypeId::USMALLINT:
+			case LogicalTypeId::INTEGER: {
+				rtype = "integer";
+				break;
+			}
+			case LogicalTypeId::BIGINT:
+			case LogicalTypeId::UINTEGER:
+			case LogicalTypeId::UBIGINT:
+			case LogicalTypeId::HUGEINT:
+			case LogicalTypeId::FLOAT:
+			case LogicalTypeId::DOUBLE: {
+				rtype = "numeric";
+				break;
+			}
+			case LogicalTypeId::BLOB: {
+				rtype = "raw";
+				break;
+			}
+			case LogicalTypeId::VARCHAR: {
+				rtype = "character";
+				break;
+			}
+			default:
+				cpp11::stop("duckdb_execute_R: Unknown custom type for convert: %s", TypeIdToString(internal_type).c_str());
+			}
+			break;
+		}
 		default:
 			cpp11::stop("duckdb_prepare_R: Unknown column type for prepare: %s", stype.ToString().c_str());
 			break;
@@ -240,6 +277,49 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 	case LogicalTypeId::ENUM:
 		varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
 		break;
+	case LogicalTypeId::CUSTOM: {
+		auto internal_type = CustomType::GetInternalType(type);
+		switch (internal_type) {
+		case LogicalTypeId::BOOLEAN: {
+			varvalue = r_varvalue.Protect(NEW_LOGICAL(nrows));
+			break;
+		}
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::INTEGER: {
+			varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
+			break;
+		}
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
+		case LogicalTypeId::HUGEINT:
+		case LogicalTypeId::FLOAT:
+		case LogicalTypeId::DOUBLE: {
+			varvalue = r_varvalue.Protect(NEW_NUMERIC(nrows));
+			break;
+		}
+		case LogicalTypeId::BLOB: {
+			varvalue = r_varvalue.Protect(NEW_LIST(nrows));
+			break;
+		}
+		case LogicalTypeId::VARCHAR: {
+			auto wrapper = new DuckDBAltrepStringWrapper();
+			wrapper->length = nrows;
+
+			auto ptr = PROTECT(R_MakeExternalPtr((void *)wrapper, R_NilValue, R_NilValue));
+			R_RegisterCFinalizer(ptr, AltrepString::Finalize);
+			varvalue = r_varvalue.Protect(R_new_altrep(AltrepString::rclass, ptr, R_NilValue));
+			UNPROTECT(1);
+			break;
+		}
+		default:
+			cpp11::stop("duckdb_execute_R: Unknown custom type for convert: %s", TypeIdToString(internal_type).c_str());
+		}
+		break;
+	}
 	default:
 		cpp11::stop("duckdb_execute_R: Unknown column type for execute: %s", type.ToString().c_str());
 	}
@@ -450,6 +530,93 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 		SET_LEVELS(dest, RApi::StringsToSexp(str_c_vec));
 		SET_CLASS(dest, RStrings::get().factor_str);
 		break;
+	}
+	case LogicalTypeId::CUSTOM: {
+		auto internal_type = CustomType::GetInternalType(src_vec.GetType());
+		switch (internal_type) {
+		case LogicalTypeId::BOOLEAN: {
+			VectorToR<int8_t, uint32_t>(src_vec, n, LOGICAL_POINTER(dest), dest_offset, NA_LOGICAL);
+			break;
+		}
+		case LogicalTypeId::TINYINT: {
+			VectorToR<int8_t, uint32_t>(src_vec, n, INTEGER_POINTER(dest), dest_offset, NA_INTEGER);
+			break;
+		}
+		case LogicalTypeId::SMALLINT: {
+			VectorToR<int16_t, uint32_t>(src_vec, n, INTEGER_POINTER(dest), dest_offset, NA_INTEGER);
+			break;
+		}
+		case LogicalTypeId::INTEGER: {
+			VectorToR<int32_t, uint32_t>(src_vec, n, INTEGER_POINTER(dest), dest_offset, NA_INTEGER);
+			break;
+		}
+		case LogicalTypeId::BIGINT: {
+			VectorToR<int64_t, double>(src_vec, n, NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+			break;
+		}
+		case LogicalTypeId::UTINYINT: {
+			VectorToR<uint8_t, uint32_t>(src_vec, n, INTEGER_POINTER(dest), dest_offset, NA_INTEGER);
+			break;
+		}
+		case LogicalTypeId::USMALLINT: {
+			VectorToR<uint16_t, uint32_t>(src_vec, n, INTEGER_POINTER(dest), dest_offset, NA_INTEGER);
+			break;
+		}
+		case LogicalTypeId::UINTEGER: {
+			VectorToR<uint32_t, double>(src_vec, n, NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+			break;
+		}
+		case LogicalTypeId::UBIGINT: {
+			VectorToR<uint64_t, double>(src_vec, n, NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+			break;
+		}
+		case LogicalTypeId::HUGEINT: {
+			auto src_data = FlatVector::GetData<hugeint_t>(src_vec);
+			auto &mask = FlatVector::Validity(src_vec);
+			double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
+			for (size_t row_idx = 0; row_idx < n; row_idx++) {
+				if (!mask.RowIsValid(row_idx)) {
+					dest_ptr[row_idx] = NA_REAL;
+				} else {
+					Hugeint::TryCast(src_data[row_idx], dest_ptr[row_idx]);
+				}
+			}
+			break;
+		}
+		case LogicalTypeId::FLOAT: {
+			VectorToR<float, double>(src_vec, n, NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+			break;
+		}
+		case LogicalTypeId::DOUBLE: {
+			VectorToR<double, double>(src_vec, n, NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+			break;
+		}
+		case LogicalTypeId::BLOB: {
+			auto src_ptr = FlatVector::GetData<string_t>(src_vec);
+			auto &mask = FlatVector::Validity(src_vec);
+			for (size_t row_idx = 0; row_idx < n; row_idx++) {
+				if (!mask.RowIsValid(row_idx)) {
+					SET_VECTOR_ELT(dest, dest_offset + row_idx, Rf_ScalarLogical(NA_LOGICAL));
+				} else {
+					SEXP rawval = NEW_RAW(src_ptr[row_idx].GetSize());
+					if (!rawval) {
+						throw std::bad_alloc();
+					}
+					memcpy(RAW_POINTER(rawval), src_ptr[row_idx].GetDataUnsafe(), src_ptr[row_idx].GetSize());
+					SET_VECTOR_ELT(dest, dest_offset + row_idx, rawval);
+				}
+			}
+			break;
+		}
+		case LogicalTypeId::VARCHAR: {
+			auto wrapper = (DuckDBAltrepStringWrapper *)R_ExternalPtrAddr(R_altrep_data1(dest));
+			wrapper->vectors.emplace_back(LogicalType::VARCHAR, nullptr);
+			wrapper->vectors.back().Reference(src_vec);
+			break;
+		}
+		default:
+			cpp11::stop("duckdb_execute_R: Unknown custom type for convert: %s", TypeIdToString(internal_type).c_str());
+		}
 	}
 	default:
 		cpp11::stop("duckdb_execute_R: Unknown column type for convert: %s", src_vec.GetType().ToString().c_str());

@@ -489,6 +489,7 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::UUID:
+	case LogicalTypeId::CUSTOM:
 		type_width = sizeof(PyObject *);
 		break;
 	default:
