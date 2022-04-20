@@ -53,43 +53,47 @@ struct ApproxCountDistinctFunction {
 	}
 };
 
+static void ApproxCountDistinctUpdateFunction(Vector &v, idx_t count, HyperLogLog **logs[],
+                                              const SelectionVector *log_sel) {
+	VectorData vdata;
+	v.Orrify(count, vdata);
+
+	uint64_t indices[STANDARD_VECTOR_SIZE];
+	uint8_t counts[STANDARD_VECTOR_SIZE];
+
+	HyperLogLog::ProcessEntries(vdata, v.GetType().InternalType(), indices, counts, count);
+	HyperLogLog::AddToLogs(vdata, count, indices, counts, logs, log_sel);
+}
+
 static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], FunctionData *bind_data, idx_t input_count,
                                                     data_ptr_t state, idx_t count) {
 	D_ASSERT(input_count == 1);
+
 	auto agg_state = (ApproxDistinctCountState *)state;
 	if (!agg_state->log) {
 		agg_state->log = new HyperLogLog();
 	}
 
-	VectorData vdata;
-	inputs[0].Orrify(count, vdata);
-
-	uint64_t hashes[STANDARD_VECTOR_SIZE];
-	HyperLogLog::ComputeHashes(vdata, inputs[0].GetType().InternalType(), count, hashes);
-	agg_state->log->AddHashes(vdata, count, hashes);
+	ApproxCountDistinctUpdateFunction(inputs[0], count, (HyperLogLog ***)&agg_state,
+	                                  ConstantVector::ZeroSelectionVector());
 }
 
 static void ApproxCountDistinctUpdateFunction(Vector inputs[], FunctionData *bind_data, idx_t input_count,
                                               Vector &state_vector, idx_t count) {
+	D_ASSERT(input_count == 1);
+
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
 	auto states = (ApproxDistinctCountState **)sdata.data;
 
-	VectorData vdata;
-	inputs[0].Orrify(count, vdata);
-
-	uint64_t hashes[STANDARD_VECTOR_SIZE];
-	HyperLogLog::ComputeHashes(vdata, inputs[0].GetType().InternalType(), count, hashes);
-
 	for (idx_t i = 0; i < count; i++) {
-		if (vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
-			auto agg_state = states[sdata.sel->get_index(i)];
-			if (!agg_state->log) {
-				agg_state->log = new HyperLogLog();
-			}
-			agg_state->log->AddHash(hashes[i]);
+		auto agg_state = states[sdata.sel->get_index(i)];
+		if (!agg_state->log) {
+			agg_state->log = new HyperLogLog();
 		}
 	}
+
+	ApproxCountDistinctUpdateFunction(inputs[0], count, (HyperLogLog ***)states, sdata.sel);
 }
 
 AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) {

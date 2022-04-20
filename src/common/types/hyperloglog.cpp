@@ -7,6 +7,7 @@ namespace duckdb {
 
 HyperLogLog::HyperLogLog() : hll(nullptr) {
 	hll = duckdb_hll::hll_create();
+	duckdb_hll::hllSparseToDense((duckdb_hll::robj *)hll);
 }
 
 HyperLogLog::HyperLogLog(void *hll) : hll(hll) {
@@ -178,7 +179,7 @@ void TemplatedComputeHashes(VectorData &vdata, const idx_t &count, uint64_t hash
 	}
 }
 
-void HyperLogLog::ComputeHashes(VectorData &vdata, PhysicalType type, idx_t count, uint64_t hashes[]) {
+static void ComputeHashes(VectorData &vdata, PhysicalType type, uint64_t hashes[], idx_t count) {
 	switch (type) {
 	case PhysicalType::UINT8:
 		return TemplatedComputeHashes<uint8_t>(vdata, count, hashes);
@@ -209,7 +210,7 @@ void HyperLogLog::ComputeHashes(VectorData &vdata, PhysicalType type, idx_t coun
 	}
 }
 
-int HyperLogLog::AddHash(uint64_t &hash) {
+static inline void ComputeIndexAndCount(uint64_t &hash, uint8_t &prefix) {
 	uint64_t index = hash & ((1 << 14) - 1); /* Register index. */
 	hash >>= 14;                             /* Remove bits used to address the register. */
 	hash |= ((uint64_t)1 << (64 - 14));      /* Make sure the loop terminates
@@ -221,25 +222,21 @@ int HyperLogLog::AddHash(uint64_t &hash) {
 		bit <<= 1;
 	}
 
-	auto o = (duckdb_hll::robj *)hll;
-	duckdb_hll::hllhdr *hdr = (duckdb_hll::hllhdr *)o->ptr;
-	switch (hdr->encoding) {
-	case 0:
-		return duckdb_hll::hllDenseSet(hdr->registers + 1, index, count);
-	case 1:
-		return duckdb_hll::hllSparseSet(o, index, count);
-	default:
-		return -1;
+	hash = index;
+	prefix = count;
+}
+
+void HyperLogLog::ProcessEntries(VectorData &vdata, PhysicalType type, uint64_t hashes[], uint8_t counts[],
+                                 idx_t count) {
+	ComputeHashes(vdata, type, hashes, count);
+	for (idx_t i = 0; i < count; i++) {
+		ComputeIndexAndCount(hashes[i], counts[i]);
 	}
 }
 
-void HyperLogLog::AddHashes(VectorData &vdata, idx_t count, uint64_t hashes[]) {
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (vdata.validity.RowIsValid(idx)) {
-			AddHash(hashes[i]);
-		}
-	}
+void HyperLogLog::AddToLogs(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[], HyperLogLog **logs[],
+                            const SelectionVector *log_sel) {
+	AddToLogsInternal(vdata, count, indices, counts, (void ****)logs, log_sel);
 }
 
 } // namespace duckdb
