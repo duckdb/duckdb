@@ -48,17 +48,17 @@ endloop
 query I
 SELECT list_distinct([1, 1, 2, 2, 2, 3])
 ----
-[1, 2, 3]
+[3, 2, 1]
 
 query I
 SELECT list_distinct([1, 1, NULL, 2, 2, 2, 3, NULL, NULL])
 ----
-[1, 2, 3]
+[3, 2, 1]
 
 query I
 SELECT list_distinct(list_distinct([1, 1, -5, 10, 10, 2]))
 ----
-[-5, 1, 2, 10]
+[1, -5, 10, 2]
 
 statement ok
 CREATE TABLE integers (l integer[])
@@ -72,7 +72,7 @@ INSERT INTO integers VALUES ([NULL]), (NULL), ([])
 query I
 SELECT list_distinct(l) FROM integers
 ----
-[1, 2, 3]
+[3, 2, 1]
 [1]
 []
 NULL
@@ -83,7 +83,7 @@ NULL
 query I
 SELECT array_distinct([1, 2, 2, NULL])
 ----
-[1, 2]
+[2, 1]
 
 # test all types
 
@@ -91,7 +91,7 @@ SELECT array_distinct([1, 2, 2, NULL])
 query I
 SELECT list_distinct(['aa', 'aa', 'cd', NULL, '42'])
 ----
-[42, aa, cd]
+[42, cd, aa]
 
 query I
 SELECT list_distinct([NULL::VARCHAR])
