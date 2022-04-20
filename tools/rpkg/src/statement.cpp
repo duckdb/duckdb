@@ -157,7 +157,7 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 				break;
 			}
 			default:
-				cpp11::stop("duckdb_execute_R: Unknown custom type for convert: %s", TypeIdToString(internal_type).c_str());
+				cpp11::stop("duckdb_prepare_R: Unknown column type for prepare: %s", stype.ToString().c_str());
 			}
 			break;
 		}
@@ -316,7 +316,7 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 			break;
 		}
 		default:
-			cpp11::stop("duckdb_execute_R: Unknown custom type for convert: %s", TypeIdToString(internal_type).c_str());
+			cpp11::stop("duckdb_execute_R: Unknown custom type for convert: %s", type.ToString().c_str());
 		}
 		break;
 	}
@@ -615,7 +615,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 			break;
 		}
 		default:
-			cpp11::stop("duckdb_execute_R: Unknown custom type for convert: %s", TypeIdToString(internal_type).c_str());
+			cpp11::stop("duckdb_execute_R: Unknown custom type for convert: %s", type.ToString().c_str());
 		}
 	}
 	default:
