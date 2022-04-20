@@ -615,7 +615,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 			break;
 		}
 		default:
-			cpp11::stop("duckdb_execute_R: Unknown custom type for convert: %s", type.ToString().c_str());
+			cpp11::stop("duckdb_execute_R: Unknown custom type for convert: %s", src_vec.GetType().ToString().c_str());
 		}
 	}
 	default:
