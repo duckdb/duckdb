@@ -1822,7 +1822,6 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 			}
 		}
 		insert_chunk.Slice(succesful_rows, sel_size);
-		// insert_chunk.Verify();
 	}
 	parse_chunk.Reset();
 }
