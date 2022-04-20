@@ -334,7 +334,7 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 			Node4::Insert(new_node, node->prefix[mismatch_pos], node);
 			node_ptr->prefix_length -= (mismatch_pos + 1);
 			memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatch_pos + 1, node_ptr->prefix_length);
-			unique_ptr<Node> leaf_node = make_unique<Leaf>( move(value), row_id);
+			unique_ptr<Node> leaf_node = make_unique<Leaf>(move(value), row_id);
 			Node4::Insert(new_node, key[depth + mismatch_pos], leaf_node);
 			node = move(new_node);
 			return true;

@@ -16,7 +16,10 @@ public:
 	explicit Node4(size_t compression_length);
 
 	uint8_t key[4];
+	// Pointers to the deserialized nodes
 	unique_ptr<Node> child[4];
+	// Block offsets
+	std::pair<idx_t, idx_t> block_offsets[4];
 
 public:
 	//! Get position of a byte, returns -1 if not exists

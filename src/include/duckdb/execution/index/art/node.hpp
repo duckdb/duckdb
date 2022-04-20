@@ -13,11 +13,12 @@
 #include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
-enum class NodeType : uint8_t { N4 = 0, N16 = 1, N48 = 2, N256 = 3, NLeaf = 4 };
+enum class NodeType : uint8_t { N4 = 0, N16 = 1, N48 = 2, N256 = 3, N_LEAF = 4 };
 
 class Node {
 public:
 	static const uint8_t EMPTY_MARKER = 48;
+	duckdb::Deserializer *source;
 
 public:
 	Node(NodeType type, size_t compressed_prefix_size);
@@ -48,6 +49,8 @@ public:
 
 	//! Serialize this Node
 	virtual std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) = 0;
+
+	static unique_ptr<Node> Deserialize(duckdb::Deserializer &source, std::pair<idx_t, idx_t> offsets);
 
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position. if pos ==
 	//! DConstants::INVALID_INDEX, then the first valid position in the node will be returned.

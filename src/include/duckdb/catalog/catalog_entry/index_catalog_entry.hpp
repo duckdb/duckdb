@@ -34,7 +34,7 @@ public:
 	void SerializeMetadata(duckdb::MetaBlockWriter &serializer);
 	static unique_ptr<CreateIndexInfo> DeserializeMetadata(Deserializer &source);
 	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer);
-//	std::unique_ptr<Index> Deserialize(Deserializer &source);
+	//	std::unique_ptr<Index> Deserialize(Deserializer &source);
 };
 
 } // namespace duckdb

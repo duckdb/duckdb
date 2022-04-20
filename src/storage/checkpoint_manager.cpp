@@ -328,7 +328,7 @@ void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reade
 	    (TableCatalogEntry *)catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name);
 	auto index_catalog = schema_catalog->CreateIndex(context, info.get(), table_catalog);
 
-	// Read the actual index data
+	// Here we just gotta read the root node
 	auto root_block_id = reader.Read<idx_t>();
 	auto root_offset = reader.Read<idx_t>();
 

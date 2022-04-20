@@ -25,6 +25,20 @@ idx_t Node::GetMin() {
 }
 // LCOV_EXCL_STOP
 
+static unique_ptr<Node> Deserialize(duckdb::Deserializer &source, std::pair<idx_t, idx_t> offsets) {
+	auto node_type = source.Read<idx_t>();
+	switch (node_type) {
+	case 0:
+		return Leaf::Deserialize(source, offsets);
+	case 4:
+	case 16:
+	case 48:
+	case 256:
+	default:
+		throw InternalException("This ART node type does not exist");
+	}
+}
+
 uint32_t Node::PrefixMismatch(Node *node, Key &key, uint64_t depth) {
 	uint64_t pos;
 	for (pos = 0; pos < node->prefix_length; pos++) {

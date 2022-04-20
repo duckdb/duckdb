@@ -83,7 +83,7 @@ void Node48::Insert(unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &
 		new_node->count = n->count;
 		CopyPrefix(n, new_node.get());
 		node = move(new_node);
-		Node256::Insert( node, key_byte, child);
+		Node256::Insert(node, key_byte, child);
 	}
 }
 
