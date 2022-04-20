@@ -871,6 +871,18 @@ SQLRETURN DescRecord::SetSqlDescType(SQLSMALLINT type) {
 	return SQL_SUCCESS;
 }
 
+void DescRecord::SetDescUnsignedField(duckdb::LogicalType type) {
+	switch (type.id()) {
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+		sql_desc_unsigned = SQL_TRUE;
+		break;
+	default:
+		sql_desc_unsigned = SQL_FALSE;
+	}
+}
 //! DescHeader functions ******************************************************
 DescHeader::DescHeader() {
 	Reset();
