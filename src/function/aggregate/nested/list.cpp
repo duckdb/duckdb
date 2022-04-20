@@ -48,7 +48,7 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 	}
 }
 
-static void ListCombineFunction(Vector &state, Vector &combined, idx_t count) {
+static void ListCombineFunction(Vector &state, Vector &combined, FunctionData *bind_data, idx_t count) {
 	VectorData sdata;
 	state.Orrify(count, sdata);
 	auto states_ptr = (ListAggState **)sdata.data;

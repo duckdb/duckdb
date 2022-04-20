@@ -174,7 +174,7 @@ struct SortedAggregateFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (source.arguments.Count() == 0) {
 			return;
 		}
