@@ -25,7 +25,7 @@ struct HistogramFunction {
 	}
 };
 
-template <class T>
+template <class T, class MAP_TYPE = map<T, idx_t>>
 static void HistogramUpdateFunction(Vector inputs[], FunctionData *, idx_t input_count, Vector &state_vector,
                                     idx_t count) {
 	D_ASSERT(input_count == 1);
@@ -36,12 +36,12 @@ static void HistogramUpdateFunction(Vector inputs[], FunctionData *, idx_t input
 	VectorData input_data;
 	input.Orrify(count, input_data);
 
-	auto states = (HistogramAggState<T> **)sdata.data;
+	auto states = (HistogramAggState<T, MAP_TYPE> **)sdata.data;
 	for (idx_t i = 0; i < count; i++) {
 		if (input_data.validity.RowIsValid(input_data.sel->get_index(i))) {
 			auto state = states[sdata.sel->get_index(i)];
 			if (!state->hist) {
-				state->hist = new map<T, idx_t>();
+				state->hist = new MAP_TYPE();
 			}
 			auto value = (T *)input_data.data;
 			(*state->hist)[value[input_data.sel->get_index(i)]]++;
@@ -49,6 +49,7 @@ static void HistogramUpdateFunction(Vector inputs[], FunctionData *, idx_t input
 	}
 }
 
+template <class T, class MAP_TYPE = map<T, idx_t>>
 static void HistogramUpdateFunctionString(Vector inputs[], FunctionData *, idx_t input_count, Vector &state_vector,
                                           idx_t count) {
 	D_ASSERT(input_count == 1);
@@ -59,12 +60,12 @@ static void HistogramUpdateFunctionString(Vector inputs[], FunctionData *, idx_t
 	VectorData input_data;
 	input.Orrify(count, input_data);
 
-	auto states = (HistogramAggState<string> **)sdata.data;
+	auto states = (HistogramAggState<T, MAP_TYPE> **)sdata.data;
 	for (idx_t i = 0; i < count; i++) {
 		if (input_data.validity.RowIsValid(input_data.sel->get_index(i))) {
 			auto state = states[sdata.sel->get_index(i)];
 			if (!state->hist) {
-				state->hist = new map<string, idx_t>();
+				state->hist = new MAP_TYPE();
 			}
 			auto value = (string_t *)input_data.data;
 			(*state->hist)[value[input_data.sel->get_index(i)].GetString()]++;
@@ -72,13 +73,13 @@ static void HistogramUpdateFunctionString(Vector inputs[], FunctionData *, idx_t
 	}
 }
 
-template <class T>
+template <class T, class MAP_TYPE = map<T, idx_t>>
 static void HistogramCombineFunction(Vector &state, Vector &combined, idx_t count) {
 	VectorData sdata;
 	state.Orrify(count, sdata);
-	auto states_ptr = (HistogramAggState<T> **)sdata.data;
+	auto states_ptr = (HistogramAggState<T, MAP_TYPE> **)sdata.data;
 
-	auto combined_ptr = FlatVector::GetData<HistogramAggState<T> *>(combined);
+	auto combined_ptr = FlatVector::GetData<HistogramAggState<T, MAP_TYPE> *>(combined);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states_ptr[sdata.sel->get_index(i)];
@@ -86,7 +87,7 @@ static void HistogramCombineFunction(Vector &state, Vector &combined, idx_t coun
 			continue;
 		}
 		if (!combined_ptr[i]->hist) {
-			combined_ptr[i]->hist = new map<T, idx_t>();
+			combined_ptr[i]->hist = new MAP_TYPE();
 		}
 		D_ASSERT(combined_ptr[i]->hist);
 		D_ASSERT(state->hist);
@@ -96,11 +97,11 @@ static void HistogramCombineFunction(Vector &state, Vector &combined, idx_t coun
 	}
 }
 
-template <class T>
+template <class T, class MAP_TYPE = map<T, idx_t>>
 static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count, idx_t offset) {
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
-	auto states = (HistogramAggState<T> **)sdata.data;
+	auto states = (HistogramAggState<T, MAP_TYPE> **)sdata.data;
 
 	auto &mask = FlatVector::Validity(result);
 
@@ -158,22 +159,23 @@ static AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	if (type == LogicalType::VARCHAR) {
 		return AggregateFunction("histogram", {type}, LogicalTypeId::MAP, AggregateFunction::StateSize<STATE_TYPE>,
 		                         AggregateFunction::StateInitialize<STATE_TYPE, HistogramFunction>,
-		                         HistogramUpdateFunctionString, HistogramCombineFunction<T>, HistogramFinalize<T>,
-		                         nullptr, HistogramBindFunction,
+		                         HistogramUpdateFunctionString<T, MAP_TYPE>, HistogramCombineFunction<T, MAP_TYPE>,
+		                         HistogramFinalize<T, MAP_TYPE>, nullptr, HistogramBindFunction,
 		                         AggregateFunction::StateDestroy<STATE_TYPE, HistogramFunction>);
 	}
 
 	return AggregateFunction("histogram", {type}, LogicalTypeId::MAP, AggregateFunction::StateSize<STATE_TYPE>,
 	                         AggregateFunction::StateInitialize<STATE_TYPE, HistogramFunction>,
-	                         HistogramUpdateFunction<T>, HistogramCombineFunction<T>, HistogramFinalize<T>, nullptr,
-	                         HistogramBindFunction, AggregateFunction::StateDestroy<STATE_TYPE, HistogramFunction>);
+	                         HistogramUpdateFunction<T, MAP_TYPE>, HistogramCombineFunction<T, MAP_TYPE>,
+	                         HistogramFinalize<T, MAP_TYPE>, nullptr, HistogramBindFunction,
+	                         AggregateFunction::StateDestroy<STATE_TYPE, HistogramFunction>);
 };
 
 template <class T, bool IS_ORDERED>
 AggregateFunction GetMapType(const LogicalType &type) {
 
 	if (IS_ORDERED) {
-		return GetHistogramFunction<T>(type);
+		return GetHistogramFunction<T, map<T, idx_t>>(type);
 	}
 	return GetHistogramFunction<T, unordered_map<T, idx_t>>(type);
 }
