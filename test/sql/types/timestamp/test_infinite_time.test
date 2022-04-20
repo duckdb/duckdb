@@ -116,6 +116,74 @@ FROM specials;
 ----
 1970-01-01 00:00:00	1970-01-01 00:00:00+00	1970-01-01 00:00:00
 
+query III
+SELECT MODE(ts), MODE(tstz), MODE(dt)
+FROM specials;
+----
+-infinity	-infinity	-infinity
+
+query III
+SELECT MODE(ts), MODE(tstz), MODE(dt)
+FROM specials;
+----
+-infinity	-infinity	-infinity
+
+query III
+SELECT APPROX_COUNT_DISTINCT(ts), APPROX_COUNT_DISTINCT(tstz), APPROX_COUNT_DISTINCT(dt)
+FROM specials;
+----
+3	3	3
+
+query III
+SELECT ARBITRARY(ts), FIRST(ts), LAST(ts)
+FROM specials;
+----
+infinity	infinity	1970-01-01 00:00:00
+
+query III
+SELECT ARBITRARY(tstz), FIRST(tstz), LAST(tstz)
+FROM specials;
+----
+infinity	infinity	1970-01-01 00:00:00+00
+
+query III
+SELECT ARBITRARY(dt), FIRST(dt), LAST(dt)
+FROM specials;
+----
+infinity	infinity	1970-01-01
+
+foreach arg ts tstz dt
+
+foreach val ts tstz dt
+
+query II
+SELECT ARG_MIN(${arg}, ${val}), ARG_MAX(${arg}, ${val}) FROM specials;
+----
+-infinity	infinity
+
+endloop
+
+endloop
+
+query III
+SELECT HISTOGRAM(ts), HISTOGRAM(tstz), HISTOGRAM(dt)
+FROM specials;
+----
+{-infinity=1, 1970-01-01 00:00:00=1, infinity=1}	{-infinity=1, 1970-01-01 00:00:00+00=1, infinity=1}	{-infinity=1, 1970-01-01=1, infinity=1}
+
+query III
+SELECT QUANTILE_DISC(ts, 0.34), QUANTILE_DISC(tstz, 0.34), QUANTILE_DISC(dt, 0.34)
+FROM specials;
+----
+-infinity	-infinity	-infinity
+
+# No interpolation, just values
+query III
+SELECT QUANTILE_DISC(ts, [0.0, 0.5, 1.0]), QUANTILE_DISC(tstz, [0.0, 0.5, 1.0]), QUANTILE_DISC(dt, [0.0, 0.5, 1.0])
+FROM specials;
+----
+[-infinity, 1970-01-01 00:00:00, infinity]	[-infinity, 1970-01-01 00:00:00+00, infinity]	[-infinity, 1970-01-01, infinity]
+
 #
 # Arithmetic
 #
