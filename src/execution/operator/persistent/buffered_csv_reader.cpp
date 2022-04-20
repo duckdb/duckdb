@@ -1807,7 +1807,12 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
 			bool failed = false;
 			for (idx_t column_idx = 0; column_idx < sql_types.size(); column_idx++) {
-				if (insert_chunk.data[column_idx].GetValue(row_idx).IsNull()) {
+
+				auto& inserted_column = insert_chunk.data[column_idx];
+				auto& parsed_column = parse_chunk.data[column_idx];
+
+				bool was_already_null = FlatVector::IsNull(parsed_column, row_idx);
+				if (!was_already_null && FlatVector::IsNull(inserted_column, row_idx)) {
 					failed = true;
 					break;
 				}
