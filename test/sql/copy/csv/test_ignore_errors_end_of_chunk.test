@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/test_ignore_errors.test
+# name: test/sql/copy/csv/test_ignore_errors_end_of_chunk.test
 # description: IGNORE_ERRORS test
 # group: [csv]
 

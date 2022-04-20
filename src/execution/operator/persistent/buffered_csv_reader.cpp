@@ -156,8 +156,7 @@ std::string BufferedCSVReaderOptions::ToString() const {
 	       ", HEADER=" + std::to_string(header) +
 	       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
 	       ", SAMPLE_SIZE=" + std::to_string(sample_chunk_size * sample_chunks) +
-		   ", IGNORE_ERRORS=" + std::to_string(ignore_errors) +
-	       ", ALL_VARCHAR=" + std::to_string(all_varchar);
+	       ", IGNORE_ERRORS=" + std::to_string(ignore_errors) + ", ALL_VARCHAR=" + std::to_string(all_varchar);
 }
 
 static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
@@ -1623,11 +1622,10 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 		if (options.ignore_errors == true) {
 			options.error_column_overflow = true;
 			return;
-		}
-		else {
+		} else {
 			throw InvalidInputException("Error on line %s: expected %lld values per row, but got more. (%s)",
-										GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(),
-										options.ToString());
+			                            GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(),
+			                            options.ToString());
 		}
 	}
 
@@ -1680,7 +1678,7 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 		}
 	}
 
-	//Error forwarded by 'ignore_errors' - originally encountered in 'AddValue'
+	// Error forwarded by 'ignore_errors' - originally encountered in 'AddValue'
 	if (options.ignore_errors == true && options.error_column_overflow == true) {
 		options.error_column_overflow = false;
 		column = 0;
@@ -1691,11 +1689,10 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 		if (options.ignore_errors == true) {
 			column = 0;
 			return false;
-		}
-		else {
+		} else {
 			throw InvalidInputException("Error on line %s: expected %lld values per row, but got %d. (%s)",
-										GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column,
-										options.ToString());
+			                            GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column,
+			                            options.ToString());
 		}
 	}
 
@@ -1774,7 +1771,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				success = VectorOperations::TryCast(parse_chunk.data[col_idx], insert_chunk.data[col_idx],
 				                                    parse_chunk.size(), &error_message);
 			}
-			if (options.ignore_errors == true && !success ) {
+			if (options.ignore_errors == true && !success) {
 				conversion_error_ignored = true;
 				continue;
 			}
@@ -1808,8 +1805,8 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 			bool failed = false;
 			for (idx_t column_idx = 0; column_idx < sql_types.size(); column_idx++) {
 
-				auto& inserted_column = insert_chunk.data[column_idx];
-				auto& parsed_column = parse_chunk.data[column_idx];
+				auto &inserted_column = insert_chunk.data[column_idx];
+				auto &parsed_column = parse_chunk.data[column_idx];
 
 				bool was_already_null = FlatVector::IsNull(parsed_column, row_idx);
 				if (!was_already_null && FlatVector::IsNull(inserted_column, row_idx)) {
