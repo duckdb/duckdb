@@ -1619,7 +1619,7 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 		return;
 	}
 	if (column >= sql_types.size()) {
-		if (options.ignore_errors == true) {
+		if (options.ignore_errors) {
 			error_column_overflow = true;
 			return;
 		} else {
@@ -1679,7 +1679,7 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	}
 
 	// Error forwarded by 'ignore_errors' - originally encountered in 'AddValue'
-	if (error_column_overflow == true) {
+	if (error_column_overflow) {
 		D_ASSERT(options.ignore_errors);
 		error_column_overflow = false;
 		column = 0;
@@ -1687,7 +1687,7 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	}
 
 	if (column < sql_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
-		if (options.ignore_errors == true) {
+		if (options.ignore_errors) {
 			column = 0;
 			return false;
 		} else {
