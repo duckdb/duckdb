@@ -1772,28 +1772,29 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				success = VectorOperations::TryCast(parse_chunk.data[col_idx], insert_chunk.data[col_idx],
 				                                    parse_chunk.size(), &error_message);
 			}
-			if (options.ignore_errors == true && !success) {
+			if (success) {
+				continue;
+			}
+			if (options.ignore_errors) {
 				conversion_error_ignored = true;
 				continue;
 			}
-			if (!success) {
-				string col_name = to_string(col_idx);
-				if (col_idx < col_names.size()) {
-					col_name = "\"" + col_names[col_idx] + "\"";
-				}
+			string col_name = to_string(col_idx);
+			if (col_idx < col_names.size()) {
+				col_name = "\"" + col_names[col_idx] + "\"";
+			}
 
-				if (options.auto_detect) {
-					throw InvalidInputException("%s in column %s, between line %llu and %llu. Parser "
-					                            "options: %s. Consider either increasing the sample size "
-					                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
-					                            "or skipping column conversion (ALL_VARCHAR=1)",
-					                            error_message, col_name, linenr - parse_chunk.size() + 1, linenr,
-					                            options.ToString());
-				} else {
-					throw InvalidInputException("%s between line %llu and %llu in column %s. Parser options: %s ",
-					                            error_message, linenr - parse_chunk.size(), linenr, col_name,
-					                            options.ToString());
-				}
+			if (options.auto_detect) {
+				throw InvalidInputException("%s in column %s, between line %llu and %llu. Parser "
+											"options: %s. Consider either increasing the sample size "
+											"(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
+											"or skipping column conversion (ALL_VARCHAR=1)",
+											error_message, col_name, linenr - parse_chunk.size() + 1, linenr,
+											options.ToString());
+			} else {
+				throw InvalidInputException("%s between line %llu and %llu in column %s. Parser options: %s ",
+											error_message, linenr - parse_chunk.size(), linenr, col_name,
+											options.ToString());
 			}
 		}
 	}
