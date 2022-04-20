@@ -1786,19 +1786,20 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 
 			if (options.auto_detect) {
 				throw InvalidInputException("%s in column %s, between line %llu and %llu. Parser "
-											"options: %s. Consider either increasing the sample size "
-											"(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
-											"or skipping column conversion (ALL_VARCHAR=1)",
-											error_message, col_name, linenr - parse_chunk.size() + 1, linenr,
-											options.ToString());
+				                            "options: %s. Consider either increasing the sample size "
+				                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
+				                            "or skipping column conversion (ALL_VARCHAR=1)",
+				                            error_message, col_name, linenr - parse_chunk.size() + 1, linenr,
+				                            options.ToString());
 			} else {
 				throw InvalidInputException("%s between line %llu and %llu in column %s. Parser options: %s ",
-											error_message, linenr - parse_chunk.size(), linenr, col_name,
-											options.ToString());
+				                            error_message, linenr - parse_chunk.size(), linenr, col_name,
+				                            options.ToString());
 			}
 		}
 	}
-	if (conversion_error_ignored && options.ignore_errors) {
+	if (conversion_error_ignored) {
+		D_ASSERT(options.ignore_errors);
 		SelectionVector succesful_rows;
 		succesful_rows.Initialize(parse_chunk.size());
 		idx_t sel_size = 0;
