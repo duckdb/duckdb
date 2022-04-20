@@ -66,7 +66,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 			payload_types_filters.push_back(aggr.filter->return_type);
 		}
 		if (!aggr.function.combine) {
-			throw InternalException("Hash function %s is missing a combine method", aggr.function.name);
+			throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
 		}
 		aggregates.push_back(move(expr));
 	}
