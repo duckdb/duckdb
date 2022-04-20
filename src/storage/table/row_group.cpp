@@ -663,8 +663,7 @@ void RowGroup::RevertAppend(idx_t row_group_start) {
 	Verify();
 }
 
-void RowGroup::InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state,
-                                idx_t remaining_append_count) {
+void RowGroup::InitializeAppendInternal(RowGroupAppendState &append_state) {
 	append_state.row_group = this;
 	append_state.offset_in_row_group = this->count;
 	// for each column, initialize the append state
@@ -672,6 +671,11 @@ void RowGroup::InitializeAppend(Transaction &transaction, RowGroupAppendState &a
 	for (idx_t i = 0; i < columns.size(); i++) {
 		columns[i]->InitializeAppend(append_state.states[i]);
 	}
+}
+
+void RowGroup::InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state,
+                                idx_t remaining_append_count) {
+	InitializeAppendInternal(append_state);
 	// append the version info for this row_group
 	idx_t append_count = MinValue<idx_t>(remaining_append_count, RowGroup::ROW_GROUP_SIZE - this->count);
 	AppendVersionInfo(transaction, this->count, append_count, transaction.transaction_id);
@@ -680,6 +684,14 @@ void RowGroup::InitializeAppend(Transaction &transaction, RowGroupAppendState &a
 void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append_count) {
 	// append to the current row_group
 	for (idx_t i = 0; i < columns.size(); i++) {
+		columns[i]->Append(*stats[i]->statistics, state.states[i], chunk.data[i], append_count);
+	}
+	state.offset_in_row_group += append_count;
+}
+
+void RowGroup::AppendInternal(RowGroupAppendState &state, DataChunk &chunk, idx_t append_count, idx_t columns_size) {
+	// append to the current row_group
+	for (idx_t i = 0; i < columns_size; i++) {
 		columns[i]->Append(*stats[i]->statistics, state.states[i], chunk.data[i], append_count);
 	}
 	state.offset_in_row_group += append_count;
@@ -739,7 +751,7 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	vector<LogicalType> types;
 	vector<column_t> column_ids;
 	
-	// collect logical types by interating the columns
+	// collect logical types by iterating the columns
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		auto &column = columns[column_idx];
 		types.push_back(column->type);
@@ -783,37 +795,30 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	// add local state to global state, which sorts the data
 	global_sort_state.AddLocalState(local_sort_state);
 	global_sort_state.PrepareMergePhase();
-	
-	// selection vector that is to be filled with the 'sorted' payload
-	SelectionVector sel_sorted(incr_payload_count);
-	idx_t sel_sorted_idx = 0;
-	
-	// scan the sorted row data
+
+	// scan the sorted row data and add to the sorted row group
+	RowGroup sorted_rowgroup(db, table_info, start, count);
+	sorted_rowgroup.columns = this->columns;
+	TableAppendState append_state;
+	sorted_rowgroup.InitializeAppendInternal(append_state.row_group_append_state);
+
 	PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
+	DataChunk result_chunk;
+	result_chunk.Initialize(types);
+	result_chunk.SetCardinality(0);
 	for (;;) {
-		DataChunk result_chunk;
-		result_chunk.Initialize(types);
-		result_chunk.SetCardinality(0);
 		scanner.Scan(result_chunk);
 		if (result_chunk.size() == 0) {
 			break;
 		}
-		
-		// construct the selection vector with the new order from the keys vectors
-		Vector result_vector(result_chunk.data[0]);
-		auto result_data = FlatVector::GetData<uint32_t>(result_vector);
-		auto row_count = result_chunk.size();
-		
-		for (idx_t i = 0; i < row_count; i++) {
-			sel_sorted.set_index(sel_sorted_idx, result_data[i]);
-			sel_sorted_idx++;
-		}
+		sorted_rowgroup.Append(append_state.row_group_append_state, result_chunk, count);
 	}
-	
+
+	this->columns = sorted_rowgroup.columns;
+
 	// checkpoint the individual columns of the row group
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		auto &column = columns[column_idx];
-		column->sel_sorted = sel_sorted;
 		ColumnCheckpointInfo checkpoint_info {writer.GetColumnCompressionType(column_idx)};
 		auto checkpoint_state = column->Checkpoint(*this, writer, checkpoint_info);
 		D_ASSERT(checkpoint_state);
