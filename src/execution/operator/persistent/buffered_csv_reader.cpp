@@ -1620,7 +1620,7 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 	}
 	if (column >= sql_types.size()) {
 		if (options.ignore_errors == true) {
-			options.error_column_overflow = true;
+			error_column_overflow = true;
 			return;
 		} else {
 			throw InvalidInputException("Error on line %s: expected %lld values per row, but got more. (%s)",
@@ -1679,8 +1679,9 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	}
 
 	// Error forwarded by 'ignore_errors' - originally encountered in 'AddValue'
-	if (options.ignore_errors == true && options.error_column_overflow == true) {
-		options.error_column_overflow = false;
+	if (error_column_overflow == true) {
+		D_ASSERT(options.ignore_errors);
+		error_column_overflow = false;
 		column = 0;
 		return false;
 	}
