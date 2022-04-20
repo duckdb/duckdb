@@ -35,12 +35,12 @@ ICUDateFunc::BindData::BindData(ClientContext &context) {
 	}
 }
 
-bool ICUDateFunc::BindData::Equals(FunctionData &other_p) {
-	auto &other = (BindData &)other_p;
-	return FunctionData::Equals(other_p) && *calendar == *other.calendar;
+bool ICUDateFunc::BindData::Equals(const FunctionData &other_p) const {
+	auto &other = (const ICUDateFunc::BindData &)other_p;
+	return *calendar == *other.calendar;
 }
 
-unique_ptr<FunctionData> ICUDateFunc::BindData::Copy() {
+unique_ptr<FunctionData> ICUDateFunc::BindData::Copy() const {
 	return make_unique<BindData>(*this);
 }
 

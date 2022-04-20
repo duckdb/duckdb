@@ -12,8 +12,13 @@ struct ConstantOrNullBindData : public FunctionData {
 	Value value;
 
 public:
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<ConstantOrNullBindData>(value);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const ConstantOrNullBindData &)other_p;
+		return value == other.value;
 	}
 };
 

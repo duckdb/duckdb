@@ -46,9 +46,14 @@ struct AverageDecimalBindData : public FunctionData {
 	double scale;
 
 public:
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<AverageDecimalBindData>(scale);
 	};
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (AverageDecimalBindData &)other_p;
+		return scale == other.scale;
+	}
 };
 
 struct AverageSetOperation {

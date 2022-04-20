@@ -20,10 +20,10 @@ struct StringAggBindData : public FunctionData {
 
 	string sep;
 
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<StringAggBindData>(sep);
 	}
-	bool Equals(FunctionData &other_p) override {
+	bool Equals(const FunctionData &other_p) const override {
 		auto &other = (StringAggBindData &)other_p;
 		return sep == other.sep;
 	}

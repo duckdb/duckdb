@@ -36,7 +36,7 @@
 
 namespace duckdb {
 
-struct ParquetReadBindData : public FunctionData {
+struct ParquetReadBindData : public TableFunctionData {
 	shared_ptr<ParquetReader> initial_reader;
 	vector<string> files;
 	vector<column_t> column_ids;
@@ -389,7 +389,7 @@ public:
 	}
 };
 
-struct ParquetWriteBindData : public FunctionData {
+struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
 	string file_name;
 	vector<string> column_names;

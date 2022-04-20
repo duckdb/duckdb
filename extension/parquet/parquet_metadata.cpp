@@ -10,7 +10,7 @@
 
 namespace duckdb {
 
-struct ParquetMetaDataBindData : public FunctionData {
+struct ParquetMetaDataBindData : public TableFunctionData {
 	vector<LogicalType> return_types;
 	vector<string> files;
 };

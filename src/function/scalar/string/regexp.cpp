@@ -30,8 +30,12 @@ RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options, s
 RegexpMatchesBindData::~RegexpMatchesBindData() {
 }
 
-unique_ptr<FunctionData> RegexpMatchesBindData::Copy() {
+unique_ptr<FunctionData> RegexpMatchesBindData::Copy() const {
 	return make_unique<RegexpMatchesBindData>(options, constant_string);
+}
+
+bool RegexpMatchesBindData::Equals(const FunctionData &other_p) const {
+	return false;
 }
 
 static inline duckdb_re2::StringPiece CreateStringPiece(string_t &input) {
@@ -94,7 +98,7 @@ struct RegexFullMatch {
 	}
 };
 
-struct RegexLocalState : public FunctionData {
+struct RegexLocalState : public FunctionLocalState {
 	explicit RegexLocalState(RegexpMatchesBindData &info)
 	    : constant_pattern(duckdb_re2::StringPiece(info.constant_string.c_str(), info.constant_string.size()),
 	                       info.options) {
@@ -109,7 +113,8 @@ struct RegexLocalState : public FunctionData {
 	RE2 constant_pattern;
 };
 
-static unique_ptr<FunctionData> RegexInitLocalState(const BoundFunctionExpression &expr, FunctionData *bind_data) {
+static unique_ptr<FunctionLocalState> RegexInitLocalState(const BoundFunctionExpression &expr,
+                                                          FunctionData *bind_data) {
 	auto &info = (RegexpMatchesBindData &)*bind_data;
 	if (info.constant_pattern) {
 		return make_unique<RegexLocalState>(info);
@@ -188,11 +193,15 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 	    });
 }
 
-unique_ptr<FunctionData> RegexpReplaceBindData::Copy() {
+unique_ptr<FunctionData> RegexpReplaceBindData::Copy() const {
 	auto copy = make_unique<RegexpReplaceBindData>();
 	copy->options = options;
 	copy->global_replace = global_replace;
 	return move(copy);
+}
+
+bool RegexpReplaceBindData::Equals(const FunctionData &other_p) const {
+	return false;
 }
 
 static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarFunction &bound_function,
@@ -239,8 +248,8 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 	}
 }
 
-static unique_ptr<FunctionData> RegexExtractInitLocalState(const BoundFunctionExpression &expr,
-                                                           FunctionData *bind_data) {
+static unique_ptr<FunctionLocalState> RegexExtractInitLocalState(const BoundFunctionExpression &expr,
+                                                                 FunctionData *bind_data) {
 	auto &info = (RegexpExtractBindData &)*bind_data;
 	if (info.constant_pattern) {
 		return make_unique<RegexLocalState>(info);
@@ -254,8 +263,12 @@ RegexpExtractBindData::RegexpExtractBindData(bool constant_pattern, const string
       rewrite(group_string) {
 }
 
-unique_ptr<FunctionData> RegexpExtractBindData::Copy() {
+unique_ptr<FunctionData> RegexpExtractBindData::Copy() const {
 	return make_unique<RegexpExtractBindData>(constant_pattern, constant_string, group_string);
+}
+
+bool RegexpExtractBindData::Equals(const FunctionData &other_p) const {
+	return false;
 }
 
 static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarFunction &bound_function,
