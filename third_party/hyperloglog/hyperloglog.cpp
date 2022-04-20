@@ -662,7 +662,7 @@ int hllSparseToDense(robj *o) {
  * sparse to dense: this happens when a register requires to be set to a value
  * not representable with the sparse representation, or when the resulting
  * size would be greater than server.hll_sparse_max_bytes. */
-static inline int hllSparseSet(robj *o, long index, uint8_t count) {
+int hllSparseSet(robj *o, long index, uint8_t count) {
     struct hllhdr *hdr;
     uint8_t oldcount, *sparse, *end, *p, *prev, *next;
     long first, span;
@@ -1261,7 +1261,9 @@ void AddToLogsInternal(VectorData &vdata, idx_t count, uint64_t indices[], uint8
 	for (idx_t i = 0; i < count; i++) {
 		auto log = logs[log_sel->get_index(i)];
 		if (log && vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
-			AddToLog(**log, indices[i], counts[i]);
+			if (!AddToLog(**log, indices[i], counts[i])) {
+				throw InternalException("Could not add to HLL?");
+			}
 		}
 	}
 }
