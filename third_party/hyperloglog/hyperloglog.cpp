@@ -1242,6 +1242,7 @@ robj *hll_merge(robj **hlls, size_t hll_count) {
     }
 	return result;
 }
+
 }
 
 namespace duckdb {
@@ -1261,7 +1262,7 @@ void AddToLogsInternal(VectorData &vdata, idx_t count, uint64_t indices[], uint8
 	for (idx_t i = 0; i < count; i++) {
 		auto log = logs[log_sel->get_index(i)];
 		if (log && vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
-			if (!AddToLog(**log, indices[i], counts[i])) {
+			if (AddToLog(**log, indices[i], counts[i]) == HLL_C_ERR) {
 				throw InternalException("Could not add to HLL?");
 			}
 		}

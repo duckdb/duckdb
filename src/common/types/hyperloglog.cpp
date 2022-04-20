@@ -7,6 +7,7 @@ namespace duckdb {
 
 HyperLogLog::HyperLogLog() : hll(nullptr) {
 	hll = duckdb_hll::hll_create();
+	// Insert into a dense hll can be vectorized, sparse cannot, so we immediately convert
 	duckdb_hll::hllSparseToDense((duckdb_hll::robj *)hll);
 }
 
