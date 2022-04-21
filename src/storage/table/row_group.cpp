@@ -748,73 +748,77 @@ void RowGroup::MergeStatistics(idx_t column_idx, BaseStatistics &other) {
 RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
-	vector<LogicalType> types;
-	vector<column_t> column_ids;
-	
-	// collect logical types by iterating the columns
-	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
-		auto &column = columns[column_idx];
-		types.push_back(column->type);
-		column_ids.push_back(column->column_index);
-	}
-	
-	// scan row group and convert to datachunks with correct types
-	DataChunk keys;
-	DataChunk payload;
-	keys.Initialize(types);
-	payload.Initialize(types);
 
-	RowGroupSortBindData sort_state(types, column_ids, db);
-	auto &global_sort_state = *sort_state.global_sort_state;
-	LocalSortState local_sort_state;
-	local_sort_state.Initialize(global_sort_state, global_sort_state.buffer_manager);
+	if (db.config.force_compression_sorting) {
+		vector<LogicalType> types;
+		vector<column_t> column_ids;
 
-	TableScanState scan_state;
-	scan_state.column_ids = column_ids;
-	scan_state.max_row = count;
-	bool next_chunk = true;
-	uint32_t incr_payload_count = 0;
-	idx_t incr_payload_index_count = 0;
-	
-	InitializeScan(scan_state.row_group_scan_state);
-	while (next_chunk) {
-		next_chunk = ScanToDataChunk(scan_state.row_group_scan_state, keys);
-		
+		// collect logical types by iterating the columns
 		for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
-			for (idx_t i = 0; i < keys.size(); i++) {
-				payload.SetValue(column_idx, i, Value::INTEGER(incr_payload_index_count));
-				incr_payload_index_count++;
+			auto &column = columns[column_idx];
+			types.push_back(column->type);
+			column_ids.push_back(column->column_index);
+		}
+
+		// scan row group and convert to datachunks with correct types
+		DataChunk keys;
+		DataChunk payload;
+		keys.Initialize(types);
+		payload.Initialize(types);
+
+		RowGroupSortBindData sort_state(types, column_ids, db);
+		auto &global_sort_state = *sort_state.global_sort_state;
+		LocalSortState local_sort_state;
+		local_sort_state.Initialize(global_sort_state, global_sort_state.buffer_manager);
+
+		TableScanState scan_state;
+		scan_state.column_ids = column_ids;
+		scan_state.max_row = count;
+		bool next_chunk = true;
+		uint32_t incr_payload_count = 0;
+		idx_t incr_payload_index_count = 0;
+
+		InitializeScan(scan_state.row_group_scan_state);
+		while (next_chunk) {
+			next_chunk = ScanToDataChunk(scan_state.row_group_scan_state, keys);
+
+			for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
+				for (idx_t i = 0; i < keys.size(); i++) {
+					payload.SetValue(column_idx, i, Value::INTEGER(incr_payload_index_count));
+					incr_payload_index_count++;
+				}
 			}
+			payload.SetCardinality(keys.size());
+			// Scan again to check the cardinalities
+
+			local_sort_state.SinkChunk(keys, keys);
+			incr_payload_count += STANDARD_VECTOR_SIZE;
 		}
-		payload.SetCardinality(keys.size());
-		
-		local_sort_state.SinkChunk(keys, keys);
-		incr_payload_count += STANDARD_VECTOR_SIZE;
-	}
-	
-	// add local state to global state, which sorts the data
-	global_sort_state.AddLocalState(local_sort_state);
-	global_sort_state.PrepareMergePhase();
 
-	// scan the sorted row data and add to the sorted row group
-	RowGroup sorted_rowgroup(db, table_info, start, count);
-	sorted_rowgroup.columns = this->columns;
-	TableAppendState append_state;
-	sorted_rowgroup.InitializeAppendInternal(append_state.row_group_append_state);
+		// add local state to global state, which sorts the data
+		global_sort_state.AddLocalState(local_sort_state);
+		global_sort_state.PrepareMergePhase();
 
-	PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
-	DataChunk result_chunk;
-	result_chunk.Initialize(types);
-	result_chunk.SetCardinality(0);
-	for (;;) {
-		scanner.Scan(result_chunk);
-		if (result_chunk.size() == 0) {
-			break;
+		// scan the sorted row data and add to the sorted row group
+		RowGroup sorted_rowgroup(db, table_info, start, count);
+		sorted_rowgroup.InitializeEmpty(types);
+		TableAppendState append_state;
+		sorted_rowgroup.InitializeAppendInternal(append_state.row_group_append_state);
+
+		PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
+		DataChunk result_chunk;
+		result_chunk.Initialize(types);
+		result_chunk.SetCardinality(0);
+		for (;;) {
+			scanner.Scan(result_chunk);
+			if (result_chunk.size() == 0) {
+				break;
+			}
+			sorted_rowgroup.Append(append_state.row_group_append_state, result_chunk, count);
 		}
-		sorted_rowgroup.Append(append_state.row_group_append_state, result_chunk, count);
-	}
 
-	this->columns = sorted_rowgroup.columns;
+		this->columns = sorted_rowgroup.columns;
+	}
 
 	// checkpoint the individual columns of the row group
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {

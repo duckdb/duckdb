@@ -12,23 +12,23 @@ statement ok
 PRAGMA force_compression = 'rle'
 
 statement ok
-CREATE TABLE test (a INTEGER);
+CREATE TABLE test (a INTEGER, b INTEGER);
 
 statement ok
-INSERT INTO test VALUES (1),(2),(1),(2),(1),(2);
+INSERT INTO test VALUES (1,1),(2,2),(1,1),(2,2),(1,1),(2,2);
 
 statement ok
 checkpoint
 
-query I
+query II
 SELECT * FROM test;
 ----
-1
-2
-1
-2
-1
-2
+1   1
+2   2
+1   1
+2   2
+1   1
+2   2
 
 statement ok
 PRAGMA force_compression_sorting = true
@@ -37,25 +37,20 @@ statement ok
 DROP TABLE IF EXISTS test;
 
 statement ok
-CREATE TABLE test (a INTEGER);
+CREATE TABLE test (a INTEGER, b INTEGER);
 
 statement ok
-INSERT INTO test VALUES (1);
-INSERT INTO test VALUES (2);
-INSERT INTO test VALUES (1);
-INSERT INTO test VALUES (2);
-INSERT INTO test VALUES (1);
-INSERT INTO test VALUES (2);
+INSERT INTO test VALUES (1,1),(2,2),(1,1),(2,2),(1,1),(2,2);
 
 statement ok
 checkpoint
 
-query I
+query II
 SELECT * FROM test;
 ----
-1
-1
-1
-2
-2
-2
+1   1
+1   1
+1   1
+2   2
+2   2
+2   2
