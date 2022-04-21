@@ -148,6 +148,7 @@ private:
 	template <TableScanType TYPE>
 	void TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result);
 
+	bool ScanToDataChunks(RowGroupScanState &state, DataChunk &result);
 	bool ScanToKeyAndPayload(RowGroupScanState &state, DataChunk &keys, DataChunk &payload, const vector<idx_t>& cardinalities);
 	void SortColumns();
 

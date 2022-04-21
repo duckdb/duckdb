@@ -539,6 +539,44 @@ bool RowGroup::ScanToKeyAndPayload(RowGroupScanState &state, DataChunk &keys, Da
 	return true;
 }
 
+bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
+	auto &column_ids = state.parent.column_ids;
+	while (true) {
+		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row) {
+			// exceeded the amount of rows to scan
+			return false;
+		}
+		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
+		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row - current_row);
+
+		idx_t count;
+		count = max_count;
+
+		// scan all vectors completely: full scan without deletions or table filters
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			auto column = column_ids[i];
+			if (column == COLUMN_IDENTIFIER_ROW_ID) {
+				// scan row id
+				D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
+				result.data[i].Sequence(this->start + current_row, 1);
+			} else {
+				columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
+				                               false);
+			}
+		}
+
+		result.SetCardinality(count);
+		state.vector_index++;
+
+		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row) {
+			// exceeded the amount of rows to scan
+			return false;
+		}
+		break;
+	}
+	return true;
+}
+
 void RowGroup::SortColumns() {
 	vector<LogicalType> types;
 	vector<column_t> column_ids;
@@ -568,7 +606,7 @@ void RowGroup::SortColumns() {
 	vector<HyperLogLog> logs(columns.size());
 	InitializeScan(scan_state.row_group_scan_state);
 	while (next_chunk) {
-		next_chunk = ScanToKeyAndPayload(scan_state.row_group_scan_state, result, <#initializer #>, vector<idx_t>());
+		next_chunk = ScanToDataChunks(scan_state.row_group_scan_state, result);
 		for (idx_t i = 0; i < columns.size(); i++) {
 			for (idx_t j = 0; j < result.size(); j++) {
 				logs[i].Add(result.data[j].GetData(), sizeof(types[i].InternalType()));
@@ -591,7 +629,6 @@ void RowGroup::SortColumns() {
 
 	// Scan the RowGroup into the DataChunks
 	next_chunk = true;
-	idx_t incr_cardinality_index = 0;
 	InitializeScan(scan_state.row_group_scan_state);
 	while (next_chunk) {
 		next_chunk = ScanToKeyAndPayload(scan_state.row_group_scan_state, keys, payload, cardinalities);
