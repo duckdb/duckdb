@@ -54,13 +54,10 @@ struct TextSearchShiftArray {
 };
 
 struct BufferedCSVReaderOptions {
-	//! The file path of the CSV file to read
-	string file_path;
-	//! Whether file is compressed or not, and if so which compression type
-	//! AUTO_DETECT (default; infer from file extension)
-	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
-	//! Whether or not to automatically detect dialect and datatypes
-	bool auto_detect = false;
+	//===--------------------------------------------------------------------===//
+	// CommonCSVOptions
+	//===--------------------------------------------------------------------===//
+
 	//! Whether or not a delimiter was defined by the user
 	bool has_delimiter = false;
 	//! Delimiter to separate columns within each line
@@ -77,26 +74,49 @@ struct BufferedCSVReaderOptions {
 	bool has_header = false;
 	//! Whether or not the file has a header line
 	bool header = false;
-	//! Whether or not header names shall be normalized
-	bool normalize_names = false;
-	//! How many leading rows to skip
-	idx_t skip_rows = 0;
 	//! Expected number of columns
 	idx_t num_cols = 0;
+	//! Number of samples to buffer
+	idx_t buffer_size = STANDARD_VECTOR_SIZE * 100;
 	//! Specifies the string that represents a null value
 	string null_str;
+	//! Whether file is compressed or not, and if so which compression type
+	//! AUTO_DETECT (default; infer from file extension)
+	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
+	//! How many leading rows to skip
+	idx_t skip_rows = 0;
+	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
+	idx_t maximum_line_size = 2097152;
+
+	//===--------------------------------------------------------------------===//
+	// ReadCSVOptions
+	//===--------------------------------------------------------------------===//
+
+	//! Whether or not header names shall be normalized
+	bool normalize_names = false;
 	//! True, if column with that index must skip null check
 	vector<bool> force_not_null;
+	//! Consider all columns to be of type varchar
+	bool all_varchar = false;
 	//! Size of sample chunk used for dialect and type detection
 	idx_t sample_chunk_size = STANDARD_VECTOR_SIZE;
 	//! Number of sample chunks used for type detection
 	idx_t sample_chunks = 10;
-	//! Number of samples to buffer
-	idx_t buffer_size = STANDARD_VECTOR_SIZE * 100;
-	//! Consider all columns to be of type varchar
-	bool all_varchar = false;
-	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
-	idx_t maximum_line_size = 2097152;
+	//! Whether or not to automatically detect dialect and datatypes
+	bool auto_detect = false;
+	//! The file path of the CSV file to read
+	string file_path;
+	//! Whether or not to include a file name column
+	bool include_file_name = false;
+
+	//===--------------------------------------------------------------------===//
+	// WriteCSVOptions
+	//===--------------------------------------------------------------------===//
+
+	//! The column names of the columns to write
+	vector<string> names;
+	//! True, if column with that index must be quoted
+	vector<bool> force_quote;
 
 	//! The date format to use (if any is specified)
 	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
@@ -104,6 +124,16 @@ struct BufferedCSVReaderOptions {
 	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
 	void SetDelimiter(const string &delimiter);
+	//! Set an option that is supported by both reading and writing functions, called by
+	//! the SetReadOption and SetWriteOption methods
+	bool SetBaseOption(const string &loption, vector<Value> &set);
+
+	//! loption - lowercase string
+	//! set - argument(s) to the option
+	//! expected_names - names expected if the option is "columns"
+	bool SetReadOption(const string &loption, vector<Value> &set, vector<string> &expected_names);
+
+	bool SetWriteOption(const string &loption, vector<Value> &set);
 
 	std::string ToString() const;
 };

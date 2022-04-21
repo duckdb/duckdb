@@ -22,6 +22,71 @@
 
 namespace duckdb {
 
+static bool ParseBoolean(vector<Value> &set) {
+	if (set.empty()) {
+		// no option specified: default to true
+		return true;
+	}
+	if (set.size() > 1) {
+		throw BinderException("Expected a single argument as a boolean value (e.g. TRUE or 1)");
+	}
+	if (set[0].type() == LogicalType::FLOAT || set[0].type() == LogicalType::DOUBLE ||
+	    set[0].type().id() == LogicalTypeId::DECIMAL) {
+		throw BinderException("Expected a boolean value (e.g. TRUE or 1)");
+	}
+	return BooleanValue::Get(set[0].CastAs(LogicalType::BOOLEAN));
+}
+
+static string ParseString(vector<Value> &set) {
+	if (set.size() != 1) {
+		// no option specified or multiple options specified
+		throw BinderException("Expected a single argument as a string value");
+	}
+	if (set[0].type().id() != LogicalTypeId::VARCHAR) {
+		throw BinderException("Expected a string argument!");
+	}
+	return set[0].GetValue<string>();
+}
+
+static int64_t ParseInteger(vector<Value> &set) {
+	if (set.size() != 1) {
+		// no option specified or multiple options specified
+		throw BinderException("Expected a single argument as a integer value");
+	}
+	return set[0].GetValue<int64_t>();
+}
+
+static vector<bool> ParseColumnList(vector<Value> &set, vector<string> &names) {
+	vector<bool> result;
+	if (set.empty()) {
+		throw BinderException("Expected a column list or * as parameter");
+	}
+	if (set.size() == 1 && set[0].type().id() == LogicalTypeId::VARCHAR && set[0].GetValue<string>() == "*") {
+		// *, force_not_null on all columns
+		result.resize(names.size(), true);
+	} else {
+		// list of options: parse the list
+		unordered_map<string, bool> option_map;
+		for (idx_t i = 0; i < set.size(); i++) {
+			option_map[set[i].ToString()] = false;
+		}
+		result.resize(names.size(), false);
+		for (idx_t i = 0; i < names.size(); i++) {
+			auto entry = option_map.find(names[i]);
+			if (entry != option_map.end()) {
+				result[i] = true;
+				entry->second = true;
+			}
+		}
+		for (auto &entry : option_map) {
+			if (!entry.second) {
+				throw BinderException("Column %s not found in table", entry.first.c_str());
+			}
+		}
+	}
+	return result;
+}
+
 struct CSVFileHandle {
 public:
 	explicit CSVFileHandle(unique_ptr<FileHandle> file_handle_p) : file_handle(move(file_handle_p)) {
@@ -147,6 +212,125 @@ void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	if (input.empty()) {
 		throw BinderException("DELIM or SEP must not be empty");
 	}
+}
+
+bool BufferedCSVReaderOptions::SetReadOption(const string &loption, vector<Value> &set,
+                                             vector<string> &expected_names) {
+	if (SetBaseOption(loption, set)) {
+		return true;
+	}
+	if (loption == "auto_detect") {
+		auto_detect = ParseBoolean(set);
+	} else if (loption == "sample_size") {
+		int64_t sample_size = ParseInteger(set);
+		if (sample_size < 1 && sample_size != -1) {
+			throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
+		}
+		if (sample_size == -1) {
+			sample_chunks = std::numeric_limits<uint64_t>::max();
+			sample_chunk_size = STANDARD_VECTOR_SIZE;
+		} else if (sample_size <= STANDARD_VECTOR_SIZE) {
+			sample_chunk_size = sample_size;
+			sample_chunks = 1;
+		} else {
+			sample_chunk_size = STANDARD_VECTOR_SIZE;
+			sample_chunks = sample_size / STANDARD_VECTOR_SIZE;
+		}
+	} else if (loption == "sample_chunk_size") {
+		sample_chunk_size = ParseInteger(set);
+		if (sample_chunk_size > STANDARD_VECTOR_SIZE) {
+			throw BinderException(
+			    "Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
+			    STANDARD_VECTOR_SIZE);
+		} else if (sample_chunk_size < 1) {
+			throw BinderException("Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be smaller than 1");
+		}
+	} else if (loption == "sample_chunks") {
+		sample_chunks = ParseInteger(set);
+		if (sample_chunks < 1) {
+			throw BinderException("Unsupported parameter for SAMPLE_CHUNKS: cannot be smaller than 1");
+		}
+	} else if (loption == "force_not_null") {
+		force_not_null = ParseColumnList(set, expected_names);
+	} else if (loption == "date_format" || loption == "dateformat") {
+		string format = ParseString(set);
+		auto &date_format = this->date_format[LogicalTypeId::DATE];
+		string error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
+		date_format.format_specifier = format;
+		if (!error.empty()) {
+			throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+		}
+		has_format[LogicalTypeId::DATE] = true;
+	} else if (loption == "timestamp_format" || loption == "timestampformat") {
+		string format = ParseString(set);
+		auto &timestamp_format = date_format[LogicalTypeId::TIMESTAMP];
+		string error = StrTimeFormat::ParseFormatSpecifier(format, timestamp_format);
+		timestamp_format.format_specifier = format;
+		if (!error.empty()) {
+			throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
+		}
+		has_format[LogicalTypeId::TIMESTAMP] = true;
+	} else if (loption == "escape") {
+		escape = StringValue::Get(set[0]);
+		has_escape = true;
+	} else if (loption == "all_varchar") {
+		all_varchar = ParseBoolean(set);
+	} else if (loption == "normalize_names") {
+		normalize_names = ParseBoolean(set);
+	} else if (loption == "filename") {
+		include_file_name = ParseBoolean(set);
+	} else {
+		return false;
+	}
+	return true;
+}
+
+bool BufferedCSVReaderOptions::SetWriteOption(const string &loption, vector<Value> &set) {
+	if (SetBaseOption(loption, set)) {
+		return true;
+	}
+
+	if (loption == "force_quote") {
+		force_quote = ParseColumnList(set, names);
+	} else {
+		return false;
+	}
+	return true;
+}
+
+bool BufferedCSVReaderOptions::SetBaseOption(const string &loption, vector<Value> &set) {
+	// Make sure this function was only called after the option was turned into lowercase
+	D_ASSERT(!std::any_of(loption.begin(), loption.end(), ::isupper));
+
+	if (StringUtil::StartsWith(loption, "delim") || StringUtil::StartsWith(loption, "sep")) {
+		SetDelimiter(ParseString(set));
+	} else if (loption == "quote") {
+		quote = ParseString(set);
+		has_quote = true;
+	} else if (loption == "escape") {
+		escape = ParseString(set);
+		has_escape = true;
+	} else if (loption == "header") {
+		header = ParseBoolean(set);
+		has_header = true;
+	} else if (loption == "null" || loption == "nullstr") {
+		null_str = ParseString(set);
+	} else if (loption == "encoding") {
+		auto encoding = StringUtil::Lower(ParseString(set));
+		if (encoding != "utf8" && encoding != "utf-8") {
+			throw BinderException("Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'");
+		}
+	} else if (loption == "compression") {
+		compression = FileCompressionTypeFromString(ParseString(set));
+	} else if (loption == "skip") {
+		skip_rows = ParseInteger(set);
+	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
+		maximum_line_size = ParseInteger(set);
+	} else {
+		// unrecognized option in base CSV
+		return false;
+	}
+	return true;
 }
 
 std::string BufferedCSVReaderOptions::ToString() const {
