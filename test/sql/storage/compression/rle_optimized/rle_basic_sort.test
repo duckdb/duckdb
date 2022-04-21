@@ -23,12 +23,12 @@ checkpoint
 query II
 SELECT * FROM test;
 ----
-1   1
-2   2
-1   1
-2   2
-1   1
-2   2
+1	1
+2	2
+1	1
+2	2
+1	1
+2	2
 
 statement ok
 PRAGMA force_compression_sorting = true
@@ -48,9 +48,9 @@ checkpoint
 query II
 SELECT * FROM test;
 ----
-1   1
-1   1
-1   1
-2   2
-2   2
-2   2
+1	1
+1	1
+1	1
+2	2
+2	2
+2	2

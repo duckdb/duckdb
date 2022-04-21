@@ -124,7 +124,6 @@ public:
 
 	void InitializeAppendInternal(RowGroupAppendState &append_state);
 	void InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state, idx_t remaining_append_count);
-	void AppendInternal(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count, idx_t columns_size);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 
 	void Update(Transaction &transaction, DataChunk &updates, row_t *ids, idx_t offset, idx_t count,
@@ -149,10 +148,8 @@ private:
 	template <TableScanType TYPE>
 	void TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result);
 
-	bool ScanToDataChunk(RowGroupScanState &state, DataChunk &result);
-
-	void SinkChunks(DataChunk &keys, DataChunk &payload, GlobalSortState &global_sort_state,
-	                BufferManager &buffer_manager);
+	bool ScanToKeyAndPayload(RowGroupScanState &state, DataChunk &keys, DataChunk &payload, const vector<idx_t>& cardinalities);
+	void SortColumns();
 
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
 	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);
