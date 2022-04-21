@@ -13,9 +13,12 @@ namespace duckdb {
 
 class Node256 : public Node {
 public:
-	Node256(size_t compression_length);
+	explicit Node256(size_t compression_length);
 
 	unique_ptr<Node> child[256];
+
+	// Block offsets
+	std::pair<idx_t, idx_t> block_offsets[256];
 
 public:
 	//! Get position of a specific byte, returns DConstants::INVALID_INDEX if not exists
@@ -26,7 +29,7 @@ public:
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position
 	idx_t GetNextPos(idx_t pos) override;
 	//! Get Node256 Child
-	unique_ptr<Node> *GetChild(idx_t pos) override;
+	unique_ptr<Node> *GetChild(ART &art, idx_t pos) override;
 
 	idx_t GetMin() override;
 
@@ -39,6 +42,6 @@ public:
 	//! Serialize Node
 	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) override;
 
-	static unique_ptr<Node256> Deserialize(duckdb::Deserializer &source);
+	static unique_ptr<Node256> Deserialize(duckdb::MetaBlockReader &source);
 };
 } // namespace duckdb

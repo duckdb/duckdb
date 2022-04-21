@@ -1,13 +1,16 @@
 #include "duckdb/storage/checkpoint_manager.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
@@ -22,8 +25,6 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -326,35 +327,18 @@ void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reade
 	auto schema_catalog = catalog.GetSchema(context, info->schema);
 	auto table_catalog =
 	    (TableCatalogEntry *)catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name);
-	auto index_catalog = schema_catalog->CreateIndex(context, info.get(), table_catalog);
+	auto index_catalog = (IndexCatalogEntry *)schema_catalog->CreateIndex(context, info.get(), table_catalog);
 
 	// Here we just gotta read the root node
 	auto root_block_id = reader.Read<idx_t>();
 	auto root_offset = reader.Read<idx_t>();
 
-	int i = 0;
+	// create an adaptive radix tree around the expressions
+	//	auto art = make_unique<ART>(column_ids, move(unbound_expressions), constraint_type,db);
+	//	storage->AddIndex(move(art), bound_expressions
 
-	//	// bind the info
-	//	auto binder = Binder::CreateBinder(context);
-	//	auto bound_info = binder->BindCreateViewInfo()
-	//
-	//	// now read the actual table data and place it into the create table info
-	//	auto block_id = reader.Read<block_id_t>();
-	//	auto offset = reader.Read<uint64_t>();
-	//	MetaBlockReader table_data_reader(db, block_id);
-	//	table_data_reader.offset = offset;
-	//	TableDataReader data_reader(table_data_reader, *bound_info);
-	//	data_reader.ReadTableData();
-	//
-	//	// finally create the table in the catalog
-	//	auto &catalog = Catalog::GetCatalog(db);
-	//	catalog.GetEntry()
-	//	catalog.
-	//	catalog.CreateTable(context, bound_info.get());
-	//
-	//	auto info = TableMacroCatalogEntry::Deserialize(reader);
-	//	auto &catalog = Catalog::GetCatalog(db);
-	//	catalog.CreateFunction(context, info.get());
+	//	index_catalog->index = ART(root_block_id,root_offset);
+	int i = 0;
 }
 
 //===--------------------------------------------------------------------===//

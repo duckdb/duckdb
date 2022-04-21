@@ -42,8 +42,11 @@ idx_t Node16::GetNextPos(idx_t pos) {
 	return pos < count ? pos : DConstants::INVALID_INDEX;
 }
 
-unique_ptr<Node> *Node16::GetChild(idx_t pos) {
+unique_ptr<Node> *Node16::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(pos < count);
+	if (!child[pos]) {
+		child[pos] = Node::Deserialize(art, block_offsets[pos].first, block_offsets[pos].second);
+	}
 	return &child[pos];
 }
 
@@ -86,16 +89,24 @@ void Node16::Insert(unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &
 
 std::pair<idx_t, idx_t> Node16::Serialize(duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
-	auto block_id = writer.block->id;
 	vector<std::pair<idx_t, idx_t>> child_offsets;
 	for (auto &child_node : child) {
 		if (child_node) {
 			child_offsets.push_back(child_node->Serialize(writer));
+		} else {
+			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
 		}
 	}
+	auto block_id = writer.block->id;
 	auto offset = writer.offset;
 	// Write Node Type
-	writer.Write(16);
+	writer.Write(type);
+	writer.Write(count);
+	// Write compression Info
+	writer.Write(prefix_length);
+	for (idx_t i = 0; i < prefix_length; i++) {
+		writer.Write(prefix[i]);
+	}
 	// Write Key values
 	for (auto &key_v : key) {
 		writer.Write(key_v);
@@ -106,6 +117,28 @@ std::pair<idx_t, idx_t> Node16::Serialize(duckdb::MetaBlockWriter &writer) {
 		writer.Write(offsets.second);
 	}
 	return {block_id, offset};
+}
+
+unique_ptr<Node16> Node16::Deserialize(duckdb::MetaBlockReader &reader) {
+	auto count = reader.Read<uint16_t>();
+	auto prefix_length = reader.Read<uint32_t>();
+	auto node16 = make_unique<Node16>(prefix_length);
+	node16->count = count;
+
+	for (idx_t i = 0; i < prefix_length; i++) {
+		node16->prefix[i] = reader.Read<uint8_t>();
+	}
+
+	// Get Key values
+	for (idx_t i = 0; i < 16; i++) {
+		node16->key[i] = reader.Read<uint8_t>();
+	}
+
+	// Get Child offsets
+	for (idx_t i = 0; i < 16; i++) {
+		node16->block_offsets[i] = {reader.Read<idx_t>(), reader.Read<idx_t>()};
+	}
+	return node16;
 }
 
 void Node16::Erase(unique_ptr<Node> &node, int pos) {

@@ -65,7 +65,7 @@ void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, ve
 		column_ids.push_back(key);
 	}
 	// create an adaptive radix tree around the expressions
-	auto art = make_unique<ART>(column_ids, move(unbound_expressions), constraint_type);
+	auto art = make_unique<ART>(column_ids, move(unbound_expressions), constraint_type, storage->db);
 	storage->AddIndex(move(art), bound_expressions);
 }
 

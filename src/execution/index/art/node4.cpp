@@ -1,6 +1,7 @@
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
 namespace duckdb {
 
@@ -43,11 +44,10 @@ idx_t Node4::GetNextPos(idx_t pos) {
 	return pos < count ? pos : DConstants::INVALID_INDEX;
 }
 
-unique_ptr<Node> *Node4::GetChild(idx_t pos) {
+unique_ptr<Node> *Node4::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(pos < count);
 	if (!child[pos]) {
-		// Gotta deserialize this baby
-		child[pos] = Node::Deserialize(block_offsets[pos]);
+		child[pos] = Node::Deserialize(art, block_offsets[pos].first, block_offsets[pos].second);
 	}
 	return &child[pos];
 }
@@ -125,16 +125,24 @@ void Node4::Erase(unique_ptr<Node> &node, int pos) {
 
 std::pair<idx_t, idx_t> Node4::Serialize(duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
-	auto block_id = writer.block->id;
 	vector<std::pair<idx_t, idx_t>> child_offsets;
 	for (auto &child_node : child) {
 		if (child_node) {
 			child_offsets.push_back(child_node->Serialize(writer));
+		} else {
+			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
 		}
 	}
+	auto block_id = writer.block->id;
 	auto offset = writer.offset;
 	// Write Node Type
-	writer.Write(4);
+	writer.Write(type);
+	writer.Write(count);
+	// Write compression Info
+	writer.Write(prefix_length);
+	for (idx_t i = 0; i < prefix_length; i++) {
+		writer.Write(prefix[i]);
+	}
 	// Write Key values
 	for (auto &key_v : key) {
 		writer.Write(key_v);
@@ -147,7 +155,27 @@ std::pair<idx_t, idx_t> Node4::Serialize(duckdb::MetaBlockWriter &writer) {
 	return {block_id, offset};
 }
 
-unique_ptr<Node4> Node4::Deserialize(duckdb::Deserializer &source) {
+unique_ptr<Node4> Node4::Deserialize(duckdb::MetaBlockReader &reader) {
+	auto count = reader.Read<uint16_t>();
+	auto prefix_length = reader.Read<uint32_t>();
+	auto node4 = make_unique<Node4>(prefix_length);
+	node4->count = count;
+
+	for (idx_t i = 0; i < prefix_length; i++) {
+		node4->prefix[i] = reader.Read<uint8_t>();
+	}
+
+	// Get Key values
+	for (idx_t i = 0; i < 4; i++) {
+		node4->key[i] = reader.Read<uint8_t>();
+	}
+
+	// Get Child offsets
+	for (idx_t i = 0; i < 4; i++) {
+		node4->block_offsets[i] = {reader.Read<idx_t>(), reader.Read<idx_t>()};
+	}
+
+	return node4;
 }
 
 } // namespace duckdb

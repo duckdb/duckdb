@@ -1,6 +1,6 @@
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
-
+#include "duckdb/storage/meta_block_reader.hpp"
 #include <cstring>
 
 namespace duckdb {
@@ -35,8 +35,7 @@ std::pair<idx_t, idx_t> Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
 	auto block_id = writer.block->id;
 	auto offset = writer.offset;
 	// Write Node Type
-	idx_t node_type = 0;
-	writer.Write(node_type);
+	writer.Write(type);
 	// Write value
 	// Write Value Length
 	writer.Write(value->len);
@@ -54,19 +53,19 @@ std::pair<idx_t, idx_t> Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
 	return {block_id, offset};
 }
 
-unique_ptr<Leaf> Leaf::Deserialize(Deserializer &source) {
-	auto value_length = source.Read<idx_t>();
+unique_ptr<Leaf> Leaf::Deserialize(MetaBlockReader &reader) {
+	auto value_length = reader.Read<idx_t>();
 	unique_ptr<data_t[]> data = unique_ptr<data_t[]>(new data_t[value_length]);
 	for (idx_t i = 0; i < value_length; i++) {
-		data[i] = source.Read<data_t>();
+		data[i] = reader.Read<data_t>();
 	}
 
 	unique_ptr<Key> key_value = make_unique<Key>(move(data), value_length);
 
-	auto num_elements = source.Read<idx_t>();
+	auto num_elements = reader.Read<idx_t>();
 	auto elements = unique_ptr<row_t[]>(new row_t[num_elements]);
 	for (idx_t i = 0; i < num_elements; i++) {
-		elements[i] = source.Read<row_t>();
+		elements[i] = reader.Read<row_t>();
 	}
 	return make_unique<Leaf>(move(key_value), move(elements), num_elements);
 }

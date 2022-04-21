@@ -41,8 +41,11 @@ idx_t Node48::GetNextPos(idx_t pos) {
 	return Node::GetNextPos(pos);
 }
 
-unique_ptr<Node> *Node48::GetChild(idx_t pos) {
+unique_ptr<Node> *Node48::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(child_index[pos] != Node::EMPTY_MARKER);
+	if (!child[child_index[pos]]) {
+		child[child_index[pos]] = Node::Deserialize(art, block_offsets[pos].first, block_offsets[pos].second);
+	}
 	return &child[child_index[pos]];
 }
 
@@ -109,15 +112,23 @@ void Node48::Erase(unique_ptr<Node> &node, int pos) {
 std::pair<idx_t, idx_t> Node48::Serialize(duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
 	vector<std::pair<idx_t, idx_t>> child_offsets;
-	auto block_id = writer.block->id;
 	for (auto &child_node : child) {
 		if (child_node) {
 			child_offsets.push_back(child_node->Serialize(writer));
+		} else {
+			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
 		}
 	}
+	auto block_id = writer.block->id;
 	auto offset = writer.offset;
 	// Write Node Type
-	writer.Write(48);
+	writer.Write(type);
+	writer.Write(count);
+	// Write compression Info
+	writer.Write(prefix_length);
+	for (idx_t i = 0; i < prefix_length; i++) {
+		writer.Write(prefix[i]);
+	}
 	// Write Key values
 	for (auto &key_v : child_index) {
 		writer.Write(key_v);
@@ -128,6 +139,28 @@ std::pair<idx_t, idx_t> Node48::Serialize(duckdb::MetaBlockWriter &writer) {
 		writer.Write(offsets.second);
 	}
 	return {block_id, offset};
+}
+
+unique_ptr<Node48> Node48::Deserialize(duckdb::MetaBlockReader &reader) {
+	auto count = reader.Read<uint16_t>();
+	auto prefix_length = reader.Read<uint32_t>();
+	auto node48 = make_unique<Node48>(prefix_length);
+	node48->count = count;
+
+	for (idx_t i = 0; i < prefix_length; i++) {
+		node48->prefix[i] = reader.Read<uint8_t>();
+	}
+
+	// Get Key values
+	for (idx_t i = 0; i < 256; i++) {
+		node48->child_index[i] = reader.Read<uint8_t>();
+	}
+
+	// Get Child offsets
+	for (idx_t i = 0; i < 48; i++) {
+		node48->block_offsets[i] = {reader.Read<idx_t>(), reader.Read<idx_t>()};
+	}
+	return node48;
 }
 
 } // namespace duckdb

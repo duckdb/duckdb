@@ -11,11 +11,13 @@
 namespace duckdb {
 
 ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
-         IndexConstraintType constraint_type)
-    : Index(IndexType::ART, column_ids, unbound_expressions, constraint_type) {
-	tree = nullptr;
+         IndexConstraintType constraint_type, DatabaseInstance &db, idx_t block_id, idx_t block_offset)
+    : Index(IndexType::ART, column_ids, unbound_expressions, constraint_type), db(db) {
 	expression_result.Initialize(logical_types);
 	is_little_endian = IsLittleEndian();
+	if (block_id != DConstants::INVALID_INDEX) {
+		tree = Node::Deserialize(*this, block_id, block_offset);
+	}
 	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
 		case PhysicalType::BOOL:
@@ -345,7 +347,7 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 	// Recurse
 	idx_t pos = node->GetChildPos(key[depth]);
 	if (pos != DConstants::INVALID_INDEX) {
-		auto child = node->GetChild(pos);
+		auto child = node->GetChild(*this, pos);
 		return Insert(*child, move(value), depth + 1, row_id);
 	}
 	unique_ptr<Node> new_node = make_unique<Leaf>(move(value), row_id);
@@ -414,7 +416,7 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 	}
 	idx_t pos = node->GetChildPos(key[depth]);
 	if (pos != DConstants::INVALID_INDEX) {
-		auto child = node->GetChild(pos);
+		auto child = node->GetChild(*this, pos);
 		D_ASSERT(child);
 
 		unique_ptr<Node> &child_ref = *child;
@@ -528,7 +530,7 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 		if (pos == DConstants::INVALID_INDEX) {
 			return nullptr;
 		}
-		node_val = node_val->GetChild(pos)->get();
+		node_val = node_val->GetChild(*this, pos)->get();
 		D_ASSERT(node_val);
 
 		depth++;
@@ -597,7 +599,7 @@ bool ART::IteratorNext(Iterator &it) {
 		top.pos = node->GetNextPos(top.pos);
 		if (top.pos != DConstants::INVALID_INDEX) {
 			// next node found: go there
-			it.SetEntry(it.depth, IteratorEntry(node->GetChild(top.pos)->get(), DConstants::INVALID_INDEX));
+			it.SetEntry(it.depth, IteratorEntry(node->GetChild(*this, top.pos)->get(), DConstants::INVALID_INDEX));
 			it.depth++;
 		} else {
 			// no node found: move up the tree
@@ -627,7 +629,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 		it.depth++;
 		if (!equal) {
 			while (node->type != NodeType::NLeaf) {
-				node = node->GetChild(node->GetMin())->get();
+				node = node->GetChild(*this, node->GetMin())->get();
 				auto &c_top = it.stack[it.depth];
 				c_top.node = node;
 				it.depth++;
@@ -688,7 +690,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 			// Find min leaf
 			top.pos = node->GetMin();
 		}
-		node = node->GetChild(top.pos)->get();
+		node = node->GetChild(*this, top.pos)->get();
 		//! This means all children of this node qualify as geq
 
 		depth++;

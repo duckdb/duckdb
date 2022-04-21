@@ -30,7 +30,7 @@ public:
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position
 	idx_t GetNextPos(idx_t pos) override;
 	//! Get Node4 Child
-	unique_ptr<Node> *GetChild(idx_t pos) override;
+	unique_ptr<Node> *GetChild(ART &art, idx_t pos) override;
 
 	idx_t GetMin() override;
 
@@ -41,6 +41,6 @@ public:
 
 	//! Serialize Node
 	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) override;
-	static unique_ptr<Node4> Deserialize(duckdb::Deserializer &source);
+	static unique_ptr<Node4> Deserialize(duckdb::MetaBlockReader &reader);
 };
 } // namespace duckdb

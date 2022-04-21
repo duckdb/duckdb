@@ -13,10 +13,12 @@ namespace duckdb {
 
 class Node48 : public Node {
 public:
-	Node48(size_t compression_length);
+	explicit Node48(size_t compression_length);
 
 	uint8_t child_index[256];
 	unique_ptr<Node> child[48];
+	// Block offsets
+	std::pair<idx_t, idx_t> block_offsets[48];
 
 public:
 	//! Get position of a byte, returns -1 if not exists
@@ -27,7 +29,7 @@ public:
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position
 	idx_t GetNextPos(idx_t pos) override;
 	//! Get Node48 Child
-	unique_ptr<Node> *GetChild(idx_t pos) override;
+	unique_ptr<Node> *GetChild(ART &art, idx_t pos) override;
 
 	idx_t GetMin() override;
 
@@ -40,6 +42,6 @@ public:
 	//! Serialize Node
 	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) override;
 
-	static unique_ptr<Node48> Deserialize(duckdb::Deserializer &source);
+	static unique_ptr<Node48> Deserialize(duckdb::MetaBlockReader &source);
 };
 } // namespace duckdb

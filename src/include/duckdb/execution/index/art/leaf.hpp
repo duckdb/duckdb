@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
 namespace duckdb {
 
@@ -31,7 +32,7 @@ public:
 
 	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) override;
 
-	static unique_ptr<Leaf> Deserialize(duckdb::Deserializer &source);
+	static unique_ptr<Leaf> Deserialize(duckdb::MetaBlockReader &reader);
 
 private:
 	unique_ptr<row_t[]> row_ids;

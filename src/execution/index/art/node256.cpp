@@ -7,6 +7,7 @@ Node256::Node256(size_t compression_length) : Node(NodeType::N256, compression_l
 }
 
 idx_t Node256::GetChildPos(uint8_t k) {
+	//! FIXME: GOTTA do something here to check the keys with serialized nodes
 	if (child[k]) {
 		return k;
 	} else {
@@ -46,8 +47,10 @@ idx_t Node256::GetNextPos(idx_t pos) {
 	return Node::GetNextPos(pos);
 }
 
-unique_ptr<Node> *Node256::GetChild(idx_t pos) {
-	D_ASSERT(child[pos]);
+unique_ptr<Node> *Node256::GetChild(ART &art, idx_t pos) {
+	if (!child[pos]) {
+		child[pos] = Node::Deserialize(art, block_offsets[pos].first, block_offsets[pos].second);
+	}
 	return &child[pos];
 }
 
@@ -79,23 +82,23 @@ void Node256::Erase(unique_ptr<Node> &node, int pos) {
 
 std::pair<idx_t, idx_t> Node256::Serialize(duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
-	auto block_id = writer.block->id;
 	vector<std::pair<idx_t, idx_t>> child_offsets;
-	vector<idx_t> valid_children;
-	idx_t child_id = 0;
 	for (auto &child_node : child) {
 		if (child_node) {
-			valid_children.push_back(child_id);
 			child_offsets.push_back(child_node->Serialize(writer));
+		} else {
+			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
 		}
-		child_id++;
 	}
+	auto block_id = writer.block->id;
 	auto offset = writer.offset;
 	// Write Node Type
-	writer.Write(256);
-	// Write Key values
-	for (auto &key_v : valid_children) {
-		writer.Write(key_v);
+	writer.Write(type);
+	writer.Write(count);
+	// Write compression Info
+	writer.Write(prefix_length);
+	for (idx_t i = 0; i < prefix_length; i++) {
+		writer.Write(prefix[i]);
 	}
 	// Write child offsets
 	for (auto &offsets : child_offsets) {
@@ -103,6 +106,23 @@ std::pair<idx_t, idx_t> Node256::Serialize(duckdb::MetaBlockWriter &writer) {
 		writer.Write(offsets.second);
 	}
 	return {block_id, offset};
+}
+
+unique_ptr<Node256> Node256::Deserialize(duckdb::MetaBlockReader &reader) {
+	auto count = reader.Read<uint16_t>();
+	auto prefix_length = reader.Read<uint32_t>();
+	auto node256 = make_unique<Node256>(prefix_length);
+	node256->count = count;
+
+	for (idx_t i = 0; i < prefix_length; i++) {
+		node256->prefix[i] = reader.Read<uint8_t>();
+	}
+
+	// Get Child offsets
+	for (idx_t i = 0; i < 256; i++) {
+		node256->block_offsets[i] = {reader.Read<idx_t>(), reader.Read<idx_t>()};
+	}
+	return node256;
 }
 
 } // namespace duckdb

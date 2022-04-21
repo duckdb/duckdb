@@ -35,14 +35,6 @@ pair<idx_t, idx_t> IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &writer)
 	return art_index->DepthFirstSearchCheckpoint(writer);
 }
 
-// std::unique_ptr<Index> IndexCatalogEntry::Deserialize(Deserializer &source, idx_t block_id, idx_t offset) {
-//	if (index->type != IndexType::ART) {
-//		throw NotImplementedException("Don't know how to deserialize this index type");
-//	}
-//	auto art_index = make_unique<ART>();
-//	return art_index->DepthFirstSearchCheckpoint(writer);
-// }
-
 void IndexCatalogEntry::SerializeMetadata(duckdb::MetaBlockWriter &serializer) {
 	// Here we serialize the index metadata in the following order:
 	// schema name, table name, index name, sql, index type, index constraint type, expression list.
@@ -96,26 +88,5 @@ unique_ptr<CreateIndexInfo> IndexCatalogEntry::DeserializeMetadata(Deserializer 
 	reader.Finalize();
 	return create_index_info;
 }
-
-// unique_ptr<CreateMacroInfo> IndexCatalogEntry::Deserialize(Deserializer &main_source) {
-//	auto info = make_unique<CreateMacroInfo>(CatalogType::TABLE_MACRO_ENTRY);
-//	FieldReader reader(main_source);
-//	info->schema = reader.ReadRequired<string>();
-//	info->name = reader.ReadRequired<string>();
-//	auto query_node = reader.ReadRequiredSerializable<QueryNode>();
-//	auto table_function = make_unique<TableMacroFunction>(move(query_node));
-//	info->function = move(table_function);
-//	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>();
-//	auto default_param_count = reader.ReadRequired<uint32_t>();
-//	auto &source = reader.GetSource();
-//	for (idx_t i = 0; i < default_param_count; i++) {
-//		auto name = source.Read<string>();
-//		info->function->default_parameters[name] = ParsedExpression::Deserialize(source);
-//	}
-//
-//	reader.Finalize();
-//
-//	return info;
-// }
 
 } // namespace duckdb

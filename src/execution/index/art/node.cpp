@@ -14,7 +14,7 @@ void Node::CopyPrefix(Node *src, Node *dst) {
 }
 
 // LCOV_EXCL_START
-unique_ptr<Node> *Node::GetChild(idx_t pos) {
+unique_ptr<Node> *Node::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(0);
 	return nullptr;
 }
@@ -25,17 +25,21 @@ idx_t Node::GetMin() {
 }
 // LCOV_EXCL_STOP
 
-static unique_ptr<Node> Deserialize(duckdb::Deserializer &source, std::pair<idx_t, idx_t> offsets) {
-	auto node_type = source.Read<idx_t>();
+unique_ptr<Node> Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
+	MetaBlockReader reader(art.db, block_id);
+	reader.offset = offset;
+	NodeType node_type(static_cast<NodeType>(reader.Read<uint8_t>()));
 	switch (node_type) {
-	case 0:
-		return Leaf::Deserialize(source, offsets);
-	case 4:
-	case 16:
-	case 48:
-	case 256:
-	default:
-		throw InternalException("This ART node type does not exist");
+	case NodeType::NLeaf:
+		return Leaf::Deserialize(reader);
+	case NodeType::N4:
+		return Node4::Deserialize(reader);
+	case NodeType::N16:
+		return Node16::Deserialize(reader);
+	case NodeType::N48:
+		return Node48::Deserialize(reader);
+	case NodeType::N256:
+		return Node256::Deserialize(reader);
 	}
 }
 
