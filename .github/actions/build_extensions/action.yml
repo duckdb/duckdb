@@ -4,9 +4,18 @@ inputs:
   run_tests:
     description: 'Tests to run after build'
     default: 1
+
+  # Note: pass S3 secrets to this action when setting deploy_as
   deploy_as:
     description: 'Binary name for deploy step'
     default: ''
+  s3_id:
+    description: 'S3 key ID'
+    default: ''
+  s3_key:
+    description: 'S3 key secret'
+    default: ''
+
   force_32_bit:
     description: 'Force the 32 bit build'
     default: 0
@@ -76,8 +85,8 @@ runs:
       if: inputs.deploy_as != ""
       shell: bash
       env:
-        AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-        AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+        AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
         AWS_DEFAULT_REGION: us-east-1
       run: |
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
@@ -88,8 +97,8 @@ runs:
       if: inputs.run_tests
       shell: bash
       env:
-        AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-        AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+        AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
         AWS_DEFAULT_REGION: us-east-1
       run: |
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
