@@ -516,6 +516,21 @@ const ParquetRowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 	return file_meta_data->row_groups[state.group_idx_list[state.current_group]];
 }
 
+size_t ParquetReader::GetGroupCompressedSize(ParquetReaderScanState &state) {
+	auto &group = GetGroup(state);
+	auto total_compressed_size = group.total_compressed_size;
+
+	// If the global total_compressed_size is not set, we can still calculate it
+	if (group.total_compressed_size == 0) {
+		auto root_reader = ((StructColumnReader *)state.root_reader.get());
+		for (auto& child_reader: root_reader->child_readers) {
+			total_compressed_size += child_reader->TotalCompressedSize();
+		}
+	}
+
+	return total_compressed_size;
+}
+
 void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx) {
 	auto &group = GetGroup(state);
 
@@ -744,6 +759,9 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		state.current_group++;
 		state.group_offset = 0;
 
+		auto &trans = (ThriftFileTransport &)*state.thrift_file_proto->getTransport();
+		trans.ClearRegisterPrefetch();
+
 		if ((idx_t)state.current_group == state.group_idx_list.size()) {
 			state.finished = true;
 			return false;
@@ -764,64 +782,40 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			to_scan_compressed_bytes += root_reader->GetChildReader(file_col_idx)->TotalCompressedSize();
 		}
 
-		// Prefetch type A: Small groups, no filter
+		auto& group = GetGroup(state);
 		// TODO what if we have limit clause? we scan way to much? Can we push down limit clauses to prevent this? Should we exponential increase?
-		if (!state.filters) {
-			auto &group = GetGroup(state);
-			auto total_compressed_size = group.total_compressed_size;
+		if (state.group_offset != group.num_rows) {
+			auto total_compressed_size = GetGroupCompressedSize(state);
 
-			// If the global total_compressed_size is not set, we can still calculate it
-			if (group.total_compressed_size == 0) {
-				auto root_reader = ((StructColumnReader *)state.root_reader.get());
-				for (auto& child_reader: root_reader->child_readers) {
-					total_compressed_size += child_reader->TotalCompressedSize();
-				}
-			}
-
-			bool scans_enough = (total_compressed_size / (double)to_scan_compressed_bytes) >=
+			bool scans_enough = ((double)to_scan_compressed_bytes / total_compressed_size) >=
 			                    ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN;
-			bool groups_small_enough = total_compressed_size < ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MAX_SIZE;
+			bool groups_small_enough =
+			    total_compressed_size < ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MAX_SIZE;
 
 			if (groups_small_enough && scans_enough) {
-				// Prefetch type 1a: Prefetch whole row group
 				if (!state.have_prefetched_group || state.prefetched_group != state.current_group) {
-					auto &trans = (ThriftFileTransport &)*state.thrift_file_proto->getTransport();
-
 					if (total_compressed_size > 0) {
 						trans.Prefetch(group.file_offset, total_compressed_size);
 					}
 					state.have_prefetched_group = true;
 					state.prefetched_group = state.current_group;
 				}
-			} else if (to_scan_compressed_bytes / result.ColumnCount() > ParquetReaderPrefetchConfig::COLUMN_CHUNK_CACHE_LOWER_LIMIT && to_scan_compressed_bytes < ParquetReaderPrefetchConfig::COLUMN_CHUNK_CACHE_MAX_SIZE) {
+			} else if (to_scan_compressed_bytes / result.ColumnCount() >
+			               ParquetReaderPrefetchConfig::COLUMN_CHUNK_CACHE_LOWER_LIMIT &&
+			           to_scan_compressed_bytes < ParquetReaderPrefetchConfig::COLUMN_CHUNK_CACHE_MAX_SIZE) {
 				// Prefetch type 2a: Prefetch columns-wise
-
-				// TODO: should we just prefetch all columns?
-
-				// TODO can we assume this is ordered? Prob not, meaning we have to have a map for both beginning and ending?
-				struct BufferToPrefetch {
-					idx_t pos;
-					size_t len;
-				};
-				std::map<idx_t, BufferToPrefetch> end_map;
-
-				auto &trans = (ThriftFileTransport &)*state.thrift_file_proto->getTransport();
 				for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 					auto file_col_idx = state.column_ids[out_col_idx];
 					auto root_reader = ((StructColumnReader *)state.root_reader.get());
 					auto size = root_reader->GetChildReader(file_col_idx)->TotalCompressedSize();
 					auto offset = root_reader->GetChildReader(file_col_idx)->FileOffset();
-
 					trans.RegisterPrefetch(offset, size);
 				}
 				trans.PrefetchRegistered();
 			} else {
 				// BIG MEM
 			}
-		} else {
-			// We are going to filter: what do we do?
 		}
-
 		return true;
 	}
 

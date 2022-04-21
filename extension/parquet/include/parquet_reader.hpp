@@ -67,10 +67,10 @@ struct ParquetReaderPrefetchConfig {
 	/// The upper limit below which whole row groups will be prefetched
 	static constexpr size_t WHOLE_GROUP_PREFETCH_MAX_SIZE = 1 << 23; // 8 MiB
 	/// Percentage of data in a row group that should be scanned for enabling whole group prefetch
-	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.75;
+	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.99;
 
 	/// The lowest avg column size for which to enable column chunk caching
-	static constexpr size_t COLUMN_CHUNK_CACHE_LOWER_LIMIT = 1 << 20; // 1 MiB
+	static constexpr size_t COLUMN_CHUNK_CACHE_LOWER_LIMIT = 1 ; // tiny
 	/// The upper limit below which we may enable the column chunk cache
 	static constexpr size_t COLUMN_CHUNK_CACHE_MAX_SIZE = 1 << 26; // 64 MiB (* NUM_THREADS = 512MB max)
 };
@@ -157,6 +157,7 @@ private:
 	                                               idx_t depth, idx_t max_define, idx_t max_repeat,
 	                                               idx_t &next_schema_idx, idx_t &next_file_idx);
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
+	size_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
 

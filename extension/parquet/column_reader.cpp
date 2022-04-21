@@ -81,7 +81,7 @@ size_t ColumnReader::TotalCompressedSize() const {
 }
 
 idx_t ColumnReader::FileOffset() const {
-	return chunk->file_offset;
+	return chunk->meta_data.data_page_offset;
 }
 
 idx_t ColumnReader::GroupRowsAvailable() {

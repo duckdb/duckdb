@@ -49,13 +49,51 @@ struct ReadAheadBuffer {
 	Allocator &allocator;
 	FileHandle &handle;
 
+	std::map<idx_t, ReadHead*> start_map;
+	std::map<idx_t, ReadHead*> end_map;
+
 	idx_t total_size = 0;
 
 	/// Add a read head to the prefetching list
-	void AddReadHead(idx_t pos, idx_t len) {
+	void AddReadHead(idx_t pos, idx_t len, bool merge_buffers = true) {
+
+		// Attempt to merge with existing
+		if (merge_buffers) {
+			auto lookup_start = end_map.find(pos);
+			if (lookup_start != end_map.end()) {
+				auto read_head = lookup_start->second;
+				// Merge existing read head with this one
+				read_head->size += len;
+				// Add new end
+				end_map.insert(std::pair<idx_t, ReadHead*>(read_head->GetEnd(), read_head));
+				// Erase old end
+				end_map.erase(lookup_start->first);
+				return;
+			}
+
+			auto lookup_end = start_map.find(pos + len);
+			if (lookup_end != start_map.end()) {
+				auto read_head = lookup_start->second;
+				// Merge existing read head with this one
+				read_head->location -= len;
+				read_head->size += len;
+				// Add new start
+				start_map.insert(std::pair<idx_t, ReadHead*>(read_head->location, read_head));
+				// Erase old start
+				end_map.erase(lookup_start->first);
+				return;
+			}
+		}
+
+		// No merge candidate found, just add it
 		read_heads.emplace_front(ReadHead(pos, len));
 		total_size += len;
-		read_heads.front().Allocate(allocator);
+
+		auto& read_head = read_heads.front();
+
+		// Insert begin and end into maps for later merge lookups
+		start_map.insert(std::pair<idx_t, ReadHead*>(read_head.location, &read_head));
+		end_map.insert(std::pair<idx_t, ReadHead*>(read_head.GetEnd(), &read_head));
 	}
 
 	/// Returns the relevant read head
@@ -68,12 +106,12 @@ struct ReadAheadBuffer {
 		return nullptr;
 	}
 
-	/// Allocate buffers for all
+	/// Prefetch all read heads
 	void Prefetch() {
-
-		// TODO: replace with a multi-range HTTP GET request
+		// TODO we could do these prefetches in parallel probably
 		for (auto& read_head: read_heads) {
-			std::cout << "Prefetching registered: " << read_head.location << " till " << read_head.size + read_head.location << " bytes \n";
+			read_head.Allocate(allocator);
+			std::cout << "Prefetching registered: " << read_head.location << " till " << read_head.location + read_head.size << " bytes (total:" << read_head.size << ") \n";
 			handle.Read(read_head.data->get(), read_head.size, read_head.location);
 		}
 	}
@@ -93,10 +131,9 @@ public:
 		} else {
 			auto prefetch_buffer = ra_buffer.GetReadHead(location);
 			if (prefetch_buffer != nullptr) {
-//				std::cout << "Reading through new prefetch: " << location << " till " << location + len << " bytes \n";
 				memcpy(buf, prefetch_buffer->data->get() + location - prefetch_buffer->location, len);
 			} else {
-				std::cout << "Directly reading: " << location << " till " << location + len << " bytes \n";
+				std::cout << "Directly reading: " << location << " till " << location + len << " bytes (total:" << len << ") \n";
 				handle.Read(buf, len, location);
 			}
 		}
@@ -106,7 +143,7 @@ public:
 
 	/// Old prefetch
 	void Prefetch(idx_t pos, idx_t len) {
-		std::cout << "Prefetching OLD: " << pos << " till " << pos + len << " bytes \n";
+		std::cout << "Prefetching OLD: " << pos << " till " << pos + len << " bytes (total:" << len << ") \n";
 		prefetch_location = pos;
 		prefetched_data = allocator.Allocate(len);
 		handle.Read(prefetched_data->get(), len, prefetch_location); // here
