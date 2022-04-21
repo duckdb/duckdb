@@ -167,7 +167,7 @@ static AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	                         HistogramUpdateFunction<OP, T, MAP_TYPE>, HistogramCombineFunction<T, MAP_TYPE>,
 	                         HistogramFinalize<T, MAP_TYPE>, nullptr, HistogramBindFunction,
 	                         AggregateFunction::StateDestroy<STATE_TYPE, HistogramFunction>);
-};
+}
 
 template <class OP, class T, bool IS_ORDERED>
 AggregateFunction GetMapType(const LogicalType &type) {
@@ -244,8 +244,8 @@ void HistogramFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 AggregateFunction HistogramFun::GetHistogramUnorderedMap(LogicalType &type) {
-	const auto const_type = type;
+	const auto &const_type = type;
 	return GetHistogramFunction<false>(const_type);
-};
+}
 
 } // namespace duckdb

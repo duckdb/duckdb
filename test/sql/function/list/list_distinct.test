@@ -2,6 +2,10 @@
 # description: Test the list_distinct function
 # group: [list]
 
+# FIXME: some of these test cases could be improved by using list_sort
+# Currently, they use UNNEST(...) ORDER BY, because unordered maps seem to 'sort'
+# different on Windows and other systems
+
 # test null or empty
 
 query I
@@ -46,25 +50,32 @@ endloop
 # other tests
 
 query I
-SELECT list_distinct([1, 1, 2, 2, 2, 3])
+SELECT UNNEST(list_distinct([1, 1, 2, 2, 2, 3])) AS l ORDER BY l
 ----
-[3, 2, 1]
+1
+2
+3
 
 query I
-SELECT list_distinct([1, 1, NULL, 2, 2, 2, 3, NULL, NULL])
+SELECT UNNEST(list_distinct([1, 1, NULL, 2, 2, 2, 3, NULL, NULL])) AS l ORDER BY l
 ----
-[3, 2, 1]
+1
+2
+3
 
 query I
-SELECT list_distinct(list_distinct([1, 1, -5, 10, 10, 2]))
+SELECT UNNEST(list_distinct(list_distinct([1, 1, -5, 10, 10, 2]))) AS l ORDER BY l
 ----
-[1, -5, 10, 2]
+-5
+1
+2
+10
 
 statement ok
 CREATE TABLE integers (l integer[])
 
 statement ok
-INSERT INTO integers VALUES ([1, 1, 2, 2, 2, 3]), ([1, NULL, 1, NULL])
+INSERT INTO integers VALUES ([1, 1, 1]), ([1, NULL, 1, NULL])
 
 statement ok
 INSERT INTO integers VALUES ([NULL]), (NULL), ([])
@@ -72,7 +83,7 @@ INSERT INTO integers VALUES ([NULL]), (NULL), ([])
 query I
 SELECT list_distinct(l) FROM integers
 ----
-[3, 2, 1]
+[1]
 [1]
 []
 NULL
@@ -81,17 +92,20 @@ NULL
 # aliases
 
 query I
-SELECT array_distinct([1, 2, 2, NULL])
+SELECT UNNEST(array_distinct([1, 2, 2, NULL])) AS l ORDER BY l
 ----
-[2, 1]
+1
+2
 
 # test all types
 
 # VARCHAR
 query I
-SELECT list_distinct(['aa', 'aa', 'cd', NULL, '42'])
+SELECT UNNEST(list_distinct(['aa', 'aa', 'cd', NULL, '42'])) AS l ORDER BY l
 ----
-[42, cd, aa]
+42
+aa
+cd
 
 query I
 SELECT list_distinct([NULL::VARCHAR])
