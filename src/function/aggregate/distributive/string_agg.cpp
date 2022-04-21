@@ -15,7 +15,7 @@ struct StringAggState {
 };
 
 struct StringAggBindData : public FunctionData {
-	StringAggBindData(string sep_p) : sep(move(sep_p)) {
+	explicit StringAggBindData(string sep_p) : sep(move(sep_p)) {
 	}
 
 	string sep;
