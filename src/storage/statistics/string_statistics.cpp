@@ -35,6 +35,7 @@ void StringStatistics::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(has_unicode);
 	writer.WriteField<uint32_t>(max_string_length);
 	writer.WriteField<bool>(has_overflow_strings);
+	BaseStatistics::Serialize(writer);
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Deserialize(FieldReader &reader, LogicalType type) {

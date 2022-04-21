@@ -1,10 +1,12 @@
 #include "duckdb/storage/table/update_segment.hpp"
-#include "duckdb/transaction/update_info.hpp"
-#include "duckdb/storage/table/column_data.hpp"
+
+#include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
+#include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/update_info.hpp"
 
 namespace duckdb {
 
@@ -902,9 +904,16 @@ idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats,
 	return count;
 }
 
+void UpdateDistinctStatistics(SegmentStatistics &stats, Vector &update, idx_t count) {
+	auto &distinct_stats = (DistinctStatistics &)*stats.statistics->distinct_stats;
+	distinct_stats.Update(update, count);
+}
+
 template <class T>
 idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
                                        SelectionVector &sel) {
+	UpdateDistinctStatistics(stats, update, count);
+
 	auto update_data = FlatVector::GetData<T>(update);
 	auto &mask = FlatVector::Validity(update);
 
@@ -929,6 +938,8 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 
 idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
                              SelectionVector &sel) {
+	UpdateDistinctStatistics(stats, update, count);
+
 	auto update_data = FlatVector::GetData<string_t>(update);
 	auto &mask = FlatVector::Validity(update);
 	if (mask.AllValid()) {

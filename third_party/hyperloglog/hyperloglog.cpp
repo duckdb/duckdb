@@ -1243,6 +1243,10 @@ robj *hll_merge(robj **hlls, size_t hll_count) {
 	return result;
 }
 
+uint64_t get_size() {
+	return HLL_DENSE_SIZE;
+}
+
 }
 
 namespace duckdb {
@@ -1262,9 +1266,20 @@ void AddToLogsInternal(VectorData &vdata, idx_t count, uint64_t indices[], uint8
 	for (idx_t i = 0; i < count; i++) {
 		auto log = logs[log_sel->get_index(i)];
 		if (log && vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
-			if (AddToLog(**log, indices[i], counts[i]) == HLL_C_ERR) {
-				throw InternalException("Could not add to HLL?");
-			}
+			AddToLog(**log, indices[i], counts[i]);
+		}
+	}
+}
+
+void AddToSingleLogInternal(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[], void *log) {
+	const auto o = (duckdb_hll::robj *)log;
+	duckdb_hll::hllhdr *hdr = (duckdb_hll::hllhdr *)o->ptr;
+	D_ASSERT(hdr->encoding == HLL_DENSE);
+
+	const auto registers = hdr->registers + 1;
+	for (idx_t i = 0; i < count; i++) {
+		if (vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
+			duckdb_hll::hllDenseSet(registers, indices[i], counts[i]);
 		}
 	}
 }

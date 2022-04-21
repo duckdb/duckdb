@@ -1,12 +1,13 @@
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/storage/statistics/list_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
-#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
@@ -34,15 +35,20 @@ bool BaseStatistics::CanHaveNoNull() const {
 	return ((ValidityStatistics &)*validity_stats).has_no_null;
 }
 
-void BaseStatistics::Merge(const BaseStatistics &other) {
-	D_ASSERT(type == other.type);
-	if (other.validity_stats) {
-		if (validity_stats) {
-			validity_stats->Merge(*other.validity_stats);
+void MergeInternal(unique_ptr<BaseStatistics> &orig, const unique_ptr<BaseStatistics> &other) {
+	if (other) {
+		if (orig) {
+			orig->Merge(*other);
 		} else {
-			validity_stats = other.validity_stats->Copy();
+			orig = other->Copy();
 		}
 	}
+}
+
+void BaseStatistics::Merge(const BaseStatistics &other) {
+	D_ASSERT(type == other.type);
+	MergeInternal(validity_stats, other.validity_stats);
+	MergeInternal(distinct_stats, other.distinct_stats);
 }
 
 unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
@@ -72,6 +78,7 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	default:
 		auto base_stats = make_unique<BaseStatistics>(move(type));
 		base_stats->validity_stats = make_unique<ValidityStatistics>(false);
+		base_stats->distinct_stats = make_unique<DistinctStatistics>();
 		return base_stats;
 	}
 }
@@ -81,28 +88,44 @@ unique_ptr<BaseStatistics> BaseStatistics::Copy() const {
 	if (validity_stats) {
 		statistics->validity_stats = validity_stats->Copy();
 	}
+	if (distinct_stats) {
+		statistics->distinct_stats = distinct_stats->Copy();
+	}
 	return statistics;
 }
 
 void BaseStatistics::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
-	writer.WriteField<bool>(CanHaveNull());
-	writer.WriteField<bool>(CanHaveNoNull());
 	Serialize(writer);
 	writer.Finalize();
 }
 
 void BaseStatistics::Serialize(FieldWriter &writer) const {
+	// Required
+	if (!validity_stats) {
+		auto validity_stats_temp = make_unique<ValidityStatistics>(CanHaveNull(), CanHaveNoNull());
+		writer.WriteSerializable<ValidityStatistics>((ValidityStatistics &)*validity_stats_temp);
+	} else {
+		writer.WriteSerializable<ValidityStatistics>((ValidityStatistics &)*validity_stats);
+	}
+	// Optional
+	writer.WriteOptional<BaseStatistics>(distinct_stats);
+}
+
+void BaseStatistics::DeserializeBase(FieldReader &reader) {
+	// Required
+	validity_stats = reader.ReadRequiredSerializable<ValidityStatistics>();
+	// Optional
+	distinct_stats = reader.ReadOptional<DistinctStatistics>(nullptr);
 }
 
 unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, LogicalType type) {
 	FieldReader reader(source);
-	bool can_have_null = reader.ReadRequired<bool>();
-	bool can_have_no_null = reader.ReadRequired<bool>();
 	unique_ptr<BaseStatistics> result;
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
-		return ValidityStatistics::Deserialize(reader);
+		result = ValidityStatistics::Deserialize(reader);
+		break;
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -132,12 +155,13 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	default:
 		throw InternalException("Unimplemented type for statistics deserialization");
 	}
-	result->validity_stats = make_unique<ValidityStatistics>(can_have_null, can_have_no_null);
+	result->DeserializeBase(reader);
 	return result;
 }
 
 string BaseStatistics::ToString() const {
-	return StringUtil::Format("Base Statistics %s", validity_stats ? validity_stats->ToString() : "[]");
+	return StringUtil::Format("Base Statistics %s %s", validity_stats ? validity_stats->ToString() : "[]",
+	                          distinct_stats ? distinct_stats->ToString() : "[]");
 }
 
 void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {

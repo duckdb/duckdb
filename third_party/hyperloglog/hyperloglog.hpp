@@ -35,6 +35,8 @@ int hll_add(robj *o, unsigned char *ele, size_t elesize);
 int hll_count(robj *o, size_t *result);
 //! Merge hll_count HyperLogLog objects into a single one. Returns NULL on failure, or the new HLL object on success.
 robj *hll_merge(robj **hlls, size_t hll_count);
+//! Get size (in bytes) of the HLL
+uint64_t get_size();
 
 uint64_t MurmurHash64A(const void *key, int len, unsigned int seed);
 
@@ -44,5 +46,7 @@ namespace duckdb {
 
 void AddToLogsInternal(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[], void ***logs[],
                        const SelectionVector *log_sel);
+
+void AddToSingleLogInternal(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[], void *log);
 
 } // namespace duckdb

@@ -23,6 +23,7 @@ class FieldWriter;
 class FieldReader;
 class Vector;
 class ValidityStatistics;
+class DistinctStatistics;
 
 class BaseStatistics {
 public:
@@ -33,6 +34,8 @@ public:
 	LogicalType type;
 	//! The validity stats of the column (if any)
 	unique_ptr<BaseStatistics> validity_stats;
+	//! The approximate count distinct stats of the column (if any)
+	unique_ptr<BaseStatistics> distinct_stats;
 
 public:
 	bool CanHaveNull() const;
@@ -47,8 +50,10 @@ public:
 	virtual void Merge(const BaseStatistics &other);
 
 	virtual unique_ptr<BaseStatistics> Copy() const;
-	void Serialize(Serializer &serializer) const;
+
+	virtual void Serialize(Serializer &serializer) const;
 	virtual void Serialize(FieldWriter &writer) const;
+
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
 
 	//! Verify that a vector does not violate the statistics
@@ -56,6 +61,9 @@ public:
 	void Verify(Vector &vector, idx_t count) const;
 
 	virtual string ToString() const;
+
+private:
+	void DeserializeBase(FieldReader &reader);
 };
 
 } // namespace duckdb

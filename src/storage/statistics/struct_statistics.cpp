@@ -55,6 +55,7 @@ void StructStatistics::Serialize(FieldWriter &writer) const {
 			child_stats[i]->Serialize(serializer);
 		}
 	}
+	BaseStatistics::Serialize(writer);
 }
 
 unique_ptr<BaseStatistics> StructStatistics::Deserialize(FieldReader &reader, LogicalType type) {

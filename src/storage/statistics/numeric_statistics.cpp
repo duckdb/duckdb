@@ -126,6 +126,7 @@ bool NumericStatistics::IsConstant() const {
 void NumericStatistics::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(min);
 	writer.WriteSerializable(max);
+	BaseStatistics::Serialize(writer);
 }
 
 unique_ptr<BaseStatistics> NumericStatistics::Deserialize(FieldReader &reader, LogicalType type) {

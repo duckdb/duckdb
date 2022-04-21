@@ -1,6 +1,7 @@
 #include "duckdb/common/types/hyperloglog.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "hyperloglog.hpp"
 
 namespace duckdb {
@@ -24,7 +25,7 @@ void HyperLogLog::Add(data_ptr_t element, idx_t size) {
 	}
 }
 
-idx_t HyperLogLog::Count() {
+idx_t HyperLogLog::Count() const {
 	// exception from size_t ban
 	size_t result;
 
@@ -69,6 +70,31 @@ unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog logs[], idx_t count) {
 		throw InternalException("Could not merge HLLs");
 	}
 	return unique_ptr<HyperLogLog>(new HyperLogLog((void *)new_hll));
+}
+
+idx_t HyperLogLog::GetSize() {
+	return duckdb_hll::get_size();
+}
+
+data_ptr_t HyperLogLog::GetPtr() const {
+	return (data_ptr_t)((duckdb_hll::robj *)hll)->ptr;
+}
+
+unique_ptr<HyperLogLog> HyperLogLog::Copy() const {
+	auto result = make_unique<HyperLogLog>();
+	memcpy(result->GetPtr(), GetPtr(), GetSize());
+	D_ASSERT(result->Count() == Count());
+	return result;
+}
+
+void HyperLogLog::Serialize(FieldWriter &writer) const {
+	writer.WriteBlob(GetPtr(), GetSize());
+}
+
+unique_ptr<HyperLogLog> HyperLogLog::Deserialize(FieldReader &reader) {
+	auto result = make_unique<HyperLogLog>();
+	reader.ReadBlob(result->GetPtr(), GetSize());
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -238,6 +264,10 @@ void HyperLogLog::ProcessEntries(VectorData &vdata, PhysicalType type, uint64_t 
 void HyperLogLog::AddToLogs(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[], HyperLogLog **logs[],
                             const SelectionVector *log_sel) {
 	AddToLogsInternal(vdata, count, indices, counts, (void ****)logs, log_sel);
+}
+
+void HyperLogLog::AddToLog(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[]) {
+	AddToSingleLogInternal(vdata, count, indices, counts, hll);
 }
 
 } // namespace duckdb

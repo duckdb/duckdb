@@ -13,6 +13,9 @@
 
 namespace duckdb {
 
+class FieldWriter;
+class FieldReader;
+
 //! The HyperLogLog class holds a HyperLogLog counter for approximate cardinality counting
 class HyperLogLog {
 public:
@@ -24,23 +27,35 @@ public:
 	//! Adds an element of the specified size to the HyperLogLog counter
 	void Add(data_ptr_t element, idx_t size);
 	//! Return the count of this HyperLogLog counter
-	idx_t Count();
+	idx_t Count() const;
 	//! Merge this HyperLogLog counter with another counter to create a new one
 	unique_ptr<HyperLogLog> Merge(HyperLogLog &other);
 	HyperLogLog *MergePointer(HyperLogLog &other);
 	//! Merge a set of HyperLogLogs to create one big one
 	static unique_ptr<HyperLogLog> Merge(HyperLogLog logs[], idx_t count);
+	//! Get the size (in bytes) of a HLL
+	static idx_t GetSize();
+	//! Get pointer to the HLL
+	data_ptr_t GetPtr() const;
+	//! Get copy of the HLL
+	unique_ptr<HyperLogLog> Copy() const;
+	//! (De)Serialize the HLL
+	void Serialize(FieldWriter &writer) const;
+	static unique_ptr<HyperLogLog> Deserialize(FieldReader &reader);
 
-	static constexpr unsigned int SEED = 0xadc83b19ULL;
-	static constexpr uint64_t M = 0xc6a4a7935bd1e995;
-	static constexpr int R = 47;
-
+public:
 	//! Compute HLL hashes over vdata, and store them in 'hashes'
 	//! Then, compute register indices and prefix lengths, and also store them in 'hashes' as a pair of uint32_t
 	static void ProcessEntries(VectorData &vdata, PhysicalType type, uint64_t hashes[], uint8_t counts[], idx_t count);
 	//! Add the indices and counts to the logs
 	static void AddToLogs(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[], HyperLogLog **logs[],
 	                      const SelectionVector *log_sel);
+	//! Add the indices and counts to THIS log
+	void AddToLog(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[]);
+
+	static constexpr unsigned int SEED = 0xadc83b19ULL;
+	static constexpr uint64_t M = 0xc6a4a7935bd1e995;
+	static constexpr int R = 47;
 
 private:
 	explicit HyperLogLog(void *hll);

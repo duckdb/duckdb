@@ -53,18 +53,6 @@ struct ApproxCountDistinctFunction {
 	}
 };
 
-static void ApproxCountDistinctUpdateFunction(Vector &v, idx_t count, HyperLogLog **logs[],
-                                              const SelectionVector *log_sel) {
-	VectorData vdata;
-	v.Orrify(count, vdata);
-
-	uint64_t indices[STANDARD_VECTOR_SIZE];
-	uint8_t counts[STANDARD_VECTOR_SIZE];
-
-	HyperLogLog::ProcessEntries(vdata, v.GetType().InternalType(), indices, counts, count);
-	HyperLogLog::AddToLogs(vdata, count, indices, counts, logs, log_sel);
-}
-
 static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], FunctionData *bind_data, idx_t input_count,
                                                     data_ptr_t state, idx_t count) {
 	D_ASSERT(input_count == 1);
@@ -74,8 +62,14 @@ static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], FunctionDat
 		agg_state->log = new HyperLogLog();
 	}
 
-	ApproxCountDistinctUpdateFunction(inputs[0], count, (HyperLogLog ***)&agg_state,
-	                                  ConstantVector::ZeroSelectionVector());
+	VectorData vdata;
+	inputs[0].Orrify(count, vdata);
+
+	uint64_t indices[STANDARD_VECTOR_SIZE];
+	uint8_t counts[STANDARD_VECTOR_SIZE];
+
+	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType().InternalType(), indices, counts, count);
+	agg_state->log->AddToLog(vdata, count, indices, counts);
 }
 
 static void ApproxCountDistinctUpdateFunction(Vector inputs[], FunctionData *bind_data, idx_t input_count,
@@ -93,7 +87,14 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], FunctionData *bin
 		}
 	}
 
-	ApproxCountDistinctUpdateFunction(inputs[0], count, (HyperLogLog ***)states, sdata.sel);
+	VectorData vdata;
+	inputs[0].Orrify(count, vdata);
+
+	uint64_t indices[STANDARD_VECTOR_SIZE];
+	uint8_t counts[STANDARD_VECTOR_SIZE];
+
+	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType().InternalType(), indices, counts, count);
+	HyperLogLog::AddToLogs(vdata, count, indices, counts, (HyperLogLog ***)states, sdata.sel);
 }
 
 AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) {

@@ -38,6 +38,7 @@ unique_ptr<BaseStatistics> ListStatistics::Copy() const {
 
 void ListStatistics::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(*child_stats);
+	BaseStatistics::Serialize(writer);
 }
 
 unique_ptr<BaseStatistics> ListStatistics::Deserialize(FieldReader &reader, LogicalType type) {
