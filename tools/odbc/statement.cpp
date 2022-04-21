@@ -25,7 +25,7 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 		}
 		case SQL_ATTR_PARAM_BIND_TYPE: {
 			if (value_ptr) {
-				stmt->param_desc->apd->header.sql_desc_bind_type = (SQLINTEGER) (SQLULEN) (uintptr_t) value_ptr;
+				stmt->param_desc->apd->header.sql_desc_bind_type = (SQLINTEGER)(SQLULEN)(uintptr_t)value_ptr;
 			}
 			return SQL_SUCCESS;
 		}
