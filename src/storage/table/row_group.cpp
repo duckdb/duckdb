@@ -512,14 +512,15 @@ bool RowGroup::ScanToKeyAndPayload(RowGroupScanState &state, DataChunk &keys, Da
 				D_ASSERT(keys.data[i].GetType().InternalType() == ROW_TYPE);
 				payload.data[i].Sequence(this->start + current_row, 1);
 
-				if (cardinalities[i] > 0) {
+				// If cardinality == 1 use as key column for sorting
+				if (cardinalities[i] == 1) {
 					keys.data[i].Sequence(this->start + current_row, 1);
 				}
 			} else {
 				columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], payload.data[i],
 												   false);
 
-				if (cardinalities[i] > 0) {
+				if (cardinalities[i] == 1) {
 					columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], keys.data[i],
 					                               false);
 				}
@@ -614,12 +615,30 @@ void RowGroup::SortColumns() {
 		}
 	}
 
-	// Get the final cardinality counts
-	vector<idx_t> cardinalities;
+	// Get the final cardinality counts - maximum cardinality is 30 percent of all rows
+	// Initialize cardinalities to 0 for each column
+	vector<idx_t> cardinalities(columns.size());
+	idx_t max_cardinality = count * 0.3;
+	idx_t current_count = 0;
+	unique_ptr<HyperLogLog> merged_log;
+
+	// Keep merging the counts until we have 30 percent of the rows - use these columns as keys
 	for (idx_t i = 0; i < logs.size(); i++) {
-		cardinalities.push_back(logs[i].Count());
+		if (i == 0) {
+			current_count = logs[i].Count();
+			cardinalities[i] = 1;
+			continue;
+		}
+		merged_log = logs[i-1].Merge(logs[i]);
+		current_count = merged_log->Count();
+
+		if (current_count > max_cardinality) {
+			break;
+		}
+
+		// Set cardinality of "key" columns to 1
+		cardinalities[i] = 1;
 	}
-	std::sort(cardinalities.begin(), cardinalities.end());
 
 	// Initialize DataChunk for key columns and payload (the entire RowGroup)
 	DataChunk keys;
