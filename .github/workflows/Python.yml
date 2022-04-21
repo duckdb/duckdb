@@ -129,6 +129,8 @@ jobs:
       with:
         deploy_as: linux_${{matrix.arch == 'i686' && 'i686' || 'amd64'}}_gcc4
         force_32_bit: ${{ matrix.arch == 'i686' && 1 || 0}}
+        s3_id: ${{ secrets.S3_ID }}
+        s3_key: ${{ secrets.S3_KEY }}
 
     - uses: actions/upload-artifact@v2
       with:

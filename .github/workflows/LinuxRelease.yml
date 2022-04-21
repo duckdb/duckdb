@@ -109,6 +109,8 @@ jobs:
       with:
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
+        s3_id: ${{ secrets.S3_ID }}
+        s3_key: ${{ secrets.S3_KEY }}
 
  linux-release-32:
     name: Linux (32 Bit)

@@ -222,3 +222,5 @@ jobs:
        with:
          deploy_as: windows_amd64
          post_install: choco uninstall openssl -y --force
+         s3_id: ${{ secrets.S3_ID }}
+         s3_key: ${{ secrets.S3_KEY }}
