@@ -228,14 +228,12 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		// Check for special values
 		if (TryConvertDateSpecial(buf, len, pos, "infinity")) {
 			result = yearneg ? date_t::ninfinity() : date_t::infinity();
-			return true;
 		} else if (TryConvertDateSpecial(buf, len, pos, "epoch")) {
 			result = date_t::epoch();
-			return true;
 		} else {
 			return false;
 		}
-		// skip trailing spaces
+		// skip trailing spaces - parsing must be strict here
 		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 			pos++;
 		}

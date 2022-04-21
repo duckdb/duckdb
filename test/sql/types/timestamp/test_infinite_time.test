@@ -25,6 +25,18 @@ endloop
 
 endloop
 
+# No trailing non-spaces!
+foreach datatype TIMESTAMP TIMESTAMPTZ DATE
+
+foreach special infinity -infinity epoch
+
+statement error
+SELECT '${special} 00:00:00'::${datatype};
+
+endloop
+
+endloop
+
 # Table insertion
 statement ok
 CREATE TABLE specials (ts TIMESTAMP, tstz TIMESTAMPTZ, dt DATE);
