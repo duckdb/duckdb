@@ -79,17 +79,7 @@ void PhysicalRangeJoin::GlobalSortedTable::IntializeMatches() {
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::Print() {
-	PayloadScanner scanner(global_sort_state, false);
-	DataChunk chunk;
-	chunk.Initialize(scanner.GetPayloadTypes());
-	for (;;) {
-		scanner.Scan(chunk);
-		const auto count = chunk.size();
-		if (!count) {
-			break;
-		}
-		chunk.Print();
-	}
+	global_sort_state.Print();
 }
 
 class RangeJoinMergeTask : public ExecutorTask {
