@@ -20,7 +20,7 @@ public:
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = (const CurrentSettingBindData &)other_p;
-		return value == other.value;
+		return Value::NotDistinctFrom(value, other.value);
 	}
 };
 

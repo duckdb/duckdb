@@ -28,6 +28,12 @@ struct TableScanBindData : public TableFunctionData {
 
 	//! How many chunks we already scanned
 	atomic<idx_t> chunk_count;
+
+public:
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const TableScanBindData &)other_p;
+		return other.table == table && result_ids == other.result_ids;
+	}
 };
 
 //! The table scan function represents a sequential scan over one of DuckDB's base tables.

@@ -19,7 +19,7 @@ struct RandomBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		return false;
+		return true;
 	}
 };
 

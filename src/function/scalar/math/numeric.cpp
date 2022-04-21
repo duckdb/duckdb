@@ -404,7 +404,7 @@ struct RoundPrecisionFunctionData : public FunctionData {
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = (const RoundPrecisionFunctionData &)other_p;
-		return other.target_scale;
+		return target_scale == other.target_scale;
 	}
 };
 

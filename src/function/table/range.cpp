@@ -14,6 +14,12 @@ struct RangeFunctionBindData : public TableFunctionData {
 	hugeint_t start;
 	hugeint_t end;
 	hugeint_t increment;
+
+public:
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const RangeFunctionBindData &)other_p;
+		return other.start == start && other.end == end && other.increment == increment;
+	}
 };
 
 template <bool GENERATE_SERIES>
@@ -108,6 +114,13 @@ struct RangeDateTimeBindData : public TableFunctionData {
 	interval_t increment;
 	bool inclusive_bound;
 	bool greater_than_check;
+
+public:
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const RangeDateTimeBindData &)other_p;
+		return other.start == start && other.end == end && other.increment == increment &&
+		       other.inclusive_bound == inclusive_bound && other.greater_than_check == greater_than_check;
+	}
 
 	bool Finished(timestamp_t current_value) {
 		if (greater_than_check) {

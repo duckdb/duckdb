@@ -17,7 +17,7 @@ struct UUIDRandomBindData : public FunctionData {
 		return make_unique<UUIDRandomBindData>(context, dist);
 	}
 	bool Equals(const FunctionData &other_p) const override {
-		return false;
+		return true;
 	}
 };
 

@@ -27,7 +27,8 @@ struct NextvalBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		return false;
+		auto &other = (NextvalBindData &)other_p;
+		return sequence == other.sequence;
 	}
 };
 

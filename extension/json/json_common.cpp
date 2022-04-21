@@ -37,7 +37,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Copy() const {
 
 bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
 	auto &other = (const JSONReadFunctionData &)other_p;
-	return constant == other.constant && path == other.path && ptr == other.ptr && len == other.len;
+	return constant == other.constant && path == other.path && len == other.len;
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
@@ -67,7 +67,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Copy() const {
 
 bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
 	auto &other = (const JSONReadManyFunctionData &)other_p;
-	return paths == other.paths && ptrs == other.ptrs && lens == other.lens;
+	return paths == other.paths && lens == other.lens;
 }
 
 unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,

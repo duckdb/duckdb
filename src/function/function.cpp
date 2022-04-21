@@ -44,7 +44,7 @@ unique_ptr<FunctionData> TableFunctionData::Copy() const {
 }
 
 bool TableFunctionData::Equals(const FunctionData &other) const {
-	throw InternalException("Equals not supported for TableFunctionData");
+	return false;
 }
 
 Function::Function(string name_p) : name(move(name_p)) {

@@ -18,7 +18,7 @@ public:
 		return make_unique<JSONCreateFunctionData>(move(map_copy));
 	}
 	bool Equals(const FunctionData &other_p) const override {
-		return false;
+		return true;
 	}
 
 public:

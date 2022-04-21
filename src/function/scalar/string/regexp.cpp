@@ -27,6 +27,10 @@ RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options, s
 	}
 }
 
+static bool RegexOptionsEquals(const duckdb_re2::RE2::Options &opt_a, const duckdb_re2::RE2::Options &opt_b) {
+	return opt_a.case_sensitive() == opt_b.case_sensitive();
+}
+
 RegexpMatchesBindData::~RegexpMatchesBindData() {
 }
 
@@ -35,7 +39,8 @@ unique_ptr<FunctionData> RegexpMatchesBindData::Copy() const {
 }
 
 bool RegexpMatchesBindData::Equals(const FunctionData &other_p) const {
-	return false;
+	auto &other = (const RegexpMatchesBindData &)other_p;
+	return constant_string == other.constant_string && RegexOptionsEquals(options, other.options);
 }
 
 static inline duckdb_re2::StringPiece CreateStringPiece(string_t &input) {
@@ -201,7 +206,8 @@ unique_ptr<FunctionData> RegexpReplaceBindData::Copy() const {
 }
 
 bool RegexpReplaceBindData::Equals(const FunctionData &other_p) const {
-	return false;
+	auto &other = (const RegexpReplaceBindData &)other_p;
+	return global_replace == other.global_replace && RegexOptionsEquals(options, other.options);
 }
 
 static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarFunction &bound_function,
@@ -268,7 +274,8 @@ unique_ptr<FunctionData> RegexpExtractBindData::Copy() const {
 }
 
 bool RegexpExtractBindData::Equals(const FunctionData &other_p) const {
-	return false;
+	auto &other = (const RegexpExtractBindData &)other_p;
+	return constant_string == other.constant_string && group_string == other.group_string;
 }
 
 static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarFunction &bound_function,
