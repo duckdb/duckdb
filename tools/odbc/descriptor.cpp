@@ -871,7 +871,7 @@ SQLRETURN DescRecord::SetSqlDescType(SQLSMALLINT type) {
 	return SQL_SUCCESS;
 }
 
-void DescRecord::SetDescUnsignedField(duckdb::LogicalType type) {
+void DescRecord::SetDescUnsignedField(const duckdb::LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
