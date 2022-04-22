@@ -128,12 +128,12 @@ void PartitionableHashTable::Partition() {
 	D_ASSERT(radix_partitioned_hts.size() == 0);
 	D_ASSERT(partition_info.n_partitions > 1);
 
-	vector<GroupedAggregateHashTable *> partition_hts;
+	vector<GroupedAggregateHashTable *> partition_hts(partition_info.n_partitions);
 	for (auto &unpartitioned_ht : unpartitioned_hts) {
 		for (idx_t r = 0; r < partition_info.n_partitions; r++) {
 			radix_partitioned_hts[r].push_back(make_unique<GroupedAggregateHashTable>(
 			    buffer_manager, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_32));
-			partition_hts.push_back(radix_partitioned_hts[r].back().get());
+			partition_hts[r] = radix_partitioned_hts[r].back().get();
 		}
 		unpartitioned_ht->Partition(partition_hts, partition_info.radix_mask, partition_info.RADIX_SHIFT);
 		unpartitioned_ht.reset();

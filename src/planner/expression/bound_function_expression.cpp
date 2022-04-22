@@ -1,8 +1,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
@@ -12,6 +11,7 @@ BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, Scalar
                                                  unique_ptr<FunctionData> bind_info, bool is_operator)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, move(return_type)),
       function(move(bound_function)), children(move(arguments)), bind_info(move(bind_info)), is_operator(is_operator) {
+	D_ASSERT(!function.name.empty());
 }
 
 bool BoundFunctionExpression::HasSideEffects() const {
@@ -24,11 +24,11 @@ bool BoundFunctionExpression::IsFoldable() const {
 }
 
 string BoundFunctionExpression::ToString() const {
-	string result = function.name + "(";
-	result += StringUtil::Join(children, children.size(), ", ",
-	                           [](const unique_ptr<Expression> &child) { return child->GetName(); });
-	result += ")";
-	return result;
+	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), function.name,
+	                                                                         is_operator);
+}
+bool BoundFunctionExpression::PropagatesNullValues() const {
+	return !function.propagates_null_values ? false : Expression::PropagatesNullValues();
 }
 
 hash_t BoundFunctionExpression::Hash() const {
@@ -64,6 +64,10 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() {
 	                                                 is_operator);
 	copy->CopyProperties(*this);
 	return move(copy);
+}
+
+void BoundFunctionExpression::Verify() const {
+	D_ASSERT(!function.name.empty());
 }
 
 } // namespace duckdb

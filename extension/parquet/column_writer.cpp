@@ -53,11 +53,7 @@ static void VarintEncode(uint32_t val, Serializer &ser) {
 static uint8_t GetVarintSize(uint32_t val) {
 	uint8_t res = 0;
 	do {
-		uint8_t byte = val & 127;
 		val >>= 7;
-		if (val != 0) {
-			byte |= 128;
-		}
 		res++;
 	} while (val != 0);
 	return res;
@@ -1549,8 +1545,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		schema_path.emplace_back("key_value");
 
 		// construct the child types recursively
-		vector<LogicalType> kv_types {ListType::GetChildType(MapType::KeyType(type)),
-		                              ListType::GetChildType(MapType::ValueType(type))};
+		vector<LogicalType> kv_types {MapType::KeyType(type), MapType::ValueType(type)};
 		vector<string> kv_names {"key", "value"};
 		vector<unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(2);
@@ -1644,6 +1639,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::JSON:
 		return make_unique<StringColumnWriter>(writer, schema_idx, move(schema_path), max_repeat, max_define,
 		                                       can_have_nulls);
 	case LogicalTypeId::UUID:

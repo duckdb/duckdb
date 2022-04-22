@@ -40,7 +40,7 @@ duckdb_result <- function(connection, stmt_lst, arrow) {
 }
 
 duckdb_execute <- function(res) {
-  out <- .Call(`_duckdb_execute_R`, res@stmt_lst$ref, res@arrow)
+  out <- rapi_execute(res@stmt_lst$ref, res@arrow)
   duckdb_post_execute(res, out)
 }
 
@@ -48,7 +48,7 @@ duckdb_post_execute <- function(res, out) {
   if (!res@arrow) {
     out <- list_to_df(out)
 
-    if (res@stmt_lst$type != "SELECT") {
+    if (!res@stmt_lst$type %in% c("SELECT", "EXPLAIN")) {
       res@env$rows_affected <- sum(as.numeric(out[[1]]))
     }
 
@@ -77,25 +77,24 @@ fix_rownames <- function(df) {
 
 #' @rdname duckdb_result-class
 #' @param res Query result to be converted to an Arrow Table
-#' @param stream If we are streaming the query result or returning it all at once
-#' @param vector_per_chunk If streaming, how many vectors per chunk we should emit
-#' @param return_table If we return results as a list of RecordBatches or an Arrow Table
+#' @param chunk_size The chunk size
 #' @export
-duckdb_fetch_arrow <- function(res, stream = FALSE, vector_per_chunk = 1, return_table = FALSE) {
-  if (vector_per_chunk < 0) {
-    stop("cannot fetch negative vector_per_chunk")
+duckdb_fetch_arrow <- function(res, chunk_size = 1000000) {
+  if (chunk_size <= 0) {
+    stop("Chunk Size must be higher than 0")
   }
-  result <- .Call(`_duckdb_fetch_arrow_R`, res@query_result, stream, vector_per_chunk, return_table)
-  return(result)
+  rapi_execute_arrow(res@query_result, chunk_size)
 }
 
 #' @rdname duckdb_result-class
-#' @param res Query result to be converted to an Arrow Table
-#' @param approx_batch_size If streaming, how many vectors per chunk we should emit
+#' @param res Query result to be converted to a Record Batch Reader
+#' @param chunk_size The chunk size
 #' @export
-duckdb_fetch_record_batch <- function(res, approx_batch_size = 1) {
-  result <- .Call(`_duckdb_fetch_record_batch_R`, res@query_result, approx_batch_size)
-  return(result)
+duckdb_fetch_record_batch <- function(res, chunk_size = 1000000) {
+  if (chunk_size <= 0) {
+    stop("Chunk Size must be higher than 0")
+  }
+  rapi_record_batch(res@query_result, chunk_size)
 }
 
 set_output_tz <- function(x, timezone, convert) {

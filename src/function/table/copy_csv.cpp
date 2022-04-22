@@ -8,7 +8,6 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/common/windows_undefs.hpp"
 #include <limits>
 
 namespace duckdb {
@@ -190,7 +189,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	string file_pattern = info.file_path;
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	bind_data->files = fs.Glob(file_pattern);
+	bind_data->files = fs.Glob(file_pattern, context);
 	if (bind_data->files.empty()) {
 		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
 	}
@@ -427,10 +426,11 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &cont
 	return move(local_data);
 }
 
-static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data) {
+static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data,
+                                                               const string &file_path) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
-	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), csv_data.files[0],
+	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path,
 	                                                   FileSystem::GetFileOpener(context), options.compression);
 
 	if (options.header) {
@@ -524,6 +524,7 @@ static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, Glo
 //===--------------------------------------------------------------------===//
 void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
 	auto &global_state = (GlobalWriteCSVData &)gstate;
+
 	global_state.handle->Close();
 	global_state.handle.reset();
 }

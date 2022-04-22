@@ -98,7 +98,7 @@ statement ok
 INSERT INTO a VALUES (1, [7, 8, 9, 10, 11, 12, 13, 14, 15])
 
 query II
-SELECT * FROM a WHERE id=1 ORDER BY c[0] NULLS FIRST
+SELECT * FROM a WHERE id=1 ORDER BY c[1] NULLS FIRST
 ----
 1	NULL
 1	[NULL]

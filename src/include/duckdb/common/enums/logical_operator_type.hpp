@@ -100,6 +100,6 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_LOAD = 180
 };
 
-string LogicalOperatorToString(LogicalOperatorType type);
+DUCKDB_API string LogicalOperatorToString(LogicalOperatorType type);
 
 } // namespace duckdb

@@ -271,7 +271,19 @@ void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
 			// delete the entry from the dependency manager, if it is not deleted yet
 			catalog_entry->catalog->dependency_manager->EraseObject(catalog_entry);
 		}
-		catalog_entry->parent->child = move(catalog_entry->child);
+		auto parent = catalog_entry->parent;
+		parent->child = move(catalog_entry->child);
+		if (parent->deleted && !parent->child && !parent->parent) {
+			auto mapping_entry = mapping.find(parent->name);
+			D_ASSERT(mapping_entry != mapping.end());
+			auto index = mapping_entry->second->index;
+			auto entry = entries.find(index);
+			D_ASSERT(entry != entries.end());
+			if (entry->second.get() == parent) {
+				mapping.erase(mapping_entry);
+				entries.erase(entry);
+			}
+		}
 	}
 }
 

@@ -81,9 +81,9 @@ bool SimpleNamedParameterFunction::HasNamedParameters() {
 }
 
 BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type_p,
-                                       bool has_side_effects, LogicalType varargs_p)
+                                       bool has_side_effects, LogicalType varargs_p, bool propagates_null_values_p)
     : SimpleFunction(move(name_p), move(arguments_p), move(varargs_p)), return_type(move(return_type_p)),
-      has_side_effects(has_side_effects) {
+      has_side_effects(has_side_effects), propagates_null_values(propagates_null_values_p) {
 }
 
 BaseScalarFunction::~BaseScalarFunction() {

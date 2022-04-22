@@ -28,8 +28,10 @@ using duckdb::hugeint_t;
 using duckdb::interval_t;
 using duckdb::LogicalType;
 using duckdb::LogicalTypeId;
+using duckdb::OdbcDiagnostic;
 using duckdb::OdbcInterval;
 using duckdb::OdbcUtils;
+using duckdb::SQLStateType;
 using duckdb::Store;
 using duckdb::string_t;
 using duckdb::timestamp_t;
@@ -51,8 +53,9 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 		auto query = duckdb::OdbcUtils::ReadString(statement_text, text_length);
 		stmt->stmt = stmt->dbc->conn->Prepare(query);
 		if (!stmt->stmt->success) {
-			stmt->error_messages.emplace_back(stmt->stmt->error);
-			return SQL_ERROR;
+			DiagRecord diag_rec(stmt->stmt->error, SQLStateType::SYNTAX_ERROR_OR_ACCESS_VIOLATION,
+			                    stmt->dbc->GetDataSourceName());
+			throw OdbcException("PrepareStmt", SQL_ERROR, diag_rec);
 		}
 		stmt->param_desc->ResetParams(stmt->stmt->n_param);
 
@@ -77,7 +80,7 @@ SQLRETURN duckdb::BatchExecuteStmt(SQLHSTMT statement_handle) {
 				return fetch_ret;
 			}
 		}
-
+		stmt->FillIRD();
 		return ret;
 	});
 }
@@ -130,19 +133,22 @@ SQLRETURN duckdb::FetchStmtResult(SQLHSTMT statement_handle, SQLSMALLINT fetch_o
 
 //! Static fuctions used by GetDataStmtResult //
 
-static bool ValidateType(LogicalTypeId input, LogicalTypeId expected, duckdb::OdbcHandleStmt *stmt) {
+static void ValidateType(LogicalTypeId input, LogicalTypeId expected, duckdb::OdbcHandleStmt *stmt) {
 	if (input != expected) {
-		stmt->error_messages.emplace_back("Type mismatch error: received " + LogicalTypeIdToString(input) +
-		                                  ", but expected " + LogicalTypeIdToString(expected));
-		return false;
+		string msg = "Type mismatch error: received " + LogicalTypeIdToString(input) + ", but expected " +
+		             LogicalTypeIdToString(expected);
+		duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE, stmt->dbc->GetDataSourceName());
+		throw duckdb::OdbcException("ValidateType", SQL_ERROR, diag_rec);
 	}
-	return true;
 }
 
-static void LogInvalidCast(const LogicalType &from_type, const LogicalType &to_type, duckdb::OdbcHandleStmt *stmt) {
+static void ThrowInvalidCast(const string &component, const LogicalType &from_type, const LogicalType &to_type,
+                             duckdb::OdbcHandleStmt *stmt) {
 	string msg = "Not implemented Error: Unimplemented type for cast (" + from_type.ToString() + " -> " +
 	             to_type.ToString() + ")";
-	stmt->error_messages.emplace_back(msg);
+
+	duckdb::DiagRecord diag_rec(msg, SQLStateType::INVALID_DATATIME_FORMAT, stmt->dbc->GetDataSourceName());
+	throw duckdb::OdbcException(component, SQL_ERROR, diag_rec);
 }
 
 template <class SRC, class DEST = SRC>
@@ -158,9 +164,10 @@ static SQLRETURN GetInternalValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Va
 			*str_len_or_ind_ptr = sizeof(casted_value);
 		}
 		return SQL_SUCCESS;
-	} catch (std::exception &ex) {
-		stmt->error_messages.emplace_back(ex.what());
-		return SQL_ERROR;
+	} catch (duckdb::Exception &ex) {
+		duckdb::DiagRecord diag_rec(std::string(ex.what()), SQLStateType::RESTRICTED_DATA_TYPE,
+		                            stmt->dbc->GetDataSourceName());
+		throw duckdb::OdbcException("GetInternalValue", SQL_ERROR, diag_rec);
 	}
 }
 
@@ -172,8 +179,9 @@ static bool CastTimestampValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value
 		target = CAST_OP::template Operation<timestamp_t, TARGET_TYPE>(timestamp);
 		return true;
 	} catch (duckdb::Exception &ex) {
-		stmt->error_messages.emplace_back(ex.what());
-		return false;
+		duckdb::DiagRecord diag_rec(std::string(ex.what()), SQLStateType::INVALID_DATATIME_FORMAT,
+		                            stmt->dbc->GetDataSourceName());
+		throw duckdb::OdbcException("CastTimestampValue", SQL_ERROR, diag_rec);
 	}
 }
 
@@ -219,7 +227,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
                                     SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 
 	return duckdb::WithStatementResult(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
-		if (!target_value_ptr && !IsSQLVariableLengthType(target_type)) {
+		if (!target_value_ptr && !OdbcUtils::IsCharType(target_type)) {
 			return SQL_ERROR;
 		}
 
@@ -316,9 +324,8 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			                        str_len_or_ind_ptr);
 		}
 		case SQL_C_NUMERIC: {
-			if (!ValidateType(val.type().id(), LogicalTypeId::DECIMAL, stmt)) {
-				return SQL_ERROR;
-			}
+			ValidateType(val.type().id(), LogicalTypeId::DECIMAL, stmt);
+
 			SQL_NUMERIC_STRUCT *numeric = (SQL_NUMERIC_STRUCT *)target_value_ptr;
 			auto dataptr = (duckdb::data_ptr_t)numeric->val;
 			// reset numeric val to remove some garbage
@@ -410,14 +417,15 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				string val_str = val.GetValue<string>();
 				auto str_input = string_t(val_str);
 				if (!TryCast::Operation<string_t, date_t>(str_input, date)) {
-					stmt->error_messages.emplace_back(CastExceptionText<string_t, date_t>(str_input));
-					return SQL_ERROR;
+					auto msg = CastExceptionText<string_t, date_t>(str_input);
+					duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE,
+					                            stmt->dbc->GetDataSourceName());
+					throw duckdb::OdbcException("GetDataStmtResult", SQL_ERROR, diag_rec);
 				}
 				break;
 			}
 			default:
-				LogInvalidCast(val.type(), LogicalType::DATE, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::DATE, stmt);
 			} // end switch "val.type().id()": SQL_C_TYPE_DATE
 
 			SQL_DATE_STRUCT *date_struct = (SQL_DATE_STRUCT *)target_value_ptr;
@@ -467,14 +475,15 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				string val_str = val.GetValue<string>();
 				auto str_input = string_t(val_str);
 				if (!TryCast::Operation<string_t, dtime_t>(str_input, time)) {
-					stmt->error_messages.emplace_back(CastExceptionText<string_t, dtime_t>(str_input));
-					return SQL_ERROR;
+					auto msg = CastExceptionText<string_t, dtime_t>(str_input);
+					duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE,
+					                            stmt->dbc->GetDataSourceName());
+					throw duckdb::OdbcException("GetDataStmtResult", SQL_ERROR, diag_rec);
 				}
 				break;
 			}
 			default:
-				LogInvalidCast(val.type(), LogicalType::TIME, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::TIME, stmt);
 			} // end switch "val.type().id()": SQL_C_TYPE_TIME
 
 			SQL_TIME_STRUCT *time_struct = (SQL_TIME_STRUCT *)target_value_ptr;
@@ -507,8 +516,10 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			case LogicalTypeId::DATE: {
 				auto date_input = val.GetValue<date_t>();
 				if (!TryCast::Operation<date_t, timestamp_t>(date_input, timestamp)) {
-					stmt->error_messages.emplace_back(CastExceptionText<date_t, timestamp_t>(date_input));
-					return SQL_ERROR;
+					auto msg = CastExceptionText<date_t, timestamp_t>(date_input);
+					duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE,
+					                            stmt->dbc->GetDataSourceName());
+					throw duckdb::OdbcException("GetDataStmtResult", SQL_ERROR, diag_rec);
 				}
 				break;
 			}
@@ -516,14 +527,15 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				string val_str = val.GetValue<string>();
 				auto str_input = string_t(val_str);
 				if (!TryCast::Operation<string_t, timestamp_t>(str_input, timestamp)) {
-					stmt->error_messages.emplace_back(CastExceptionText<string_t, timestamp_t>(str_input));
-					return SQL_ERROR;
+					auto msg = CastExceptionText<string_t, timestamp_t>(str_input);
+					duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE,
+					                            stmt->dbc->GetDataSourceName());
+					throw duckdb::OdbcException("GetDataStmtResult", SQL_ERROR, diag_rec);
 				}
 				break;
 			}
 			default:
-				LogInvalidCast(val.type(), LogicalType::TIMESTAMP, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::TIMESTAMP, stmt);
 			} // end switch "val.type().id()"
 
 			SQL_TIMESTAMP_STRUCT *timestamp_struct = (SQL_TIMESTAMP_STRUCT *)target_value_ptr;
@@ -551,8 +563,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_YEAR: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
-				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::INTERVAL, stmt);
 			}
 
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
@@ -568,8 +579,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_MONTH: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
-				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::INTERVAL, stmt);
 			}
 
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
@@ -585,8 +595,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_DAY: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
-				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::INTERVAL, stmt);
 			}
 
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
@@ -602,8 +611,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_HOUR: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
-				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::INTERVAL, stmt);
 			}
 
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
@@ -619,8 +627,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_MINUTE: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
-				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::INTERVAL, stmt);
 			}
 
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
@@ -636,8 +643,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_SECOND: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
-				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::INTERVAL, stmt);
 			}
 
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
@@ -653,8 +659,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_YEAR_TO_MONTH: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
-				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::INTERVAL, stmt);
 			}
 
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
@@ -673,8 +678,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_DAY_TO_HOUR: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
-				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::INTERVAL, stmt);
 			}
 
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
@@ -690,8 +694,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_DAY_TO_MINUTE: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
-				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::INTERVAL, stmt);
 			}
 
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
@@ -707,8 +710,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_DAY_TO_SECOND: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
-				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::INTERVAL, stmt);
 			}
 
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
@@ -724,8 +726,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_HOUR_TO_MINUTE: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
-				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::INTERVAL, stmt);
 			}
 
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
@@ -741,8 +742,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_HOUR_TO_SECOND: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
-				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::INTERVAL, stmt);
 			}
 
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
@@ -758,8 +758,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_MINUTE_TO_SECOND: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
-				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
-				return SQL_ERROR;
+				ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::INTERVAL, stmt);
 			}
 
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
@@ -774,9 +773,9 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		}
 		// TODO other types
 		default:
-			stmt->error_messages.emplace_back("Unsupported type.");
-			return SQL_ERROR;
-
+			duckdb::DiagRecord diag_rec("Unsupported type", SQLStateType::RESTRICTED_DATA_TYPE,
+			                            stmt->dbc->GetDataSourceName());
+			throw duckdb::OdbcException("GetDataStmtResult", SQL_ERROR, diag_rec);
 		} // end switch "(target_type)": SQL_C_TYPE_TIMESTAMP
 	});
 }
@@ -828,8 +827,8 @@ SQLRETURN duckdb::BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT para
 			ipd_record->sql_desc_precision = column_size;
 		}
 
-		if (ipd_record->SetValueType(parameter_type) == SQL_ERROR ||
-		    apd_record->SetValueType(value_type) == SQL_ERROR) {
+		if (ipd_record->SetSqlDataType(parameter_type) == SQL_ERROR ||
+		    apd_record->SetSqlDataType(value_type) == SQL_ERROR) {
 			stmt->error_messages.emplace_back("Error while binding parameter/value type.");
 			return SQL_ERROR;
 		}

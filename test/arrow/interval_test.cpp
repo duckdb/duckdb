@@ -43,6 +43,7 @@ std::unique_ptr<duckdb::QueryResult> FromArrow(int32_t month, int64_t day_time_m
 	duckdb::vector<duckdb::Value> params;
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
+	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::GetSchema));
 	params.push_back(duckdb::Value::UBIGINT(1000000));
 	auto result = conn.TableFunction("arrow_scan", params)->Execute();
 	return result;

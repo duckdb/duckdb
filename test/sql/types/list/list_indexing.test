@@ -1,0 +1,57 @@
+# name: test/sql/types/list/list_indexing.test
+# description: Test changes from 0-based indexing to 1-based indexing
+# group: [list]
+
+statement ok
+CREATE TABLE test (l INTEGER[]);
+
+statement ok
+INSERT INTO test VALUES ([1, 2, 3]), ([NULL]), (NULL), ([-2, NULL, 4, 2]);
+
+query I
+SELECT list_extract(l, 0) FROM test;
+----
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT list_extract(l, 1) FROM test;
+----
+1
+NULL
+NULL
+-2
+
+query I
+SELECT l[:] FROM test;
+----
+[1, 2, 3]
+[NULL]
+NULL
+[-2, NULL, 4, 2]
+
+query I
+SELECT l[0:0] FROM test;
+----
+[]
+[]
+NULL
+[]
+
+query I
+SELECT l[0:1] FROM test;
+----
+[1]
+[NULL]
+NULL
+[-2]
+
+query I
+SELECT l[1:0] FROM test;
+----
+[]
+[]
+NULL
+[]

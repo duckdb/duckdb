@@ -93,15 +93,17 @@ static void ScatterNestedVector(Vector &vec, VectorData &col, Vector &rows, data
 	// Store pointers to the data in the row
 	// Do this first because SerializeVector destroys the locations
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
+	data_ptr_t validitymask_locations[STANDARD_VECTOR_SIZE];
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto row = ptrs[idx];
+		validitymask_locations[i] = row;
 
 		Store<data_ptr_t>(data_locations[i], row + col_offset);
 	}
 
 	// Serialise the data
-	RowOperations::HeapScatter(vec, vcount, sel, count, col_no, data_locations, ptrs);
+	RowOperations::HeapScatter(vec, vcount, sel, count, col_no, data_locations, validitymask_locations);
 }
 
 void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,

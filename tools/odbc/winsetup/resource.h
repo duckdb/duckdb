@@ -4,6 +4,7 @@
 
 #define IDD_SETUP_DIALOG  106
 #define IDC_EDIT_DSN      2000
+#define IDB_BANNER        2003
 #define IDC_BUTTON_CANCEL 2006
 #define IDC_EDIT_DATABASE 2007
 

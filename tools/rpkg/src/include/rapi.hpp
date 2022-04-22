@@ -21,56 +21,41 @@ struct DBWrapper {
 	mutex lock;
 };
 
+void DBDeleter(DBWrapper *);
+typedef cpp11::external_pointer<DBWrapper, DBDeleter> db_eptr_t;
+
 struct ConnWrapper {
 	unique_ptr<Connection> conn;
-	SEXP db_sexp;
+	db_eptr_t db_eptr;
 };
+
+void ConnDeleter(ConnWrapper *);
+typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
 
 struct RStatement {
 	unique_ptr<PreparedStatement> stmt;
 	vector<Value> parameters;
 };
 
-struct RApi {
+typedef cpp11::external_pointer<RStatement> stmt_eptr_t;
 
-	static SEXP Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp);
-
-	static void Shutdown(SEXP dbsexp);
-
-	static SEXP Connect(SEXP dbsexp);
-
-	static void Disconnect(SEXP connsexp);
-
-	static SEXP Prepare(SEXP connsexp, SEXP querysexp);
-
-	static SEXP Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp);
-
-	static SEXP Execute(SEXP stmtsexp, SEXP arrowsexp);
-
-	static SEXP DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp,
-	                               SEXP return_tablesexp);
-
-	static SEXP DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp);
-
-	static SEXP Release(SEXP stmtsexp);
-
-	static void RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp);
-
-	static void UnregisterDataFrame(SEXP connsexp, SEXP namesexp);
-
-	static void RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp);
-
-	static void UnregisterArrow(SEXP connsexp, SEXP namesexp);
-
-	static SEXP PointerToString(SEXP extptr);
-
-	// internal
-	static unique_ptr<TableFunctionRef> ArrowScanReplacement(const string &table_name, void *data);
-
-	static SEXP StringsToSexp(vector<string> s);
-
-	static SEXP ToUtf8(SEXP string_sexp);
+struct RQueryResult {
+	unique_ptr<QueryResult> result;
 };
+
+typedef cpp11::external_pointer<RQueryResult> rqry_eptr_t;
+
+// internal
+unique_ptr<TableFunctionRef> ArrowScanReplacement(ClientContext &context, const std::string &table_name,
+                                                  ReplacementScanData *data);
+
+struct ArrowScanReplacementData : public ReplacementScanData {
+	DBWrapper *wrapper;
+};
+
+SEXP StringsToSexp(vector<std::string> s);
+
+SEXP ToUtf8(SEXP string_sexp);
 
 struct RProtector {
 	RProtector() : protect_count(0) {
@@ -109,7 +94,6 @@ struct RStrings {
 	SEXP secs_str;
 	SEXP arrow_str; // StringsToSexp
 	SEXP POSIXct_POSIXt_str;
-	SEXP str_ref_type_names_rtypes_n_param_str;
 	SEXP enc2utf8_sym; // Rf_install
 	SEXP tzone_sym;
 	SEXP units_sym;
@@ -130,3 +114,35 @@ private:
 };
 
 } // namespace duckdb
+
+// moved out of duckdb namespace for the time being (r-lib/cpp11#262)
+
+duckdb::db_eptr_t rapi_startup(std::string, bool, cpp11::list);
+
+void rapi_shutdown(duckdb::db_eptr_t);
+
+duckdb::conn_eptr_t rapi_connect(duckdb::db_eptr_t);
+
+void rapi_disconnect(duckdb::conn_eptr_t);
+
+cpp11::list rapi_prepare(duckdb::conn_eptr_t, std::string);
+
+cpp11::list rapi_bind(duckdb::stmt_eptr_t, SEXP paramsexp, bool);
+
+SEXP rapi_execute(duckdb::stmt_eptr_t, bool);
+
+void rapi_release(duckdb::stmt_eptr_t);
+
+void rapi_register_df(duckdb::conn_eptr_t, std::string, cpp11::data_frame);
+
+void rapi_unregister_df(duckdb::conn_eptr_t, std::string);
+
+void rapi_register_arrow(duckdb::conn_eptr_t, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp);
+
+void rapi_unregister_arrow(duckdb::conn_eptr_t, SEXP namesexp);
+
+SEXP rapi_execute_arrow(duckdb::rqry_eptr_t, int);
+
+SEXP rapi_record_batch(duckdb::rqry_eptr_t, int);
+
+cpp11::r_string rapi_ptr_to_str(SEXP extptr);

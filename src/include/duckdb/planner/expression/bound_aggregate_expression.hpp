@@ -37,6 +37,7 @@ public:
 	bool IsFoldable() const override {
 		return false;
 	}
+	bool PropagatesNullValues() const override;
 
 	string ToString() const override;
 

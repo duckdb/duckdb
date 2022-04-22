@@ -5,7 +5,7 @@ add_library_unity(
   type_catalog_entry.cpp
   custom_type_catalog_entry.cpp
   index_catalog_entry.cpp
-  macro_catalog_entry.cpp
+  scalar_macro_catalog_entry.cpp
   pragma_function_catalog_entry.cpp
   schema_catalog_entry.cpp
   sequence_catalog_entry.cpp

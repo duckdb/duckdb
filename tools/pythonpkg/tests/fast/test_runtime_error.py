@@ -50,7 +50,7 @@ class TestRuntimeError(object):
             return
         con = duckdb.connect()
         arrow_object = con.execute("select 1").arrow()
-        arrow_relation = con.from_arrow_table(arrow_object)
+        arrow_relation = con.from_arrow(arrow_object)
         res = arrow_relation.execute()
         res.close()
         with pytest.raises(Exception):
@@ -63,7 +63,7 @@ class TestRuntimeError(object):
             return
         con = duckdb.connect()
         arrow_object = con.execute("select 1").arrow()
-        arrow_relation = con.from_arrow_table(arrow_object)
+        arrow_relation = con.from_arrow(arrow_object)
         res = arrow_relation.execute()
         res.close()
         with pytest.raises(Exception):
@@ -146,7 +146,7 @@ class TestRuntimeError(object):
             conn.from_parquet("bla")
 
         with pytest.raises(Exception):
-            conn.from_arrow_table("bla")
+            conn.from_arrow("bla")
 
     def test_missing_result_from_conn_exceptions(self, duckdb_cursor):
         conn = duckdb.connect()

@@ -281,21 +281,34 @@ void SBScanState::SetIndices(idx_t block_idx_to, idx_t entry_idx_to) {
 	entry_idx = entry_idx_to;
 }
 
-PayloadScanner::PayloadScanner(SortedData &sorted_data, GlobalSortState &global_sort_state)
+PayloadScanner::PayloadScanner(SortedData &sorted_data, GlobalSortState &global_sort_state, bool flush_p)
     : sorted_data(sorted_data), read_state(global_sort_state.buffer_manager, global_sort_state),
-      total_count(sorted_data.Count()), global_sort_state(global_sort_state), total_scanned(0) {
+      total_count(sorted_data.Count()), global_sort_state(global_sort_state), total_scanned(0), flush(flush_p) {
+}
+
+PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, bool flush_p)
+    : PayloadScanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state, flush_p) {
+}
+
+PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_idx)
+    : sorted_data(*global_sort_state.sorted_blocks[0]->payload_data),
+      read_state(global_sort_state.buffer_manager, global_sort_state),
+      total_count(sorted_data.data_blocks[block_idx].count), global_sort_state(global_sort_state), total_scanned(0),
+      flush(false) {
+	read_state.SetIndices(block_idx, 0);
 }
 
 void PayloadScanner::Scan(DataChunk &chunk) {
 	auto count = MinValue((idx_t)STANDARD_VECTOR_SIZE, total_count - total_scanned);
 	if (count == 0) {
-		D_ASSERT(read_state.block_idx == sorted_data.data_blocks.size());
 		chunk.SetCardinality(count);
 		return;
 	}
 	// Eagerly delete references to blocks that we've passed
-	for (idx_t i = 0; i < read_state.block_idx; i++) {
-		sorted_data.data_blocks[i].block = nullptr;
+	if (flush) {
+		for (idx_t i = 0; i < read_state.block_idx; i++) {
+			sorted_data.data_blocks[i].block = nullptr;
+		}
 	}
 	const idx_t &row_width = sorted_data.layout.GetRowWidth();
 	// Set up a batch of pointers to scan data from

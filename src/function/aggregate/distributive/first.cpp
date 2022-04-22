@@ -108,7 +108,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 		if (!state->is_set || state->is_null) {
 			mask.SetInvalid(idx);
 		} else {
-			target[idx] = StringVector::AddString(result, state->value);
+			target[idx] = StringVector::AddStringOrBlob(result, state->value);
 		}
 	}
 
@@ -290,6 +290,7 @@ unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunct
                                           vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	function = GetFirstFunction<LAST>(decimal_type);
+	function.name = "first";
 	function.return_type = decimal_type;
 	return nullptr;
 }
