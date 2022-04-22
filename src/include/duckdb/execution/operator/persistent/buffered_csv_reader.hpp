@@ -83,15 +83,15 @@ struct BufferedCSVReaderOptions {
 	//! Whether file is compressed or not, and if so which compression type
 	//! AUTO_DETECT (default; infer from file extension)
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
-	//! How many leading rows to skip
-	idx_t skip_rows = 0;
-	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
-	idx_t maximum_line_size = 2097152;
 
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
 	//===--------------------------------------------------------------------===//
 
+	//! How many leading rows to skip
+	idx_t skip_rows = 0;
+	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
+	idx_t maximum_line_size = 2097152;
 	//! Whether or not header names shall be normalized
 	bool normalize_names = false;
 	//! True, if column with that index must skip null check
@@ -131,9 +131,10 @@ struct BufferedCSVReaderOptions {
 	//! loption - lowercase string
 	//! set - argument(s) to the option
 	//! expected_names - names expected if the option is "columns"
-	bool SetReadOption(const string &loption, vector<Value> &set, vector<string> &expected_names);
+	void SetReadOption(const string &loption, vector<Value> &set, vector<string> &expected_names);
+	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
 
-	bool SetWriteOption(const string &loption, vector<Value> &set);
+	void SetWriteOption(const string &loption, vector<Value> &set);
 
 	std::string ToString() const;
 };
