@@ -20,7 +20,6 @@ RandomEngine::RandomEngine(int64_t seed) : random_state(make_unique<RandomState>
 }
 
 RandomEngine::~RandomEngine() {
-
 }
 
 double RandomEngine::NextRandom(double min, double max) {
@@ -39,5 +38,4 @@ void RandomEngine::SetSeed(uint32_t seed) {
 	random_state->pcg.seed(seed);
 }
 
-
-}
+} // namespace duckdb
