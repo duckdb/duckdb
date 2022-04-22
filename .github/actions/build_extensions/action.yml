@@ -76,13 +76,13 @@ runs:
         make
 
     - name: Run post-install scripts
-      if: inputs.post_install != ""
+      if: ${{ inputs.post_install != "" }}
       shell: bash
       run: |
         ${{ inputs.post_install }}
 
     - name: Deploy
-      if: inputs.deploy_as != ""
+      if: ${{ inputs.deploy_as != "" }}
       shell: bash
       env:
         AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
