@@ -50,7 +50,8 @@ struct ActiveQueryContext {
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false), client_data(make_unique<ClientData>(*this)) {
+    : db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false),
+      client_data(make_unique<ClientData>(*this)) {
 }
 
 ClientContext::~ClientContext() {

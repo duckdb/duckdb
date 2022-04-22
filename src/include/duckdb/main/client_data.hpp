@@ -46,7 +46,6 @@ struct ClientData {
 	//! The file opener of the client context
 	unique_ptr<FileOpener> file_opener;
 
-
 public:
 	static ClientData &Get(ClientContext &context);
 };

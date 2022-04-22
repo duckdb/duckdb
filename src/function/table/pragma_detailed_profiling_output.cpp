@@ -127,7 +127,8 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 			return;
 		}
 		// For each Operator
-		for (auto op : ClientData::Get(context).query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
+		for (auto op :
+		     ClientData::Get(context).query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
 			// For each Expression Executor
 			for (auto &expr_executor : op.second->info.executors_info) {
 				// For each Expression tree

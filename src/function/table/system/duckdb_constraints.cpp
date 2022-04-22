@@ -75,7 +75,7 @@ unique_ptr<FunctionOperatorData> DuckDBConstraintsInit(ClientContext &context, c
 
 	// check the temp schema as well
 	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
-	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 

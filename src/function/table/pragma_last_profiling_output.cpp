@@ -72,7 +72,8 @@ static void PragmaLastProfilingOutputFunction(ClientContext &context, const Func
 		chunk.Initialize(data.types);
 		int operator_counter = 1;
 		if (!ClientData::Get(context).query_profiler_history->GetPrevProfilers().empty()) {
-			for (auto op : ClientData::Get(context).query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
+			for (auto op :
+			     ClientData::Get(context).query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
 				SetValue(chunk, chunk.size(), operator_counter++, op.second->name, op.second->info.time,
 				         op.second->info.elements, " ");
 				chunk.SetCardinality(chunk.size() + 1);
