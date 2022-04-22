@@ -65,9 +65,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		if (!bind_data->options.SetWriteOption(loption, set)) {
-			throw NotImplementedException("Unrecognized option for CSV: %s", option.first.c_str());
-		}
+		bind_data->options.SetWriteOption(loption, set);
 	}
 	// verify the parsed options
 	if (bind_data->options.force_quote.empty()) {
@@ -99,9 +97,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		if (!options.SetReadOption(loption, set, expected_names)) {
-			throw NotImplementedException("Unrecognized option for CSV: %s", option.first.c_str());
-		}
+		options.SetReadOption(loption, set, expected_names);
 	}
 	// verify the parsed options
 	if (options.force_not_null.empty()) {

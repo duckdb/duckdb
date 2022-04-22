@@ -30,23 +30,14 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
 	}
 
-	vector<Value> set;
 	for (auto &kv : input.named_parameters) {
 		auto loption = StringUtil::Lower(kv.first);
-		set.clear();
-		set.emplace_back(kv.second);
-		if (options.SetReadOption(loption, set, names)) {
-			continue;
-		}
 		if (loption == "columns") {
-			if (set.empty()) {
-				throw BinderException("read_csv columns requires an argument");
-			}
-			auto &child_type = set[0].type();
+			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException("read_csv columns requires a struct as input");
 			}
-			auto &struct_children = StructValue::GetChildren(set[0]);
+			auto &struct_children = StructValue::GetChildren(kv.second);
 			D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
 			for (idx_t i = 0; i < struct_children.size(); i++) {
 				auto &name = StructType::GetChildName(child_type, i);
@@ -60,8 +51,14 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
+		} else if (loption == "all_varchar") {
+			options.all_varchar = BooleanValue::Get(kv.second);
+		} else if (loption == "normalize_names") {
+			options.normalize_names = BooleanValue::Get(kv.second);
+		} else if (loption == "filename") {
+			options.include_file_name = BooleanValue::Get(kv.second);
 		} else {
-			throw InternalException("Unrecognized parameter %s", kv.first);
+			options.SetReadOption(loption, kv.second, names);
 		}
 	}
 	if (!options.auto_detect && return_types.empty()) {
