@@ -97,9 +97,9 @@ protected:
 	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time);
 	char *WriteString(char *target, const string_t &str);
 	char *Write2(char *target, uint8_t value);
-	char *WritePadded2(char *target, int32_t value);
+	char *WritePadded2(char *target, uint32_t value);
 	char *WritePadded3(char *target, uint32_t value);
-	char *WritePadded(char *target, int32_t value, int32_t padding);
+	char *WritePadded(char *target, uint32_t value, size_t padding);
 	bool IsDateSpecifier(StrTimeSpecifier specifier);
 	char *WriteDateSpecifier(StrTimeSpecifier specifier, date_t date, char *target);
 	char *WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], char *target);

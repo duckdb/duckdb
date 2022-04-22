@@ -5,7 +5,7 @@
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
@@ -31,11 +31,38 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 
 #include <algorithm>
 #include <sstream>
 
 namespace duckdb {
+
+void FindForeignKeyInformation(CatalogEntry *entry, AlterForeignKeyType alter_fk_type,
+                               vector<unique_ptr<AlterForeignKeyInfo>> &fk_arrays) {
+	if (entry->type != CatalogType::TABLE_ENTRY) {
+		return;
+	}
+	auto *table_entry = (TableCatalogEntry *)entry;
+	for (idx_t i = 0; i < table_entry->constraints.size(); i++) {
+		auto &cond = table_entry->constraints[i];
+		if (cond->type != ConstraintType::FOREIGN_KEY) {
+			continue;
+		}
+		auto &fk = (ForeignKeyConstraint &)*cond;
+		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+			fk_arrays.push_back(make_unique<AlterForeignKeyInfo>(fk.info.schema, fk.info.table, entry->name,
+			                                                     fk.pk_columns, fk.fk_columns, fk.info.pk_keys,
+			                                                     fk.info.fk_keys, alter_fk_type));
+		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE &&
+		           alter_fk_type == AlterForeignKeyType::AFT_DELETE) {
+			throw CatalogException("Could not drop the table because this table is main key table of the table \"%s\"",
+			                       fk.info.table);
+		}
+	}
+}
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name_p, bool internal)
     : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, move(name_p)),
@@ -102,7 +129,23 @@ CatalogEntry *SchemaCatalogEntry::CreateType(ClientContext &context, CreateTypeI
 CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
 	auto table = make_unique<TableCatalogEntry>(catalog, this, info);
 	table->storage->info->cardinality = table->storage->GetTotalRows();
-	return AddEntry(context, move(table), info->Base().on_conflict, info->dependencies);
+	CatalogEntry *entry = AddEntry(context, move(table), info->Base().on_conflict, info->dependencies);
+	if (!entry) {
+		return nullptr;
+	}
+	// add a foreign key constraint in main key table if there is a foreign key constraint
+	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
+	FindForeignKeyInformation(entry, AlterForeignKeyType::AFT_ADD, fk_arrays);
+	for (idx_t i = 0; i < fk_arrays.size(); i++) {
+		// alter primary key table
+		AlterForeignKeyInfo *fk_info = fk_arrays[i].get();
+		catalog->Alter(context, fk_info);
+
+		// make a dependency between this table and referenced table
+		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
+		info->dependencies.insert(set.GetEntry(context, fk_info->name));
+	}
+	return entry;
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateView(ClientContext &context, CreateViewInfo *info) {
@@ -146,7 +189,12 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 		break;
 	case CatalogType::MACRO_ENTRY:
 		// create a macro function
-		function = make_unique_base<StandardEntry, MacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
+		function = make_unique_base<StandardEntry, ScalarMacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
+		break;
+
+	case CatalogType::TABLE_MACRO_ENTRY:
+		// create a macro function
+		function = make_unique_base<StandardEntry, TableMacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
 		break;
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		D_ASSERT(info->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
@@ -206,8 +254,19 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info->name,
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info->type));
 	}
+
+	// if there is a foreign key constraint, get that information
+	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
+	FindForeignKeyInformation(existing_entry, AlterForeignKeyType::AFT_DELETE, fk_arrays);
+
 	if (!set.DropEntry(context, info->name, info->cascade)) {
 		throw InternalException("Could not drop element because of an internal error");
+	}
+
+	// remove the foreign key constraint in main key table if main key table's name is valid
+	for (idx_t i = 0; i < fk_arrays.size(); i++) {
+		// alter primary key tablee
+		Catalog::GetCatalog(context).Alter(context, fk_arrays[i].get());
 	}
 }
 
@@ -267,6 +326,7 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 	case CatalogType::INDEX_ENTRY:
 		return indexes;
 	case CatalogType::TABLE_FUNCTION_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY:
 		return table_functions;
 	case CatalogType::COPY_FUNCTION_ENTRY:
 		return copy_functions;

@@ -68,7 +68,7 @@ public:
 		FindFileSystem(directory)->RemoveDirectory(directory);
 	}
 
-	bool ListFiles(const string &directory, const std::function<void(string, bool)> &callback) override {
+	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) override {
 		return FindFileSystem(directory)->ListFiles(directory, callback);
 	}
 
@@ -80,12 +80,15 @@ public:
 		return FindFileSystem(filename)->FileExists(filename);
 	}
 
+	bool IsPipe(const string &filename) override {
+		return FindFileSystem(filename)->IsPipe(filename);
+	}
 	virtual void RemoveFile(const string &filename) override {
 		FindFileSystem(filename)->RemoveFile(filename);
 	}
 
-	vector<string> Glob(const string &path) override {
-		return FindFileSystem(path)->Glob(path);
+	virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
+		return FindFileSystem(path)->Glob(path, opener);
 	}
 
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override {

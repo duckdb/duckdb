@@ -3,8 +3,10 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
+
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 
@@ -224,10 +226,16 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 }
 
 string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table_name, string &column_name) {
-	idx_t current_position = ref.index - 1;
 	idx_t total_columns = 0;
+	idx_t current_position = ref.index - 1;
 	for (auto &entry : bindings_list) {
 		idx_t entry_column_count = entry.second->names.size();
+		if (ref.index == 0) {
+			// this is a row id
+			table_name = entry.first;
+			column_name = "rowid";
+			return string();
+		}
 		if (current_position < entry_column_count) {
 			table_name = entry.first;
 			column_name = entry.second->names[current_position];
@@ -390,6 +398,11 @@ vector<string> BindContext::AliasColumnNames(const string &table_name, const vec
 }
 
 void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
+	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
+	AddGenericBinding(index, alias, names, subquery.types);
+}
+
+void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
 	AddGenericBinding(index, alias, names, subquery.types);
 }

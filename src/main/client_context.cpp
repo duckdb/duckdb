@@ -17,9 +17,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
-#include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
-#include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
@@ -32,7 +30,6 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/planner/pragma_handler.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 
@@ -753,7 +750,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	D_ASSERT(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
 	for (idx_t i = 0; i < orig_expr_list.size(); i++) {
 		// run the ToString, to verify that it doesn't crash
-		orig_expr_list[i]->ToString();
+		auto str = orig_expr_list[i]->ToString();
 		// check that the expressions are equivalent
 		D_ASSERT(orig_expr_list[i]->Equals(de_expr_list[i].get()));
 		D_ASSERT(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
@@ -763,6 +760,17 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 		D_ASSERT(orig_expr_list[i]->Hash() == cp_expr_list[i]->Hash());
 
 		D_ASSERT(!orig_expr_list[i]->Equals(nullptr));
+		orig_expr_list[i]->Verify();
+		de_expr_list[i]->Verify();
+		cp_expr_list[i]->Verify();
+
+		// ToString round trip
+		if (orig_expr_list[i]->HasSubquery()) {
+			continue;
+		}
+		auto parsed_list = Parser::ParseExpressionList(str);
+		D_ASSERT(parsed_list.size() == 1);
+		D_ASSERT(parsed_list[0]->Equals(orig_expr_list[i].get()));
 	}
 	// now perform additional checking within the expressions
 	for (idx_t outer_idx = 0; outer_idx < orig_expr_list.size(); outer_idx++) {

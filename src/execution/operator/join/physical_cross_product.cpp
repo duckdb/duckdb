@@ -51,7 +51,7 @@ unique_ptr<OperatorState> PhysicalCrossProduct::GetOperatorState(ClientContext &
 }
 
 OperatorResultType PhysicalCrossProduct::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                 OperatorState &state_p) const {
+                                                 GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (CrossProductOperatorState &)state_p;
 	auto &sink = (CrossProductGlobalState &)*sink_state;
 	auto &right_collection = sink.rhs_materialized;

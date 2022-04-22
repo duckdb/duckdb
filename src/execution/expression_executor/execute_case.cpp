@@ -1,7 +1,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 
 namespace duckdb {
 

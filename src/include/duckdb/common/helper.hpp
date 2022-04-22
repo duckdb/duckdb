@@ -22,6 +22,19 @@
 #endif
 
 namespace duckdb {
+
+// explicit fallthrough for switch_statementss
+#ifndef __has_cpp_attribute // For backwards compatibility
+#define __has_cpp_attribute(x) 0
+#endif
+#if __has_cpp_attribute(clang::fallthrough)
+#define DUCKDB_EXPLICIT_FALLTHROUGH [[clang::fallthrough]]
+#elif __has_cpp_attribute(gnu::fallthrough)
+#define DUCKDB_EXPLICIT_FALLTHROUGH [[gnu::fallthrough]]
+#else
+#define DUCKDB_EXPLICIT_FALLTHROUGH
+#endif
+
 #if !defined(_MSC_VER) && (__cplusplus < 201402L)
 template <typename T, typename... Args>
 unique_ptr<T> make_unique(Args &&... args) {

@@ -10,15 +10,13 @@ SELECT gamma(NULL)
 ----
 NULL
 
-query I
+statement error
 SELECT gamma(0)
-----
-NULL
 
 query I
 SELECT gamma(-1)
 ----
-NULL
+nan
 
 query I
 SELECT gamma(1)
@@ -59,20 +57,18 @@ SELECT lgamma(NULL)
 ----
 NULL
 
-query I
+statement error
 SELECT lgamma(0)
-----
-NULL
 
 query I
 SELECT lgamma(-1)
 ----
-NULL
+inf
 
 query I
 SELECT lgamma(-100)
 ----
-NULL
+inf
 
 query I
 SELECT lgamma(1)

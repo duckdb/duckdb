@@ -24,8 +24,10 @@ static void test_runner() {
 	buffer << t.rdbuf();
 	auto query = buffer.str();
 	result = con.Query(query.c_str());
+
+	unordered_set<string> internal_error_messages = {"Unoptimized Result differs from original result!", "INTERNAL"};
 	if (!result->success) {
-		if (TestIsInternalError(result->error)) {
+		if (TestIsInternalError(internal_error_messages, result->error)) {
 			REQUIRE(result->error.empty());
 		}
 	}
@@ -39,7 +41,7 @@ struct RegisterOssfuzzTests {
 	RegisterOssfuzzTests() {
 		// register a separate test for each file in the QUERY_DIRECTORY
 		unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-		fs->ListFiles(QUERY_DIRECTORY, [&](const string &path, bool) {
+		fs->ListFiles(QUERY_DIRECTORY, [&](string path, bool) {
 			REGISTER_TEST_CASE(test_runner, string(QUERY_DIRECTORY) + "/" + path, "[ossfuzz][.]");
 		});
 	}

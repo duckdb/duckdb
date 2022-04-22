@@ -27,10 +27,7 @@ struct PragmaTableOperatorData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, vector<Value> &inputs,
-                                                    named_parameter_map_t &named_parameters,
-                                                    vector<LogicalType> &input_table_types,
-                                                    vector<string> &input_table_names,
+static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("cid");
 	return_types.emplace_back(LogicalType::INTEGER);
@@ -50,7 +47,7 @@ static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, vect
 	names.emplace_back("pk");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
-	auto qname = QualifiedName::Parse(inputs[0].GetValue<string>());
+	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
 	auto &catalog = Catalog::GetCatalog(context);

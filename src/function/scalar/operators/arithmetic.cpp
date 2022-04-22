@@ -263,6 +263,9 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::DATE,
 			                      ScalarFunction::BinaryFunction<date_t, interval_t, date_t, AddOperator>);
+		} else if (right_type.id() == LogicalTypeId::TIME) {
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			                      ScalarFunction::BinaryFunction<date_t, dtime_t, timestamp_t, AddOperator>);
 		}
 		break;
 	case LogicalTypeId::INTEGER:
@@ -290,6 +293,9 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIME,
 			                      ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, AddTimeOperator>);
+		} else if (right_type.id() == LogicalTypeId::DATE) {
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			                      ScalarFunction::BinaryFunction<dtime_t, date_t, timestamp_t, AddOperator>);
 		}
 		break;
 	case LogicalTypeId::TIMESTAMP:
@@ -329,6 +335,11 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 
 	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
 	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP));
+
+	// we can add times to dates
+	functions.AddFunction(GetFunction(LogicalType::TIME, LogicalType::DATE));
+	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::TIME));
+
 	// we can add lists together
 	functions.AddFunction(ListConcatFun::GetFunction());
 
@@ -354,6 +365,16 @@ struct NegateOperator {
 		return -cast;
 	}
 };
+
+template <>
+bool NegateOperator::CanNegate(float input) {
+	return Value::FloatIsFinite(input);
+}
+
+template <>
+bool NegateOperator::CanNegate(double input) {
+	return Value::DoubleIsFinite(input);
+}
 
 template <>
 interval_t NegateOperator::Operation(interval_t input) {
@@ -654,23 +675,23 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("*");
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
-			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, false, BindDecimalMultiply));
+			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, true, false, BindDecimalMultiply));
 		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
 			functions.AddFunction(ScalarFunction(
-			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()), false,
-			    nullptr, nullptr,
+			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()), true,
+			    false, nullptr, nullptr,
 			    PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>));
 		} else {
-			functions.AddFunction(
-			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
+			functions.AddFunction(ScalarFunction({type, type}, type,
+			                                     GetScalarBinaryFunction<MultiplyOperator>(type.InternalType()), true));
 		}
 	}
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
+	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>, true));
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
-	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>));
+	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>, true));
 	set.AddFunction(functions);
 }
 
@@ -680,7 +701,7 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 template <>
 float DivideOperator::Operation(float left, float right) {
 	auto result = left / right;
-	if (!Value::FloatIsValid(result)) {
+	if (!Value::FloatIsFinite(result)) {
 		throw OutOfRangeException("Overflow in division of float!");
 	}
 	return result;
@@ -689,7 +710,7 @@ float DivideOperator::Operation(float left, float right) {
 template <>
 double DivideOperator::Operation(double left, double right) {
 	auto result = left / right;
-	if (!Value::DoubleIsValid(result)) {
+	if (!Value::DoubleIsFinite(result)) {
 		throw OutOfRangeException("Overflow in division of double!");
 	}
 	return result;
@@ -801,13 +822,21 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 template <>
 float ModuloOperator::Operation(float left, float right) {
 	D_ASSERT(right != 0);
-	return std::fmod(left, right);
+	auto result = std::fmod(left, right);
+	if (!Value::FloatIsFinite(result)) {
+		throw OutOfRangeException("Overflow in modulo of float!");
+	}
+	return result;
 }
 
 template <>
 double ModuloOperator::Operation(double left, double right) {
 	D_ASSERT(right != 0);
-	return std::fmod(left, right);
+	auto result = std::fmod(left, right);
+	if (!Value::DoubleIsFinite(result)) {
+		throw OutOfRangeException("Overflow in modulo of double!");
+	}
+	return result;
 }
 
 template <>

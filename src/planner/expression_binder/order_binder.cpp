@@ -22,8 +22,20 @@ OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, Selec
 }
 
 unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, idx_t index) {
-	return make_unique<BoundColumnRefExpression>(expr.GetName(), LogicalType::INVALID,
+	string alias;
+	if (extra_list && index < extra_list->size()) {
+		alias = extra_list->at(index)->ToString();
+	} else {
+		alias = expr.GetName();
+	}
+	return make_unique<BoundColumnRefExpression>(move(alias), LogicalType::INVALID,
 	                                             ColumnBinding(projection_index, index));
+}
+
+unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpression> expr) {
+	auto result = CreateProjectionReference(*expr, extra_list->size());
+	extra_list->push_back(move(expr));
+	return result;
 }
 
 unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
@@ -96,9 +108,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		                      expr->ToString());
 	}
 	// otherwise we need to push the ORDER BY entry into the select list
-	auto result = CreateProjectionReference(*expr, extra_list->size());
-	extra_list->push_back(move(expr));
-	return result;
+	return CreateExtraReference(move(expr));
 }
 
 } // namespace duckdb

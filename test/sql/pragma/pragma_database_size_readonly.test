@@ -1,0 +1,15 @@
+# name: test/sql/pragma/pragma_database_size_readonly.test
+# description: PRAGMA database_size read only
+# group: [pragma]
+
+# load the DB from disk
+load __TEST_DIR__/database_size_read_only.db
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+# load the DB from disk
+load __TEST_DIR__/database_size_read_only.db readonly
+
+statement ok
+PRAGMA database_size

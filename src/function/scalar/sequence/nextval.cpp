@@ -47,14 +47,11 @@ struct NextSequenceValueOperator {
 		bool overflow = !TryAddOperator::Operation(seq->counter, seq->increment, seq->counter);
 		if (seq->cycle) {
 			if (overflow) {
-				throw SequenceException("overflow in sequence");
-			}
-			if (result < seq->min_value) {
-				result = seq->max_value;
-				seq->counter = seq->max_value + seq->increment;
-			} else if (result > seq->max_value) {
-				result = seq->min_value;
-				seq->counter = seq->min_value + seq->increment;
+				seq->counter = seq->increment < 0 ? seq->max_value : seq->min_value;
+			} else if (seq->counter < seq->min_value) {
+				seq->counter = seq->max_value;
+			} else if (seq->counter > seq->max_value) {
+				seq->counter = seq->min_value;
 			}
 		} else {
 			if (result < seq->min_value || (overflow && seq->increment < 0)) {

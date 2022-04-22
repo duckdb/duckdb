@@ -9,7 +9,7 @@ namespace duckdb {
 
 ExplainRelation::ExplainRelation(shared_ptr<Relation> child_p)
     : Relation(child_p->context, RelationType::EXPLAIN_RELATION), child(move(child_p)) {
-	context.TryBindRelation(*this, this->columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 BoundStatement ExplainRelation::Bind(Binder &binder) {

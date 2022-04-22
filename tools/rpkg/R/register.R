@@ -43,7 +43,7 @@ encode_values <- function(value) {
 duckdb_register <- function(conn, name, df) {
   stopifnot(dbIsValid(conn))
   df <- encode_values(as.data.frame(df))
-  .Call(`_duckdb_register_R`, conn@conn_ref, enc2utf8(as.character(name)), df)
+  rapi_register_df(conn@conn_ref, enc2utf8(as.character(name)), df)
   invisible(TRUE)
 }
 
@@ -51,7 +51,7 @@ duckdb_register <- function(conn, name, df) {
 #' @export
 duckdb_unregister <- function(conn, name) {
   stopifnot(dbIsValid(conn))
-  .Call(`_duckdb_unregister_R`, conn@conn_ref, enc2utf8(as.character(name)))
+  rapi_unregister_df(conn@conn_ref, enc2utf8(as.character(name)))
   invisible(TRUE)
 }
 
@@ -80,18 +80,32 @@ duckdb_register_arrow <- function(conn, name, arrow_scannable, use_async = NULL)
 
   # create some R functions to pass to c-land
   export_fun <- function(arrow_scannable, stream_ptr, projection = NULL, filter = TRUE) {
+    # If we get a scanner we must transform it to a record batch reader first
+    if (class(arrow_scannable)[1] == "Scanner") {
+      arrow_scannable <- arrow_scannable$ToRecordBatchReader()
+    }
     arrow::Scanner$create(arrow_scannable, projection, filter)$ToRecordBatchReader()$export_to_c(stream_ptr)
   }
+
+  get_schema_fun <- function(arrow_scannable, stream_ptr) {
+    if (class(arrow_scannable)[1] == "arrow_dplyr_query") {
+      collapse <- pkg_method("collapse", "dplyr")
+      collapse(arrow_scannable)$.data$schema$export_to_c(stream_ptr)
+    } else {
+      schema <- arrow_scannable$schema$export_to_c(stream_ptr)
+    }
+  }
+
   # pass some functions to c land so we don't have to look them up there
-  function_list <- list(export_fun, arrow::Expression$create, arrow::Expression$field_ref, arrow::Expression$scalar)
-  .Call(`_duckdb_register_arrow_R`, conn@conn_ref, enc2utf8(as.character(name)), function_list, arrow_scannable)
+  function_list <- list(export_fun, arrow::Expression$create, arrow::Expression$field_ref, arrow::Expression$scalar, get_schema_fun)
+  rapi_register_arrow(conn@conn_ref, enc2utf8(as.character(name)), function_list, arrow_scannable)
   invisible(TRUE)
 }
 
 #' @rdname duckdb_register_arrow
 #' @export
 duckdb_unregister_arrow <- function(conn, name) {
-  .Call(`_duckdb_unregister_arrow_R`, conn@conn_ref, enc2utf8(as.character(name)))
+  rapi_unregister_arrow(conn@conn_ref, enc2utf8(as.character(name)))
   invisible(TRUE)
 }
 

@@ -1,6 +1,8 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/database.hpp"
 
+#include <cstdint>
+
 namespace duckdb {
 
 struct PragmaVersionData : public FunctionOperatorData {
@@ -9,11 +11,8 @@ struct PragmaVersionData : public FunctionOperatorData {
 	bool finished;
 };
 
-static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, vector<Value> &inputs,
-                                                  named_parameter_map_t &named_parameters,
-                                                  vector<LogicalType> &input_table_types,
-                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                  vector<string> &names) {
+static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, TableFunctionBindInput &input,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("library_version");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("source_id");
@@ -54,7 +53,15 @@ const char *DuckDB::LibraryVersion() {
 
 string DuckDB::Platform() {
 	string os = "linux";
+#if INTPTR_MAX == INT64_MAX
 	string arch = "amd64";
+#elif INTPTR_MAX == INT32_MAX
+	string arch = "i686";
+#else
+#error Unknown pointer size or missing size macros!
+#endif
+	string postfix = "";
+
 #ifdef _WIN32
 	os = "windows";
 #elif defined(__APPLE__)
@@ -63,7 +70,14 @@ string DuckDB::Platform() {
 #if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64)
 	arch = "arm64";
 #endif
-	return os + "_" + arch;
+
+#if !defined(_GLIBCXX_USE_CXX11_ABI) || _GLIBCXX_USE_CXX11_ABI == 0
+	if (os == "linux") {
+		postfix = "_gcc4";
+	}
+#endif
+
+	return os + "_" + arch + postfix;
 }
 
 } // namespace duckdb

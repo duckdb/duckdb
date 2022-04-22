@@ -105,4 +105,16 @@ struct EvenFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct IsNanFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct IsInfiniteFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct IsFiniteFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

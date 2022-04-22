@@ -18,7 +18,7 @@ ProjectionRelation::ProjectionRelation(shared_ptr<Relation> child_p,
 		}
 	}
 	// bind the expressions
-	context.TryBindRelation(*this, this->columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> ProjectionRelation::GetQueryNode() {
@@ -60,7 +60,7 @@ string ProjectionRelation::ToString(idx_t depth) {
 		if (i != 0) {
 			str += ", ";
 		}
-		str += expressions[i]->ToString();
+		str += expressions[i]->ToString() + " as " + expressions[i]->alias;
 	}
 	str += "]\n";
 	return str + child->ToString(depth + 1);

@@ -19,7 +19,7 @@ namespace duckdb {
 template <>
 float AddOperator::Operation(float left, float right) {
 	auto result = left + right;
-	if (!Value::FloatIsValid(result)) {
+	if (!Value::FloatIsFinite(result)) {
 		throw OutOfRangeException("Overflow in addition of float!");
 	}
 	return result;
@@ -28,7 +28,7 @@ float AddOperator::Operation(float left, float right) {
 template <>
 double AddOperator::Operation(double left, double right) {
 	auto result = left + right;
-	if (!Value::DoubleIsValid(result)) {
+	if (!Value::DoubleIsFinite(result)) {
 		throw OutOfRangeException("Overflow in addition of double!");
 	}
 	return result;
@@ -54,6 +54,20 @@ date_t AddOperator::Operation(date_t left, int32_t right) {
 template <>
 date_t AddOperator::Operation(int32_t left, date_t right) {
 	return AddOperator::Operation<date_t, int32_t, date_t>(right, left);
+}
+
+template <>
+timestamp_t AddOperator::Operation(date_t left, dtime_t right) {
+	timestamp_t result;
+	if (!Timestamp::TryFromDatetime(left, right, result)) {
+		throw OutOfRangeException("Timestamp out of range");
+	}
+	return result;
+}
+
+template <>
+timestamp_t AddOperator::Operation(dtime_t left, date_t right) {
+	return AddOperator::Operation<date_t, dtime_t, timestamp_t>(right, left);
 }
 
 template <>

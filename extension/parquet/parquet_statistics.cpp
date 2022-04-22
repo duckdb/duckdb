@@ -81,7 +81,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 			throw InternalException("Incorrect stats size for type FLOAT");
 		}
 		auto val = Load<float>((data_ptr_t)stats.c_str());
-		if (!Value::FloatIsValid(val)) {
+		if (!Value::FloatIsFinite(val)) {
 			return Value();
 		}
 		return Value::FLOAT(val);
@@ -91,7 +91,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 			throw InternalException("Incorrect stats size for type DOUBLE");
 		}
 		auto val = Load<double>((data_ptr_t)stats.c_str());
-		if (!Value::DoubleIsValid(val)) {
+		if (!Value::DoubleIsFinite(val)) {
 			return Value();
 		}
 		return Value::DOUBLE(val);

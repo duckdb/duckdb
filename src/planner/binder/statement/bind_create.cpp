@@ -24,6 +24,9 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -71,8 +74,9 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 
 SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = (CreateMacroInfo &)info;
+	auto &scalar_function = (ScalarMacroFunction &)*base.function;
 
-	if (base.function->expression->HasParameter()) {
+	if (scalar_function.expression->HasParameter()) {
 		throw BinderException("Parameter expressions within macro's are not supported!");
 	}
 
@@ -96,10 +100,10 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	}
 	auto this_macro_binding = make_unique<MacroBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
-	ExpressionBinder::QualifyColumnNames(*this, base.function->expression);
+	ExpressionBinder::QualifyColumnNames(*this, scalar_function.expression);
 
 	// create a copy of the expression because we do not want to alter the original
-	auto expression = base.function->expression->Copy();
+	auto expression = scalar_function.expression->Copy();
 
 	// bind it to verify the function was defined correctly
 	string error;
@@ -171,6 +175,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, move(stmt.info), schema);
 		break;
 	}
+	case CatalogType::TABLE_MACRO_ENTRY: {
+		auto schema = BindSchema(*stmt.info);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, move(stmt.info), schema);
+		break;
+	}
 	case CatalogType::MACRO_ENTRY: {
 		auto schema = BindCreateFunctionInfo(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, move(stmt.info), schema);
@@ -211,6 +220,42 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
+		// If there is a foreign key constraint, resolve primary key column's index from primary key column's name
+		auto &create_info = (CreateTableInfo &)*stmt.info;
+		auto &catalog = Catalog::GetCatalog(context);
+		for (idx_t i = 0; i < create_info.constraints.size(); i++) {
+			auto &cond = create_info.constraints[i];
+			if (cond->type != ConstraintType::FOREIGN_KEY) {
+				continue;
+			}
+			auto &fk = (ForeignKeyConstraint &)*cond;
+			if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+				continue;
+			}
+			D_ASSERT(fk.info.pk_keys.empty() && !fk.pk_columns.empty());
+			if (create_info.table == fk.info.table) {
+				fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
+			} else {
+				// have to resolve referenced table
+				auto pk_table_entry_ptr = catalog.GetEntry<TableCatalogEntry>(context, fk.info.schema, fk.info.table);
+				D_ASSERT(!fk.pk_columns.empty() && fk.info.pk_keys.empty());
+				for (auto &keyname : fk.pk_columns) {
+					auto entry = pk_table_entry_ptr->name_map.find(keyname);
+					if (entry == pk_table_entry_ptr->name_map.end()) {
+						throw BinderException("column \"%s\" named in key does not exist", keyname);
+					}
+					fk.info.pk_keys.push_back(entry->second);
+				}
+				auto index = pk_table_entry_ptr->storage->info->indexes.FindForeignKeyIndex(
+				    fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);
+				if (!index) {
+					auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
+					throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
+					                      "present on these columns",
+					                      pk_table_entry_ptr->name, fk_column_names);
+				}
+			}
+		}
 		// We first check if there are any user types, if yes we check to which custom types they refer.
 		auto bound_info = BindCreateTableInfo(move(stmt.info));
 		auto root = move(bound_info->query);

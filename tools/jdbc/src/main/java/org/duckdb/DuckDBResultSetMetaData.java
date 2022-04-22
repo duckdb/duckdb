@@ -8,29 +8,45 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.time.OffsetDateTime;
+import java.math.BigDecimal;
 
 import org.duckdb.DuckDBResultSet.DuckDBBlobResult;
 
 public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
 	public DuckDBResultSetMetaData(int param_count, int column_count, String[] column_names,
-			String[] column_types_string) {
+			String[] column_types_string, String[] column_types_details) {
 		this.param_count = param_count;
 		this.column_count = column_count;
 		this.column_names = column_names;
 		this.column_types_string = column_types_string;
+		this.column_types_details = column_types_details;
 		ArrayList<DuckDBColumnType> column_types_al = new ArrayList<DuckDBColumnType>(column_count);
+		ArrayList<DuckDBColumnTypeMetaData> column_types_meta = new ArrayList<DuckDBColumnTypeMetaData>(column_count);
 
 		for (String column_type_string : this.column_types_string) {
 			column_types_al.add(TypeNameToType(column_type_string));
 		}
 		this.column_types = new DuckDBColumnType[column_count];
 		this.column_types = column_types_al.toArray(this.column_types);
+
+		for (String column_type_detail : this.column_types_details) {
+			if (!column_type_detail.equals("")) {
+				String[] split_details = column_type_detail.split(";");
+				column_types_meta.add(new DuckDBColumnTypeMetaData(Short.parseShort(split_details[0].replace("DECIMAL", ""))
+							, Short.parseShort(split_details[1]), Short.parseShort(split_details[2])));
+			}
+			else { column_types_meta.add(null); }
+		}
+		this.column_types_meta = column_types_meta.toArray(new DuckDBColumnTypeMetaData[column_count]);
 	}
 
 	public static DuckDBColumnType TypeNameToType(String type_name) {
 		if (type_name.startsWith("DECIMAL")) {
 			return DuckDBColumnType.DECIMAL;
+		} else if (type_name.equals("TIMESTAMP WITH TIME ZONE")) {
+			return DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE;
 		} else {
 			return DuckDBColumnType.valueOf(type_name);
 		}
@@ -40,7 +56,9 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 	protected int column_count;
 	protected String[] column_names;
 	protected String[] column_types_string;
+	protected String[] column_types_details;
 	protected DuckDBColumnType[] column_types;
+	protected DuckDBColumnTypeMetaData[] column_types_meta;
 
 	public int getColumnCount() throws SQLException {
 		return column_count;
@@ -93,6 +111,8 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Types.DATE;
 		case TIMESTAMP:
 			return Types.TIMESTAMP;
+		case TIMESTAMP_WITH_TIME_ZONE:
+			return Types.TIME_WITH_TIMEZONE;
 		case INTERVAL:
 			return Types.JAVA_OBJECT;
 		case BLOB:
@@ -134,8 +154,12 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Date.class.toString();
 		case Types.TIMESTAMP:
 			return Timestamp.class.toString();
+		case Types.TIME_WITH_TIMEZONE:
+			return OffsetDateTime.class.toString();
 		case Types.BLOB:
 			return DuckDBBlobResult.class.toString();
+		case Types.DECIMAL:
+			return BigDecimal.class.toString();
 		default:
 			throw new SQLException("Unknown type " + getColumnTypeName(column));
 		}

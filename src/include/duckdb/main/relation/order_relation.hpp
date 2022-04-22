@@ -16,10 +16,11 @@ namespace duckdb {
 
 class OrderRelation : public Relation {
 public:
-	OrderRelation(shared_ptr<Relation> child, vector<OrderByNode> orders);
+	DUCKDB_API OrderRelation(shared_ptr<Relation> child, vector<OrderByNode> orders);
 
 	vector<OrderByNode> orders;
 	shared_ptr<Relation> child;
+	vector<ColumnDefinition> columns;
 
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;

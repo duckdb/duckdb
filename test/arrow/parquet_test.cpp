@@ -58,6 +58,7 @@ std::unique_ptr<duckdb::QueryResult> ArrowToDuck(duckdb::Connection &conn, arrow
 	duckdb::vector<duckdb::Value> params;
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
+	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::GetSchema));
 	params.push_back(duckdb::Value::UBIGINT(1000000));
 	if (query.empty()) {
 		return conn.TableFunction("arrow_scan", params)->Execute();
@@ -83,7 +84,7 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 	auto result = ArrowToDuck(conn, *table);
 	ArrowSchema abi_arrow_schema;
 	std::vector<std::shared_ptr<arrow::RecordBatch>> batches_result;
-	result->ToArrowSchema(&abi_arrow_schema);
+	duckdb::QueryResult::ToArrowSchema(&abi_arrow_schema, result->types, result->names);
 	auto result_schema = arrow::ImportSchema(&abi_arrow_schema);
 
 	while (true) {
@@ -120,13 +121,12 @@ TEST_CASE("Test Parquet File NaN", "[arrow]") {
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
 
-	//! Impossible to round-trip NaNs so we just validate that the duckdb table is correct-o
 	std::string parquet_path = "data/parquet-testing/nan-float.parquet";
 	auto table = ReadParquetFile(parquet_path);
 
 	auto result = ArrowToDuck(conn, *table);
 	REQUIRE(result->success);
-	REQUIRE(CHECK_COLUMN(result, 0, {-1, nullptr, 2.5}));
+	REQUIRE(CHECK_COLUMN(result, 0, {-1, std::numeric_limits<double>::infinity(), 2.5}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"foo", "bar", "baz"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {true, false, true}));
 }
@@ -194,6 +194,7 @@ TEST_CASE("Test Arrow Parquet Files", "[arrow]") {
 	std::vector<std::string> skip {"datapage_v2.snappy.parquet"}; //! Not supported by arrow
 	skip.emplace_back("lz4_raw_compressed.parquet");              //! Arrow can't read this
 	skip.emplace_back("lz4_raw_compressed_larger.parquet");       //! Arrow can't read this
+	skip.emplace_back("uuid-arrow.parquet");                      //! Not supported by arrow
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};

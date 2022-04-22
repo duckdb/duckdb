@@ -180,8 +180,11 @@ bench_plot <- function(object, type = c("beeswarm", "jitter", "ridge",
                        check = FALSE, ref, new, threshold, ...) {
 
   within_thresh <- function(x, ref, new, thresh) {
-    ifelse(x[new] > x[ref] + x[ref] * thresh, "slower",
-           ifelse(x[new] < x[ref] - x[ref] * thresh, "faster", "same"))
+    bounds <- quantile(x[[ref]], c(0.5 - thresh, 0.5 + thresh))
+    val <- median(x[[new]])
+    ifelse(
+      val > bounds[2L], "slower", ifelse(val < bounds[1L], "faster", "same")
+    )
   }
 
   labeller <- function(...) {
@@ -214,9 +217,11 @@ bench_plot <- function(object, type = c("beeswarm", "jitter", "ridge",
 
     grid <- object[, c("expression", params)]
     temp <- split(object, grid)
-    temp <- Map(setNames, lapply(temp, `[[`, "median"),
+    temp <- Map(setNames, lapply(temp, `[[`, "time"),
                           lapply(temp, `[[`, "version"), USE.NAMES = FALSE)
-    grid <- cbind(grid,
+
+    grid <- cbind(
+      do.call(rbind, lapply(split(grid, grid), unique)),
       `Median runtime` = vapply(temp, within_thresh, character(1L), ref, new,
                                 threshold)
     )

@@ -1,0 +1,48 @@
+# name: test/sql/function/list/aggregates/bool_and_or.test
+# description: Test the list_bool_and, list_bool_or aggregate functions
+# group: [aggregates]
+
+# incorrect usage
+statement error
+select list_bool_or()
+
+statement error
+select list_bool_and()
+
+# list of booleans
+statement ok
+CREATE TABLE bools (l BOOLEAN[]);
+
+statement ok
+INSERT INTO bools SELECT LIST(True) FROM range(100) tbl(i);
+
+statement ok
+INSERT INTO bools SELECT LIST(False) FROM range(100) tbl(i);
+
+statement ok
+INSERT INTO bools VALUES ([True, False]);
+
+statement ok
+INSERT INTO bools VALUES ([]), ([NULL]), (NULL), ([NULL, True, False, NULL]);
+
+query I
+SELECT list_bool_or(l) FROM bools;
+----
+1
+0
+1
+NULL
+NULL
+NULL
+1
+
+query I
+SELECT list_bool_and(l) FROM bools;
+----
+1
+0
+0
+NULL
+NULL
+NULL
+0

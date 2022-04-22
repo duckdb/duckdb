@@ -22,8 +22,10 @@
 #else
 #include "duckdb/common/windows_util.hpp"
 #include <string>
+#include <io.h>
 
 #ifdef __MINGW32__
+#include <sys/stat.h>
 // need to manually define this for mingw
 extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
 #endif
@@ -47,6 +49,90 @@ static void AssertValidFileFlags(uint8_t flags) {
 	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 #endif
 }
+
+#ifdef __MINGW32__
+bool LocalFileSystem::FileExists(const string &filename) {
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	const wchar_t *wpath = unicode_path.c_str();
+	if (_waccess(wpath, 0) == 0) {
+		struct _stat64i32 status;
+		_wstat64i32(wpath, &status);
+		if (status.st_size > 0) {
+			return true;
+		}
+	}
+	return false;
+}
+bool LocalFileSystem::IsPipe(const string &filename) {
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	const wchar_t *wpath = unicode_path.c_str();
+	if (_waccess(wpath, 0) == 0) {
+		struct _stat64i32 status;
+		_wstat64i32(wpath, &status);
+		if (status.st_size == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+#else
+#ifndef _WIN32
+bool LocalFileSystem::FileExists(const string &filename) {
+	if (!filename.empty()) {
+		if (access(filename.c_str(), 0) == 0) {
+			struct stat status;
+			stat(filename.c_str(), &status);
+			if (S_ISREG(status.st_mode)) {
+				return true;
+			}
+		}
+	}
+	// if any condition fails
+	return false;
+}
+
+bool LocalFileSystem::IsPipe(const string &filename) {
+	if (!filename.empty()) {
+		if (access(filename.c_str(), 0) == 0) {
+			struct stat status;
+			stat(filename.c_str(), &status);
+			if (S_ISFIFO(status.st_mode)) {
+				return true;
+			}
+		}
+	}
+	// if any condition fails
+	return false;
+}
+
+#else
+bool LocalFileSystem::FileExists(const string &filename) {
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	const wchar_t *wpath = unicode_path.c_str();
+	if (_waccess(wpath, 0) == 0) {
+		struct _stat64i32 status;
+		_wstat(wpath, &status);
+		if (status.st_mode & S_IFREG) {
+			return true;
+		}
+	}
+	return false;
+}
+bool LocalFileSystem::IsPipe(const string &filename) {
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	const wchar_t *wpath = unicode_path.c_str();
+	if (_waccess(wpath, 0) == 0) {
+		struct _stat64i32 status;
+		_wstat(wpath, &status);
+		if (status.st_mode & _S_IFCHR) {
+			return true;
+		}
+	}
+	return false;
+}
+#endif
+#endif
 
 #ifndef _WIN32
 // somehow sometimes this is missing
@@ -284,20 +370,6 @@ bool LocalFileSystem::DirectoryExists(const string &directory) {
 	return false;
 }
 
-bool LocalFileSystem::FileExists(const string &filename) {
-	if (!filename.empty()) {
-		if (access(filename.c_str(), 0) == 0) {
-			struct stat status;
-			stat(filename.c_str(), &status);
-			if (!(status.st_mode & S_IFDIR)) {
-				return true;
-			}
-		}
-	}
-	// if any condition fails
-	return false;
-}
-
 void LocalFileSystem::CreateDirectory(const string &directory) {
 	struct stat st;
 
@@ -361,7 +433,7 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(string, bool)> &callback) {
+bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
 	if (!DirectoryExists(directory)) {
 		return false;
 	}
@@ -409,12 +481,16 @@ void LocalFileSystem::MoveFile(const string &source, const string &target) {
 	}
 }
 
+std::string LocalFileSystem::GetLastErrorAsString() {
+	return string();
+}
+
 #else
 
 constexpr char PIPE_PREFIX[] = "\\\\.\\pipe\\";
 
 // Returns the last Win32 error, in string format. Returns an empty string if there is no error.
-std::string GetLastErrorAsString() {
+std::string LocalFileSystem::GetLastErrorAsString() {
 	// Get the error message, if any.
 	DWORD errorMessageID = GetLastError();
 	if (errorMessageID == 0)
@@ -490,7 +566,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 	HANDLE hFile = CreateFileW(unicode_path.c_str(), desired_access, share_mode, NULL, creation_disposition,
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
-		auto error = GetLastErrorAsString();
+		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
 	}
 	auto handle = make_unique<WindowsFileHandle>(*this, path.c_str(), hFile);
@@ -519,7 +595,7 @@ static DWORD FSInternalRead(FileHandle &handle, HANDLE hFile, void *buffer, int6
 	ov.hEvent = 0;
 	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, &ov);
 	if (!rc) {
-		auto error = GetLastErrorAsString();
+		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Could not read file \"%s\" (error in ReadFile): %s", handle.path, error);
 	}
 	return bytes_read;
@@ -553,7 +629,7 @@ static DWORD FSInternalWrite(FileHandle &handle, HANDLE hFile, void *buffer, int
 	ov.hEvent = 0;
 	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, &bytes_written, &ov);
 	if (!rc) {
-		auto error = GetLastErrorAsString();
+		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Could not write file \"%s\" (error in WriteFile): %s", handle.path, error);
 	}
 	return bytes_written;
@@ -617,7 +693,7 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	SetFilePointer(handle, new_size);
 	// now set the end of file position
 	if (!SetEndOfFile(hFile)) {
-		auto error = GetLastErrorAsString();
+		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Failure in SetEndOfFile call on file \"%s\": %s", handle.path, error);
 	}
 }
@@ -630,11 +706,6 @@ static DWORD WindowsGetFileAttributes(const string &filename) {
 bool LocalFileSystem::DirectoryExists(const string &directory) {
 	DWORD attrs = WindowsGetFileAttributes(directory);
 	return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
-}
-
-bool LocalFileSystem::FileExists(const string &filename) {
-	DWORD attrs = WindowsGetFileAttributes(filename);
-	return (attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY));
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory) {
@@ -676,7 +747,7 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 	DeleteFileW(unicode_path.c_str());
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(string, bool)> &callback) {
+bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
 	string search_dir = JoinPath(directory, "*");
 
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(search_dir.c_str());
@@ -789,15 +860,15 @@ static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bo
 	});
 }
 
-vector<string> LocalFileSystem::Glob(const string &path) {
+vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	if (path.empty()) {
 		return vector<string>();
 	}
 	// first check if the path has a glob at all
 	if (!HasGlob(path)) {
-		// no glob: return only the file (if it exists)
+		// no glob: return only the file (if it exists or is a pipe)
 		vector<string> result;
-		if (FileExists(path)) {
+		if (FileExists(path) || IsPipe(path)) {
 			result.push_back(path);
 		}
 		return result;
