@@ -1,0 +1,10 @@
+# name: test/sql/parser/generated_columns.test
+# description: Test generated columns
+# group: [parser]
+
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+ALTER TABLE unit ADD COLUMN total_profit AS (price * amount_sold);
+
