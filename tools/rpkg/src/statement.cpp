@@ -286,10 +286,8 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 			auto wrapper = new DuckDBAltrepStringWrapper();
 			wrapper->length = nrows;
 
-			auto ptr = PROTECT(R_MakeExternalPtr((void *)wrapper, R_NilValue, R_NilValue));
-			R_RegisterCFinalizer(ptr, AltrepString::Finalize);
+			cpp11::external_pointer<DuckDBAltrepStringWrapper> ptr(wrapper);
 			varvalue = r_varvalue.Protect(R_new_altrep(AltrepString::rclass, ptr, R_NilValue));
-			UNPROTECT(1);
 			break;
 		}
 		default:
