@@ -6,6 +6,7 @@
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "visualizer_constants.hpp"
 
 namespace duckdb {
