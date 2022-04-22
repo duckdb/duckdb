@@ -37,7 +37,7 @@ static bool ParseBoolean(const vector<Value> &set, const string &loption) {
 
 static bool ParseBoolean(const Value &value, const string &loption) {
 
-	if (value.type() == LogicalTypeId::LIST) {
+	if (value.type().id() == LogicalTypeId::LIST) {
 		auto &children = ListValue::GetChildren(value);
 		return ParseBoolean(children, loption);
 	}
@@ -49,7 +49,7 @@ static bool ParseBoolean(const Value &value, const string &loption) {
 }
 
 static string ParseString(const Value &value, const string &loption) {
-	if (value.type() == LogicalTypeId::LIST) {
+	if (value.type().id() == LogicalTypeId::LIST) {
 		auto &children = ListValue::GetChildren(value);
 		if (children.size() != 1) {
 			throw BinderException("\"%s\" expects a single argument as a string value", loption);
@@ -63,7 +63,7 @@ static string ParseString(const Value &value, const string &loption) {
 }
 
 static int64_t ParseInteger(const Value &value, const string &loption) {
-	if (value.type() == LogicalTypeId::LIST) {
+	if (value.type().id() == LogicalTypeId::LIST) {
 		auto &children = ListValue::GetChildren(value);
 		if (children.size() != 1) {
 			// no option specified or multiple options specified
@@ -106,7 +106,7 @@ static vector<bool> ParseColumnList(const Value &value, vector<string> &names, c
 	vector<bool> result;
 
 	// Only accept a list of arguments
-	if (value.type() != LogicalTypeId::LIST) {
+	if (value.type().id() != LogicalTypeId::LIST) {
 		// Support a single argument if it's '*'
 		if (value.type().id() == LogicalTypeId::VARCHAR && value.GetValue<string>() == "*") {
 			result.resize(names.size(), true);
