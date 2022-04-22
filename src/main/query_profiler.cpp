@@ -38,7 +38,7 @@ string QueryProfiler::GetSaveLocation() const {
 }
 
 QueryProfiler &QueryProfiler::Get(ClientContext &context) {
-	return *context.profiler;
+	return *ClientData::Get(context).profiler;
 }
 
 void QueryProfiler::StartQuery(string query, bool is_explain_analyze) {

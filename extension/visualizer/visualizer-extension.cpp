@@ -26,7 +26,7 @@ static string ToHTML(ClientContext &context, const string &first_json_path, cons
 	ss << "</script>\n";
 	ss << "<script> var data = ";
 	// If no json_file is given and profiler history is not empty, read from query profiler. Else read from file.
-	auto &prevProfilers = context.query_profiler_history->GetPrevProfilers();
+	auto &prevProfilers = ClientData::Get(context).query_profiler_history->GetPrevProfilers();
 	if (first_json_path.empty() && !prevProfilers.empty()) {
 		ss << prevProfilers.back().second->ToJSON();
 	} else if (!first_json_path.empty()) {

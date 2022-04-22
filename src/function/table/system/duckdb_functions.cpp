@@ -77,7 +77,7 @@ unique_ptr<FunctionOperatorData> DuckDBFunctionsInit(ClientContext &context, con
 	for (auto &schema : schemas) {
 		ExtractFunctionsFromSchema(context, *schema, *result);
 	};
-	ExtractFunctionsFromSchema(context, *context.temporary_objects, *result);
+	ExtractFunctionsFromSchema(context, *ClientData::Get(context).temporary_objects, *result);
 
 	std::sort(result->entries.begin(), result->entries.end(),
 	          [&](CatalogEntry *a, CatalogEntry *b) { return (int)a->type < (int)b->type; });

@@ -2,26 +2,25 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/random_engine.hpp"
 
 namespace duckdb {
 
 struct UUIDRandomBindData : public FunctionData {
 	ClientContext &context;
-	std::uniform_int_distribution<uint32_t> dist;
 
-	UUIDRandomBindData(ClientContext &context, std::uniform_int_distribution<uint32_t> dist)
-	    : context(context), dist(dist) {
+	UUIDRandomBindData(ClientContext &context)
+	    : context(context) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
-		return make_unique<UUIDRandomBindData>(context, dist);
+		return make_unique<UUIDRandomBindData>(context);
 	}
 };
 
 static unique_ptr<FunctionData> UUIDRandomBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-	std::uniform_int_distribution<uint32_t> dist;
-	return make_unique<UUIDRandomBindData>(context, dist);
+	return make_unique<UUIDRandomBindData>(context);
 }
 
 static void GenerateUUIDFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -31,10 +30,12 @@ static void GenerateUUIDFunction(DataChunk &args, ExpressionState &state, Vector
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<hugeint_t>(result);
+
+	auto &random_engine = RandomEngine::Get(info.context);
 	for (idx_t i = 0; i < args.size(); i++) {
 		uint8_t bytes[16];
 		for (int i = 0; i < 16; i += 4) {
-			*reinterpret_cast<uint32_t *>(bytes + i) = info.dist(info.context.random_engine);
+			*reinterpret_cast<uint32_t *>(bytes + i) = random_engine.NextRandomInteger();
 		}
 		// variant must be 10xxxxxx
 		bytes[8] &= 0xBF;

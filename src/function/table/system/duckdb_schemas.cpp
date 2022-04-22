@@ -40,7 +40,7 @@ unique_ptr<FunctionOperatorData> DuckDBSchemasInit(ClientContext &context, const
 	Catalog::GetCatalog(context).ScanSchemas(
 	    context, [&](CatalogEntry *entry) { result->entries.push_back((SchemaCatalogEntry *)entry); });
 	// get the temp schema as well
-	result->entries.push_back(context.temporary_objects.get());
+	result->entries.push_back(ClientData::Get(context).temporary_objects.get());
 
 	return move(result);
 }

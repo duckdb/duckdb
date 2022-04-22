@@ -29,12 +29,13 @@ static void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto input_seeds = FlatVector::GetData<double>(input);
 	uint32_t half_max = NumericLimits<uint32_t>::Maximum() / 2;
 
+	auto &random_engine = RandomEngine::Get(info.context);
 	for (idx_t i = 0; i < args.size(); i++) {
 		if (input_seeds[i] < -1.0 || input_seeds[i] > 1.0) {
 			throw Exception("SETSEED accepts seed values between -1.0 and 1.0, inclusive");
 		}
 		uint32_t norm_seed = (input_seeds[i] + 1.0) * half_max;
-		info.context.random_engine.seed(norm_seed);
+		random_engine.SetSeed(norm_seed);
 	}
 
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);

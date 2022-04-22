@@ -21,7 +21,6 @@
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/main/pending_query_result.hpp"
-#include <random>
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/main/client_config.hpp"
 
@@ -37,12 +36,12 @@ class PreparedStatementData;
 class Relation;
 class BufferedFileWriter;
 class QueryProfiler;
-class QueryProfilerHistory;
 class ClientContextLock;
 struct CreateScalarFunctionInfo;
 class ScalarFunctionCatalogEntry;
 struct ActiveQueryContext;
 struct ParserOptions;
+struct ClientData;
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
@@ -55,10 +54,6 @@ public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
 	DUCKDB_API ~ClientContext();
 
-	//! Query profiler
-	shared_ptr<QueryProfiler> profiler;
-	//! QueryProfiler History
-	unique_ptr<QueryProfilerHistory> query_profiler_history;
 	//! The database that this client is connected to
 	shared_ptr<DatabaseInstance> db;
 	//! Data for the currently running transaction
@@ -66,20 +61,10 @@ public:
 	//! Whether or not the query is interrupted
 	atomic<bool> interrupted;
 
-	unique_ptr<SchemaCatalogEntry> temporary_objects;
-	unordered_map<string, shared_ptr<PreparedStatementData>> prepared_statements;
-
-	//! The writer used to log queries (if logging is enabled)
-	unique_ptr<BufferedFileWriter> log_query_writer;
-	//! The random generator used by random(). Its seed value can be set by setseed().
-	std::mt19937 random_engine;
-
-	const unique_ptr<CatalogSearchPath> catalog_search_path;
-
-	unique_ptr<FileOpener> file_opener;
-
 	//! The client configuration
 	ClientConfig config;
+	//! The set of client-specific data
+	unique_ptr<ClientData> client_data;
 
 public:
 	DUCKDB_API Transaction &ActiveTransaction() {
