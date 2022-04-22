@@ -510,18 +510,20 @@ bool RowGroup::ScanToKeyAndPayload(RowGroupScanState &state, DataChunk &keys, Da
 			if (column == COLUMN_IDENTIFIER_ROW_ID) {
 				// scan row id
 				D_ASSERT(keys.data[i].GetType().InternalType() == ROW_TYPE);
-				payload.data[i].Sequence(this->start + current_row, 1);
-
 				// If cardinality == 1 use as key column for sorting
 				if (cardinalities[i] == 1) {
 					keys.data[i].Sequence(this->start + current_row, 1);
 				}
+				else {
+					payload.data[i].Sequence(this->start + current_row, 1);
+				}
 			} else {
-				columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], payload.data[i],
-												   false);
-
 				if (cardinalities[i] == 1) {
 					columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], keys.data[i],
+					                               false);
+				}
+				else {
+					columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], payload.data[i],
 					                               false);
 				}
 			}
@@ -580,6 +582,7 @@ bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
 
 void RowGroup::SortColumns() {
 	vector<LogicalType> types;
+	vector<LogicalType> key_types;
 	vector<column_t> column_ids;
 
 	// collect logical types by iterating the columns
@@ -589,68 +592,44 @@ void RowGroup::SortColumns() {
 		column_ids.push_back(column->column_index);
 	}
 
+	// Initialize the scan states
+	TableScanState scan_state;
+	scan_state.column_ids = column_ids;
+	scan_state.max_row = count;
+	vector<idx_t> cardinalities(columns.size());
+//	vector<idx_t> cardinalities{1};
+
+	// Calculate the column cardinalities
+	CalculateCardinalitiesCorrelation1(types, scan_state, cardinalities);
+
+	// Get types for the key column
+	for (auto i : cardinalities) {
+		key_types.push_back(types[i]);
+	}
+
+	// Initialize DataChunk for key columns and payload (the entire RowGroup)
+	DataChunk keys;
+	DataChunk payload;
+	keys.Initialize(key_types);
+	payload.Initialize(types);
+
 	// Initialize the sorting states
 	RowGroupSortBindData sort_state(types, column_ids, db);
 	auto &global_sort_state = *sort_state.global_sort_state;
 	LocalSortState local_sort_state;
 	local_sort_state.Initialize(global_sort_state, global_sort_state.buffer_manager);
 
-	// Initialize the scan states
-	TableScanState scan_state;
-	scan_state.column_ids = column_ids;
-	scan_state.max_row = count;
-	bool next_chunk = true;
-
-	// Scan the RowGroup to calculate cardinality - initialize a HyperLogLog for each column and add values
-	DataChunk result;
-	result.Initialize(types);
-	vector<HyperLogLog> logs(columns.size());
-	InitializeScan(scan_state.row_group_scan_state);
-	while (next_chunk) {
-		next_chunk = ScanToDataChunks(scan_state.row_group_scan_state, result);
-		for (idx_t i = 0; i < columns.size(); i++) {
-			for (idx_t j = 0; j < result.size(); j++) {
-				logs[i].Add(result.data[j].GetData(), sizeof(types[i].InternalType()));
-			}
-		}
-	}
-
-	// Get the final cardinality counts - maximum cardinality is 30 percent of all rows
-	// Initialize cardinalities to 0 for each column
-	vector<idx_t> cardinalities(columns.size());
-	idx_t max_cardinality = count * 0.3;
-	idx_t current_count = 0;
-	unique_ptr<HyperLogLog> merged_log;
-
-	// Keep merging the counts until we have 30 percent of the rows - use these columns as keys
-	for (idx_t i = 0; i < logs.size(); i++) {
-		if (i == 0) {
-			current_count = logs[i].Count();
-			cardinalities[i] = 1;
-			continue;
-		}
-		merged_log = logs[i-1].Merge(logs[i]);
-		current_count = merged_log->Count();
-
-		if (current_count > max_cardinality) {
-			break;
-		}
-
-		// Set cardinality of "key" columns to 1
-		cardinalities[i] = 1;
-	}
-
-	// Initialize DataChunk for key columns and payload (the entire RowGroup)
-	DataChunk keys;
-	DataChunk payload;
-	keys.Initialize(types);
-	payload.Initialize(types);
-
 	// Scan the RowGroup into the DataChunks
-	next_chunk = true;
+	bool next_chunk = true;
 	InitializeScan(scan_state.row_group_scan_state);
 	while (next_chunk) {
-		next_chunk = ScanToKeyAndPayload(scan_state.row_group_scan_state, keys, payload, cardinalities);
+		next_chunk = ScanToDataChunks(scan_state.row_group_scan_state, payload);
+
+		keys.data[0].Reference(payload.data[1]);
+		// If column cardinality == 1, use the key column for sorting
+//		for (idx_t i = 0; i < cardinalities.size(); i++) {
+//			keys.data[i].Reference(payload.data[cardinalities[i]]);
+//		}
 		local_sort_state.SinkChunk(keys, payload);
 	}
 
@@ -678,6 +657,46 @@ void RowGroup::SortColumns() {
 	}
 
 	this->columns = sorted_rowgroup.columns;
+}
+
+void RowGroup::CalculateCardinalitiesCorrelation1(vector<LogicalType> &types, TableScanState &scan_state, vector<idx_t> &cardinalities) {
+	// Scan the RowGroup to calculate cardinality - initialize a HyperLogLog for each column and add values
+	DataChunk result;
+	result.Initialize(types);
+	vector<HyperLogLog> logs(columns.size());
+	InitializeScan(scan_state.row_group_scan_state);
+
+	bool next_chunk = true;
+	while (next_chunk) {
+		next_chunk = ScanToDataChunks(scan_state.row_group_scan_state, result);
+		for (idx_t i = 0; i < columns.size(); i++) {
+			logs[i].Add(result.data[i].GetData(), sizeof(types[i].InternalType()));
+		}
+	}
+
+	// Get the final cardinality counts - maximum cardinality is 30 percent of all rows
+	// Initialize cardinalities to 0 for each column
+	idx_t max_cardinality = count * 0.3;
+	idx_t current_count = 0;
+	unique_ptr<HyperLogLog> merged_log;
+
+	// Keep merging the counts until we have 30 percent of the rows - use these columns as keys
+	for (idx_t i = 0; i < logs.size(); i++) {
+		if (i == 0) {
+			current_count = logs[i].Count();
+			cardinalities[i] = 1;
+			continue;
+		}
+		merged_log = logs[i-1].Merge(logs[i]);
+		current_count = merged_log->Count();
+
+		if (current_count > max_cardinality) {
+			break;
+		}
+
+		// Set cardinality of "key" columns to 1
+		cardinalities[i] = 1;
+	}
 }
 
 ChunkInfo *RowGroup::GetChunkInfo(idx_t vector_idx) {

@@ -12,6 +12,9 @@ statement ok
 PRAGMA force_compression = 'rle'
 
 statement ok
+PRAGMA force_compression_sorting = false
+
+statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
 
 statement ok
@@ -31,10 +34,10 @@ SELECT * FROM test;
 2	2
 
 statement ok
-PRAGMA force_compression_sorting = true
+DROP TABLE IF EXISTS test;
 
 statement ok
-DROP TABLE IF EXISTS test;
+PRAGMA force_compression_sorting = true
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);

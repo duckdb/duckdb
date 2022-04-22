@@ -120,7 +120,7 @@ public:
 	//! Force a specific compression method to be used when checkpointing (if available)
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
 	//! Force sorting before compression
-	bool force_compression_sorting = false;
+	bool force_compression_sorting = true;
 	//! Debug flag that adds additional (unnecessary) free_list blocks to the storage
 	bool debug_many_free_list_blocks = false;
 	//! Debug setting for window aggregation mode: (window, combine, separate)

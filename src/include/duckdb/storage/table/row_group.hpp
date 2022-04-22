@@ -151,6 +151,7 @@ private:
 	bool ScanToDataChunks(RowGroupScanState &state, DataChunk &result);
 	bool ScanToKeyAndPayload(RowGroupScanState &state, DataChunk &keys, DataChunk &payload, const vector<idx_t>& cardinalities);
 	void SortColumns();
+	void CalculateCardinalitiesCorrelation1(vector<LogicalType> &types, TableScanState &scan_state, vector<idx_t> &cardinalities);
 
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
 	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);
