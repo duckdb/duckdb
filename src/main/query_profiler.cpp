@@ -12,6 +12,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include <utility>
 #include <algorithm>
 

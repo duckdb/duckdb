@@ -13,6 +13,7 @@
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 

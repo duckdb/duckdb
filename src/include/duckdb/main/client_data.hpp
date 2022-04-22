@@ -14,7 +14,10 @@
 #include "duckdb/common/enums/output_type.hpp"
 
 namespace duckdb {
+class BufferedFileWriter;
 class ClientContext;
+class CatalogSearchPath;
+class FileOpener;
 class QueryProfiler;
 class QueryProfilerHistory;
 class PreparedStatementData;
