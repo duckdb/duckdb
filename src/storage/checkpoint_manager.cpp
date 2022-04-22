@@ -179,6 +179,7 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 
 	FieldWriter writer(*metadata_writer);
 	writer.WriteField<uint32_t>(custom_types.size());
+	writer.WriteField<uint32_t>(new_custom_types.size());
 	writer.WriteField<uint32_t>(sequences.size());
 	writer.WriteField<uint32_t>(tables.size());
 	writer.WriteField<uint32_t>(views.size());
@@ -192,7 +193,6 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	}
 
 	// write the new_custom_types
-	metadata_writer->Write<uint32_t>(new_custom_types.size());
 	for (auto &custom_type : new_custom_types) {
 		WriteCustomType(*custom_type);
 	}
@@ -235,6 +235,7 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	// first read all the counts
 	FieldReader field_reader(reader);
 	uint32_t enum_count = field_reader.ReadRequired<uint32_t>();
+	uint32_t custom_count = field_reader.ReadRequired<uint32_t>();
 	uint32_t seq_count = field_reader.ReadRequired<uint32_t>();
 	uint32_t table_count = field_reader.ReadRequired<uint32_t>();
 	uint32_t view_count = field_reader.ReadRequired<uint32_t>();
@@ -248,7 +249,6 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	}
 
 	// now read the custom types
-	uint32_t custom_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < custom_count; i++) {
 		ReadCustomType(context, reader);
 	}

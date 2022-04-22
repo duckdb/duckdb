@@ -664,6 +664,9 @@ Value Value::CUSTOM(const_data_ptr_t data, const LogicalType &ctype, idx_t index
 	default:
 		throw InternalException("Unimplemented internal type for custom value access");
 	}
+	return result;
+}
+
 Value Value::JSON(const char *val) {
 	auto result = Value(val);
 	result.type_ = LogicalTypeId::JSON;

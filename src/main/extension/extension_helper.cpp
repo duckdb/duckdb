@@ -13,11 +13,10 @@
 #include "parquet-extension.hpp"
 #endif
 
-#ifdef BUILD_CUSTOMTYPE_EXTENSION
+#if defined(BUILD_CUSTOMTYPE_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "customtype-extension.hpp"
 #endif
 
-#ifdef BUILD_TPCH_EXTENSION
 #if defined(BUILD_TPCH_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "tpch-extension.hpp"
 #endif
