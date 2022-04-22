@@ -92,7 +92,7 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "customtype") {
-#ifdef BUILD_CUSTOMTYPE_EXTENSION
+#if defined(BUILD_CUSTOMTYPE_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 		db.LoadExtension<CustomTypeExtension>();
 #else
 		// extension extension required but not build: skip this test
