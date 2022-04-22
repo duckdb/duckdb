@@ -126,15 +126,14 @@ struct BufferedCSVReaderOptions {
 	void SetDelimiter(const string &delimiter);
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
-	bool SetBaseOption(const string &loption, vector<Value> &set);
+	bool SetBaseOption(const string &loption, const Value &value);
 
 	//! loption - lowercase string
 	//! set - argument(s) to the option
 	//! expected_names - names expected if the option is "columns"
-	void SetReadOption(const string &loption, vector<Value> &set, vector<string> &expected_names);
 	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
 
-	void SetWriteOption(const string &loption, vector<Value> &set);
+	void SetWriteOption(const string &loption, const Value &value);
 
 	std::string ToString() const;
 };

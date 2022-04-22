@@ -57,6 +57,13 @@ void BaseCSVData::Finalize() {
 	}
 }
 
+static Value ConvertVectorToValue(vector<Value> set) {
+	if (set.empty()) {
+		return Value::EMPTYLIST(LogicalType::BOOLEAN);
+	}
+	return Value::LIST(move(set));
+}
+
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
                                              vector<LogicalType> &sql_types) {
 	auto bind_data = make_unique<WriteCSVData>(info.file_path, sql_types, names);
@@ -65,7 +72,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		bind_data->options.SetWriteOption(loption, set);
+		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(move(set)));
 	}
 	// verify the parsed options
 	if (bind_data->options.force_quote.empty()) {
@@ -97,7 +104,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		options.SetReadOption(loption, set, expected_names);
+		options.SetReadOption(loption, ConvertVectorToValue(move(set)), expected_names);
 	}
 	// verify the parsed options
 	if (options.force_not_null.empty()) {
