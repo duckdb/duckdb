@@ -56,7 +56,6 @@ void RandomFun::RegisterFunction(BuiltinFunctions &set) {
 
 static void GenerateUUIDFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 0);
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &lstate = (RandomLocalState &)*ExecuteFunctionState::GetFunctionState(state);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
