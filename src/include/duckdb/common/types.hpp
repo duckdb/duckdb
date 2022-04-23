@@ -561,6 +561,7 @@ struct CustomType {
 	DUCKDB_API static ClientContext* GetContext(const LogicalType &type);
 	DUCKDB_API static void SetCatalog(LogicalType &type, CustomTypeCatalogEntry* catalog_entry);
 	DUCKDB_API static CustomTypeCatalogEntry* GetCatalog(const LogicalType &type);
+	DUCKDB_API static const string GetValue(const Value &val);
 };
 
 struct AggregateStateType {

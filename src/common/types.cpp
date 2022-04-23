@@ -1500,6 +1500,10 @@ CustomTypeCatalogEntry *CustomType::GetCatalog(const LogicalType &type) {
 	return ((CustomTypeInfo &)*info).catalog_entry;
 }
 
+const string CustomType::GetValue(const Value &val) {
+	return val.ToString();
+}
+
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
