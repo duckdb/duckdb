@@ -56,7 +56,6 @@ runs:
     - name: Build
       shell: bash
       env:
-        GEN: ninja
         BUILD_VISUALIZER: ${{ inputs.visualizer }}
         BUILD_ICU: ${{ inputs.icu }}
         BUILD_TPCH: ${{ inputs.tpch }}
