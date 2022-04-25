@@ -32,7 +32,7 @@ public:
 
 	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) override;
 
-	static unique_ptr<Leaf> Deserialize(duckdb::MetaBlockReader &reader);
+	static Leaf *Deserialize(duckdb::MetaBlockReader &reader);
 
 private:
 	unique_ptr<row_t[]> row_ids;

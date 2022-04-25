@@ -8,6 +8,15 @@ Node48::Node48(size_t compression_length) : Node(NodeType::N48, compression_leng
 	for (idx_t i = 0; i < 256; i++) {
 		child_index[i] = Node::EMPTY_MARKER;
 	}
+	for (auto &child : children) {
+		child = nullptr;
+	}
+}
+
+Node48::~Node48() {
+	for (auto &child : children) {
+		delete child;
+	}
 }
 
 idx_t Node48::GetChildPos(uint8_t k) {
@@ -41,12 +50,9 @@ idx_t Node48::GetNextPos(idx_t pos) {
 	return Node::GetNextPos(pos);
 }
 
-unique_ptr<Node> *Node48::GetChild(ART &art, idx_t pos) {
+Node *Node48::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(child_index[pos] != Node::EMPTY_MARKER);
-	if (!child[child_index[pos]]) {
-		child[child_index[pos]] = Node::Deserialize(art, block_offsets[pos].first, block_offsets[pos].second);
-	}
-	return &child[child_index[pos]];
+	return Node::GetChildSwizzled(art, (uintptr_t)children[child_index[pos]]);
 }
 
 idx_t Node48::GetMin() {
@@ -58,63 +64,66 @@ idx_t Node48::GetMin() {
 	return DConstants::INVALID_INDEX;
 }
 
-void Node48::Insert(unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
-	Node48 *n = static_cast<Node48 *>(node.get());
+void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
+	auto n = (Node48 *)node;
 
 	// Insert leaf into inner node
 	if (node->count < 48) {
 		// Insert element
 		idx_t pos = n->count;
-		if (n->child[pos]) {
+		if (n->children[pos]) {
 			// find an empty position in the node list if the current position is occupied
 			pos = 0;
-			while (n->child[pos]) {
+			while (n->children[pos]) {
 				pos++;
 			}
 		}
-		n->child[pos] = move(child);
+		n->children[pos] = child;
 		n->child_index[key_byte] = pos;
 		n->count++;
 	} else {
 		// Grow to Node256
-		auto new_node = make_unique<Node256>(n->prefix_length);
+		auto new_node = new Node256(n->prefix_length);
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
-				new_node->child[i] = move(n->child[n->child_index[i]]);
+				new_node->children[i] = n->children[n->child_index[i]];
 			}
 		}
 		new_node->count = n->count;
-		CopyPrefix(n, new_node.get());
-		node = move(new_node);
+		CopyPrefix(n, new_node);
+		delete node;
+		node = new_node;
 		Node256::Insert(node, key_byte, child);
 	}
 }
 
-void Node48::Erase(unique_ptr<Node> &node, int pos) {
-	Node48 *n = static_cast<Node48 *>(node.get());
+void Node48::Erase(Node *&node, int pos) {
+	auto n = (Node48 *)(node);
 
-	n->child[n->child_index[pos]].reset();
+	delete n->children[n->child_index[pos]];
+	n->children[n->child_index[pos]] = nullptr;
 	n->child_index[pos] = Node::EMPTY_MARKER;
 	n->count--;
 	if (node->count <= 12) {
-		auto new_node = make_unique<Node16>(n->prefix_length);
-		CopyPrefix(n, new_node.get());
+		auto new_node = new Node16(n->prefix_length);
+		CopyPrefix(n, new_node);
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
 				new_node->key[new_node->count] = i;
-				new_node->child[new_node->count++] = move(n->child[n->child_index[i]]);
+				new_node->children[new_node->count++] = n->children[n->child_index[i]];
 			}
 		}
-		node = move(new_node);
+		delete node;
+		node = new_node;
 	}
 }
 
 std::pair<idx_t, idx_t> Node48::Serialize(duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
 	vector<std::pair<idx_t, idx_t>> child_offsets;
-	for (auto &child_node : child) {
-		if (child_node) {
-			child_offsets.push_back(child_node->Serialize(writer));
+	for (auto &child : children) {
+		if (child) {
+			child_offsets.push_back(child->Serialize(writer));
 		} else {
 			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
 		}
@@ -141,10 +150,10 @@ std::pair<idx_t, idx_t> Node48::Serialize(duckdb::MetaBlockWriter &writer) {
 	return {block_id, offset};
 }
 
-unique_ptr<Node48> Node48::Deserialize(duckdb::MetaBlockReader &reader) {
+Node48 *Node48::Deserialize(duckdb::MetaBlockReader &reader) {
 	auto count = reader.Read<uint16_t>();
 	auto prefix_length = reader.Read<uint32_t>();
-	auto node48 = make_unique<Node48>(prefix_length);
+	auto node48 = new Node48(prefix_length);
 	node48->count = count;
 
 	for (idx_t i = 0; i < prefix_length; i++) {
@@ -158,7 +167,7 @@ unique_ptr<Node48> Node48::Deserialize(duckdb::MetaBlockReader &reader) {
 
 	// Get Child offsets
 	for (idx_t i = 0; i < 48; i++) {
-		node48->block_offsets[i] = {reader.Read<idx_t>(), reader.Read<idx_t>()};
+		node48->children[i] = (Node *)(Node::GenerateSwizzledPointer(reader.Read<idx_t>(), reader.Read<idx_t>()));
 	}
 	return node48;
 }

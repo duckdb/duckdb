@@ -51,7 +51,7 @@ public:
 	//! Serialize this Node
 	virtual std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) = 0;
 
-	static unique_ptr<Node> Deserialize(ART &art, idx_t block_id, idx_t offset);
+	static Node *Deserialize(ART &art, idx_t block_id, idx_t offset);
 
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position. if pos ==
 	//! DConstants::INVALID_INDEX, then the first valid position in the node will be returned.
@@ -60,7 +60,14 @@ public:
 	}
 	//! Get the child at the specified position in the node. pos should be between [0, count). Throws an assertion if
 	//! the element is not found.
-	virtual unique_ptr<Node> *GetChild(ART &art, idx_t pos);
+	virtual Node *GetChild(ART &art, idx_t pos);
+
+	//! Tries to get a child from a given address, checks if the address is pointing to a memory space
+	//! Or if its a swizzled pointer.
+	static Node *GetChildSwizzled(ART &art, uintptr_t pointer);
+
+	//! Generate Swizzled Pointer from block id and offset
+	static uintptr_t GenerateSwizzledPointer(uint32_t block_id, uint32_t offset);
 
 	//! Compare the key with the prefix of the node, return the number matching bytes
 	static uint32_t PrefixMismatch(Node *node, Key &key, uint64_t depth);

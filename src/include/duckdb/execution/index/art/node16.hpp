@@ -14,11 +14,9 @@ namespace duckdb {
 class Node16 : public Node {
 public:
 	explicit Node16(size_t compression_length);
-
+	~Node16() override;
 	uint8_t key[16];
-	unique_ptr<Node> child[16];
-	// Block offsets
-	std::pair<idx_t, idx_t> block_offsets[4];
+	Node *children[16];
 
 public:
 	//! Get position of a byte, returns -1 if not exists
@@ -29,18 +27,18 @@ public:
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position
 	idx_t GetNextPos(idx_t pos) override;
 	//! Get Node16 Child
-	unique_ptr<Node> *GetChild(ART &art, idx_t pos) override;
+	Node *GetChild(ART &art, idx_t pos) override;
 
 	idx_t GetMin() override;
 
 	//! Insert node into Node16
-	static void Insert(unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child);
+	static void Insert(Node *&node, uint8_t key_byte, Node *child);
 	//! Shrink to node 4
-	static void Erase(unique_ptr<Node> &node, int pos);
+	static void Erase(Node *&node, int pos);
 
 	//! Serialize Node
 	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) override;
 
-	static unique_ptr<Node16> Deserialize(duckdb::MetaBlockReader &source);
+	static Node16 *Deserialize(duckdb::MetaBlockReader &source);
 };
 } // namespace duckdb

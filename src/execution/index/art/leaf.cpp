@@ -53,7 +53,7 @@ std::pair<idx_t, idx_t> Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
 	return {block_id, offset};
 }
 
-unique_ptr<Leaf> Leaf::Deserialize(MetaBlockReader &reader) {
+Leaf *Leaf::Deserialize(MetaBlockReader &reader) {
 	auto value_length = reader.Read<idx_t>();
 	unique_ptr<data_t[]> data = unique_ptr<data_t[]>(new data_t[value_length]);
 	for (idx_t i = 0; i < value_length; i++) {
@@ -67,7 +67,7 @@ unique_ptr<Leaf> Leaf::Deserialize(MetaBlockReader &reader) {
 	for (idx_t i = 0; i < num_elements; i++) {
 		elements[i] = reader.Read<row_t>();
 	}
-	return make_unique<Leaf>(move(key_value), move(elements), num_elements);
+	return new Leaf(move(key_value), move(elements), num_elements);
 }
 
 void Leaf::Remove(row_t row_id) {

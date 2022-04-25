@@ -8,6 +8,15 @@ namespace duckdb {
 
 Node16::Node16(size_t compression_length) : Node(NodeType::N16, compression_length) {
 	memset(key, 16, sizeof(key));
+	for (auto &child : children) {
+		child = nullptr;
+	}
+}
+
+Node16::~Node16() {
+	for (auto &child : children) {
+		delete child;
+	}
 }
 
 idx_t Node16::GetChildPos(uint8_t k) {
@@ -42,20 +51,17 @@ idx_t Node16::GetNextPos(idx_t pos) {
 	return pos < count ? pos : DConstants::INVALID_INDEX;
 }
 
-unique_ptr<Node> *Node16::GetChild(ART &art, idx_t pos) {
+Node *Node16::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(pos < count);
-	if (!child[pos]) {
-		child[pos] = Node::Deserialize(art, block_offsets[pos].first, block_offsets[pos].second);
-	}
-	return &child[pos];
+	return Node::GetChildSwizzled(art, (uintptr_t)children[pos]);
 }
 
 idx_t Node16::GetMin() {
 	return 0;
 }
 
-void Node16::Insert(unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
-	Node16 *n = static_cast<Node16 *>(node.get());
+void Node16::Insert(Node *&node, uint8_t key_byte, Node *child) {
+	Node16 *n = (Node16 *)node;
 
 	if (n->count < 16) {
 		// Insert element
@@ -63,25 +69,27 @@ void Node16::Insert(unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &
 		while (pos < node->count && n->key[pos] < key_byte) {
 			pos++;
 		}
-		if (n->child[pos] != nullptr) {
+		if (n->children[pos] != nullptr) {
 			for (idx_t i = n->count; i > pos; i--) {
 				n->key[i] = n->key[i - 1];
-				n->child[i] = move(n->child[i - 1]);
+				n->children[i] = n->children[i - 1];
 			}
 		}
 		n->key[pos] = key_byte;
-		n->child[pos] = move(child);
+		n->children[pos] = child;
 		n->count++;
 	} else {
 		// Grow to Node48
-		auto new_node = make_unique<Node48>(n->prefix_length);
+		auto new_node = new Node48(n->prefix_length);
 		for (idx_t i = 0; i < node->count; i++) {
 			new_node->child_index[n->key[i]] = i;
-			new_node->child[i] = move(n->child[i]);
+			new_node->children[i] = n->children[i];
+			n->children[i] = nullptr;
 		}
-		CopyPrefix(n, new_node.get());
+		CopyPrefix(n, new_node);
 		new_node->count = node->count;
-		node = move(new_node);
+		delete node;
+		node = new_node;
 
 		Node48::Insert(node, key_byte, child);
 	}
@@ -90,7 +98,7 @@ void Node16::Insert(unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &
 std::pair<idx_t, idx_t> Node16::Serialize(duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
 	vector<std::pair<idx_t, idx_t>> child_offsets;
-	for (auto &child_node : child) {
+	for (auto &child_node : children) {
 		if (child_node) {
 			child_offsets.push_back(child_node->Serialize(writer));
 		} else {
@@ -119,10 +127,10 @@ std::pair<idx_t, idx_t> Node16::Serialize(duckdb::MetaBlockWriter &writer) {
 	return {block_id, offset};
 }
 
-unique_ptr<Node16> Node16::Deserialize(duckdb::MetaBlockReader &reader) {
+Node16 *Node16::Deserialize(duckdb::MetaBlockReader &reader) {
 	auto count = reader.Read<uint16_t>();
 	auto prefix_length = reader.Read<uint32_t>();
-	auto node16 = make_unique<Node16>(prefix_length);
+	auto node16 = new Node16(prefix_length);
 	node16->count = count;
 
 	for (idx_t i = 0; i < prefix_length; i++) {
@@ -136,30 +144,32 @@ unique_ptr<Node16> Node16::Deserialize(duckdb::MetaBlockReader &reader) {
 
 	// Get Child offsets
 	for (idx_t i = 0; i < 16; i++) {
-		node16->block_offsets[i] = {reader.Read<idx_t>(), reader.Read<idx_t>()};
+		node16->children[i] = (Node *)(Node::GenerateSwizzledPointer(reader.Read<idx_t>(), reader.Read<idx_t>()));
 	}
 	return node16;
 }
 
-void Node16::Erase(unique_ptr<Node> &node, int pos) {
-	Node16 *n = static_cast<Node16 *>(node.get());
+void Node16::Erase(Node *&node, int pos) {
+	auto n = (Node16 *)node;
 	// erase the child and decrease the count
-	n->child[pos].reset();
+	delete n->children[pos];
+	n->children[pos] = nullptr;
 	n->count--;
 	// potentially move any children backwards
 	for (; pos < n->count; pos++) {
 		n->key[pos] = n->key[pos + 1];
-		n->child[pos] = move(n->child[pos + 1]);
+		n->children[pos] = n->children[pos + 1];
 	}
 	if (node->count <= 3) {
 		// Shrink node
-		auto new_node = make_unique<Node4>(n->prefix_length);
+		auto new_node = new Node4(n->prefix_length);
 		for (unsigned i = 0; i < n->count; i++) {
 			new_node->key[new_node->count] = n->key[i];
-			new_node->child[new_node->count++] = move(n->child[i]);
+			new_node->children[new_node->count++] = n->children[i];
 		}
-		CopyPrefix(n, new_node.get());
-		node = move(new_node);
+		CopyPrefix(n, new_node);
+		delete node;
+		node = new_node;
 	}
 }
 

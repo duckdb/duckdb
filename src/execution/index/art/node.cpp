@@ -14,7 +14,7 @@ void Node::CopyPrefix(Node *src, Node *dst) {
 }
 
 // LCOV_EXCL_START
-unique_ptr<Node> *Node::GetChild(ART &art, idx_t pos) {
+Node *Node::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(0);
 	return nullptr;
 }
@@ -25,7 +25,34 @@ idx_t Node::GetMin() {
 }
 // LCOV_EXCL_STOP
 
-unique_ptr<Node> Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
+Node *Node::GetChildSwizzled(ART &art, uintptr_t pointer) {
+	idx_t pointer_size = sizeof(pointer) * 8;
+	// We first check if left-most bit is set
+	bool in_disk = (pointer >> (pointer_size - 1)) & 1;
+	if (in_disk) {
+		// This means our pointer is not yet in memory, gotta deserialize this
+		// first we unset the bae
+		pointer = pointer & ~(1UL << pointer_size);
+		uint32_t block_id = pointer >> (pointer_size / 2);
+		uint32_t offset = pointer & 0xffffffff;
+		return Deserialize(art, block_id, offset);
+
+	} else {
+		return (Node *)pointer;
+	}
+}
+
+uintptr_t Node::GenerateSwizzledPointer(uint32_t block_id, uint32_t offset) {
+	uintptr_t pointer;
+	idx_t pointer_size = sizeof(pointer) * 8;
+	pointer = block_id;
+	pointer = pointer << (pointer_size / 2);
+	pointer += offset;
+	// Set the left most bit to indicate this is a swizzled pointer and send it back to the mother-ship
+	return pointer << ((pointer_size)-1);
+}
+
+Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 	MetaBlockReader reader(art.db, block_id);
 	reader.offset = offset;
 	NodeType node_type(static_cast<NodeType>(reader.Read<uint8_t>()));
