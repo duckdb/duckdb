@@ -76,12 +76,41 @@ idx_t ColumnReader::MaxRepeat() const {
 	return max_repeat;
 }
 
-size_t ColumnReader::TotalCompressedSize() const {
+void ColumnReader::Prefetch(ThriftFileTransport & transport) {
+	if (chunk) {
+		auto size = chunk->meta_data.total_compressed_size;
+
+		transport.RegisterPrefetch(FileOffset(), size);
+	}
+}
+
+size_t ColumnReader::TotalCompressedSize() {
+	if (!chunk) {
+		return 0;
+		throw std::runtime_error("TotalCompressedSize called on ColumnReader with no chunk");
+	}
+
 	return chunk->meta_data.total_compressed_size;
 }
 
 idx_t ColumnReader::FileOffset() const {
-	return chunk->meta_data.data_page_offset;
+	if (!chunk) {
+		throw std::runtime_error("FileOffset called on ColumnReader with no chunk");
+	}
+	// Note: For some reason, it's not trivial to determine where all Column data is stored. Chunk->file_offset apparently
+	// is not the first page of the data. Therefore we determine the address of the first page.
+	// TODO: However: this still appears to be wrong sometime
+
+	auto min_offset = NumericLimits<idx_t>::Maximum();
+	if (chunk->meta_data.__isset.dictionary_page_offset) {
+		min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.dictionary_page_offset);
+	}
+	if (chunk->meta_data.__isset.index_page_offset) {
+		min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.index_page_offset);
+	}
+	min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.data_page_offset);
+
+	return min_offset;
 }
 
 idx_t ColumnReader::GroupRowsAvailable() {
@@ -712,6 +741,9 @@ StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p
 }
 
 ColumnReader *StructColumnReader::GetChildReader(idx_t child_idx) {
+	if (child_idx >= child_readers.size()){
+ 		throw std::runtime_error("WHY?");
+	}
 	return child_readers[child_idx].get();
 }
 
@@ -750,6 +782,20 @@ void StructColumnReader::Skip(idx_t num_values) {
 	for (auto &child_reader : child_readers) {
 		child_reader->Skip(num_values);
 	}
+}
+
+void StructColumnReader::Prefetch(ThriftFileTransport & transport) {
+	for (auto& child: child_readers){
+		child->Prefetch(transport);
+	}
+}
+
+size_t StructColumnReader::TotalCompressedSize() {
+	size_t size = 0;
+	for (auto& child: child_readers){
+		size += child->TotalCompressedSize();
+	}
+	return size;
 }
 
 idx_t StructColumnReader::GroupRowsAvailable() {

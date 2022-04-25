@@ -158,6 +158,7 @@ private:
 	                                               idx_t &next_schema_idx, idx_t &next_file_idx);
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	size_t GetGroupCompressedSize(ParquetReaderScanState &state);
+	idx_t GetGroupOffset(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
 

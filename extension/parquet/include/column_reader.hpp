@@ -62,10 +62,11 @@ public:
 	idx_t FileIdx() const;
 	idx_t MaxDefine() const;
 	idx_t MaxRepeat() const;
-	size_t TotalCompressedSize() const;
-	idx_t FileOffset() const;
 
+	virtual idx_t FileOffset() const;
+	virtual size_t TotalCompressedSize();
 	virtual idx_t GroupRowsAvailable();
+	virtual void Prefetch(ThriftFileTransport & transport);
 
 	virtual unique_ptr<BaseStatistics> Stats(const std::vector<ColumnChunk> &columns);
 
@@ -105,7 +106,7 @@ private:
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
 
-	const duckdb_parquet::format::ColumnChunk *chunk;
+	const duckdb_parquet::format::ColumnChunk *chunk = nullptr;
 
 	duckdb_apache::thrift::protocol::TProtocol *protocol;
 	idx_t page_rows_available;

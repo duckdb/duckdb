@@ -11,15 +11,6 @@
 
 namespace duckdb {
 
-struct PrefetchBuffer {
-	PrefetchBuffer(idx_t location, size_t size, Allocator &allocator) : location(location) {
-		data = allocator.Allocate(size);
-	}
-	idx_t location;
-	unique_ptr<AllocatedData> data;
-	bool operator == (const PrefetchBuffer& other) const { return data == other.data; }
-};
-
 /// A ReadHead contains a range that was hinted to be accessed in the near future.
 struct ReadHead {
 	ReadHead(idx_t location, size_t size) : location(location), size(size){};
@@ -39,6 +30,22 @@ struct ReadHead {
 	}
 };
 
+// Allows to merge also buffers that do not perfectly align to reduce number of requests
+struct ReadHeadComparator
+{
+	static constexpr size_t ALLOW_GAP = 1 << 14; // 16 KiB
+
+	bool operator()( const ReadHead* a, const ReadHead* b ) const
+	{
+		// TODO: handle overflow?
+		auto a_start = a->location;
+		auto a_end = a->location + a->size + ALLOW_GAP;
+		auto b_start = b->location;
+
+		return a_start < b_start && a_end < b_start;
+	}
+};
+
 /// Read ahead buffer implementation that requires specifying the ranges that can be accesssed
 struct ReadAheadBuffer {
 	ReadAheadBuffer(Allocator &allocator, FileHandle &handle) : allocator(allocator), handle(handle) {
@@ -48,6 +55,8 @@ struct ReadAheadBuffer {
 	std::list<ReadHead> read_heads;
 	Allocator &allocator;
 	FileHandle &handle;
+
+	std::set<ReadHead*, ReadHeadComparator> merge_set;
 
 	std::map<idx_t, ReadHead*> start_map;
 	std::map<idx_t, ReadHead*> end_map;
@@ -59,30 +68,43 @@ struct ReadAheadBuffer {
 
 		// Attempt to merge with existing
 		if (merge_buffers) {
-			auto lookup_start = end_map.find(pos);
-			if (lookup_start != end_map.end()) {
-				auto read_head = lookup_start->second;
-				// Merge existing read head with this one
-				read_head->size += len;
-				// Add new end
-				end_map.insert(std::pair<idx_t, ReadHead*>(read_head->GetEnd(), read_head));
-				// Erase old end
-				end_map.erase(lookup_start->first);
+
+			// Merge using SET
+			ReadHead new_read_head{pos, len};
+			auto lookup_set = merge_set.find(&new_read_head);
+			if (lookup_set != merge_set.end()){
+				auto existing_head = *lookup_set;
+				auto new_start = MinValue<idx_t>(existing_head->location, new_read_head.location);
+				auto new_length = MaxValue<idx_t>(existing_head->GetEnd(), new_read_head.GetEnd()) - new_start;
+				existing_head->location = new_start;
+				existing_head->size = new_length;
 				return;
 			}
 
-			auto lookup_end = start_map.find(pos + len);
-			if (lookup_end != start_map.end()) {
-				auto read_head = lookup_start->second;
-				// Merge existing read head with this one
-				read_head->location -= len;
-				read_head->size += len;
-				// Add new start
-				start_map.insert(std::pair<idx_t, ReadHead*>(read_head->location, read_head));
-				// Erase old start
-				end_map.erase(lookup_start->first);
-				return;
-			}
+//			auto lookup_start = end_map.find(pos);
+//			if (lookup_start != end_map.end()) {
+//				auto read_head = lookup_start->second;
+//				// Merge existing read head with this one
+//				read_head->size += len;
+//				// Add new end
+//				end_map.insert(std::pair<idx_t, ReadHead*>(read_head->GetEnd(), read_head));
+//				// Erase old end
+//				end_map.erase(lookup_start->first);
+//				return;
+//			}
+//
+//			auto lookup_end = start_map.find(pos + len);
+//			if (lookup_end != start_map.end()) {
+//				auto read_head = lookup_end->second;
+//				// Merge existing read head with this one
+//				read_head->location -= len;
+//				read_head->size += len;
+//				// Add new start
+//				start_map.insert(std::pair<idx_t, ReadHead*>(read_head->location, read_head));
+//				// Erase old start
+//				end_map.erase(lookup_end->first);
+//				return;
+//			}
 		}
 
 		// No merge candidate found, just add it
@@ -92,8 +114,14 @@ struct ReadAheadBuffer {
 		auto& read_head = read_heads.front();
 
 		// Insert begin and end into maps for later merge lookups
-		start_map.insert(std::pair<idx_t, ReadHead*>(read_head.location, &read_head));
-		end_map.insert(std::pair<idx_t, ReadHead*>(read_head.GetEnd(), &read_head));
+//		start_map.insert(std::pair<idx_t, ReadHead*>(read_head.location, &read_head));
+//		end_map.insert(std::pair<idx_t, ReadHead*>(read_head.GetEnd(), &read_head));
+
+		merge_set.insert(&read_head);
+
+		if (read_head.GetEnd() > handle.GetFileSize()) {
+			throw std::runtime_error("Prefetch registered for bytes outside file");
+		}
 	}
 
 	/// Returns the relevant read head
@@ -108,10 +136,15 @@ struct ReadAheadBuffer {
 
 	/// Prefetch all read heads
 	void Prefetch() {
-		// TODO we could do these prefetches in parallel probably
+		// TODO we should do these prefetches in parallel probably
 		for (auto& read_head: read_heads) {
 			read_head.Allocate(allocator);
-			std::cout << "Prefetching registered: " << read_head.location << " till " << read_head.location + read_head.size << " bytes (total:" << read_head.size << ") \n";
+
+			if (read_head.GetEnd() > handle.GetFileSize()) {
+				throw std::runtime_error("Prefetch registered requested for bytes outside file");
+			}
+
+//			std::cout << "Prefetch new " << read_head.location << " for " << read_head.size << " bytes\n";
 			handle.Read(read_head.data->get(), read_head.size, read_head.location);
 		}
 	}
@@ -125,15 +158,16 @@ public:
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
 		if (prefetched_data && location >= prefetch_location &&
-		    location + len < prefetch_location + prefetched_data->GetSize()) {
-//			std::cout << "Reading through old prefetch: " << location << " till " << location + len << " bytes \n";
+		    location + len <= prefetch_location + prefetched_data->GetSize()) {
 			memcpy(buf, prefetched_data->get() + location - prefetch_location, len);
 		} else {
 			auto prefetch_buffer = ra_buffer.GetReadHead(location);
-			if (prefetch_buffer != nullptr) {
+			// TODO: Sometimes we are scanning inside a prefetch buffer and exceed it. Why does this happen?
+			if (prefetch_buffer != nullptr && location - prefetch_buffer->location + len <= prefetch_buffer->size) {
+				D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
 				memcpy(buf, prefetch_buffer->data->get() + location - prefetch_buffer->location, len);
 			} else {
-				std::cout << "Directly reading: " << location << " till " << location + len << " bytes (total:" << len << ") \n";
+//				std::cout << "Direct read " << location << " for " << len << " bytes\n";
 				handle.Read(buf, len, location);
 			}
 		}
@@ -143,9 +177,14 @@ public:
 
 	/// Old prefetch
 	void Prefetch(idx_t pos, idx_t len) {
-		std::cout << "Prefetching OLD: " << pos << " till " << pos + len << " bytes (total:" << len << ") \n";
+		if (pos + len > handle.GetFileSize()) {
+			throw std::runtime_error("Prefetch requested for bytes outside file");
+		}
+
+//		std::cout << "Prefetch old " << pos << " for " << len << " bytes\n";
 		prefetch_location = pos;
 		prefetched_data = allocator.Allocate(len);
+
 		handle.Read(prefetched_data->get(), len, prefetch_location); // here
 	}
 	void ClearPrefetch() {

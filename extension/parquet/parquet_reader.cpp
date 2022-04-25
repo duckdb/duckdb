@@ -520,15 +520,39 @@ size_t ParquetReader::GetGroupCompressedSize(ParquetReaderScanState &state) {
 	auto &group = GetGroup(state);
 	auto total_compressed_size = group.total_compressed_size;
 
+	idx_t calc_compressed_size = 0;
+
 	// If the global total_compressed_size is not set, we can still calculate it
 	if (group.total_compressed_size == 0) {
-		auto root_reader = ((StructColumnReader *)state.root_reader.get());
-		for (auto& child_reader: root_reader->child_readers) {
-			total_compressed_size += child_reader->TotalCompressedSize();
+		for (auto& column_chunk: group.columns) {
+			calc_compressed_size += column_chunk.meta_data.total_compressed_size;
 		}
 	}
 
-	return total_compressed_size;
+	if (total_compressed_size != 0 && calc_compressed_size != 0 && total_compressed_size != calc_compressed_size) {
+		throw std::runtime_error("mismatch between calculated compressed size and reported compressed size");
+	}
+
+	return total_compressed_size ? total_compressed_size : calc_compressed_size;
+}
+
+idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
+	auto &group = GetGroup(state);
+	idx_t min_offset_overall = NumericLimits<idx_t>::Maximum();
+
+	for (auto& column_chunk : group.columns) {
+		auto min_offset = NumericLimits<idx_t>::Maximum();
+		if (column_chunk.meta_data.__isset.dictionary_page_offset) {
+			min_offset = MinValue<idx_t>(min_offset, column_chunk.meta_data.dictionary_page_offset);
+		}
+		if (column_chunk.meta_data.__isset.index_page_offset) {
+			min_offset = MinValue<idx_t>(min_offset, column_chunk.meta_data.index_page_offset);
+		}
+		min_offset = MinValue<idx_t>(min_offset, column_chunk.meta_data.data_page_offset);
+		min_offset_overall = MinValue<idx_t>(min_offset_overall, min_offset);
+	}
+
+	return min_offset_overall;
 }
 
 void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx) {
@@ -768,10 +792,12 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		}
 
 		size_t to_scan_compressed_bytes = 0;
+		bool will_scan_all_columns = true;
 		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 			// this is a special case where we are not interested in the actual contents of the file
 			if (state.column_ids[out_col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
 				continue;
+				will_scan_all_columns = false;
 			}
 
 			PrepareRowGroupBuffer(state, out_col_idx);
@@ -787,29 +813,32 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		if (state.group_offset != group.num_rows) {
 			auto total_compressed_size = GetGroupCompressedSize(state);
 
-			bool scans_enough = ((double)to_scan_compressed_bytes / total_compressed_size) >=
-			                    ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN;
-			bool groups_small_enough =
-			    total_compressed_size < ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MAX_SIZE;
-
-			if (groups_small_enough && scans_enough) {
+			// TODO: I should figure out how to directly read the column metadata without the dumb reader thingies?
+			// OR only do the code below when all columns are scanned.
+			if (false) {
 				if (!state.have_prefetched_group || state.prefetched_group != state.current_group) {
+
 					if (total_compressed_size > 0) {
-						trans.Prefetch(group.file_offset, total_compressed_size);
+						trans.RegisterPrefetch(GetGroupOffset(state), total_compressed_size);
+						trans.PrefetchRegistered();
 					}
 					state.have_prefetched_group = true;
 					state.prefetched_group = state.current_group;
 				}
-			} else if (to_scan_compressed_bytes / result.ColumnCount() >
+			} else if (true || to_scan_compressed_bytes / result.ColumnCount() >
 			               ParquetReaderPrefetchConfig::COLUMN_CHUNK_CACHE_LOWER_LIMIT &&
 			           to_scan_compressed_bytes < ParquetReaderPrefetchConfig::COLUMN_CHUNK_CACHE_MAX_SIZE) {
 				// Prefetch type 2a: Prefetch columns-wise
 				for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
+
+					if (state.column_ids[out_col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
+						continue;
+					}
+
 					auto file_col_idx = state.column_ids[out_col_idx];
 					auto root_reader = ((StructColumnReader *)state.root_reader.get());
-					auto size = root_reader->GetChildReader(file_col_idx)->TotalCompressedSize();
-					auto offset = root_reader->GetChildReader(file_col_idx)->FileOffset();
-					trans.RegisterPrefetch(offset, size);
+
+					root_reader->GetChildReader(file_col_idx)->Prefetch(trans);
 				}
 				trans.PrefetchRegistered();
 			} else {
@@ -851,6 +880,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				break;
 			}
 
+//			std::cout << "Reading filter for col " << root_reader->GetChildReader(file_col_idx)->Schema().name << "\n";
 			root_reader->GetChildReader(file_col_idx)
 			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[filter_col.first]);
 
@@ -871,6 +901,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				continue;
 			}
 			// TODO handle ROWID here, too
+//			std::cout << "Reading mask for col " << root_reader->GetChildReader(file_col_idx)->Schema().name << "\n";
 			root_reader->GetChildReader(file_col_idx)
 			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[out_col_idx]);
 		}
@@ -895,6 +926,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				continue;
 			}
 
+//			std::cout << "Reading nofilter for col " << root_reader->GetChildReader(file_col_idx)->Schema().name << "\n";
 			root_reader->GetChildReader(file_col_idx)
 			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[out_col_idx]);
 		}

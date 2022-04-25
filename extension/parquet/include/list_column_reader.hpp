@@ -31,6 +31,15 @@ public:
 		return child_column_reader->GroupRowsAvailable() + overflow_child_count;
 	}
 
+	size_t TotalCompressedSize() override {
+		return child_column_reader->TotalCompressedSize();
+	}
+
+	void Prefetch(ThriftFileTransport & transport) override {
+		child_column_reader->Prefetch(transport);
+	}
+
+
 private:
 	unique_ptr<ColumnReader> child_column_reader;
 	ResizeableBuffer child_defines;
