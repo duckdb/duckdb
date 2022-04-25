@@ -148,9 +148,11 @@ private:
 	template <TableScanType TYPE>
 	void TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result);
 
+	//! Scan the RowGroup to the payload DataChunk before sorting
 	bool ScanToDataChunks(RowGroupScanState &state, DataChunk &result);
-	bool ScanToKeyAndPayload(RowGroupScanState &state, DataChunk &keys, DataChunk &payload, const vector<idx_t>& cardinalities);
+	//! Sort the columns before checkpointing
 	void SortColumns();
+	//! Return the indices of the key columns
 	void CalculateCardinalitiesCorrelation1(vector<LogicalType> &types, TableScanState &scan_state, vector<idx_t> &cardinalities);
 
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
