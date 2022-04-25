@@ -52,7 +52,6 @@ test_that("duckdb custom scalars translated correctly", {
   expect_equal(translate(log(x, base = 2)), sql(r"{LOG2("x")}"))
   expect_equal(translate(log10(x)), sql(r"{LOG10("x")}"))
   expect_equal(translate(log2(x)), sql(r"{LOG2("x")}"))
-  expect_equal(translate(is.na(var1)), sql(r"{("var1" IS NULL OR PRINTF('%f', "var1") = 'nan')}"))
   expect_equal(translate(is.nan(var1)), sql(r"{("var1" IS NOT NULL AND PRINTF('%f', "var1") = 'nan')}"))
   expect_equal(translate(is.infinite(var1)), sql(r"{("var1" IS NOT NULL AND REGEXP_MATCHES(PRINTF('%f', "var1"), 'inf'))}"))
   expect_equal(translate(is.finite(var1)), sql(r"{(NOT ("var1" IS NULL OR REGEXP_MATCHES(PRINTF('%f', "var1"), 'inf|nan')))}"))
@@ -237,7 +236,6 @@ test_that("snapshots of duckdb custom scalars translations", {
     translate(log(x, base = 2))
     translate(log10(x))
     translate(log2(x))
-    translate(is.na(var1))
     translate(is.nan(var1))
     translate(is.infinite(var1))
     translate(is.finite(var1))
@@ -384,10 +382,10 @@ test_that("these should give errors", {
 
   expect_snapshot(error = TRUE, {
     translate(grepl("dummy", txt, perl = TRUE)) # Expected error
-#    translate(paste0(x, collapse = ""), window = FALSE) # Skip because of changing rlang_error (sql_paste())
+    #    translate(paste0(x, collapse = ""), window = FALSE) # Skip because of changing rlang_error (sql_paste())
     translate(quarter(x, type = "other")) # Not supported - error
     translate(quarter(x, fiscal_start = 2)) # Not supported - error
-#    translate(str_c(x, collapse = "")) # Skip because of changing rlang_error (sql_paste())
+    #    translate(str_c(x, collapse = "")) # Skip because of changing rlang_error (sql_paste())
     translate(str_pad(x, width = 10, side = "other")) # Error
   })
 })

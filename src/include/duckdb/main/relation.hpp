@@ -15,27 +15,36 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include <memory>
 
 namespace duckdb {
 struct BoundStatement;
 
-class ClientContext;
+class ClientContextWrapper;
 class Binder;
 class LogicalOperator;
 class QueryNode;
 class TableRef;
 
+class ExtraDependencies {};
+
 class Relation : public std::enable_shared_from_this<Relation> {
 public:
-	DUCKDB_API Relation(ClientContext &context, RelationType type) : context(context), type(type) {
+	DUCKDB_API Relation(const std::shared_ptr<ClientContext> &context, RelationType type)
+	    : context(context), type(type) {
+	}
+	DUCKDB_API Relation(ClientContextWrapper &context, RelationType type) : context(context.GetContext()), type(type) {
 	}
 	DUCKDB_API virtual ~Relation() {
 	}
 
-	ClientContext &context;
+	ClientContextWrapper context;
+
 	RelationType type;
+
+	unique_ptr<ExtraDependencies> extra_dependencies;
 
 public:
 	DUCKDB_API virtual const vector<ColumnDefinition> &Columns() = 0;

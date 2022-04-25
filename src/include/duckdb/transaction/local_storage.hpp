@@ -16,7 +16,7 @@ class DataTable;
 class WriteAheadLog;
 struct TableAppendState;
 
-class LocalTableStorage {
+class LocalTableStorage : public std::enable_shared_from_this<LocalTableStorage> {
 public:
 	explicit LocalTableStorage(DataTable &table);
 	~LocalTableStorage();
@@ -88,6 +88,9 @@ public:
 	void ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, const LogicalType &target_type,
 	                const vector<column_t> &bound_columns, Expression &cast_expr);
 
+	void FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &chunk);
+	vector<unique_ptr<Index>> &GetIndexes(DataTable *table);
+
 private:
 	LocalTableStorage *GetStorage(DataTable *table);
 
@@ -96,7 +99,7 @@ private:
 
 private:
 	Transaction &transaction;
-	unordered_map<DataTable *, unique_ptr<LocalTableStorage>> table_storage;
+	unordered_map<DataTable *, shared_ptr<LocalTableStorage>> table_storage;
 
 	void Flush(DataTable &table, LocalTableStorage &storage);
 };

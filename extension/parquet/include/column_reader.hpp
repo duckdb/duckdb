@@ -56,12 +56,16 @@ public:
 
 	virtual void Skip(idx_t num_values);
 
-	const LogicalType &Type();
-	const SchemaElement &Schema();
+	ParquetReader &Reader();
+	const LogicalType &Type() const;
+	const SchemaElement &Schema() const;
+	idx_t FileIdx() const;
+	idx_t MaxDefine() const;
+	idx_t MaxRepeat() const;
 
 	virtual idx_t GroupRowsAvailable();
 
-	unique_ptr<BaseStatistics> Stats(const std::vector<ColumnChunk> &columns);
+	virtual unique_ptr<BaseStatistics> Stats(const std::vector<ColumnChunk> &columns);
 
 protected:
 	// readers that use the default Read() need to implement those

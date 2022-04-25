@@ -2,6 +2,7 @@
 #include "test_helpers.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/main/connection_manager.hpp"
 
 #include <chrono>
 #include <thread>
@@ -499,4 +500,29 @@ TEST_CASE("Test opening an invalid database file", "[api]") {
 		REQUIRE(StringUtil::Contains(ex.what(), "DuckDB"));
 	}
 	REQUIRE(!success);
+}
+
+TEST_CASE("Test large number of connections to a single database", "[api]") {
+	auto db = make_unique<DuckDB>(nullptr);
+	auto context = make_unique<ClientContext>((*db).instance);
+	auto &connection_manager = ConnectionManager::Get(*context);
+
+	vector<unique_ptr<Connection>> connections;
+	size_t createdConnections = 5000;
+	size_t remainingConnections = 500;
+	size_t toRemove = createdConnections - remainingConnections;
+
+	for (size_t i = 0; i < createdConnections; i++) {
+		auto conn = make_unique<Connection>(*db);
+		connections.push_back(move(conn));
+	}
+
+	REQUIRE(connection_manager.connections.size() == createdConnections);
+
+	for (size_t i = 0; i < toRemove; i++) {
+		auto conn = *connections[0];
+		connections.erase(connections.begin());
+	}
+
+	REQUIRE(connection_manager.connections.size() == remainingConnections);
 }

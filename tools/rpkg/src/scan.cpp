@@ -69,14 +69,11 @@ struct DataFrameOperatorData : public FunctionOperatorData {
 	idx_t count;
 };
 
-static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
-                                                    named_parameter_map_t &named_parameters,
-                                                    vector<LogicalType> &input_table_types,
-                                                    vector<string> &input_table_names,
+static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
-	data_frame df((SEXP)inputs[0].GetPointer());
+	data_frame df((SEXP)input.inputs[0].GetPointer());
 
-	auto experimental = get_bool_param(named_parameters, "experimental", false);
+	auto experimental = get_bool_param(input.named_parameters, "experimental", false);
 
 	auto df_names = df.names();
 	vector<RType> rtypes;
@@ -156,7 +153,7 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 		data_ptrs.push_back(coldata_ptr);
 	}
 	auto row_count = Rf_length(VECTOR_ELT(df, 0));
-	return make_unique<DataFrameScanBindData>(df, row_count, rtypes, data_ptrs, named_parameters);
+	return make_unique<DataFrameScanBindData>(df, row_count, rtypes, data_ptrs, input.named_parameters);
 }
 
 static void dataframe_scan_init_internal(ClientContext &context, const DataFrameScanBindData *bind_data,

@@ -1,5 +1,7 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/common/pair.hpp"
+#include <cmath>
+#include <limits>
 
 namespace duckdb {
 
@@ -54,6 +56,7 @@ static vector<TestType> GetTestTypes() {
 	result.emplace_back(LogicalType::DECIMAL(18, 6), "dec_18_6");
 	result.emplace_back(LogicalType::DECIMAL(38, 10), "dec38_10");
 	result.emplace_back(LogicalType::UUID, "uuid");
+
 	// interval
 	interval_t min_interval;
 	min_interval.months = 0;
@@ -68,6 +71,7 @@ static vector<TestType> GetTestTypes() {
 	                    Value::INTERVAL(max_interval));
 	// strings/blobs
 	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
+	result.emplace_back(LogicalType::JSON, "json", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
 	result.emplace_back(LogicalType::BLOB, "blob", Value::BLOB("thisisalongblob\\x00withnullbytes"),
 	                    Value("\\x00\\x00\\x00a"));
 
@@ -99,6 +103,13 @@ static vector<TestType> GetTestTypes() {
 	auto int_list = Value::LIST({Value::INTEGER(42), Value::INTEGER(999), Value(LogicalType::INTEGER),
 	                             Value(LogicalType::INTEGER), Value::INTEGER(-42)});
 	result.emplace_back(int_list_type, "int_array", empty_int_list, int_list);
+
+	auto double_list_type = LogicalType::LIST(LogicalType::DOUBLE);
+	auto empty_double_list = Value::EMPTYLIST(LogicalType::DOUBLE);
+	auto double_list = Value::LIST(
+	    {Value::DOUBLE(42), Value::DOUBLE(NAN), Value::DOUBLE(std::numeric_limits<double>::infinity()),
+	     Value::DOUBLE(-std::numeric_limits<double>::infinity()), Value(LogicalType::DOUBLE), Value::DOUBLE(-42)});
+	result.emplace_back(double_list_type, "double_array", empty_double_list, double_list);
 
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto empty_varchar_list = Value::EMPTYLIST(LogicalType::VARCHAR);
@@ -165,11 +176,8 @@ static vector<TestType> GetTestTypes() {
 	return result;
 }
 
-static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, vector<Value> &inputs,
-                                                 named_parameter_map_t &named_parameters,
-                                                 vector<LogicalType> &input_table_types,
-                                                 vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                 vector<string> &names) {
+static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFunctionBindInput &input,
+                                                 vector<LogicalType> &return_types, vector<string> &names) {
 	auto test_types = GetTestTypes();
 	for (auto &test_type : test_types) {
 		return_types.push_back(move(test_type.type));

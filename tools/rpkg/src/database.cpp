@@ -46,7 +46,10 @@ void duckdb::DBDeleter(DBWrapper *db) {
 
 	try {
 		wrapper = new DBWrapper();
-		config.replacement_scans.emplace_back(ArrowScanReplacement, wrapper);
+
+		auto data = make_unique<ArrowScanReplacementData>();
+		data->wrapper = wrapper;
+		config.replacement_scans.emplace_back(ArrowScanReplacement, move(data));
 		wrapper->db = make_unique<DuckDB>(dbdirchar, &config);
 	} catch (std::exception &e) {
 		cpp11::stop("rapi_startup: Failed to open database: %s", e.what());

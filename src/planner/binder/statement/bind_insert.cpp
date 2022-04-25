@@ -7,6 +7,10 @@
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_binder/returning_binder.hpp"
 
 namespace duckdb {
 
@@ -115,18 +119,31 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		}
 	}
 
-	// insert from select statement
 	// parse select statement and add to logical plan
 	auto root_select = Bind(*stmt.select_statement);
 	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
 	                               table->name.c_str());
 
 	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, move(root_select.plan));
+
 	insert->AddChild(move(root));
 
-	result.plan = move(insert);
-	this->allow_stream_result = false;
-	return result;
+	if (!stmt.returning_list.empty()) {
+		insert->return_chunk = true;
+		result.types.clear();
+		result.names.clear();
+		auto insert_table_index = GenerateTableIndex();
+		insert->table_index = insert_table_index;
+		unique_ptr<LogicalOperator> index_as_logicaloperator = move(insert);
+
+		return BindReturning(move(stmt.returning_list), table, insert_table_index, move(index_as_logicaloperator),
+		                     move(result));
+	} else {
+		D_ASSERT(result.types.size() == result.names.size());
+		result.plan = move(insert);
+		this->allow_stream_result = false;
+		return result;
+	}
 }
 
 } // namespace duckdb

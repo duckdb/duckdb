@@ -234,7 +234,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		pStmt->current_row = -1;
 
 		auto statement_type = pStmt->prepared->GetStatementType();
-		if (StatementTypeReturnChanges(statement_type) && pStmt->current_chunk->size() > 0) {
+		if (StatementTypeReturnChanges(statement_type) && pStmt->current_chunk && pStmt->current_chunk->size() > 0) {
 			// update total changes
 			auto row_changes = pStmt->current_chunk->GetValue(0, 0);
 			if (!row_changes.IsNull() && row_changes.TryCastAs(LogicalType::BIGINT)) {
@@ -941,16 +941,6 @@ int sqlite3_complete(const char *zSql) {
 			if (*zSql == 0)
 				return state == 1;
 			token = tkWS;
-			break;
-		}
-		case '[': { /* Microsoft-style identifiers in [...] */
-			zSql++;
-			while (*zSql && *zSql != ']') {
-				zSql++;
-			}
-			if (*zSql == 0)
-				return 0;
-			token = tkOTHER;
 			break;
 		}
 		case '`': /* Grave-accent quoted symbols used by MySQL */

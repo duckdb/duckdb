@@ -1013,19 +1013,6 @@ bool TryCast::Operation(string_t input, uint64_t &result, bool strict) {
 }
 
 template <class T>
-bool CheckDoubleValidity(T value);
-
-template <>
-bool CheckDoubleValidity(float value) {
-	return Value::FloatIsValid(value);
-}
-
-template <>
-bool CheckDoubleValidity(double value) {
-	return Value::DoubleIsValid(value);
-}
-
-template <class T>
 static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
 	while (len > 0 && StringUtil::CharacterIsSpace(*buf)) {
@@ -1041,9 +1028,6 @@ static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 	}
 	auto endptr = buf + len;
 	auto parse_result = duckdb_fast_float::from_chars(buf, buf + len, result);
-	if (!CheckDoubleValidity<T>(result)) {
-		return false;
-	}
 	if (parse_result.ec != std::errc()) {
 		return false;
 	}
@@ -1896,9 +1880,11 @@ bool TryCastToDecimal::Operation(hugeint_t input, hugeint_t &result, string *err
 template <class SRC, class DST>
 bool DoubleToDecimalCast(SRC input, DST &result, string *error_message, uint8_t width, uint8_t scale) {
 	double value = input * NumericHelper::DOUBLE_POWERS_OF_TEN[scale];
+	// Add the sign (-1, 0, 1) times a tiny value to fix floating point issues (issue 3091)
+	double sign = (double(0) < value) - (value < double(0));
+	value += 1e-9 * sign;
 	if (value <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] || value >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
 		string error = StringUtil::Format("Could not cast value %f to DECIMAL(%d,%d)", value, width, scale);
-		;
 		HandleCastError::AssignError(error, error_message);
 		return false;
 	}

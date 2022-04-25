@@ -281,8 +281,9 @@ static std::string type_to_jduckdb_type(LogicalType logical_type) {
 			return std::string("no physical type found");
 		}
 	} break;
+	default:
+		return std::string("");
 	}
-	return std::string("");
 }
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv *env, jclass, jobject stmt_ref_buf) {
@@ -306,9 +307,16 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 	auto type_detail_array = env->NewObjectArray(column_count, env->FindClass("java/lang/String"), nullptr);
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		std::string col_name;
+		if (types[col_idx].id() == LogicalTypeId::ENUM) {
+			col_name = "ENUM";
+		} else {
+			col_name = types[col_idx].ToString();
+		}
+
 		env->SetObjectArrayElement(name_array, col_idx,
 		                           decode_charbuffer_to_jstring(env, names[col_idx].c_str(), names[col_idx].length()));
-		env->SetObjectArrayElement(type_array, col_idx, env->NewStringUTF(types[col_idx].ToString().c_str()));
+		env->SetObjectArrayElement(type_array, col_idx, env->NewStringUTF(col_name.c_str()));
 		env->SetObjectArrayElement(type_detail_array, col_idx,
 		                           env->NewStringUTF(type_to_jduckdb_type(types[col_idx]).c_str()));
 	}
@@ -401,6 +409,8 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 			case PhysicalType::INT128:
 				constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 				break;
+			default:
+				throw InternalException("Unimplemented physical type for decimal");
 			}
 			break;
 		}
@@ -408,6 +418,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
 			break;
 		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(timestamp_t));
 			break;
 		case LogicalTypeId::TIME:
@@ -426,6 +437,17 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 				}
 				auto d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
 				auto j_str = decode_charbuffer_to_jstring(env, d_str.GetDataUnsafe(), d_str.GetSize());
+				env->SetObjectArrayElement(varlen_data, row_idx, j_str);
+			}
+			break;
+		case LogicalTypeId::ENUM:
+			varlen_data = env->NewObjectArray(row_count, env->FindClass("java/lang/String"), nullptr);
+			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+				if (FlatVector::IsNull(vec, row_idx)) {
+					continue;
+				}
+				auto d_str = vec.GetValue(row_idx).ToString();
+				jstring j_str = env->NewStringUTF(d_str.c_str());
 				env->SetObjectArrayElement(varlen_data, row_idx, j_str);
 			}
 			break;

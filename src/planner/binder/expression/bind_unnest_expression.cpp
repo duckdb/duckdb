@@ -29,13 +29,19 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	}
 	auto &child = (BoundExpression &)*function.children[0];
 	auto &child_type = child.expr->return_type;
-	if (child_type.id() != LogicalTypeId::LIST) {
-		return BindResult(binder.FormatError(function, "Unnest() can only be applied to lists"));
+
+	if (child_type.id() != LogicalTypeId::LIST && child_type.id() != LogicalTypeId::SQLNULL) {
+		return BindResult(binder.FormatError(function, "Unnest() can only be applied to lists and NULL"));
 	}
+
 	if (depth > 0) {
 		throw BinderException(binder.FormatError(function, "Unnest() for correlated expressions is not supported yet"));
 	}
-	auto &return_type = ListType::GetChildType(child_type);
+
+	auto return_type = LogicalType(LogicalTypeId::SQLNULL);
+	if (child_type.id() == LogicalTypeId::LIST) {
+		return_type = ListType::GetChildType(child_type);
+	}
 
 	auto result = make_unique<BoundUnnestExpression>(return_type);
 	result->child = move(child.expr);
@@ -49,6 +55,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	auto colref = make_unique<BoundColumnRefExpression>(
 	    function.alias.empty() ? node.unnests[unnest_index]->ToString() : function.alias, return_type,
 	    ColumnBinding(node.unnest_index, unnest_index), depth);
+
 	return BindResult(move(colref));
 }
 

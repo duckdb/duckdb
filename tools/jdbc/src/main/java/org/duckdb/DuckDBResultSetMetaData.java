@@ -8,6 +8,8 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.time.OffsetDateTime;
+import java.math.BigDecimal;
 
 import org.duckdb.DuckDBResultSet.DuckDBBlobResult;
 
@@ -43,6 +45,8 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 	public static DuckDBColumnType TypeNameToType(String type_name) {
 		if (type_name.startsWith("DECIMAL")) {
 			return DuckDBColumnType.DECIMAL;
+		} else if (type_name.equals("TIMESTAMP WITH TIME ZONE")) {
+			return DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE;
 		} else {
 			return DuckDBColumnType.valueOf(type_name);
 		}
@@ -107,6 +111,8 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Types.DATE;
 		case TIMESTAMP:
 			return Types.TIMESTAMP;
+		case TIMESTAMP_WITH_TIME_ZONE:
+			return Types.TIME_WITH_TIMEZONE;
 		case INTERVAL:
 			return Types.JAVA_OBJECT;
 		case BLOB:
@@ -148,8 +154,12 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Date.class.toString();
 		case Types.TIMESTAMP:
 			return Timestamp.class.toString();
+		case Types.TIME_WITH_TIMEZONE:
+			return OffsetDateTime.class.toString();
 		case Types.BLOB:
 			return DuckDBBlobResult.class.toString();
+		case Types.DECIMAL:
+			return BigDecimal.class.toString();
 		default:
 			throw new SQLException("Unknown type " + getColumnTypeName(column));
 		}

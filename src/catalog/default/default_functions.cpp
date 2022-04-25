@@ -2,16 +2,11 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+
+#include "duckdb/function/scalar_macro_function.hpp"
 
 namespace duckdb {
-
-struct DefaultMacro {
-	const char *schema;
-	const char *name;
-	const char *parameters[8];
-	const char *macro;
-};
 
 static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "current_user", {nullptr}, "'duckdb'"},                       // user name of current execution context
@@ -90,31 +85,78 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "array_append", {"arr", "el", nullptr}, "list_append(arr, el)"},
 	{DEFAULT_SCHEMA, "list_prepend", {"e", "l", nullptr}, "list_concat(list_value(e), l)"},
 	{DEFAULT_SCHEMA, "array_prepend", {"el", "arr", nullptr}, "list_prepend(el, arr)"},
+	{DEFAULT_SCHEMA, "array_pop_back", {"arr", nullptr}, "arr[:LEN(arr)-1]"},
+	{DEFAULT_SCHEMA, "array_pop_front", {"arr", nullptr}, "arr[2:]"},
+	{DEFAULT_SCHEMA, "array_push_back", {"arr", "e", nullptr}, "list_concat(arr, list_value(e))"},
+	{DEFAULT_SCHEMA, "array_push_front", {"arr", "e", nullptr}, "list_concat(list_value(e), arr)"},
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, "unnest(generate_series(1, array_length(arr, dim)))"},
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, "floor(x/y)"},
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
-	{nullptr, nullptr, {nullptr}, nullptr}};
 
-static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &schema, const string &name) {
+	// algebraic list aggregates
+	{DEFAULT_SCHEMA, "list_avg", {"l", nullptr}, "list_aggr(l, 'avg')"},
+	{DEFAULT_SCHEMA, "list_var_samp", {"l", nullptr}, "list_aggr(l, 'var_samp')"},
+	{DEFAULT_SCHEMA, "list_var_pop", {"l", nullptr}, "list_aggr(l, 'var_pop')"},
+	{DEFAULT_SCHEMA, "list_stddev_pop", {"l", nullptr}, "list_aggr(l, 'stddev_pop')"},
+	{DEFAULT_SCHEMA, "list_stddev_samp", {"l", nullptr}, "list_aggr(l, 'stddev_samp')"},
+	{DEFAULT_SCHEMA, "list_sem", {"l", nullptr}, "list_aggr(l, 'sem')"},
+
+	// distributive list aggregates
+	{DEFAULT_SCHEMA, "list_approx_count_distinct", {"l", nullptr}, "list_aggr(l, 'approx_count_distinct')"},
+	{DEFAULT_SCHEMA, "list_bit_xor", {"l", nullptr}, "list_aggr(l, 'bit_xor')"},
+	{DEFAULT_SCHEMA, "list_bit_or", {"l", nullptr}, "list_aggr(l, 'bit_or')"},
+	{DEFAULT_SCHEMA, "list_bit_and", {"l", nullptr}, "list_aggr(l, 'bit_and')"},
+	{DEFAULT_SCHEMA, "list_bool_and", {"l", nullptr}, "list_aggr(l, 'bool_and')"},
+	{DEFAULT_SCHEMA, "list_bool_or", {"l", nullptr}, "list_aggr(l, 'bool_or')"},
+	{DEFAULT_SCHEMA, "list_count", {"l", nullptr}, "list_aggr(l, 'count')"},
+	{DEFAULT_SCHEMA, "list_entropy", {"l", nullptr}, "list_aggr(l, 'entropy')"},
+	{DEFAULT_SCHEMA, "list_last", {"l", nullptr}, "list_aggr(l, 'last')"},
+	{DEFAULT_SCHEMA, "list_first", {"l", nullptr}, "list_aggr(l, 'first')"},
+	{DEFAULT_SCHEMA, "list_kurtosis", {"l", nullptr}, "list_aggr(l, 'kurtosis')"},
+	{DEFAULT_SCHEMA, "list_min", {"l", nullptr}, "list_aggr(l, 'min')"},
+	{DEFAULT_SCHEMA, "list_max", {"l", nullptr}, "list_aggr(l, 'max')"},
+	{DEFAULT_SCHEMA, "list_product", {"l", nullptr}, "list_aggr(l, 'product')"},
+	{DEFAULT_SCHEMA, "list_skewness", {"l", nullptr}, "list_aggr(l, 'skewness')"},
+	{DEFAULT_SCHEMA, "list_sum", {"l", nullptr}, "list_aggr(l, 'sum')"},
+	{DEFAULT_SCHEMA, "list_string_agg", {"l", nullptr}, "list_aggr(l, 'string_agg')"},
+
+	// holistic list aggregates
+	{DEFAULT_SCHEMA, "list_mode", {"l", nullptr}, "list_aggr(l, 'mode')"},
+	{DEFAULT_SCHEMA, "list_median", {"l", nullptr}, "list_aggr(l, 'median')"},
+	{DEFAULT_SCHEMA, "list_mad", {"l", nullptr}, "list_aggr(l, 'mad')"},
+
+	// nested list aggregates
+	{DEFAULT_SCHEMA, "list_histogram", {"l", nullptr}, "list_aggr(l, 'histogram')"},
+
+	{nullptr, nullptr, {nullptr}, nullptr}
+	};
+
+unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(DefaultMacro &default_macro) {
+	// parse the expression
+	auto expressions = Parser::ParseExpressionList(default_macro.macro);
+	D_ASSERT(expressions.size() == 1);
+
+	auto result = make_unique<ScalarMacroFunction>(move(expressions[0]));
+	for (idx_t param_idx = 0; default_macro.parameters[param_idx] != nullptr; param_idx++) {
+		result->parameters.push_back(
+		    make_unique<ColumnRefExpression>(default_macro.parameters[param_idx]));
+	}
+
+	auto bind_info = make_unique<CreateMacroInfo>();
+	bind_info->schema = default_macro.schema;
+	bind_info->name = default_macro.name;
+	bind_info->temporary = true;
+	bind_info->internal = true;
+	bind_info->function = move(result);
+	return bind_info;
+}
+
+static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &input_schema, const string &input_name) {
+	auto schema = StringUtil::Lower(input_schema);
+	auto name = StringUtil::Lower(input_name);
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
 		if (internal_macros[index].schema == schema && internal_macros[index].name == name) {
-			// parse the expression
-			auto expressions = Parser::ParseExpressionList(internal_macros[index].macro);
-			D_ASSERT(expressions.size() == 1);
-
-			auto result = make_unique<MacroFunction>(move(expressions[0]));
-			for (idx_t param_idx = 0; internal_macros[index].parameters[param_idx] != nullptr; param_idx++) {
-				result->parameters.push_back(
-				    make_unique<ColumnRefExpression>(internal_macros[index].parameters[param_idx]));
-			}
-
-			auto bind_info = make_unique<CreateMacroInfo>();
-			bind_info->schema = schema;
-			bind_info->name = internal_macros[index].name;
-			bind_info->temporary = true;
-			bind_info->internal = true;
-			bind_info->function = move(result);
-			return move(bind_info);
+			return DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index]);
 		}
 	}
 	return nullptr;
@@ -128,7 +170,7 @@ unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientCont
                                                                       const string &entry_name) {
 	auto info = GetDefaultFunction(schema->name, entry_name);
 	if (info) {
-		return make_unique_base<CatalogEntry, MacroCatalogEntry>(&catalog, schema, (CreateMacroInfo *)info.get());
+		return make_unique_base<CatalogEntry, ScalarMacroCatalogEntry>(&catalog, schema, (CreateMacroInfo *)info.get());
 	}
 	return nullptr;
 }

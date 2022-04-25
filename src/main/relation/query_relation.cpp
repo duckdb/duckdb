@@ -6,9 +6,10 @@
 
 namespace duckdb {
 
-QueryRelation::QueryRelation(ClientContext &context, unique_ptr<SelectStatement> select_stmt_p, string alias_p)
+QueryRelation::QueryRelation(const std::shared_ptr<ClientContext> &context, unique_ptr<SelectStatement> select_stmt_p,
+                             string alias_p)
     : Relation(context, RelationType::QUERY_RELATION), select_stmt(move(select_stmt_p)), alias(move(alias_p)) {
-	context.TryBindRelation(*this, this->columns);
+	context->TryBindRelation(*this, this->columns);
 }
 
 QueryRelation::~QueryRelation() {

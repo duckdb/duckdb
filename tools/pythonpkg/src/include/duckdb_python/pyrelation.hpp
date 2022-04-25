@@ -14,7 +14,14 @@
 #include "duckdb_python/pyconnection.hpp"
 
 namespace duckdb {
+
 struct DuckDBPyResult;
+
+class PythonDependencies : public ExtraDependencies {
+public:
+	explicit PythonDependencies(py::function map_function) : map_function(map_function) {};
+	py::function map_function;
+};
 
 struct DuckDBPyRelation {
 public:
@@ -45,10 +52,16 @@ public:
 	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation>
-	FromParquetDefault(const string &filename, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation>
-	FromArrowTable(py::object &table, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	GetSubstrait(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
+	static unique_ptr<DuckDBPyRelation>
+	FromParquetDefault(const string &filename, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
+	static unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object,
+	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Project(const string &expr);
 
@@ -79,7 +92,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Aggregate(const string &expr, const string &groups = "");
 
-	unique_ptr<DuckDBPyRelation> GenericAggregator(const string &function_name, const string &sum_columns,
+	unique_ptr<DuckDBPyRelation> GenericAggregator(const string &function_name, const string &aggregated_columns,
 	                                               const string &groups = "", const string &function_parameter = "",
 	                                               const string &projected_columns = "");
 
@@ -103,11 +116,32 @@ public:
 
 	unique_ptr<DuckDBPyRelation> ValueCounts(const string &std_columns, const string &groups = "");
 
+	unique_ptr<DuckDBPyRelation> MAD(const string &aggr_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Mode(const string &aggr_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Abs(const string &aggr_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Prod(const string &aggr_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Skew(const string &aggr_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Kurt(const string &aggr_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> SEM(const string &aggr_columns, const string &groups = "");
+
+	unique_ptr<DuckDBPyRelation> Describe();
+
 	idx_t Length();
 
 	py::tuple Shape();
 
-	unique_ptr<DuckDBPyRelation> Unique(const string &std_columns);
+	unique_ptr<DuckDBPyRelation> Unique(const string &aggr_columns);
+
+	unique_ptr<DuckDBPyRelation> GenericWindowFunction(const string &function_name, const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> CumSum(const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> CumProd(const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> CumMax(const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> CumMin(const string &aggr_columns);
 
 	static unique_ptr<DuckDBPyRelation> AggregateDF(py::object df, const string &expr, const string &groups = "",
 	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
@@ -123,7 +157,9 @@ public:
 
 	py::object Fetchall();
 
-	py::object ToArrowTable();
+	py::object ToArrowTable(idx_t batch_size);
+
+	py::object ToRecordBatch(idx_t batch_size);
 
 	unique_ptr<DuckDBPyRelation> Union(DuckDBPyRelation *other);
 
@@ -163,7 +199,9 @@ public:
 	string Print();
 
 private:
-	py::object map_function;
+	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
+	                              const string &groups = "", const string &function_parameter = "",
+	                              const string &projected_columns = "", const string &window_function = "");
 };
 
 } // namespace duckdb

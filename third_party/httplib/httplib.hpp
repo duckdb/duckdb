@@ -221,12 +221,13 @@ using socket_t = int;
 #include <memory>
 #include <mutex>
 #include <random>
-#include <regex>
 #include <set>
 #include <sstream>
 #include <string>
 #include <sys/stat.h>
 #include <thread>
+
+#include "duckdb/common/re2_regex.hpp"
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
 // these are defined in wincrypt.h and it breaks compilation if BoringSSL is
@@ -320,7 +321,8 @@ struct ci {
 using Headers = std::multimap<std::string, std::string, detail::ci>;
 
 using Params = std::multimap<std::string, std::string>;
-using Match = std::smatch;
+using Match = duckdb_re2::Match;
+using Regex = duckdb_re2::Regex;
 
 using Progress = std::function<bool(uint64_t current, uint64_t total)>;
 
@@ -725,9 +727,9 @@ protected:
 	size_t payload_max_length_ = CPPHTTPLIB_PAYLOAD_MAX_LENGTH;
 
 private:
-	using Handlers = std::vector<std::pair<std::regex, Handler>>;
+	using Handlers = std::vector<std::pair<Regex, Handler>>;
 	using HandlersForContentReader =
-	    std::vector<std::pair<std::regex, HandlerWithContentReader>>;
+	    std::vector<std::pair<Regex, HandlerWithContentReader>>;
 
 	socket_t create_server_socket(const char *host, int port, int socket_flags,
 	                              SocketOptions socket_options) const;
@@ -2125,9 +2127,9 @@ inline void read_file(const std::string &path, std::string &out) {
 }
 
 inline std::string file_extension(const std::string &path) {
-	std::smatch m;
-	static auto re = std::regex("\\.([a-zA-Z0-9]+)$");
-	if (std::regex_search(path, m, re)) { return m[1].str(); }
+	Match m;
+	static Regex re("\\.([a-zA-Z0-9]+)$");
+	if (duckdb_re2::RegexSearch(path, m, re)) { return m.str(1); }
 	return std::string();
 }
 
@@ -3720,17 +3722,17 @@ inline bool parse_range_header(const std::string &s, Ranges &ranges) {
 #else
 inline bool parse_range_header(const std::string &s, Ranges &ranges) try {
 #endif
-	static auto re_first_range = std::regex(R"(bytes=(\d*-\d*(?:,\s*\d*-\d*)*))");
-	std::smatch m;
-	if (std::regex_match(s, m, re_first_range)) {
+	static Regex re_first_range(R"(bytes=(\d*-\d*(?:,\s*\d*-\d*)*))");
+	Match m;
+	if (duckdb_re2::RegexMatch(s, m, re_first_range)) {
 		auto pos = static_cast<size_t>(m.position(1));
 		auto len = static_cast<size_t>(m.length(1));
 		bool all_valid_ranges = true;
 		split(&s[pos], &s[pos + len], ',', [&](const char *b, const char *e) {
 			if (!all_valid_ranges) return;
-			static auto re_another_range = std::regex(R"(\s*(\d*)-(\d*))");
-			std::cmatch cm;
-			if (std::regex_match(b, e, cm, re_another_range)) {
+			static Regex re_another_range(R"(\s*(\d*)-(\d*))");
+			Match cm;
+			if (duckdb_re2::RegexMatch(b, e, cm, re_another_range)) {
 				ssize_t first = -1;
 				if (!cm.str(1).empty()) {
 					first = static_cast<ssize_t>(std::stoll(cm.str(1)));
@@ -3768,10 +3770,10 @@ public:
 	bool parse(const char *buf, size_t n, const ContentReceiver &content_callback,
 	           const MultipartContentHeader &header_callback) {
 
-		static const std::regex re_content_disposition(
+		static const Regex re_content_disposition(
 		    "^Content-Disposition:\\s*form-data;\\s*name=\"(.*?)\"(?:;\\s*filename="
 		    "\"(.*?)\")?\\s*$",
-		    std::regex_constants::icase);
+		    duckdb_re2::RegexOptions::CASE_INSENSITIVE);
 		static const std::string dash_ = "--";
 		static const std::string crlf_ = "\r\n";
 
@@ -3812,8 +3814,8 @@ public:
 					if (start_with_case_ignore(header, header_name)) {
 						file_.content_type = trim_copy(header.substr(header_name.size()));
 					} else {
-						std::smatch m;
-						if (std::regex_match(header, m, re_content_disposition)) {
+						Match m;
+						if (duckdb_re2::RegexMatch(header, m, re_content_disposition)) {
 							file_.name = m[1];
 							file_.filename = m[2];
 						}
@@ -4303,7 +4305,7 @@ inline bool parse_www_authenticate(const Response &res,
                                    bool is_proxy) {
 	auto auth_key = is_proxy ? "Proxy-Authenticate" : "WWW-Authenticate";
 	if (res.has_header(auth_key)) {
-		static auto re = std::regex(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~");
+		static Regex re(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~");
 		auto s = res.get_header_value(auth_key);
 		auto pos = s.find(' ');
 		if (pos != std::string::npos) {
@@ -4312,9 +4314,8 @@ inline bool parse_www_authenticate(const Response &res,
 				return false;
 			} else if (type == "Digest") {
 				s = s.substr(pos + 1);
-				auto beg = std::sregex_iterator(s.begin(), s.end(), re);
-				for (auto i = beg; i != std::sregex_iterator(); ++i) {
-					auto m = *i;
+				auto matches = duckdb_re2::RegexFindAll(s, re);
+				for (auto &m : matches) {
 					auto key = s.substr(static_cast<size_t>(m.position(1)),
 					                    static_cast<size_t>(m.length(1)));
 					auto val = m.length(2) > 0
@@ -4398,8 +4399,8 @@ inline void hosted_at(const char *hostname, std::vector<std::string> &addrs) {
 
 inline std::string append_query_params(const char *path, const Params &params) {
 	std::string path_with_query = path;
-	const static std::regex re("[^?]+\\?.*");
-	auto delm = std::regex_match(path, re) ? '&' : '?';
+	const static Regex re("[^?]+\\?.*");
+	auto delm = duckdb_re2::RegexMatch(path, re) ? '&' : '?';
 	path_with_query += delm + detail::params_to_query_str(params);
 	return path_with_query;
 }
@@ -4732,65 +4733,65 @@ inline Server::~Server() {}
 
 inline Server &Server::Get(const std::string &pattern, Handler handler) {
 	get_handlers_.push_back(
-	    std::make_pair(std::regex(pattern), std::move(handler)));
+	    std::make_pair(Regex(pattern), std::move(handler)));
 	return *this;
 }
 
 inline Server &Server::Post(const std::string &pattern, Handler handler) {
 	post_handlers_.push_back(
-	    std::make_pair(std::regex(pattern), std::move(handler)));
+	    std::make_pair(Regex(pattern), std::move(handler)));
 	return *this;
 }
 
 inline Server &Server::Post(const std::string &pattern,
                             HandlerWithContentReader handler) {
 	post_handlers_for_content_reader_.push_back(
-	    std::make_pair(std::regex(pattern), std::move(handler)));
+	    std::make_pair(Regex(pattern), std::move(handler)));
 	return *this;
 }
 
 inline Server &Server::Put(const std::string &pattern, Handler handler) {
 	put_handlers_.push_back(
-	    std::make_pair(std::regex(pattern), std::move(handler)));
+	    std::make_pair(Regex(pattern), std::move(handler)));
 	return *this;
 }
 
 inline Server &Server::Put(const std::string &pattern,
                            HandlerWithContentReader handler) {
 	put_handlers_for_content_reader_.push_back(
-	    std::make_pair(std::regex(pattern), std::move(handler)));
+	    std::make_pair(Regex(pattern), std::move(handler)));
 	return *this;
 }
 
 inline Server &Server::Patch(const std::string &pattern, Handler handler) {
 	patch_handlers_.push_back(
-	    std::make_pair(std::regex(pattern), std::move(handler)));
+	    std::make_pair(Regex(pattern), std::move(handler)));
 	return *this;
 }
 
 inline Server &Server::Patch(const std::string &pattern,
                              HandlerWithContentReader handler) {
 	patch_handlers_for_content_reader_.push_back(
-	    std::make_pair(std::regex(pattern), std::move(handler)));
+	    std::make_pair(Regex(pattern), std::move(handler)));
 	return *this;
 }
 
 inline Server &Server::Delete(const std::string &pattern, Handler handler) {
 	delete_handlers_.push_back(
-	    std::make_pair(std::regex(pattern), std::move(handler)));
+	    std::make_pair(Regex(pattern), std::move(handler)));
 	return *this;
 }
 
 inline Server &Server::Delete(const std::string &pattern,
                               HandlerWithContentReader handler) {
 	delete_handlers_for_content_reader_.push_back(
-	    std::make_pair(std::regex(pattern), std::move(handler)));
+	    std::make_pair(Regex(pattern), std::move(handler)));
 	return *this;
 }
 
 inline Server &Server::Options(const std::string &pattern, Handler handler) {
 	options_handlers_.push_back(
-	    std::make_pair(std::regex(pattern), std::move(handler)));
+	    std::make_pair(Regex(pattern), std::move(handler)));
 	return *this;
 }
 
@@ -5476,7 +5477,7 @@ inline bool Server::dispatch_request(Request &req, Response &res,
 		const auto &pattern = x.first;
 		const auto &handler = x.second;
 
-		if (std::regex_match(req.path, req.matches, pattern)) {
+		if (duckdb_re2::RegexMatch(req.path, req.matches, pattern)) {
 			handler(req, res);
 			return true;
 		}
@@ -5601,7 +5602,7 @@ inline bool Server::dispatch_request_for_content_reader(
 		const auto &pattern = x.first;
 		const auto &handler = x.second;
 
-		if (std::regex_match(req.path, req.matches, pattern)) {
+		if (duckdb_re2::RegexMatch(req.path, req.matches, pattern)) {
 			handler(req, res, content_reader);
 			return true;
 		}
@@ -5881,13 +5882,13 @@ inline bool ClientImpl::read_response_line(Stream &strm, const Request &req,
 	if (!line_reader.getline()) { return false; }
 
 #ifdef CPPHTTPLIB_ALLOW_LF_AS_LINE_TERMINATOR
-	const static std::regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
+	const static Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
 #else
-	const static std::regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
+	const static Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
 #endif
 
-	std::cmatch m;
-	if (!std::regex_match(line_reader.ptr(), m, re)) {
+	Match m;
+	if (!duckdb_re2::RegexMatch(line_reader.ptr(), m, re)) {
 		return req.method == "CONNECT";
 	}
 	res.version = std::string(m[1]);
@@ -5899,7 +5900,7 @@ inline bool ClientImpl::read_response_line(Stream &strm, const Request &req,
 		if (!line_reader.getline()) { return false; } // CRLF
 		if (!line_reader.getline()) { return false; } // next response line
 
-		if (!std::regex_match(line_reader.ptr(), m, re)) { return false; }
+		if (!duckdb_re2::RegexMatch(line_reader.ptr(), m, re)) { return false; }
 		res.version = std::string(m[1]);
 		res.status = std::stoi(std::string(m[2]));
 		res.reason = std::string(m[3]);
@@ -6079,11 +6080,11 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
 	auto location = detail::decode_url(res.get_header_value("location"), true);
 	if (location.empty()) { return false; }
 
-	const static std::regex re(
+	const static Regex re(
 	    R"((?:(https?):)?(?://(?:\[([\d:]+)\]|([^:/?#]+))(?::(\d+))?)?([^?#]*(?:\?[^#]*)?)(?:#.*)?)");
 
-	std::smatch m;
-	if (!std::regex_match(location, m, re)) { return false; }
+	Match m;
+	if (!duckdb_re2::RegexMatch(location, m, re)) { return false; }
 
 	auto scheme = is_ssl() ? "https" : "http";
 
@@ -7757,11 +7758,11 @@ inline Client::Client(const std::string &scheme_host_port)
 inline Client::Client(const std::string &scheme_host_port,
                       const std::string &client_cert_path,
                       const std::string &client_key_path) {
-	const static std::regex re(
+	const static Regex re(
 	    R"((?:([a-z]+):\/\/)?(?:\[([\d:]+)\]|([^:/?#]+))(?::(\d+))?)");
 
-	std::smatch m;
-	if (std::regex_match(scheme_host_port, m, re)) {
+	Match m;
+	if (duckdb_re2::RegexMatch(scheme_host_port, m, re)) {
 		auto scheme = m[1].str();
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT

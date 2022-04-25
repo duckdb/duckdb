@@ -66,7 +66,7 @@ class TestArrowIntegration(object):
         arrow_result.combine_chunks()
         arrow_result.validate(full=True)
 
-        round_tripping = duckdb.from_arrow_table(arrow_result).to_arrow_table()
+        round_tripping = duckdb.from_arrow(arrow_result).to_arrow_table()
         round_tripping.validate(full=True)
 
         assert round_tripping.equals(arrow_result, check_metadata=True)
@@ -85,7 +85,7 @@ class TestArrowIntegration(object):
 
         duck_tbl = duckdb_conn.table("test")
 
-        duck_from_arrow = duckdb_conn.from_arrow_table(duck_tbl.arrow())
+        duck_from_arrow = duckdb_conn.from_arrow(duck_tbl.arrow())
 
         duck_from_arrow.create("testarrow")
 
@@ -104,7 +104,7 @@ class TestArrowIntegration(object):
         data = (pyarrow.array(np.array([9999999999999999999999999999999999]), type=pyarrow.decimal128(38,0)))
         arrow_tbl = pyarrow.Table.from_arrays([data],['a'])
         duckdb_conn = duckdb.connect()
-        duckdb_conn.from_arrow_table(arrow_tbl).create("bigdecimal")
+        duckdb_conn.from_arrow(arrow_tbl).create("bigdecimal")
         result = duckdb_conn.execute('select * from bigdecimal')
         assert (result.fetchone()[0] == 9999999999999999999999999999999999)
 
@@ -124,7 +124,7 @@ class TestArrowIntegration(object):
 
         duck_tbl = duckdb_conn.table("test")
 
-        duck_from_arrow = duckdb_conn.from_arrow_table(duck_tbl.arrow())
+        duck_from_arrow = duckdb_conn.from_arrow(duck_tbl.arrow())
 
         duck_from_arrow.create("testarrow")
 

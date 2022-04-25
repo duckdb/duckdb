@@ -14,11 +14,8 @@ struct DuckDBKeywordsData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> DuckDBKeywordsBind(ClientContext &context, vector<Value> &inputs,
-                                                   named_parameter_map_t &named_parameters,
-                                                   vector<LogicalType> &input_table_types,
-                                                   vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                   vector<string> &names) {
+static unique_ptr<FunctionData> DuckDBKeywordsBind(ClientContext &context, TableFunctionBindInput &input,
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("keyword_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 

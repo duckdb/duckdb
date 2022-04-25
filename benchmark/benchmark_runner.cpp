@@ -28,7 +28,7 @@ Benchmark::Benchmark(bool register_benchmark, string name, string group) : name(
 }
 
 static void listFiles(FileSystem &fs, const string &path, std::function<void(const string &)> cb) {
-	fs.ListFiles(path, [&](string fname, bool is_dir) {
+	fs.ListFiles(path, [&](const string &fname, bool is_dir) {
 		string full_path = fs.JoinPath(path, fname);
 		if (is_dir) {
 			// recurse into directory
@@ -201,7 +201,7 @@ enum ConfigurationError { None, BenchmarkNotFound, InfoWithoutBenchmarkName };
 void LoadInterpretedBenchmarks() {
 	// load interpreted benchmarks
 	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	listFiles(*fs, "benchmark", [](string path) {
+	listFiles(*fs, "benchmark", [](const string &path) {
 		if (endsWith(path, ".benchmark")) {
 			new InterpretedBenchmark(path);
 		}
@@ -343,4 +343,5 @@ int main(int argc, char **argv) {
 		print_error_message(configuration_error);
 		exit(1);
 	}
+	return 0;
 }

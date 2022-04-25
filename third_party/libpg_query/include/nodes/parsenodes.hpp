@@ -1273,6 +1273,7 @@ typedef enum PGObjectType {
 	PG_OBJECT_FOREIGN_SERVER,
 	PG_OBJECT_FOREIGN_TABLE,
 	PG_OBJECT_FUNCTION,
+	PG_OBJECT_TABLE_MACRO,
 	PG_OBJECT_INDEX,
 	PG_OBJECT_LANGUAGE,
 	PG_OBJECT_LARGEOBJECT,
@@ -1674,6 +1675,8 @@ typedef struct PGCreateFunctionStmt {
 	PGRangeVar *name;
 	PGList *params;
 	PGNode *function;
+  	PGNode *query;
+	char relpersistence;
 } PGCreateFunctionStmt;
 
 /* ----------------------
@@ -1987,7 +1990,7 @@ typedef struct PGSampleOptions {
 } PGSampleOptions;
 
 /* ----------------------
- *              Limit Percentage
+ *      Limit Percentage
  * ----------------------
  */
 typedef struct PGLimitPercent {
@@ -1996,13 +1999,13 @@ typedef struct PGLimitPercent {
 } PGLimitPercent;
 
 /* ----------------------
- *		Lambda Function
+ *		Lambda Function (or Arrow Operator)
  * ----------------------
  */
 typedef struct PGLambdaFunction {
 	PGNodeTag type;
-	PGList *parameters;          /* list of input parameters */
-	PGNode *function;            /* lambda expression */
+	PGNode *lhs;                 /* list of input parameters */
+	PGNode *rhs;                 /* lambda expression */
 	int location;                /* token location, or -1 if unknown */
 } PGLambdaFunction;
 

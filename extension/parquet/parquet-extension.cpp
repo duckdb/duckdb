@@ -42,6 +42,8 @@ struct ParquetReadBindData : public FunctionData {
 	vector<column_t> column_ids;
 	atomic<idx_t> chunk_count;
 	atomic<idx_t> cur_file;
+	vector<string> names;
+	vector<LogicalType> types;
 };
 
 struct ParquetReadOperatorData : public FunctionOperatorData {
@@ -88,6 +90,7 @@ public:
 	static unique_ptr<FunctionData> ParquetReadBind(ClientContext &context, CopyInfo &info,
 	                                                vector<string> &expected_names,
 	                                                vector<LogicalType> &expected_types) {
+		D_ASSERT(expected_names.size() == expected_types.size());
 		for (auto &option : info.options) {
 			auto loption = StringUtil::Lower(option.first);
 			if (loption == "compression" || loption == "codec") {
@@ -100,12 +103,14 @@ public:
 		auto result = make_unique<ParquetReadBindData>();
 
 		FileSystem &fs = FileSystem::GetFileSystem(context);
-		result->files = fs.Glob(info.file_path);
+		result->files = fs.Glob(info.file_path, context);
 		if (result->files.empty()) {
 			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
 		}
 		ParquetOptions parquet_options(context);
 		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options);
+		result->names = result->initial_reader->names;
+		result->types = result->initial_reader->return_types;
 		return move(result);
 	}
 
@@ -181,45 +186,38 @@ public:
 		result->files = move(files);
 
 		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], parquet_options);
-		return_types = result->initial_reader->return_types;
-
-		names = result->initial_reader->names;
+		return_types = result->types = result->initial_reader->return_types;
+		names = result->names = result->initial_reader->names;
 		return move(result);
 	}
 
-	static vector<string> ParquetGlob(FileSystem &fs, const string &glob) {
-		auto files = fs.Glob(glob);
+	static vector<string> ParquetGlob(FileSystem &fs, const string &glob, ClientContext &context) {
+		auto files = fs.Glob(glob, FileSystem::GetFileOpener(context));
 		if (files.empty()) {
 			throw IOException("No files found that match the pattern \"%s\"", glob);
 		}
 		return files;
 	}
 
-	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, vector<Value> &inputs,
-	                                                named_parameter_map_t &named_parameters,
-	                                                vector<LogicalType> &input_table_types,
-	                                                vector<string> &input_table_names,
+	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
 		auto &config = DBConfig::GetConfig(context);
 		if (!config.enable_external_access) {
 			throw PermissionException("Scanning Parquet files is disabled through configuration");
 		}
-		auto file_name = inputs[0].GetValue<string>();
+		auto file_name = input.inputs[0].GetValue<string>();
 		ParquetOptions parquet_options(context);
-		for (auto &kv : named_parameters) {
+		for (auto &kv : input.named_parameters) {
 			if (kv.first == "binary_as_string") {
 				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
 			}
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
-		auto files = ParquetGlob(fs, file_name);
+		auto files = ParquetGlob(fs, file_name, context);
 		return ParquetScanBindInternal(context, move(files), return_types, names, parquet_options);
 	}
 
-	static unique_ptr<FunctionData> ParquetScanBindList(ClientContext &context, vector<Value> &inputs,
-	                                                    named_parameter_map_t &named_parameters,
-	                                                    vector<LogicalType> &input_table_types,
-	                                                    vector<string> &input_table_names,
+	static unique_ptr<FunctionData> ParquetScanBindList(ClientContext &context, TableFunctionBindInput &input,
 	                                                    vector<LogicalType> &return_types, vector<string> &names) {
 		auto &config = DBConfig::GetConfig(context);
 		if (!config.enable_external_access) {
@@ -227,15 +225,15 @@ public:
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		vector<string> files;
-		for (auto &val : ListValue::GetChildren(inputs[0])) {
-			auto glob_files = ParquetGlob(fs, val.ToString());
+		for (auto &val : ListValue::GetChildren(input.inputs[0])) {
+			auto glob_files = ParquetGlob(fs, val.ToString(), context);
 			files.insert(files.end(), glob_files.begin(), glob_files.end());
 		}
 		if (files.empty()) {
 			throw IOException("Parquet reader needs at least one file to read");
 		}
 		ParquetOptions parquet_options(context);
-		for (auto &kv : named_parameters) {
+		for (auto &kv : input.named_parameters) {
 			if (kv.first == "binary_as_string") {
 				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
 			}
@@ -309,8 +307,9 @@ public:
 					bind_data.chunk_count = 0;
 					string file = bind_data.files[data.file_index];
 					// move to the next file
-					data.reader = make_shared<ParquetReader>(context, file, data.reader->return_types,
-					                                         data.reader->parquet_options, bind_data.files[0]);
+					data.reader =
+					    make_shared<ParquetReader>(context, file, bind_data.names, bind_data.types, data.column_ids,
+					                               data.reader->parquet_options, bind_data.files[0]);
 					vector<idx_t> group_ids;
 					for (idx_t i = 0; i < data.reader->NumRowGroups(); i++) {
 						group_ids.push_back(i);
@@ -371,8 +370,8 @@ public:
 				// read the next file
 				string file = bind_data.files[++parallel_state.file_index];
 				parallel_state.current_reader =
-				    make_shared<ParquetReader>(context, file, parallel_state.current_reader->return_types,
-				                               parallel_state.current_reader->parquet_options);
+				    make_shared<ParquetReader>(context, file, bind_data.names, bind_data.types, scan_data.column_ids,
+				                               parallel_state.current_reader->parquet_options, bind_data.files[0]);
 				if (parallel_state.current_reader->NumRowGroups() == 0) {
 					// empty parquet file, move to next file
 					continue;
@@ -445,14 +444,15 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 	return move(bind_data);
 }
 
-unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data) {
+unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data,
+                                                            const string &file_path) {
 	auto global_state = make_unique<ParquetWriteGlobalState>();
 	auto &parquet_bind = (ParquetWriteBindData &)bind_data;
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer =
-	    make_unique<ParquetWriter>(fs, parquet_bind.file_name, FileSystem::GetFileOpener(context),
-	                               parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec);
+	    make_unique<ParquetWriter>(fs, file_path, FileSystem::GetFileOpener(context), parquet_bind.sql_types,
+	                               parquet_bind.column_names, parquet_bind.codec);
 	return move(global_state);
 }
 
@@ -490,7 +490,8 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ClientContext &context
 	return make_unique<ParquetWriteLocalState>();
 }
 
-unique_ptr<TableFunctionRef> ParquetScanReplacement(const string &table_name, void *data) {
+unique_ptr<TableFunctionRef> ParquetScanReplacement(ClientContext &context, const string &table_name,
+                                                    ReplacementScanData *data) {
 	if (!StringUtil::EndsWith(StringUtil::Lower(table_name), ".parquet")) {
 		return nullptr;
 	}
@@ -552,3 +553,7 @@ std::string ParquetExtension::Name() {
 }
 
 } // namespace duckdb
+
+#ifndef DUCKDB_EXTENSION_MAIN
+#error DUCKDB_EXTENSION_MAIN not defined
+#endif

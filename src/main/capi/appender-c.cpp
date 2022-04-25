@@ -194,3 +194,11 @@ duckdb_state duckdb_appender_flush(duckdb_appender appender) {
 duckdb_state duckdb_appender_close(duckdb_appender appender) {
 	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.Close(); });
 }
+
+duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckdb_data_chunk chunk) {
+	if (!chunk) {
+		return DuckDBError;
+	}
+	auto data_chunk = (duckdb::DataChunk *)chunk;
+	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.AppendDataChunk(*data_chunk); });
+}

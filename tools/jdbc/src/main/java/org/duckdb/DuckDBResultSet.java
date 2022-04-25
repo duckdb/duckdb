@@ -149,12 +149,16 @@ public class DuckDBResultSet implements ResultSet {
 			return getBigDecimal(columnIndex);
 		case VARCHAR:
 			return getString(columnIndex);
+		case ENUM:
+			return getString(columnIndex);
 		case TIME:
 			return getTime(columnIndex);
 		case DATE:
 			return getDate(columnIndex);
 		case TIMESTAMP:
 			return getTimestamp(columnIndex);
+		case TIMESTAMP_WITH_TIME_ZONE:
+			return getOffsetDateTime(columnIndex);
 		case INTERVAL:
 			return getLazyString(columnIndex);
 		default:
@@ -192,7 +196,8 @@ public class DuckDBResultSet implements ResultSet {
 			return null;
 		}
 
-		if (isType(columnIndex, DuckDBColumnType.VARCHAR)) {
+		if (isType(columnIndex, DuckDBColumnType.VARCHAR)
+			|| isType(columnIndex, DuckDBColumnType.ENUM)) {
 			return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
 		}
 		Object res = getObject(columnIndex);
@@ -483,6 +488,17 @@ public class DuckDBResultSet implements ResultSet {
 		}
 		return null;
 	}
+
+	private OffsetDateTime getOffsetDateTime(int columnIndex) throws SQLException {
+		if (check_and_null(columnIndex)) {
+			return null;
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
+			return DuckDBTimestamp.toOffsetDateTime(getbuf(columnIndex, 8).getLong());
+		}
+		return null;
+	}
+
 	static class DuckDBBlobResult implements Blob {
 
 		static class ByteBufferBackedInputStream extends InputStream {
@@ -1249,7 +1265,8 @@ public class DuckDBResultSet implements ResultSet {
 				throw new SQLException("Can't convert value to BigDecimal " + type.toString());
 			}
 		} else if (type == String.class) {
-			if (sqlType == DuckDBColumnType.VARCHAR) {
+			if (sqlType == DuckDBColumnType.VARCHAR
+					|| sqlType == DuckDBColumnType.ENUM) {
 				return type.cast(getString(columnIndex));
 			} else {
 				throw new SQLException("Can't convert value to String " + type.toString());
@@ -1338,9 +1355,8 @@ public class DuckDBResultSet implements ResultSet {
 				throw new SQLException("Can't convert value to BigInteger " + type.toString());
 			}
 		} else if (type == OffsetDateTime.class) {
-			if (sqlType == DuckDBColumnType.TIMESTAMP_WITH_TIMEZONE) {
-				throw new SQLException("Can't convert value to OffsetDateTime " + type.toString());
-			// return type.cast(getLocalDateTime(columnIndex));
+			if (sqlType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
+				return type.cast(getOffsetDateTime(columnIndex));
 			} else {
 				throw new SQLException("Can't convert value to OffsetDateTime " + type.toString());
 			}

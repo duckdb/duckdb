@@ -11,7 +11,7 @@ except:
 
 def compare_results(query):
     true_answer = duckdb.query(query).fetchall()
-    from_arrow = duckdb.from_arrow_table(duckdb.query(query).arrow()).fetchall()
+    from_arrow = duckdb.from_arrow(duckdb.query(query).arrow()).fetchall()
     assert true_answer == from_arrow
 
 def arrow_to_pandas(query):
@@ -44,21 +44,21 @@ class TestArrowNested(object):
         #Large Lists
         data = pyarrow.array([[1],None, [2]], type=pyarrow.large_list(pyarrow.int64()))
         arrow_table = pa.Table.from_arrays([data],['a'])
-        rel = duckdb.from_arrow_table(arrow_table)
+        rel = duckdb.from_arrow(arrow_table)
         res = rel.execute().fetchall()
         assert res == [([1],), (None,), ([2],)]
 
         #Fixed Size Lists
         data = pyarrow.array([[1],None, [2]], type=pyarrow.list_(pyarrow.int64(),1))
         arrow_table = pa.Table.from_arrays([data],['a'])
-        rel = duckdb.from_arrow_table(arrow_table)
+        rel = duckdb.from_arrow(arrow_table)
         res = rel.execute().fetchall()
         assert res == [([1],), (None,), ([2],)]
 
         #Complex nested structures with different list types
         data = [pyarrow.array([[1],None, [2]], type=pyarrow.list_(pyarrow.int64(),1)),pyarrow.array([[1],None, [2]], type=pyarrow.large_list(pyarrow.int64())),pyarrow.array([[1,2,3],None, [2,1]], type=pyarrow.list_(pyarrow.int64()))]
         arrow_table = pa.Table.from_arrays([data[0],data[1],data[2]],['a','b','c'])
-        rel = duckdb.from_arrow_table(arrow_table)
+        rel = duckdb.from_arrow(arrow_table)
         res = rel.project('a').execute().fetchall()
         assert res == [([1],), (None,), ([2],)]
         res = rel.project('b').execute().fetchall()
@@ -69,7 +69,7 @@ class TestArrowNested(object):
         #Struct Holding different List Types
         struct = [pa.StructArray.from_arrays( data,['fixed', 'large','normal'])]
         arrow_table = pa.Table.from_arrays(struct,['a'])
-        rel = duckdb.from_arrow_table(arrow_table)
+        rel = duckdb.from_arrow(arrow_table)
         res = rel.execute().fetchall()
         assert res == [({'fixed': [1], 'large': [1], 'normal': [1, 2, 3]},), ({'fixed': None, 'large': None, 'normal': None},), ({'fixed': [2], 'large': [2], 'normal': [2, 1]},)]
 

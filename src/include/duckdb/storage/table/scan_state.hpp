@@ -72,9 +72,9 @@ struct ColumnFetchState {
 struct LocalScanState {
 	~LocalScanState();
 
-	void SetStorage(LocalTableStorage *storage);
+	void SetStorage(shared_ptr<LocalTableStorage> storage);
 	LocalTableStorage *GetStorage() {
-		return storage;
+		return storage.get();
 	}
 
 	idx_t chunk_index;
@@ -83,7 +83,7 @@ struct LocalScanState {
 	TableFilterSet *table_filters;
 
 private:
-	LocalTableStorage *storage = nullptr;
+	shared_ptr<LocalTableStorage> storage;
 };
 
 class RowGroupScanState {

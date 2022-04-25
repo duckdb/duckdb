@@ -6,6 +6,11 @@ require tpch
 
 load __TEST_DIR__/tpch_storage.db
 
+foreach compression <compression>
+
+statement ok
+PRAGMA force_compression='${compression}'
+
 statement ok
 call dbgen(sf=1);
 
@@ -154,5 +159,17 @@ query I
 PRAGMA tpch(${i})
 ----
 <FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop
+
+statement ok
+DROP TABLE part;
+DROP TABLE supplier;
+DROP TABLE partsupp;
+DROP TABLE customer;
+DROP TABLE orders;
+DROP TABLE lineitem;
+DROP TABLE nation;
+DROP TABLE region;
 
 endloop

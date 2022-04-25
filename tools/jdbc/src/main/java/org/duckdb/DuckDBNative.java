@@ -27,6 +27,7 @@ public class DuckDBNative {
 				os_name = "windows";
 			} else if (os_name_detect.startsWith("mac")) {
 				os_name = "osx";
+				os_arch = "universal";
 			} else if (os_name_detect.startsWith("linux")) {
 				os_name = "linux";
 			}
