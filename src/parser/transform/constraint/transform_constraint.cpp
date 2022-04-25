@@ -68,6 +68,8 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		return make_unique<UniqueConstraint>(index, false);
 	case duckdb_libpgquery::PG_CONSTR_NULL:
 		return nullptr;
+	case duckdb_libpgquery::PG_CONSTR_GENERATED:
+		return make_unique<GeneratedConstraint>(index);
 	case duckdb_libpgquery::PG_CONSTR_DEFAULT:
 		column.default_value = TransformExpression(constraint->raw_expr);
 		return nullptr;

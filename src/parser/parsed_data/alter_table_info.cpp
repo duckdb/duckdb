@@ -1,5 +1,6 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/parser/constraint.hpp"
 
 namespace duckdb {
 

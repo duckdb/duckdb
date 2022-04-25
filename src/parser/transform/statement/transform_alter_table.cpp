@@ -23,15 +23,24 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 		case duckdb_libpgquery::PG_AT_AddColumn: {
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)command->def;
 			auto centry = TransformColumnDefinition(cdef);
+
+			vector<unique_ptr<Constraint>> constraints;
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
 					auto constraint = TransformConstraint(constr, centry, 0);
 					if (constraint) {
-						throw ParserException("Adding columns with constraints not yet supported");
+						if (constraint->type == ConstraintType::GENERATED) {
+							constraints.push_back(move(constraint));
+						}
+						else {
+							throw ParserException("Adding columns with constraints not yet supported");
+						}
 					}
 				}
 			}
-			result->info = make_unique<AddColumnInfo>(qname.schema, qname.name, move(centry));
+			auto info = make_unique<AddColumnInfo>(qname.schema, qname.name, move(centry));
+			info->constraints = (move(constraints));
+			result->info = move(info);
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_DropColumn: {
