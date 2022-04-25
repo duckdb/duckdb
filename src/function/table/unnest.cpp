@@ -7,7 +7,7 @@
 namespace duckdb {
 
 struct UnnestBindData : public FunctionData {
-	UnnestBindData(LogicalType input_type_p) : input_type(move(input_type_p)) {
+	explicit UnnestBindData(LogicalType input_type_p) : input_type(move(input_type_p)) {
 	}
 
 	LogicalType input_type;
