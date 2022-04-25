@@ -12,7 +12,7 @@ namespace duckdb {
 struct RandomBindData : public FunctionData {
 	ClientContext &context;
 
-	RandomBindData(ClientContext &context) : context(context) {
+	explicit RandomBindData(ClientContext &context) : context(context) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
