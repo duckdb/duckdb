@@ -44,7 +44,7 @@ static OperatorResultType SummaryFunction(ClientContext &context, const Function
 }
 
 void SummaryTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction summary_function({LogicalType::TABLE}, nullptr, SummaryFunctionBind);
+	TableFunction summary_function("summary", {LogicalType::TABLE}, nullptr, SummaryFunctionBind);
 	summary_function.in_out_function = SummaryFunction;
 	set.AddFunction(summary_function);
 }
