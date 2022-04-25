@@ -182,12 +182,18 @@ template <bool IS_ORDERED = true>
 AggregateFunction GetHistogramFunction(const LogicalType &type) {
 
 	switch (type.id()) {
+	case LogicalType::BOOLEAN:
+		return GetMapType<HistogramUpdateFunctor, bool, IS_ORDERED>(type);
+	case LogicalType::UTINYINT:
+		return GetMapType<HistogramUpdateFunctor, uint8_t, IS_ORDERED>(type);
 	case LogicalType::USMALLINT:
 		return GetMapType<HistogramUpdateFunctor, uint16_t, IS_ORDERED>(type);
 	case LogicalType::UINTEGER:
 		return GetMapType<HistogramUpdateFunctor, uint32_t, IS_ORDERED>(type);
 	case LogicalType::UBIGINT:
 		return GetMapType<HistogramUpdateFunctor, uint64_t, IS_ORDERED>(type);
+	case LogicalType::TINYINT:
+		return GetMapType<HistogramUpdateFunctor, int8_t, IS_ORDERED>(type);
 	case LogicalType::SMALLINT:
 		return GetMapType<HistogramUpdateFunctor, int16_t, IS_ORDERED>(type);
 	case LogicalType::INTEGER:
@@ -223,9 +229,12 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 
 void HistogramFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet fun("histogram");
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::BOOLEAN));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::UTINYINT));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::USMALLINT));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::UINTEGER));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::UBIGINT));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::TINYINT));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::SMALLINT));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::INTEGER));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::BIGINT));

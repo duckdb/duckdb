@@ -99,6 +99,18 @@ SELECT UNNEST(array_distinct([1, 2, 2, NULL])) AS l ORDER BY l
 
 # test all types
 
+# BOOLEAN
+query I
+SELECT UNNEST(list_distinct([True, True, False, NULL])) AS l ORDER BY l
+----
+0
+1
+
+query I
+SELECT list_distinct([NULL::BOOLEAN])
+----
+[]
+
 # VARCHAR
 query I
 SELECT UNNEST(list_distinct(['aa', 'aa', 'cd', NULL, '42'])) AS l ORDER BY l

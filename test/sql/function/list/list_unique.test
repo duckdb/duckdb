@@ -87,6 +87,17 @@ SELECT array_unique([1, 2, 2, NULL])
 
 # test all types
 
+# BOOLEAN
+query I
+SELECT list_unique([True, True, False, NULL])
+----
+2
+
+query I
+SELECT list_unique([NULL::BOOLEAN])
+----
+0
+
 # VARCHAR
 query I
 SELECT list_unique(['aa', 'aa', 'cd', NULL, '42'])
