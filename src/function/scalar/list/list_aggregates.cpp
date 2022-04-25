@@ -219,66 +219,66 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 		D_ASSERT(aggr.function.arguments.size() == 1);
 		auto key_type = aggr.function.arguments[0];
 
-		switch(key_type.InternalType()) {
-			case PhysicalType::BOOL:
-				OP::template ListExecuteFunction<bool>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::UINT8:
-				OP::template ListExecuteFunction<uint8_t>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::UINT16:
-				OP::template ListExecuteFunction<uint16_t>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::UINT32:
-				OP::template ListExecuteFunction<uint32_t>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::UINT64:
-				OP::template ListExecuteFunction<uint64_t>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::INT8:
-				OP::template ListExecuteFunction<int8_t>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::INT16:
-				OP::template ListExecuteFunction<int16_t>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::INT32:
-				OP::template ListExecuteFunction<int32_t>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::INT64:
-				OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::FLOAT:
-				OP::template ListExecuteFunction<float>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::DOUBLE:
-				OP::template ListExecuteFunction<double>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::DATE32:
-				OP::template ListExecuteFunction<int32_t>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::DATE64:
-				OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::TIMESTAMP:
-				OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::TIME32:
-				OP::template ListExecuteFunction<int32_t>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::TIME64:
-				OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::STRING:
-				OP::template ListExecuteFunction<string>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::LARGE_STRING:
-				OP::template ListExecuteFunction<string>(result, state_vector.state_vector, count);
-				break;
-			case PhysicalType::VARCHAR:
-				OP::template ListExecuteFunction<string>(result, state_vector.state_vector, count);
-				break;
-			default:
-				throw InternalException("Unimplemented histogram aggregate");
+		switch (key_type.InternalType()) {
+		case PhysicalType::BOOL:
+			OP::template ListExecuteFunction<bool>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::UINT8:
+			OP::template ListExecuteFunction<uint8_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::UINT16:
+			OP::template ListExecuteFunction<uint16_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::UINT32:
+			OP::template ListExecuteFunction<uint32_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::UINT64:
+			OP::template ListExecuteFunction<uint64_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::INT8:
+			OP::template ListExecuteFunction<int8_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::INT16:
+			OP::template ListExecuteFunction<int16_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::INT32:
+			OP::template ListExecuteFunction<int32_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::INT64:
+			OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::FLOAT:
+			OP::template ListExecuteFunction<float>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::DOUBLE:
+			OP::template ListExecuteFunction<double>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::DATE32:
+			OP::template ListExecuteFunction<int32_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::DATE64:
+			OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::TIMESTAMP:
+			OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::TIME32:
+			OP::template ListExecuteFunction<int32_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::TIME64:
+			OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::STRING:
+			OP::template ListExecuteFunction<string>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::LARGE_STRING:
+			OP::template ListExecuteFunction<string>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::VARCHAR:
+			OP::template ListExecuteFunction<string>(result, state_vector.state_vector, count);
+			break;
+		default:
+			throw InternalException("Unimplemented histogram aggregate");
 		}
 	}
 }
