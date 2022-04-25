@@ -49,7 +49,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -81,7 +81,7 @@ jobs:
       BUILD_EXCEL: 1
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -106,7 +106,7 @@ jobs:
         GEN: ninja
 
       steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -137,7 +137,7 @@ jobs:
       TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -167,7 +167,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -185,7 +185,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-debug
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -212,7 +212,7 @@ jobs:
       CXX: g++-10
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -231,7 +231,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -251,7 +251,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -283,7 +283,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -316,7 +316,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -340,7 +340,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 

@@ -10,28 +10,25 @@
 
 namespace duckdb {
 
-unique_ptr<Expression> CastHugeintToSmallestType(unique_ptr<Expression> expr, NumericStatistics &num_stats) {
-	// Compute range
-	if (num_stats.min.IsNull() || num_stats.max.IsNull()) {
-		return expr;
-	}
-
-	auto min_val = num_stats.min.GetValue<hugeint_t>();
-	auto max_val = num_stats.max.GetValue<hugeint_t>();
-	if (max_val < min_val) {
-		return expr;
-	}
-
-	// Prevent overflow
-	if (min_val < NumericLimits<int64_t>().Minimum() && max_val > NumericLimits<int64_t>().Maximum()) {
-		return expr;
-	}
-
-	// Compute range
-	auto range = max_val - min_val;
+template <class T>
+bool GetCastType(T signed_range, LogicalType &cast_type) {
+	auto range = static_cast<typename std::make_unsigned<decltype(signed_range)>::type>(signed_range);
 
 	// Check if this range fits in a smaller type
-	LogicalType cast_type;
+	if (range < NumericLimits<uint8_t>::Maximum()) {
+		cast_type = LogicalType::UTINYINT;
+	} else if (sizeof(T) > sizeof(uint16_t) && range < NumericLimits<uint16_t>::Maximum()) {
+		cast_type = LogicalType::USMALLINT;
+	} else if (sizeof(T) > sizeof(uint32_t) && range < NumericLimits<uint32_t>::Maximum()) {
+		cast_type = LogicalType::UINTEGER;
+	} else {
+		return false;
+	}
+	return true;
+}
+
+template <>
+bool GetCastType(hugeint_t range, LogicalType &cast_type) {
 	if (range < NumericLimits<uint8_t>().Maximum()) {
 		cast_type = LogicalType::UTINYINT;
 	} else if (range < NumericLimits<uint16_t>().Maximum()) {
@@ -39,22 +36,11 @@ unique_ptr<Expression> CastHugeintToSmallestType(unique_ptr<Expression> expr, Nu
 	} else if (range < NumericLimits<uint32_t>().Maximum()) {
 		cast_type = LogicalType::UINTEGER;
 	} else if (range < NumericLimits<uint64_t>().Maximum()) {
-		cast_type = LogicalTypeId::UBIGINT;
+		cast_type = LogicalType::UBIGINT;
 	} else {
-		return expr;
+		return false;
 	}
-
-	// Create expression to map to a smaller range
-	auto input_type = expr->return_type;
-	auto minimum_expr = make_unique<BoundConstantExpression>(Value::CreateValue(min_val));
-	vector<unique_ptr<Expression>> arguments;
-	arguments.push_back(move(expr));
-	arguments.push_back(move(minimum_expr));
-	auto minus_expr = make_unique<BoundFunctionExpression>(input_type, SubtractFun::GetFunction(input_type, input_type),
-	                                                       move(arguments), nullptr, true);
-
-	// Cast to smaller type
-	return make_unique<BoundCastExpression>(move(minus_expr), cast_type);
+	return true;
 }
 
 template <class T>
@@ -72,21 +58,14 @@ unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr, 
 
 	// Compute range, cast to unsigned to prevent comparing signed with unsigned
 	T signed_range;
-	if (!TrySubtractOperator::Operation(signed_min_val, signed_max_val, signed_range)) {
+	if (!TrySubtractOperator::Operation(signed_max_val, signed_min_val, signed_range)) {
 		// overflow in subtraction: cannot do any simplification
 		return expr;
 	}
-	auto range = static_cast<typename std::make_unsigned<decltype(signed_range)>::type>(signed_range);
 
 	// Check if this range fits in a smaller type
 	LogicalType cast_type;
-	if (range < NumericLimits<uint8_t>::Maximum()) {
-		cast_type = LogicalType::UTINYINT;
-	} else if (sizeof(T) > sizeof(uint16_t) && range < NumericLimits<uint16_t>::Maximum()) {
-		cast_type = LogicalType::USMALLINT;
-	} else if (sizeof(T) > sizeof(uint32_t) && range < NumericLimits<uint32_t>::Maximum()) {
-		cast_type = LogicalType::UINTEGER;
-	} else {
+	if (!GetCastType(signed_range, cast_type)) {
 		return expr;
 	}
 
@@ -122,7 +101,7 @@ unique_ptr<Expression> CastToSmallestType(unique_ptr<Expression> expr, NumericSt
 	case PhysicalType::INT64:
 		return TemplatedCastToSmallestType<int64_t>(move(expr), num_stats);
 	case PhysicalType::INT128:
-		return CastHugeintToSmallestType(move(expr), num_stats);
+		return TemplatedCastToSmallestType<hugeint_t>(move(expr), num_stats);
 	default:
 		throw NotImplementedException("Unknown integer type!");
 	}
