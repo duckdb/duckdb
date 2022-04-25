@@ -20,7 +20,7 @@
 namespace duckdb {
 
 static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function) {
-	return table_function.functions.size() == 1 && table_function.functions[0].arguments.size() >= 1 &&
+	return table_function.functions.size() == 1 && table_function.functions[0].arguments.size() == 1 &&
 	       table_function.functions[0].arguments[0].id() == LogicalTypeId::TABLE;
 }
 

@@ -75,7 +75,7 @@ OperatorResultType MapFunction::MapFunctionExec(ClientContext &context, const Fu
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
-	auto &data = (MapFunctionData &)*bind_data;
+	auto &data = (MapFunctionData &)*bind_data_p;
 
 	D_ASSERT(input->GetTypes() == data.in_types);
 	NumpyResultConversion conversion(data.in_types, input.size());
