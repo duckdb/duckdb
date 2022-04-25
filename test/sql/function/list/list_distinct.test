@@ -211,3 +211,23 @@ query I
 SELECT list_distinct([NULL::JSON])
 ----
 []
+
+# test WHERE
+
+statement ok
+CREATE TABLE wheretest (name VARCHAR, l INTEGER[]);
+
+statement ok
+INSERT INTO wheretest VALUES ('one1', [2, 3, 3, 4, NULL, 2]), ('one2', [NULL, NULL, 2]), ('two1', [1, 2, 3, 10, 15]),
+	('one3', [2, 3, 4]), ('two2', NULL), ('two3', [10, 11, 12]);
+
+query I
+SELECT name FROM wheretest WHERE name ILIKE 'one%' AND list_unique(list_distinct(l)) > 1;
+----
+one1
+one3
+
+query I
+SELECT name FROM wheretest WHERE name ILIKE 'two%' AND list_unique(list_distinct(l)) > 3;
+----
+two1
