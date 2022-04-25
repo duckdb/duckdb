@@ -1427,6 +1427,7 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 		const idx_t count = ie_lstate.SelectOuterRows(ie_lstate.right_matches);
 		if (!count) {
 			ie_gstate.GetNextPair(context.client, ie_sink, ie_lstate);
+			continue;
 		}
 
 		SliceSortedPayload(result, ie_sink.tables[1]->global_sort_state, ie_lstate.right_base, ie_lstate.true_sel,
