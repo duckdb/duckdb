@@ -1,0 +1,28 @@
+# name: test/sql/types/enum/test_3479.test
+# description: Test Enum -> Enum invalid conversion
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TYPE mood_2 AS ENUM ('1', '2', '3');
+
+statement ok
+CREATE TABLE m (
+    m mood
+);
+
+statement ok
+CREATE TABLE m_2 (
+    m mood_2
+);
+
+statement ok
+insert into m_2 values ('1')
+
+statement error
+insert into m SELECT * FROM m_2
