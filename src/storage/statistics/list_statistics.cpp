@@ -4,12 +4,11 @@
 
 namespace duckdb {
 
-ListStatistics::ListStatistics(LogicalType type_p) : BaseStatistics(move(type_p)) {
+ListStatistics::ListStatistics(LogicalType type_p, bool global) : BaseStatistics(move(type_p), global) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
-
+	InitializeBase();
 	auto &child_type = ListType::GetChildType(type);
-	child_stats = BaseStatistics::CreateEmpty(child_type);
-	validity_stats = make_unique<ValidityStatistics>(false);
+	child_stats = BaseStatistics::CreateEmpty(child_type, global);
 }
 
 void ListStatistics::Merge(const BaseStatistics &other_p) {
@@ -30,20 +29,24 @@ FilterPropagateResult ListStatistics::CheckZonemap(ExpressionType comparison_typ
 // LCOV_EXCL_STOP
 
 unique_ptr<BaseStatistics> ListStatistics::Copy() const {
-	auto copy = make_unique<ListStatistics>(type);
-	copy->validity_stats = validity_stats ? validity_stats->Copy() : nullptr;
-	copy->child_stats = child_stats ? child_stats->Copy() : nullptr;
-	return move(copy);
+	auto result = make_unique<ListStatistics>(type, global);
+	result->CopyBase(*this);
+
+	result->child_stats = child_stats ? child_stats->Copy() : nullptr;
+	return move(result);
 }
 
 void ListStatistics::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializable(*child_stats);
 	BaseStatistics::Serialize(writer);
+
+	writer.WriteSerializable(*child_stats);
 }
 
 unique_ptr<BaseStatistics> ListStatistics::Deserialize(FieldReader &reader, LogicalType type) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
-	auto result = make_unique<ListStatistics>(move(type));
+	auto result = make_unique<ListStatistics>(move(type), false);
+	result->DeserializeBase(reader);
+
 	auto &child_type = ListType::GetChildType(result->type);
 	auto &source = reader.GetSource();
 	result->child_stats = BaseStatistics::Deserialize(source, child_type);
@@ -51,12 +54,7 @@ unique_ptr<BaseStatistics> ListStatistics::Deserialize(FieldReader &reader, Logi
 }
 
 string ListStatistics::ToString() const {
-	string result;
-	result += " [";
-	result += child_stats ? child_stats->ToString() : "No Stats";
-	result += "]";
-	result += validity_stats ? validity_stats->ToString() : "";
-	return result;
+	return StringUtil::Format("[%s]%s", child_stats ? child_stats->ToString() : "No Stats", BaseStatistics::ToString());
 }
 
 void ListStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {

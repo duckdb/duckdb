@@ -6,7 +6,8 @@
 
 namespace duckdb {
 
-StringStatistics::StringStatistics(LogicalType type_p) : BaseStatistics(move(type_p)) {
+StringStatistics::StringStatistics(LogicalType type_p, bool global) : BaseStatistics(move(type_p), global) {
+	InitializeBase();
 	for (idx_t i = 0; i < MAX_STRING_MINMAX_SIZE; i++) {
 		min[i] = 0xFF;
 		max[i] = 0;
@@ -14,32 +15,33 @@ StringStatistics::StringStatistics(LogicalType type_p) : BaseStatistics(move(typ
 	max_string_length = 0;
 	has_unicode = false;
 	has_overflow_strings = false;
-	validity_stats = make_unique<ValidityStatistics>(false);
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Copy() const {
-	auto stats = make_unique<StringStatistics>(type);
-	memcpy(stats->min, min, MAX_STRING_MINMAX_SIZE);
-	memcpy(stats->max, max, MAX_STRING_MINMAX_SIZE);
-	stats->has_unicode = has_unicode;
-	stats->max_string_length = max_string_length;
-	if (validity_stats) {
-		stats->validity_stats = validity_stats->Copy();
-	}
-	return move(stats);
+	auto result = make_unique<StringStatistics>(type, global);
+	result->CopyBase(*this);
+
+	memcpy(result->min, min, MAX_STRING_MINMAX_SIZE);
+	memcpy(result->max, max, MAX_STRING_MINMAX_SIZE);
+	result->has_unicode = has_unicode;
+	result->max_string_length = max_string_length;
+	return move(result);
 }
 
 void StringStatistics::Serialize(FieldWriter &writer) const {
+	BaseStatistics::Serialize(writer);
+
 	writer.WriteBlob(min, MAX_STRING_MINMAX_SIZE);
 	writer.WriteBlob(max, MAX_STRING_MINMAX_SIZE);
 	writer.WriteField<bool>(has_unicode);
 	writer.WriteField<uint32_t>(max_string_length);
 	writer.WriteField<bool>(has_overflow_strings);
-	BaseStatistics::Serialize(writer);
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Deserialize(FieldReader &reader, LogicalType type) {
-	auto stats = make_unique<StringStatistics>(move(type));
+	auto stats = make_unique<StringStatistics>(move(type), false);
+	stats->DeserializeBase(reader);
+
 	reader.ReadBlob(stats->min, MAX_STRING_MINMAX_SIZE);
 	reader.ReadBlob(stats->max, MAX_STRING_MINMAX_SIZE);
 	stats->has_unicode = reader.ReadRequired<bool>();
@@ -167,8 +169,7 @@ string StringStatistics::ToString() const {
 	idx_t max_len = GetValidMinMaxSubstring(max);
 	return StringUtil::Format("[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %lld]%s",
 	                          string((const char *)min, min_len), string((const char *)max, max_len),
-	                          has_unicode ? "true" : "false", max_string_length,
-	                          validity_stats ? validity_stats->ToString() : "");
+	                          has_unicode ? "true" : "false", max_string_length, BaseStatistics::ToString());
 }
 
 void StringStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {

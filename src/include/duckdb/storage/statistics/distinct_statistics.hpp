@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/statistics/validity_statistics.hpp
+// duckdb/storage/statistics/distinct_statistics.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -36,6 +36,7 @@ public:
 	static unique_ptr<DistinctStatistics> Deserialize(FieldReader &reader);
 
 	void Update(Vector &update, idx_t count);
+	void Update(VectorData &update_data, PhysicalType ptype, idx_t count);
 
 	string ToString() const override;
 };

@@ -11,10 +11,17 @@
 
 namespace duckdb {
 
-BaseStatistics::BaseStatistics(LogicalType type) : type(move(type)) {
+BaseStatistics::BaseStatistics(LogicalType type, bool global) : type(move(type)), global(global) {
 }
 
 BaseStatistics::~BaseStatistics() {
+}
+
+void BaseStatistics::InitializeBase() {
+	validity_stats = make_unique<ValidityStatistics>(false);
+	if (global) {
+		distinct_stats = make_unique<DistinctStatistics>();
+	}
 }
 
 bool BaseStatistics::CanHaveNull() const {
@@ -35,6 +42,18 @@ bool BaseStatistics::CanHaveNoNull() const {
 	return ((ValidityStatistics &)*validity_stats).has_no_null;
 }
 
+void BaseStatistics::UpdateDistinctStatistics(Vector &v, idx_t count) {
+	D_ASSERT(distinct_stats);
+	auto &d_stats = (DistinctStatistics &)*distinct_stats;
+	d_stats.Update(v, count);
+}
+
+void BaseStatistics::UpdateDistinctStatistics(VectorData &vdata, PhysicalType ptype, idx_t count) {
+	D_ASSERT(distinct_stats);
+	auto &d_stats = (DistinctStatistics &)*distinct_stats;
+	d_stats.Update(vdata, ptype, count);
+}
+
 void MergeInternal(unique_ptr<BaseStatistics> &orig, const unique_ptr<BaseStatistics> &other) {
 	if (other) {
 		if (orig) {
@@ -48,10 +67,12 @@ void MergeInternal(unique_ptr<BaseStatistics> &orig, const unique_ptr<BaseStatis
 void BaseStatistics::Merge(const BaseStatistics &other) {
 	D_ASSERT(type == other.type);
 	MergeInternal(validity_stats, other.validity_stats);
-	MergeInternal(distinct_stats, other.distinct_stats);
+	if (global) {
+		MergeInternal(distinct_stats, other.distinct_stats);
+	}
 }
 
-unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
+unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type, bool global) {
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
 		return make_unique<ValidityStatistics>(false, false);
@@ -67,31 +88,34 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		return make_unique<NumericStatistics>(move(type));
+		return make_unique<NumericStatistics>(move(type), global);
 	case PhysicalType::VARCHAR:
-		return make_unique<StringStatistics>(move(type));
+		return make_unique<StringStatistics>(move(type), global);
 	case PhysicalType::STRUCT:
-		return make_unique<StructStatistics>(move(type));
+		return make_unique<StructStatistics>(move(type), global);
 	case PhysicalType::LIST:
-		return make_unique<ListStatistics>(move(type));
+		return make_unique<ListStatistics>(move(type), global);
 	case PhysicalType::INTERVAL:
 	default:
-		auto base_stats = make_unique<BaseStatistics>(move(type));
-		base_stats->validity_stats = make_unique<ValidityStatistics>(false);
-		base_stats->distinct_stats = make_unique<DistinctStatistics>();
-		return base_stats;
+		auto result = make_unique<BaseStatistics>(move(type), global);
+		result->InitializeBase();
+		return result;
 	}
 }
 
 unique_ptr<BaseStatistics> BaseStatistics::Copy() const {
-	auto statistics = make_unique<BaseStatistics>(type);
-	if (validity_stats) {
-		statistics->validity_stats = validity_stats->Copy();
+	auto result = make_unique<BaseStatistics>(type, global);
+	result->CopyBase(*this);
+	return result;
+}
+
+void BaseStatistics::CopyBase(const BaseStatistics &orig) {
+	if (orig.validity_stats) {
+		validity_stats = orig.validity_stats->Copy();
 	}
-	if (distinct_stats) {
-		statistics->distinct_stats = distinct_stats->Copy();
+	if (orig.distinct_stats) {
+		distinct_stats = orig.distinct_stats->Copy();
 	}
-	return statistics;
 }
 
 void BaseStatistics::Serialize(Serializer &serializer) const {
@@ -102,6 +126,7 @@ void BaseStatistics::Serialize(Serializer &serializer) const {
 
 void BaseStatistics::Serialize(FieldWriter &writer) const {
 	// Required
+	writer.WriteField<bool>(global);
 	if (!validity_stats) {
 		auto validity_stats_temp = make_unique<ValidityStatistics>(CanHaveNull(), CanHaveNoNull());
 		writer.WriteSerializable<ValidityStatistics>((ValidityStatistics &)*validity_stats_temp);
@@ -114,6 +139,7 @@ void BaseStatistics::Serialize(FieldWriter &writer) const {
 
 void BaseStatistics::DeserializeBase(FieldReader &reader) {
 	// Required
+	global = reader.ReadRequired<bool>();
 	validity_stats = reader.ReadRequiredSerializable<ValidityStatistics>();
 	// Optional
 	distinct_stats = reader.ReadOptional<DistinctStatistics>(nullptr);
@@ -150,18 +176,18 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 		result = ListStatistics::Deserialize(reader, move(type));
 		break;
 	case PhysicalType::INTERVAL:
-		result = make_unique<BaseStatistics>(move(type));
+		result = make_unique<BaseStatistics>(move(type), false);
+		result->DeserializeBase(reader);
 		break;
 	default:
 		throw InternalException("Unimplemented type for statistics deserialization");
 	}
-	result->DeserializeBase(reader);
 	return result;
 }
 
 string BaseStatistics::ToString() const {
-	return StringUtil::Format("Base Statistics %s %s", validity_stats ? validity_stats->ToString() : "[]",
-	                          distinct_stats ? distinct_stats->ToString() : "[]");
+	return StringUtil::Format("%s%s", validity_stats ? validity_stats->ToString() : "",
+	                          distinct_stats ? distinct_stats->ToString() : "");
 }
 
 void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {

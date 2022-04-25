@@ -24,10 +24,11 @@ class FieldReader;
 class Vector;
 class ValidityStatistics;
 class DistinctStatistics;
+struct VectorData;
 
 class BaseStatistics {
 public:
-	explicit BaseStatistics(LogicalType type);
+	BaseStatistics(LogicalType type, bool global);
 	virtual ~BaseStatistics();
 
 	//! The type of the logical segment
@@ -36,25 +37,33 @@ public:
 	unique_ptr<BaseStatistics> validity_stats;
 	//! The approximate count distinct stats of the column (if any)
 	unique_ptr<BaseStatistics> distinct_stats;
+	//! Whether these are 'global' stats, i.e., over a whole table, or just over a segment
+	//! Some statistics are more expensive to keep, therefore we only keep them globally
+	bool global;
 
 public:
+	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type, bool global);
+
 	bool CanHaveNull() const;
 	bool CanHaveNoNull() const;
+
+	void UpdateDistinctStatistics(Vector &v, idx_t count);
+	void UpdateDistinctStatistics(VectorData &vdata, PhysicalType type, idx_t count);
 
 	virtual bool IsConstant() const {
 		return false;
 	}
 
-	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
-
 	virtual void Merge(const BaseStatistics &other);
 
 	virtual unique_ptr<BaseStatistics> Copy() const;
+	void CopyBase(const BaseStatistics &orig);
 
 	virtual void Serialize(Serializer &serializer) const;
 	virtual void Serialize(FieldWriter &writer) const;
 
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
+	void DeserializeBase(FieldReader &reader);
 
 	//! Verify that a vector does not violate the statistics
 	virtual void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const;
@@ -62,8 +71,8 @@ public:
 
 	virtual string ToString() const;
 
-private:
-	void DeserializeBase(FieldReader &reader);
+protected:
+	void InitializeBase();
 };
 
 } // namespace duckdb

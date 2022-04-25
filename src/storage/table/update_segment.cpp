@@ -904,16 +904,9 @@ idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats,
 	return count;
 }
 
-void UpdateDistinctStatistics(SegmentStatistics &stats, Vector &update, idx_t count) {
-	auto &distinct_stats = (DistinctStatistics &)*stats.statistics->distinct_stats;
-	distinct_stats.Update(update, count);
-}
-
 template <class T>
 idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
                                        SelectionVector &sel) {
-	UpdateDistinctStatistics(stats, update, count);
-
 	auto update_data = FlatVector::GetData<T>(update);
 	auto &mask = FlatVector::Validity(update);
 
@@ -938,8 +931,6 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 
 idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
                              SelectionVector &sel) {
-	UpdateDistinctStatistics(stats, update, count);
-
 	auto update_data = FlatVector::GetData<string_t>(update);
 	auto &mask = FlatVector::Validity(update);
 	if (mask.AllValid()) {

@@ -4,15 +4,15 @@
 
 namespace duckdb {
 
-StructStatistics::StructStatistics(LogicalType type_p) : BaseStatistics(move(type_p)) {
+StructStatistics::StructStatistics(LogicalType type_p, bool global) : BaseStatistics(move(type_p), global) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
+	InitializeBase();
 
 	auto &child_types = StructType::GetChildTypes(type);
 	child_stats.resize(child_types.size());
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		child_stats[i] = BaseStatistics::CreateEmpty(child_types[i].second);
+		child_stats[i] = BaseStatistics::CreateEmpty(child_types[i].second, global);
 	}
-	validity_stats = make_unique<ValidityStatistics>(false);
 }
 
 void StructStatistics::Merge(const BaseStatistics &other_p) {
@@ -36,17 +36,18 @@ FilterPropagateResult StructStatistics::CheckZonemap(ExpressionType comparison_t
 // LCOV_EXCL_STOP
 
 unique_ptr<BaseStatistics> StructStatistics::Copy() const {
-	auto copy = make_unique<StructStatistics>(type);
-	if (validity_stats) {
-		copy->validity_stats = validity_stats->Copy();
-	}
+	auto result = make_unique<StructStatistics>(type, global);
+	result->CopyBase(*this);
+
 	for (idx_t i = 0; i < child_stats.size(); i++) {
-		copy->child_stats[i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
+		result->child_stats[i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
 	}
-	return move(copy);
+	return move(result);
 }
 
 void StructStatistics::Serialize(FieldWriter &writer) const {
+	BaseStatistics::Serialize(writer);
+
 	writer.WriteField<uint32_t>(child_stats.size());
 	auto &serializer = writer.GetSerializer();
 	for (idx_t i = 0; i < child_stats.size(); i++) {
@@ -55,12 +56,13 @@ void StructStatistics::Serialize(FieldWriter &writer) const {
 			child_stats[i]->Serialize(serializer);
 		}
 	}
-	BaseStatistics::Serialize(writer);
 }
 
 unique_ptr<BaseStatistics> StructStatistics::Deserialize(FieldReader &reader, LogicalType type) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
-	auto result = make_unique<StructStatistics>(move(type));
+	auto result = make_unique<StructStatistics>(move(type), false);
+	result->DeserializeBase(reader);
+
 	auto &child_types = StructType::GetChildTypes(result->type);
 
 	auto child_type_count = reader.ReadRequired<uint32_t>();
@@ -90,7 +92,7 @@ string StructStatistics::ToString() const {
 		result += child_types[i].first + ": " + (child_stats[i] ? child_stats[i]->ToString() : "No Stats");
 	}
 	result += "}";
-	result += validity_stats ? validity_stats->ToString() : "";
+	result += BaseStatistics::ToString();
 	return result;
 }
 

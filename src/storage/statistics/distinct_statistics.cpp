@@ -5,11 +5,12 @@
 
 namespace duckdb {
 
-DistinctStatistics::DistinctStatistics() : BaseStatistics(LogicalType::INVALID), log(make_unique<HyperLogLog>()) {
+DistinctStatistics::DistinctStatistics()
+    : BaseStatistics(LogicalType::INVALID, false), log(make_unique<HyperLogLog>()) {
 }
 
 DistinctStatistics::DistinctStatistics(unique_ptr<HyperLogLog> log)
-    : BaseStatistics(LogicalType::INVALID), log(move(log)) {
+    : BaseStatistics(LogicalType::INVALID, false), log(move(log)) {
 }
 
 unique_ptr<BaseStatistics> DistinctStatistics::Copy() const {
@@ -46,16 +47,19 @@ unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(FieldReader &read
 void DistinctStatistics::Update(Vector &v, idx_t count) {
 	VectorData vdata;
 	v.Orrify(count, vdata);
+	Update(vdata, v.GetType().InternalType(), count);
+}
 
+void DistinctStatistics::Update(VectorData &vdata, PhysicalType ptype, idx_t count) {
 	uint64_t indices[STANDARD_VECTOR_SIZE];
 	uint8_t counts[STANDARD_VECTOR_SIZE];
 
-	HyperLogLog::ProcessEntries(vdata, v.GetType().InternalType(), indices, counts, count);
+	HyperLogLog::ProcessEntries(vdata, ptype, indices, counts, count);
 	log->AddToLog(vdata, count, indices, counts);
 }
 
 string DistinctStatistics::ToString() const {
-	return StringUtil::Format("[Approximate Distinct Count: %s]", log->Count());
+	return StringUtil::Format("[Approx Unique: %s]", to_string(log->Count()));
 }
 
 } // namespace duckdb

@@ -1,4 +1,5 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+//#include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/field_writer.hpp"
@@ -13,14 +14,15 @@ template <>
 void NumericStatistics::Update<list_entry_t>(SegmentStatistics &stats, list_entry_t new_value) {
 }
 
-NumericStatistics::NumericStatistics(LogicalType type_p) : BaseStatistics(move(type_p)) {
+NumericStatistics::NumericStatistics(LogicalType type_p, bool global) : BaseStatistics(move(type_p), global) {
+	InitializeBase();
 	min = Value::MaximumValue(type);
 	max = Value::MinimumValue(type);
-	validity_stats = make_unique<ValidityStatistics>(false);
 }
 
-NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_p)
-    : BaseStatistics(move(type_p)), min(move(min_p)), max(move(max_p)) {
+NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_p, bool global)
+    : BaseStatistics(move(type_p), global), min(move(min_p)), max(move(max_p)) {
+	InitializeBase();
 }
 
 void NumericStatistics::Merge(const BaseStatistics &other_p) {
@@ -112,11 +114,9 @@ FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_
 }
 
 unique_ptr<BaseStatistics> NumericStatistics::Copy() const {
-	auto stats = make_unique<NumericStatistics>(type, min, max);
-	if (validity_stats) {
-		stats->validity_stats = validity_stats->Copy();
-	}
-	return move(stats);
+	auto result = make_unique<NumericStatistics>(type, min, max, global);
+	result->CopyBase(*this);
+	return move(result);
 }
 
 bool NumericStatistics::IsConstant() const {
@@ -124,20 +124,23 @@ bool NumericStatistics::IsConstant() const {
 }
 
 void NumericStatistics::Serialize(FieldWriter &writer) const {
+	BaseStatistics::Serialize(writer);
+
 	writer.WriteSerializable(min);
 	writer.WriteSerializable(max);
-	BaseStatistics::Serialize(writer);
 }
 
 unique_ptr<BaseStatistics> NumericStatistics::Deserialize(FieldReader &reader, LogicalType type) {
-	auto min = reader.ReadRequiredSerializable<Value, Value>();
-	auto max = reader.ReadRequiredSerializable<Value, Value>();
-	return make_unique_base<BaseStatistics, NumericStatistics>(move(type), min, max);
+	auto result = make_unique<NumericStatistics>(move(type), false);
+	result->DeserializeBase(reader);
+
+	result->min = reader.ReadRequiredSerializable<Value, Value>();
+	result->max = reader.ReadRequiredSerializable<Value, Value>();
+	return result;
 }
 
 string NumericStatistics::ToString() const {
-	return StringUtil::Format("[Min: %s, Max: %s]%s", min.ToString(), max.ToString(),
-	                          validity_stats ? validity_stats->ToString() : "");
+	return StringUtil::Format("[Min: %s, Max: %s]%s", min.ToString(), max.ToString(), BaseStatistics::ToString());
 }
 
 template <class T>

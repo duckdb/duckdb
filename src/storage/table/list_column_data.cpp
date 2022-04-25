@@ -284,7 +284,7 @@ void ListColumnData::CommitDropColumn() {
 struct ListColumnCheckpointState : public ColumnCheckpointState {
 	ListColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
 	    : ColumnCheckpointState(row_group, column_data, writer) {
-		global_stats = make_unique<ListStatistics>(column_data.type);
+		global_stats = make_unique<ListStatistics>(column_data.type, true);
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;

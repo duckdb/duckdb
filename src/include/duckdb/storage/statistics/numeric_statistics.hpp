@@ -23,8 +23,8 @@ namespace duckdb {
 
 class NumericStatistics : public BaseStatistics {
 public:
-	explicit NumericStatistics(LogicalType type);
-	NumericStatistics(LogicalType type, Value min, Value max);
+	explicit NumericStatistics(LogicalType type, bool global);
+	NumericStatistics(LogicalType type, Value min, Value max, bool global);
 
 	//! The minimum value of the segment
 	Value min;
