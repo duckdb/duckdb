@@ -61,7 +61,8 @@ typedef void (*table_function_t)(ClientContext &context, const FunctionData *bin
                                  FunctionOperatorData *operator_state, DataChunk &output);
 
 typedef OperatorResultType (*table_in_out_function_t)(ClientContext &context, const FunctionData *bind_data,
-                                 FunctionOperatorData *operator_state, DataChunk &input, DataChunk &output);
+                                                      FunctionOperatorData *operator_state, DataChunk &input,
+                                                      DataChunk &output);
 
 typedef void (*table_function_parallel_t)(ClientContext &context, const FunctionData *bind_data,
                                           FunctionOperatorData *operator_state, DataChunk &output,

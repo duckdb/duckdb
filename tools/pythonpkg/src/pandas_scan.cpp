@@ -135,7 +135,8 @@ double PandasScanFunction::PandasProgress(ClientContext &context, const Function
 }
 
 void PandasScanFunction::PandasScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
-                                                FunctionOperatorData *operator_state, DataChunk &output, ParallelState *parallel_state_p) {
+                                                FunctionOperatorData *operator_state, DataChunk &output,
+                                                ParallelState *parallel_state_p) {
 	//! FIXME: Have specialized parallel function from pandas scan here
 	PandasScanFunc(context, bind_data, operator_state, input, output);
 }
