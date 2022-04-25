@@ -1937,7 +1937,7 @@ a_expr:		c_expr									{ $$ = $1; }
 			| a_expr LAMBDA_ARROW a_expr %prec Op
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
-				n->lhs = $1;
+				n->lhs = list_make1($1);
 				n->rhs = $3;
 				n->location = @2;
 				$$ = (PGNode *) n;

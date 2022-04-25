@@ -2004,7 +2004,7 @@ typedef struct PGLimitPercent {
  */
 typedef struct PGLambdaFunction {
 	PGNodeTag type;
-	PGNode *lhs;                 /* list of input parameters */
+	PGList *lhs;                 /* list of input parameters */
 	PGNode *rhs;                 /* lambda expression */
 	int location;                /* token location, or -1 if unknown */
 } PGLambdaFunction;

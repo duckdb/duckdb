@@ -19,9 +19,9 @@ namespace duckdb {
 //! Lambda expressions are written in the form of "capture -> expr", e.g. "x -> x + 1"
 class LambdaExpression : public ParsedExpression {
 public:
-	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> rhs);
+	LambdaExpression(vector<unique_ptr<ParsedExpression>> lhs, unique_ptr<ParsedExpression> rhs);
 
-	unique_ptr<ParsedExpression> lhs;
+	vector<unique_ptr<ParsedExpression>> lhs;
 	unique_ptr<ParsedExpression> rhs;
 
 public:

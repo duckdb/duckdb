@@ -31,7 +31,10 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth)
 	// 	return BindResult(error);
 	// }
 	// expr.Print();
-	OperatorExpression arrow_expr(ExpressionType::ARROW, move(expr.lhs), move(expr.rhs));
+
+	D_ASSERT(expr.lhs.size() == 1);
+	auto lhs_expr = expr.lhs[0]->Copy();
+	OperatorExpression arrow_expr(ExpressionType::ARROW, move(lhs_expr), move(expr.rhs));
 	return ExpressionBinder::BindExpression(arrow_expr, depth);
 }
 
