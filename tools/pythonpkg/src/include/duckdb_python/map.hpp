@@ -23,7 +23,7 @@ public:
 	                                                vector<LogicalType> &return_types, vector<string> &names);
 
 	static void MapFunctionExec(ClientContext &context, const FunctionData *bind_data,
-	                            FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output);
+	                            FunctionOperatorData *operator_state, DataChunk &output);
 };
 
 } // namespace duckdb

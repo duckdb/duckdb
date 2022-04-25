@@ -135,8 +135,7 @@ double PandasScanFunction::PandasProgress(ClientContext &context, const Function
 }
 
 void PandasScanFunction::PandasScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
-                                                FunctionOperatorData *operator_state, DataChunk *input,
-                                                DataChunk &output, ParallelState *parallel_state_p) {
+                                                FunctionOperatorData *operator_state, DataChunk &output, ParallelState *parallel_state_p) {
 	//! FIXME: Have specialized parallel function from pandas scan here
 	PandasScanFunc(context, bind_data, operator_state, input, output);
 }
@@ -144,7 +143,7 @@ void PandasScanFunction::PandasScanFuncParallel(ClientContext &context, const Fu
 //! The main pandas scan function: note that this can be called in parallel without the GIL
 //! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 void PandasScanFunction::PandasScanFunc(ClientContext &context, const FunctionData *bind_data,
-                                        FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                        FunctionOperatorData *operator_state, DataChunk &output) {
 	if (!operator_state) {
 		return;
 	}

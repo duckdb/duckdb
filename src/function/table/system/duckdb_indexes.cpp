@@ -70,7 +70,7 @@ unique_ptr<FunctionOperatorData> DuckDBIndexesInit(ClientContext &context, const
 }
 
 void DuckDBIndexesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                           DataChunk *input, DataChunk &output) {
+                           DataChunk &output) {
 	auto &data = (DuckDBIndexesData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

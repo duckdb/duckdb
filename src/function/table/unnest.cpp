@@ -31,7 +31,7 @@ static unique_ptr<FunctionOperatorData> UnnestInit(ClientContext &context, const
 }
 
 static void UnnestFunction(ClientContext &context, const FunctionData *bind_data_p,
-                           FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                           FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &bind_data = (UnnestFunctionData &)*bind_data_p;
 	auto &state = (UnnestOperatorData &)*operator_state;
 

@@ -36,7 +36,7 @@ shared_ptr<Relation> SubstraitPlanToDuckDBRel(Connection &conn, string &serializ
 }
 
 static void ToSubFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk *input, DataChunk &output) {
+                          DataChunk &output) {
 	auto &data = (ToSubstraitFunctionData &)*bind_data;
 	if (data.finished) {
 		return;
@@ -84,7 +84,7 @@ static unique_ptr<FunctionData> FromSubstraitBind(ClientContext &context, TableF
 }
 
 static void FromSubFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                            DataChunk *input, DataChunk &output) {
+                            DataChunk &output) {
 	auto &data = (FromSubstraitFunctionData &)*bind_data;
 	if (!data.res) {
 		data.res = data.plan->Execute();

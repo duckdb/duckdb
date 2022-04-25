@@ -68,7 +68,7 @@ static string TypeVectorToString(vector<LogicalType> &types) {
 }
 
 void MapFunction::MapFunctionExec(ClientContext &context, const FunctionData *bind_data,
-                                  FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                  FunctionOperatorData *operator_state, DataChunk &output) {
 
 	py::gil_scoped_acquire acquire;
 

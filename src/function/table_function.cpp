@@ -20,8 +20,9 @@ TableFunction::TableFunction(string name, vector<LogicalType> arguments, table_f
                              table_function_init_parallel_state_t init_parallel_state,
                              table_function_parallel_t parallel_function, table_function_init_parallel_t parallel_init,
                              table_function_parallel_state_next_t parallel_state_next, bool projection_pushdown,
-                             bool filter_pushdown, table_function_progress_t query_progress)
-    : SimpleNamedParameterFunction(move(name), move(arguments)), bind(bind), init(init), function(function),
+                             bool filter_pushdown, table_function_progress_t query_progress,
+                             table_in_out_function_t in_out_function)
+    : SimpleNamedParameterFunction(move(name), move(arguments)), bind(bind), init(init), function(function), in_out_function(in_out_function),
       statistics(statistics), cleanup(cleanup), dependency(dependency), cardinality(cardinality),
       pushdown_complex_filter(pushdown_complex_filter), to_string(to_string), max_threads(max_threads),
       init_parallel_state(init_parallel_state), parallel_function(parallel_function), parallel_init(parallel_init),
@@ -38,10 +39,11 @@ TableFunction::TableFunction(const vector<LogicalType> &arguments, table_functio
                              table_function_init_parallel_state_t init_parallel_state,
                              table_function_parallel_t parallel_function, table_function_init_parallel_t parallel_init,
                              table_function_parallel_state_next_t parallel_state_next, bool projection_pushdown,
-                             bool filter_pushdown, table_function_progress_t query_progress)
+                             bool filter_pushdown, table_function_progress_t query_progress,
+                             table_in_out_function_t in_out_function)
     : TableFunction(string(), arguments, function, bind, init, statistics, cleanup, dependency, cardinality,
                     pushdown_complex_filter, to_string, max_threads, init_parallel_state, parallel_function,
-                    parallel_init, parallel_state_next, projection_pushdown, filter_pushdown, query_progress) {
+                    parallel_init, parallel_state_next, projection_pushdown, filter_pushdown, query_progress, in_out_function) {
 }
 TableFunction::TableFunction() : SimpleNamedParameterFunction("", {}) {
 }
