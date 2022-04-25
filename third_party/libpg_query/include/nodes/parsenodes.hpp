@@ -1578,7 +1578,8 @@ typedef enum PGConstrType /* types of constraints */
   PG_CONSTR_ATTR_NOT_DEFERRABLE,
   PG_CONSTR_ATTR_DEFERRED,
   PG_CONSTR_ATTR_IMMEDIATE,
-  PG_CONSTR_COMPRESSION} PGConstrType;
+  PG_CONSTR_COMPRESSION,
+  PG_CONSTR_GENERATED} PGConstrType;
 
 /* Foreign key action codes */
 #define PG_FKCONSTR_ACTION_NOACTION 'a'

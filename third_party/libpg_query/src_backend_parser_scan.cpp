@@ -3685,13 +3685,8 @@ static int yy_init_globals (yyscan_t yyscanner)
     yyg->yy_start_stack =  NULL;
 
 /* Defined in main.c */
-#ifdef YY_STDINIT
-    yyin = stdin;
-    yyout = stdout;
-#else
-    yyin = NULL;
-    yyout = NULL;
-#endif
+    yyin = (FILE *) 0;
+    yyout = (FILE *) 0;
 
     /* For future reference: Set errno on error, since we are called by
      * yylex_init()

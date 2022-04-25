@@ -208,6 +208,29 @@ ColConstraintElem:
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
+			| GENERATED generated_when AS '(' a_expr ')' VIRTUAL
+				{
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_GENERATED;
+					n->generated_when = $2;
+					n->raw_expr = $5;
+					n->cooked_expr = NULL;
+					n->location = @1;
+
+					/*
+					 * Can't do this in the grammar because of shift/reduce
+					 * conflicts.  (IDENTITY allows both ALWAYS and BY
+					 * DEFAULT, but generated columns only allow ALWAYS.)  We
+					 * can also give a more useful error message and location.
+					 */
+					if ($2 != PG_ATTRIBUTE_IDENTITY_ALWAYS)
+						ereport(ERROR,
+								(errcode(PG_ERRCODE_SYNTAX_ERROR),
+								 errmsg("for a generated column, GENERATED ALWAYS must be specified"),
+								 parser_errposition(@2)));
+
+					$$ = (PGNode *)n;
+				}
 			| REFERENCES qualified_name opt_column_list key_match key_actions
 				{
 					PGConstraint *n = makeNode(PGConstraint);
