@@ -63,6 +63,8 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	}
 	if (name == "as.integer") {
 		return make_external<CastExpression>("duckdb_expr", LogicalType::INTEGER, move(children[0]));
+	} else if (name == "as.Date") {
+		return make_external<CastExpression>("duckdb_expr", LogicalType::DATE, move(children[0]));
 	} else if (name == "ifelse") {
 		auto res = make_external<CaseExpression>("duckdb_expr");
 		CaseCheck check;
