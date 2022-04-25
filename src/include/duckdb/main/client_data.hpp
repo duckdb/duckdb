@@ -50,7 +50,7 @@ struct ClientData {
 	unique_ptr<FileOpener> file_opener;
 
 public:
-	static ClientData &Get(ClientContext &context);
+	DUCKDB_API static ClientData &Get(ClientContext &context);
 };
 
 } // namespace duckdb
