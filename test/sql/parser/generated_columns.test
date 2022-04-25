@@ -6,5 +6,4 @@ statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
 
 statement ok
-ALTER TABLE unit ADD COLUMN total_profit AS (price * amount_sold);
-
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
