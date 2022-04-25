@@ -20,7 +20,7 @@
 namespace duckdb {
 
 static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function) {
-	return table_function.functions.size() == 1 && table_function.functions[0].arguments.size() == 1 &&
+	return table_function.functions.size() == 1 && table_function.functions[0].arguments.size() >= 1 &&
 	       table_function.functions[0].arguments[0].id() == LogicalTypeId::TABLE;
 }
 
@@ -54,6 +54,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		arguments.emplace_back(LogicalTypeId::TABLE);
 		return BindTableInTableOutFunction(expressions, subquery, error);
 	}
+	bool seen_subquery = false;
 	for (auto &child : expressions) {
 		string parameter_name;
 
@@ -69,6 +70,20 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 				}
 			}
 		}
+		if (child->type == ExpressionType::SUBQUERY) {
+			if (seen_subquery) {
+				error = "Table function can have at most one subquery parameter ";
+				return false;
+			}
+			auto binder = Binder::CreateBinder(this->context, this, true);
+			auto &se = (SubqueryExpression &)*child;
+			auto node = binder->BindNode(*se.subquery->node);
+			subquery = make_unique<BoundSubqueryRef>(move(binder), move(node));
+			seen_subquery = true;
+			arguments.emplace_back(LogicalTypeId::TABLE);
+			continue;
+		}
+
 		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
 		LogicalType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
