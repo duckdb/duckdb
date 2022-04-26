@@ -588,7 +588,7 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 		break;
 	}
 
-	if (rec_number <= 0 || rec_number > (SQLSMALLINT)records.size()) {
+	if (rec_number <= 0) {
 		error_messages.emplace_back("Invalid descriptor index");
 		return SQL_ERROR;
 	}
