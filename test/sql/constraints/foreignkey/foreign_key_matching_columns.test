@@ -16,7 +16,7 @@ CREATE TABLE routes (
 statement ok
 CREATE TABLE agency (
 	agency_id TEXT PRIMARY KEY,
-	agency_name TEXT NOT NULL
+	agency_name TEXT UNIQUE NOT NULL
 );
 
 # column count mismatch
@@ -83,3 +83,25 @@ INSERT INTO routes VALUES (2, 2);
 
 statement ok
 INSERT INTO routes VALUES (2, 1);
+
+# multi-column primary key constraint
+statement ok
+DROP TABLE routes;
+
+statement ok
+DROP TABLE agency;
+
+statement ok
+CREATE TABLE agency (
+	agency_id TEXT,
+	agency_id_2 TEXT,
+	agency_name TEXT NOT NULL,
+	PRIMARY KEY (agency_id, agency_id_2)
+);
+
+statement ok
+CREATE TABLE routes (
+	route_id TEXT PRIMARY KEY,
+	agency_id TEXT,
+	FOREIGN KEY (route_id, agency_id) REFERENCES agency
+);
