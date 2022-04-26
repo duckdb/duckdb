@@ -11,6 +11,16 @@ struct UnnestBindData : public FunctionData {
 	}
 
 	LogicalType input_type;
+
+public:
+	unique_ptr<FunctionData> Copy() const override {
+		return make_unique<UnnestBindData>(input_type);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const UnnestBindData &)other_p;
+		return input_type == other.input_type;
+	}
 };
 
 struct UnnestOperatorData : public FunctionOperatorData {
