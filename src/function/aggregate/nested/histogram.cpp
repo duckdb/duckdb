@@ -78,7 +78,7 @@ static void HistogramUpdateFunctionString(Vector inputs[], FunctionData *, idx_t
 }
 
 template <class T>
-static void HistogramCombineFunction(Vector &state, Vector &combined, idx_t count) {
+static void HistogramCombineFunction(Vector &state, Vector &combined, FunctionData *bind_data, idx_t count) {
 	VectorData sdata;
 	state.Orrify(count, sdata);
 	auto states_ptr = (HistogramAggState<T> **)sdata.data;

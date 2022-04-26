@@ -589,13 +589,20 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 }
 
 struct StrfTimeBindData : public FunctionData {
-	explicit StrfTimeBindData(StrfTimeFormat format) : format(move(format)) {
+	explicit StrfTimeBindData(StrfTimeFormat format_p, string format_string_p)
+	    : format(move(format_p)), format_string(move(format_string_p)) {
 	}
 
 	StrfTimeFormat format;
+	string format_string;
 
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<StrfTimeBindData>(format);
+	unique_ptr<FunctionData> Copy() const override {
+		return make_unique<StrfTimeBindData>(format, format_string);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const StrfTimeBindData &)other_p;
+		return format_string == other.format_string;
 	}
 };
 
@@ -606,15 +613,15 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, Sca
 		throw InvalidInputException("strftime format must be a constant");
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[REVERSED ? 0 : 1]);
+	auto format_string = options_str.GetValue<string>();
 	StrfTimeFormat format;
 	if (!options_str.IsNull()) {
-		auto format_string = options_str.GetValue<string>();
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {
 			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
 		}
 	}
-	return make_unique<StrfTimeBindData>(format);
+	return make_unique<StrfTimeBindData>(format, format_string);
 }
 
 template <bool REVERSED>
@@ -1128,13 +1135,20 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 }
 
 struct StrpTimeBindData : public FunctionData {
-	explicit StrpTimeBindData(StrpTimeFormat format) : format(move(format)) {
+	explicit StrpTimeBindData(StrpTimeFormat format_p, string format_string_p)
+	    : format(move(format_p)), format_string(move(format_string_p)) {
 	}
 
 	StrpTimeFormat format;
+	string format_string;
 
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<StrpTimeBindData>(format);
+	unique_ptr<FunctionData> Copy() const override {
+		return make_unique<StrpTimeBindData>(format, format_string);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const StrpTimeBindData &)other_p;
+		return format_string == other.format_string;
 	}
 };
 
@@ -1144,9 +1158,9 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 		throw InvalidInputException("strptime format must be a constant");
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+	string format_string = options_str.ToString();
 	StrpTimeFormat format;
 	if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
-		string format_string = options_str.ToString();
 		format.format_specifier = format_string;
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {
@@ -1156,7 +1170,7 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 			bound_function.return_type = LogicalType::TIMESTAMP_TZ;
 		}
 	}
-	return make_unique<StrpTimeBindData>(format);
+	return make_unique<StrpTimeBindData>(format, format_string);
 }
 
 StrpTimeFormat::ParseResult StrpTimeFormat::Parse(const string &format_string, const string &text) {

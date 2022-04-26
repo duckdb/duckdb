@@ -13,8 +13,11 @@ struct UUIDRandomBindData : public FunctionData {
 	    : context(context), dist(dist) {
 	}
 
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<UUIDRandomBindData>(context, dist);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		return true;
 	}
 };
 
