@@ -10,8 +10,8 @@
 namespace duckdb {
 
 struct ListSortBindData : public FunctionData {
-	ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, LogicalType &return_type_p,
-	                 LogicalType &child_type_p, ClientContext &context_p);
+	ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, const LogicalType &return_type_p,
+	                 const LogicalType &child_type_p, ClientContext &context_p);
 	~ListSortBindData() override;
 
 	OrderType order_type;
@@ -27,11 +27,14 @@ struct ListSortBindData : public FunctionData {
 	RowLayout payload_layout;
 	vector<BoundOrderByNode> orders;
 
-	unique_ptr<FunctionData> Copy() override;
+public:
+	bool Equals(const FunctionData &other_p) const override;
+	unique_ptr<FunctionData> Copy() const override;
 };
 
-ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, LogicalType &return_type_p,
-                                   LogicalType &child_type_p, ClientContext &context_p)
+ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p,
+                                   const LogicalType &return_type_p, const LogicalType &child_type_p,
+                                   ClientContext &context_p)
     : order_type(order_type_p), null_order(null_order_p), return_type(return_type_p), child_type(child_type_p),
       context(context_p) {
 
@@ -54,8 +57,13 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
 	orders.emplace_back(order_type, null_order, move(lists_col_expr));
 }
 
-unique_ptr<FunctionData> ListSortBindData::Copy() {
+unique_ptr<FunctionData> ListSortBindData::Copy() const {
 	return make_unique<ListSortBindData>(order_type, null_order, return_type, child_type, context);
+}
+
+bool ListSortBindData::Equals(const FunctionData &other_p) const {
+	auto &other = (ListSortBindData &)other_p;
+	return order_type == other.order_type && null_order == other.null_order;
 }
 
 ListSortBindData::~ListSortBindData() {
