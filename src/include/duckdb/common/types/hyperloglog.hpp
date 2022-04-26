@@ -53,10 +53,6 @@ public:
 	//! Add the indices and counts to THIS log
 	void AddToLog(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[]);
 
-	static constexpr unsigned int SEED = 0xadc83b19ULL;
-	static constexpr uint64_t M = 0xc6a4a7935bd1e995;
-	static constexpr int R = 47;
-
 private:
 	explicit HyperLogLog(void *hll);
 

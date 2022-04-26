@@ -43,6 +43,10 @@ bool BaseStatistics::CanHaveNoNull() const {
 }
 
 void BaseStatistics::UpdateDistinctStatistics(Vector &v, idx_t count) {
+	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
+		// We don't do nested types (yet)
+		return;
+	}
 	D_ASSERT(distinct_stats);
 	auto &d_stats = (DistinctStatistics &)*distinct_stats;
 	d_stats.Update(v, count);
@@ -114,6 +118,7 @@ void BaseStatistics::CopyBase(const BaseStatistics &orig) {
 		validity_stats = orig.validity_stats->Copy();
 	}
 	if (orig.distinct_stats) {
+		D_ASSERT(global && orig.global);
 		distinct_stats = orig.distinct_stats->Copy();
 	}
 }
@@ -134,6 +139,7 @@ void BaseStatistics::Serialize(FieldWriter &writer) const {
 		writer.WriteSerializable<ValidityStatistics>((ValidityStatistics &)*validity_stats);
 	}
 	// Optional
+	D_ASSERT((global && distinct_stats) || (!global && !distinct_stats));
 	writer.WriteOptional<BaseStatistics>(distinct_stats);
 }
 

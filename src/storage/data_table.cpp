@@ -1275,7 +1275,7 @@ BlockPointer DataTable::Checkpoint(TableDataWriter &writer) {
 	// FIXME: we might want to combine adjacent row groups in case they have had deletions...
 	vector<unique_ptr<BaseStatistics>> global_stats;
 	for (idx_t i = 0; i < column_definitions.size(); i++) {
-		global_stats.push_back(BaseStatistics::CreateEmpty(column_definitions[i].type, true));
+		global_stats.push_back(column_stats[i]->Copy());
 	}
 
 	auto row_group = (RowGroup *)row_groups->GetRootSegment();

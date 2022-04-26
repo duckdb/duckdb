@@ -114,7 +114,14 @@ inline uint64_t TemplatedHash(const T &elem) {
 
 template <>
 inline uint64_t TemplatedHash(const hugeint_t &elem) {
-	return TemplatedHash<uint64_t>(*((uint64_t *)&elem.upper)) ^ TemplatedHash<uint64_t>(elem.lower);
+	return TemplatedHash<uint64_t>(Load<uint64_t>((data_ptr_t)&elem.upper)) ^ TemplatedHash<uint64_t>(elem.lower);
+}
+
+template <>
+inline uint64_t TemplatedHash(const interval_t &elem) {
+	return TemplatedHash<uint32_t>(Load<uint32_t>((data_ptr_t)&elem.months)) ^
+	       TemplatedHash<uint32_t>(Load<uint32_t>((data_ptr_t)&elem.days)) ^
+	       TemplatedHash<uint64_t>(Load<uint64_t>((data_ptr_t)&elem.micros));
 }
 
 inline int64_t HashOtherSize(const data_ptr_t &data, const idx_t &len) {
@@ -177,6 +184,7 @@ void TemplatedComputeHashes(VectorData &vdata, const idx_t &count, uint64_t hash
 
 static void ComputeHashes(VectorData &vdata, PhysicalType type, uint64_t hashes[], idx_t count) {
 	switch (type) {
+	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::UINT8:
 		return TemplatedComputeHashes<uint8_t>(vdata, count, hashes);
@@ -193,10 +201,12 @@ static void ComputeHashes(VectorData &vdata, PhysicalType type, uint64_t hashes[
 		return TemplatedComputeHashes<uint64_t>(vdata, count, hashes);
 	case PhysicalType::INT128:
 		return TemplatedComputeHashes<hugeint_t>(vdata, count, hashes);
+	case PhysicalType::INTERVAL:
+		return TemplatedComputeHashes<interval_t>(vdata, count, hashes);
 	case PhysicalType::VARCHAR:
 		return TemplatedComputeHashes<string_t>(vdata, count, hashes);
 	default:
-		throw InternalException("Unimplemented type for HyperLogLog::AddVector");
+		throw InternalException("Unimplemented type for HyperLogLog::ComputeHashes");
 	}
 }
 
