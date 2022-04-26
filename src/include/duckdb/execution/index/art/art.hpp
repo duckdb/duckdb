@@ -77,7 +77,7 @@ public:
 	~ART() override;
 
 	//! Root of the tree
-	unique_ptr<Node> tree;
+	Node *tree;
 	//! True if machine is little endian
 	bool is_little_endian;
 
@@ -124,19 +124,19 @@ private:
 	//! Insert a row id into a leaf node
 	bool InsertToLeaf(Leaf &leaf, row_t row_id);
 	//! Insert the leaf value into the tree
-	bool Insert(unique_ptr<Node> &node, unique_ptr<Key> key, unsigned depth, row_t row_id);
+	bool Insert(Node *&node, unique_ptr<Key> key, unsigned depth, row_t row_id);
 
 	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
-	void Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id);
+	void Erase(Node *&node, Key &key, unsigned depth, row_t row_id);
 
 	//! Check if the key of the leaf is equal to the searched key
 	bool LeafMatches(Node *node, Key &key, unsigned depth);
 
 	//! Find the node with a matching key, optimistic version
-	Node *Lookup(unique_ptr<Node> &node, Key &key, unsigned depth);
+	Node *Lookup(Node *node, Key &key, unsigned depth);
 
 	//! Find the first node that is bigger (or equal to) a specific key
-	bool Bound(unique_ptr<Node> &node, Key &key, Iterator &iterator, bool inclusive);
+	bool Bound(Node *node, Key &key, Iterator &iterator, bool inclusive);
 
 	//! Gets next node for range queries
 	bool IteratorNext(Iterator &iter);

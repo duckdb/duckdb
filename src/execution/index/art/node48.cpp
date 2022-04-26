@@ -15,7 +15,9 @@ Node48::Node48(size_t compression_length) : Node(NodeType::N48, compression_leng
 
 Node48::~Node48() {
 	for (auto &child : children) {
-		delete child;
+		if (child) {
+			delete child;
+		}
 	}
 }
 
@@ -87,6 +89,7 @@ void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
 				new_node->children[i] = n->children[n->child_index[i]];
+				n->children[n->child_index[i]] = nullptr;
 			}
 		}
 		new_node->count = n->count;
@@ -95,6 +98,10 @@ void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
 		node = new_node;
 		Node256::Insert(node, key_byte, child);
 	}
+}
+
+void Node48::ReplaceChildPointer(idx_t pos, Node *node) {
+	children[child_index[pos]] = node;
 }
 
 void Node48::Erase(Node *&node, int pos) {

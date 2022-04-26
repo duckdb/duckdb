@@ -62,6 +62,9 @@ public:
 	//! the element is not found.
 	virtual Node *GetChild(ART &art, idx_t pos);
 
+	//! Replaces the pointer
+	virtual void ReplaceChildPointer(idx_t pos, Node *node);
+
 	//! Tries to get a child from a given address, checks if the address is pointing to a memory space
 	//! Or if its a swizzled pointer.
 	static Node *GetChildSwizzled(ART &art, uintptr_t pointer);
@@ -72,9 +75,9 @@ public:
 	//! Compare the key with the prefix of the node, return the number matching bytes
 	static uint32_t PrefixMismatch(Node *node, Key &key, uint64_t depth);
 	//! Insert leaf into inner node
-	static void InsertLeaf(unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &new_node);
+	static void InsertLeaf(Node *&node, uint8_t key, Node *new_node);
 	//! Erase entry from node
-	static void Erase(unique_ptr<Node> &node, idx_t pos);
+	static void Erase(Node *&node, idx_t pos);
 
 protected:
 	//! Copies the prefix from the source to the destination node

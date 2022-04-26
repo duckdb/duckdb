@@ -10,7 +10,9 @@ Node256::Node256(size_t compression_length) : Node(NodeType::N256, compression_l
 }
 Node256::~Node256() {
 	for (auto &child : children) {
-		delete child;
+		if (child) {
+			delete child;
+		}
 	}
 }
 
@@ -43,6 +45,10 @@ idx_t Node256::GetMin() {
 		}
 	}
 	return DConstants::INVALID_INDEX;
+}
+
+void Node256::ReplaceChildPointer(idx_t pos, Node *node) {
+	children[pos] = node;
 }
 
 idx_t Node256::GetNextPos(idx_t pos) {
@@ -78,9 +84,11 @@ void Node256::Erase(Node *&node, int pos) {
 			if (n->children[i]) {
 				new_node->child_index[i] = new_node->count;
 				new_node->children[new_node->count] = n->children[i];
+				n->children[i] = nullptr;
 				new_node->count++;
 			}
 		}
+		delete node;
 		node = new_node;
 	}
 }

@@ -14,8 +14,14 @@ Node4::Node4(size_t compression_length) : Node(NodeType::N4, compression_length)
 
 Node4::~Node4() {
 	for (auto &child : children) {
-		delete child;
+		if (child) {
+			delete child;
+		}
 	}
+}
+
+void Node4::ReplaceChildPointer(idx_t pos, Node *node) {
+	children[pos] = node;
 }
 
 idx_t Node4::GetChildPos(uint8_t k) {
@@ -106,6 +112,10 @@ void Node4::Erase(Node *&node, int pos) {
 	for (; pos < n->count; pos++) {
 		n->key[pos] = n->key[pos + 1];
 		n->children[pos] = n->children[pos + 1];
+	}
+	// set any remaining nodes as nullptr
+	for (; pos < 4; pos++) {
+		n->children[pos] = nullptr;
 	}
 
 	// This is a one way node

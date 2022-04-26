@@ -15,7 +15,9 @@ Node16::Node16(size_t compression_length) : Node(NodeType::N16, compression_leng
 
 Node16::~Node16() {
 	for (auto &child : children) {
-		delete child;
+		if (child) {
+			delete child;
+		}
 	}
 }
 
@@ -58,6 +60,10 @@ Node *Node16::GetChild(ART &art, idx_t pos) {
 
 idx_t Node16::GetMin() {
 	return 0;
+}
+
+void Node16::ReplaceChildPointer(idx_t pos, Node *node) {
+	children[pos] = node;
 }
 
 void Node16::Insert(Node *&node, uint8_t key_byte, Node *child) {
@@ -160,12 +166,21 @@ void Node16::Erase(Node *&node, int pos) {
 		n->key[pos] = n->key[pos + 1];
 		n->children[pos] = n->children[pos + 1];
 	}
+	// set any remaining nodes as nullptr
+	for (; pos < 16; pos++) {
+		if (!n->children[pos]) {
+			break;
+		}
+		n->children[pos] = nullptr;
+	}
+
 	if (node->count <= 3) {
 		// Shrink node
 		auto new_node = new Node4(n->prefix_length);
 		for (unsigned i = 0; i < n->count; i++) {
 			new_node->key[new_node->count] = n->key[i];
 			new_node->children[new_node->count++] = n->children[i];
+			n->children[i] = nullptr;
 		}
 		CopyPrefix(n, new_node);
 		delete node;

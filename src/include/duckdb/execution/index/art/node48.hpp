@@ -31,6 +31,8 @@ public:
 	Node *GetChild(ART &art, idx_t pos) override;
 
 	idx_t GetMin() override;
+	//! Replace child pointer
+	void ReplaceChildPointer(idx_t pos, Node *node) override;
 
 	//! Insert node in Node48
 	static void Insert(Node *&node, uint8_t key_byte, Node *child);

@@ -29,6 +29,7 @@ public:
 public:
 	void Insert(row_t row_id);
 	void Remove(row_t row_id);
+	static void Node4Replace();
 
 	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) override;
 

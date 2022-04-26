@@ -29,6 +29,9 @@ public:
 	//! Get Node16 Child
 	Node *GetChild(ART &art, idx_t pos) override;
 
+	//! Replace child pointer
+	void ReplaceChildPointer(idx_t pos, Node *node) override;
+
 	idx_t GetMin() override;
 
 	//! Insert node into Node16

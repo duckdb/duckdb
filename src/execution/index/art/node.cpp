@@ -19,6 +19,10 @@ Node *Node::GetChild(ART &art, idx_t pos) {
 	return nullptr;
 }
 
+void Node::ReplaceChildPointer(idx_t pos, Node *node) {
+	D_ASSERT(0);
+}
+
 idx_t Node::GetMin() {
 	D_ASSERT(0);
 	return 0;
@@ -80,7 +84,7 @@ uint32_t Node::PrefixMismatch(Node *node, Key &key, uint64_t depth) {
 	return pos;
 }
 
-void Node::InsertLeaf(unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &new_node) {
+void Node::InsertLeaf(Node *&node, uint8_t key, Node *new_node) {
 	switch (node->type) {
 	case NodeType::N4:
 		Node4::Insert(node, key, new_node);
@@ -99,7 +103,7 @@ void Node::InsertLeaf(unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &new
 	}
 }
 
-void Node::Erase(unique_ptr<Node> &node, idx_t pos) {
+void Node::Erase(Node *&node, idx_t pos) {
 	switch (node->type) {
 	case NodeType::N4: {
 		Node4::Erase(node, pos);
