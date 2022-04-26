@@ -25,6 +25,9 @@ inputs:
   post_install:
     description: 'Post-install scripts to run'
     default: ''
+  treat_warn_as_error:
+    description: 'Treat compilation warnings as errors'
+    default: 1
   visualizer:
     description: 'Build Visualizer'
     default: 1
@@ -66,7 +69,7 @@ runs:
         BUILD_EXCEL: ${{ inputs.excel }}
         FORCE_32_BIT: ${{ inputs.force_32_bit }}
         BUILD_SUBSTRAIT_EXTENSION: ${{ inputs.substrait }}
-        TREAT_WARNINGS_AS_ERRORS: 1
+        TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat_warn_as_error}}
         FORCE_WARN_UNUSED: 1
         STATIC_OPENSSL: 1
         DISABLE_BUILTIN_EXTENSIONS: 1
