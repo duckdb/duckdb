@@ -87,6 +87,8 @@ public:
 
 	unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query);
 
+	unordered_set<string> GetTableNames(const string &query);
+
 	DuckDBPyConnection *UnregisterPythonObject(const string &name);
 
 	DuckDBPyConnection *Begin();
