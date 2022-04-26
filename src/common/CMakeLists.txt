@@ -14,7 +14,6 @@ add_library_unity(
   allocator.cpp
   arrow_wrapper.cpp
   assert.cpp
-  radix.cpp
   compressed_file_system.cpp
   constants.cpp
   checksum.cpp
