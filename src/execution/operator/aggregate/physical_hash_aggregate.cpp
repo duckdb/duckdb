@@ -35,8 +35,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
                                              vector<vector<idx_t>> grouping_functions_p, idx_t estimated_cardinality,
                                              PhysicalOperatorType type)
     : PhysicalOperator(type, move(types), estimated_cardinality), groups(move(groups_p)),
-      grouping_sets(move(grouping_sets_p)), grouping_functions(move(grouping_functions_p)), all_combinable(true),
-      any_distinct(false) {
+      grouping_sets(move(grouping_sets_p)), grouping_functions(move(grouping_functions_p)), any_distinct(false) {
 	// get a list of all aggregates to be computed
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);
@@ -67,7 +66,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 			payload_types_filters.push_back(aggr.filter->return_type);
 		}
 		if (!aggr.function.combine) {
-			all_combinable = false;
+			throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
 		}
 		aggregates.push_back(move(expr));
 	}

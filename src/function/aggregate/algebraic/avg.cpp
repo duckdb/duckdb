@@ -46,9 +46,14 @@ struct AverageDecimalBindData : public FunctionData {
 	double scale;
 
 public:
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<AverageDecimalBindData>(scale);
 	};
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (AverageDecimalBindData &)other_p;
+		return scale == other.scale;
+	}
 };
 
 struct AverageSetOperation {
@@ -57,7 +62,7 @@ struct AverageSetOperation {
 		state->Initialize();
 	}
 	template <class STATE>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		target->Combine(source);
 	}
 	template <class STATE>

@@ -72,7 +72,7 @@ struct BitAndOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (!source.is_set) {
 			// source is NULL, nothing to do.
 			return;
@@ -132,7 +132,7 @@ struct BitOrOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (!source.is_set) {
 			// source is NULL, nothing to do.
 			return;
@@ -192,7 +192,7 @@ struct BitXorOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (!source.is_set) {
 			// source is NULL, nothing to do.
 			return;

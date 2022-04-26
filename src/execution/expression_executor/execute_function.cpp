@@ -3,6 +3,13 @@
 
 namespace duckdb {
 
+ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root)
+    : ExpressionState(expr, root) {
+}
+
+ExecuteFunctionState::~ExecuteFunctionState() {
+}
+
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ExecuteFunctionState>(expr, root);
