@@ -1,6 +1,7 @@
 #include "duckdb_odbc.hpp"
 #include "api_info.hpp"
 #include "driver.hpp"
+#include "odbc_diagnostic.hpp"
 #include "odbc_fetch.hpp"
 #include "odbc_utils.hpp"
 #include "parameter_descriptor.hpp"
@@ -13,6 +14,7 @@
 
 using duckdb::LogicalTypeId;
 using duckdb::OdbcUtils;
+using duckdb::SQLStateType;
 using std::string;
 
 SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
@@ -25,7 +27,7 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 		}
 		case SQL_ATTR_PARAM_BIND_TYPE: {
 			if (value_ptr) {
-				stmt->param_desc->apd->header.sql_desc_bind_type = *((SQLINTEGER *)value_ptr);
+				stmt->param_desc->apd->header.sql_desc_bind_type = (SQLINTEGER)(SQLULEN)(uintptr_t)value_ptr;
 			}
 			return SQL_SUCCESS;
 		}
@@ -346,14 +348,22 @@ SQLRETURN SQL_API SQLColumns(SQLHSTMT statement_handle, SQLCHAR *catalog_name, S
 	});
 }
 
+SQLRETURN SQL_API SQLColAttributes(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLUSMALLINT field_identifier,
+                                   SQLPOINTER character_attribute_ptr, SQLSMALLINT buffer_length,
+                                   SQLSMALLINT *string_length_ptr, SQLLEN *numeric_attribute_ptr) {
+	return SQLColAttribute(statement_handle, column_number, field_identifier, character_attribute_ptr, buffer_length,
+	                       string_length_ptr, numeric_attribute_ptr);
+}
+
 SQLRETURN SQL_API SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLUSMALLINT field_identifier,
                                   SQLPOINTER character_attribute_ptr, SQLSMALLINT buffer_length,
                                   SQLSMALLINT *string_length_ptr, SQLLEN *numeric_attribute_ptr) {
 
 	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (column_number < 1 || column_number > stmt->stmt->GetTypes().size()) {
-			stmt->error_messages.emplace_back("Column number out of range.");
-			return SQL_ERROR;
+			duckdb::DiagRecord diag_rec("Column number out of range", SQLStateType::INVALID_DESC_INDEX,
+			                            stmt->dbc->GetDataSourceName());
+			throw duckdb::OdbcException("SQLColAttribute", SQL_ERROR, diag_rec);
 		}
 
 		duckdb::idx_t col_idx = column_number - 1;
@@ -362,8 +372,9 @@ SQLRETURN SQL_API SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column
 		switch (field_identifier) {
 		case SQL_DESC_LABEL: {
 			if (buffer_length <= 0) {
-				stmt->error_messages.emplace_back("Inadequate buffer length.");
-				return SQL_ERROR;
+				duckdb::DiagRecord diag_rec("Inadequate buffer length", SQLStateType::INVALID_STR_BUFF_LENGTH,
+				                            stmt->dbc->GetDataSourceName());
+				throw duckdb::OdbcException("SQLColAttribute", SQL_ERROR, diag_rec);
 			}
 
 			auto col_name = stmt->stmt->GetNames()[col_idx];
@@ -377,6 +388,7 @@ SQLRETURN SQL_API SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column
 
 			return SQL_SUCCESS;
 		}
+		case SQL_COLUMN_LENGTH:
 		case SQL_DESC_LENGTH:
 			if (numeric_attribute_ptr) {
 				duckdb::Store<SQLLEN>(desc_record->sql_desc_length, (duckdb::data_ptr_t)numeric_attribute_ptr);
@@ -390,8 +402,9 @@ SQLRETURN SQL_API SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column
 			return SQL_SUCCESS;
 		case SQL_DESC_TYPE_NAME: {
 			if (buffer_length <= 0) {
-				stmt->error_messages.emplace_back("Inadequate buffer length.");
-				return SQL_ERROR;
+				duckdb::DiagRecord diag_rec("Inadequate buffer length", SQLStateType::INVALID_STR_BUFF_LENGTH,
+				                            stmt->dbc->GetDataSourceName());
+				throw duckdb::OdbcException("SQLColAttribute", SQL_ERROR, diag_rec);
 			}
 
 			auto internal_type = stmt->stmt->GetTypes()[col_idx].InternalType();
@@ -409,8 +422,9 @@ SQLRETURN SQL_API SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column
 		case SQL_DESC_DISPLAY_SIZE: {
 			auto ret = duckdb::ApiInfo::GetColumnSize(stmt->stmt->GetTypes()[col_idx], numeric_attribute_ptr);
 			if (ret == SQL_ERROR) {
-				stmt->error_messages.emplace_back("Unsupported type for display size.");
-				return SQL_ERROR;
+				duckdb::DiagRecord diag_rec("Unsupported type for display size", SQLStateType::INVALID_PARAMETER_TYPE,
+				                            stmt->dbc->GetDataSourceName());
+				throw duckdb::OdbcException("SQLColAttribute", SQL_ERROR, diag_rec);
 			}
 		}
 		case SQL_DESC_UNSIGNED: {
@@ -476,14 +490,22 @@ SQLRETURN SQL_API SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column
 			}
 			return SQL_SUCCESS;
 		}
+		case SQL_COLUMN_NAME:
 		case SQL_DESC_NAME: {
 			duckdb::OdbcUtils::WriteString(desc_record->sql_desc_name, (SQLCHAR *)character_attribute_ptr,
 			                               buffer_length, string_length_ptr);
 			return SQL_SUCCESS;
 		}
+		case SQL_DESC_UPDATABLE: {
+			if (numeric_attribute_ptr) {
+				duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_updatable, (duckdb::data_ptr_t)numeric_attribute_ptr);
+			}
+			return SQL_SUCCESS;
+		}
 		default:
-			stmt->error_messages.emplace_back("Unsupported attribute type.");
-			return SQL_ERROR;
+			duckdb::DiagRecord diag_rec("Unsupported attribute type", SQLStateType::INVALID_ATTR_OPTION_ID,
+			                            stmt->dbc->GetDataSourceName());
+			throw duckdb::OdbcException("SQLColAttribute", SQL_ERROR, diag_rec);
 		}
 	});
 }

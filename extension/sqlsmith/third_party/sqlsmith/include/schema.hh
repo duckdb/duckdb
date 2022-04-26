@@ -76,7 +76,7 @@ struct schema {
 	}
 	virtual ~schema() {
 	}
-	void generate_indexes();
+	void generate_indexes(bool verbose_output);
 };
 
 #endif

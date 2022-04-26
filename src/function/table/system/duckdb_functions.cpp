@@ -55,6 +55,9 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	names.emplace_back("macro_definition");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("has_side_effects");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
 	return nullptr;
 }
 
@@ -127,6 +130,10 @@ struct ScalarFunctionExtractor {
 	static Value GetMacroDefinition(ScalarFunctionCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
+
+	static Value HasSideEffects(ScalarFunctionCatalogEntry &entry, idx_t offset) {
+		return Value::BOOLEAN(entry.functions[offset].has_side_effects);
+	}
 };
 
 struct AggregateFunctionExtractor {
@@ -170,6 +177,10 @@ struct AggregateFunctionExtractor {
 
 	static Value GetMacroDefinition(AggregateFunctionCatalogEntry &entry, idx_t offset) {
 		return Value();
+	}
+
+	static Value HasSideEffects(AggregateFunctionCatalogEntry &entry, idx_t offset) {
+		return Value::BOOLEAN(entry.functions[offset].has_side_effects);
 	}
 };
 
@@ -219,10 +230,12 @@ struct MacroExtractor {
 	}
 
 	static Value GetMacroDefinition(ScalarMacroCatalogEntry &entry, idx_t offset) {
-		if (entry.function->type == MacroType::SCALAR_MACRO) {
-			auto &func = (ScalarMacroFunction &)*entry.function;
-			return func.expression->ToString();
-		}
+		D_ASSERT(entry.function->type == MacroType::SCALAR_MACRO);
+		auto &func = (ScalarMacroFunction &)*entry.function;
+		return func.expression->ToString();
+	}
+
+	static Value HasSideEffects(ScalarMacroCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
 };
@@ -279,6 +292,10 @@ struct TableMacroExtractor {
 		}
 		return Value();
 	}
+
+	static Value HasSideEffects(TableMacroCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
 };
 
 struct TableFunctionExtractor {
@@ -327,6 +344,10 @@ struct TableFunctionExtractor {
 	}
 
 	static Value GetMacroDefinition(TableFunctionCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
+
+	static Value HasSideEffects(TableFunctionCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
 };
@@ -379,6 +400,10 @@ struct PragmaFunctionExtractor {
 	static Value GetMacroDefinition(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
+
+	static Value HasSideEffects(PragmaFunctionCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
 };
 
 template <class T, class OP>
@@ -410,6 +435,9 @@ bool ExtractFunctionData(StandardEntry *entry, idx_t function_idx, DataChunk &ou
 
 	// macro_definition, LogicalType::VARCHAR
 	output.SetValue(8, output_offset, OP::GetMacroDefinition(function, function_idx));
+
+	// has_side_effects, LogicalType::BOOLEAN
+	output.SetValue(9, output_offset, OP::HasSideEffects(function, function_idx));
 
 	return function_idx + 1 == OP::FunctionCount(function);
 }

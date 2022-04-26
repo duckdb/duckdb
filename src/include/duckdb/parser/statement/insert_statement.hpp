@@ -12,6 +12,7 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
+class ExpressionListRef;
 
 class InsertStatement : public SQLStatement {
 public:
@@ -34,7 +35,12 @@ protected:
 	InsertStatement(const InsertStatement &other);
 
 public:
+	string ToString() const override;
 	unique_ptr<SQLStatement> Copy() const override;
+
+	//! If the INSERT statement is inserted DIRECTLY from a values list (i.e. INSERT INTO tbl VALUES (...)) this returns
+	//! the expression list Otherwise, this returns NULL
+	ExpressionListRef *GetValuesList() const;
 };
 
 } // namespace duckdb

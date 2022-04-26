@@ -23,6 +23,8 @@ struct ICUDateFunc {
 		explicit BindData(ClientContext &context);
 		BindData(const BindData &other);
 
+		string tz_setting;
+		string cal_setting;
 		CalendarPtr calendar;
 
 		bool Equals(FunctionData &other_p) override;
@@ -33,6 +35,8 @@ struct ICUDateFunc {
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments);
 
+	//! Sets the time zone for the calendar.
+	static void SetTimeZone(icu::Calendar *calendar, const string_t &tz_id);
 	//! Gets the timestamp from the calendar, throwing if it is not in range.
 	static timestamp_t GetTime(icu::Calendar *calendar, uint64_t micros = 0);
 	//! Gets the timestamp from the calendar, assuming it is in range.

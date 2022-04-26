@@ -23,11 +23,14 @@ public:
 		throw InternalException("Cannot get select list of bound subquery node");
 	}
 
+	string ToString() const override {
+		throw InternalException("Cannot ToString bound subquery node");
+	}
 	unique_ptr<QueryNode> Copy() const override {
 		throw InternalException("Cannot copy bound subquery node");
 	}
 	void Serialize(FieldWriter &writer) const override {
-		throw InternalException("Cannot copy bound subquery node");
+		throw InternalException("Cannot serialize bound subquery node");
 	}
 };
 

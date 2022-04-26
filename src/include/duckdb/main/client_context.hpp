@@ -23,6 +23,7 @@
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/main/external_dependencies.hpp"
 
 namespace duckdb {
 class Appender;
@@ -60,6 +61,8 @@ public:
 	TransactionContext transaction;
 	//! Whether or not the query is interrupted
 	atomic<bool> interrupted;
+	//! External Objects (e.g., Python objects) that views depend of
+	unordered_map<string, vector<shared_ptr<ExternalDependency>>> external_dependencies;
 
 	//! The client configuration
 	ClientConfig config;
