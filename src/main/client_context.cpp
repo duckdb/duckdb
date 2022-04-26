@@ -523,7 +523,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		// create a copy of the statement, and use the copy
 		// this way we verify that the copy correctly copies all properties
 		auto copied_statement = statement->Copy();
-		if (statement->type == StatementType::SELECT_STATEMENT) {
+		switch (statement->type) {
+		case StatementType::SELECT_STATEMENT: {
 			// in case this is a select query, we verify the original statement
 			string error;
 			try {
@@ -535,8 +536,22 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 				// error in verifying query
 				return make_unique<PendingQueryResult>(error);
 			}
+			statement = move(copied_statement);
+			break;
 		}
-		statement = move(copied_statement);
+		case StatementType::INSERT_STATEMENT:
+		case StatementType::DELETE_STATEMENT:
+		case StatementType::UPDATE_STATEMENT: {
+			auto sql = statement->ToString();
+			Parser parser;
+			parser.ParseQuery(sql);
+			statement = move(parser.statements[0]);
+			break;
+		}
+		default:
+			statement = move(copied_statement);
+			break;
+		}
 	}
 	return PendingStatementOrPreparedStatement(lock, query, move(statement), prepared, values);
 }
@@ -716,6 +731,18 @@ void ClientContext::DisableProfiling() {
 	config.enable_profiler = false;
 }
 
+struct VerifyStatement {
+	VerifyStatement(unique_ptr<SelectStatement> statement_p, string statement_name_p, bool require_equality = true)
+	    : statement(move(statement_p)), statement_name(move(statement_name_p)), require_equality(require_equality),
+	      select_list(statement->node->GetSelectList()) {
+	}
+
+	unique_ptr<SelectStatement> statement;
+	string statement_name;
+	bool require_equality;
+	const vector<unique_ptr<ParsedExpression>> &select_list;
+};
+
 string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// aggressive query verification
@@ -725,8 +752,10 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	// Serialize()/Deserialize() of expressions
 	// Hash() of expressions
 	// Equality() of statements and expressions
+	// ToString() of statements and expressions
 	// Correctness of plans both with and without optimizers
-	// Correctness of plans both with and without parallelism
+
+	vector<VerifyStatement> verify_statements;
 
 	// copy the statement
 	auto select_stmt = (SelectStatement *)statement.get();
@@ -737,42 +766,60 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	select_stmt->Serialize(serializer);
 	BufferedDeserializer source(serializer);
 	auto deserialized_stmt = SelectStatement::Deserialize(source);
+
+	Parser parser;
+	parser.ParseQuery(select_stmt->ToString());
+	D_ASSERT(parser.statements.size() == 1);
+	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
+	auto parsed_statement = move(parser.statements[0]);
+
+	verify_statements.emplace_back(unique_ptr_cast<SQLStatement, SelectStatement>(move(statement)),
+	                               "Original statement");
+	verify_statements.emplace_back(move(copied_stmt), "Copied statement");
+	verify_statements.emplace_back(move(deserialized_stmt), "Deserialized statement");
+	verify_statements.emplace_back(unique_ptr_cast<SQLStatement, SelectStatement>(move(parsed_statement)),
+	                               "Parsed statement", false);
+
 	// all the statements should be equal
-	D_ASSERT(copied_stmt->Equals(statement.get()));
-	D_ASSERT(deserialized_stmt->Equals(statement.get()));
-	D_ASSERT(copied_stmt->Equals(deserialized_stmt.get()));
+	for (idx_t i = 1; i < verify_statements.size(); i++) {
+		if (!verify_statements[i].require_equality) {
+			continue;
+		}
+		D_ASSERT(verify_statements[i].statement->Equals(verify_statements[0].statement.get()));
+	}
 
 	// now perform checking on the expressions
 #ifdef DEBUG
-	auto &orig_expr_list = select_stmt->node->GetSelectList();
-	auto &de_expr_list = deserialized_stmt->node->GetSelectList();
-	auto &cp_expr_list = copied_stmt->node->GetSelectList();
-	D_ASSERT(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
-	for (idx_t i = 0; i < orig_expr_list.size(); i++) {
+	for (idx_t i = 1; i < verify_statements.size(); i++) {
+		D_ASSERT(verify_statements[i].select_list.size() == verify_statements[0].select_list.size());
+	}
+	auto expr_count = verify_statements[0].select_list.size();
+	auto &orig_expr_list = verify_statements[0].select_list;
+	for (idx_t i = 0; i < expr_count; i++) {
 		// run the ToString, to verify that it doesn't crash
 		auto str = orig_expr_list[i]->ToString();
-		// check that the expressions are equivalent
-		D_ASSERT(orig_expr_list[i]->Equals(de_expr_list[i].get()));
-		D_ASSERT(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
-		D_ASSERT(de_expr_list[i]->Equals(cp_expr_list[i].get()));
-		// check that the hashes are equivalent too
-		D_ASSERT(orig_expr_list[i]->Hash() == de_expr_list[i]->Hash());
-		D_ASSERT(orig_expr_list[i]->Hash() == cp_expr_list[i]->Hash());
+		for (idx_t v_idx = 0; v_idx < verify_statements.size(); v_idx++) {
+			if (!verify_statements[v_idx].require_equality && orig_expr_list[i]->HasSubquery()) {
+				continue;
+			}
+			// check that the expressions are equivalent
+			D_ASSERT(orig_expr_list[i]->Equals(verify_statements[v_idx].select_list[i].get()));
+			// check that the hashes are equivalent too
+			D_ASSERT(orig_expr_list[i]->Hash() == verify_statements[v_idx].select_list[i]->Hash());
 
+			verify_statements[v_idx].select_list[i]->Verify();
+		}
 		D_ASSERT(!orig_expr_list[i]->Equals(nullptr));
-		orig_expr_list[i]->Verify();
-		de_expr_list[i]->Verify();
-		cp_expr_list[i]->Verify();
 
-		// ToString round trip
 		if (orig_expr_list[i]->HasSubquery()) {
 			continue;
 		}
+		// ToString round trip
 		auto parsed_list = Parser::ParseExpressionList(str);
 		D_ASSERT(parsed_list.size() == 1);
 		D_ASSERT(parsed_list[0]->Equals(orig_expr_list[i].get()));
 	}
-	// now perform additional checking within the expressions
+	// perform additional checking within the expressions
 	for (idx_t outer_idx = 0; outer_idx < orig_expr_list.size(); outer_idx++) {
 		auto hash = orig_expr_list[outer_idx]->Hash();
 		for (idx_t inner_idx = 0; inner_idx < orig_expr_list.size(); inner_idx++) {
@@ -795,27 +842,20 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	// see below
 	auto statement_copy_for_explain = select_stmt->Copy();
 
-	unique_ptr<MaterializedQueryResult> original_result =
-	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-	                                    copied_result =
-	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-	                                    deserialized_result =
-	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-	                                    unoptimized_result =
-	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT);
-
 	// execute the original statement
-	try {
-		auto result = RunStatementInternal(lock, query, move(statement), false, false);
-		original_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
-	} catch (std::exception &ex) {
-		original_result->error = ex.what();
-		original_result->success = false;
+	vector<unique_ptr<MaterializedQueryResult>> results;
+	for (idx_t i = 0; i < verify_statements.size(); i++) {
+		interrupted = false;
+		try {
+			auto result = RunStatementInternal(lock, query, move(verify_statements[i].statement), false, false);
+			results.push_back(unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result)));
+		} catch (std::exception &ex) {
+			results.push_back(make_unique<MaterializedQueryResult>(ex.what()));
+		}
 	}
-	interrupted = false;
 
 	// check explain, only if q does not already contain EXPLAIN
-	if (original_result->success) {
+	if (results[0]->success) {
 		auto explain_q = "EXPLAIN " + query;
 		auto explain_stmt = make_unique<ExplainStatement>(move(statement_copy_for_explain));
 		try {
@@ -825,34 +865,6 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 		} // LCOV_EXCL_STOP
 	}
 
-	// now execute the copied statement
-	try {
-		auto result = RunStatementInternal(lock, query, move(copied_stmt), false, false);
-		copied_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
-	} catch (std::exception &ex) {
-		copied_result->error = ex.what();
-		copied_result->success = false;
-	}
-	interrupted = false;
-	// now execute the deserialized statement
-	try {
-		auto result = RunStatementInternal(lock, query, move(deserialized_stmt), false, false);
-		deserialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
-	} catch (std::exception &ex) {
-		deserialized_result->error = ex.what();
-		deserialized_result->success = false;
-	}
-	interrupted = false;
-	// now execute the unoptimized statement
-	config.enable_optimizer = false;
-	try {
-		auto result = RunStatementInternal(lock, query, move(unoptimized_stmt), false, false);
-		unoptimized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
-	} catch (std::exception &ex) {
-		unoptimized_result->error = ex.what();
-		unoptimized_result->success = false;
-	}
-	interrupted = false;
 	config.enable_optimizer = true;
 
 	if (profiling_is_enabled) {
@@ -861,22 +873,18 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 
 	// now compare the results
 	// the results of all runs should be identical
-	vector<unique_ptr<MaterializedQueryResult>> results;
-	results.push_back(move(copied_result));
-	results.push_back(move(deserialized_result));
-	results.push_back(move(unoptimized_result));
-	vector<string> names = {"Copied Result", "Deserialized Result", "Unoptimized Result"};
-	for (idx_t i = 0; i < results.size(); i++) {
-		if (original_result->success != results[i]->success) { // LCOV_EXCL_START
-			string result = names[i] + " differs from original result!\n";
-			result += "Original Result:\n" + original_result->ToString();
-			result += names[i] + ":\n" + results[i]->ToString();
+	for (idx_t i = 1; i < results.size(); i++) {
+		auto name = verify_statements[i].statement_name;
+		if (results[0]->success != results[i]->success) { // LCOV_EXCL_START
+			string result = name + " differs from original result!\n";
+			result += "Original Result:\n" + results[0]->ToString();
+			result += name + ":\n" + results[i]->ToString();
 			return result;
-		}                                                                  // LCOV_EXCL_STOP
-		if (!original_result->collection.Equals(results[i]->collection)) { // LCOV_EXCL_START
-			string result = names[i] + " differs from original result!\n";
-			result += "Original Result:\n" + original_result->ToString();
-			result += names[i] + ":\n" + results[i]->ToString();
+		}                                                             // LCOV_EXCL_STOP
+		if (!results[0]->collection.Equals(results[i]->collection)) { // LCOV_EXCL_START
+			string result = name + " differs from original result!\n";
+			result += "Original Result:\n" + results[0]->ToString();
+			result += name + ":\n" + results[i]->ToString();
 			return result;
 		} // LCOV_EXCL_STOP
 	}

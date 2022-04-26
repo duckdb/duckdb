@@ -19,8 +19,12 @@ struct VariableReturnBindData : public FunctionData {
 	explicit VariableReturnBindData(const LogicalType &stype_p) : stype(stype_p) {
 	}
 
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<VariableReturnBindData>(stype);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const VariableReturnBindData &)other_p;
+		return stype == other.stype;
 	}
 };
 
@@ -63,7 +67,6 @@ struct ListContainsFun {
 };
 
 struct ListFlattenFun {
-	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -73,6 +76,11 @@ struct ListPositionFun {
 };
 
 struct ListAggregateFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct ListSortFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };

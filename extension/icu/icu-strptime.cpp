@@ -23,11 +23,11 @@ struct ICUStrptime : public ICUDateFunc {
 
 		StrpTimeFormat format;
 
-		bool Equals(FunctionData &other_p) override {
+		bool Equals(const FunctionData &other_p) const override {
 			auto &other = (ICUStrptimeBindData &)other_p;
-			return BindData::Equals(other_p) && format.format_specifier == other.format.format_specifier;
+			return format.format_specifier == other.format.format_specifier;
 		}
-		unique_ptr<FunctionData> Copy() override {
+		unique_ptr<FunctionData> Copy() const override {
 			return make_unique<ICUStrptimeBindData>(*this);
 		}
 	};

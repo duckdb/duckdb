@@ -3,6 +3,9 @@
 # group: [delete]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE a(i INTEGER);
 
 statement ok

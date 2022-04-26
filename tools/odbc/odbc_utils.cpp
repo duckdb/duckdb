@@ -207,20 +207,23 @@ string OdbcUtils::GetQueryDuckdbTables(const string &schema_filter, const string
 }
 
 void OdbcUtils::SetValueFromConnStr(const string &conn_str, const char *key, string &value) {
-	auto pos_key = conn_str.find(key);
-	if (pos_key != string::npos) {
-		auto pos_start_value = conn_str.find('=', pos_key);
+	std::string pattern = std::string(key) + ".*";
+	std::smatch match_str;
+	std::regex re(pattern, std::regex_constants::icase);
+	if (std::regex_search(conn_str, match_str, re)) {
+		std::string matched_str = match_str.str();
+		auto pos_start_value = matched_str.find('=');
 		if (pos_start_value == string::npos) {
 			// an equal '=' char must be present (syntax error)
 			return;
 		}
 		++pos_start_value;
-		auto pos_end_value = conn_str.find(';', pos_start_value);
+		auto pos_end_value = matched_str.find(';', pos_start_value);
 		if (pos_end_value == string::npos) {
 			// there is no ';', reached the end of the string
-			pos_end_value = conn_str.size();
+			pos_end_value = matched_str.size();
 		}
-		value = conn_str.substr(pos_start_value, pos_end_value - pos_start_value);
+		value = matched_str.substr(pos_start_value, pos_end_value - pos_start_value);
 	}
 }
 

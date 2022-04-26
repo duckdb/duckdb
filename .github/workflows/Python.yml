@@ -280,9 +280,9 @@ jobs:
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
-        CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+        CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" "psutil>=5.9.0"'
         CIBW_TEST_REQUIRES: 'pytest'
-        CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" mypy'
+        CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" mypy "psutil>=5.9.0"'
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         SETUPTOOLS_USE_DISTUTILS: 'stdlib'
@@ -329,7 +329,7 @@ jobs:
           python-version: '3.7'
 
       - name: Install
-        run: pip install numpy pytest pandas mypy
+        run: pip install numpy pytest pandas mypy psutil
 
       - name: Build
         run: |

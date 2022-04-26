@@ -337,7 +337,7 @@ struct UDFAverageFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		target->count += source.count;
 		target->sum += source.sum;
 	}
@@ -400,7 +400,7 @@ struct UDFCovarOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (target->count == 0) {
 			*target = source;
 		} else if (source.count > 0) {
@@ -543,7 +543,7 @@ struct UDFSum {
 	}
 
 	template <class STATE_TYPE>
-	static void Combine(Vector &source, Vector &target, idx_t count) {
+	static void Combine(Vector &source, Vector &target, FunctionData *bind_data, idx_t count) {
 		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
 		auto sdata = FlatVector::GetData<const STATE_TYPE *>(source);
 		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
