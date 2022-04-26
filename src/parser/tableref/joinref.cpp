@@ -5,6 +5,32 @@
 
 namespace duckdb {
 
+string JoinRef::ToString() const {
+	string result;
+	result = left->ToString() + " ";
+	if (is_natural) {
+		result += "NATURAL ";
+	}
+	result += JoinTypeToString(type) + " JOIN ";
+	result += right->ToString();
+	if (condition) {
+		D_ASSERT(using_columns.empty());
+		result += " ON (";
+		result += condition->ToString();
+		result += ")";
+	} else if (!using_columns.empty()) {
+		result += " USING (";
+		for (idx_t i = 0; i < using_columns.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += using_columns[i];
+		}
+		result += ")";
+	}
+	return result;
+}
+
 bool JoinRef::Equals(const TableRef *other_p) const {
 	if (!TableRef::Equals(other_p)) {
 		return false;

@@ -33,9 +33,9 @@ struct RegrSlopeOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
-		CovarOperation::Combine<CovarState, OP>(source.cov_pop, &target->cov_pop);
-		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, &target->var_pop);
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+		CovarOperation::Combine<CovarState, OP>(source.cov_pop, &target->cov_pop, bind_data);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, &target->var_pop, bind_data);
 	}
 
 	template <class T, class STATE>

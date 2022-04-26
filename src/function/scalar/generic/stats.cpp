@@ -10,8 +10,13 @@ struct StatsBindData : public FunctionData {
 	string stats;
 
 public:
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<StatsBindData>(stats);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const StatsBindData &)other_p;
+		return stats == other.stats;
 	}
 };
 

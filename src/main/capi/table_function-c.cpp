@@ -22,7 +22,7 @@ struct CTableFunctionInfo : public TableFunctionInfo {
 	duckdb_delete_callback_t delete_callback = nullptr;
 };
 
-struct CTableBindData : public FunctionData {
+struct CTableBindData : public TableFunctionData {
 	~CTableBindData() {
 		if (bind_data && delete_callback) {
 			delete_callback(bind_data);

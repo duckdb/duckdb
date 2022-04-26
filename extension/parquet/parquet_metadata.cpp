@@ -10,9 +10,15 @@
 
 namespace duckdb {
 
-struct ParquetMetaDataBindData : public FunctionData {
+struct ParquetMetaDataBindData : public TableFunctionData {
 	vector<LogicalType> return_types;
 	vector<string> files;
+
+public:
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const ParquetMetaDataBindData &)other_p;
+		return other.return_types == return_types && files == other.files;
+	}
 };
 
 struct ParquetMetaDataOperatorData : public FunctionOperatorData {

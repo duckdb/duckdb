@@ -10,6 +10,34 @@ TEST_CASE("Test Logical Types C API", "[capi]") {
 	duckdb_destroy_logical_type(&type);
 	duckdb_destroy_logical_type(&type);
 
+	// list type
+	duckdb_logical_type elem_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	duckdb_logical_type list_type = duckdb_create_list_type(elem_type);
+	REQUIRE(duckdb_get_type_id(list_type) == DUCKDB_TYPE_LIST);
+	duckdb_logical_type elem_type_dup = duckdb_list_type_child_type(list_type);
+	REQUIRE(elem_type_dup != elem_type);
+	REQUIRE(duckdb_get_type_id(elem_type_dup) == duckdb_get_type_id(elem_type));
+	duckdb_destroy_logical_type(&elem_type);
+	duckdb_destroy_logical_type(&list_type);
+	duckdb_destroy_logical_type(&elem_type_dup);
+
+	// map type
+	duckdb_logical_type key_type = duckdb_create_logical_type(DUCKDB_TYPE_SMALLINT);
+	duckdb_logical_type value_type = duckdb_create_logical_type(DUCKDB_TYPE_DOUBLE);
+	duckdb_logical_type map_type = duckdb_create_map_type(key_type, value_type);
+	REQUIRE(duckdb_get_type_id(map_type) == DUCKDB_TYPE_MAP);
+	duckdb_logical_type key_type_dup = duckdb_map_type_key_type(map_type);
+	duckdb_logical_type value_type_dup = duckdb_map_type_value_type(map_type);
+	REQUIRE(key_type_dup != key_type);
+	REQUIRE(value_type_dup != value_type);
+	REQUIRE(duckdb_get_type_id(key_type_dup) == duckdb_get_type_id(key_type));
+	REQUIRE(duckdb_get_type_id(value_type_dup) == duckdb_get_type_id(value_type));
+	duckdb_destroy_logical_type(&key_type);
+	duckdb_destroy_logical_type(&value_type);
+	duckdb_destroy_logical_type(&map_type);
+	duckdb_destroy_logical_type(&key_type_dup);
+	duckdb_destroy_logical_type(&value_type_dup);
+
 	duckdb_destroy_logical_type(nullptr);
 }
 

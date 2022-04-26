@@ -8,16 +8,14 @@
 
 #pragma once
 
-#include "duckdb/execution/operator/join/physical_comparison_join.hpp"
+#include "duckdb/execution/operator/join/physical_range_join.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
 
-class IEJoinSortedTable;
-
 //! PhysicalIEJoin represents a two inequality range join between
 //! two tables
-class PhysicalIEJoin : public PhysicalComparisonJoin {
+class PhysicalIEJoin : public PhysicalRangeJoin {
 public:
 	PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	               vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
@@ -55,9 +53,6 @@ public:
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          GlobalSinkState &gstate) const override;
-
-	//! Schedules tasks to merge sort the current child's data during a Finalize phase
-	static void ScheduleMergeTasks(Pipeline &pipeline, Event &event, IEJoinSortedTable &table);
 
 	bool IsSink() const override {
 		return true;
