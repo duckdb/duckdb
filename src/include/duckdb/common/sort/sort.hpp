@@ -61,6 +61,8 @@ public:
 	//! Completes the cascaded merge sort round.
 	//! Pass true if you wish to use the radix data for further comparisons.
 	void CompleteMergeRound(bool keep_radix_data = false);
+	//! Print the sorted data to the console.
+	void Print();
 
 public:
 	//! The lock for updating the order global state

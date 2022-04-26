@@ -31,8 +31,13 @@ JSONReadFunctionData::JSONReadFunctionData(bool constant, string path_p, idx_t l
     : constant(constant), path(move(path_p)), ptr(path.c_str()), len(len) {
 }
 
-unique_ptr<FunctionData> JSONReadFunctionData::Copy() {
+unique_ptr<FunctionData> JSONReadFunctionData::Copy() const {
 	return make_unique<JSONReadFunctionData>(constant, path, len);
+}
+
+bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
+	auto &other = (const JSONReadFunctionData &)other_p;
+	return constant == other.constant && path == other.path && len == other.len;
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
@@ -56,8 +61,13 @@ JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vecto
 	}
 }
 
-unique_ptr<FunctionData> JSONReadManyFunctionData::Copy() {
+unique_ptr<FunctionData> JSONReadManyFunctionData::Copy() const {
 	return make_unique<JSONReadManyFunctionData>(paths, lens);
+}
+
+bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
+	auto &other = (const JSONReadManyFunctionData &)other_p;
+	return paths == other.paths && lens == other.lens;
 }
 
 unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,

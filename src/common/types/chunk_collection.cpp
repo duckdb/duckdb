@@ -431,9 +431,6 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 	if (ColumnCount() != other.ColumnCount()) {
 		return false;
 	}
-	if (types != other.types) {
-		return false;
-	}
 	// if count is equal amount of chunks should be equal
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {

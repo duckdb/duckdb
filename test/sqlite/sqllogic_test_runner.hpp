@@ -37,6 +37,7 @@ public:
 	unique_ptr<Command> top_level_loop;
 	vector<LoopDefinition *> running_loops;
 	bool original_sqlite_test = false;
+	bool output_sql = false;
 
 	// If these error msgs occur in a test, the test will abort but still count as passed
 	unordered_set<string> ignore_error_messages = {"HTTP", "Unable to connect"};
