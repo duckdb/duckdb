@@ -240,6 +240,8 @@ public:
 	//! Returns true if the values are (approximately) equivalent. Note this is NOT the SQL equivalence. For this
 	//! function, NULL values are equivalent and floating point values that are close are equivalent.
 	DUCKDB_API static bool ValuesAreEqual(const Value &result_value, const Value &value);
+	//! Returns true if the values are not distinct from each other, following SQL semantics for NOT DISTINCT FROM.
+	DUCKDB_API static bool NotDistinctFrom(const Value &lvalue, const Value &rvalue);
 
 	friend std::ostream &operator<<(std::ostream &out, const Value &val) {
 		out << val.ToString();
@@ -452,6 +454,8 @@ template <>
 DUCKDB_API timestamp_t Value::GetValue() const;
 template <>
 DUCKDB_API interval_t Value::GetValue() const;
+template <>
+DUCKDB_API Value Value::GetValue() const;
 
 template <>
 DUCKDB_API bool Value::GetValueUnsafe() const;

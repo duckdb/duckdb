@@ -18,15 +18,18 @@ struct ListAggregatesBindData : public FunctionData {
 	LogicalType stype;
 	unique_ptr<Expression> aggr_expr;
 
-	unique_ptr<FunctionData> Copy() override;
+	unique_ptr<FunctionData> Copy() const override {
+		return make_unique<ListAggregatesBindData>(stype, aggr_expr->Copy());
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const ListAggregatesBindData &)other_p;
+		return stype == other.stype && aggr_expr->Equals(other.aggr_expr.get());
+	}
 };
 
 ListAggregatesBindData::ListAggregatesBindData(const LogicalType &stype_p, unique_ptr<Expression> aggr_expr_p)
     : stype(stype_p), aggr_expr(move(aggr_expr_p)) {
-}
-
-unique_ptr<FunctionData> ListAggregatesBindData::Copy() {
-	return make_unique<ListAggregatesBindData>(stype, aggr_expr->Copy());
 }
 
 ListAggregatesBindData::~ListAggregatesBindData() {

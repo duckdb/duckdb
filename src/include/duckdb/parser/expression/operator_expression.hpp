@@ -85,10 +85,10 @@ public:
 			       KeywordHelper::WriteOptionallyQuoted(child_string.substr(1, child_string.size() - 2));
 		}
 		case ExpressionType::ARRAY_CONSTRUCTOR: {
-			string result = "ARRAY[";
+			string result = "(ARRAY[";
 			result += StringUtil::Join(entry.children, entry.children.size(), ", ",
 			                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
-			result += "]";
+			result += "])";
 			return result;
 		}
 		default:

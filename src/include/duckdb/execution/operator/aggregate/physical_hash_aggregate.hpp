@@ -40,8 +40,6 @@ public:
 	vector<unique_ptr<Expression>> aggregates;
 	//! The set of GROUPING functions
 	vector<vector<idx_t>> grouping_functions;
-	//! Whether or not all aggregates are combinable
-	bool all_combinable;
 
 	//! Whether or not any aggregation is DISTINCT
 	bool any_distinct;
@@ -83,7 +81,7 @@ public:
 	}
 
 	bool ParallelSink() const override {
-		return all_combinable;
+		return true;
 	}
 
 public:

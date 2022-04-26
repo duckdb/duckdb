@@ -14,8 +14,13 @@ struct CurrentSettingBindData : public FunctionData {
 	Value value;
 
 public:
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<CurrentSettingBindData>(value);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const CurrentSettingBindData &)other_p;
+		return Value::NotDistinctFrom(value, other.value);
 	}
 };
 
