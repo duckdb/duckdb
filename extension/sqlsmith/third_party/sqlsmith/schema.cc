@@ -4,9 +4,10 @@
 
 using namespace std;
 
-void schema::generate_indexes() {
+void schema::generate_indexes(bool verbose_output) {
 
-	cerr << "Generating indexes...";
+	if (verbose_output)
+		cerr << "Generating indexes...";
 
 	for (auto &type : types) {
 		assert(type);
@@ -48,7 +49,8 @@ void schema::generate_indexes() {
 			base_tables.push_back(&t);
 	}
 
-	cerr << "done." << endl;
+	if (verbose_output)
+		cerr << "done." << endl;
 
 	assert(booltype);
 	assert(inttype);

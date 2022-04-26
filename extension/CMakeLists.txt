@@ -37,3 +37,7 @@ endif()
 if(${BUILD_SUBSTRAIT_EXTENSION})
   add_subdirectory(substrait)
 endif()
+
+if(${BUILD_SQLSMITH_EXTENSION})
+  add_subdirectory(sqlsmith)
+endif()
