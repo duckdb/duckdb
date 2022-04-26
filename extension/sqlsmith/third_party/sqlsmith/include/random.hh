@@ -13,7 +13,8 @@ namespace smith {
 extern std::mt19937_64 rng;
 }
 
-template <typename T> T &random_pick(std::vector<T> &container) {
+template <typename T>
+T &random_pick(std::vector<T> &container) {
 	if (!container.size())
 		throw std::runtime_error("No candidates available");
 
@@ -21,7 +22,8 @@ template <typename T> T &random_pick(std::vector<T> &container) {
 	return container[pick(smith::rng)];
 }
 
-template <typename I> I random_pick(I beg, I end) {
+template <typename I>
+I random_pick(I beg, I end) {
 	if (beg == end)
 		throw std::runtime_error("No candidates available");
 
@@ -30,7 +32,8 @@ template <typename I> I random_pick(I beg, I end) {
 	return beg;
 }
 
-template <typename I> I random_pick(std::pair<I, I> iters) {
+template <typename I>
+I random_pick(std::pair<I, I> iters) {
 	return random_pick(iters.first, iters.second);
 }
 

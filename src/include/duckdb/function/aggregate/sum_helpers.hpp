@@ -139,8 +139,8 @@ struct BaseSumOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
-		STATEOP::template Combine<STATE>(source, target);
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+		STATEOP::template Combine<STATE>(source, target, bind_data);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>

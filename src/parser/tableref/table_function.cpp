@@ -8,7 +8,7 @@ TableFunctionRef::TableFunctionRef() : TableRef(TableReferenceType::TABLE_FUNCTI
 }
 
 string TableFunctionRef::ToString() const {
-	return function->ToString();
+	return BaseToString(function->ToString(), column_name_alias);
 }
 
 bool TableFunctionRef::Equals(const TableRef *other_p) const {

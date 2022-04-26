@@ -60,6 +60,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				if (join.conditions.size() > 1) {
 					// there are multiple conditions: erase this condition
 					join.conditions.erase(join.conditions.begin() + i);
+					// remove the corresponding statistics
+					join.join_stats.clear();
 					i--;
 					continue;
 				} else {

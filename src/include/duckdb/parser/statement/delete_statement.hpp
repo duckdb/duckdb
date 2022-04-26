@@ -27,6 +27,7 @@ protected:
 	DeleteStatement(const DeleteStatement &other);
 
 public:
+	string ToString() const override;
 	unique_ptr<SQLStatement> Copy() const override;
 };
 

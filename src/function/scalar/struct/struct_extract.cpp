@@ -16,11 +16,11 @@ struct StructExtractBindData : public FunctionData {
 	LogicalType type;
 
 public:
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<StructExtractBindData>(key, index, type);
 	}
-	bool Equals(FunctionData &other_p) override {
-		auto &other = (StructExtractBindData &)other_p;
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const StructExtractBindData &)other_p;
 		return key == other.key && index == other.index && type == other.type;
 	}
 };
