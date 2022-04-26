@@ -1,0 +1,96 @@
+# name: test/sql/storage/compression/rle_sorted/rle_sort_types.test
+# description: Test sort before RLE compression with integer types
+# group: [rle]
+
+# load the DB from disk
+load __TEST_DIR__/test_rle.db
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+# BIGINT
+
+statement ok
+CREATE TABLE test (a BIGINT, b BIGINT);
+
+statement ok
+INSERT INTO test VALUES (1000000000000,1000000000000),(2000000000000,2000000000000),(1000000000000,1000000000000),(2000000000000,2000000000000),(1000000000000,1000000000000),(2000000000000,2000000000000);
+
+statement ok
+checkpoint
+
+query II
+SELECT * FROM test;
+----
+1000000000000	1000000000000
+1000000000000	1000000000000
+1000000000000	1000000000000
+2000000000000	2000000000000
+2000000000000	2000000000000
+2000000000000	2000000000000
+
+# DECIMAL(5,2)
+
+statement ok
+DROP TABLE IF EXISTS test;
+
+statement ok
+CREATE TABLE test (a DECIMAL(5,2), b DECIMAL(5,2));
+
+statement ok
+INSERT INTO test VALUES (100.20,100.20),(200.20,200.20),(100.10,100.10);
+
+statement ok
+checkpoint
+
+query II
+SELECT * FROM test;
+----
+100.10	100.10
+100.20	100.20
+200.20	200.20
+
+# DECIMAL(8,5)
+
+statement ok
+DROP TABLE IF EXISTS test;
+
+statement ok
+CREATE TABLE test (a DECIMAL(8,5), b DECIMAL(5,2));
+
+statement ok
+INSERT INTO test VALUES (100.23400,100.20),(200.21234,200.20),(100.12346,100.10);
+
+statement ok
+checkpoint
+
+query II
+SELECT * FROM test;
+----
+100.12346	100.10
+100.23400	100.20
+200.21234	200.20
+
+# Negative decimals
+
+statement ok
+DROP TABLE IF EXISTS test;
+
+statement ok
+CREATE TABLE test (a DECIMAL(5,2), b DECIMAL(5,2));
+
+statement ok
+INSERT INTO test VALUES (-100.20,-100.20),(100.10,100.10),(-200.20,-200.20)
+
+statement ok
+checkpoint
+
+query II
+SELECT * FROM test;
+----
+-200.20	-200.20
+-100.20	-100.20
+100.10	100.10
