@@ -8,4 +8,3 @@ source_files = []
 base_path = os.path.dirname(os.path.abspath(__file__))
 for dir in source_directories:
     source_files += [os.path.join('extension', 'icu', dir, x) for x in os.listdir(os.path.join(base_path, dir)) if x.endswith('.cpp')]
-

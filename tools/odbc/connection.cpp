@@ -94,6 +94,15 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 
 SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                     SQLINTEGER string_length) {
+	// attributes before connection
+	switch (attribute) {
+	case SQL_ATTR_LOGIN_TIMEOUT:
+	case SQL_ATTR_ODBC_CURSORS:
+	case SQL_ATTR_PACKET_SIZE:
+		return SQL_SUCCESS;
+	default:
+		break;
+	}
 	return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) {
 		switch (attribute) {
 		case SQL_ATTR_AUTOCOMMIT:
@@ -156,10 +165,7 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 		case SQL_ATTR_DBC_INFO_TOKEN:
 #endif
 		case SQL_ATTR_ENLIST_IN_DTC:
-		case SQL_ATTR_LOGIN_TIMEOUT:
 		case SQL_ATTR_METADATA_ID:
-		case SQL_ATTR_ODBC_CURSORS:
-		case SQL_ATTR_PACKET_SIZE:
 		case SQL_ATTR_QUIET_MODE:
 		case SQL_ATTR_TRACE:
 		case SQL_ATTR_TRACEFILE:
@@ -338,6 +344,10 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		duckdb::Store<SQLUINTEGER>(mask, (duckdb::data_ptr_t)info_value_ptr);
 		return SQL_SUCCESS;
 	}
+	case SQL_CONVERT_GUID: {
+		duckdb::Store<SQLUINTEGER>(0, (duckdb::data_ptr_t)info_value_ptr);
+		return SQL_SUCCESS;
+	}
 	case SQL_CONVERT_DATE: {
 		SQLUINTEGER mask = SQL_CVT_CHAR | SQL_CVT_DATE | SQL_CVT_LONGVARCHAR | SQL_CVT_TIMESTAMP | SQL_CVT_VARCHAR;
 		duckdb::Store<SQLUINTEGER>(mask, (duckdb::data_ptr_t)info_value_ptr);
@@ -394,6 +404,9 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		duckdb::Store<SQLUSMALLINT>(SQL_CN_ANY, (duckdb::data_ptr_t)info_value_ptr);
 		return SQL_SUCCESS;
 	}
+	case SQL_CONVERT_WCHAR:
+	case SQL_CONVERT_WLONGVARCHAR:
+	case SQL_CONVERT_WVARCHAR:
 	case SQL_CREATE_ASSERTION:
 	case SQL_CREATE_CHARACTER_SET:
 	case SQL_CREATE_COLLATION:
@@ -946,7 +959,12 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		return SQL_SUCCESS;
 	}
 	default:
-		return SQL_ERROR;
+		return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) -> SQLRETURN {
+			duckdb::DiagRecord diag_rec("Unrecognized attribute.", SQLStateType::INVALID_ATTR_OPTION_ID,
+			                            dbc->GetDataSourceName());
+			// returning SQL_SUCESS, but with a record message
+			throw duckdb::OdbcException("SQLGetInfo", SQL_SUCCESS, diag_rec);
+		});
 	}
 } // end SQLGetInfo
 
