@@ -1,0 +1,8 @@
+# name: test/sql/function/list/list_transform.test
+# description: Test list_transform function
+# group: [list]
+
+query I
+SELECT list_transform([1, 2, 3], x -> x + 1)
+----
+[2, 3, 4]

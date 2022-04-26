@@ -13,7 +13,10 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, ScalarFunction &bound_function,
                                                            vector<unique_ptr<Expression>> &arguments) {
 
-	// TODO
+	// TODO:
+	// this is about finding out what the input and output types are
+	// also, remove the lambda function from the arguments here
+	// and add it to the bind info instead
 
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }

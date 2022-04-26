@@ -15,7 +15,7 @@ namespace duckdb {
 //	return colref.column_names[0];
 // }
 
-BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth) {
+BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, bool is_lambda) {
 	string error;
 
 	// FIXME: decide from the context whether this is actually a LambdaExpression
@@ -32,10 +32,12 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth)
 	// }
 	// expr.Print();
 
-	D_ASSERT(expr.lhs.size() == 1);
-	auto lhs_expr = expr.lhs[0]->Copy();
-	OperatorExpression arrow_expr(ExpressionType::ARROW, move(lhs_expr), move(expr.rhs));
-	return ExpressionBinder::BindExpression(arrow_expr, depth);
+	//if (!is_lambda) {
+		D_ASSERT(expr.lhs.size() == 1);
+		auto lhs_expr = expr.lhs[0]->Copy();
+		OperatorExpression arrow_expr(ExpressionType::ARROW, move(lhs_expr), move(expr.rhs));
+		return ExpressionBinder::BindExpression(arrow_expr, depth);
+	//}
 }
 
 } // namespace duckdb

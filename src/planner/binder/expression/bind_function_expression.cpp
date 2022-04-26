@@ -27,6 +27,10 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
 		// scalar function
+		// ensure that we distinguish between lambda functions and the JSON operator ->
+		if (function.function_name == "list_transform") {
+			// TODO: what to call from here?
+		}
 		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
 	case CatalogType::MACRO_ENTRY:
 		// macro function
