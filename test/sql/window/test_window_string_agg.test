@@ -33,12 +33,5 @@ select j, s, string_agg(s, '|') over (partition by j order by s) from a order by
 2	5	2|5
 
 # different separator per group
-query III
+statement error
 select j, s, string_agg(s, sep) over (partition by j order by s) from a order by j, s;
-----
-0	3	3
-0	6	3-6
-1	1	1
-1	4	1|4
-2	2	2
-2	5	2|5

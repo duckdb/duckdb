@@ -77,7 +77,7 @@ struct column_reference : value_expr {
 struct coalesce : value_expr {
 	const char *abbrev_;
 	vector<shared_ptr<value_expr>> value_exprs;
-	virtual ~coalesce(){};
+	virtual ~coalesce() {};
 	coalesce(prod *p, sqltype *type_constraint = 0, const char *abbrev = "coalesce");
 	virtual void out(std::ostream &out);
 	virtual void accept(prod_visitor *v) {
@@ -88,8 +88,8 @@ struct coalesce : value_expr {
 };
 
 struct nullif : coalesce {
-	virtual ~nullif(){};
-	nullif(prod *p, sqltype *type_constraint = 0) : coalesce(p, type_constraint, "nullif"){};
+	virtual ~nullif() {};
+	nullif(prod *p, sqltype *type_constraint = 0) : coalesce(p, type_constraint, "nullif") {};
 };
 
 struct bool_expr : value_expr {
@@ -170,7 +170,7 @@ struct bool_term : bool_binop {
 
 struct distinct_pred : bool_binop {
 	distinct_pred(prod *p);
-	virtual ~distinct_pred(){};
+	virtual ~distinct_pred() {};
 	virtual void out(std::ostream &o) {
 		o << *lhs << " is distinct from " << *rhs;
 	}
@@ -179,7 +179,7 @@ struct distinct_pred : bool_binop {
 struct comparison_op : bool_binop {
 	op *oper;
 	comparison_op(prod *p);
-	virtual ~comparison_op(){};
+	virtual ~comparison_op() {};
 	virtual void out(std::ostream &o) {
 		o << *lhs << " " << oper->name << " " << *rhs;
 	}

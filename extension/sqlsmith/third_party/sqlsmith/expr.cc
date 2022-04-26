@@ -191,9 +191,9 @@ funcall::funcall(prod *p, sqltype *type_constraint, bool agg) : value_expr(p), i
 	if (type_constraint == scope->schema->internaltype)
 		fail("cannot call functions involving internal type");
 
-	auto &idx = agg ? p->scope->schema->aggregates_returning_type
-	                : (4 < d6()) ? p->scope->schema->routines_returning_type
-	                             : p->scope->schema->parameterless_routines_returning_type;
+	auto &idx = agg          ? p->scope->schema->aggregates_returning_type
+	            : (4 < d6()) ? p->scope->schema->routines_returning_type
+	                         : p->scope->schema->parameterless_routines_returning_type;
 
 retry:
 

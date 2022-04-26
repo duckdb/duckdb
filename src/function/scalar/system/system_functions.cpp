@@ -15,8 +15,11 @@ struct SystemBindData : public FunctionData {
 	explicit SystemBindData(ClientContext &context) : context(context) {
 	}
 
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<SystemBindData>(context);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		return true;
 	}
 
 	static SystemBindData &GetFrom(ExpressionState &state) {

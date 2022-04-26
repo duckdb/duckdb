@@ -78,7 +78,7 @@ void RowOperations::CombineStates(RowLayout &layout, Vector &sources, Vector &ta
 	VectorOperations::AddInPlace(targets, layout.GetAggrOffset(), count);
 	for (auto &aggr : layout.GetAggregates()) {
 		D_ASSERT(aggr.function.combine);
-		aggr.function.combine(sources, targets, count);
+		aggr.function.combine(sources, targets, aggr.bind_data, count);
 
 		// Move to the next aggregate states
 		VectorOperations::AddInPlace(sources, aggr.payload_size, count);

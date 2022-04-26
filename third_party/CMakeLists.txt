@@ -15,9 +15,6 @@ if(NOT WIN32
    AND NOT SUN
    AND ${BUILD_UNITTESTS})
   add_subdirectory(imdb)
-  if(${BUILD_SQLSMITH})
-    add_subdirectory(sqlsmith)
-  endif()
   add_subdirectory(sqlite)
   if(${BUILD_TPCE})
     add_subdirectory(tpce-tool)

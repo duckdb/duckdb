@@ -614,7 +614,7 @@ void Vector::Normalify(idx_t count) {
 		break;
 	case VectorType::DICTIONARY_VECTOR: {
 		// create a new flat vector of this type
-		Vector other(GetType());
+		Vector other(GetType(), count);
 		// now copy the data of this vector to the other vector, removing the selection vector in the process
 		VectorOperations::Copy(*this, other, count, 0, 0);
 		// create a reference to the data in the other vector

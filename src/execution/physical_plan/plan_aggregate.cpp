@@ -121,16 +121,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 	unique_ptr<PhysicalOperator> groupby;
 	D_ASSERT(op.children.size() == 1);
 
-	bool all_combinable = true;
-	for (auto &expression : op.expressions) {
-		auto &aggregate = (BoundAggregateExpression &)*expression;
-		if (!aggregate.function.combine) {
-			// unsupported aggregate for simple aggregation: use hash aggregation
-			all_combinable = false;
-			break;
-		}
-	}
-
 	auto plan = CreatePlan(*op.children[0]);
 
 	plan = ExtractAggregateExpressions(move(plan), op.expressions, op.groups);
@@ -147,7 +137,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 				break;
 			}
 		}
-		if (use_simple_aggregation && all_combinable) {
+		if (use_simple_aggregation) {
 			groupby = make_unique_base<PhysicalOperator, PhysicalSimpleAggregate>(op.types, move(op.expressions),
 			                                                                      op.estimated_cardinality);
 		} else {
