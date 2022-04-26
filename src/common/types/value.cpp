@@ -1769,6 +1769,10 @@ void Value::Print() const {
 	Printer::Print(ToString());
 }
 
+bool Value::NotDistinctFrom(const Value &lvalue, const Value &rvalue) {
+	return ValueOperations::NotDistinctFrom(lvalue, rvalue);
+}
+
 bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
 	if (result_value.IsNull() != value.IsNull()) {
 		return false;

@@ -52,8 +52,13 @@ struct IcuBindData : public FunctionData {
 		}
 	}
 
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<IcuBindData>(language, country);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (IcuBindData &)other_p;
+		return language == other.language && country == other.country;
 	}
 };
 

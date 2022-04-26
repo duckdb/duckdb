@@ -14,7 +14,7 @@
 namespace duckdb {
 class TableCatalogEntry;
 
-struct TableScanBindData : public FunctionData {
+struct TableScanBindData : public TableFunctionData {
 	explicit TableScanBindData(TableCatalogEntry *table) : table(table), is_index_scan(false), chunk_count(0) {
 	}
 
@@ -28,6 +28,12 @@ struct TableScanBindData : public FunctionData {
 
 	//! How many chunks we already scanned
 	atomic<idx_t> chunk_count;
+
+public:
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const TableScanBindData &)other_p;
+		return other.table == table && result_ids == other.result_ids;
+	}
 };
 
 //! The table scan function represents a sequential scan over one of DuckDB's base tables.
