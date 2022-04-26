@@ -71,6 +71,7 @@ jobs:
           libduckdb-windows-amd64.zip
           duckdb_cli-windows-amd64.zip
           tools/jdbc/duckdb_jdbc.jar
+          duckdb_odbc-windows-amd64.zip
 
     - uses: ilammy/msvc-dev-cmd@v1
     - name: Duckdb.dll export symbols with C++ on Windows
