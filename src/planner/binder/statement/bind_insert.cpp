@@ -51,11 +51,12 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			if (entry == table->name_map.end()) {
 				throw BinderException("Column %s not found in table %s", stmt.columns[i], table->name);
 			}
-			if (entry->second == COLUMN_IDENTIFIER_ROW_ID) {
+			auto column_index = entry->second.index;
+			if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
 			}
-			insert->expected_types.push_back(table->columns[entry->second].type);
-			named_column_map.push_back(entry->second);
+			insert->expected_types.push_back(table->columns[column_index].type);
+			named_column_map.push_back(column_index);
 		}
 		for (idx_t i = 0; i < table->columns.size(); i++) {
 			auto &col = table->columns[i];

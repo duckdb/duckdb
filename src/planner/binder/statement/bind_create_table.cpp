@@ -30,7 +30,8 @@ static void CreateColumnMap(BoundCreateTableInfo &info, bool allow_duplicate_nam
 			}
 		}
 
-		info.name_map[col.name] = oid;
+		auto column_info = TableColumnInfo(oid);
+		info.name_map[col.name] = column_info;
 		col.oid = oid;
 	}
 }
@@ -82,13 +83,14 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 					if (entry == info.name_map.end()) {
 						throw ParserException("column \"%s\" named in key does not exist", keyname);
 					}
-					if (key_set.find(entry->second) != key_set.end()) {
+					auto& column_index = entry->second.index;
+					if (key_set.find(column_index) != key_set.end()) {
 						throw ParserException("column \"%s\" appears twice in "
 						                      "primary key constraint",
 						                      keyname);
 					}
-					keys.push_back(entry->second);
-					key_set.insert(entry->second);
+					keys.push_back(column_index);
+					key_set.insert(column_index);
 				}
 			}
 
@@ -115,7 +117,8 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 					if (entry == info.name_map.end()) {
 						throw BinderException("column \"%s\" named in key does not exist", keyname);
 					}
-					fk.info.pk_keys.push_back(entry->second);
+					auto column_index = entry->second.index;
+					fk.info.pk_keys.push_back(column_index);
 				}
 			}
 			if (fk.info.fk_keys.empty()) {
@@ -124,7 +127,8 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 					if (entry == info.name_map.end()) {
 						throw BinderException("column \"%s\" named in key does not exist", keyname);
 					}
-					fk.info.fk_keys.push_back(entry->second);
+					auto column_index = entry->second.index;
+					fk.info.fk_keys.push_back(column_index);
 				}
 			}
 			unordered_set<idx_t> fk_key_set, pk_key_set;

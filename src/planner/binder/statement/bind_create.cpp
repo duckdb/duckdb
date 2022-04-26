@@ -244,7 +244,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 					if (entry == pk_table_entry_ptr->name_map.end()) {
 						throw BinderException("column \"%s\" named in key does not exist", keyname);
 					}
-					fk.info.pk_keys.push_back(entry->second);
+					auto column_index = entry->second.index;
+					fk.info.pk_keys.push_back(column_index);
 				}
 				auto index = pk_table_entry_ptr->storage->info->indexes.FindForeignKeyIndex(
 				    fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);

@@ -15,6 +15,7 @@
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/catalog/catalog_entry/table_column_info.hpp"
 
 namespace duckdb {
 
@@ -25,6 +26,7 @@ struct BoundCreateTableInfo;
 
 struct RenameColumnInfo;
 struct AddColumnInfo;
+struct AddGeneratedColumnInfo;
 struct RemoveColumnInfo;
 struct SetDefaultInfo;
 struct ChangeColumnTypeInfo;
@@ -41,12 +43,13 @@ public:
 	std::shared_ptr<DataTable> storage;
 	//! A list of columns that are part of this table
 	vector<ColumnDefinition> columns;
+	// vector<GeneratedColumn>	generated_columns;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<Constraint>> constraints;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	//! A map of column name to column index
-	case_insensitive_map_t<column_t> name_map;
+	case_insensitive_map_t<TableColumnInfo> name_map;
 
 public:
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
@@ -79,6 +82,7 @@ public:
 
 private:
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
+	unique_ptr<CatalogEntry> AddGeneratedColumn(ClientContext &context, AddGeneratedColumnInfo &info);
 	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo &info);
 	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo &info);
 	unique_ptr<CatalogEntry> SetDefault(ClientContext &context, SetDefaultInfo &info);

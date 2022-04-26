@@ -88,8 +88,9 @@ public:
 	mutex write_lock;
 
 public:
-	//! Get the ClientContext from the Catalog
+	//! Get the Catalog from the ClientContext
 	DUCKDB_API static Catalog &GetCatalog(ClientContext &context);
+	//! Get the Catalog from the DatabaseInstance
 	DUCKDB_API static Catalog &GetCatalog(DatabaseInstance &db);
 
 	DUCKDB_API DependencyManager &GetDependencyManager() {

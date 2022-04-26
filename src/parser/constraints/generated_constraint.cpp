@@ -3,11 +3,12 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
 
-GeneratedConstraint::GeneratedConstraint(uint64_t index)
-    : Constraint(ConstraintType::GENERATED), index(index) {
+GeneratedConstraint::GeneratedConstraint(uint64_t index, unique_ptr<ParsedExpression> expression)
+    : Constraint(ConstraintType::GENERATED), index(index), expression(move(expression)) {
 }
 
 string GeneratedConstraint::ToString() const {
@@ -18,17 +19,20 @@ string GeneratedConstraint::ToString() const {
 }
 
 unique_ptr<Constraint> GeneratedConstraint::Copy() const {
-	auto result = make_unique<GeneratedConstraint>(index);
+	auto result = make_unique<GeneratedConstraint>(index, expression->Copy());
 	return move(result);
 }
 
 void GeneratedConstraint::Serialize(FieldWriter &writer) const {
 	writer.WriteField<uint64_t>(index);
+	expression->Serialize(writer);
 }
 
-unique_ptr<Constraint> GeneratedConstraint::Deserialize(FieldReader &source) {
-	auto index = source.ReadRequired<idx_t>();
-	return make_unique_base<Constraint, GeneratedConstraint>(index);
+unique_ptr<Constraint> GeneratedConstraint::Deserialize(FieldReader &reader) {
+	Deserializer& source = reader.GetSource();
+	auto index = reader.ReadRequired<idx_t>();
+	auto expression = ParsedExpression::Deserialize(source);
+	return make_unique_base<Constraint, GeneratedConstraint>(index, move(expression));
 }
 
 } // namespace duckdb

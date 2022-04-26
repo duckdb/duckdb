@@ -9,6 +9,7 @@ add_library_unity(
   schema_catalog_entry.cpp
   sequence_catalog_entry.cpp
   table_catalog_entry.cpp
+  table_column_info.cpp
   table_function_catalog_entry.cpp
   view_catalog_entry.cpp)
 set(ALL_OBJECT_FILES

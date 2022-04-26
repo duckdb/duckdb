@@ -75,7 +75,8 @@ enum class AlterTableType : uint8_t {
 	REMOVE_COLUMN = 4,
 	ALTER_COLUMN_TYPE = 5,
 	SET_DEFAULT = 6,
-	FOREIGN_KEY_CONSTRAINT = 7
+	FOREIGN_KEY_CONSTRAINT = 7,
+	ADD_GENERATED_COLUMN = 8
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -126,6 +127,21 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
+// AddGeneratedColumnInfo
+//===--------------------------------------------------------------------===//
+struct AddGeneratedColumnInfo : public AlterTableInfo {
+	AddGeneratedColumnInfo(string schema, string table, string entry_name, unique_ptr<ParsedExpression> expression);
+	~AddGeneratedColumnInfo() override;
+
+	string							entry_name;
+	unique_ptr<ParsedExpression>	expression;
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	void SerializeAlterTable(FieldWriter &writer) const override;
+	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, string schema, string table);
+};
+
+//===--------------------------------------------------------------------===//
 // AddColumnInfo
 //===--------------------------------------------------------------------===//
 struct AddColumnInfo : public AlterTableInfo {
@@ -134,7 +150,6 @@ struct AddColumnInfo : public AlterTableInfo {
 
 	//! New column
 	ColumnDefinition new_column;
-	vector<unique_ptr<Constraint>> constraints;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;

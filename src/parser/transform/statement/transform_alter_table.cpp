@@ -3,6 +3,7 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/constraints/generated_constraint.hpp"
 
 namespace duckdb {
 
@@ -24,23 +25,30 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)command->def;
 			auto centry = TransformColumnDefinition(cdef);
 
-			vector<unique_ptr<Constraint>> constraints;
+			unique_ptr<Constraint>	generated_constraint = nullptr;
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
 					auto constraint = TransformConstraint(constr, centry, 0);
-					if (constraint) {
-						if (constraint->type == ConstraintType::GENERATED) {
-							constraints.push_back(move(constraint));
-						}
-						else {
-							throw ParserException("Adding columns with constraints not yet supported");
-						}
+					if (!constraint) {
+						continue;
+					}
+					if (constraint->type == ConstraintType::GENERATED && !generated_constraint) {
+						generated_constraint = move(constraint);
+					}
+					else {
+						throw ParserException("Adding columns with constraints not yet supported");
 					}
 				}
 			}
-			auto info = make_unique<AddColumnInfo>(qname.schema, qname.name, move(centry));
-			info->constraints = (move(constraints));
-			result->info = move(info);
+			if (generated_constraint) {
+				D_ASSERT(generated_constraint->type == ConstraintType::GENERATED);
+				auto gen_constraint = (GeneratedConstraint *)generated_constraint.get();
+				auto expression = move(gen_constraint->expression);
+				result->info = make_unique<AddGeneratedColumnInfo>(qname.schema, qname.name, centry.name, move(expression));
+			}
+			else {
+				result->info = make_unique<AddColumnInfo>(qname.schema, qname.name, move(centry));
+			}
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_DropColumn: {

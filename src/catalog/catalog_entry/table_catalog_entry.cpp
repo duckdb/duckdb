@@ -44,8 +44,9 @@ idx_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
 			throw BinderException("Table \"%s\" does not have a column with name \"%s\"", name, column_name);
 		}
 	}
-	column_name = columns[entry->second].name;
-	return idx_t(entry->second);
+	auto column_index = entry->second.index;
+	column_name = columns[column_index].name;
+	return idx_t(column_index);
 }
 
 void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, vector<idx_t> &keys,
@@ -135,6 +136,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		auto copied_table = Copy(context);
 		copied_table->name = rename_info->new_table_name;
 		return copied_table;
+	}
+	case AlterTableType::ADD_GENERATED_COLUMN: {
+		auto add_generated_info = (AddGeneratedColumnInfo *)table_info;
+		return AddGeneratedColumn(context, *add_generated_info);
 	}
 	case AlterTableType::ADD_COLUMN: {
 		auto add_info = (AddColumnInfo *)table_info;
@@ -231,6 +236,26 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		}
 		create_info->constraints.push_back(move(copy));
 	}
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+}
+
+unique_ptr<CatalogEntry> TableCatalogEntry::AddGeneratedColumn(ClientContext &context, AddGeneratedColumnInfo &info) {
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+
+	//Copy all the columns, changing the value of the one that was specified by 'column_name'
+	for (idx_t i = 0; i < columns.size(); i++) {
+		auto copy = columns[i].Copy();
+		create_info->columns.push_back(move(copy));
+	}
+
+	//Copy all the constraints
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto constraint = constraints[i]->Copy();
+		create_info->constraints.push_back(move(constraint));
+	}
+
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
@@ -358,6 +383,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	idx_t default_idx = GetColumnIndex(info.column_name);
+
+	//Copy all the columns, changing the value of the one that was specified by 'column_name'
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
 		if (default_idx == i) {
@@ -367,6 +394,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		create_info->columns.push_back(move(copy));
 	}
 
+	//Copy all the constraints
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
 		create_info->constraints.push_back(move(constraint));
@@ -491,10 +519,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContex
 
 ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
 	auto entry = name_map.find(name);
-	if (entry == name_map.end() || entry->second == COLUMN_IDENTIFIER_ROW_ID) {
+	auto column_index = entry->second.index;
+	if (entry == name_map.end() || column_index == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Column with name %s does not exist!", name);
 	}
-	return columns[entry->second];
+	return columns[column_index];
 }
 
 vector<LogicalType> TableCatalogEntry::GetTypes() {

@@ -13,6 +13,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/catalog/catalog_entry/table_column_info.hpp"
 
 namespace duckdb {
 class BindContext;
@@ -37,7 +38,7 @@ struct Binding {
 	//! Column names of the subquery
 	vector<string> names;
 	//! Name -> index for the names
-	case_insensitive_map_t<column_t> name_map;
+	case_insensitive_map_t<TableColumnInfo> name_map;
 
 public:
 	bool TryGetBindingIndex(const string &column_name, column_t &column_index);

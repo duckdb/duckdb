@@ -21,14 +21,16 @@ Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<strin
 		if (name_map.find(name) != name_map.end()) {
 			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias, name);
 		}
-		name_map[name] = i;
+		auto column_info = TableColumnInfo((column_t)i);
+		name_map[name] = column_info;
 	}
 }
 
 bool Binding::TryGetBindingIndex(const string &column_name, column_t &result) {
 	auto entry = name_map.find(column_name);
 	if (entry != name_map.end()) {
-		result = entry->second;
+		auto column_index = entry->second.index;
+		result = column_index;
 		return true;
 	}
 	return false;
@@ -75,7 +77,8 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
     : Binding(alias, move(types_p), move(names_p), index), get(get) {
 	if (add_row_id) {
 		if (name_map.find("rowid") == name_map.end()) {
-			name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
+			auto column_info = TableColumnInfo(COLUMN_IDENTIFIER_ROW_ID);
+			name_map["rowid"] = column_info;
 		}
 	}
 }
