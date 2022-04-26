@@ -535,8 +535,7 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	TableScanState scan_state;
 	scan_state.column_ids = column_ids;
 	scan_state.max_row = count;
-	vector<idx_t> cardinalities(columns.size());
-//	vector<idx_t> cardinalities{1};
+	vector<idx_t> cardinalities;
 
 	// Calculate the column cardinalities
 	CalculateCardinalitiesCorrelation1(types, scan_state, cardinalities);
@@ -628,7 +627,7 @@ void RowGroup::CalculateCardinalitiesCorrelation1(vector<LogicalType> &types, Ta
 	for (idx_t i = 0; i < logs.size(); i++) {
 		if (i == 0) {
 			current_count = logs[i].Count();
-			cardinalities[i] = i;
+			cardinalities.push_back(0);
 			continue;
 		}
 		merged_log = logs[i-1].Merge(logs[i]);
@@ -638,8 +637,8 @@ void RowGroup::CalculateCardinalitiesCorrelation1(vector<LogicalType> &types, Ta
 			break;
 		}
 
-		// Set cardinality of "key" columns to 1
-		cardinalities[i] = i;
+		// Push the indices of the key columns
+		cardinalities.push_back(i);
 	}
 }
 
