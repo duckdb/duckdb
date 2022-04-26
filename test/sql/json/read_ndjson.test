@@ -5,7 +5,7 @@
 require json
 
 query I
-SELECT * FROM read_json('data/json/example.ndjson')
+SELECT * FROM read_json_objects('data/json/example.ndjson')
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}
@@ -14,20 +14,10 @@ SELECT * FROM read_json('data/json/example.ndjson')
 {"id":5,"name":"Raising Arizona"}
 
 query I
-SELECT * FROM read_ndjson('data/json/example.ndjson')
+SELECT * FROM read_ndjson_objects('data/json/example.ndjson')
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}
 {"id":3,"name":"The Firm"}
 {"id":4,"name":"Broadcast News"}
 {"id":5,"name":"Raising Arizona"}
-
-query I
-SELECT * FROM 'data/json/example.ndjson'
-----
-{"id":1,"name":"O Brother, Where Art Thou?"}
-{"id":2,"name":"Home for the Holidays"}
-{"id":3,"name":"The Firm"}
-{"id":4,"name":"Broadcast News"}
-{"id":5,"name":"Raising Arizona"}
-

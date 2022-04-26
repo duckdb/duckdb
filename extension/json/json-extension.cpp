@@ -20,25 +20,11 @@ static DefaultMacro json_macros[] = {
 
 static DefaultMacro table_macros[] = {
     {DEFAULT_SCHEMA,
-     "read_json",
+     "read_json_objects",
      {"json_file", nullptr},
      "SELECT * FROM read_csv(json_file, columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL)"},
-    {DEFAULT_SCHEMA, "read_ndjson", {"json_file", nullptr}, "SELECT * FROM read_json(json_file)"},
+    {DEFAULT_SCHEMA, "read_ndjson_objects", {"json_file", nullptr}, "SELECT * FROM read_json_objects(json_file)"},
     {nullptr, nullptr, {nullptr}, nullptr}};
-
-unique_ptr<TableFunctionRef> JSONScanReplacement(ClientContext &context, const string &table_name,
-                                                 ReplacementScanData *data) {
-	auto ltable = StringUtil::Lower(table_name);
-	if (!StringUtil::EndsWith(ltable, ".json") && !StringUtil::EndsWith(ltable, ".ndjson") &&
-	    !StringUtil::EndsWith(ltable, ".jsonl")) {
-		return nullptr;
-	}
-	auto table_function = make_unique<TableFunctionRef>();
-	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
-	table_function->function = make_unique<FunctionExpression>("read_json", move(children));
-	return table_function;
-}
 
 void JSONExtension::Load(DuckDB &db) {
 	Connection con(db);
@@ -57,10 +43,6 @@ void JSONExtension::Load(DuckDB &db) {
 		auto info = DefaultFunctionGenerator::CreateInternalTableMacroInfo(table_macros[index]);
 		catalog.CreateFunction(*con.context, info.get());
 	}
-
-	auto &config = DBConfig::GetConfig(*db.instance);
-	config.replacement_scans.emplace_back(JSONScanReplacement);
-
 	con.Commit();
 }
 
