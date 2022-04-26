@@ -151,7 +151,7 @@ private:
 	//! Scan the RowGroup to the payload DataChunk before sorting
 	bool ScanToDataChunks(RowGroupScanState &state, DataChunk &result);
 	//! Sort the columns before checkpointing
-	void SortColumns();
+	void SortColumns(vector<LogicalType> &types, vector<column_t> &column_ids);
 	//! Return the indices of the key columns
 	void CalculateCardinalitiesCorrelation1(vector<LogicalType> &types, TableScanState &scan_state, vector<idx_t> &cardinalities);
 

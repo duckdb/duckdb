@@ -528,17 +528,8 @@ bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
 	return true;
 }
 
-void RowGroup::SortColumns() {
-	vector<LogicalType> types;
+void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_ids) {
 	vector<LogicalType> key_types;
-	vector<column_t> column_ids;
-
-	// collect logical types by iterating the columns
-	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
-		auto &column = columns[column_idx];
-		types.push_back(column->type);
-		column_ids.push_back(column->column_index);
-	}
 
 	// Initialize the scan states
 	TableScanState scan_state;
@@ -579,6 +570,11 @@ void RowGroup::SortColumns() {
 			keys.SetCardinality(payload.size());
 		}
 		local_sort_state.SinkChunk(keys, payload);
+
+		// Do not continue sort if payload is empty
+		if (payload.size() == 0) {
+			return;
+		}
 	}
 
 	// add local state to global state, which sorts the data
@@ -856,9 +852,30 @@ void RowGroup::MergeStatistics(idx_t column_idx, BaseStatistics &other) {
 RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
+	vector<LogicalType> types;
+	vector<column_t> column_ids;
 
 	if (db.config.force_compression_sorting && !columns.empty() && count != 0) {
-		SortColumns();
+		bool contains_illegal_types = false;
+
+		// collect logical types by iterating the columns
+		for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
+			auto &column = columns[column_idx];
+			auto type_id = column->type.id();
+
+			if (type_id == LogicalTypeId::STRUCT || type_id == LogicalTypeId::LIST || type_id == LogicalTypeId::MAP ||
+			    type_id == LogicalTypeId::TABLE || type_id == LogicalTypeId::ENUM ||
+			    type_id == LogicalTypeId::AGGREGATE_STATE || type_id == LogicalTypeId::VARCHAR) {
+				contains_illegal_types = true;
+				break;
+			}
+			types.push_back(column->type);
+			column_ids.push_back(column->column_index);
+		}
+
+		if (!contains_illegal_types && !columns.empty() && count != 0) {
+			SortColumns(types, column_ids);
+		}
 	}
 
 	// checkpoint the individual columns of the row group
