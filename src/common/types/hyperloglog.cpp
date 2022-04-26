@@ -124,26 +124,45 @@ inline uint64_t TemplatedHash(const interval_t &elem) {
 	       TemplatedHash<uint64_t>(Load<uint64_t>((data_ptr_t)&elem.micros));
 }
 
-inline int64_t HashOtherSize(const data_ptr_t &data, const idx_t &len) {
+template <idx_t rest>
+inline void CreateIntegerRecursive(const data_ptr_t &data, uint64_t &x) {
+	x ^= (uint64_t)data[rest - 1] << ((rest - 1) * 8);
+	return CreateIntegerRecursive<rest - 1>(data, x);
+}
+
+template <>
+inline void CreateIntegerRecursive<1>(const data_ptr_t &data, uint64_t &x) {
+	x ^= (uint64_t)data[0];
+}
+
+inline uint64_t HashOtherSize(const data_ptr_t &data, const idx_t &len) {
 	uint64_t x = 0;
 	switch (len & 7) {
 	case 7:
-		x ^= (uint64_t)data[6] << 48; /* fall-thru */
+		CreateIntegerRecursive<7>(data, x);
+		break;
 	case 6:
-		x ^= (uint64_t)data[5] << 40; /* fall-thru */
+		CreateIntegerRecursive<6>(data, x);
+		break;
 	case 5:
-		x ^= (uint64_t)data[4] << 32; /* fall-thru */
+		CreateIntegerRecursive<5>(data, x);
+		break;
 	case 4:
-		x ^= (uint64_t)data[3] << 24; /* fall-thru */
+		CreateIntegerRecursive<4>(data, x);
+		break;
 	case 3:
-		x ^= (uint64_t)data[2] << 16; /* fall-thru */
+		CreateIntegerRecursive<3>(data, x);
+		break;
 	case 2:
-		x ^= (uint64_t)data[1] << 8; /* fall-thru */
+		CreateIntegerRecursive<2>(data, x);
+		break;
 	case 1:
-		x ^= (uint64_t)data[0];
-	default:
-		return TemplatedHash<uint64_t>(x);
-	};
+		CreateIntegerRecursive<1>(data, x);
+		break;
+	case 0:
+		throw InternalException("Rest 0 in HashOtherSize!");
+	}
+	return TemplatedHash<uint64_t>(x);
 }
 
 template <>
