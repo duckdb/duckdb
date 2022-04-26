@@ -61,7 +61,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					// there are multiple conditions: erase this condition
 					join.conditions.erase(join.conditions.begin() + i);
 					// remove the corresponding statistics
-					join.join_stats.resize(join.join_stats.size() - 2);
+					join.join_stats.clear();
 					i--;
 					continue;
 				} else {

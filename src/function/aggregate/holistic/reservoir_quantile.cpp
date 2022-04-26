@@ -40,13 +40,13 @@ struct ReservoirQuantileBindData : public FunctionData {
 	    : quantile(quantile_p), sample_size(sample_size_p) {
 	}
 
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<ReservoirQuantileBindData>(quantile, sample_size);
 	}
 
-	bool Equals(FunctionData &other_p) override {
+	bool Equals(const FunctionData &other_p) const override {
 		auto &other = (ReservoirQuantileBindData &)other_p;
-		return quantile == other.quantile;
+		return quantile == other.quantile && sample_size == other.sample_size;
 	}
 
 	double quantile;
@@ -97,7 +97,7 @@ struct ReservoirQuantileOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (source.pos == 0) {
 			return;
 		}

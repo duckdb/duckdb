@@ -112,7 +112,7 @@ struct MinOperation : public NumericMinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
@@ -135,7 +135,7 @@ struct MaxOperation : public NumericMinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
@@ -182,7 +182,7 @@ struct StringMinMaxBase : public MinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
@@ -442,7 +442,7 @@ struct VectorMinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (!source.value) {
 			return;
 		} else if (!target->value) {

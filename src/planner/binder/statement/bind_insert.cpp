@@ -82,37 +82,36 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	idx_t expected_columns = stmt.columns.empty() ? table->columns.size() : stmt.columns.size();
+
 	// special case: check if we are inserting from a VALUES statement
-	if (stmt.select_statement->node->type == QueryNodeType::SELECT_NODE) {
-		auto &node = (SelectNode &)*stmt.select_statement->node;
-		if (node.from_table->type == TableReferenceType::EXPRESSION_LIST) {
-			auto &expr_list = (ExpressionListRef &)*node.from_table;
-			expr_list.expected_types.resize(expected_columns);
-			expr_list.expected_names.resize(expected_columns);
+	auto values_list = stmt.GetValuesList();
+	if (values_list) {
+		auto &expr_list = (ExpressionListRef &)*values_list;
+		expr_list.expected_types.resize(expected_columns);
+		expr_list.expected_names.resize(expected_columns);
 
-			D_ASSERT(expr_list.values.size() > 0);
-			CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !stmt.columns.empty(),
-			                               table->name.c_str());
+		D_ASSERT(expr_list.values.size() > 0);
+		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !stmt.columns.empty(),
+		                               table->name.c_str());
 
-			// VALUES list!
-			for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
-				idx_t table_col_idx = stmt.columns.empty() ? col_idx : named_column_map[col_idx];
-				D_ASSERT(table_col_idx < table->columns.size());
+		// VALUES list!
+		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
+			idx_t table_col_idx = stmt.columns.empty() ? col_idx : named_column_map[col_idx];
+			D_ASSERT(table_col_idx < table->columns.size());
 
-				// set the expected types as the types for the INSERT statement
-				auto &column = table->columns[table_col_idx];
-				expr_list.expected_types[col_idx] = column.type;
-				expr_list.expected_names[col_idx] = column.name;
+			// set the expected types as the types for the INSERT statement
+			auto &column = table->columns[table_col_idx];
+			expr_list.expected_types[col_idx] = column.type;
+			expr_list.expected_names[col_idx] = column.name;
 
-				// now replace any DEFAULT values with the corresponding default expression
-				for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
-					if (expr_list.values[list_idx][col_idx]->type == ExpressionType::VALUE_DEFAULT) {
-						// DEFAULT value! replace the entry
-						if (column.default_value) {
-							expr_list.values[list_idx][col_idx] = column.default_value->Copy();
-						} else {
-							expr_list.values[list_idx][col_idx] = make_unique<ConstantExpression>(Value(column.type));
-						}
+			// now replace any DEFAULT values with the corresponding default expression
+			for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
+				if (expr_list.values[list_idx][col_idx]->type == ExpressionType::VALUE_DEFAULT) {
+					// DEFAULT value! replace the entry
+					if (column.default_value) {
+						expr_list.values[list_idx][col_idx] = column.default_value->Copy();
+					} else {
+						expr_list.values[list_idx][col_idx] = make_unique<ConstantExpression>(Value(column.type));
 					}
 				}
 			}
