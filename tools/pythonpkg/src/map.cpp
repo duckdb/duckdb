@@ -77,7 +77,7 @@ OperatorResultType MapFunction::MapFunctionExec(ClientContext &context, const Fu
 
 	auto &data = (MapFunctionData &)*bind_data_p;
 
-	D_ASSERT(input->GetTypes() == data.in_types);
+	D_ASSERT(input.GetTypes() == data.in_types);
 	NumpyResultConversion conversion(data.in_types, input.size());
 	conversion.Append(input);
 

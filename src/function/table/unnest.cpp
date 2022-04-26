@@ -40,7 +40,7 @@ static unique_ptr<FunctionOperatorData> UnnestInit(ClientContext &context, const
 	auto bound_unnest = make_unique<BoundUnnestExpression>(ListType::GetChildType(bind_data.input_type));
 	bound_unnest->child = move(ref);
 	result->select_list.push_back(move(bound_unnest));
-	return result;
+	return move(result);
 }
 
 static OperatorResultType UnnestFunction(ClientContext &context, const FunctionData *bind_data_p,
