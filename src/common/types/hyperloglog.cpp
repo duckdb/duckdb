@@ -160,7 +160,7 @@ inline uint64_t HashOtherSize(const data_ptr_t &data, const idx_t &len) {
 		CreateIntegerRecursive<1>(data, x);
 		break;
 	case 0:
-		throw InternalException("Rest 0 in HashOtherSize!");
+		break;
 	}
 	return TemplatedHash<uint64_t>(x);
 }
