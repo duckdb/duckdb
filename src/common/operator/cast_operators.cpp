@@ -1937,7 +1937,12 @@ bool TryCastToDecimal::Operation(double input, hugeint_t &result, string *error_
 //===--------------------------------------------------------------------===//
 template <class SRC, class DST>
 bool TryCastDecimalToNumeric(SRC input, DST &result, string *error_message, uint8_t scale) {
-	auto scaled_value = input / NumericHelper::POWERS_OF_TEN[scale];
+	// Round away from 0.
+	const auto power = NumericHelper::POWERS_OF_TEN[scale];
+	// https://graphics.stanford.edu/~seander/bithacks.html#ConditionalNegate
+	const auto fNegate = int64_t(input < 0);
+	const auto rounding = ((power ^ -fNegate) + fNegate) / 2;
+	const auto scaled_value = (input + rounding) / power;
 	if (!TryCast::Operation<SRC, DST>(scaled_value, result)) {
 		string error = StringUtil::Format("Failed to cast decimal value %d to type %s", scaled_value, GetTypeId<DST>());
 		HandleCastError::AssignError(error, error_message);
@@ -1948,7 +1953,9 @@ bool TryCastDecimalToNumeric(SRC input, DST &result, string *error_message, uint
 
 template <class DST>
 bool TryCastHugeDecimalToNumeric(hugeint_t input, DST &result, string *error_message, uint8_t scale) {
-	auto scaled_value = input / Hugeint::POWERS_OF_TEN[scale];
+	const auto power = Hugeint::POWERS_OF_TEN[scale];
+	const auto rounding = ((input < 0) ? -power : power) / 2;
+	auto scaled_value = (input + rounding) / power;
 	if (!TryCast::Operation<hugeint_t, DST>(scaled_value, result)) {
 		string error = StringUtil::Format("Failed to cast decimal value %s to type %s",
 		                                  ConvertToString::Operation(scaled_value), GetTypeId<DST>());

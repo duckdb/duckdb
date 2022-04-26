@@ -1,0 +1,16 @@
+# name: test/sql/cast/decimal_integer_cast.test
+# description: Issue #2965
+# group: [cast]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select cast(0.55 as integer) as x;
+----
+1
+
+query I
+select cast(-0.55 as integer) as x;
+----
+-1
