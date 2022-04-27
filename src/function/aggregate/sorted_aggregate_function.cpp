@@ -44,12 +44,12 @@ struct SortedAggregateBindData : public FunctionData {
 		}
 	}
 
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<SortedAggregateBindData>(*this);
 	}
 
-	bool Equals(FunctionData &other_p) override {
-		auto &other = (SortedAggregateBindData &)other_p;
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const SortedAggregateBindData &)other_p;
 		if (bind_info && other.bind_info) {
 			if (!bind_info->Equals(*other.bind_info)) {
 				return false;
@@ -174,7 +174,7 @@ struct SortedAggregateFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (source.arguments.Count() == 0) {
 			return;
 		}

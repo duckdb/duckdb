@@ -588,7 +588,7 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 		break;
 	}
 
-	if (rec_number <= 0 || rec_number > (SQLSMALLINT)records.size()) {
+	if (rec_number <= 0) {
 		error_messages.emplace_back("Invalid descriptor index");
 		return SQL_ERROR;
 	}
@@ -871,6 +871,18 @@ SQLRETURN DescRecord::SetSqlDescType(SQLSMALLINT type) {
 	return SQL_SUCCESS;
 }
 
+void DescRecord::SetDescUnsignedField(const duckdb::LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+		sql_desc_unsigned = SQL_TRUE;
+		break;
+	default:
+		sql_desc_unsigned = SQL_FALSE;
+	}
+}
 //! DescHeader functions ******************************************************
 DescHeader::DescHeader() {
 	Reset();

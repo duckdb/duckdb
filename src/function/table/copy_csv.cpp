@@ -83,6 +83,8 @@ static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, 
 		options.skip_rows = ParseInteger(set);
 	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
 		options.maximum_line_size = ParseInteger(set);
+	} else if (loption == "ignore_errors") {
+		options.ignore_errors = ParseBoolean(set);
 	} else {
 		// unrecognized option in base CSV
 		return false;

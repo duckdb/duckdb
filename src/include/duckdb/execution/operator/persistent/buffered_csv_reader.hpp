@@ -77,6 +77,8 @@ struct BufferedCSVReaderOptions {
 	bool has_header = false;
 	//! Whether or not the file has a header line
 	bool header = false;
+	//! Whether or not we should ignore InvalidInput errors
+	bool ignore_errors = false;
 	//! Whether or not header names shall be normalized
 	bool normalize_names = false;
 	//! How many leading rows to skip
@@ -229,6 +231,10 @@ private:
 	                                        const vector<LogicalType> &requested_types,
 	                                        vector<vector<LogicalType>> &best_sql_types_candidates,
 	                                        map<LogicalTypeId, vector<string>> &best_format_candidates);
+
+private:
+	//! Whether or not the current row's columns have overflown sql_types.size()
+	bool error_column_overflow = false;
 };
 
 } // namespace duckdb
