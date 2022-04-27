@@ -377,3 +377,48 @@ PRAGMA debug_force_external=false
 endloop
 
 endloop
+
+# issue 3450 test case
+
+statement ok
+CREATE TABLE functions (function_name varchar, function_type varchar, parameter_types varchar[]);
+
+statement ok
+INSERT INTO functions VALUES ('last_day', 'scalar', ['TIMESTAMP']), ('dayname', 'else', ['TIMESTAMP']),
+	('date_part', 'scalar', ['DATE', 'VARCHAR']), ('scalar_part', 'scalar', ['VARCHAR', 'TIMESTAMP']);
+
+query I
+SELECT function_name FROM functions
+WHERE function_type = 'scalar' AND list_has(parameter_types, 'TIMESTAMP');
+----
+last_day
+scalar_part
+
+# issue 3457 test case
+
+statement ok
+CREATE TABLE test (id int, name text[]);
+
+statement ok
+INSERT INTO test VALUES (1, ['U2']), (2, ['Blur','Rock']), (3, ['Oasis','2Pac']);
+
+query II
+SELECT id, name FROM test WHERE ARRAY_CONTAINS(name, '2Pac');
+----
+3	[Oasis, 2Pac]
+
+query II
+SELECT id, name FROM test WHERE id IN (2,3) AND ARRAY_CONTAINS(name, '2Pac');
+----
+3	[Oasis, 2Pac]
+
+query II
+WITH cte AS (SELECT id, name FROM test WHERE id IN (2,3))
+SELECT id, name FROM cte WHERE ARRAY_CONTAINS(name, '2Pac');
+----
+3	[Oasis, 2Pac]
+
+query II
+SELECT id, name FROM test WHERE id IN (2,3) AND name::text ILIKE '%2Pac%';
+----
+3	[Oasis, 2Pac]

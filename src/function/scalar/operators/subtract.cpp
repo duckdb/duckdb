@@ -158,6 +158,12 @@ bool TrySubtractOperator::Operation(int64_t left, int64_t right, int64_t &result
 	return true;
 }
 
+template <>
+bool TrySubtractOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
+	result = left;
+	return Hugeint::SubtractInPlace(result, right);
+}
+
 //===--------------------------------------------------------------------===//
 // subtract decimal with overflow check
 //===--------------------------------------------------------------------===//

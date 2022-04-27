@@ -20,7 +20,8 @@ namespace duckdb {
 struct JSONReadFunctionData : public FunctionData {
 public:
 	JSONReadFunctionData(bool constant, string path_p, idx_t len);
-	unique_ptr<FunctionData> Copy() override;
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other_p) const override;
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments);
 
@@ -34,7 +35,8 @@ public:
 struct JSONReadManyFunctionData : public FunctionData {
 public:
 	JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p);
-	unique_ptr<FunctionData> Copy() override;
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other_p) const override;
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments);
 

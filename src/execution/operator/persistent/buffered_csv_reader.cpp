@@ -156,7 +156,7 @@ std::string BufferedCSVReaderOptions::ToString() const {
 	       ", HEADER=" + std::to_string(header) +
 	       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
 	       ", SAMPLE_SIZE=" + std::to_string(sample_chunk_size * sample_chunks) +
-	       ", ALL_VARCHAR=" + std::to_string(all_varchar);
+	       ", IGNORE_ERRORS=" + std::to_string(ignore_errors) + ", ALL_VARCHAR=" + std::to_string(all_varchar);
 }
 
 static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
@@ -1619,9 +1619,14 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 		return;
 	}
 	if (column >= sql_types.size()) {
-		throw InvalidInputException("Error on line %s: expected %lld values per row, but got more. (%s)",
-		                            GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(),
-		                            options.ToString());
+		if (options.ignore_errors) {
+			error_column_overflow = true;
+			return;
+		} else {
+			throw InvalidInputException("Error on line %s: expected %lld values per row, but got more. (%s)",
+			                            GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(),
+			                            options.ToString());
+		}
 	}
 
 	// insert the line number into the chunk
@@ -1673,10 +1678,23 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 		}
 	}
 
+	// Error forwarded by 'ignore_errors' - originally encountered in 'AddValue'
+	if (error_column_overflow) {
+		D_ASSERT(options.ignore_errors);
+		error_column_overflow = false;
+		column = 0;
+		return false;
+	}
+
 	if (column < sql_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
-		throw InvalidInputException("Error on line %s: expected %lld values per row, but got %d. (%s)",
-		                            GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column,
-		                            options.ToString());
+		if (options.ignore_errors) {
+			column = 0;
+			return false;
+		} else {
+			throw InvalidInputException("Error on line %s: expected %lld values per row, but got %d. (%s)",
+			                            GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column,
+			                            options.ToString());
+		}
 	}
 
 	if (mode == ParserMode::SNIFFING_DIALECT) {
@@ -1710,6 +1728,9 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	if (parse_chunk.size() == 0) {
 		return;
 	}
+
+	bool conversion_error_ignored = false;
+
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
 	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
@@ -1751,26 +1772,56 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				success = VectorOperations::TryCast(parse_chunk.data[col_idx], insert_chunk.data[col_idx],
 				                                    parse_chunk.size(), &error_message);
 			}
-			if (!success) {
-				string col_name = to_string(col_idx);
-				if (col_idx < col_names.size()) {
-					col_name = "\"" + col_names[col_idx] + "\"";
-				}
+			if (success) {
+				continue;
+			}
+			if (options.ignore_errors) {
+				conversion_error_ignored = true;
+				continue;
+			}
+			string col_name = to_string(col_idx);
+			if (col_idx < col_names.size()) {
+				col_name = "\"" + col_names[col_idx] + "\"";
+			}
 
-				if (options.auto_detect) {
-					throw InvalidInputException("%s in column %s, between line %llu and %llu. Parser "
-					                            "options: %s. Consider either increasing the sample size "
-					                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
-					                            "or skipping column conversion (ALL_VARCHAR=1)",
-					                            error_message, col_name, linenr - parse_chunk.size() + 1, linenr,
-					                            options.ToString());
-				} else {
-					throw InvalidInputException("%s between line %llu and %llu in column %s. Parser options: %s ",
-					                            error_message, linenr - parse_chunk.size(), linenr, col_name,
-					                            options.ToString());
-				}
+			if (options.auto_detect) {
+				throw InvalidInputException("%s in column %s, between line %llu and %llu. Parser "
+				                            "options: %s. Consider either increasing the sample size "
+				                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
+				                            "or skipping column conversion (ALL_VARCHAR=1)",
+				                            error_message, col_name, linenr - parse_chunk.size() + 1, linenr,
+				                            options.ToString());
+			} else {
+				throw InvalidInputException("%s between line %llu and %llu in column %s. Parser options: %s ",
+				                            error_message, linenr - parse_chunk.size(), linenr, col_name,
+				                            options.ToString());
 			}
 		}
+	}
+	if (conversion_error_ignored) {
+		D_ASSERT(options.ignore_errors);
+		SelectionVector succesful_rows;
+		succesful_rows.Initialize(parse_chunk.size());
+		idx_t sel_size = 0;
+
+		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
+			bool failed = false;
+			for (idx_t column_idx = 0; column_idx < sql_types.size(); column_idx++) {
+
+				auto &inserted_column = insert_chunk.data[column_idx];
+				auto &parsed_column = parse_chunk.data[column_idx];
+
+				bool was_already_null = FlatVector::IsNull(parsed_column, row_idx);
+				if (!was_already_null && FlatVector::IsNull(inserted_column, row_idx)) {
+					failed = true;
+					break;
+				}
+			}
+			if (!failed) {
+				succesful_rows.set_index(sel_size++, row_idx);
+			}
+		}
+		insert_chunk.Slice(succesful_rows, sel_size);
 	}
 	parse_chunk.Reset();
 }
