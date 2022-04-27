@@ -128,6 +128,7 @@ PhysicalType LogicalType::GetInternalType() {
 		return EnumType::GetPhysicalType(size);
 	}
 	case LogicalTypeId::TABLE:
+	case LogicalTypeId::LAMBDA:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
@@ -180,7 +181,7 @@ constexpr const LogicalTypeId LogicalType::ROW_TYPE;
 
 // TODO these are incomplete and should maybe not exist as such
 constexpr const LogicalTypeId LogicalType::TABLE;
-
+constexpr const LogicalTypeId LogicalType::LAMBDA;
 constexpr const LogicalTypeId LogicalType::ANY;
 
 const vector<LogicalType> LogicalType::Numeric() {
@@ -425,6 +426,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "POINTER";
 	case LogicalTypeId::TABLE:
 		return "TABLE";
+	case LogicalTypeId::LAMBDA:
+		return "LAMBDA";
 	case LogicalTypeId::INVALID:
 		return "INVALID";
 	case LogicalTypeId::UNKNOWN:

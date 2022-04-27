@@ -20,8 +20,8 @@ string LambdaExpression::ToString() const {
 	if (lhs_strings.size() > 1) {
 		lhs_string = "(" + lhs_string + ")";
 	}
-	
- 	return lhs_string + " -> " + rhs->ToString();
+
+	return lhs_string + " -> " + rhs->ToString();
 }
 
 bool LambdaExpression::Equals(const LambdaExpression *a, const LambdaExpression *b) {
@@ -36,7 +36,7 @@ bool LambdaExpression::Equals(const LambdaExpression *a, const LambdaExpression 
 		}
 	}
 
- 	return a->rhs->Equals(b->rhs.get());
+	return a->rhs->Equals(b->rhs.get());
 }
 
 hash_t LambdaExpression::Hash() const {

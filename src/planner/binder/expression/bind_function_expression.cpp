@@ -27,11 +27,11 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
 		// scalar function
-		// ensure that we distinguish between lambda functions and the JSON operator ->
 		if (function.function_name == "list_transform") {
-			// TODO: what to call from here?
+			// distinguish between lambda functions and the JSON operator ->
+			BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, true);
 		}
-		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
+		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, false);
 	case CatalogType::MACRO_ENTRY:
 		// macro function
 		return BindMacro(function, (ScalarMacroCatalogEntry *)func, depth, expr_ptr);
@@ -41,12 +41,48 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	}
 }
 
-BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func, idx_t depth) {
+BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func, idx_t depth,
+                                          bool is_lambda) {
+
 	// bind the children of the function expression
 	string error;
-	for (idx_t i = 0; i < function.children.size(); i++) {
-		BindChild(function.children[i], depth, error);
+
+	if (is_lambda) { // bind the lambda child separately
+
+		D_ASSERT(function.children.size() == 2);
+
+		// bind the list parameter
+		BindChild(function.children[0], depth, error);
+
+		// get the logical type of the children of the list
+		auto &list_child = (BoundExpression &)*function.children[0];
+		D_ASSERT(list_child.expr->return_type.id() == LogicalTypeId::LIST);
+		auto list_child_type = ListType::GetChildType(list_child.expr->return_type);
+
+		// bind the lambda parameter
+		auto &lambda_expr = (LambdaExpression &)*function.children[1];
+		BindResult result = BindExpression(lambda_expr, depth, true, list_child_type);
+
+		if (result.HasError()) {
+			error = result.error;
+		} else {
+			// successfully bound: replace the node with a BoundExpression
+			auto alias = function.children[1]->alias;
+			function.children[1] = make_unique<BoundExpression>(move(result.expression));
+			auto be = (BoundExpression *)function.children[1].get();
+			D_ASSERT(be);
+			be->alias = alias;
+			if (!alias.empty()) {
+				be->expr->alias = alias;
+			}
+		}
+
+	} else { // normal bind of each child
+		for (idx_t i = 0; i < function.children.size(); i++) {
+			BindChild(function.children[i], depth, error);
+		}
 	}
+
 	if (!error.empty()) {
 		return BindResult(error);
 	}
