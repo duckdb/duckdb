@@ -22,8 +22,13 @@ struct NextvalBindData : public FunctionData {
 	NextvalBindData(ClientContext &context, SequenceCatalogEntry *sequence) : context(context), sequence(sequence) {
 	}
 
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<NextvalBindData>(context, sequence);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (NextvalBindData &)other_p;
+		return sequence == other.sequence;
 	}
 };
 

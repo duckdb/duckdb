@@ -165,7 +165,7 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState
 		Vector source_state(Value::POINTER((uintptr_t)source.state.aggregates[aggr_idx].get()));
 		Vector dest_state(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
 
-		aggregate.function.combine(source_state, dest_state, 1);
+		aggregate.function.combine(source_state, dest_state, aggregate.bind_info.get(), 1);
 	}
 
 	auto &client_profiler = QueryProfiler::Get(context.client);

@@ -398,8 +398,13 @@ struct RoundPrecisionFunctionData : public FunctionData {
 
 	int32_t target_scale;
 
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<RoundPrecisionFunctionData>(target_scale);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const RoundPrecisionFunctionData &)other_p;
+		return target_scale == other.target_scale;
 	}
 };
 

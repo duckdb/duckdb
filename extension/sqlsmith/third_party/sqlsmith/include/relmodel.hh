@@ -21,6 +21,7 @@ struct sqltype {
 	string name;
 	static map<string, struct sqltype *> typemap;
 	static struct sqltype *get(string s);
+	static const map<string, sqltype *> &get_types();
 	sqltype(string n) : name(n) {
 	}
 
@@ -87,7 +88,7 @@ struct table : named_relation {
 	virtual string ident() {
 		return schema + "." + name;
 	}
-	virtual ~table(){};
+	virtual ~table() {};
 };
 
 struct scope {
