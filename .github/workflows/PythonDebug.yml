@@ -27,6 +27,10 @@ jobs:
       BUILD_PYTHON: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
+      CIBW_BUILD: 'cp39-manylinux_x86_64'
+      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+      TWINE_USERNAME: 'hfmuehleisen'
+      PYTEST_TIMEOUT: '600'
 
     steps:
     - uses: actions/checkout@v2
