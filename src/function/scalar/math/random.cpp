@@ -24,7 +24,7 @@ struct RandomBindData : public FunctionData {
 	}
 };
 
-struct RandomLocalState : public FunctionData {
+struct RandomLocalState : public FunctionLocalState {
 	explicit RandomLocalState(uint32_t seed) : random_engine(seed) {
 	}
 
@@ -47,7 +47,8 @@ unique_ptr<FunctionData> RandomBind(ClientContext &context, ScalarFunction &boun
 	return make_unique<RandomBindData>(context);
 }
 
-static unique_ptr<FunctionData> RandomInitLocalState(const BoundFunctionExpression &expr, FunctionData *bind_data) {
+static unique_ptr<FunctionLocalState> RandomInitLocalState(const BoundFunctionExpression &expr,
+                                                           FunctionData *bind_data) {
 	auto &info = (RandomBindData &)*bind_data;
 	auto &random_engine = RandomEngine::Get(info.context);
 	return make_unique<RandomLocalState>(random_engine.NextRandomInteger());
