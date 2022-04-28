@@ -89,9 +89,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 
 	if (func_catalog->type == CatalogType::TABLE_FUNCTION_ENTRY) {
 		function = (TableFunctionCatalogEntry *)func_catalog;
-
 	} else if (func_catalog->type == CatalogType::TABLE_MACRO_ENTRY) {
-
 		auto macro_func = (TableMacroCatalogEntry *)func_catalog;
 		auto query_node = BindTableMacro(*fexpr, macro_func, 0);
 		D_ASSERT(query_node);

@@ -145,7 +145,7 @@ void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	this->delimiter = StringUtil::Replace(input, "\\t", "\t");
 	this->has_delimiter = true;
 	if (input.empty()) {
-		throw BinderException("DELIM or SEP must not be empty");
+		this->delimiter = string("\0", 1);
 	}
 }
 
