@@ -498,7 +498,8 @@ function toDataFrame(result::Ref{duckdb_result})::DataFrame
 end
 
 function execute_tasks(db::DuckDBHandle)
-    return duckdb_execute_tasks(db.handle, typemax(UInt64))
+    duckdb_execute_tasks(db.handle, typemax(UInt64))
+    return
 end
 
 function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
@@ -506,10 +507,15 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
 
     handle = Ref{duckdb_result}()
     # if multi-threading is enabled, launch tasks
+    tasks = []
     for i in 1:Threads.nthreads()
-        @spawn execute_tasks(stmt.con.db)
+        task_val = @spawn execute_tasks(stmt.con.db)
+        push!(tasks, task_val)
     end
     ret = duckdb_execute_prepared(stmt.handle, handle)
+    for task in tasks
+        Base.wait(task)
+    end
     if ret != DuckDBSuccess
         error_ptr = duckdb_result_error(handle)
         if error_ptr == C_NULL
