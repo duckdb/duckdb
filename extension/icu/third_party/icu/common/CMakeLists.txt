@@ -196,8 +196,7 @@ add_library_unity(
   locmap.cpp
   putil.cpp
   umapfile.cpp
-  wintz.cpp
-)
+  wintz.cpp)
 set(ICU_LIBRARY_FILES
     ${ICU_LIBRARY_FILES} $<TARGET_OBJECTS:duckdb_icu_common>
     PARENT_SCOPE)
