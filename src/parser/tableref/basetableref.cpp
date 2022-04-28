@@ -1,11 +1,14 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
 string BaseTableRef::ToString() const {
-	return "GET(" + schema_name + "." + table_name + ")";
+	string schema = schema_name.empty() ? "" : KeywordHelper::WriteOptionallyQuoted(schema_name) + ".";
+	string result = schema + KeywordHelper::WriteOptionallyQuoted(table_name);
+	return BaseToString(result, column_name_alias);
 }
 
 bool BaseTableRef::Equals(const TableRef *other_p) const {

@@ -4,6 +4,10 @@
 
 namespace duckdb {
 
+string CrossProductRef::ToString() const {
+	return left->ToString() + ", " + right->ToString();
+}
+
 bool CrossProductRef::Equals(const TableRef *other_p) const {
 	if (!TableRef::Equals(other_p)) {
 		return false;

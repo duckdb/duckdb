@@ -26,15 +26,7 @@ namespace duckdb {
 FunctionData::~FunctionData() {
 }
 
-unique_ptr<FunctionData> FunctionData::Copy() {
-	throw InternalException("Unimplemented copy for FunctionData");
-}
-
-bool FunctionData::Equals(FunctionData &other) {
-	return true;
-}
-
-bool FunctionData::Equals(FunctionData *left, FunctionData *right) {
+bool FunctionData::Equals(const FunctionData *left, const FunctionData *right) {
 	if (left == right) {
 		return true;
 	}
@@ -42,6 +34,17 @@ bool FunctionData::Equals(FunctionData *left, FunctionData *right) {
 		return false;
 	}
 	return left->Equals(*right);
+}
+
+TableFunctionData::~TableFunctionData() {
+}
+
+unique_ptr<FunctionData> TableFunctionData::Copy() const {
+	throw InternalException("Copy not supported for TableFunctionData");
+}
+
+bool TableFunctionData::Equals(const FunctionData &other) const {
+	return false;
 }
 
 Function::Function(string name_p) : name(move(name_p)) {

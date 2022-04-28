@@ -35,14 +35,19 @@ struct PragmaInfo;
 struct FunctionData {
 	DUCKDB_API virtual ~FunctionData();
 
-	DUCKDB_API virtual unique_ptr<FunctionData> Copy();
-	DUCKDB_API virtual bool Equals(FunctionData &other);
-	DUCKDB_API static bool Equals(FunctionData *left, FunctionData *right);
+	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
+	DUCKDB_API virtual bool Equals(const FunctionData &other) const = 0;
+	DUCKDB_API static bool Equals(const FunctionData *left, const FunctionData *right);
 };
 
 struct TableFunctionData : public FunctionData {
 	// used to pass on projections to table functions that support them. NB, can contain COLUMN_IDENTIFIER_ROW_ID
 	vector<idx_t> column_ids;
+
+	DUCKDB_API virtual ~TableFunctionData();
+
+	DUCKDB_API unique_ptr<FunctionData> Copy() const override;
+	DUCKDB_API bool Equals(const FunctionData &other) const override;
 };
 
 struct FunctionParameters {
