@@ -48,7 +48,7 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 	}
 }
 
-static void ListCombineFunction(Vector &state, Vector &combined, idx_t count) {
+static void ListCombineFunction(Vector &state, Vector &combined, FunctionData *bind_data, idx_t count) {
 	VectorData sdata;
 	state.Orrify(count, sdata);
 	auto states_ptr = (ListAggState **)sdata.data;
@@ -109,8 +109,7 @@ unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunct
                                           vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(arguments.size() == 1);
 	function.return_type = LogicalType::LIST(arguments[0]->return_type);
-	return make_unique<ListBindData>(); // TODO atm this is not used anywhere but it might not be required after all
-	                                    // except for sanity checking
+	return nullptr;
 }
 
 void ListFun::RegisterFunction(BuiltinFunctions &set) {

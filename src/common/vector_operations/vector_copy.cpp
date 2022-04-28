@@ -83,7 +83,20 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		if (smask.IsMaskSet()) {
 			for (idx_t i = 0; i < copy_count; i++) {
 				auto idx = sel->get_index(source_offset + i);
-				tmask.Set(target_offset + i, smask.RowIsValid(idx));
+
+				if (smask.RowIsValid(idx)) {
+					// set valid
+					if (!tmask.AllValid()) {
+						tmask.SetValidUnsafe(target_offset + i);
+					}
+				} else {
+					// set invalid
+					if (tmask.AllValid()) {
+						auto init_size = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, target_offset + copy_count);
+						tmask.Initialize(init_size);
+					}
+					tmask.SetInvalidUnsafe(target_offset + i);
+				}
 			}
 		}
 	}

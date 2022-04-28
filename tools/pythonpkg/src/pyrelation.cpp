@@ -502,6 +502,9 @@ void DuckDBPyRelation::WriteCsvDF(py::object df, const string &file, DuckDBPyCon
 // should this return a rel with the new view?
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_name, bool replace) {
 	rel->CreateView(view_name, replace);
+	// We need to pass ownership of any Python Object Dependencies to the connection
+	auto all_dependencies = rel->GetAllDependencies();
+	rel->context.GetContext()->external_dependencies[view_name] = move(all_dependencies);
 	return make_unique<DuckDBPyRelation>(rel);
 }
 
@@ -539,7 +542,7 @@ void DuckDBPyRelation::InsertInto(const string &table) {
 	} else {
 		//! Schema defined, we try to insert into it.
 		rel->Insert(parsed_info.schema, parsed_info.name);
-	};
+	}
 }
 
 void DuckDBPyRelation::Insert(py::object params) {
