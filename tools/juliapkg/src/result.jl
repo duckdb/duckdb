@@ -508,7 +508,7 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     handle = Ref{duckdb_result}()
     # if multi-threading is enabled, launch tasks
     tasks = []
-    for i in 1:Threads.nthreads()
+    for i in 2:Threads.nthreads()
         task_val = @spawn execute_tasks(stmt.con.db)
         push!(tasks, task_val)
     end
