@@ -1,0 +1,19 @@
+# name: test/sql/function/list/list_filter.test
+# description: Test list_filter function
+# group: [list]
+
+# NOTE: some of these tests are directly taken from the Presto Array Function examples
+
+mode skip
+
+query I
+SELECT list_filter([5, -6, NULL, 7], x -> x > 0)
+----
+[5, 7]
+
+query I
+SELECT list_filter([5, NULL, 7, NULL], x -> x IS NOT NULL)
+----
+[5, 7]
+
+mode unskip

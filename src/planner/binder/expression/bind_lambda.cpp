@@ -8,14 +8,18 @@
 
 namespace duckdb {
 
-BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, bool is_lambda,
+BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, idx_t lambda_param_count,
                                             LogicalType list_child_type) {
 
 	string error;
 
-	if (is_lambda) {
+	if (lambda_param_count != 0) {
 
 		D_ASSERT(expr.lhs.size() != 0);
+
+		if (expr.lhs.size() != lambda_param_count) {
+			throw BinderException("Invalid number of left-hand side parameters for this lambda function.");
+		}
 
 		// create dummy columns for the lambda parameters (lhs)
 		vector<LogicalType> column_types;

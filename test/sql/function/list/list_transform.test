@@ -2,7 +2,30 @@
 # description: Test list_transform function
 # group: [list]
 
+# NOTE: some of these tests are directly taken from the Presto Array Function examples
+
 query I
 SELECT list_transform([1, 2, 3], x -> x + 1)
 ----
 [2, 3, 4]
+
+query I
+SELECT list_transform([5, NULL, 6], x -> COALESCE(x, 0) + 1)
+----
+[6, 1, 7]
+
+query I
+SELECT list_transform(['x', 'abc', 'z'], x -> x || '0')
+----
+[x0, abc0, z0]
+
+# TODO: this test case requires the implementation of list_filter
+
+mode skip
+
+query I
+SELECT list_transform([[1, NULL, 2], [3, NULL]], a -> list_filter(a, x -> x IS NOT NULL))
+----
+[[1, 2], [3]]
+
+mode unskip

@@ -24,14 +24,22 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	auto &catalog = Catalog::GetCatalog(context);
 	auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.schema, function.function_name,
 	                             false, error_context);
+
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
 		// scalar function
-		if (function.function_name == "list_transform") {
-			// distinguish between lambda functions and the JSON operator ->
-			BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, true);
+
+		// scalar function with a lambda function
+		if (function.function_name == "list_transform" || function.function_name == "array_transform") {
+			return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 1);
+		} else if (function.function_name == "list_filter" || function.function_name == "array_filter") {
+			return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 1);
+		} else if (function.function_name == "list_reduce" || function.function_name == "array_reduce") {
+			return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 2);
 		}
-		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, false);
+
+		// other scalar function
+		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 0);
 	case CatalogType::MACRO_ENTRY:
 		// macro function
 		return BindMacro(function, (ScalarMacroCatalogEntry *)func, depth, expr_ptr);
@@ -42,12 +50,12 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 }
 
 BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func, idx_t depth,
-                                          bool is_lambda) {
+                                          idx_t lambda_param_count) {
 
 	// bind the children of the function expression
 	string error;
 
-	if (is_lambda) { // bind the lambda child separately
+	if (lambda_param_count != 0) { // bind the lambda child separately
 
 		D_ASSERT(function.children.size() == 2);
 
@@ -61,7 +69,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 		// bind the lambda parameter
 		auto &lambda_expr = (LambdaExpression &)*function.children[1];
-		BindResult result = BindExpression(lambda_expr, depth, true, list_child_type);
+		BindResult result = BindExpression(lambda_expr, depth, lambda_param_count, list_child_type);
 
 		if (result.HasError()) {
 			error = result.error;

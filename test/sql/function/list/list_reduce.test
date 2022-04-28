@@ -1,0 +1,24 @@
+# name: test/sql/function/list/list_reduce.test
+# description: Test list_reduce function
+# group: [list]
+
+# NOTE: some of these tests are directly taken from the Presto Array Function examples
+
+mode skip
+
+query I
+SELECT list_reduce([5, 20, 50], (s, x) -> s + x)
+----
+75
+
+query I
+SELECT list_reduce([5, 20, NULL, 50], (s, x) -> s + x)
+----
+NULL
+
+query I
+SELECT list_reduce([5, 20, NULL, 50], (s, x) -> s + COALESCE(x, 0))
+----
+75
+
+mode unskip
