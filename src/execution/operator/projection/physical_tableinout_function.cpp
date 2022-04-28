@@ -22,7 +22,7 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ClientCon
 	if (function.init) {
 		result->operator_data = function.init(context, bind_data.get(), column_ids, nullptr);
 	}
-	return result;
+	return move(result);
 }
 
 OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
