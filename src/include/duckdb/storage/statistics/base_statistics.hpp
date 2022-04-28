@@ -48,7 +48,6 @@ public:
 	bool CanHaveNoNull() const;
 
 	void UpdateDistinctStatistics(Vector &v, idx_t count);
-	void UpdateDistinctStatistics(VectorData &vdata, PhysicalType type, idx_t count);
 
 	virtual bool IsConstant() const {
 		return false;

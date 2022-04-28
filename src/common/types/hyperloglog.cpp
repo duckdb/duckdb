@@ -105,9 +105,9 @@ template <class T>
 inline uint64_t TemplatedHash(const T &elem) {
 	uint64_t x = elem;
 	x ^= x >> 30;
-	x *= 0xbf58476d1ce4e5b9U;
+	x *= UINT64_C(0xbf58476d1ce4e5b9);
 	x ^= x >> 27;
-	x *= 0x94d049bb133111ebU;
+	x *= UINT64_C(0x94d049bb133111eb);
 	x ^= x >> 31;
 	return x;
 }
@@ -243,9 +243,9 @@ static const uint64_t bits[] = {
     (uint64_t)1 << 60, (uint64_t)1 << 61, (uint64_t)1 << 62, (uint64_t)1 << 63};
 
 static inline void ComputeIndexAndCount(uint64_t &hash, uint8_t &prefix) {
-	uint64_t index = hash & ((1 << 14) - 1); /* Register index. */
-	hash >>= 14;                             /* Remove bits used to address the register. */
-	hash |= ((uint64_t)1 << (64 - 14));      /* Make sure the loop terminates
+	uint64_t index = hash & ((1 << 12) - 1); /* Register index. */
+	hash >>= 12;                             /* Remove bits used to address the register. */
+	hash |= ((uint64_t)1 << (64 - 12));      /* Make sure the loop terminates
 	                                          and count will be <= Q+1. */
 	idx_t i = 0;
 	while (hash & bits[i]) {

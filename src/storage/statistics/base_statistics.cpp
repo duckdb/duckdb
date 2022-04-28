@@ -52,12 +52,6 @@ void BaseStatistics::UpdateDistinctStatistics(Vector &v, idx_t count) {
 	d_stats.Update(v, count);
 }
 
-void BaseStatistics::UpdateDistinctStatistics(VectorData &vdata, PhysicalType ptype, idx_t count) {
-	D_ASSERT(distinct_stats);
-	auto &d_stats = (DistinctStatistics &)*distinct_stats;
-	d_stats.Update(vdata, ptype, count);
-}
-
 void MergeInternal(unique_ptr<BaseStatistics> &orig, const unique_ptr<BaseStatistics> &other) {
 	if (other) {
 		if (orig) {
