@@ -1,0 +1,55 @@
+# name: test/sql/prepared/prepare_list_functions.test
+# description: PREPARE of various LIST functions
+# group: [prepared]
+
+# list_aggregate
+statement ok
+PREPARE v1 AS SELECT list_aggregate(?, 'min')
+
+query I
+EXECUTE v1([1, 2, 3])
+----
+1
+
+query I
+EXECUTE v1(['hello', 'world'])
+----
+hello
+
+
+query I
+EXECUTE v1(NULL::INT[])
+----
+NULL
+
+# array_slice
+statement ok
+PREPARE v2 AS SELECT array_slice(?, 1, 2);
+
+query I
+EXECUTE v2([1, 2, 3]);
+----
+[1, 2]
+
+query I
+EXECUTE v2('123');
+----
+12
+
+# flatten
+statement ok
+PREPARE v3 AS SELECT flatten(?)
+
+query I
+EXECUTE v3([[1,2,3],[4,5]]);
+----
+[1, 2, 3, 4, 5]
+
+# list_extract
+statement ok
+PREPARE v4 AS SELECT list_extract(?, 2)
+
+query I
+EXECUTE v4([1, 2, 3]);
+----
+2

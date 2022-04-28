@@ -81,6 +81,8 @@ public:
 	vector<CorrelatedColumnInfo> correlated_columns;
 	//! The set of parameter expressions bound by this binder
 	vector<BoundParameterExpression *> *parameters;
+	//! The types of the prepared statement parameters, if any
+	vector<LogicalType> *parameter_types;
 	//! Whether or not the bound statement is read-only
 	bool read_only;
 	//! Whether or not the statement requires a valid transaction to run
