@@ -30,15 +30,14 @@ struct ReadHead {
 	}
 };
 
-// Allows to merge also buffers that do not perfectly align to reduce number of requests
+// Comparator for buffers that are either overlapping, adjacent, or within ALLOW_GAP bytes from each other
 struct ReadHeadComparator
 {
 	static constexpr size_t ALLOW_GAP = 1 << 14; // 16 KiB
-
 	bool operator()( const ReadHead* a, const ReadHead* b ) const
 	{
-		// TODO: handle overflow?
 		auto a_start = a->location;
+		// Note that this could theoretically overflow, but we won't have files that big
 		auto a_end = a->location + a->size + ALLOW_GAP;
 		auto b_start = b->location;
 
@@ -58,18 +57,12 @@ struct ReadAheadBuffer {
 
 	std::set<ReadHead*, ReadHeadComparator> merge_set;
 
-	std::map<idx_t, ReadHead*> start_map;
-	std::map<idx_t, ReadHead*> end_map;
-
 	idx_t total_size = 0;
 
 	/// Add a read head to the prefetching list
 	void AddReadHead(idx_t pos, idx_t len, bool merge_buffers = true) {
-
 		// Attempt to merge with existing
 		if (merge_buffers) {
-
-			// Merge using SET
 			ReadHead new_read_head{pos, len};
 			auto lookup_set = merge_set.find(&new_read_head);
 			if (lookup_set != merge_set.end()){
@@ -80,43 +73,11 @@ struct ReadAheadBuffer {
 				existing_head->size = new_length;
 				return;
 			}
-
-//			auto lookup_start = end_map.find(pos);
-//			if (lookup_start != end_map.end()) {
-//				auto read_head = lookup_start->second;
-//				// Merge existing read head with this one
-//				read_head->size += len;
-//				// Add new end
-//				end_map.insert(std::pair<idx_t, ReadHead*>(read_head->GetEnd(), read_head));
-//				// Erase old end
-//				end_map.erase(lookup_start->first);
-//				return;
-//			}
-//
-//			auto lookup_end = start_map.find(pos + len);
-//			if (lookup_end != start_map.end()) {
-//				auto read_head = lookup_end->second;
-//				// Merge existing read head with this one
-//				read_head->location -= len;
-//				read_head->size += len;
-//				// Add new start
-//				start_map.insert(std::pair<idx_t, ReadHead*>(read_head->location, read_head));
-//				// Erase old start
-//				end_map.erase(lookup_end->first);
-//				return;
-//			}
 		}
 
-		// No merge candidate found, just add it
 		read_heads.emplace_front(ReadHead(pos, len));
 		total_size += len;
-
 		auto& read_head = read_heads.front();
-
-		// Insert begin and end into maps for later merge lookups
-//		start_map.insert(std::pair<idx_t, ReadHead*>(read_head.location, &read_head));
-//		end_map.insert(std::pair<idx_t, ReadHead*>(read_head.GetEnd(), &read_head));
-
 		merge_set.insert(&read_head);
 
 		if (read_head.GetEnd() > handle.GetFileSize()) {
@@ -137,6 +98,7 @@ struct ReadAheadBuffer {
 	/// Prefetch all read heads
 	void Prefetch() {
 		// TODO we should do these prefetches in parallel probably
+		// problem is that we need multiple handles for this which may be slow?
 		for (auto& read_head: read_heads) {
 			read_head.Allocate(allocator);
 

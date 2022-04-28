@@ -200,6 +200,14 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 		throw std::runtime_error("out of file");
 	}
 
+	if (hfh.flags & FileFlags::FILE_FLAGS_DIRECT_IO || nr_bytes > hfh.READ_BUFFER_LEN) {
+		GetRangeRequest(hfh, hfh.path, {}, location, (char *)buffer, to_read);
+		hfh.buffer_available = 0;
+		hfh.buffer_idx = 0;
+		hfh.file_offset = location + nr_bytes;
+		return;
+	}
+
 	if (location >= hfh.buffer_start && location < hfh.buffer_end) {
 		hfh.file_offset = location;
 		hfh.buffer_idx = location - hfh.buffer_start;
@@ -228,21 +236,11 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 		if (to_read > 0 && hfh.buffer_available == 0) {
 			auto new_buffer_available = MinValue<idx_t>(hfh.READ_BUFFER_LEN, hfh.length - hfh.file_offset);
 
-			// Bypass buffer if we read more than buffer size
-			if (to_read > new_buffer_available) {
-				GetRangeRequest(hfh, hfh.path, {}, location + buffer_offset, (char *)buffer+buffer_offset, to_read);
-				hfh.buffer_available = 0;
-				hfh.buffer_idx = 0;
-				hfh.file_offset += to_read;
-				break;
-			} else {
-				// Reading less than buffer size, we store it in the read buffers
-				GetRangeRequest(hfh, hfh.path, {}, hfh.file_offset, (char *)hfh.read_buffer.get(), new_buffer_available);
-				hfh.buffer_available = new_buffer_available;
-				hfh.buffer_idx = 0;
-				hfh.buffer_start = hfh.file_offset;
-				hfh.buffer_end = hfh.buffer_start + new_buffer_available;
-			}
+			GetRangeRequest(hfh, hfh.path, {}, hfh.file_offset, (char *)hfh.read_buffer.get(), new_buffer_available);
+			hfh.buffer_available = new_buffer_available;
+			hfh.buffer_idx = 0;
+			hfh.buffer_start = hfh.file_offset;
+			hfh.buffer_end = hfh.buffer_start + new_buffer_available;
 		}
 	}
 }

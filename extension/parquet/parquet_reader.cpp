@@ -536,12 +536,34 @@ size_t ParquetReader::GetGroupCompressedSize(ParquetReaderScanState &state) {
 	return total_compressed_size ? total_compressed_size : calc_compressed_size;
 }
 
-idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
+size_t ParquetReader::GetGroupSpan(ParquetReaderScanState &state) {
 	auto &group = GetGroup(state);
-	idx_t min_offset_overall = NumericLimits<idx_t>::Maximum();
+	idx_t min_offset = NumericLimits<idx_t>::Maximum();
+	idx_t max_offset = NumericLimits<idx_t>::Minimum();
 
 	for (auto& column_chunk : group.columns) {
-		auto min_offset = NumericLimits<idx_t>::Maximum();
+
+		// Set the min offset
+		idx_t current_min_offset = NumericLimits<idx_t>::Maximum();
+		if (column_chunk.meta_data.__isset.dictionary_page_offset) {
+			current_min_offset = MinValue<idx_t>(current_min_offset, column_chunk.meta_data.dictionary_page_offset);
+		}
+		if (column_chunk.meta_data.__isset.index_page_offset) {
+			current_min_offset = MinValue<idx_t>(current_min_offset, column_chunk.meta_data.index_page_offset);
+		}
+		current_min_offset = MinValue<idx_t>(current_min_offset, column_chunk.meta_data.data_page_offset);
+		min_offset = MinValue<idx_t>(current_min_offset, min_offset);
+		max_offset = MaxValue<idx_t>(max_offset, column_chunk.meta_data.total_compressed_size + current_min_offset);
+	}
+
+	return max_offset - min_offset;
+}
+
+idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
+	auto &group = GetGroup(state);
+	idx_t min_offset = NumericLimits<idx_t>::Maximum();
+
+	for (auto& column_chunk : group.columns) {
 		if (column_chunk.meta_data.__isset.dictionary_page_offset) {
 			min_offset = MinValue<idx_t>(min_offset, column_chunk.meta_data.dictionary_page_offset);
 		}
@@ -549,10 +571,9 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 			min_offset = MinValue<idx_t>(min_offset, column_chunk.meta_data.index_page_offset);
 		}
 		min_offset = MinValue<idx_t>(min_offset, column_chunk.meta_data.data_page_offset);
-		min_offset_overall = MinValue<idx_t>(min_offset_overall, min_offset);
 	}
 
-	return min_offset_overall;
+	return min_offset;
 }
 
 void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx) {
@@ -602,8 +623,17 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 
 	if (!state.file_handle || state.file_handle->path != file_handle->path) {
+		auto flags = FileFlags::FILE_FLAGS_READ;
+
+		if (file_handle->file_system.GetName() == "HTTPFileSystem") {
+			state.prefetch_mode = true;
+			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+		} else {
+			state.prefetch_mode = false;
+		}
+
 		state.file_handle =
-		    file_handle->file_system.OpenFile(file_handle->path, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+		    file_handle->file_system.OpenFile(file_handle->path, flags, FileSystem::DEFAULT_LOCK,
 		                                      FileSystem::DEFAULT_COMPRESSION, file_opener);
 	}
 
@@ -792,12 +822,10 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		}
 
 		size_t to_scan_compressed_bytes = 0;
-		bool will_scan_all_columns = true;
 		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 			// this is a special case where we are not interested in the actual contents of the file
 			if (state.column_ids[out_col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
 				continue;
-				will_scan_all_columns = false;
 			}
 
 			PrepareRowGroupBuffer(state, out_col_idx);
@@ -810,25 +838,30 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 		auto& group = GetGroup(state);
 		// TODO what if we have limit clause? we scan way to much? Can we push down limit clauses to prevent this? Should we exponential increase?
-		if (state.group_offset != group.num_rows) {
-			auto total_compressed_size = GetGroupCompressedSize(state);
+		if (state.prefetch_mode && state.group_offset != group.num_rows) {
+//			std::cout << "Prefetching row group " << state.group_idx_list[state.current_group] << " entirely\n";
+			size_t total_row_group_span = GetGroupSpan(state);
 
-			// TODO: I should figure out how to directly read the column metadata without the dumb reader thingies?
-			// OR only do the code below when all columns are scanned.
-			if (false) {
-				if (!state.have_prefetched_group || state.prefetched_group != state.current_group) {
+			double scan_percentage = (double)(to_scan_compressed_bytes) / total_row_group_span;
 
+			if (to_scan_compressed_bytes > total_row_group_span) {
+				throw std::runtime_error("Malformed parquet file: sum of total compressed bytes of columns seems incorrect");
+			}
+
+			if (scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+				// Prefetch the whole row group
+				if (!state.have_prefetched_group || state.prefetched_group != state.group_idx_list[state.current_group]) {
+					auto total_compressed_size = GetGroupCompressedSize(state);
 					if (total_compressed_size > 0) {
-						trans.RegisterPrefetch(GetGroupOffset(state), total_compressed_size);
+						trans.RegisterPrefetch(GetGroupOffset(state), total_row_group_span);
 						trans.PrefetchRegistered();
 					}
 					state.have_prefetched_group = true;
-					state.prefetched_group = state.current_group;
+					state.prefetched_group = state.group_idx_list[state.current_group];
 				}
-			} else if (true || to_scan_compressed_bytes / result.ColumnCount() >
-			               ParquetReaderPrefetchConfig::COLUMN_CHUNK_CACHE_LOWER_LIMIT &&
-			           to_scan_compressed_bytes < ParquetReaderPrefetchConfig::COLUMN_CHUNK_CACHE_MAX_SIZE) {
-				// Prefetch type 2a: Prefetch columns-wise
+			} else {
+				// Prefetch column-wise
+//				std::cout << "Prefetching row group " << group.ordinal << " column-wise\n";
 				for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 
 					if (state.column_ids[out_col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
@@ -841,8 +874,6 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 					root_reader->GetChildReader(file_col_idx)->Prefetch(trans);
 				}
 				trans.PrefetchRegistered();
-			} else {
-				// BIG MEM
 			}
 		}
 		return true;
