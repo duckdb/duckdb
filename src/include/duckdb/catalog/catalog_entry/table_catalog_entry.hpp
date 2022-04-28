@@ -11,6 +11,7 @@
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/generated_column_definition.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -43,7 +44,7 @@ public:
 	std::shared_ptr<DataTable> storage;
 	//! A list of columns that are part of this table
 	vector<ColumnDefinition> columns;
-	// vector<GeneratedColumn>	generated_columns;
+	vector<GeneratedColumnDefinition>	generated_columns;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<Constraint>> constraints;
 	//! A list of constraints that are part of this table
@@ -53,11 +54,11 @@ public:
 
 public:
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
-	//! Returns whether or not a column with the given name exists
-	bool ColumnExists(const string &name);
+	//! Returns whether or not a column with the given name exists, of the given column type
+	bool ColumnExists(const string &name, TableColumnType type = TableColumnType::STANDARD);
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
-	ColumnDefinition &GetColumn(const string &name);
+	ColumnDefinition &GetColumn(const string &name, TableColumnType type = TableColumnType::STANDARD);
 	//! Returns a list of types of the table
 	vector<LogicalType> GetTypes();
 	string ToSQL() override;

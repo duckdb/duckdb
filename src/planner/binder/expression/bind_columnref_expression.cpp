@@ -40,15 +40,22 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		D_ASSERT(!binder.macro_binding->alias.empty());
 		return make_unique<ColumnRefExpression>(column_name, binder.macro_binding->alias);
 	} else {
+		//see if it's a regular column
 		string table_name = binder.bind_context.GetMatchingBinding(column_name);
-		if (table_name.empty()) {
-			auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
-			string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
-			error_message =
-			    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str);
-			return nullptr;
+		if (!table_name.empty()) {
+			return binder.bind_context.CreateColumnReference(table_name, column_name);
 		}
-		return binder.bind_context.CreateColumnReference(table_name, column_name);
+		//it's not, might be a generated column
+		table_name = binder.bind_context.GetMatchingBinding(column_name, TableColumnType::GENERATED);
+		if (!table_name.empty()) {
+			return binder.bind_context.ExpandGeneratedColumn(table_name, column_name);
+		}
+		//it's neither, find candidates and error
+		auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
+		string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
+		error_message =
+			StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str);
+		return nullptr;
 	}
 }
 

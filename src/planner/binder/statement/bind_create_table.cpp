@@ -34,6 +34,15 @@ static void CreateColumnMap(BoundCreateTableInfo &info, bool allow_duplicate_nam
 		info.name_map[col.name] = column_info;
 		col.oid = oid;
 	}
+	for (uint64_t oid = 0; oid < base.generated_columns.size(); oid++) {
+		auto &col = base.generated_columns[oid];
+		if (info.name_map.find(col.name) != info.name_map.end()) {
+			throw CatalogException("Column with name %s already exists!", col.name);
+		}
+		auto column_info = TableColumnInfo(oid, TableColumnType::GENERATED);
+		info.name_map[col.name] = column_info;
+		col.oid = oid;
+	}
 }
 
 static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {

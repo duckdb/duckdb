@@ -43,7 +43,7 @@ public:
 public:
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
-	string GetMatchingBinding(const string &column_name);
+	string GetMatchingBinding(const string &column_name, TableColumnType type = TableColumnType::STANDARD);
 	//! Like GetMatchingBinding, but instead of throwing an error if multiple tables have the same binding it will
 	//! return a list of all the matching ones
 	unordered_set<string> GetMatchingBindings(const string &column_name);
@@ -57,6 +57,8 @@ public:
 	BindResult BindColumn(ColumnRefExpression &colref, idx_t depth);
 	string BindColumn(PositionalReferenceExpression &ref, string &table_name, string &column_name);
 	BindResult BindColumn(PositionalReferenceExpression &ref, idx_t depth);
+
+	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &table_name, const string &column_name);
 
 	unique_ptr<ParsedExpression> CreateColumnReference(const string &table_name, const string &column_name);
 	unique_ptr<ParsedExpression> CreateColumnReference(const string &schema_name, const string &table_name,
@@ -78,7 +80,7 @@ public:
 
 	//! Adds a base table with the given alias to the BindContext.
 	void AddBaseTable(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
-	                  LogicalGet &get);
+	                  const vector<string> &gnames, const vector<LogicalType> &gtypes, LogicalGet &get);
 	//! Adds a call to a table function with the given alias to the BindContext.
 	void AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
 	                      const vector<LogicalType> &types, LogicalGet &get);

@@ -44,6 +44,12 @@ idx_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
 			throw BinderException("Table \"%s\" does not have a column with name \"%s\"", name, column_name);
 		}
 	}
+	if (entry->second.column_type != TableColumnType::STANDARD) {
+		if (if_exists) {
+			return DConstants::INVALID_INDEX;
+		}
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", name, column_name);
+	}
 	auto column_index = entry->second.index;
 	column_name = columns[column_index].name;
 	return idx_t(column_index);
@@ -73,17 +79,24 @@ void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, ve
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
                                      std::shared_ptr<DataTable> inherited_storage)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table), storage(move(inherited_storage)),
-      columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
+      columns(move(info->Base().columns)), generated_columns(move(info->Base().generated_columns)), constraints(move(info->Base().constraints)),
       bound_constraints(move(info->bound_constraints)) {
 	this->temporary = info->Base().temporary;
 	// add lower case aliases
 	for (idx_t i = 0; i < columns.size(); i++) {
 		D_ASSERT(name_map.find(columns[i].name) == name_map.end());
-		name_map[columns[i].name] = i;
+		auto column_info = TableColumnInfo(i);
+		name_map[columns[i].name] = column_info;
+	}
+	for (idx_t i = 0; i < generated_columns.size(); i++) {
+		D_ASSERT(name_map.find(generated_columns[i].name) == name_map.end());
+		auto column_info = TableColumnInfo(i, TableColumnType::GENERATED);
+		name_map[generated_columns[i].name] = column_info;
 	}
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
-		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
+		auto column_info = TableColumnInfo(COLUMN_IDENTIFIER_ROW_ID);
+		name_map["rowid"] = column_info;
 	}
 	if (!storage) {
 		// create the physical storage
@@ -116,8 +129,12 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	}
 }
 
-bool TableCatalogEntry::ColumnExists(const string &name) {
-	return name_map.find(name) != name_map.end();
+bool TableCatalogEntry::ColumnExists(const string &name, TableColumnType type) {
+	auto iterator = name_map.find(name);
+	if (iterator == name_map.end()) {
+		return false;
+	}
+	return iterator->second.column_type == type;
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
@@ -189,6 +206,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 			create_info->columns[i].name = info.new_name;
 		}
 	}
+	for (auto& gen_column : generated_columns) {
+		create_info->generated_columns.push_back(move(gen_column.Copy()));
+	}
 	for (idx_t c_idx = 0; c_idx < constraints.size(); c_idx++) {
 		auto copy = constraints[c_idx]->Copy();
 		switch (copy->type) {
@@ -244,11 +264,20 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 unique_ptr<CatalogEntry> TableCatalogEntry::AddGeneratedColumn(ClientContext &context, AddGeneratedColumnInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 
-	//Copy all the columns, changing the value of the one that was specified by 'column_name'
+	//Copy all the columns
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
 		create_info->columns.push_back(move(copy));
 	}
+
+	//now we copy all the generated columns
+	for (idx_t i = 0; i < generated_columns.size(); i++) {
+		auto copy = generated_columns[i].Copy();
+		create_info->generated_columns.push_back(move(copy));
+	}
+	//and we add the new generated column
+	info.new_column.oid = columns.size();
+	create_info->generated_columns.push_back(info.new_column.Copy());
 
 	//Copy all the constraints
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -266,6 +295,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	create_info->temporary = temporary;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		create_info->columns.push_back(columns[i].Copy());
+	}
+	for (auto& gen_column : generated_columns) {
+		create_info->generated_columns.push_back(move(gen_column.Copy()));
 	}
 	Binder::BindLogicalType(context, info.new_column.type, schema->name);
 	info.new_column.oid = columns.size();
@@ -290,6 +322,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		if (removed_index != i) {
 			create_info->columns.push_back(columns[i].Copy());
 		}
+	}
+	for (auto& gen_column : generated_columns) {
+		create_info->generated_columns.push_back(move(gen_column.Copy()));
 	}
 	if (create_info->columns.empty()) {
 		throw CatalogException("Cannot drop column: table only has one column remaining!");
@@ -393,7 +428,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		}
 		create_info->columns.push_back(move(copy));
 	}
-
+	for (auto& gen_column : generated_columns) {
+		create_info->generated_columns.push_back(move(gen_column.Copy()));
+	}
 	//Copy all the constraints
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
@@ -425,7 +462,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		}
 		create_info->columns.push_back(move(copy));
 	}
-
+	for (auto& gen_column : generated_columns) {
+		create_info->generated_columns.push_back(move(gen_column.Copy()));
+	}
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
 		switch (constraint->type) {
@@ -490,6 +529,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContex
 	for (idx_t i = 0; i < columns.size(); i++) {
 		create_info->columns.push_back(columns[i].Copy());
 	}
+	for (auto& gen_column : generated_columns) {
+		create_info->generated_columns.push_back(move(gen_column.Copy()));
+	}
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
 		if (constraint->type == ConstraintType::FOREIGN_KEY) {
@@ -517,12 +559,14 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContex
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
-ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
+ColumnDefinition &TableCatalogEntry::GetColumn(const string &name, TableColumnType type) {
 	auto entry = name_map.find(name);
-	auto column_index = entry->second.index;
-	if (entry == name_map.end() || column_index == COLUMN_IDENTIFIER_ROW_ID) {
+	if (entry == name_map.end() ||
+	    entry->second.index == COLUMN_IDENTIFIER_ROW_ID ||
+	    entry->second.column_type != type) {
 		throw CatalogException("Column with name %s does not exist!", name);
 	}
+	auto column_index = entry->second.index;
 	return columns[column_index];
 }
 
@@ -541,6 +585,7 @@ void TableCatalogEntry::Serialize(Serializer &serializer) {
 	writer.WriteString(schema->name);
 	writer.WriteString(name);
 	writer.WriteRegularSerializableList(columns);
+	writer.WriteRegularSerializableList(generated_columns);
 	writer.WriteSerializableList(constraints);
 	writer.Finalize();
 }
@@ -552,6 +597,7 @@ unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source)
 	info->schema = reader.ReadRequired<string>();
 	info->table = reader.ReadRequired<string>();
 	info->columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>();
+	info->generated_columns = reader.ReadRequiredSerializableList<GeneratedColumnDefinition, GeneratedColumnDefinition>();
 	info->constraints = reader.ReadRequiredSerializableList<Constraint>();
 	reader.Finalize();
 
@@ -651,6 +697,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	for (idx_t i = 0; i < columns.size(); i++) {
 		create_info->columns.push_back(columns[i].Copy());
+	}
+	for (auto& gen_column : generated_columns) {
+		create_info->generated_columns.push_back(gen_column.Copy());
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {

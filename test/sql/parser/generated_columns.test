@@ -5,20 +5,11 @@
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
 
-statement ok
-INSERT INTO unit VALUES (5,4)
-
-query II
-SELECT * FROM unit
-----
-5	4
-
-statement ok
-ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
-
-# error 'expected_columns' doesnt match
 #statement ok
 #INSERT INTO unit VALUES (5,4)
 
 statement ok
-SELECT total_profit2 FROM unit
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+
+statement ok
+SELECT total_profit FROM unit

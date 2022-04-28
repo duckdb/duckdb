@@ -154,27 +154,24 @@ unique_ptr<AlterInfo> RenameTableInfo::Deserialize(FieldReader &reader, string s
 //===--------------------------------------------------------------------===//
 // AddGeneratedColumnInfo
 //===--------------------------------------------------------------------===//
-AddGeneratedColumnInfo::AddGeneratedColumnInfo(string schema, string table, string entry_name, unique_ptr<ParsedExpression> expression)
-    : AlterTableInfo(AlterTableType::ADD_GENERATED_COLUMN, move(schema), move(table)), entry_name(move(entry_name)), expression(move(expression)) {
+AddGeneratedColumnInfo::AddGeneratedColumnInfo(string schema, string table, GeneratedColumnDefinition new_column)
+    : AlterTableInfo(AlterTableType::ADD_GENERATED_COLUMN, move(schema), move(table)), new_column(move(new_column)) {
 }
 AddGeneratedColumnInfo::~AddGeneratedColumnInfo() {
 }
 
 unique_ptr<AlterInfo> AddGeneratedColumnInfo::Copy() const {
-	return make_unique_base<AlterInfo, AddGeneratedColumnInfo>(schema, name, entry_name, expression->Copy());
+	return make_unique_base<AlterInfo, AddGeneratedColumnInfo>(schema, name, new_column.Copy());
 }
 
 void AddGeneratedColumnInfo::SerializeAlterTable(FieldWriter &writer) const {
-	writer.WriteString(entry_name);
-	expression->Serialize(writer);
+	writer.WriteSerializable(new_column);
 }
 
 unique_ptr<AlterInfo> AddGeneratedColumnInfo::Deserialize(FieldReader &reader, string schema, string table)
 {
-	Deserializer& source = reader.GetSource();
-	auto entry_name = reader.ReadRequired<string>();
-	auto expression = ParsedExpression::Deserialize(source);
-	return make_unique<AddGeneratedColumnInfo>(move(schema), move(table), move(entry_name), move(expression));
+	auto new_column = reader.ReadRequiredSerializable<GeneratedColumnDefinition, GeneratedColumnDefinition>();
+	return make_unique<AddGeneratedColumnInfo>(move(schema), move(table), move(new_column));
 }
 
 //===--------------------------------------------------------------------===//

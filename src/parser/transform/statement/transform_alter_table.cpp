@@ -43,8 +43,8 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			if (generated_constraint) {
 				D_ASSERT(generated_constraint->type == ConstraintType::GENERATED);
 				auto gen_constraint = (GeneratedConstraint *)generated_constraint.get();
-				auto expression = move(gen_constraint->expression);
-				result->info = make_unique<AddGeneratedColumnInfo>(qname.schema, qname.name, centry.name, move(expression));
+				auto generated_column = GeneratedColumnDefinition(centry.name, move(centry.type), move(gen_constraint->expression));
+				result->info = make_unique<AddGeneratedColumnInfo>(qname.schema, qname.name, move(generated_column));
 			}
 			else {
 				result->info = make_unique<AddColumnInfo>(qname.schema, qname.name, move(centry));

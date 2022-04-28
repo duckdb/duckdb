@@ -17,7 +17,7 @@
 
 namespace duckdb {
 
-string BindContext::GetMatchingBinding(const string &column_name) {
+string BindContext::GetMatchingBinding(const string &column_name, TableColumnType type) {
 	string result;
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
@@ -25,7 +25,7 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 		if (is_using_binding) {
 			continue;
 		}
-		if (binding->HasMatchingBinding(column_name)) {
+		if (binding->HasMatchingBinding(column_name, type)) {
 			if (!result.empty() || is_using_binding) {
 				throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
 				                      "or \"%s.%s\")",
@@ -158,6 +158,21 @@ unordered_set<string> BindContext::GetMatchingBindings(const string &column_name
 		}
 	}
 	return result;
+}
+
+unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &table_name,
+                                                                const string &column_name) {
+	string error_message;
+	vector<string> names;
+	names.push_back(table_name);
+	names.push_back(column_name);
+
+	auto binding = GetBinding(table_name, error_message);
+	auto table_catalog_entry = binding->GetTableEntry();
+
+	auto column_index = binding->GetBindingIndex(column_name, TableColumnType::GENERATED);
+	auto expression = table_catalog_entry->generated_columns[column_index].expression->Copy();
+	return expression;
 }
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &table_name, const string &column_name) {
@@ -359,13 +374,13 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
-                               const vector<LogicalType> &types, LogicalGet &get) {
-	AddBinding(alias, make_unique<TableBinding>(alias, types, names, get, index, true));
+                               const vector<LogicalType> &types, const vector<string>& gnames, const vector<LogicalType>& gtypes, LogicalGet &get) {
+	AddBinding(alias, make_unique<TableBinding>(alias, types, names, types, names, get, index, true));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
                                    const vector<LogicalType> &types, LogicalGet &get) {
-	AddBinding(alias, make_unique<TableBinding>(alias, types, names, get, index));
+	AddBinding(alias, make_unique<TableBinding>(alias, types, names, vector<LogicalType>(), vector<string>(), get, index));
 }
 
 static string AddColumnNameToBinding(const string &base_name, case_insensitive_set_t &current_names) {
@@ -409,12 +424,12 @@ void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
                                     const vector<LogicalType> &types) {
-	AddBinding(alias, make_unique<Binding>(alias, types, names, index));
+	AddBinding(alias, make_unique<Binding>(alias, types, names, vector<LogicalType>(), vector<string>(), index));
 }
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
                                 const vector<LogicalType> &types) {
-	auto binding = make_shared<Binding>(alias, types, names, index);
+	auto binding = make_shared<Binding>(alias, types, names, vector<LogicalType>(), vector<string>(), index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);

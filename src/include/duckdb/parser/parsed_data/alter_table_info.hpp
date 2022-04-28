@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/generated_column_definition.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/constraint.hpp"
 
@@ -130,11 +131,11 @@ public:
 // AddGeneratedColumnInfo
 //===--------------------------------------------------------------------===//
 struct AddGeneratedColumnInfo : public AlterTableInfo {
-	AddGeneratedColumnInfo(string schema, string table, string entry_name, unique_ptr<ParsedExpression> expression);
+	AddGeneratedColumnInfo(string schema, string table, GeneratedColumnDefinition new_column);
 	~AddGeneratedColumnInfo() override;
 
-	string							entry_name;
-	unique_ptr<ParsedExpression>	expression;
+	//! New generated column
+	GeneratedColumnDefinition new_column;
 public:
 	unique_ptr<AlterInfo> Copy() const override;
 	void SerializeAlterTable(FieldWriter &writer) const override;

@@ -27,7 +27,7 @@ class BoundTableFunction;
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
-	Binding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index);
+	Binding(const string &alias, vector<LogicalType> types, vector<string> names, vector<LogicalType> gtypes, vector<string> gnames, idx_t index);
 	virtual ~Binding() = default;
 
 	//! The alias of the binding
@@ -37,13 +37,16 @@ struct Binding {
 	vector<LogicalType> types;
 	//! Column names of the subquery
 	vector<string> names;
+	vector<LogicalType> gtypes;
+	//! Generated column names of the subquery
+	vector<string> gnames;
 	//! Name -> index for the names
 	case_insensitive_map_t<TableColumnInfo> name_map;
 
 public:
-	bool TryGetBindingIndex(const string &column_name, column_t &column_index);
-	column_t GetBindingIndex(const string &column_name);
-	bool HasMatchingBinding(const string &column_name);
+	bool TryGetBindingIndex(const string &column_name, column_t &column_index, TableColumnType type = TableColumnType::STANDARD);
+	column_t GetBindingIndex(const string &column_name, TableColumnType type = TableColumnType::STANDARD);
+	bool HasMatchingBinding(const string &column_name, TableColumnType type = TableColumnType::STANDARD);
 	virtual string ColumnNotFoundError(const string &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual TableCatalogEntry *GetTableEntry();
@@ -52,7 +55,7 @@ public:
 //! TableBinding is exactly like the Binding, except it keeps track of which columns were bound in the linked LogicalGet
 //! node for projection pushdown purposes.
 struct TableBinding : public Binding {
-	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names, LogicalGet &get, idx_t index,
+	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names, vector<LogicalType> gtypes, vector<string> gnames, LogicalGet &get, idx_t index,
 	             bool add_row_id = false);
 
 	//! the underlying LogicalGet

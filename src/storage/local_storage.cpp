@@ -344,6 +344,7 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column
 template <class T>
 bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun) {
 	vector<column_t> column_ids;
+	column_ids.reserve(table.column_definitions.size());
 	for (idx_t i = 0; i < table.column_definitions.size(); i++) {
 		column_ids.push_back(i);
 	}

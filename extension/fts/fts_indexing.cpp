@@ -304,7 +304,7 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 			}
 			break;
 		}
-		if (table->name_map.find(col_name) == table->name_map.end()) {
+		if (!table->ColumnExists(col_name)) {
 			// we check this here because else we we end up with an error halfway the indexing script
 			throw CatalogException("Table '%s.%s' does not have a column named '%s'!", qname.schema, qname.name,
 			                       col_name);
