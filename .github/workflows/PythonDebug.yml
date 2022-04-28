@@ -19,7 +19,7 @@ env:
 
 jobs:
  python-debug-linux:
-    name: Linux (64 Bit)
+    name: Python Debug - Linux (64 Bit)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
     env:
@@ -66,7 +66,7 @@ jobs:
     - name: Build
       run: |
         cd tools/pythonpkg
-        python3.9 setup.py sdist
+        python3.9 setup.py install
 
     - name: Run Tests
       run: python3.9 -m pytest {project}/tests/fast
