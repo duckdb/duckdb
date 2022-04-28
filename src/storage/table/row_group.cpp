@@ -580,6 +580,10 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	global_sort_state.AddLocalState(local_sort_state);
 	global_sort_state.PrepareMergePhase();
 
+	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
+		columns[column_idx]->CleanPersistentSegments();
+	}
+
 	// scan the sorted row data and add to the sorted row group
 	RowGroup sorted_rowgroup(db, table_info, start, count);
 	sorted_rowgroup.InitializeEmpty(types);

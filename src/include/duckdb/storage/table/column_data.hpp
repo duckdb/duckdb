@@ -109,6 +109,8 @@ public:
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
 	                                                     ColumnCheckpointInfo &checkpoint_info);
 
+	virtual void CleanPersistentSegments();
+
 	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
 
