@@ -73,10 +73,9 @@ public:
 	                                                                         vector<unique_ptr<Expression>> children,
 	                                                                         string &error, bool is_operator = false);
 
-	DUCKDB_API static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context,
-	                                                                         ScalarFunction bound_function,
-	                                                                         vector<unique_ptr<Expression>> children,
-	                                                                         bool is_operator = false);
+	DUCKDB_API static unique_ptr<BoundFunctionExpression>
+	BindScalarFunction(ClientContext &context, ScalarFunction bound_function, vector<unique_ptr<Expression>> children,
+	                   bool is_operator = false, bool cast_parameters = true);
 
 	DUCKDB_API bool operator==(const ScalarFunction &rhs) const;
 	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const;
