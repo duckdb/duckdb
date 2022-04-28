@@ -1,3 +1,4 @@
+import Base.Threads.@spawn
 
 mutable struct QueryResult
     handle::Ref{duckdb_result}
@@ -496,11 +497,20 @@ function toDataFrame(result::Ref{duckdb_result})::DataFrame
     return df
 end
 
+function execute_tasks(db::DuckDBHandle)
+    return duckdb_execute_tasks(db.handle, typemax(UInt64))
+end
+
 function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     bind_parameters(stmt, params)
 
     handle = Ref{duckdb_result}()
-    if duckdb_execute_prepared(stmt.handle, handle) != DuckDBSuccess
+    # if multi-threading is enabled, launch tasks
+    for i in 1:Threads.nthreads()
+        @spawn execute_tasks(stmt.con.db)
+    end
+    ret = duckdb_execute_prepared(stmt.handle, handle)
+    if ret != DuckDBSuccess
         error_ptr = duckdb_result_error(handle)
         if error_ptr == C_NULL
             error_message = string("Execute of query \"", stmt.sql, "\" failed: unknown error")

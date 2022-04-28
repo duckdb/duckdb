@@ -93,7 +93,7 @@ ProducerToken::ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerT
 ProducerToken::~ProducerToken() {
 }
 
-TaskScheduler::TaskScheduler() : queue(make_unique<ConcurrentQueue>()) {
+TaskScheduler::TaskScheduler(DatabaseInstance &db) : db(db), queue(make_unique<ConcurrentQueue>()) {
 }
 
 TaskScheduler::~TaskScheduler() {
@@ -141,6 +141,18 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #endif
 }
 
+void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
+	unique_ptr<Task> task;
+	for (idx_t i = 0; i < max_tasks; i++) {
+		queue->semaphore.wait(TASK_TIMEOUT_USECS);
+		if (!queue->q.try_dequeue(task)) {
+			return;
+		}
+		task->Execute(TaskExecutionMode::PROCESS_ALL);
+		task.reset();
+	}
+}
+
 #ifndef DUCKDB_NO_THREADS
 static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker) {
 	scheduler->ExecuteForever(marker);
@@ -148,7 +160,8 @@ static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker) {
 #endif
 
 int32_t TaskScheduler::NumberOfThreads() {
-	return threads.size() + 1;
+	auto &config = DBConfig::GetConfig(db);
+	return threads.size() + config.external_threads + 1;
 }
 
 void TaskScheduler::SetThreads(int32_t n) {
