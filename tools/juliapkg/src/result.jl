@@ -502,6 +502,12 @@ function execute_tasks(db::DuckDBHandle)
     return
 end
 
+function cleanup_tasks(tasks)
+    for task in tasks
+        Base.wait(task)
+    end
+end
+
 function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     bind_parameters(stmt, params)
 
@@ -512,10 +518,14 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
         task_val = @spawn execute_tasks(stmt.con.db)
         push!(tasks, task_val)
     end
-    ret = duckdb_execute_prepared(stmt.handle, handle)
-    for task in tasks
-        Base.wait(task)
+    ret = DuckDBSuccess
+    try
+        ret = duckdb_execute_prepared(stmt.handle, handle)
+    catch ex
+        cleanup_tasks(tasks)
+        throw(ex)
     end
+    cleanup_tasks(tasks)
     if ret != DuckDBSuccess
         error_ptr = duckdb_result_error(handle)
         if error_ptr == C_NULL

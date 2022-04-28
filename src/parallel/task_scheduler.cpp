@@ -130,7 +130,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	// loop until the marker is set to false
 	while (*marker) {
 		// wait for a signal with a timeout; the timeout allows us to periodically check
-		queue->semaphore.wait(TASK_TIMEOUT_USECS);
+		queue->semaphore.wait();
 		if (queue->q.try_dequeue(task)) {
 			task->Execute(TaskExecutionMode::PROCESS_ALL);
 			task.reset();
@@ -148,8 +148,12 @@ void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
 		if (!queue->q.try_dequeue(task)) {
 			return;
 		}
-		task->Execute(TaskExecutionMode::PROCESS_ALL);
-		task.reset();
+		try {
+			task->Execute(TaskExecutionMode::PROCESS_ALL);
+			task.reset();
+		} catch (...) {
+			return;
+		}
 	}
 }
 
@@ -202,6 +206,7 @@ void TaskScheduler::SetThreadsInternal(int32_t n) {
 		}
 		// now join the threads to ensure they are fully stopped before erasing them
 		for (idx_t i = new_thread_count; i < threads.size(); i++) {
+			queue->semaphore.signal(threads.size());
 			threads[i]->internal_thread->join();
 		}
 		// erase the threads/markers

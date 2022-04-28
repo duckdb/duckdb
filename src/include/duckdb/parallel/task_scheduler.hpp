@@ -35,8 +35,8 @@ struct ProducerToken {
 
 //! The TaskScheduler is responsible for managing tasks and threads
 class TaskScheduler {
-	// timeout for semaphore wait, default 50ms
-	constexpr static int64_t TASK_TIMEOUT_USECS = 50000;
+	// timeout for semaphore wait, default 5ms
+	constexpr static int64_t TASK_TIMEOUT_USECS = 5000;
 
 public:
 	TaskScheduler(DatabaseInstance &db);
