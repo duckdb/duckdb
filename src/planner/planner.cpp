@@ -2,6 +2,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
@@ -84,8 +85,10 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 	auto &stmt = (ExecuteStatement &)*statement;
 
 	// bind the prepared statement
-	auto entry = context.prepared_statements.find(stmt.name);
-	if (entry == context.prepared_statements.end()) {
+	auto &client_data = ClientData::Get(context);
+
+	auto entry = client_data.prepared_statements.find(stmt.name);
+	if (entry == client_data.prepared_statements.end()) {
 		throw BinderException("Prepared statement \"%s\" does not exist", stmt.name);
 	}
 

@@ -4,6 +4,7 @@
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/common/limits.hpp"
 
 namespace duckdb {
@@ -123,11 +124,12 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 		int operator_counter = 1;
 		int function_counter = 1;
 		int expression_counter = 1;
-		if (context.query_profiler_history->GetPrevProfilers().empty()) {
+		if (ClientData::Get(context).query_profiler_history->GetPrevProfilers().empty()) {
 			return;
 		}
 		// For each Operator
-		for (auto op : context.query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
+		for (auto op :
+		     ClientData::Get(context).query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
 			// For each Expression Executor
 			for (auto &expr_executor : op.second->info.executors_info) {
 				// For each Expression tree

@@ -27,13 +27,14 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 
 namespace duckdb {
 
 SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	if (info.schema.empty()) {
-		info.schema = info.temporary ? TEMP_SCHEMA : context.catalog_search_path->GetDefault();
+		info.schema = info.temporary ? TEMP_SCHEMA : ClientData::Get(context).catalog_search_path->GetDefault();
 	}
 
 	if (!info.temporary) {
