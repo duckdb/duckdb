@@ -139,6 +139,8 @@ void Node4::Erase(Node *&node, int pos) {
 		//! set new prefix and move the child
 		child_ref->prefix = move(new_prefix);
 		child_ref->prefix_length = new_length;
+		n->children[0] = nullptr;
+		delete node;
 		node = child_ref;
 	}
 }

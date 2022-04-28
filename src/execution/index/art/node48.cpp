@@ -118,6 +118,7 @@ void Node48::Erase(Node *&node, int pos) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
 				new_node->key[new_node->count] = i;
 				new_node->children[new_node->count++] = n->children[n->child_index[i]];
+				n->children[n->child_index[i]] = nullptr;
 			}
 		}
 		delete node;

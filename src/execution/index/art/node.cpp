@@ -71,6 +71,8 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 		return Node48::Deserialize(reader);
 	case NodeType::N256:
 		return Node256::Deserialize(reader);
+	default:
+		throw InternalException("Invalid ART Node Type");
 	}
 }
 

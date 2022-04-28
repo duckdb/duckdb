@@ -263,14 +263,14 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 }
 
 bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
-	DataChunk expression_result;
-	expression_result.Initialize(logical_types);
+	DataChunk expression_chunk;
+	expression_chunk.Initialize(logical_types);
 
 	// first resolve the expressions for the index
-	ExecuteExpressions(appended_data, expression_result);
+	ExecuteExpressions(appended_data, expression_chunk);
 
 	// now insert into the index
-	return Insert(lock, expression_result, row_identifiers);
+	return Insert(lock, expression_chunk, row_identifiers);
 }
 
 void ART::VerifyAppend(DataChunk &chunk) {
@@ -367,15 +367,15 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 // Delete
 //===--------------------------------------------------------------------===//
 void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
-	DataChunk expression_result;
-	expression_result.Initialize(logical_types);
+	DataChunk expression;
+	expression.Initialize(logical_types);
 
 	// first resolve the expressions
-	ExecuteExpressions(input, expression_result);
+	ExecuteExpressions(input, expression);
 
 	// then generate the keys for the given input
 	vector<unique_ptr<Key>> keys;
-	GenerateKeys(expression_result, keys);
+	GenerateKeys(expression, keys);
 
 	// now erase the elements from the database
 	row_ids.Normalify(input.size());
@@ -428,10 +428,9 @@ void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
 		auto child = node->GetChild(*this, pos);
 		D_ASSERT(child);
 
-		Node *child_ref = child;
-		if (child_ref->type == NodeType::NLeaf && LeafMatches(child_ref, key, depth)) {
+		if (child->type == NodeType::NLeaf && LeafMatches(child, key, depth)) {
 			// Leaf found, remove entry
-			auto leaf = static_cast<Leaf *>(child_ref);
+			auto leaf = (Leaf *)child;
 			leaf->Remove(row_id);
 			if (leaf->num_elements == 0) {
 				// Leaf is empty, delete leaf, decrement node counter and maybe shrink node
@@ -440,6 +439,7 @@ void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
 		} else {
 			// Recurse
 			Erase(child, key, depth + 1, row_id);
+			node->ReplaceChildPointer(pos, child);
 		}
 	}
 }
@@ -500,7 +500,7 @@ bool ART::SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &
 void ART::SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size) {
 	//! We need to look for a leaf
 	auto key = CreateKey(*this, types[0], equal_value);
-	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
+	auto leaf = (Leaf *)(Lookup(tree, *key, 0));
 	if (!leaf) {
 		return;
 	}
@@ -812,7 +812,7 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 	D_ASSERT(state->values[0].type().InternalType() == types[0]);
 
 	vector<row_t> row_ids;
-	bool success = true;
+	bool success;
 	if (state->values[1].IsNull()) {
 		lock_guard<mutex> l(lock);
 		// single predicate
@@ -868,17 +868,17 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 		return;
 	}
 
-	DataChunk expression_result;
-	expression_result.Initialize(logical_types);
+	DataChunk expression_chunk;
+	expression_chunk.Initialize(logical_types);
 
 	// unique index, check
 	lock_guard<mutex> l(lock);
 	// first resolve the expressions for the index
-	ExecuteExpressions(chunk, expression_result);
+	ExecuteExpressions(chunk, expression_chunk);
 
 	// generate the keys for the given input
 	vector<unique_ptr<Key>> keys;
-	GenerateKeys(expression_result, keys);
+	GenerateKeys(expression_chunk, keys);
 
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		if (!keys[i]) {
@@ -891,11 +891,11 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 			continue;
 		}
 		string key_name;
-		for (idx_t k = 0; k < expression_result.ColumnCount(); k++) {
+		for (idx_t k = 0; k < expression_chunk.ColumnCount(); k++) {
 			if (k > 0) {
 				key_name += ", ";
 			}
-			key_name += unbound_expressions[k]->GetName() + ": " + expression_result.data[k].GetValue(i).ToString();
+			key_name += unbound_expressions[k]->GetName() + ": " + expression_chunk.data[k].GetValue(i).ToString();
 		}
 		string exception_msg;
 		switch (verify_type) {
