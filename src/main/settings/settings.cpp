@@ -339,6 +339,18 @@ Value ExplainOutputSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// External Threads Setting
+//===--------------------------------------------------------------------===//
+void ExternalThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.external_threads = input.GetValue<int64_t>();
+}
+
+Value ExternalThreadsSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BIGINT(config.external_threads);
+}
+
+//===--------------------------------------------------------------------===//
 // Force Compression
 //===--------------------------------------------------------------------===//
 void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
