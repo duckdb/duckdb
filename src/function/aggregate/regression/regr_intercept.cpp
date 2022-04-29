@@ -33,11 +33,11 @@ struct RegrInterceptOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		target->count += source.count;
 		target->sum_x += source.sum_x;
 		target->sum_y += source.sum_y;
-		RegrSlopeOperation::Combine<RegrSlopeState, OP>(source.slope, &target->slope);
+		RegrSlopeOperation::Combine<RegrSlopeState, OP>(source.slope, &target->slope, bind_data);
 	}
 
 	template <class T, class STATE>

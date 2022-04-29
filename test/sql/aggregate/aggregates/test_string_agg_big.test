@@ -3,6 +3,9 @@
 # group: [aggregates]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 PRAGMA verify_parallelism
 
 statement ok
@@ -14,9 +17,10 @@ SELECT COUNT(*) FROM (SELECT g, STRING_AGG(x,',') FROM strings GROUP BY g) t1
 100
 
 query I
-SELECT g, STRING_AGG(x,',') FROM strings GROUP BY g ORDER BY 1, 2
+SELECT g, STRING_AGG(x ORDER BY x DESC) FROM strings GROUP BY g ORDER BY 1, 2
 ----
-200 values hashing to b8126ea73f21372cdb3f2dc483106a12
+200 values hashing to d9069f92649cccb595d30934b2c25cbc
+
 
 query I
 SELECT g, STRING_AGG(x,',' ORDER BY x DESC) FROM strings GROUP BY g ORDER BY 1, 2

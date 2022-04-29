@@ -316,4 +316,16 @@ string Relation::RenderWhitespace(idx_t depth) {
 	return string(depth * 2, ' ');
 }
 
+vector<shared_ptr<ExternalDependency>> Relation::GetAllDependencies() {
+	vector<shared_ptr<ExternalDependency>> all_dependencies;
+	Relation *cur = this;
+	while (cur) {
+		if (cur->extra_dependencies) {
+			all_dependencies.push_back(cur->extra_dependencies);
+		}
+		cur = ChildRelation();
+	}
+	return all_dependencies;
+}
+
 } // namespace duckdb

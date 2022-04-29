@@ -14,7 +14,7 @@ struct SumSetOperation {
 		state->Initialize();
 	}
 	template <class STATE>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		target->Combine(source);
 	}
 	template <class STATE>
