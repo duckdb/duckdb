@@ -40,6 +40,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 
 		// other scalar function
 		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 0);
+
 	case CatalogType::MACRO_ENTRY:
 		// macro function
 		return BindMacro(function, (ScalarMacroCatalogEntry *)func, depth, expr_ptr);

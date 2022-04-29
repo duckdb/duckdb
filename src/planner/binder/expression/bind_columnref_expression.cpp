@@ -34,22 +34,34 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 			return move(coalesce);
 		}
 	}
+
 	// no table name: find a binding that contains this
+
+	if (binder.lambda_bindings.size() != 0) {
+		for (idx_t i = 0; i < binder.lambda_bindings.size(); i++) {
+			if (binder.lambda_bindings[i]->HasMatchingBinding(column_name)) {
+				// first priority are lambda bindings TODO: throw a warning when this name conflicts
+				D_ASSERT(!binder.lambda_bindings[i]->alias.empty());
+				return make_unique<ColumnRefExpression>(column_name, binder.lambda_bindings[i]->alias);
+			}
+		}
+	}
+
 	if (binder.macro_binding != nullptr && binder.macro_binding->HasMatchingBinding(column_name)) {
-		// priority to macro parameter bindings TODO: throw a warning when this name conflicts
+		// second priority are macro parameter bindings TODO: throw a warning when this name conflicts
 		D_ASSERT(!binder.macro_binding->alias.empty());
 		return make_unique<ColumnRefExpression>(column_name, binder.macro_binding->alias);
-	} else {
-		string table_name = binder.bind_context.GetMatchingBinding(column_name);
-		if (table_name.empty()) {
-			auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
-			string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
-			error_message =
-			    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str);
-			return nullptr;
-		}
-		return binder.bind_context.CreateColumnReference(table_name, column_name);
 	}
+
+	string table_name = binder.bind_context.GetMatchingBinding(column_name);
+	if (table_name.empty()) {
+		auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
+		string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
+		error_message =
+		    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str);
+		return nullptr;
+	}
+	return binder.bind_context.CreateColumnReference(table_name, column_name);
 }
 
 void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
@@ -190,15 +202,33 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	auto &colref = (ColumnRefExpression &)*expr;
 	D_ASSERT(colref.column_names.size() == 2 || colref.column_names.size() == 3);
 	auto &table_name = colref.column_names.size() == 3 ? colref.column_names[1] : colref.column_names[0];
+
 	// individual column reference
 	// resolve to either a base table or a subquery expression
 	// if it was a macro parameter, let macro_binding bind it to the argument
+	// if it was a lambda parameter, let lambda_bindings bind it to the argument
+
 	BindResult result;
-	if (binder.macro_binding && table_name == binder.macro_binding->alias) {
-		result = binder.macro_binding->Bind(colref, depth);
-	} else {
-		result = binder.bind_context.BindColumn(colref, depth);
+
+	auto found_lambda_binding = false;
+	if (binder.lambda_bindings.size() != 0) {
+		for (idx_t i = 0; i < binder.lambda_bindings.size(); i++) {
+			if (table_name == binder.lambda_bindings[i]->alias) {
+				result = binder.lambda_bindings[i]->Bind(colref, depth);
+				found_lambda_binding = true;
+				break;
+			}
+		}
 	}
+
+	if (!found_lambda_binding) {
+		if (binder.macro_binding && table_name == binder.macro_binding->alias) {
+			result = binder.macro_binding->Bind(colref, depth);
+		} else {
+			result = binder.bind_context.BindColumn(colref, depth);
+		}
+	}
+
 	if (!result.HasError()) {
 		BoundColumnReferenceInfo ref;
 		ref.name = colref.column_names.back();

@@ -28,6 +28,7 @@ class CatalogEntry;
 class SimpleFunction;
 
 struct MacroBinding;
+struct LambdaBinding;
 
 struct BoundColumnReferenceInfo {
 	string name;
@@ -60,6 +61,7 @@ public:
 	LogicalType target_type;
 
 	MacroBinding *macro_binding;
+	vector<LambdaBinding *> lambda_bindings;
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
@@ -119,7 +121,8 @@ protected:
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
 	BindResult BindExpression(ConstantExpression &expr, idx_t depth);
 	BindResult BindExpression(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> *expr_ptr);
-	BindResult BindExpression(LambdaExpression &expr, idx_t depth, idx_t lambda_param_count, LogicalType list_child_type);
+	BindResult BindExpression(LambdaExpression &expr, idx_t depth, idx_t lambda_param_count,
+	                          LogicalType list_child_type);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(PositionalReferenceExpression &ref, idx_t depth);

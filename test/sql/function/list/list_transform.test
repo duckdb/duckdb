@@ -5,6 +5,13 @@
 # NOTE: some of these tests are directly taken from the Presto Array Function examples
 
 query I
+SELECT list_transform([[1], [2], [3]], x -> list_transform(x, y -> y + 1))
+----
+[[2], [3], [4]]
+
+mode skip
+
+query I
 SELECT list_transform([1, 2, 3], x -> x + 1)
 ----
 [2, 3, 4]
@@ -18,6 +25,8 @@ query I
 SELECT list_transform(['x', 'abc', 'z'], x -> x || '0')
 ----
 [x0, abc0, z0]
+
+mode unskip
 
 # TODO: this test case requires the implementation of list_filter
 

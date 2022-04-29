@@ -23,7 +23,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 
 		// create dummy columns for the lambda parameters (lhs)
 		vector<LogicalType> column_types;
-		vector<string> dummy_column_names;
+		vector<string> column_names;
 		vector<string> lhs_strings;
 
 		// positional parameters as column references
@@ -35,7 +35,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 			}
 
 			column_types.emplace_back(list_child_type);
-			dummy_column_names.push_back(column_ref.GetColumnName());
+			column_names.push_back(column_ref.GetColumnName());
 			lhs_strings.push_back(expr.lhs[i]->ToString());
 		}
 
@@ -45,11 +45,20 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 			lhs_alias = "(" + lhs_alias + ")";
 		}
 
+		// create a lambda binding and push it to the lambda bindings vector
+		auto new_lambda_binding = make_unique<LambdaBinding>(column_types, column_names, lhs_alias);
+		lambda_bindings.push_back(new_lambda_binding.get());
+		auto lambda_bindings_count = lambda_bindings.size();
+
 		// create bindings for the lambda parameters
-		binder.bind_context.AddGenericBinding(-1, lhs_alias, dummy_column_names, column_types);
+		// binder.bind_context.AddGenericBinding(-1, lhs_alias, dummy_column_names, column_types);
+
+		auto result = ExpressionBinder::BindExpression(&expr.rhs, depth, false);
+		D_ASSERT(lambda_bindings_count == lambda_bindings.size());
+		lambda_bindings.pop_back();
 
 		// now bind the rhs as a normal expression
-		return ExpressionBinder::BindExpression(&expr.rhs, depth, false);
+		return result;
 	}
 
 	D_ASSERT(expr.lhs.size() == 1);

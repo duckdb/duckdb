@@ -91,6 +91,8 @@ public:
 	string alias;
 	//! Macro parameter bindings (if any)
 	MacroBinding *macro_binding = nullptr;
+	//! The intermediate lambda bindings to bind nested lambdas
+	vector<LambdaBinding *> lambda_bindings;
 
 public:
 	BoundStatement Bind(SQLStatement &statement);

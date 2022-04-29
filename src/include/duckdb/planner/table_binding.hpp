@@ -83,4 +83,21 @@ public:
 	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &colref);
 };
 
+//! LambdaBinding is like the Binding, except the alias and index are set by default. Used for binding lambda
+//! params/arguments.
+struct LambdaBinding : public Binding {
+	static constexpr const char *LAMBDA_NAME = "__duckdb__internal_lambda_";
+
+public:
+	LambdaBinding(vector<LogicalType> types_p, vector<string> names_p, string lambda_name);
+
+	//! Arguments - TODO: are these required for the lambda binding?
+	vector<unique_ptr<ParsedExpression>> arguments;
+	//! The name of the lambda
+	string lambda_name;
+
+public:
+	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
+};
+
 } // namespace duckdb

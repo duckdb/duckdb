@@ -34,6 +34,7 @@ ListTransformBindData::~ListTransformBindData() {
 
 static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
+	/*
 	D_ASSERT(args.ColumnCount() == 1);
 	auto count = args.size();
 	Vector &lists = args.data[0];
@@ -42,8 +43,8 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &result_validity = FlatVector::Validity(result);
 
 	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
-		result_validity.SetInvalid(0);
-		return;
+	    result_validity.SetInvalid(0);
+	    return;
 	}
 
 	// get the lambda function
@@ -55,8 +56,10 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &child_vector = ListVector::GetEntry(lists);
 	VectorData child_data;
 	child_vector.Orrify(lists_size, child_data);
+	*/
 
 	// TODO: execute the lambda expression on the child vector
+	// expression executor
 }
 
 static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, ScalarFunction &bound_function,
@@ -91,9 +94,8 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 ScalarFunction ListTransformFun::GetFunction() {
 	// TODO: what logical type is the lambda function?
 	// after the bind this is any, because it is the return value of the rhs?
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY},
-	                      LogicalType::LIST(LogicalType::ANY), ListTransformFunction, false, false, ListTransformBind,
-	                      nullptr);
+	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::LIST(LogicalType::ANY),
+	                      ListTransformFunction, false, false, ListTransformBind, nullptr);
 }
 
 void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
