@@ -538,10 +538,16 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	vector<idx_t> cardinalities;
 
 	// Calculate the column cardinalities
-	CalculateCardinalitiesCorrelation1(types, scan_state, cardinalities);
+//	CalculateCardinalitiesCorrelation1(types, scan_state, cardinalities);
 
 	// Get types for the key column
-	for (auto i : cardinalities) {
+//	for (auto i : cardinalities) {
+//		cardinalities[i] = i;
+//		key_types.push_back(types[i]);
+//	}
+
+	for (idx_t i = 0; i < types.size(); i++) {
+		cardinalities.push_back(i);
 		key_types.push_back(types[i]);
 	}
 
@@ -585,11 +591,11 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	}
 
 	// scan the sorted row data and add to the sorted row group
-	RowGroup sorted_rowgroup(db, table_info, start, count);
-	sorted_rowgroup.InitializeEmpty(types);
+	auto sorted_rowgroup = make_unique<RowGroup>(db, table_info, this->start, this->count);
+	sorted_rowgroup->InitializeEmpty(types);
 
 	TableAppendState append_state;
-	sorted_rowgroup.InitializeAppendInternal(append_state.row_group_append_state);
+	sorted_rowgroup->InitializeAppendInternal(append_state.row_group_append_state);
 
 	PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 	DataChunk result_chunk;
@@ -600,10 +606,14 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 		if (result_chunk.size() == 0) {
 			break;
 		}
-		sorted_rowgroup.Append(append_state.row_group_append_state, result_chunk, result_chunk.size());
+		sorted_rowgroup->Append(append_state.row_group_append_state, result_chunk, result_chunk.size());
 	}
 
-	this->columns = sorted_rowgroup.columns;
+	this->version_info = sorted_rowgroup->version_info;
+	this->columns = sorted_rowgroup->columns;
+	this->stats = sorted_rowgroup->stats;
+
+	this->Verify();
 }
 
 void RowGroup::CalculateCardinalitiesCorrelation1(vector<LogicalType> &types, TableScanState &scan_state, vector<idx_t> &cardinalities) {
