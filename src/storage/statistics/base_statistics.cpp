@@ -121,8 +121,7 @@ void BaseStatistics::CopyBase(const BaseStatistics &orig) {
 
 void BaseStatistics::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
-	writer.WriteField<bool>(CanHaveNull());
-	writer.WriteField<bool>(CanHaveNoNull());
+	ValidityStatistics(CanHaveNull(), CanHaveNoNull()).Serialize(writer);
 	Serialize(writer);
 	writer.WriteField<StatisticsType>(stats_type);
 	writer.WriteOptional<BaseStatistics>(distinct_stats);
@@ -134,13 +133,11 @@ void BaseStatistics::Serialize(FieldWriter &writer) const {
 
 unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, LogicalType type) {
 	FieldReader reader(source);
-	bool can_have_null = reader.ReadRequired<bool>();
-	bool can_have_no_null = reader.ReadRequired<bool>();
+	auto validity_stats = ValidityStatistics::Deserialize(reader);
 	unique_ptr<BaseStatistics> result;
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
-		result = ValidityStatistics::Deserialize(reader);
-		break;
+		return ValidityStatistics::Deserialize(reader);
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -170,7 +167,7 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	default:
 		throw InternalException("Unimplemented type for statistics deserialization");
 	}
-	result->validity_stats = make_unique<ValidityStatistics>(can_have_null, can_have_no_null);
+	result->validity_stats = move(validity_stats);
 	result->stats_type = reader.ReadField<StatisticsType>(StatisticsType::LOCAL_STATS);
 	result->distinct_stats = reader.ReadOptional<DistinctStatistics>(nullptr);
 	return result;

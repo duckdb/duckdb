@@ -125,17 +125,14 @@ bool NumericStatistics::IsConstant() const {
 }
 
 void NumericStatistics::Serialize(FieldWriter &writer) const {
-	BaseStatistics::Serialize(writer);
-
 	writer.WriteSerializable(min);
 	writer.WriteSerializable(max);
 }
 
 unique_ptr<BaseStatistics> NumericStatistics::Deserialize(FieldReader &reader, LogicalType type) {
-	auto result = make_unique<NumericStatistics>(move(type), StatisticsType::LOCAL_STATS);
-	result->min = reader.ReadRequiredSerializable<Value, Value>();
-	result->max = reader.ReadRequiredSerializable<Value, Value>();
-	return result;
+	auto min = reader.ReadRequiredSerializable<Value, Value>();
+	auto max = reader.ReadRequiredSerializable<Value, Value>();
+	return make_unique_base<BaseStatistics, NumericStatistics>(move(type), min, max, StatisticsType::LOCAL_STATS);
 }
 
 string NumericStatistics::ToString() const {
