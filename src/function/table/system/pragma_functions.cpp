@@ -75,7 +75,7 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 }
 
 static void PragmaFunctionsFunction(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                    FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (PragmaFunctionsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

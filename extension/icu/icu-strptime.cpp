@@ -132,7 +132,8 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &func = (ScalarFunctionCatalogEntry &)*entry;
 		vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 		string error;
-		const idx_t best_function = Function::BindFunction(func.name, func.functions, types, error);
+		bool cast_parameters;
+		const idx_t best_function = Function::BindFunction(func.name, func.functions, types, error, cast_parameters);
 		if (best_function == DConstants::INVALID_INDEX) {
 			return;
 		}
