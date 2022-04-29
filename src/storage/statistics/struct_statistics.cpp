@@ -1,6 +1,7 @@
 #include "duckdb/storage/statistics/struct_statistics.hpp"
-#include "duckdb/common/types/vector.hpp"
+
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
@@ -70,7 +71,7 @@ unique_ptr<BaseStatistics> StructStatistics::Deserialize(FieldReader &reader, Lo
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		auto has_child = source.Read<bool>();
 		if (has_child) {
-			result->child_stats[i] = BaseStatistics::Deserialize(source, child_types[i].second);
+			result->child_stats[i] = reader.ReadRequiredSerializable<BaseStatistics>(child_types[i].second);
 		} else {
 			result->child_stats[i].reset();
 		}

@@ -39,6 +39,7 @@ unique_ptr<ResultModifier> ResultModifier::Deserialize(Deserializer &source) {
 	default:
 		throw InternalException("Unrecognized ResultModifierType for Deserialization");
 	}
+	reader.Finalize();
 	return result;
 }
 

@@ -45,8 +45,7 @@ unique_ptr<BaseStatistics> ListStatistics::Deserialize(FieldReader &reader, Logi
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto result = make_unique<ListStatistics>(move(type), StatisticsType::LOCAL_STATS);
 	auto &child_type = ListType::GetChildType(result->type);
-	auto &source = reader.GetSource();
-	result->child_stats = BaseStatistics::Deserialize(source, child_type);
+	result->child_stats = reader.ReadRequiredSerializable<BaseStatistics>(child_type);
 	return move(result);
 }
 

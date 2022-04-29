@@ -137,7 +137,8 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	unique_ptr<BaseStatistics> result;
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
-		return ValidityStatistics::Deserialize(reader);
+		result = ValidityStatistics::Deserialize(reader);
+		break;
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -167,9 +168,12 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	default:
 		throw InternalException("Unimplemented type for statistics deserialization");
 	}
-	result->validity_stats = move(validity_stats);
-	result->stats_type = reader.ReadField<StatisticsType>(StatisticsType::LOCAL_STATS);
-	result->distinct_stats = reader.ReadOptional<DistinctStatistics>(nullptr);
+	if (result->type.InternalType() != PhysicalType::BIT) {
+		result->validity_stats = move(validity_stats);
+		result->stats_type = reader.ReadField<StatisticsType>(StatisticsType::LOCAL_STATS);
+		result->distinct_stats = reader.ReadOptional<DistinctStatistics>(nullptr);
+	}
+	reader.Finalize();
 	return result;
 }
 
