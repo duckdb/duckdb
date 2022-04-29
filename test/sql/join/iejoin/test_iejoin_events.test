@@ -38,4 +38,4 @@ SELECT COUNT(*) FROM (
 	  AND r.id <> s.id
 ) q2;
 ----
-8
+6

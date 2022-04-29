@@ -47,7 +47,7 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 }
 
 static void DbgenFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk *input, DataChunk &output) {
+                          DataChunk &output) {
 	auto &data = (DBGenFunctionData &)*bind_data;
 	if (data.finished) {
 		return;
@@ -82,7 +82,7 @@ static unique_ptr<FunctionData> TPCHQueryBind(ClientContext &context, TableFunct
 }
 
 static void TPCHQueryFunction(ClientContext &context, const FunctionData *bind_data,
-                              FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                              FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (TPCHData &)*operator_state;
 	idx_t tpch_queries = 22;
 	if (data.offset >= tpch_queries) {
@@ -117,7 +117,7 @@ static unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, Tabl
 }
 
 static void TPCHQueryAnswerFunction(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                    FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (TPCHData &)*operator_state;
 	idx_t tpch_queries = 22;
 	vector<double> scale_factors {0.01, 0.1, 1};

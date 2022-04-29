@@ -159,8 +159,8 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 }
 
 static void ExecuteStringExtract(Vector &result, Vector &input_vector, Vector &subscript_vector, const idx_t count) {
-	BinaryExecutor::Execute<string_t, int32_t, string_t>(
-	    input_vector, subscript_vector, result, count, [&](string_t input_string, int32_t subscript) {
+	BinaryExecutor::Execute<string_t, int64_t, string_t>(
+	    input_vector, subscript_vector, result, count, [&](string_t input_string, int64_t subscript) {
 		    return SubstringFun::SubstringScalarFunction(result, input_string, subscript, 1);
 	    });
 }
@@ -230,7 +230,7 @@ void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction lfun({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::ANY,
 	                    ListExtractFunction, false, false, ListExtractBind, nullptr, ListExtractStats);
 
-	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::VARCHAR, ListExtractFunction, false,
+	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction, false,
 	                    false, nullptr);
 
 	ScalarFunctionSet list_extract("list_extract");

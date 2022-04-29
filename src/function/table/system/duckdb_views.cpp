@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
@@ -56,13 +57,13 @@ unique_ptr<FunctionOperatorData> DuckDBViewsInit(ClientContext &context, const F
 	};
 
 	// check the temp schema as well
-	context.temporary_objects->Scan(context, CatalogType::VIEW_ENTRY,
-	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::VIEW_ENTRY,
+	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
 void DuckDBViewsFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                         DataChunk *input, DataChunk &output) {
+                         DataChunk &output) {
 	auto &data = (DuckDBViewsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

@@ -456,3 +456,22 @@ TEST_CASE("Prepare all types of statements", "[prepared]") {
 	// TRANSACTION
 	REQUIRE_NO_FAIL(TestExecutePrepared(con, "COMMIT"));
 }
+
+TEST_CASE("Test ambiguous prepared statement parameter types", "[api]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	result = con.Query("SELECT ?", 42);
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	result = con.Query("SELECT ?", "hello");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+
+	auto prep = con.Prepare("SELECT ?");
+	result = prep->Execute(42);
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	result = prep->Execute("hello");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+}

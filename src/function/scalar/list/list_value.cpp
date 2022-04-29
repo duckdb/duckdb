@@ -39,7 +39,6 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		child_type = LogicalType::MaxLogicalType(child_type, arguments[i]->return_type);
 	}
-	ExpressionBinder::ResolveParameterType(child_type);
 
 	// this is more for completeness reasons
 	bound_function.varargs = child_type;

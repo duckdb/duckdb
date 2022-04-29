@@ -3,6 +3,7 @@ import sys
 import shutil
 import subprocess
 from python_helpers import open_utf8
+import re
 
 excluded_objects = ['utf8proc_data.cpp']
 
@@ -191,8 +192,8 @@ def build_package(target_dir, extensions, linenumbers = False, unity_count = 32,
                 return True
         return False
 
-    def generate_unity_build(entries, idx, linenumbers):
-        ub_file = os.path.join(target_dir, 'amalgamation-{}.cpp'.format(str(idx)))
+    def generate_unity_build(entries, unity_name, linenumbers):
+        ub_file = os.path.join(target_dir, f'ub_{unity_name}.cpp')
         with open_utf8(ub_file, 'w+') as f:
             for entry in entries:
                 if linenumbers:
@@ -201,34 +202,39 @@ def build_package(target_dir, extensions, linenumbers = False, unity_count = 32,
         return ub_file
 
     def generate_unity_builds(source_list, nsplits, linenumbers):
-        source_list.sort()
+        files_per_directory = {}
+        for source in source_list:
+            dirname = os.path.dirname(source)
+            if dirname not in files_per_directory:
+                files_per_directory[dirname] = []
+            files_per_directory[dirname].append(source)
 
-        files_per_split = len(source_list) / nsplits
         new_source_files = []
-        current_files = []
-        idx = 1
-        for entry in source_list:
-            if not entry.startswith('src'):
-                new_source_files.append(os.path.join(folder_name, entry))
-                continue
-
-            current_files.append(entry)
-            if len(current_files) > files_per_split:
-                new_source_files.append(generate_unity_build(current_files, idx, linenumbers))
-                current_files = []
-                idx += 1
-        if len(current_files) > 0:
-            new_source_files.append(generate_unity_build(current_files, idx, linenumbers))
-            current_files = []
-            idx += 1
-
+        for dirname in files_per_directory.keys():
+            current_files = files_per_directory[dirname]
+            cmake_file = os.path.join(dirname, 'CMakeLists.txt')
+            unity_build = False
+            if os.path.isfile(cmake_file):
+                with open(cmake_file, 'r') as f:
+                    text = f.read()
+                    if 'add_library_unity' in text:
+                        unity_build = True
+                        # re-order the files in the unity build so that they follow the same order as the CMake
+                        scores = {}
+                        filenames = [x[0] for x in re.findall('([a-zA-Z0-9_]+[.](cpp|cc|c|cxx))', text)]
+                        score = 0
+                        for filename in filenames:
+                            scores[filename] = score
+                            score += 1
+                        current_files.sort(key = lambda x: scores[os.path.basename(x)] if os.path.basename(x) in scores else 99999)
+            if not unity_build:
+                new_source_files += [os.path.join(folder_name, file) for file in current_files]
+            else:
+                new_source_files.append(generate_unity_build(current_files, dirname.replace(os.path.sep, '_'), linenumbers))
         return new_source_files
 
     original_sources = source_list
-    if unity_count > 0:
-        source_list = generate_unity_builds(source_list, unity_count, linenumbers)
-    else:
-        source_list = [os.path.join(folder_name, source) for source in source_list]
+    source_list = generate_unity_builds(source_list, unity_count, linenumbers)
 
     os.chdir(prev_wd)
     return ([convert_backslashes(x) for x in source_list if not file_is_excluded(x)],

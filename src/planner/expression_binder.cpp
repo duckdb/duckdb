@@ -165,19 +165,6 @@ LogicalType ExpressionBinder::ExchangeNullType(const LogicalType &type) {
 	return ExchangeType(type, LogicalTypeId::SQLNULL, LogicalType::INTEGER);
 }
 
-void ExpressionBinder::ResolveParameterType(LogicalType &type) {
-	if (type.id() == LogicalTypeId::UNKNOWN) {
-		type = LogicalType::VARCHAR;
-	}
-}
-
-void ExpressionBinder::ResolveParameterType(unique_ptr<Expression> &expr) {
-	if (ContainsType(expr->return_type, LogicalTypeId::UNKNOWN)) {
-		auto result_type = ExchangeType(expr->return_type, LogicalTypeId::UNKNOWN, LogicalType::VARCHAR);
-		expr = BoundCastExpression::AddCastToType(move(expr), result_type);
-	}
-}
-
 unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type,
                                               bool root_expression) {
 	// bind the main expression
@@ -206,9 +193,6 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 				result = BoundCastExpression::AddCastToType(move(result), result_type);
 			}
 		}
-		// check if we failed to convert any parameters
-		// if we did, we push a cast
-		ExpressionBinder::ResolveParameterType(result);
 	}
 	if (result_type) {
 		*result_type = result->return_type;
