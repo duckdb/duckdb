@@ -181,7 +181,7 @@ void StructColumnData::UpdateColumn(Transaction &transaction, const vector<colum
 
 unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 	// check if any child column has updates
-	auto stats = BaseStatistics::CreateEmpty(type, true);
+	auto stats = BaseStatistics::CreateEmpty(type, StatisticsType::GLOBAL_STATS);
 	auto &struct_stats = (StructStatistics &)*stats;
 	stats->validity_stats = validity.GetUpdateStatistics();
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
@@ -220,7 +220,7 @@ void StructColumnData::CommitDropColumn() {
 struct StructColumnCheckpointState : public ColumnCheckpointState {
 	StructColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
 	    : ColumnCheckpointState(row_group, column_data, writer) {
-		global_stats = make_unique<StructStatistics>(column_data.type, true);
+		global_stats = make_unique<StructStatistics>(column_data.type, StatisticsType::GLOBAL_STATS);
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;
@@ -228,7 +228,7 @@ struct StructColumnCheckpointState : public ColumnCheckpointState {
 
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
-		auto stats = make_unique<StructStatistics>(column_data.type, true);
+		auto stats = make_unique<StructStatistics>(column_data.type, StatisticsType::GLOBAL_STATS);
 		D_ASSERT(stats->child_stats.size() == child_states.size());
 		stats->validity_stats = validity_state->GetStatistics();
 		for (idx_t i = 0; i < child_states.size(); i++) {

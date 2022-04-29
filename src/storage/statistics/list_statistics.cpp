@@ -4,11 +4,12 @@
 
 namespace duckdb {
 
-ListStatistics::ListStatistics(LogicalType type_p, bool global) : BaseStatistics(move(type_p), global) {
+ListStatistics::ListStatistics(LogicalType type_p, StatisticsType stats_type)
+    : BaseStatistics(move(type_p), stats_type) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	InitializeBase();
 	auto &child_type = ListType::GetChildType(type);
-	child_stats = BaseStatistics::CreateEmpty(child_type, global);
+	child_stats = BaseStatistics::CreateEmpty(child_type, stats_type);
 }
 
 void ListStatistics::Merge(const BaseStatistics &other_p) {
@@ -29,7 +30,7 @@ FilterPropagateResult ListStatistics::CheckZonemap(ExpressionType comparison_typ
 // LCOV_EXCL_STOP
 
 unique_ptr<BaseStatistics> ListStatistics::Copy() const {
-	auto result = make_unique<ListStatistics>(type, global);
+	auto result = make_unique<ListStatistics>(type, stats_type);
 	result->CopyBase(*this);
 
 	result->child_stats = child_stats ? child_stats->Copy() : nullptr;
@@ -44,9 +45,7 @@ void ListStatistics::Serialize(FieldWriter &writer) const {
 
 unique_ptr<BaseStatistics> ListStatistics::Deserialize(FieldReader &reader, LogicalType type) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
-	auto result = make_unique<ListStatistics>(move(type), false);
-	result->DeserializeBase(reader);
-
+	auto result = make_unique<ListStatistics>(move(type), StatisticsType::LOCAL_STATS);
 	auto &child_type = ListType::GetChildType(result->type);
 	auto &source = reader.GetSource();
 	result->child_stats = BaseStatistics::Deserialize(source, child_type);

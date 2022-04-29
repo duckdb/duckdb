@@ -4,14 +4,15 @@
 
 namespace duckdb {
 
-StructStatistics::StructStatistics(LogicalType type_p, bool global) : BaseStatistics(move(type_p), global) {
+StructStatistics::StructStatistics(LogicalType type_p, StatisticsType stats_type)
+    : BaseStatistics(move(type_p), stats_type) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	InitializeBase();
 
 	auto &child_types = StructType::GetChildTypes(type);
 	child_stats.resize(child_types.size());
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		child_stats[i] = BaseStatistics::CreateEmpty(child_types[i].second, global);
+		child_stats[i] = BaseStatistics::CreateEmpty(child_types[i].second, stats_type);
 	}
 }
 
@@ -36,7 +37,7 @@ FilterPropagateResult StructStatistics::CheckZonemap(ExpressionType comparison_t
 // LCOV_EXCL_STOP
 
 unique_ptr<BaseStatistics> StructStatistics::Copy() const {
-	auto result = make_unique<StructStatistics>(type, global);
+	auto result = make_unique<StructStatistics>(type, stats_type);
 	result->CopyBase(*this);
 
 	for (idx_t i = 0; i < child_stats.size(); i++) {
@@ -46,8 +47,6 @@ unique_ptr<BaseStatistics> StructStatistics::Copy() const {
 }
 
 void StructStatistics::Serialize(FieldWriter &writer) const {
-	BaseStatistics::Serialize(writer);
-
 	writer.WriteField<uint32_t>(child_stats.size());
 	auto &serializer = writer.GetSerializer();
 	for (idx_t i = 0; i < child_stats.size(); i++) {
@@ -60,9 +59,7 @@ void StructStatistics::Serialize(FieldWriter &writer) const {
 
 unique_ptr<BaseStatistics> StructStatistics::Deserialize(FieldReader &reader, LogicalType type) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
-	auto result = make_unique<StructStatistics>(move(type), false);
-	result->DeserializeBase(reader);
-
+	auto result = make_unique<StructStatistics>(move(type), StatisticsType::LOCAL_STATS);
 	auto &child_types = StructType::GetChildTypes(result->type);
 
 	auto child_type_count = reader.ReadRequired<uint32_t>();

@@ -26,9 +26,11 @@ class ValidityStatistics;
 class DistinctStatistics;
 struct VectorData;
 
+enum StatisticsType { LOCAL_STATS = 0, GLOBAL_STATS = 1 };
+
 class BaseStatistics {
 public:
-	BaseStatistics(LogicalType type, bool global);
+	BaseStatistics(LogicalType type, StatisticsType stats_type);
 	virtual ~BaseStatistics();
 
 	//! The type of the logical segment
@@ -39,10 +41,10 @@ public:
 	unique_ptr<BaseStatistics> distinct_stats;
 	//! Whether these are 'global' stats, i.e., over a whole table, or just over a segment
 	//! Some statistics are more expensive to keep, therefore we only keep them globally
-	bool global;
+	StatisticsType stats_type;
 
 public:
-	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type, bool global);
+	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type, StatisticsType stats_type);
 
 	bool CanHaveNull() const;
 	bool CanHaveNoNull() const;
@@ -62,7 +64,6 @@ public:
 	virtual void Serialize(FieldWriter &writer) const;
 
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
-	void DeserializeBase(FieldReader &reader);
 
 	//! Verify that a vector does not violate the statistics
 	virtual void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const;

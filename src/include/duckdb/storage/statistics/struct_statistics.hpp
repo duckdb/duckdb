@@ -17,7 +17,7 @@ class Value;
 
 class StructStatistics : public BaseStatistics {
 public:
-	explicit StructStatistics(LogicalType type, bool global);
+	explicit StructStatistics(LogicalType type, StatisticsType stats_type);
 
 	vector<unique_ptr<BaseStatistics>> child_stats;
 

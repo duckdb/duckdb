@@ -6,11 +6,11 @@
 namespace duckdb {
 
 DistinctStatistics::DistinctStatistics()
-    : BaseStatistics(LogicalType::INVALID, false), log(make_unique<HyperLogLog>()) {
+    : BaseStatistics(LogicalType::INVALID, StatisticsType::LOCAL_STATS), log(make_unique<HyperLogLog>()) {
 }
 
 DistinctStatistics::DistinctStatistics(unique_ptr<HyperLogLog> log)
-    : BaseStatistics(LogicalType::INVALID, false), log(move(log)) {
+    : BaseStatistics(LogicalType::INVALID, StatisticsType::LOCAL_STATS), log(move(log)) {
 }
 
 unique_ptr<BaseStatistics> DistinctStatistics::Copy() const {

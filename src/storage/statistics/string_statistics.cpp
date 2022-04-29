@@ -6,7 +6,8 @@
 
 namespace duckdb {
 
-StringStatistics::StringStatistics(LogicalType type_p, bool global) : BaseStatistics(move(type_p), global) {
+StringStatistics::StringStatistics(LogicalType type_p, StatisticsType stats_type)
+    : BaseStatistics(move(type_p), stats_type) {
 	InitializeBase();
 	for (idx_t i = 0; i < MAX_STRING_MINMAX_SIZE; i++) {
 		min[i] = 0xFF;
@@ -18,7 +19,7 @@ StringStatistics::StringStatistics(LogicalType type_p, bool global) : BaseStatis
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Copy() const {
-	auto result = make_unique<StringStatistics>(type, global);
+	auto result = make_unique<StringStatistics>(type, stats_type);
 	result->CopyBase(*this);
 
 	memcpy(result->min, min, MAX_STRING_MINMAX_SIZE);
@@ -29,8 +30,6 @@ unique_ptr<BaseStatistics> StringStatistics::Copy() const {
 }
 
 void StringStatistics::Serialize(FieldWriter &writer) const {
-	BaseStatistics::Serialize(writer);
-
 	writer.WriteBlob(min, MAX_STRING_MINMAX_SIZE);
 	writer.WriteBlob(max, MAX_STRING_MINMAX_SIZE);
 	writer.WriteField<bool>(has_unicode);
@@ -39,9 +38,7 @@ void StringStatistics::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Deserialize(FieldReader &reader, LogicalType type) {
-	auto stats = make_unique<StringStatistics>(move(type), false);
-	stats->DeserializeBase(reader);
-
+	auto stats = make_unique<StringStatistics>(move(type), StatisticsType::LOCAL_STATS);
 	reader.ReadBlob(stats->min, MAX_STRING_MINMAX_SIZE);
 	reader.ReadBlob(stats->max, MAX_STRING_MINMAX_SIZE);
 	stats->has_unicode = reader.ReadRequired<bool>();

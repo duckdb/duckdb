@@ -361,7 +361,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto checkpoint_state = CreateCheckpointState(row_group, writer);
-	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type, false);
+	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type, StatisticsType::LOCAL_STATS);
 
 	if (!data.root_node) {
 		// empty table: flush the empty list

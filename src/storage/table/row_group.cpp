@@ -160,8 +160,8 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ClientContext &context, ColumnDefinitio
 
 	// construct a new column data for the new column
 	auto added_column = ColumnData::CreateColumn(GetTableInfo(), columns.size(), start, new_column.type);
-	auto added_col_stats =
-	    make_shared<SegmentStatistics>(new_column.type, BaseStatistics::CreateEmpty(new_column.type, false));
+	auto added_col_stats = make_shared<SegmentStatistics>(
+	    new_column.type, BaseStatistics::CreateEmpty(new_column.type, StatisticsType::LOCAL_STATS));
 
 	idx_t rows_to_write = this->count;
 	if (rows_to_write > 0) {
