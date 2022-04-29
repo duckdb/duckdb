@@ -130,8 +130,16 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	return make_unique<ResponseWrapper>(res.value());
 }
 
+HTTPFileSystem::~HTTPFileSystem() {
+	std::cout << "Bytes read : " << bytes_read << std::endl;
+	std::cout << "Bytes requested : " << bytes_requested << std::endl;
+	std::cout << "Requests made: " << requests_made << std::endl;
+}
+
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                             idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
+	requests_made++;
+	bytes_requested += buffer_out_len;
 	auto &hfs = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
@@ -144,6 +152,10 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 
 	idx_t out_offset = 0;
 
+	// New connection? -> setting up a new client like this is actually quite expensive
+//	auto client = GetClient(hfs.http_params, proto_host_port.c_str());
+
+//	auto res = client->Get(
 	auto res = hfs.http_client->Get(
 	    path.c_str(), *headers,
 	    [&](const duckdb_httplib_openssl::Response &response) {
@@ -192,7 +204,12 @@ std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t
 	return move(handle);
 }
 
+// Buffered read from http file.
+// Note that buffering is disabled when:
+//   	nr_bytes > HTTPFileHandle::READ_BUFFER_LEN
+//  	FileFlags::FILE_FLAGS_DIRECT_IO is set
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	bytes_read += nr_bytes;
 	auto &hfh = (HTTPFileHandle &)handle;
 	idx_t to_read = nr_bytes;
 	idx_t buffer_offset = 0;

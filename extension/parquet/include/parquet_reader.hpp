@@ -66,8 +66,8 @@ class TableFilterSet;
 struct ParquetReaderPrefetchConfig {
 	/// The upper limit below which whole row groups will be prefetched
 	static constexpr size_t WHOLE_GROUP_PREFETCH_MAX_SIZE = 1 << 23; // 8 MiB
-	/// Percentage of data in a row group that should be scanned for enabling whole group prefetch
-	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.99;
+	/// Percentage of data in a row group span that should be scanned for enabling whole group prefetch
+	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.95;
 
 	/// The lowest avg column size for which to enable column chunk caching
 	static constexpr size_t COLUMN_CHUNK_CACHE_LOWER_LIMIT = 1 ; // tiny
@@ -93,6 +93,9 @@ struct ParquetReaderScanState {
 
 	bool have_prefetched_group = false;
 	idx_t prefetched_group;
+
+	// Enable the prefetching mode for high latency filesystems such as HTTPFS
+	bool prefetch_mode = false;
 };
 
 struct ParquetOptions {
@@ -159,6 +162,7 @@ private:
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	size_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
+	size_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
 

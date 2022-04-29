@@ -48,15 +48,15 @@ using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftProtocol(Allocator &allocator,
-                                                                                   FileHandle &file_handle) {
-	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle);
+                                                                                   FileHandle &file_handle, FileOpener &opener) {
+	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle, opener);
 	return make_unique<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(move(transport));
 }
 
-static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle) {
+static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle, FileOpener& opener) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-	auto proto = CreateThriftProtocol(allocator, file_handle);
+	auto proto = CreateThriftProtocol(allocator, file_handle, opener);
 	auto &transport = ((ThriftFileTransport &)*proto->getTransport());
 	auto file_size = transport.GetSize();
 	if (file_size < 12) {
@@ -442,7 +442,7 @@ ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file
     : allocator(allocator_p) {
 	file_name = file_handle_p->path;
 	file_handle = move(file_handle_p);
-	metadata = LoadMetadata(allocator, *file_handle);
+	metadata = LoadMetadata(allocator, *file_handle, *file_opener);
 	vector<string> expected_names;
 	vector<column_t> expected_column_ids;
 	InitializeSchema(expected_names, expected_types_p, expected_column_ids, initial_filename_p);
@@ -467,11 +467,11 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 	// or if the cached version already expired
 	auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
 	if (!ObjectCache::ObjectCacheEnabled(context_p)) {
-		metadata = LoadMetadata(allocator, *file_handle);
+		metadata = LoadMetadata(allocator, *file_handle, *file_opener);
 	} else {
 		metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
 		if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
-			metadata = LoadMetadata(allocator, *file_handle);
+			metadata = LoadMetadata(allocator, *file_handle, *file_opener);
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 		}
 	}
@@ -637,7 +637,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 		                                      FileSystem::DEFAULT_COMPRESSION, file_opener);
 	}
 
-	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle);
+	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, *file_opener);
 	state.root_reader = CreateReader(GetFileMetadata());
 
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);

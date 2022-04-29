@@ -1,17 +1,20 @@
 #pragma once
 #include <iostream>
+#include <list>
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
+#include "duckdb/common/thread.hpp"
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/likely.hpp"
 #endif
 
 namespace duckdb {
 
-/// A ReadHead contains a range that was hinted to be accessed in the near future.
+/// A ReadHead for prefetching data in a specific range
 struct ReadHead {
 	ReadHead(idx_t location, size_t size) : location(location), size(size){};
 	/// Hint info
@@ -30,32 +33,41 @@ struct ReadHead {
 	}
 };
 
-// Comparator for buffers that are either overlapping, adjacent, or within ALLOW_GAP bytes from each other
+// Comparator for ReadHeads that are either overlapping, adjacent, or within ALLOW_GAP bytes from each other
 struct ReadHeadComparator
 {
 	static constexpr size_t ALLOW_GAP = 1 << 14; // 16 KiB
 	bool operator()( const ReadHead* a, const ReadHead* b ) const
 	{
 		auto a_start = a->location;
-		// Note that this could theoretically overflow, but we won't have files that big
-		auto a_end = a->location + a->size + ALLOW_GAP;
+		auto a_end = a->location + a->size;
 		auto b_start = b->location;
+
+		if (DUCKDB_LIKELY(a_end <= NumericLimits<idx_t>::Maximum() - ALLOW_GAP)) {
+			a_end += ALLOW_GAP;
+		}
 
 		return a_start < b_start && a_end < b_start;
 	}
 };
 
-/// Read ahead buffer implementation that requires specifying the ranges that can be accesssed
+/// Two-step read ahead buffer
+/// 1: register all ranges that will be read, merging ranges that are consecutive
+/// 2: prefetch all registered ranges
 struct ReadAheadBuffer {
-	ReadAheadBuffer(Allocator &allocator, FileHandle &handle) : allocator(allocator), handle(handle) {
+	ReadAheadBuffer(Allocator &allocator, FileHandle &handle, FileOpener& opener) : allocator(allocator), handle(handle), file_opener(opener) {
 	}
 
 	/// The list of read heads
 	std::list<ReadHead> read_heads;
+	/// Store copies of file handles for efficient async prefetching.
+	vector<unique_ptr<FileHandle>> handle_copies;
+	/// Set for merging consecutive ranges
+	std::set<ReadHead*, ReadHeadComparator> merge_set;
+
 	Allocator &allocator;
 	FileHandle &handle;
-
-	std::set<ReadHead*, ReadHeadComparator> merge_set;
+	FileOpener& file_opener;
 
 	idx_t total_size = 0;
 
@@ -97,8 +109,11 @@ struct ReadAheadBuffer {
 
 	/// Prefetch all read heads
 	void Prefetch() {
-		// TODO we should do these prefetches in parallel probably
-		// problem is that we need multiple handles for this which may be slow?
+		std::vector<thread> download_threads;
+		std::vector<unique_ptr<FileHandle>> handles_in_progress;
+
+		bool async = read_heads.size() >= 2;
+
 		for (auto& read_head: read_heads) {
 			read_head.Allocate(allocator);
 
@@ -106,16 +121,54 @@ struct ReadAheadBuffer {
 				throw std::runtime_error("Prefetch registered requested for bytes outside file");
 			}
 
-//			std::cout << "Prefetch new " << read_head.location << " for " << read_head.size << " bytes\n";
-			handle.Read(read_head.data->get(), read_head.size, read_head.location);
+			if (async) {
+				unique_ptr<FileHandle> file_handle;
+				if (handle_copies.size() > 0) {
+					file_handle = std::move(handle_copies.back());
+					handle_copies.pop_back();
+				} else {
+					auto flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO;
+					file_handle = handle.file_system.OpenFile(handle.path, flags, FileSystem::DEFAULT_LOCK,
+					                                                FileSystem::DEFAULT_COMPRESSION, &file_opener);
+				}
+				auto file_handle_ptr = file_handle.get();
+				handles_in_progress.push_back(std::move(file_handle));
+
+				// Start download thread
+				thread upload_thread(
+				    [](ReadHead &read_head, FileHandle *file_handle) {
+					    file_handle->Read(read_head.data->get(), read_head.size, read_head.location);
+//					    std::cout << "Prefetch async new " << read_head.location << " for " << read_head.size
+//					              << " bytes\n";
+				    },
+				    std::ref(read_head), file_handle_ptr);
+
+				download_threads.push_back(std::move(upload_thread));
+			} else {
+				handle.Read(read_head.data->get(), read_head.size, read_head.location);
+//				std::cout << "Prefetch sync new " << read_head.location << " for " << read_head.size
+//				          << " bytes\n";
+			}
+		}
+
+		if (async) {
+			// Await all outstanding requests
+			for (auto& thread: download_threads) {
+				thread.join();
+			}
+
+			// Store handles for reuse
+			for (auto& handle: handles_in_progress) {
+				handle_copies.push_back(std::move(handle));
+			}
 		}
 	}
 };
 
 class ThriftFileTransport : public duckdb_apache::thrift::transport::TVirtualTransport<ThriftFileTransport> {
 public:
-	ThriftFileTransport(Allocator &allocator, FileHandle &handle_p)
-	    : allocator(allocator), handle(handle_p), location(0), ra_buffer(ReadAheadBuffer(allocator, handle_p)) {
+	ThriftFileTransport(Allocator &allocator, FileHandle &handle_p, FileOpener& opener)
+	    : allocator(allocator), handle(handle_p), location(0), ra_buffer(ReadAheadBuffer(allocator, handle_p, opener)) {
 	}
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
@@ -124,7 +177,6 @@ public:
 			memcpy(buf, prefetched_data->get() + location - prefetch_location, len);
 		} else {
 			auto prefetch_buffer = ra_buffer.GetReadHead(location);
-			// TODO: Sometimes we are scanning inside a prefetch buffer and exceed it. Why does this happen?
 			if (prefetch_buffer != nullptr && location - prefetch_buffer->location + len <= prefetch_buffer->size) {
 				D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
 				memcpy(buf, prefetch_buffer->data->get() + location - prefetch_buffer->location, len);
