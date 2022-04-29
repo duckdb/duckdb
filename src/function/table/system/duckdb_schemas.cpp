@@ -47,7 +47,7 @@ unique_ptr<FunctionOperatorData> DuckDBSchemasInit(ClientContext &context, const
 }
 
 void DuckDBSchemasFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                           DataChunk *input, DataChunk &output) {
+                           DataChunk &output) {
 	auto &data = (DuckDBSchemasData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

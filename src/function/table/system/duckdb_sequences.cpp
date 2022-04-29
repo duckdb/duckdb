@@ -77,7 +77,7 @@ unique_ptr<FunctionOperatorData> DuckDBSequencesInit(ClientContext &context, con
 }
 
 void DuckDBSequencesFunction(ClientContext &context, const FunctionData *bind_data,
-                             FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                             FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (DuckDBSequencesData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

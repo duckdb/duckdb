@@ -8,7 +8,6 @@
 
 namespace duckdb {
 
-//! The operator state of the window
 class UnnestOperatorState : public OperatorState {
 public:
 	UnnestOperatorState() : parent_position(0), list_position(0), list_length(-1), first_fetch(true) {
@@ -146,11 +145,17 @@ static void UnnestVector(VectorData &vdata, Vector &source, idx_t list_size, idx
 }
 
 unique_ptr<OperatorState> PhysicalUnnest::GetOperatorState(ClientContext &context) const {
+	return PhysicalUnnest::GetState(context);
+}
+
+unique_ptr<OperatorState> PhysicalUnnest::GetState(ClientContext &context) {
 	return make_unique<UnnestOperatorState>();
 }
 
-OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                           GlobalOperatorState &gstate, OperatorState &state_p) const {
+OperatorResultType PhysicalUnnest::ExecuteInternal(ClientContext &context, DataChunk &input, DataChunk &chunk,
+                                                   OperatorState &state_p,
+                                                   const vector<unique_ptr<Expression>> &select_list,
+                                                   bool include_input) {
 	auto &state = (UnnestOperatorState &)state_p;
 	do {
 		if (state.first_fetch) {
@@ -229,12 +234,17 @@ OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk 
 		// first cols are from child, last n cols from unnest
 		chunk.SetCardinality(this_chunk_len);
 
-		for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-			ConstantVector::Reference(chunk.data[col_idx], input.data[col_idx], state.parent_position, input.size());
+		idx_t output_offset = 0;
+		if (include_input) {
+			for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+				ConstantVector::Reference(chunk.data[col_idx], input.data[col_idx], state.parent_position,
+				                          input.size());
+			}
+			output_offset = input.ColumnCount();
 		}
 
 		for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
-			auto &result_vector = chunk.data[col_idx + input.ColumnCount()];
+			auto &result_vector = chunk.data[col_idx + output_offset];
 
 			if (state.list_data.data[col_idx].GetType() == LogicalType::SQLNULL) {
 				// UNNEST(NULL)
@@ -282,6 +292,11 @@ OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk 
 		chunk.Verify();
 	} while (chunk.size() == 0);
 	return OperatorResultType::HAVE_MORE_OUTPUT;
+}
+
+OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                           GlobalOperatorState &gstate, OperatorState &state) const {
+	return ExecuteInternal(context.client, input, chunk, state, select_list);
 }
 
 } // namespace duckdb

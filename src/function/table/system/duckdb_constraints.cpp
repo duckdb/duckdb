@@ -81,7 +81,7 @@ unique_ptr<FunctionOperatorData> DuckDBConstraintsInit(ClientContext &context, c
 }
 
 void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_data,
-                               FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                               FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (DuckDBConstraintsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

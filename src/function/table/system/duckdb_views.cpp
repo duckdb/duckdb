@@ -63,7 +63,7 @@ unique_ptr<FunctionOperatorData> DuckDBViewsInit(ClientContext &context, const F
 }
 
 void DuckDBViewsFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                         DataChunk *input, DataChunk &output) {
+                         DataChunk &output) {
 	auto &data = (DuckDBViewsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

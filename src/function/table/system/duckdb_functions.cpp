@@ -443,7 +443,7 @@ bool ExtractFunctionData(StandardEntry *entry, idx_t function_idx, DataChunk &ou
 }
 
 void DuckDBFunctionsFunction(ClientContext &context, const FunctionData *bind_data,
-                             FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                             FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (DuckDBFunctionsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

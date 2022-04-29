@@ -118,7 +118,7 @@ static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFun
 }
 
 static void ReadCSVFunction(ClientContext &context, const FunctionData *bind_data_p,
-                            FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                            FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &bind_data = (ReadCSVData &)*bind_data_p;
 	auto &data = (ReadCSVOperatorData &)*operator_state;
 	do {

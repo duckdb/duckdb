@@ -107,8 +107,7 @@ static void ExtractFunctions(ChunkCollection &collection, ExpressionInfo &info, 
 }
 
 static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                                  FunctionOperatorData *operator_state, DataChunk *input,
-                                                  DataChunk &output) {
+                                                  FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &state = (PragmaDetailedProfilingOutputOperatorData &)*operator_state;
 	auto &data = (PragmaDetailedProfilingOutputData &)*bind_data_p;
 

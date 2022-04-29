@@ -60,8 +60,7 @@ unique_ptr<FunctionOperatorData> PragmaLastProfilingOutputInit(ClientContext &co
 }
 
 static void PragmaLastProfilingOutputFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                              FunctionOperatorData *operator_state, DataChunk *input,
-                                              DataChunk &output) {
+                                              FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &state = (PragmaLastProfilingOutputOperatorData &)*operator_state;
 	auto &data = (PragmaLastProfilingOutputData &)*bind_data_p;
 	if (!state.initialized) {

@@ -188,7 +188,7 @@ static void ICUTimeZoneCleanup(ClientContext &context, const FunctionData *bind_
 }
 
 static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (ICUTimeZoneData &)*operator_state;
 	idx_t index = 0;
 	while (index < STANDARD_VECTOR_SIZE) {
@@ -259,7 +259,7 @@ static unique_ptr<FunctionOperatorData> ICUCalendarInit(ClientContext &context, 
 }
 
 static void ICUCalendarFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (ICUCalendarData &)*operator_state;
 	idx_t index = 0;
 	while (index < STANDARD_VECTOR_SIZE) {
