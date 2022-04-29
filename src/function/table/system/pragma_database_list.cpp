@@ -32,7 +32,7 @@ unique_ptr<FunctionOperatorData> PragmaDatabaseListInit(ClientContext &context, 
 }
 
 void PragmaDatabaseListFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (PragmaDatabaseListData &)*operator_state;
 	if (data.finished) {
 		return;

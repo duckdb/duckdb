@@ -189,7 +189,7 @@ struct DedupPointerEnumType {
 };
 
 static void dataframe_scan_function(ClientContext &context, const FunctionData *bind_data_p,
-                                    FunctionOperatorData *operator_data_p, DataChunk *input, DataChunk &output) {
+                                    FunctionOperatorData *operator_data_p, DataChunk &output) {
 	auto &bind_data = (DataFrameScanBindData &)*bind_data_p;
 	auto &operator_data = (DataFrameOperatorData &)*operator_data_p;
 	if (operator_data.position >= operator_data.count) {
