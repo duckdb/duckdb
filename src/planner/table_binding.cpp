@@ -26,7 +26,7 @@ Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<strin
 		name_map[name] = column_info;
 	}
 	for (idx_t i = 0; i < gnames.size(); i++) {
-		auto &name = names[i];
+		auto &name = gnames[i];
 		D_ASSERT(!name.empty());
 		if (name_map.find(name) != name_map.end()) {
 			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias, name);

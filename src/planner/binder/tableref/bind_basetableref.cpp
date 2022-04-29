@@ -113,8 +113,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			table_names.push_back(col.name);
 		}
 		for (auto &col : table->generated_columns) {
-			table_types.push_back(col.type);
-			table_names.push_back(col.name);
+			table_gtypes.push_back(col.type);
+			table_gnames.push_back(col.name);
 		}
 		table_names = BindContext::AliasColumnNames(alias, table_names, ref.column_name_alias);
 

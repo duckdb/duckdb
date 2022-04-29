@@ -375,7 +375,7 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, const vector<string>& gnames, const vector<LogicalType>& gtypes, LogicalGet &get) {
-	AddBinding(alias, make_unique<TableBinding>(alias, types, names, types, names, get, index, true));
+	AddBinding(alias, make_unique<TableBinding>(alias, types, names, gtypes, gnames, get, index, true));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,

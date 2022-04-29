@@ -5,11 +5,13 @@
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
 
-#statement ok
-#INSERT INTO unit VALUES (5,4)
+statement ok
+INSERT INTO unit VALUES (5,4)
 
 statement ok
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
 
-statement ok
+query I
 SELECT total_profit FROM unit
+----
+20
