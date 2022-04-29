@@ -28,6 +28,7 @@ public:
 	vector<string> names;
 	vector<LogicalType> types;
 	unordered_map<idx_t, vector<unique_ptr<Value>>> value_map;
+	vector<LogicalType> parameter_types;
 
 	shared_ptr<Binder> binder;
 	ClientContext &context;
@@ -35,17 +36,12 @@ public:
 	bool read_only;
 	bool requires_valid_transaction;
 	bool allow_stream_result;
+	bool bound_all_parameters;
 
 private:
 	void CreatePlan(SQLStatement &statement);
 	shared_ptr<PreparedStatementData> PrepareSQLStatement(unique_ptr<SQLStatement> statement);
 	void PlanPrepare(unique_ptr<SQLStatement> statement);
 	void PlanExecute(unique_ptr<SQLStatement> statement);
-
-	// void VerifyQuery(BoundSQLStatement &statement);
-	// void VerifyNode(BoundQueryNode &statement);
-	// void VerifyExpression(Expression &expr, vector<unique_ptr<Expression>> &copies);
-
-	// bool StatementRequiresValidTransaction(BoundSQLStatement &statement);
 };
 } // namespace duckdb

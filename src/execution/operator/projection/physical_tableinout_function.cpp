@@ -4,11 +4,10 @@ namespace duckdb {
 
 class TableInOutFunctionState : public OperatorState {
 public:
-	TableInOutFunctionState() : initialized(false) {
+	TableInOutFunctionState() {
 	}
 
 	unique_ptr<FunctionOperatorData> operator_data;
-	bool initialized = false;
 };
 
 PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types, TableFunction function_p,
@@ -19,22 +18,17 @@ PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types
 }
 
 unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ClientContext &context) const {
-	return make_unique<TableInOutFunctionState>();
+	auto result = make_unique<TableInOutFunctionState>();
+	if (function.init) {
+		result->operator_data = function.init(context, bind_data.get(), column_ids, nullptr);
+	}
+	return move(result);
 }
 
 OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                        GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (TableInOutFunctionState &)state_p;
-
-	if (!state.initialized) {
-		if (function.init) {
-			state.operator_data = function.init(context.client, bind_data.get(), column_ids, nullptr);
-		}
-		state.initialized = true;
-	}
-
-	function.function(context.client, bind_data.get(), state.operator_data.get(), &input, chunk);
-	return OperatorResultType::NEED_MORE_INPUT;
+	return function.in_out_function(context.client, bind_data.get(), state.operator_data.get(), input, chunk);
 }
 
 } // namespace duckdb

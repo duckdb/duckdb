@@ -52,7 +52,7 @@ unique_ptr<FunctionOperatorData> DuckDBTypesInit(ClientContext &context, const F
 }
 
 void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                         DataChunk *input, DataChunk &output) {
+                         DataChunk &output) {
 	auto &data = (DuckDBTypesData &)*operator_state;
 	if (data.offset >= data.types.size()) {
 		// finished returning values

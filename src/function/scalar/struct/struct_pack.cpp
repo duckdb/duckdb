@@ -49,7 +49,6 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 		if (name_collision_set.find(child->alias) != name_collision_set.end()) {
 			throw BinderException("Duplicate struct entry name \"%s\"", child->alias);
 		}
-		ExpressionBinder::ResolveParameterType(arguments[i]);
 		name_collision_set.insert(child->alias);
 		struct_children.push_back(make_pair(child->alias, arguments[i]->return_type));
 	}

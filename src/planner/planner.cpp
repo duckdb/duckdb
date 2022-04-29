@@ -2,6 +2,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
@@ -28,6 +29,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	// first bind the tables and columns to the catalog
 	profiler.StartPhase("binder");
 	binder->parameters = &bound_parameters;
+	binder->parameter_types = &parameter_types;
 	auto bound_statement = binder->Bind(statement);
 	profiler.EndPhase();
 
@@ -37,20 +39,23 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	this->names = bound_statement.names;
 	this->types = bound_statement.types;
 	this->plan = move(bound_statement.plan);
+	this->bound_all_parameters = true;
 
 	// set up a map of parameter number -> value entries
 	for (auto &expr : bound_parameters) {
 		// check if the type of the parameter could be resolved
 		if (expr->return_type.id() == LogicalTypeId::INVALID || expr->return_type.id() == LogicalTypeId::UNKNOWN) {
-			throw BinderException("Could not determine type of parameters");
+			this->bound_all_parameters = false;
+			continue;
 		}
 		auto value = make_unique<Value>(expr->return_type);
 		expr->value = value.get();
 		// check if the parameter number has been used before
-		if (value_map.find(expr->parameter_nr) == value_map.end()) {
+		auto entry = value_map.find(expr->parameter_nr);
+		if (entry == value_map.end()) {
 			// not used before, create vector
 			value_map[expr->parameter_nr] = vector<unique_ptr<Value>>();
-		} else if (value_map[expr->parameter_nr].back()->type() != value->type()) {
+		} else if (entry->second.back()->type() != value->type()) {
 			// used before, but types are inconsistent
 			throw BinderException("Inconsistent types found for parameter with index %llu", expr->parameter_nr);
 		}
@@ -72,6 +77,7 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	prepared_data->requires_valid_transaction = this->requires_valid_transaction;
 	prepared_data->allow_stream_result = this->allow_stream_result;
 	prepared_data->catalog_version = Transaction::GetTransaction(context).catalog_version;
+	prepared_data->bound_all_parameters = this->bound_all_parameters;
 	return prepared_data;
 }
 
@@ -79,8 +85,10 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 	auto &stmt = (ExecuteStatement &)*statement;
 
 	// bind the prepared statement
-	auto entry = context.prepared_statements.find(stmt.name);
-	if (entry == context.prepared_statements.end()) {
+	auto &client_data = ClientData::Get(context);
+
+	auto entry = client_data.prepared_statements.find(stmt.name);
+	if (entry == client_data.prepared_statements.end()) {
 		throw BinderException("Prepared statement \"%s\" does not exist", stmt.name);
 	}
 
@@ -89,30 +97,43 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 	auto prepared = entry->second;
 	auto &catalog = Catalog::GetCatalog(context);
 	bool rebound = false;
-	if (catalog.GetCatalogVersion() != entry->second->catalog_version) {
-		// catalog was modified: rebind the statement before running the execute
-		prepared = PrepareSQLStatement(entry->second->unbound_statement->Copy());
-		if (prepared->types != entry->second->types) {
-			throw BinderException("Rebinding statement \"%s\" after catalog change resulted in change of types",
-			                      stmt.name);
-		}
-		rebound = true;
-	}
 
-	// the bound prepared statement is ready: bind any supplied parameters
+	// bind any supplied parameters
 	vector<Value> bind_values;
 	for (idx_t i = 0; i < stmt.values.size(); i++) {
 		ConstantBinder cbinder(*binder, context, "EXECUTE statement");
-		if (prepared->value_map.count(i + 1)) {
-			cbinder.target_type = prepared->GetType(i + 1);
-		}
 		auto bound_expr = cbinder.Bind(stmt.values[i]);
 
 		Value value = ExpressionExecutor::EvaluateScalar(*bound_expr);
 		bind_values.push_back(move(value));
 	}
+	bool all_bound = prepared->bound_all_parameters;
+	if (catalog.GetCatalogVersion() != entry->second->catalog_version || !all_bound) {
+		// catalog was modified or statement does not have clear types: rebind the statement before running the execute
+		for (auto &value : bind_values) {
+			parameter_types.push_back(value.type());
+		}
+		prepared = PrepareSQLStatement(entry->second->unbound_statement->Copy());
+		if (all_bound && prepared->types != entry->second->types) {
+			throw BinderException("Rebinding statement \"%s\" after catalog change resulted in change of types",
+			                      stmt.name);
+		}
+		D_ASSERT(prepared->bound_all_parameters);
+		rebound = true;
+	}
+	// add casts to the prepared statement parameters as required
+	for (idx_t i = 0; i < bind_values.size(); i++) {
+		if (prepared->value_map.count(i + 1) == 0) {
+			continue;
+		}
+		bind_values[i] = bind_values[i].CastAs(prepared->GetType(i + 1));
+	}
+
 	prepared->Bind(move(bind_values));
 	if (rebound) {
+		auto execute_plan = make_unique<LogicalExecute>(move(prepared));
+		execute_plan->children.push_back(move(plan));
+		this->plan = move(execute_plan);
 		return;
 	}
 
@@ -122,6 +143,7 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 	this->allow_stream_result = prepared->allow_stream_result;
 	this->names = prepared->names;
 	this->types = prepared->types;
+	this->bound_all_parameters = prepared->bound_all_parameters;
 	this->plan = make_unique<LogicalExecute>(move(prepared));
 }
 
@@ -136,6 +158,7 @@ void Planner::PlanPrepare(unique_ptr<SQLStatement> statement) {
 	// this is required because most clients ALWAYS invoke prepared statements
 	this->requires_valid_transaction = false;
 	this->allow_stream_result = false;
+	this->bound_all_parameters = true;
 	this->names = {"Success"};
 	this->types = {LogicalType::BOOLEAN};
 	this->plan = move(prepare);

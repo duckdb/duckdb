@@ -21,8 +21,8 @@ namespace duckdb {
 class TableMacroFunction : public MacroFunction {
 public:
 	TableMacroFunction(unique_ptr<QueryNode> query_node);
-
 	TableMacroFunction(void);
+
 	//! The main query node
 	unique_ptr<QueryNode> query_node;
 
