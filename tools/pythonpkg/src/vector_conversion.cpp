@@ -376,7 +376,8 @@ void VectorConversion::BindPandas(py::handle original_df, vector<PandasColumnBin
 		LogicalType duckdb_col_type;
 		PandasColumnBindData bind_data;
 		auto col_type = string(py::str(df_types[col_idx]));
-		if (col_type == "Int8" || col_type == "Int16" || col_type == "Int32" || col_type == "Int64" || col_type == "boolean") {
+		if (col_type == "Int8" || col_type == "Int16" || col_type == "Int32" || col_type == "Int64" ||
+		    col_type == "boolean") {
 			// masked object
 			// fetch the internal data and mask array
 			bind_data.numpy_col = get_fun(df_columns[col_idx]).attr("array").attr("_data");
