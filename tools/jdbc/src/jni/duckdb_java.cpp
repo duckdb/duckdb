@@ -111,13 +111,14 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
 	if (!conn_ref) {
 		env->ThrowNew(env->FindClass("java/sql/SQLException"), "Invalid connection");
+		return nullptr;
 	}
 
 	auto query = byte_array_to_string(env, query_j);
 	auto statements = conn_ref->ExtractStatements(query.c_str());
-
 	if (statements.empty()) {
 		env->ThrowNew(env->FindClass("java/sql/SQLException"), "No statements to execute.");
+		return nullptr;
 	}
 
 	// if there are multiple statements, we directly execute the statements besides the last one
