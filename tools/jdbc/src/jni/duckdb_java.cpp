@@ -114,9 +114,29 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	}
 
 	auto query = byte_array_to_string(env, query_j);
+	auto statements = conn_ref->ExtractStatements(query.c_str());
+
+	if (statements.empty()) {
+		env->ThrowNew(env->FindClass("java/sql/SQLException"), "No statements to execute.");
+	}
+
+	// if there are multiple statements, we directly execute the statements besides the last one
+	// we only return the result of the last statement to the user, unless one of the previous statements fails
+	for (idx_t i = 0; i + 1 < statements.size(); i++) {
+		try {
+			auto res = conn_ref->Query(move(statements[i]));
+			if (!res->success) {
+				env->ThrowNew(env->FindClass("java/sql/SQLException"), res->error.c_str());
+				return nullptr;
+			}
+		} catch (const std::exception &ex) {
+			env->ThrowNew(env->FindClass("java/sql/SQLException"), ex.what());
+			return nullptr;
+		}
+	}
 
 	auto stmt_ref = new StatementHolder();
-	stmt_ref->stmt = conn_ref->Prepare(query);
+	stmt_ref->stmt = conn_ref->Prepare(move(statements.back()));
 	if (!stmt_ref->stmt->success) {
 		string error_msg = string(stmt_ref->stmt->error);
 		stmt_ref->stmt = nullptr;
