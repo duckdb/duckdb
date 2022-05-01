@@ -1921,6 +1921,19 @@ Closes the result and de-allocates all memory allocated for the arrow result.
 */
 DUCKDB_API void duckdb_destroy_arrow(duckdb_arrow *result);
 
+//===--------------------------------------------------------------------===//
+// Threading Information
+//===--------------------------------------------------------------------===//
+/*!
+Execute DuckDB tasks on this thread.
+
+Will return after `max_tasks` have been executed, or if there are no more tasks present.
+
+* database: The database object to execute tasks for
+* max_tasks: The maximum amount of tasks to execute
+*/
+DUCKDB_API void duckdb_execute_tasks(duckdb_database database, idx_t max_tasks);
+
 #ifdef __cplusplus
 }
 #endif

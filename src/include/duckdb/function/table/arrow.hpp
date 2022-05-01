@@ -129,7 +129,7 @@ private:
 
 	//! Scan Function for Single Thread Execution
 	static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_data,
-	                              FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output);
+	                              FunctionOperatorData *operator_state, DataChunk &output);
 
 	//! -----Multi Thread Functions:-----
 	//! Initialize Parallel State
@@ -145,7 +145,7 @@ private:
 	static idx_t ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p);
 	//! Scan Function for Parallel Execution
 	static void ArrowScanFunctionParallel(ClientContext &context, const FunctionData *bind_data,
-	                                      FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output,
+	                                      FunctionOperatorData *operator_state, DataChunk &output,
 	                                      ParallelState *parallel_state_p);
 	//! Get next chunk for the running thread
 	static bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
