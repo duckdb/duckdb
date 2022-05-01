@@ -15,6 +15,7 @@
 namespace duckdb {
 
 enum class PandasType : uint8_t {
+	BOOL,
 	BOOLEAN,
 	TINYINT,
 	SMALLINT,
