@@ -221,6 +221,7 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 		case RType::INTEGER: {
 			auto data_ptr = (int *)coldata_ptr + sexp_offset;
 			AppendColumnSegment<int, int, RIntegerType>(data_ptr, v, this_count);
+
 			break;
 		}
 		case RType::NUMERIC: {
