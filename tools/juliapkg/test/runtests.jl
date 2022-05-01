@@ -18,7 +18,8 @@ test_files = [
     "test_table_function.jl",
     "test_old_interface.jl",
     "test_all_types.jl",
-    "test_decimals.jl"
+    "test_decimals.jl",
+    "test_threading.jl"
 ]
 
 if size(ARGS)[1] > 0

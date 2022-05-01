@@ -1,0 +1,19 @@
+# name: test/sql/parallelism/modify_thread_settings.test
+# description: Test modifying the number of threads repeatedly
+# group: [parallelism]
+
+loop i 0 10
+
+statement ok
+SET threads=8
+
+statement ok
+SET threads=4
+
+statement ok
+SET threads=4
+
+statement ok
+SET threads=1
+
+endloop

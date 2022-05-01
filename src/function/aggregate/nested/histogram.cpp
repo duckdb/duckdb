@@ -139,7 +139,7 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 		list_struct_data = FlatVector::GetData<list_entry_t>(*count_list);
 		list_struct_data[rid].length = ListVector::GetListSize(*count_list) - old_len;
 		list_struct_data[rid].offset = old_len;
-		old_len = list_struct_data[rid].length;
+		old_len += list_struct_data[rid].length;
 	}
 }
 

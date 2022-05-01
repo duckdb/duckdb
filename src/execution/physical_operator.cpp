@@ -6,6 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/common/enums/operator_result_type.hpp"
 
 namespace duckdb {
 

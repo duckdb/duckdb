@@ -81,6 +81,8 @@ public:
 	vector<CorrelatedColumnInfo> correlated_columns;
 	//! The set of parameter expressions bound by this binder
 	vector<BoundParameterExpression *> *parameters;
+	//! The types of the prepared statement parameters, if any
+	vector<LogicalType> *parameter_types;
 	//! Whether or not the bound statement is read-only
 	bool read_only;
 	//! Whether or not the statement requires a valid transaction to run
@@ -239,9 +241,12 @@ private:
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
 
-	bool BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
-	                            vector<Value> &parameters, named_parameter_map_t &named_parameters,
-	                            unique_ptr<BoundSubqueryRef> &subquery, string &error);
+	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
+	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
+	                                 vector<Value> &parameters, named_parameter_map_t &named_parameters,
+	                                 unique_ptr<BoundSubqueryRef> &subquery, string &error);
+	bool BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
+	                                 unique_ptr<BoundSubqueryRef> &subquery, string &error);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCrossProductRef &ref);
