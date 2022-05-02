@@ -7,6 +7,10 @@
 #'
 #' <https://duckdb.org/> for the project website.
 #'
+## usethis namespace: start
+#' @useDynLib duckdb, .registration = TRUE
+## usethis namespace: end
+#'
 #' @docType package
 #' @name duckdb-package
 NULL
