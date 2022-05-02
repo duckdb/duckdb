@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 
 #include <set>
@@ -81,8 +82,8 @@ unique_ptr<FunctionOperatorData> DuckDBColumnsInit(ClientContext &context, const
 	}
 
 	// check the temp schema as well
-	context.temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
-	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
+	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
@@ -280,7 +281,7 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 } // anonymous namespace
 
 void DuckDBColumnsFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                           DataChunk *input, DataChunk &output) {
+                           DataChunk &output) {
 	auto &data = (DuckDBColumnsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

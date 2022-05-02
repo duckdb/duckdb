@@ -72,6 +72,7 @@ jobs:
       - name: Run Tests
         run: |
           export JULIA_DUCKDB_LIBRARY="`pwd`/build/release/src/libduckdb.so"
+          export JULIA_NUM_THREADS=2
           ls $JULIA_DUCKDB_LIBRARY
           cd tools/juliapkg
           julia -e "import Pkg; Pkg.activate(\".\"); Pkg.instantiate(); include(\"test/runtests.jl\")"
