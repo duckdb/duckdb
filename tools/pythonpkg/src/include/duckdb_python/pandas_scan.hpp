@@ -46,10 +46,10 @@ public:
 	//! The main pandas scan function: note that this can be called in parallel without the GIL
 	//! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 	static void PandasScanFunc(ClientContext &context, const FunctionData *bind_data,
-	                           FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output);
+	                           FunctionOperatorData *operator_state, DataChunk &output);
 
 	static void PandasScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
-	                                   FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output,
+	                                   FunctionOperatorData *operator_state, DataChunk &output,
 	                                   ParallelState *parallel_state_p);
 
 	static unique_ptr<NodeStatistics> PandasScanCardinality(ClientContext &context, const FunctionData *bind_data);

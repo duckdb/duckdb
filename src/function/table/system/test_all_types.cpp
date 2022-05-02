@@ -202,7 +202,7 @@ unique_ptr<FunctionOperatorData> TestAllTypesInit(ClientContext &context, const 
 }
 
 void TestAllTypesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk *input, DataChunk &output) {
+                          DataChunk &output) {
 	auto &data = (TestAllTypesData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

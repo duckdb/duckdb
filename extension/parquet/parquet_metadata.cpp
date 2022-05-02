@@ -433,7 +433,7 @@ unique_ptr<FunctionOperatorData> ParquetMetaDataInit(ClientContext &context, con
 
 template <bool SCHEMA>
 void ParquetMetaDataImplementation(ClientContext &context, const FunctionData *bind_data_p,
-                                   FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                   FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (ParquetMetaDataOperatorData &)*operator_state;
 	auto &bind_data = (ParquetMetaDataBindData &)*bind_data_p;
 	while (true) {
