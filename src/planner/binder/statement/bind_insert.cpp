@@ -48,7 +48,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		for (idx_t i = 0; i < stmt.columns.size(); i++) {
 			column_name_map[stmt.columns[i]] = i;
 			auto entry = table->name_map.find(stmt.columns[i]);
-			if (entry == table->name_map.end()) {
+			if (entry == table->name_map.end() || entry->second.column_type != TableColumnType::STANDARD) {
 				throw BinderException("Column %s not found in table %s", stmt.columns[i], table->name);
 			}
 			auto column_index = entry->second.index;

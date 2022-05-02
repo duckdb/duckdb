@@ -11,7 +11,19 @@ INSERT INTO unit VALUES (5,4)
 statement ok
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
 
+# Cant add to a generated column
+statement error
+INSERT INTO unit (total_profit) VALUES (1)
+
+# Only 2 real columns exist in the table
+statement error
+INSERT INTO unit VALUES (1,1,1)
+
+statement ok
+INSERT INTO unit VALUES (1,1)
+
 query I
 SELECT total_profit FROM unit
 ----
 20
+1
