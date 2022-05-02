@@ -12,8 +12,10 @@
 
 namespace duckdb {
 
-Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<string> colnames, vector<LogicalType> gcoltypes, vector<string> gcolnames, idx_t index)
-    : alias(alias), index(index), types(move(coltypes)), names(move(colnames)), gtypes(move(gcoltypes)), gnames(move(gcolnames)) {
+Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<string> colnames,
+                 vector<LogicalType> gcoltypes, vector<string> gcolnames, idx_t index)
+    : alias(alias), index(index), types(move(coltypes)), names(move(colnames)), gtypes(move(gcoltypes)),
+      gnames(move(gcolnames)) {
 	D_ASSERT(types.size() == names.size());
 	D_ASSERT(gtypes.size() == gnames.size());
 	for (idx_t i = 0; i < names.size(); i++) {
@@ -82,8 +84,9 @@ TableCatalogEntry *Binding::GetTableEntry() {
 	return nullptr;
 }
 
-TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, vector<LogicalType> gtypes_p, vector<string> gnames_p, LogicalGet &get,
-                           idx_t index, bool add_row_id)
+TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
+                           vector<LogicalType> gtypes_p, vector<string> gnames_p, LogicalGet &get, idx_t index,
+                           bool add_row_id)
     : Binding(alias, move(types_p), move(names_p), move(gtypes_p), move(gnames_p), index), get(get) {
 	if (add_row_id) {
 		if (name_map.find("rowid") == name_map.end()) {
@@ -140,7 +143,8 @@ string TableBinding::ColumnNotFoundError(const string &column_name) const {
 }
 
 MacroBinding::MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name_p)
-    : Binding(MacroBinding::MACRO_NAME, move(types_p), move(names_p), vector<LogicalType>(), vector<string>(), -1), macro_name(move(macro_name_p)) {
+    : Binding(MacroBinding::MACRO_NAME, move(types_p), move(names_p), vector<LogicalType>(), vector<string>(), -1),
+      macro_name(move(macro_name_p)) {
 }
 
 BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {

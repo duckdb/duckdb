@@ -92,7 +92,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 					if (entry == info.name_map.end()) {
 						throw ParserException("column \"%s\" named in key does not exist", keyname);
 					}
-					auto& column_index = entry->second.index;
+					auto &column_index = entry->second.index;
 					if (key_set.find(column_index) != key_set.end()) {
 						throw ParserException("column \"%s\" appears twice in "
 						                      "primary key constraint",

@@ -136,6 +136,7 @@ struct AddGeneratedColumnInfo : public AlterTableInfo {
 
 	//! New generated column
 	GeneratedColumnDefinition new_column;
+
 public:
 	unique_ptr<AlterInfo> Copy() const override;
 	void SerializeAlterTable(FieldWriter &writer) const override;

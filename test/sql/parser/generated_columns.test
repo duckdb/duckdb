@@ -22,6 +22,12 @@ INSERT INTO unit VALUES (1,1,1)
 statement ok
 INSERT INTO unit VALUES (1,1)
 
+query III
+SELECT * FROM unit
+----
+5	4	20
+1	1	1
+
 query I
 SELECT total_profit FROM unit
 ----

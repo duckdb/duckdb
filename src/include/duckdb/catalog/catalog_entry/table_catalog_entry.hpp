@@ -44,7 +44,7 @@ public:
 	std::shared_ptr<DataTable> storage;
 	//! A list of columns that are part of this table
 	vector<ColumnDefinition> columns;
-	vector<GeneratedColumnDefinition>	generated_columns;
+	vector<GeneratedColumnDefinition> generated_columns;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<Constraint>> constraints;
 	//! A list of constraints that are part of this table

@@ -168,8 +168,7 @@ void AddGeneratedColumnInfo::SerializeAlterTable(FieldWriter &writer) const {
 	writer.WriteSerializable(new_column);
 }
 
-unique_ptr<AlterInfo> AddGeneratedColumnInfo::Deserialize(FieldReader &reader, string schema, string table)
-{
+unique_ptr<AlterInfo> AddGeneratedColumnInfo::Deserialize(FieldReader &reader, string schema, string table) {
 	auto new_column = reader.ReadRequiredSerializable<GeneratedColumnDefinition, GeneratedColumnDefinition>();
 	return make_unique<AddGeneratedColumnInfo>(move(schema), move(table), move(new_column));
 }

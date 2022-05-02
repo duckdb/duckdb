@@ -29,7 +29,7 @@ void GeneratedConstraint::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<Constraint> GeneratedConstraint::Deserialize(FieldReader &reader) {
-	Deserializer& source = reader.GetSource();
+	Deserializer &source = reader.GetSource();
 	auto index = reader.ReadRequired<idx_t>();
 	auto expression = ParsedExpression::Deserialize(source);
 	return make_unique_base<Constraint, GeneratedConstraint>(index, move(expression));

@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-GeneratedColumnDefinition::GeneratedColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression)
+GeneratedColumnDefinition::GeneratedColumnDefinition(string name_p, LogicalType type_p,
+                                                     unique_ptr<ParsedExpression> expression)
     : name(move(name_p)), type(move(type_p)), expression(move(expression)) {
 }
 

@@ -160,8 +160,7 @@ unordered_set<string> BindContext::GetMatchingBindings(const string &column_name
 	return result;
 }
 
-unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &table_name,
-                                                                const string &column_name) {
+unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &table_name, const string &column_name) {
 	string error_message;
 	vector<string> names;
 	names.push_back(table_name);
@@ -336,6 +335,10 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				}
 				new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
 			}
+			// Add generated columns
+			for (auto &column_name : binding->gnames) {
+				new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
+			}
 		}
 	} else {
 		// SELECT tbl.* case
@@ -374,13 +377,15 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
-                               const vector<LogicalType> &types, const vector<string>& gnames, const vector<LogicalType>& gtypes, LogicalGet &get) {
+                               const vector<LogicalType> &types, const vector<string> &gnames,
+                               const vector<LogicalType> &gtypes, LogicalGet &get) {
 	AddBinding(alias, make_unique<TableBinding>(alias, types, names, gtypes, gnames, get, index, true));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
                                    const vector<LogicalType> &types, LogicalGet &get) {
-	AddBinding(alias, make_unique<TableBinding>(alias, types, names, vector<LogicalType>(), vector<string>(), get, index));
+	AddBinding(alias,
+	           make_unique<TableBinding>(alias, types, names, vector<LogicalType>(), vector<string>(), get, index));
 }
 
 static string AddColumnNameToBinding(const string &base_name, case_insensitive_set_t &current_names) {

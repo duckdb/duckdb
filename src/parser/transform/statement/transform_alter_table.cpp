@@ -25,7 +25,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)command->def;
 			auto centry = TransformColumnDefinition(cdef);
 
-			unique_ptr<Constraint>	generated_constraint = nullptr;
+			unique_ptr<Constraint> generated_constraint = nullptr;
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
 					auto constraint = TransformConstraint(constr, centry, 0);
@@ -34,8 +34,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 					}
 					if (constraint->type == ConstraintType::GENERATED && !generated_constraint) {
 						generated_constraint = move(constraint);
-					}
-					else {
+					} else {
 						throw ParserException("Adding columns with constraints not yet supported");
 					}
 				}
@@ -43,10 +42,10 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			if (generated_constraint) {
 				D_ASSERT(generated_constraint->type == ConstraintType::GENERATED);
 				auto gen_constraint = (GeneratedConstraint *)generated_constraint.get();
-				auto generated_column = GeneratedColumnDefinition(centry.name, move(centry.type), move(gen_constraint->expression));
+				auto generated_column =
+				    GeneratedColumnDefinition(centry.name, move(centry.type), move(gen_constraint->expression));
 				result->info = make_unique<AddGeneratedColumnInfo>(qname.schema, qname.name, move(generated_column));
-			}
-			else {
+			} else {
 				result->info = make_unique<AddColumnInfo>(qname.schema, qname.name, move(centry));
 			}
 			break;

@@ -40,21 +40,21 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		D_ASSERT(!binder.macro_binding->alias.empty());
 		return make_unique<ColumnRefExpression>(column_name, binder.macro_binding->alias);
 	} else {
-		//see if it's a regular column
+		// see if it's a regular column
 		string table_name = binder.bind_context.GetMatchingBinding(column_name);
 		if (!table_name.empty()) {
 			return binder.bind_context.CreateColumnReference(table_name, column_name);
 		}
-		//it's not, might be a generated column
+		// it's not, might be a generated column
 		table_name = binder.bind_context.GetMatchingBinding(column_name, TableColumnType::GENERATED);
 		if (!table_name.empty()) {
 			return binder.bind_context.ExpandGeneratedColumn(table_name, column_name);
 		}
-		//it's neither, find candidates and error
+		// it's neither, find candidates and error
 		auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
 		string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
 		error_message =
-			StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str);
+		    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str);
 		return nullptr;
 	}
 }
@@ -125,6 +125,10 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 			// it is! return the colref directly
 			return binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1]);
 		} else {
+			if (binder.bind_context.GetMatchingBinding(colref.column_names[1], TableColumnType::GENERATED) ==
+			    colref.column_names[0]) {
+				return binder.bind_context.ExpandGeneratedColumn(colref.column_names[0], colref.column_names[1]);
+			}
 			// otherwise check if we can turn this into a struct extract
 			auto new_colref = make_unique<ColumnRefExpression>(colref.column_names[0]);
 			string other_error;

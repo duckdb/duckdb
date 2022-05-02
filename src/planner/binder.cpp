@@ -330,11 +330,12 @@ bool Binder::HasMatchingBinding(const string &schema_name, const string &table_n
 			return false;
 		}
 	}
-	if (!binding->HasMatchingBinding(column_name)) {
+	bool binding_found;
+	binding_found = binding->HasMatchingBinding(column_name);
+	if (!binding_found) {
 		error_message = binding->ColumnNotFoundError(column_name);
-		return false;
 	}
-	return true;
+	return binding_found;
 }
 
 void Binder::SetBindingMode(BindingMode mode) {
