@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/schema/physical_drop.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
@@ -27,7 +27,7 @@ void PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 	switch (info->type) {
 	case CatalogType::PREPARED_STATEMENT: {
 		// DEALLOCATE silently ignores errors
-		auto &statements = context.client.prepared_statements;
+		auto &statements = ClientData::Get(context.client).prepared_statements;
 		if (statements.find(info->name) != statements.end()) {
 			statements.erase(info->name);
 		}

@@ -95,7 +95,6 @@ static unique_ptr<FunctionData> ListConcatBind(ClientContext &context, ScalarFun
 		for (const auto &argument : arguments) {
 			child_type = LogicalType::MaxLogicalType(child_type, ListType::GetChildType(argument->return_type));
 		}
-		ExpressionBinder::ResolveParameterType(child_type);
 		auto list_type = LogicalType::LIST(move(child_type));
 
 		bound_function.arguments[0] = list_type;

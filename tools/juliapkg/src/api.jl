@@ -2513,3 +2513,18 @@ end
 # function duckdb_destroy_arrow(result)
 #     return ccall((:duckdb_destroy_arrow, libduckdb), Cvoid, (Ptr{Ptr{Cvoid}},), result)
 # end
+
+#=
+//===--------------------------------------------------------------------===//
+// Threading Interface
+//===--------------------------------------------------------------------===//
+=#
+# Execute DuckDB tasks on this thread.
+#
+# Will return after `max_tasks` have been executed, or if there are no more tasks present.
+#
+# * database: The database object to execute tasks for
+# * max_tasks: The maximum amount of tasks to execute
+function duckdb_execute_tasks(handle, max_tasks)
+    return ccall((:duckdb_execute_tasks, libduckdb), Cvoid, (duckdb_database, UInt64), handle, max_tasks)
+end

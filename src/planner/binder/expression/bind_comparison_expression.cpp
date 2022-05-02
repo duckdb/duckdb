@@ -101,10 +101,6 @@ LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, Log
 			}
 		}
 		return result_type;
-	case LogicalTypeId::UNKNOWN:
-		// comparing two prepared statement parameters (e.g. SELECT ?=?)
-		// default to VARCHAR
-		return LogicalType::VARCHAR;
 	default:
 		return result_type;
 	}

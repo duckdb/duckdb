@@ -7,6 +7,7 @@
 #include "duckdb/common/windows.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 
 #include <cstdint>
@@ -40,7 +41,7 @@ FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 }
 
 FileOpener *FileSystem::GetFileOpener(ClientContext &context) {
-	return context.file_opener.get();
+	return ClientData::Get(context).file_opener.get();
 }
 
 #ifndef _WIN32
