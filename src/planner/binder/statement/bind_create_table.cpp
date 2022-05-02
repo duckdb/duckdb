@@ -150,6 +150,8 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			info.bound_constraints.push_back(make_unique<BoundForeignKeyConstraint>(fk.info, pk_key_set, fk_key_set));
 			break;
 		}
+		case ConstraintType::GENERATED: {
+		}
 		default:
 			throw NotImplementedException("unrecognized constraint type in bind");
 		}

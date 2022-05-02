@@ -95,15 +95,33 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		case duckdb_libpgquery::T_PGColumnDef: {
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)c->data.ptr_value;
 			auto centry = TransformColumnDefinition(cdef);
+			TableColumnType column_type = TableColumnType::STANDARD;
+			unique_ptr<Constraint> generated = nullptr;
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
 					auto constraint = TransformConstraint(constr, centry, info->columns.size());
 					if (constraint) {
-						info->constraints.push_back(move(constraint));
+						if (constraint->type == ConstraintType::GENERATED) {
+							if (generated) {
+								throw NotImplementedException("Columns can only have 1 GENERATED constraint");
+							}
+							generated = move(constraint);
+							column_type = TableColumnType::GENERATED;
+						} else {
+							info->constraints.push_back(move(constraint));
+						}
 					}
 				}
 			}
-			info->columns.push_back(move(centry));
+			if (column_type == TableColumnType::STANDARD) {
+				info->columns.push_back(move(centry));
+			} else {
+				D_ASSERT(generated->type == ConstraintType::GENERATED);
+				auto gen_constraint = (GeneratedConstraint *)generated.get();
+				auto generated_column =
+				    GeneratedColumnDefinition(centry.name, move(centry.type), move(gen_constraint->expression));
+				info->generated_columns.push_back(move(generated_column));
+			}
 			break;
 		}
 		case duckdb_libpgquery::T_PGConstraint: {
