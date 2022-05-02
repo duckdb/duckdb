@@ -137,7 +137,8 @@ bool TableCatalogEntry::ColumnExists(const string &name, TableColumnType type) {
 	return iterator->second.column_type == type;
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
+unique_ptr<CatalogEntry>
+    TableCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
 	D_ASSERT(!internal);
 	if (info->type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
@@ -207,7 +208,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		}
 	}
 	for (auto& gen_column : generated_columns) {
-		create_info->generated_columns.push_back(move(gen_column.Copy()));
+		create_info->generated_columns.push_back(gen_column.Copy());
 	}
 	for (idx_t c_idx = 0; c_idx < constraints.size(); c_idx++) {
 		auto copy = constraints[c_idx]->Copy();
@@ -330,7 +331,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 		create_info->columns.push_back(columns[i].Copy());
 	}
 	for (auto& gen_column : generated_columns) {
-		create_info->generated_columns.push_back(move(gen_column.Copy()));
+		create_info->generated_columns.push_back(gen_column.Copy());
 	}
 	Binder::BindLogicalType(context, info.new_column.type, schema->name);
 	info.new_column.oid = columns.size();
@@ -357,7 +358,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		}
 	}
 	for (auto& gen_column : generated_columns) {
-		create_info->generated_columns.push_back(move(gen_column.Copy()));
+		create_info->generated_columns.push_back(gen_column.Copy());
 	}
 	if (create_info->columns.empty()) {
 		throw CatalogException("Cannot drop column: table only has one column remaining!");
@@ -462,7 +463,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		create_info->columns.push_back(move(copy));
 	}
 	for (auto& gen_column : generated_columns) {
-		create_info->generated_columns.push_back(move(gen_column.Copy()));
+		create_info->generated_columns.push_back(gen_column.Copy());
 	}
 	//Copy all the constraints
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -496,7 +497,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		create_info->columns.push_back(move(copy));
 	}
 	for (auto& gen_column : generated_columns) {
-		create_info->generated_columns.push_back(move(gen_column.Copy()));
+		create_info->generated_columns.push_back(gen_column.Copy());
 	}
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
@@ -563,7 +564,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContex
 		create_info->columns.push_back(columns[i].Copy());
 	}
 	for (auto& gen_column : generated_columns) {
-		create_info->generated_columns.push_back(move(gen_column.Copy()));
+		create_info->generated_columns.push_back(gen_column.Copy());
 	}
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
