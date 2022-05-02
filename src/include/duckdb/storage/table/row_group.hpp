@@ -153,7 +153,8 @@ private:
 	//! Sort the columns before checkpointing
 	void SortColumns(vector<LogicalType> &types, vector<column_t> &column_ids);
 	//! Return the indices of the key columns
-	void CalculateCardinalitiesCorrelation1(vector<LogicalType> &types, TableScanState &scan_state, vector<idx_t> &cardinalities);
+	void CalculateCardinalitiesPerColumn(vector<LogicalType> &types, TableScanState &scan_state,
+	                                     vector<std::tuple<idx_t, idx_t>> &cardinalities);
 
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
 	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);

@@ -535,20 +535,17 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	TableScanState scan_state;
 	scan_state.column_ids = column_ids;
 	scan_state.max_row = count;
-	vector<idx_t> cardinalities;
+
+	// Save cardinalities as a tuple - (cardinality_count, column_index)
+	vector<std::tuple<idx_t, idx_t>> cardinalities;
 
 	// Calculate the column cardinalities
-//	CalculateCardinalitiesCorrelation1(types, scan_state, cardinalities);
+	CalculateCardinalitiesPerColumn(types, scan_state, cardinalities);
 
 	// Get types for the key column
-//	for (auto i : cardinalities) {
-//		cardinalities[i] = i;
-//		key_types.push_back(types[i]);
-//	}
-
-	for (idx_t i = 0; i < types.size(); i++) {
-		cardinalities.push_back(i);
-		key_types.push_back(types[i]);
+	for (auto i : cardinalities) {
+		// Retrieve the index from the sorted tuples
+		key_types.push_back(types[std::get<1>(i)]);
 	}
 
 	// Initialize DataChunk for key columns and payload (the entire RowGroup)
@@ -569,9 +566,9 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	while (next_chunk) {
 		next_chunk = ScanToDataChunks(scan_state.row_group_scan_state, payload);
 
-		// If column cardinality == 1, use the key column for sorting
+		// Select key columns from lowest to highest cardinality
 		for (idx_t i = 0; i < cardinalities.size(); i++) {
-			keys.data[i].Reference(payload.data[cardinalities[i]]);
+			keys.data[i].Reference(payload.data[std::get<1>(cardinalities[i])]);
 			keys.SetCardinality(payload.size());
 		}
 		local_sort_state.SinkChunk(keys, payload);
@@ -616,7 +613,8 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	this->Verify();
 }
 
-void RowGroup::CalculateCardinalitiesCorrelation1(vector<LogicalType> &types, TableScanState &scan_state, vector<idx_t> &cardinalities) {
+void RowGroup::CalculateCardinalitiesPerColumn(vector<LogicalType> &types, TableScanState &scan_state,
+                                               vector<std::tuple<idx_t, idx_t>> &cardinalities) {
 	// Scan the RowGroup to calculate cardinality - initialize a HyperLogLog for each column and add values
 	DataChunk result;
 	result.Initialize(types);
@@ -631,29 +629,11 @@ void RowGroup::CalculateCardinalitiesCorrelation1(vector<LogicalType> &types, Ta
 		}
 	}
 
-	// Get the final cardinality counts - maximum cardinality is 30 percent of all rows
-	// Initialize cardinalities to 0 for each column
-	idx_t max_cardinality = count * 0.3;
-	idx_t current_count = 0;
-	unique_ptr<HyperLogLog> merged_log;
-
-	// Keep merging the counts until we have 30 percent of the rows - use these columns as keys
+	// Get the final cardinality counts
 	for (idx_t i = 0; i < logs.size(); i++) {
-		if (i == 0) {
-			current_count = logs[i].Count();
-			cardinalities.push_back(0);
-			continue;
-		}
-		merged_log = logs[i-1].Merge(logs[i]);
-		current_count = merged_log->Count();
-
-		if (current_count > max_cardinality) {
-			break;
-		}
-
-		// Push the indices of the key columns
-		cardinalities.push_back(i);
+		cardinalities.emplace_back(logs[i].Count(), i);
 	}
+	std::sort(cardinalities.begin(), cardinalities.end());
 }
 
 ChunkInfo *RowGroup::GetChunkInfo(idx_t vector_idx) {
