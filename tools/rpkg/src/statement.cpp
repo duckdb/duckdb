@@ -112,6 +112,9 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 		case LogicalTypeId::ENUM:
 			rtype = "factor";
 			break;
+		case LogicalTypeId::UNKNOWN:
+			rtype = "unknown";
+			break;
 		default:
 			cpp11::stop("rapi_prepare: Unknown column type for prepare: %s", stype.ToString().c_str());
 			break;

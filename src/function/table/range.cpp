@@ -78,7 +78,7 @@ static unique_ptr<FunctionOperatorData> RangeFunctionInit(ClientContext &context
 }
 
 static void RangeFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *state_p,
-                          DataChunk *input, DataChunk &output) {
+                          DataChunk &output) {
 	auto &bind_data = (RangeFunctionBindData &)*bind_data_p;
 	auto &state = (RangeFunctionState &)*state_p;
 
@@ -197,7 +197,7 @@ static unique_ptr<FunctionOperatorData> RangeDateTimeInit(ClientContext &context
 }
 
 static void RangeDateTimeFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                  FunctionOperatorData *state_p, DataChunk *input, DataChunk &output) {
+                                  FunctionOperatorData *state_p, DataChunk &output) {
 	auto &bind_data = (RangeDateTimeBindData &)*bind_data_p;
 	auto &state = (RangeDateTimeState &)*state_p;
 	if (state.finished) {

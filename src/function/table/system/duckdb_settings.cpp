@@ -73,7 +73,7 @@ unique_ptr<FunctionOperatorData> DuckDBSettingsInit(ClientContext &context, cons
 }
 
 void DuckDBSettingsFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                            DataChunk *input, DataChunk &output) {
+                            DataChunk &output) {
 	auto &data = (DuckDBSettingsData &)*operator_state;
 	if (data.offset >= data.settings.size()) {
 		// finished returning values

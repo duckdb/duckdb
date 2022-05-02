@@ -150,6 +150,7 @@ INSTANTIATE_VECTOR(std::vector<OrderByNode>)
 template class std::vector<uint64_t>;
 template class std::vector<string>;
 INSTANTIATE_VECTOR(std::vector<Expression *>)
+INSTANTIATE_VECTOR(std::vector<BoundParameterExpression *>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Expression>>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<DataChunk>>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<SQLStatement>>)
