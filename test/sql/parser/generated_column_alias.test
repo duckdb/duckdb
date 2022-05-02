@@ -1,4 +1,4 @@
-# name: test/sql/parser/generated_columns_alias.test
+# name: test/sql/parser/generated_column_alias.test
 # description: Test generated columns using AS
 # group: [parser]
 

@@ -32,7 +32,16 @@
 
 namespace duckdb {
 
-idx_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
+const string &TableCatalogEntry::GetColumnName(TableColumnInfo info) {
+	switch (info.column_type) {
+	case TableColumnType::STANDARD:
+		return columns[info.index].name;
+	case TableColumnType::GENERATED:
+		return generated_columns[info.index].name;
+	}
+}
+
+TableColumnInfo TableCatalogEntry::GetColumnInfo(string &column_name, bool if_exists) {
 	auto entry = name_map.find(column_name);
 	if (entry == name_map.end()) {
 		// entry not found: try lower-casing the name
@@ -44,15 +53,8 @@ idx_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
 			throw BinderException("Table \"%s\" does not have a column with name \"%s\"", name, column_name);
 		}
 	}
-	if (entry->second.column_type != TableColumnType::STANDARD) {
-		if (if_exists) {
-			return DConstants::INVALID_INDEX;
-		}
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", name, column_name);
-	}
-	auto column_index = entry->second.index;
-	column_name = columns[column_index].name;
-	return idx_t(column_index);
+	column_name = GetColumnName(entry->second);
+	return entry->second;
 }
 
 void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, vector<idx_t> &keys,
@@ -197,7 +199,8 @@ static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
-	idx_t rename_idx = GetColumnIndex(info.old_name);
+	auto rename_info = GetColumnInfo(info.old_name);
+	auto rename_idx = rename_info.index;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		ColumnDefinition copy = columns[i].Copy();
 
@@ -359,31 +362,49 @@ void DependsOnColumn(const ParsedExpression &expr, const string &column, bool &r
 	    expr, [&](const ParsedExpression &child) { DependsOnColumn(child, column, result); });
 }
 
-// static void PopulateDependencyMap(const ParsedExpression& expr, case_insensitive_map_t<vector<idx_t>>&
-// dependency_map, idx_t index) { 	if (expr.type == ExpressionType::COLUMN_REF) { 		auto column_ref = (ColumnRefExpression
-//&)expr; 		auto &column_name = column_ref.GetColumnName(); 		dependency_map[column_name].push_back(index);
-//	}
-//	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
-//		PopulateDependencyMap(expr, dependency_map, index);
-//	});
-// }
+unique_ptr<CatalogEntry> TableCatalogEntry::RemoveGeneratedColumn(ClientContext &context, RemoveColumnInfo &info,
+                                                                  idx_t index) {
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 
-// unique_ptr<CatalogEntry> TableCatalogEntry::RemoveGeneratedColumn(ClientContext &context, RemoveColumnInfo& info) {
-//
-// }
+	// Copy all the columns
+	for (idx_t i = 0; i < columns.size(); i++) {
+		auto copy = columns[i].Copy();
+		create_info->columns.push_back(move(copy));
+	}
+
+	// now we copy all the generated columns except the removed one
+	for (idx_t i = 0; i < generated_columns.size(); i++) {
+		if (i == index) {
+			continue;
+		}
+		auto copy = generated_columns[i].Copy();
+		create_info->generated_columns.push_back(move(copy));
+	}
+
+	// Copy all the constraints
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto constraint = constraints[i]->Copy();
+		create_info->constraints.push_back(move(constraint));
+	}
+
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+}
 
 unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo &info) {
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-	create_info->temporary = temporary;
-
-	//	if (...) {
-	//		RemoveGeneratedColumn(context, info);
-	//	}
-
-	idx_t removed_index = GetColumnIndex(info.removed_column, info.if_exists);
+	auto remove_info = GetColumnInfo(info.removed_column, info.if_exists);
+	if (remove_info.column_type == TableColumnType::GENERATED) {
+		return RemoveGeneratedColumn(context, info, remove_info.index);
+	}
+	idx_t removed_index = remove_info.index;
 	if (removed_index == DConstants::INVALID_INDEX) {
 		return nullptr;
 	}
+
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	create_info->temporary = temporary;
+
 	idx_t removed_generated_columns = 0;
 	for (idx_t i = 0; i < generated_columns.size(); i++) {
 		bool remove;
@@ -494,7 +515,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 
 unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-	idx_t default_idx = GetColumnIndex(info.column_name);
+	auto default_info = GetColumnInfo(info.column_name);
+	idx_t default_idx = default_info.index;
 
 	// Copy all the columns, changing the value of the one that was specified by 'column_name'
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -530,7 +552,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		info.target_type = user_type_catalog->user_type;
 	}
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-	idx_t change_idx = GetColumnIndex(info.column_name);
+	auto change_info = GetColumnInfo(info.column_name);
+	idx_t change_idx = change_info.index;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
 		if (change_idx == i) {

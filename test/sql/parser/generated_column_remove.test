@@ -1,0 +1,20 @@
+# name: test/sql/parser/generated_column_remove.test
+# description: Remove generated column
+# group: [parser]
+
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+statement ok
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+
+# Delete the generaterd column
+statement ok
+ALTER TABLE unit DROP COLUMN total_profit;
+
+# We can now no longer select it
+statement error
+SELECT total_profit FROM unit;

@@ -79,13 +79,14 @@ public:
 	//! If the column does not exist:
 	//! If if_exists is true, returns DConstants::INVALID_INDEX
 	//! If if_exists is false, throws an exception
-	idx_t GetColumnIndex(string &name, bool if_exists = false);
+	TableColumnInfo GetColumnInfo(string &name, bool if_exists = false);
 
 private:
+	const string &GetColumnName(TableColumnInfo info);
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
 	unique_ptr<CatalogEntry> AddGeneratedColumn(ClientContext &context, AddGeneratedColumnInfo &info);
 	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo &info);
-	//	unique_ptr<CatalogEntry> RemoveGeneratedColumn(ClientContext &context, RemoveColumnInfo &info);
+	unique_ptr<CatalogEntry> RemoveGeneratedColumn(ClientContext &context, RemoveColumnInfo &info, idx_t index);
 	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo &info);
 	unique_ptr<CatalogEntry> SetDefault(ClientContext &context, SetDefaultInfo &info);
 	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info);
