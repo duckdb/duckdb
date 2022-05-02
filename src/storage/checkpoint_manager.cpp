@@ -25,6 +25,7 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/parser/column_definition.hpp"
 
 namespace duckdb {
 
@@ -334,11 +335,21 @@ void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reade
 	auto root_offset = reader.Read<idx_t>();
 
 	// create an adaptive radix tree around the expressions
-	//	auto art = make_unique<ART>(column_ids, move(unbound_expressions), constraint_type,db);
-	//	storage->AddIndex(move(art), bound_expressions
+	vector<unique_ptr<Expression>> unbound_expressions;
+	vector<unique_ptr<Expression>> bound_expressions;
+	idx_t key_nr = 0;
+	for (auto &column_id : info->column_ids) {
+		unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(table_catalog->columns[column_id].name,
+		                                                                    table_catalog->columns[column_id].type,
+		                                                                    ColumnBinding(0, info->column_ids.size())));
 
-	//	index_catalog->index = ART(root_block_id,root_offset);
-	int i = 0;
+		bound_expressions.push_back(
+		    make_unique<BoundReferenceExpression>(table_catalog->columns[column_id].type, key_nr++));
+	}
+	auto art = make_unique<ART>(info->column_ids, move(unbound_expressions), info->constraint_type, db, root_block_id,
+	                            root_offset);
+	index_catalog->index = art.get();
+	table_catalog->storage->AddIndex(move(art), bound_expressions);
 }
 
 //===--------------------------------------------------------------------===//

@@ -6,9 +6,9 @@ namespace duckdb {
 
 IndexCatalogEntry::IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info)
     : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info->index_name), index(nullptr), sql(info->sql) {
-	//	for (auto& index_expressions: info->expressions){
-	//		expressions.push_back(index_expressions->Copy());
-	//	}
+	for (auto &index_expressions : info->parsed_expressions) {
+		expressions.push_back(index_expressions->Copy());
+	}
 }
 
 IndexCatalogEntry::~IndexCatalogEntry() {
@@ -38,20 +38,16 @@ pair<idx_t, idx_t> IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &writer)
 void IndexCatalogEntry::SerializeMetadata(duckdb::MetaBlockWriter &serializer) {
 	// Here we serialize the index metadata in the following order:
 	// schema name, table name, index name, sql, index type, index constraint type, expression list.
+	// column_ids, unbound_expression
 	FieldWriter writer(serializer);
 	writer.WriteString(info->schema);
 	writer.WriteString(info->table);
 	writer.WriteString(name);
 	writer.WriteString(sql);
-	if (index->type == IndexType::ART) {
-		uint8_t index_type = 0;
-		writer.WriteField(index_type);
-	} else {
-		throw NotImplementedException("Can't serialize index type");
-	}
-	uint8_t constraint_type = index->constraint_type;
-	writer.WriteField(constraint_type);
+	writer.WriteField(index->type);
+	writer.WriteField(index->constraint_type);
 	writer.WriteSerializableList(expressions);
+	writer.WriteList<idx_t>(index->column_ids);
 	writer.Finalize();
 }
 
@@ -70,21 +66,13 @@ unique_ptr<CreateIndexInfo> IndexCatalogEntry::DeserializeMetadata(Deserializer 
 	create_index_info->table->table_name = reader.ReadRequired<string>();
 	create_index_info->index_name = reader.ReadRequired<string>();
 	create_index_info->sql = reader.ReadRequired<string>();
-	auto index_type = reader.ReadRequired<uint8_t>();
-	if (index_type == 0) {
-		create_index_info->index_type = IndexType::ART;
-	} else {
-		throw NotImplementedException("Can't deserialize index type");
-	}
-	auto index_constraint_type = reader.ReadRequired<uint8_t>();
-	if (index_constraint_type == 0) {
-		create_index_info->unique = false;
-	} else if (index_constraint_type == 1) {
-		create_index_info->unique = true;
-	} else {
-		throw NotImplementedException("Can't deserialize this index constraint");
-	}
+	create_index_info->index_type = IndexType(reader.ReadRequired<uint8_t>());
+	create_index_info->constraint_type = IndexConstraintType(reader.ReadRequired<uint8_t>());
 	create_index_info->expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
+	for (auto &expr : create_index_info->expressions) {
+		create_index_info->parsed_expressions.push_back(expr->Copy());
+	}
+	create_index_info->column_ids = reader.ReadRequiredList<idx_t>();
 	reader.Finalize();
 	return create_index_info;
 }

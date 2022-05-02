@@ -78,15 +78,13 @@ public:
 
 	//! Root of the tree
 	Node *tree;
-	//! True if machine is little endian
-	bool is_little_endian;
 
 	DatabaseInstance &db;
 
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for a single predicate
 	unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction, Value value,
-	                                                         ExpressionType expressionType) override;
+	                                                         ExpressionType expression_type) override;
 
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for two predicates

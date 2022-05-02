@@ -33,36 +33,36 @@ uint32_t EncodeFloat(float x);
 uint64_t EncodeDouble(double x);
 
 template <class T>
-void EncodeData(data_ptr_t dataptr, T value, bool is_little_endian) {
+void EncodeData(data_ptr_t dataptr, T value) {
 	throw NotImplementedException("Cannot create data from this type");
 }
 
 template <>
-void EncodeData(data_ptr_t dataptr, bool value, bool is_little_endian);
+void EncodeData(data_ptr_t dataptr, bool value);
 template <>
-void EncodeData(data_ptr_t dataptr, int8_t value, bool is_little_endian);
+void EncodeData(data_ptr_t dataptr, int8_t value);
 template <>
-void EncodeData(data_ptr_t dataptr, int16_t value, bool is_little_endian);
+void EncodeData(data_ptr_t dataptr, int16_t value);
 template <>
-void EncodeData(data_ptr_t dataptr, int32_t value, bool is_little_endian);
+void EncodeData(data_ptr_t dataptr, int32_t value);
 template <>
-void EncodeData(data_ptr_t dataptr, int64_t value, bool is_little_endian);
+void EncodeData(data_ptr_t dataptr, int64_t value);
 template <>
-void EncodeData(data_ptr_t dataptr, uint8_t value, bool is_little_endian);
+void EncodeData(data_ptr_t dataptr, uint8_t value);
 template <>
-void EncodeData(data_ptr_t dataptr, uint16_t value, bool is_little_endian);
+void EncodeData(data_ptr_t dataptr, uint16_t value);
 template <>
-void EncodeData(data_ptr_t dataptr, uint32_t value, bool is_little_endian);
+void EncodeData(data_ptr_t dataptr, uint32_t value);
 template <>
-void EncodeData(data_ptr_t dataptr, uint64_t value, bool is_little_endian);
+void EncodeData(data_ptr_t dataptr, uint64_t value);
 template <>
-void EncodeData(data_ptr_t dataptr, hugeint_t value, bool is_little_endian);
+void EncodeData(data_ptr_t dataptr, hugeint_t value);
 template <>
-void EncodeData(data_ptr_t dataptr, double value, bool is_little_endian);
+void EncodeData(data_ptr_t dataptr, double value);
 template <>
-void EncodeData(data_ptr_t dataptr, float value, bool is_little_endian);
+void EncodeData(data_ptr_t dataptr, float value);
 template <>
-void EncodeData(data_ptr_t dataptr, interval_t value, bool is_little_endian);
+void EncodeData(data_ptr_t dataptr, interval_t value);
 
 void EncodeStringDataPrefix(data_ptr_t dataptr, string_t value, idx_t prefix_len);
 
