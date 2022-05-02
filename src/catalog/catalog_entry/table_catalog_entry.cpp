@@ -347,20 +347,61 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	                                      new_storage);
 }
 
+void DependsOnColumn(const ParsedExpression &expr, const string &column, bool &result) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto column_ref = (ColumnRefExpression &)expr;
+		auto &column_name = column_ref.GetColumnName();
+		if (column_name == column) {
+			result = true;
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { DependsOnColumn(child, column, result); });
+}
+
+// static void PopulateDependencyMap(const ParsedExpression& expr, case_insensitive_map_t<vector<idx_t>>&
+// dependency_map, idx_t index) { 	if (expr.type == ExpressionType::COLUMN_REF) { 		auto column_ref = (ColumnRefExpression
+//&)expr; 		auto &column_name = column_ref.GetColumnName(); 		dependency_map[column_name].push_back(index);
+//	}
+//	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
+//		PopulateDependencyMap(expr, dependency_map, index);
+//	});
+// }
+
+// unique_ptr<CatalogEntry> TableCatalogEntry::RemoveGeneratedColumn(ClientContext &context, RemoveColumnInfo& info) {
+//
+// }
+
 unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
+
+	//	if (...) {
+	//		RemoveGeneratedColumn(context, info);
+	//	}
+
 	idx_t removed_index = GetColumnIndex(info.removed_column, info.if_exists);
 	if (removed_index == DConstants::INVALID_INDEX) {
 		return nullptr;
 	}
+	idx_t removed_generated_columns = 0;
+	for (idx_t i = 0; i < generated_columns.size(); i++) {
+		bool remove;
+		DependsOnColumn(*generated_columns[i].expression, columns[removed_index].name, remove);
+		if (remove) {
+			removed_generated_columns++;
+			continue;
+		}
+		create_info->generated_columns.push_back(generated_columns[i].Copy());
+	}
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (removed_index != i) {
 			create_info->columns.push_back(columns[i].Copy());
+		} else {
+			if (removed_generated_columns && !info.cascade) {
+				throw CatalogException("Cannot drop column: column is a dependency of 1 or more generated column(s)");
+			}
 		}
-	}
-	for (auto &gen_column : generated_columns) {
-		create_info->generated_columns.push_back(gen_column.Copy());
 	}
 	if (create_info->columns.empty()) {
 		throw CatalogException("Cannot drop column: table only has one column remaining!");

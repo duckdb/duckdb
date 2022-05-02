@@ -51,7 +51,9 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_DropColumn: {
-			result->info = make_unique<RemoveColumnInfo>(qname.schema, qname.name, command->name, command->missing_ok);
+			bool cascade = command->behavior == duckdb_libpgquery::PG_DROP_CASCADE;
+			result->info =
+			    make_unique<RemoveColumnInfo>(qname.schema, qname.name, command->name, command->missing_ok, cascade);
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_ColumnDefault: {

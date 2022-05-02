@@ -163,13 +163,15 @@ public:
 // RemoveColumnInfo
 //===--------------------------------------------------------------------===//
 struct RemoveColumnInfo : public AlterTableInfo {
-	RemoveColumnInfo(string schema, string table, string removed_column, bool if_exists);
+	RemoveColumnInfo(string schema, string table, string removed_column, bool if_exists, bool cascade);
 	~RemoveColumnInfo() override;
 
 	//! The column to remove
 	string removed_column;
 	//! Whether or not an error should be thrown if the column does not exist
 	bool if_exists;
+	//! Whether or not the column should be removed if a dependency conflict arises (used by GENERATED columns)
+	bool cascade;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
