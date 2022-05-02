@@ -11,7 +11,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/cycle_counter.hpp"
-#include "duckdb/common/random_engine.hpp"
 #include "duckdb/function/function.hpp"
 
 namespace duckdb {

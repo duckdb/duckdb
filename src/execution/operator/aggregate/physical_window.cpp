@@ -337,10 +337,10 @@ static void SortCollectionForPartition(WindowOperatorState &state, BoundWindowEx
 
 	// fuse input and sort collection into one
 	// (sorting columns are not decoded, and we need them later)
-	ChunkCollection payload;
-	payload.Fuse(input);
-	payload.Fuse(over);
-	auto payload_types = payload.Types();
+	auto payload_types = input.Types();
+	payload_types.insert(payload_types.end(), over.Types().begin(), over.Types().end());
+	DataChunk payload_chunk;
+	payload_chunk.InitializeEmpty(payload_types);
 
 	// initialise partitioning memory
 	// to minimise copying, we fill up a chunk and then sink it.
@@ -366,8 +366,15 @@ static void SortCollectionForPartition(WindowOperatorState &state, BoundWindowEx
 	// sink collection chunks into row format
 	const idx_t chunk_count = over.ChunkCount();
 	for (idx_t i = 0; i < chunk_count; i++) {
+		auto &input_chunk = *input.Chunks()[i];
+		for (idx_t col_idx = 0; col_idx < input_chunk.ColumnCount(); ++col_idx) {
+			payload_chunk.data[col_idx].Reference(input_chunk.data[col_idx]);
+		}
 		auto &over_chunk = *over.Chunks()[i];
-		auto &payload_chunk = *payload.Chunks()[i];
+		for (idx_t col_idx = 0; col_idx < over_chunk.ColumnCount(); ++col_idx) {
+			payload_chunk.data[input_chunk.ColumnCount() + col_idx].Reference(over_chunk.data[col_idx]);
+		}
+		payload_chunk.SetCardinality(input_chunk);
 
 		// Extract the hash partition, if any
 		if (hashes) {

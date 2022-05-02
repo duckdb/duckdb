@@ -156,7 +156,7 @@ static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry 
 }
 
 static void PragmaTableInfoFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                    FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &bind_data = (PragmaTableFunctionData &)*bind_data_p;
 	auto &state = (PragmaTableOperatorData &)*operator_state;
 	switch (bind_data.entry->type) {

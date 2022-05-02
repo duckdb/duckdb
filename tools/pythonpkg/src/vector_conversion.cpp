@@ -47,7 +47,7 @@ void ScanPandasCategory(py::array &column, idx_t count, idx_t offset, Vector &ou
 }
 
 template <class T>
-void ScanPandasNumeric(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
+void ScanPandasMasked(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
 	ScanPandasColumn<T>(bind_data.numpy_col, bind_data.numpy_stride, offset, out, count);
 	auto &result_mask = FlatVector::Validity(out);
 	if (bind_data.mask) {
@@ -113,31 +113,34 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
                                      Vector &out) {
 	switch (bind_data.pandas_type) {
 	case PandasType::BOOLEAN:
+		ScanPandasMasked<bool>(bind_data, count, offset, out);
+		break;
+	case PandasType::BOOL:
 		ScanPandasColumn<bool>(numpy_col, bind_data.numpy_stride, offset, out, count);
 		break;
 	case PandasType::UTINYINT:
-		ScanPandasNumeric<uint8_t>(bind_data, count, offset, out);
+		ScanPandasMasked<uint8_t>(bind_data, count, offset, out);
 		break;
 	case PandasType::USMALLINT:
-		ScanPandasNumeric<uint16_t>(bind_data, count, offset, out);
+		ScanPandasMasked<uint16_t>(bind_data, count, offset, out);
 		break;
 	case PandasType::UINTEGER:
-		ScanPandasNumeric<uint32_t>(bind_data, count, offset, out);
+		ScanPandasMasked<uint32_t>(bind_data, count, offset, out);
 		break;
 	case PandasType::UBIGINT:
-		ScanPandasNumeric<uint64_t>(bind_data, count, offset, out);
+		ScanPandasMasked<uint64_t>(bind_data, count, offset, out);
 		break;
 	case PandasType::TINYINT:
-		ScanPandasNumeric<int8_t>(bind_data, count, offset, out);
+		ScanPandasMasked<int8_t>(bind_data, count, offset, out);
 		break;
 	case PandasType::SMALLINT:
-		ScanPandasNumeric<int16_t>(bind_data, count, offset, out);
+		ScanPandasMasked<int16_t>(bind_data, count, offset, out);
 		break;
 	case PandasType::INTEGER:
-		ScanPandasNumeric<int32_t>(bind_data, count, offset, out);
+		ScanPandasMasked<int32_t>(bind_data, count, offset, out);
 		break;
 	case PandasType::BIGINT:
-		ScanPandasNumeric<int64_t>(bind_data, count, offset, out);
+		ScanPandasMasked<int64_t>(bind_data, count, offset, out);
 		break;
 	case PandasType::FLOAT:
 		ScanPandasFpColumn<float>((float *)numpy_col.data(), count, offset, out);
@@ -288,6 +291,9 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_type, PandasType &pandas_type) {
 	if (col_type == "bool") {
 		duckdb_col_type = LogicalType::BOOLEAN;
+		pandas_type = PandasType::BOOL;
+	} else if (col_type == "boolean") {
+		duckdb_col_type = LogicalType::BOOLEAN;
 		pandas_type = PandasType::BOOLEAN;
 	} else if (col_type == "uint8" || col_type == "Uint8") {
 		duckdb_col_type = LogicalType::UTINYINT;
@@ -370,8 +376,9 @@ void VectorConversion::BindPandas(py::handle original_df, vector<PandasColumnBin
 		LogicalType duckdb_col_type;
 		PandasColumnBindData bind_data;
 		auto col_type = string(py::str(df_types[col_idx]));
-		if (col_type == "Int8" || col_type == "Int16" || col_type == "Int32" || col_type == "Int64") {
-			// numeric object
+		if (col_type == "Int8" || col_type == "Int16" || col_type == "Int32" || col_type == "Int64" ||
+		    col_type == "boolean") {
+			// masked object
 			// fetch the internal data and mask array
 			bind_data.numpy_col = get_fun(df_columns[col_idx]).attr("array").attr("_data");
 			bind_data.mask = make_unique<NumPyArrayWrapper>(get_fun(df_columns[col_idx]).attr("array").attr("_mask"));

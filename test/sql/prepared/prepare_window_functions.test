@@ -1,0 +1,24 @@
+# name: test/sql/prepared/prepare_window_functions.test
+# description: PREPARE of window functions
+# group: [prepared]
+
+require vector_size 512
+
+# ambiguous window function usage
+statement ok
+PREPARE v1 AS SELECT SUM(?) OVER ()
+
+query I
+EXECUTE v1(2)
+----
+2
+
+query I
+EXECUTE v1(2::HUGEINT)
+----
+2
+
+query I
+EXECUTE v1(0.5)
+----
+0.5

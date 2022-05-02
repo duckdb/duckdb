@@ -51,7 +51,7 @@ unique_ptr<FunctionOperatorData> PragmaDatabaseSizeInit(ClientContext &context, 
 }
 
 void PragmaDatabaseSizeFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (PragmaDatabaseSizeData &)*operator_state;
 	if (data.finished) {
 		return;

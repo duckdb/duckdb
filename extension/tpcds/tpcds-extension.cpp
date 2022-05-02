@@ -49,7 +49,7 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunction
 }
 
 static void DsdgenFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                           DataChunk *input, DataChunk &output) {
+                           DataChunk &output) {
 	auto &data = (DSDGenFunctionData &)*bind_data;
 	if (data.finished) {
 		return;
@@ -84,7 +84,7 @@ static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, TableFunc
 }
 
 static void TPCDSQueryFunction(ClientContext &context, const FunctionData *bind_data,
-                               FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                               FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (TPCDSData &)*operator_state;
 	idx_t tpcds_queries = tpcds::DSDGenWrapper::QueriesCount();
 	if (data.offset >= tpcds_queries) {
@@ -119,7 +119,7 @@ static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, Tab
 }
 
 static void TPCDSQueryAnswerFunction(ClientContext &context, const FunctionData *bind_data,
-                                     FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                     FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (TPCDSData &)*operator_state;
 	idx_t tpcds_queries = tpcds::DSDGenWrapper::QueriesCount();
 	vector<double> scale_factors {1, 10};
