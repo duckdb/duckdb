@@ -11,7 +11,9 @@ Node256::Node256(size_t compression_length) : Node(NodeType::N256, compression_l
 Node256::~Node256() {
 	for (auto &child : children) {
 		if (child) {
-			delete child;
+			if (!IsSwizzled((uintptr_t)child)) {
+				delete child;
+			}
 		}
 	}
 }

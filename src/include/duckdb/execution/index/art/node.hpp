@@ -69,8 +69,10 @@ public:
 	//! Or if its a swizzled pointer.
 	static Node *GetChildSwizzled(ART &art, uintptr_t pointer);
 
+	//! Checks if a given pointer is a swizzled pointer or not.
+	static bool IsSwizzled(uintptr_t pointer);
 	//! Generate Swizzled Pointer from block id and offset
-	static uintptr_t GenerateSwizzledPointer(uint32_t block_id, uint32_t offset);
+	static uintptr_t GenerateSwizzledPointer(idx_t block_id, idx_t offset);
 
 	//! Compare the key with the prefix of the node, return the number matching bytes
 	static uint32_t PrefixMismatch(Node *node, Key &key, uint64_t depth);

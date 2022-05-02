@@ -16,7 +16,9 @@ Node16::Node16(size_t compression_length) : Node(NodeType::N16, compression_leng
 Node16::~Node16() {
 	for (auto &child : children) {
 		if (child) {
-			delete child;
+			if (!IsSwizzled((uintptr_t)child)) {
+				delete child;
+			}
 		}
 	}
 }

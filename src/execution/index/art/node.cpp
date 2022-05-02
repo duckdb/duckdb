@@ -30,12 +30,10 @@ idx_t Node::GetMin() {
 // LCOV_EXCL_STOP
 
 Node *Node::GetChildSwizzled(ART &art, uintptr_t pointer) {
-	idx_t pointer_size = sizeof(pointer) * 8;
-	// We first check if left-most bit is set
-	bool in_disk = (pointer >> (pointer_size - 1)) & 1;
-	if (in_disk) {
+	if (IsSwizzled(pointer)) {
 		// This means our pointer is not yet in memory, gotta deserialize this
 		// first we unset the bae
+		idx_t pointer_size = sizeof(pointer) * 8;
 		pointer = pointer & ~(1UL << pointer_size);
 		uint32_t block_id = pointer >> (pointer_size / 2);
 		uint32_t offset = pointer & 0xffffffff;
@@ -46,14 +44,25 @@ Node *Node::GetChildSwizzled(ART &art, uintptr_t pointer) {
 	}
 }
 
-uintptr_t Node::GenerateSwizzledPointer(uint32_t block_id, uint32_t offset) {
+bool Node::IsSwizzled(uintptr_t pointer) {
+	idx_t pointer_size = sizeof(pointer) * 8;
+	return (pointer >> (pointer_size - 1)) & 1;
+}
+
+uintptr_t Node::GenerateSwizzledPointer(idx_t block_id, idx_t offset) {
+	if (block_id == DConstants::INVALID_INDEX || offset == DConstants::INVALID_INDEX) {
+		return 0;
+	}
 	uintptr_t pointer;
 	idx_t pointer_size = sizeof(pointer) * 8;
 	pointer = block_id;
 	pointer = pointer << (pointer_size / 2);
 	pointer += offset;
 	// Set the left most bit to indicate this is a swizzled pointer and send it back to the mother-ship
-	return pointer << ((pointer_size)-1);
+	uintptr_t mask = 1;
+	mask = mask << (pointer_size - 1);
+	pointer |= mask;
+	return pointer;
 }
 
 Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {

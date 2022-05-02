@@ -16,7 +16,9 @@ Node48::Node48(size_t compression_length) : Node(NodeType::N48, compression_leng
 Node48::~Node48() {
 	for (auto &child : children) {
 		if (child) {
-			delete child;
+			if (!IsSwizzled((uintptr_t)child)) {
+				delete child;
+			}
 		}
 	}
 }

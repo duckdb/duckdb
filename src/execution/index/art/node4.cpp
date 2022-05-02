@@ -15,7 +15,9 @@ Node4::Node4(size_t compression_length) : Node(NodeType::N4, compression_length)
 Node4::~Node4() {
 	for (auto &child : children) {
 		if (child) {
-			delete child;
+			if (!IsSwizzled((uintptr_t)child)) {
+				delete child;
+			}
 		}
 	}
 }
