@@ -34,8 +34,8 @@
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
-#include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -140,30 +140,12 @@ CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreat
 	auto table_catalog_entry = (TableCatalogEntry*)entry;
 	auto binder = Binder::CreateBinder(context);
 
-	vector<string>	names;
-	vector<LogicalType> types;
+	auto table_ref = make_unique<BaseTableRef>();
+	table_ref->schema_name = table_catalog_entry->schema->name;
+	table_ref->table_name = table_catalog_entry->name;
+	unique_ptr<TableRef> ref = move(table_ref);
 
-	idx_t table_index = 0;
-
-	auto scan_function = TableScanFunction::GetFunction();
-	auto bind_data = make_unique<TableScanBindData>(table_catalog_entry);
-
-	for (auto& col : table_catalog_entry->columns) {
-		names.push_back(col.name);
-		types.push_back(col.type);
-	}
-
-	auto logical_get =
-		make_unique<LogicalGet>(table_index, scan_function, move(bind_data), types, names);
-	binder->bind_context.AddBaseTable(
-		table_index,
-		table_catalog_entry->name,
-		names,
-		types,
-		vector<string>(),
-		vector<LogicalType>(),
-		*logical_get
-	);
+	binder->Bind(*ref);
 
 	auto expr_binder = ExpressionBinder(*binder, context);
 	for (auto& col : table_catalog_entry->generated_columns) {
