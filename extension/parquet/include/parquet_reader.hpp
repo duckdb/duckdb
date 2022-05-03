@@ -46,7 +46,6 @@ class TableFilterSet;
 // 3. Grouped column fetch: less than X% scanned, total size exceeds our buffers
 //		a) No filters: dont group columns
 
-
 // TODO: Number 2 may be more complex? say we're scanning 10 columns with no touching buffers and we have 8 threads.
 // this means that for 10MB prefetch we're looking at 10*10*8 = 800MB Cache. this is quite a lot very quickly.
 // also consider there is an 11th column which we can not buffer because we exceed our buffer limit. This means
@@ -54,8 +53,6 @@ class TableFilterSet;
 // So say we want to scan with 20 buffers so we cannot buffer at full capacity.
 // If we take 10x10x8 plus the standard 1MB read for others, we will get: 800 + 10x1*8 = 880 MB of memory for
 // This is actually fine i guess? We can simply rely on the old mechanism when we run out of buffers.
-
-
 
 // TODO: But what if our columns are longer than our maximum buffer length?
 // How to do cache invalidation in this case?
@@ -70,7 +67,7 @@ struct ParquetReaderPrefetchConfig {
 	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.95;
 
 	/// The lowest avg column size for which to enable column chunk caching
-	static constexpr size_t COLUMN_CHUNK_CACHE_LOWER_LIMIT = 1 ; // tiny
+	static constexpr size_t COLUMN_CHUNK_CACHE_LOWER_LIMIT = 1; // tiny
 	/// The upper limit below which we may enable the column chunk cache
 	static constexpr size_t COLUMN_CHUNK_CACHE_MAX_SIZE = 1 << 26; // 64 MiB (* NUM_THREADS = 512MB max)
 };

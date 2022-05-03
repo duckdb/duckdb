@@ -76,7 +76,7 @@ idx_t ColumnReader::MaxRepeat() const {
 	return max_repeat;
 }
 
-void ColumnReader::RegisterPrefetch(ThriftFileTransport & transport) {
+void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport) {
 	if (chunk) {
 		auto size = chunk->meta_data.total_compressed_size;
 
@@ -94,9 +94,9 @@ size_t ColumnReader::TotalCompressedSize() {
 }
 
 idx_t ColumnReader::FileOffset() const {
-	// Note: For some reason, it's not trivial to determine where all Column data is stored. Chunk->file_offset apparently
-	// is not the first page of the data. Therefore we determine the address of the first page by taking the minimum of all
-	// page offsets.
+	// Note: For some reason, it's not trivial to determine where all Column data is stored. Chunk->file_offset
+	// apparently is not the first page of the data. Therefore we determine the address of the first page by taking the
+	// minimum of all page offsets.
 
 	if (!chunk) {
 		throw std::runtime_error("FileOffset called on ColumnReader with no chunk");
@@ -781,15 +781,15 @@ void StructColumnReader::Skip(idx_t num_values) {
 	}
 }
 
-void StructColumnReader::RegisterPrefetch(ThriftFileTransport & transport) {
-	for (auto& child: child_readers){
+void StructColumnReader::RegisterPrefetch(ThriftFileTransport &transport) {
+	for (auto &child : child_readers) {
 		child->RegisterPrefetch(transport);
 	}
 }
 
 size_t StructColumnReader::TotalCompressedSize() {
 	size_t size = 0;
-	for (auto& child: child_readers){
+	for (auto &child : child_readers) {
 		size += child->TotalCompressedSize();
 	}
 	return size;

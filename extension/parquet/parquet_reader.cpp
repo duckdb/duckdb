@@ -47,13 +47,14 @@ using duckdb_parquet::format::SchemaElement;
 using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
 
-static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftProtocol(Allocator &allocator,
-                                                                                   FileHandle &file_handle, FileOpener &opener, bool prefetch_mode) {
+static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
+CreateThriftProtocol(Allocator &allocator, FileHandle &file_handle, FileOpener &opener, bool prefetch_mode) {
 	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle, opener, prefetch_mode);
 	return make_unique<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(move(transport));
 }
 
-static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle, FileOpener& opener) {
+static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle,
+                                                         FileOpener &opener) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
 	auto proto = CreateThriftProtocol(allocator, file_handle, opener, false);
@@ -524,7 +525,7 @@ size_t ParquetReader::GetGroupCompressedSize(ParquetReaderScanState &state) {
 
 	// If the global total_compressed_size is not set, we can still calculate it
 	if (group.total_compressed_size == 0) {
-		for (auto& column_chunk: group.columns) {
+		for (auto &column_chunk : group.columns) {
 			calc_compressed_size += column_chunk.meta_data.total_compressed_size;
 		}
 	}
@@ -541,7 +542,7 @@ size_t ParquetReader::GetGroupSpan(ParquetReaderScanState &state) {
 	idx_t min_offset = NumericLimits<idx_t>::Maximum();
 	idx_t max_offset = NumericLimits<idx_t>::Minimum();
 
-	for (auto& column_chunk : group.columns) {
+	for (auto &column_chunk : group.columns) {
 
 		// Set the min offset
 		idx_t current_min_offset = NumericLimits<idx_t>::Maximum();
@@ -563,7 +564,7 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 	auto &group = GetGroup(state);
 	idx_t min_offset = NumericLimits<idx_t>::Maximum();
 
-	for (auto& column_chunk : group.columns) {
+	for (auto &column_chunk : group.columns) {
 		if (column_chunk.meta_data.__isset.dictionary_page_offset) {
 			min_offset = MinValue<idx_t>(min_offset, column_chunk.meta_data.dictionary_page_offset);
 		}
@@ -632,9 +633,8 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 			state.prefetch_mode = false;
 		}
 
-		state.file_handle =
-		    file_handle->file_system.OpenFile(file_handle->path, flags, FileSystem::DEFAULT_LOCK,
-		                                      FileSystem::DEFAULT_COMPRESSION, file_opener);
+		state.file_handle = file_handle->file_system.OpenFile(file_handle->path, flags, FileSystem::DEFAULT_LOCK,
+		                                                      FileSystem::DEFAULT_COMPRESSION, file_opener);
 	}
 
 	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, *file_opener, state.prefetch_mode);
@@ -836,21 +836,24 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			to_scan_compressed_bytes += root_reader->GetChildReader(file_col_idx)->TotalCompressedSize();
 		}
 
-		auto& group = GetGroup(state);
-		// TODO what if we have limit clause? we scan way to much? Can we push down limit clauses to prevent this? Should we exponential increase?
+		auto &group = GetGroup(state);
+		// Should we exponential increase?
 		if (state.prefetch_mode && state.group_offset != group.num_rows) {
-//			std::cout << "Prefetching row group " << state.group_idx_list[state.current_group] << " entirely\n";
+			//			std::cout << "Prefetching row group " << state.group_idx_list[state.current_group] << "
+			//entirely\n";
 			size_t total_row_group_span = GetGroupSpan(state);
 
 			double scan_percentage = (double)(to_scan_compressed_bytes) / total_row_group_span;
 
 			if (to_scan_compressed_bytes > total_row_group_span) {
-				throw std::runtime_error("Malformed parquet file: sum of total compressed bytes of columns seems incorrect");
+				throw std::runtime_error(
+				    "Malformed parquet file: sum of total compressed bytes of columns seems incorrect");
 			}
 
 			if (scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
 				// Prefetch the whole row group
-				if (!state.have_prefetched_group || state.prefetched_group != state.group_idx_list[state.current_group]) {
+				if (!state.have_prefetched_group ||
+				    state.prefetched_group != state.group_idx_list[state.current_group]) {
 					auto total_compressed_size = GetGroupCompressedSize(state);
 					if (total_compressed_size > 0) {
 						trans.RegisterPrefetch(GetGroupOffset(state), total_row_group_span);
@@ -862,7 +865,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			} else {
 				// Prefetch column-wise
 
-//				std::cout << "Prefetching row group " << group.ordinal << " column-wise\n";
+				//				std::cout << "Prefetching row group " << group.ordinal << " column-wise\n";
 				for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 
 					if (state.column_ids[out_col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
@@ -912,7 +915,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				break;
 			}
 
-//			std::cout << "Reading filter for col " << root_reader->GetChildReader(file_col_idx)->Schema().name << "\n";
+			//			std::cout << "Reading filter for col " << root_reader->GetChildReader(file_col_idx)->Schema().name
+			//<< "\n";
 			root_reader->GetChildReader(file_col_idx)
 			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[filter_col.first]);
 
@@ -933,7 +937,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				continue;
 			}
 			// TODO handle ROWID here, too
-//			std::cout << "Reading mask for col " << root_reader->GetChildReader(file_col_idx)->Schema().name << "\n";
+			//			std::cout << "Reading mask for col " << root_reader->GetChildReader(file_col_idx)->Schema().name <<
+			//"\n";
 			root_reader->GetChildReader(file_col_idx)
 			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[out_col_idx]);
 		}
@@ -958,7 +963,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				continue;
 			}
 
-//			std::cout << "Reading nofilter for col " << root_reader->GetChildReader(file_col_idx)->Schema().name << "\n";
+			//			std::cout << "Reading nofilter for col " << root_reader->GetChildReader(file_col_idx)->Schema().name
+			//<< "\n";
 			root_reader->GetChildReader(file_col_idx)
 			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[out_col_idx]);
 		}

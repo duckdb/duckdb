@@ -1543,7 +1543,7 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 	}
 	bool use_large_buffers = !file_handle->PlainFileSource() && mode == ParserMode::PARSING;
 	idx_t buffer_read_size = use_large_buffers ? INITIAL_BUFFER_SIZE_MAX : INITIAL_BUFFER_SIZE;
-	idx_t maximum_line_size = use_large_buffers ? 2*INITIAL_BUFFER_SIZE_MAX : options.maximum_line_size;
+	idx_t maximum_line_size = use_large_buffers ? 2 * INITIAL_BUFFER_SIZE_MAX : options.maximum_line_size;
 
 	if (read_ahead_buffer) {
 		read_count = ra_buffer_size;
@@ -1599,18 +1599,20 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 
 	// During parsing, we prefetch the next Buffer Asynchronously
 	if (use_large_buffers && !ra_is_eof && read_count == buffer_read_size) {
-		// Note that we reserve an extra options.maximum_line_size here to prevent an extra copy later as this guarantees
-		// we can copy the remaining bytes into this buffer
+		// Note that we reserve an extra options.maximum_line_size here to prevent an extra copy later as this
+		// guarantees we can copy the remaining bytes into this buffer
 		size_t read_ahead_buffer_alloc_size = buffer_read_size + options.maximum_line_size + 1;
 
 		ra_fetch_in_progress = true;
-		thread t([&](size_t read_size, size_t alloc_size) {
-			read_ahead_buffer = unique_ptr<char[]>(new char[alloc_size]);
-			ra_buffer_size = file_handle->Read(read_ahead_buffer.get() + options.maximum_line_size, read_size);
-		  	ra_is_eof = ra_buffer_size != read_size;
-		  	ra_fetch_in_progress = false;
-		  	ra_fetch_cv.notify_one();
-		}, buffer_read_size, read_ahead_buffer_alloc_size);
+		thread t(
+		    [&](size_t read_size, size_t alloc_size) {
+			    read_ahead_buffer = unique_ptr<char[]>(new char[alloc_size]);
+			    ra_buffer_size = file_handle->Read(read_ahead_buffer.get() + options.maximum_line_size, read_size);
+			    ra_is_eof = ra_buffer_size != read_size;
+			    ra_fetch_in_progress = false;
+			    ra_fetch_cv.notify_one();
+		    },
+		    buffer_read_size, read_ahead_buffer_alloc_size);
 
 		t.detach();
 	}

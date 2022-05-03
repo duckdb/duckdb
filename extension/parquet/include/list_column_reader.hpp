@@ -35,10 +35,9 @@ public:
 		return child_column_reader->TotalCompressedSize();
 	}
 
-	void RegisterPrefetch(ThriftFileTransport & transport) override {
+	void RegisterPrefetch(ThriftFileTransport &transport) override {
 		child_column_reader->RegisterPrefetch(transport);
 	}
-
 
 private:
 	unique_ptr<ColumnReader> child_column_reader;

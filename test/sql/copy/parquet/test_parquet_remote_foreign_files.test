@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/parquet_http_prefetch.test
+# name: test/sql/copy/parquet/test_parquet_remote_foreign_files.test
 # description: Test queries on tricky parquet files over http. Note: on GH connection issues, these tests fail silently
 # group: [parquet]
 

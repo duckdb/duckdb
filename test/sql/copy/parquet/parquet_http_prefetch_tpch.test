@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/parquet_http_prefetch.test
+# name: test/sql/copy/parquet/parquet_http_prefetch_tpch.test
 # description: Test all tpch queries on tpch sf0.01 over s3
 # group: [parquet]
 

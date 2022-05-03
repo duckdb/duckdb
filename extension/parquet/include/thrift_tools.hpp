@@ -16,7 +16,7 @@ namespace duckdb {
 
 /// A ReadHead for prefetching data in a specific range
 struct ReadHead {
-	ReadHead(idx_t location, size_t size) : location(location), size(size){};
+	ReadHead(idx_t location, size_t size) : location(location), size(size) {};
 	/// Hint info
 	idx_t location;
 	size_t size;
@@ -34,11 +34,9 @@ struct ReadHead {
 };
 
 // Comparator for ReadHeads that are either overlapping, adjacent, or within ALLOW_GAP bytes from each other
-struct ReadHeadComparator
-{
+struct ReadHeadComparator {
 	static constexpr size_t ALLOW_GAP = 1 << 14; // 16 KiB
-	bool operator()( const ReadHead* a, const ReadHead* b ) const
-	{
+	bool operator()(const ReadHead *a, const ReadHead *b) const {
 		auto a_start = a->location;
 		auto a_end = a->location + a->size;
 		auto b_start = b->location;
@@ -55,7 +53,8 @@ struct ReadHeadComparator
 /// 1: register all ranges that will be read, merging ranges that are consecutive
 /// 2: prefetch all registered ranges
 struct ReadAheadBuffer {
-	ReadAheadBuffer(Allocator &allocator, FileHandle &handle, FileOpener& opener) : allocator(allocator), handle(handle), file_opener(opener) {
+	ReadAheadBuffer(Allocator &allocator, FileHandle &handle, FileOpener &opener)
+	    : allocator(allocator), handle(handle), file_opener(opener) {
 	}
 
 	/// The list of read heads
@@ -63,11 +62,11 @@ struct ReadAheadBuffer {
 	/// Store copies of file handles for efficient async prefetching.
 	vector<unique_ptr<FileHandle>> handle_copies;
 	/// Set for merging consecutive ranges
-	std::set<ReadHead*, ReadHeadComparator> merge_set;
+	std::set<ReadHead *, ReadHeadComparator> merge_set;
 
 	Allocator &allocator;
 	FileHandle &handle;
-	FileOpener& file_opener;
+	FileOpener &file_opener;
 
 	idx_t total_size = 0;
 
@@ -75,9 +74,9 @@ struct ReadAheadBuffer {
 	void AddReadHead(idx_t pos, idx_t len, bool merge_buffers = true) {
 		// Attempt to merge with existing
 		if (merge_buffers) {
-			ReadHead new_read_head{pos, len};
+			ReadHead new_read_head {pos, len};
 			auto lookup_set = merge_set.find(&new_read_head);
-			if (lookup_set != merge_set.end()){
+			if (lookup_set != merge_set.end()) {
 				auto existing_head = *lookup_set;
 				auto new_start = MinValue<idx_t>(existing_head->location, new_read_head.location);
 				auto new_length = MaxValue<idx_t>(existing_head->GetEnd(), new_read_head.GetEnd()) - new_start;
@@ -89,7 +88,7 @@ struct ReadAheadBuffer {
 
 		read_heads.emplace_front(ReadHead(pos, len));
 		total_size += len;
-		auto& read_head = read_heads.front();
+		auto &read_head = read_heads.front();
 		merge_set.insert(&read_head);
 
 		if (read_head.GetEnd() > handle.GetFileSize()) {
@@ -98,8 +97,8 @@ struct ReadAheadBuffer {
 	}
 
 	/// Returns the relevant read head
-	ReadHead* GetReadHead(idx_t pos) {
-		for (auto& read_head: read_heads) {
+	ReadHead *GetReadHead(idx_t pos) {
+		for (auto &read_head : read_heads) {
 			if (pos >= read_head.location && pos < read_head.GetEnd()) {
 				return &read_head;
 			}
@@ -114,7 +113,7 @@ struct ReadAheadBuffer {
 
 		bool async = read_heads.size() >= 2;
 
-		for (auto& read_head: read_heads) {
+		for (auto &read_head : read_heads) {
 			read_head.Allocate(allocator);
 
 			if (read_head.GetEnd() > handle.GetFileSize()) {
@@ -129,7 +128,7 @@ struct ReadAheadBuffer {
 				} else {
 					auto flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO;
 					file_handle = handle.file_system.OpenFile(handle.path, flags, FileSystem::DEFAULT_LOCK,
-					                                                FileSystem::DEFAULT_COMPRESSION, &file_opener);
+					                                          FileSystem::DEFAULT_COMPRESSION, &file_opener);
 				}
 				auto file_handle_ptr = file_handle.get();
 				handles_in_progress.push_back(std::move(file_handle));
@@ -138,27 +137,28 @@ struct ReadAheadBuffer {
 				thread upload_thread(
 				    [](ReadHead &read_head, FileHandle *file_handle) {
 					    file_handle->Read(read_head.data->get(), read_head.size, read_head.location);
-//					    std::cout << "Prefetch async new " << read_head.location << " for " << read_head.size
-//					              << " bytes\n";
+					    //					    std::cout << "Prefetch async new " << read_head.location << " for " <<
+					    //read_head.size
+					    //					              << " bytes\n";
 				    },
 				    std::ref(read_head), file_handle_ptr);
 
 				download_threads.push_back(std::move(upload_thread));
 			} else {
 				handle.Read(read_head.data->get(), read_head.size, read_head.location);
-//				std::cout << "Prefetch sync new " << read_head.location << " for " << read_head.size
-//				          << " bytes\n";
+				//				std::cout << "Prefetch sync new " << read_head.location << " for " << read_head.size
+				//				          << " bytes\n";
 			}
 		}
 
 		if (async) {
 			// Await all outstanding requests
-			for (auto& thread: download_threads) {
+			for (auto &thread : download_threads) {
 				thread.join();
 			}
 
 			// Store handles for reuse
-			for (auto& handle: handles_in_progress) {
+			for (auto &handle : handles_in_progress) {
 				handle_copies.push_back(std::move(handle));
 			}
 		}
@@ -172,8 +172,9 @@ class ThriftFileTransport : public duckdb_apache::thrift::transport::TVirtualTra
 public:
 	static constexpr size_t PREFETCH_FALLBACK_BUFFERSIZE = 1000000;
 
-	ThriftFileTransport(Allocator &allocator, FileHandle &handle_p, FileOpener& opener, bool prefetch_mode_p)
-	    : allocator(allocator), handle(handle_p), location(0), ra_buffer(ReadAheadBuffer(allocator, handle_p, opener)), prefetch_mode(prefetch_mode_p) {
+	ThriftFileTransport(Allocator &allocator, FileHandle &handle_p, FileOpener &opener, bool prefetch_mode_p)
+	    : allocator(allocator), handle(handle_p), location(0), ra_buffer(ReadAheadBuffer(allocator, handle_p, opener)),
+	      prefetch_mode(prefetch_mode_p) {
 	}
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
@@ -210,7 +211,7 @@ public:
 
 	/// New prefetch
 	void RegisterPrefetch(idx_t pos, idx_t len) {
-		ra_buffer.AddReadHead(pos,len);
+		ra_buffer.AddReadHead(pos, len);
 	}
 	void PrefetchRegistered() {
 		ra_buffer.Prefetch();

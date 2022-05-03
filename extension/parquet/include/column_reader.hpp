@@ -66,7 +66,7 @@ public:
 	virtual idx_t FileOffset() const;
 	virtual size_t TotalCompressedSize();
 	virtual idx_t GroupRowsAvailable();
-	virtual void RegisterPrefetch(ThriftFileTransport & transport);
+	virtual void RegisterPrefetch(ThriftFileTransport &transport);
 
 	virtual unique_ptr<BaseStatistics> Stats(const std::vector<ColumnChunk> &columns);
 

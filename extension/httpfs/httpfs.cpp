@@ -131,9 +131,9 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 }
 
 HTTPFileSystem::~HTTPFileSystem() {
-	std::cout << "Bytes read : " << bytes_read << std::endl;
-	std::cout << "Bytes requested : " << bytes_requested << std::endl;
-	std::cout << "Requests made: " << requests_made << std::endl;
+	//	std::cout << "Bytes read : " << bytes_read << std::endl;
+	//	std::cout << "Bytes requested : " << bytes_requested << std::endl;
+	//	std::cout << "Requests made: " << requests_made << std::endl;
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
@@ -154,13 +154,13 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 	idx_t tries = 0;
 	idx_t max_tries = 2;
 
-	while(true) {
+	while (true) {
 		auto res = hfs.http_client->Get(
 		    path.c_str(), *headers,
 		    [&](const duckdb_httplib_openssl::Response &response) {
 			    if (response.status >= 400) {
-				    throw std::runtime_error("HTTP GET error on '" + url + "' (HTTP " + std::to_string(response.status) +
-				                             ")");
+				    throw std::runtime_error("HTTP GET error on '" + url + "' (HTTP " +
+				                             std::to_string(response.status) + ")");
 			    }
 			    if (response.status < 300) { // done redirecting
 				    out_offset = 0;
@@ -180,17 +180,17 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 		if (res.error() == duckdb_httplib_openssl::Error::Success) {
 			return make_unique<ResponseWrapper>(res.value());
 		} else {
-			// Retry mechanism for the keep-alive connection: sometimes the connection times out and the request will fail
-			// with a Read error. Refreshing the connection will solve this.
-			
+			// Retry mechanism for the keep-alive connection: sometimes the connection times out and the request will
+			// fail with a Read error. Refreshing the connection will solve this.
+
 			if (res.error() == duckdb_httplib_openssl::Error::Read) {
 				tries += 1;
 				hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str());
 			}
 
 			if (tries >= max_tries) {
-				throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
-				                         ")");
+				throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " +
+				                         std::to_string((int)res.error()) + ")");
 			}
 		}
 	}
@@ -265,7 +265,6 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 
 		if (to_read > 0 && hfh.buffer_available == 0) {
 			auto new_buffer_available = MinValue<idx_t>(hfh.READ_BUFFER_LEN, hfh.length - hfh.file_offset);
-
 			GetRangeRequest(hfh, hfh.path, {}, hfh.file_offset, (char *)hfh.read_buffer.get(), new_buffer_available);
 			hfh.buffer_available = new_buffer_available;
 			hfh.buffer_idx = 0;
