@@ -151,37 +151,49 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 	headers->insert(std::pair<std::string, std::string>("Range", range_expr));
 
 	idx_t out_offset = 0;
+	idx_t tries = 0;
+	idx_t max_tries = 2;
 
-	// New connection? -> setting up a new client like this is actually quite expensive
-//	auto client = GetClient(hfs.http_params, proto_host_port.c_str());
-
-//	auto res = client->Get(
-	auto res = hfs.http_client->Get(
-	    path.c_str(), *headers,
-	    [&](const duckdb_httplib_openssl::Response &response) {
-		    if (response.status >= 400) {
-			    throw std::runtime_error("HTTP GET error on '" + url + "' (HTTP " + std::to_string(response.status) +
-			                             ")");
-		    }
-		    if (response.status < 300) { // done redirecting
-			    out_offset = 0;
-			    auto content_length = std::stoll(response.get_header_value("Content-Length", 0));
-			    if ((idx_t)content_length != buffer_out_len) {
-				    throw std::runtime_error("offset error");
+	while(true) {
+		auto res = hfs.http_client->Get(
+		    path.c_str(), *headers,
+		    [&](const duckdb_httplib_openssl::Response &response) {
+			    if (response.status >= 400) {
+				    throw std::runtime_error("HTTP GET error on '" + url + "' (HTTP " + std::to_string(response.status) +
+				                             ")");
 			    }
-		    }
-		    return true;
-	    },
-	    [&](const char *data, size_t data_length) {
-		    memcpy(buffer_out + out_offset, data, data_length);
-		    out_offset += data_length;
-		    return true;
-	    });
-	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
-		                         ")");
+			    if (response.status < 300) { // done redirecting
+				    out_offset = 0;
+				    auto content_length = std::stoll(response.get_header_value("Content-Length", 0));
+				    if ((idx_t)content_length != buffer_out_len) {
+					    throw std::runtime_error("offset error");
+				    }
+			    }
+			    return true;
+		    },
+		    [&](const char *data, size_t data_length) {
+			    memcpy(buffer_out + out_offset, data, data_length);
+			    out_offset += data_length;
+			    return true;
+		    });
+
+		if (res.error() == duckdb_httplib_openssl::Error::Success) {
+			return make_unique<ResponseWrapper>(res.value());
+		} else {
+			// Retry mechanism for the keep-alive connection: sometimes the connection times out and the request will fail
+			// with a Read error. Refreshing the connection will solve this.
+			
+			if (res.error() == duckdb_httplib_openssl::Error::Read) {
+				tries += 1;
+				hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str());
+			}
+
+			if (tries >= max_tries) {
+				throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
+				                         ")");
+			}
+		}
 	}
-	return make_unique<ResponseWrapper>(res.value());
 }
 
 HTTPFileHandle::HTTPFileHandle(FileSystem &fs, std::string path, uint8_t flags, const HTTPParams &http_params)
