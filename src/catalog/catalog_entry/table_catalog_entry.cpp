@@ -264,35 +264,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
-static bool ColumnsContainsColumnRef(const vector<ColumnDefinition> &columns, const string &columnref) {
-	for (auto &col : columns) {
-		if (col.name == columnref) {
-			return true;
-		}
-	}
-	return false;
-}
-
-static void VerifyAndRenameExpression(const string &name, const vector<ColumnDefinition> &columns,
-                                      ParsedExpression &expr, vector<string> &unresolved_columns) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto column_ref = (ColumnRefExpression &)expr;
-		auto &column_name = column_ref.GetColumnName();
-		if ((!column_ref.IsQualified() || column_ref.GetTableName() == name) &&
-		    ColumnsContainsColumnRef(columns, column_name)) {
-			if (!column_ref.IsQualified()) {
-				auto &names = column_ref.column_names;
-				names.insert(names.begin(), name);
-			}
-		} else {
-			unresolved_columns.push_back(column_name);
-		}
-	}
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
-		VerifyAndRenameExpression(name, columns, (ParsedExpression &)child, unresolved_columns);
-	});
-}
-
 unique_ptr<CatalogEntry> TableCatalogEntry::AddGeneratedColumn(ClientContext &context, AddGeneratedColumnInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 
@@ -309,13 +280,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddGeneratedColumn(ClientContext &co
 	}
 	// and we add the new generated column
 	info.new_column.oid = columns.size();
-	vector<string> unresolved_columnrefs;
-	VerifyAndRenameExpression(info.name, create_info->columns, *info.new_column.expression, unresolved_columnrefs);
-	if (!unresolved_columnrefs.empty()) {
-		throw BinderException(
-		    "Not all columns referenced in the generated column expression could be resolved to the table \"%s\"",
-		    info.name);
-	}
+	info.new_column.CheckValidity(create_info->columns, info.name);
 	create_info->generated_columns.push_back(info.new_column.Copy());
 
 	// Copy all the constraints

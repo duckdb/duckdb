@@ -15,6 +15,8 @@
 
 namespace duckdb {
 
+class ColumnDefinition;
+
 //! A generated column of a table.
 class GeneratedColumnDefinition {
 public:
@@ -32,6 +34,8 @@ public:
 	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
 
 public:
+	//! Has to be run on a newly added generated column to ensure that its valid
+	void CheckValidity(const vector<ColumnDefinition> &columns, const string &table_name);
 	DUCKDB_API GeneratedColumnDefinition Copy() const;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;

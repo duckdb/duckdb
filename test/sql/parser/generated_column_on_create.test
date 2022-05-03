@@ -2,11 +2,18 @@
 # description: Create a table with a generated column
 # group: [parser]
 
-statement ok
+statement error
 CREATE TABLE unit (
+    total_profit INTEGER GENERATED ALWAYS AS(price * not_in_table) VIRTUAL,
     price INTEGER,
     amount_sold INTEGER,
-    total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL
+);
+
+statement ok
+CREATE TABLE unit (
+    total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL,
+    price INTEGER,
+    amount_sold INTEGER,
 );
 
 statement ok
@@ -17,7 +24,7 @@ SELECT total_profit FROM unit;
 ----
 20
 
-# Delete the generaterd column
+# Delete the generated column
 statement ok
 ALTER TABLE unit DROP COLUMN total_profit;
 

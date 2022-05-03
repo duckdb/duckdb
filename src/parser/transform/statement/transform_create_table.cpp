@@ -132,6 +132,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			throw NotImplementedException("ColumnDef type not handled yet");
 		}
 	}
+	for (auto &gen_col : info->generated_columns) {
+		gen_col.CheckValidity(info->columns, info->table);
+	}
 	result->info = move(info);
 	return result;
 }
