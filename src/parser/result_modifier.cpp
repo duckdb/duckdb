@@ -175,6 +175,7 @@ OrderByNode OrderByNode::Deserialize(Deserializer &source) {
 	auto type = reader.ReadRequired<OrderType>();
 	auto null_order = reader.ReadRequired<OrderByNullType>();
 	auto expression = reader.ReadRequiredSerializable<ParsedExpression>();
+	reader.Finalize();
 	return OrderByNode(type, null_order, move(expression));
 }
 

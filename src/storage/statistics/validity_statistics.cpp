@@ -46,22 +46,9 @@ unique_ptr<BaseStatistics> ValidityStatistics::Copy() const {
 	return make_unique<ValidityStatistics>(has_null, has_no_null);
 }
 
-void ValidityStatistics::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	Serialize(writer);
-	writer.Finalize();
-}
-
 void ValidityStatistics::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(has_null);
 	writer.WriteField<bool>(has_no_null);
-}
-
-unique_ptr<ValidityStatistics> ValidityStatistics::Deserialize(Deserializer &source) {
-	FieldReader reader(source);
-	auto result = Deserialize(reader);
-	reader.Finalize();
-	return result;
 }
 
 unique_ptr<ValidityStatistics> ValidityStatistics::Deserialize(FieldReader &reader) {

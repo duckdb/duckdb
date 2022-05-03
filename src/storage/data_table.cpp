@@ -704,6 +704,10 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 	}
 	state.current_row += append_count;
 	for (idx_t col_idx = 0; col_idx < column_stats.size(); col_idx++) {
+		auto type = chunk.data[col_idx].GetType().InternalType();
+		if (type == PhysicalType::LIST || type == PhysicalType::STRUCT) {
+			continue;
+		}
 		column_stats[col_idx]->UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}
 }

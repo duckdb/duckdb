@@ -107,8 +107,11 @@ inline uint64_t TemplatedHash(const T &elem) {
 	x ^= x >> 30;
 	x *= UINT64_C(0xbf58476d1ce4e5b9);
 	x ^= x >> 27;
-	x *= UINT64_C(0x94d049bb133111eb);
-	x ^= x >> 31;
+	// In the article, these two lines follow
+	//	x *= UINT64_C(0x94d049bb133111eb);
+	//	x ^= x >> 31;
+	// Removing them slightly reduces the bias of the hash function,
+	// But improves performance
 	return x;
 }
 
@@ -229,31 +232,23 @@ static void ComputeHashes(VectorData &vdata, PhysicalType type, uint64_t hashes[
 	}
 }
 
-static const uint64_t bits[] = {
-    (uint64_t)1 << 0,  (uint64_t)1 << 1,  (uint64_t)1 << 2,  (uint64_t)1 << 3,  (uint64_t)1 << 4,  (uint64_t)1 << 5,
-    (uint64_t)1 << 6,  (uint64_t)1 << 7,  (uint64_t)1 << 8,  (uint64_t)1 << 9,  (uint64_t)1 << 10, (uint64_t)1 << 11,
-    (uint64_t)1 << 12, (uint64_t)1 << 13, (uint64_t)1 << 14, (uint64_t)1 << 15, (uint64_t)1 << 16, (uint64_t)1 << 17,
-    (uint64_t)1 << 18, (uint64_t)1 << 19, (uint64_t)1 << 20, (uint64_t)1 << 21, (uint64_t)1 << 22, (uint64_t)1 << 23,
-    (uint64_t)1 << 24, (uint64_t)1 << 25, (uint64_t)1 << 26, (uint64_t)1 << 27, (uint64_t)1 << 28, (uint64_t)1 << 29,
-    (uint64_t)1 << 30, (uint64_t)1 << 31, (uint64_t)1 << 32, (uint64_t)1 << 33, (uint64_t)1 << 34, (uint64_t)1 << 35,
-    (uint64_t)1 << 36, (uint64_t)1 << 37, (uint64_t)1 << 38, (uint64_t)1 << 39, (uint64_t)1 << 40, (uint64_t)1 << 41,
-    (uint64_t)1 << 42, (uint64_t)1 << 43, (uint64_t)1 << 44, (uint64_t)1 << 45, (uint64_t)1 << 46, (uint64_t)1 << 47,
-    (uint64_t)1 << 48, (uint64_t)1 << 49, (uint64_t)1 << 50, (uint64_t)1 << 51, (uint64_t)1 << 52, (uint64_t)1 << 53,
-    (uint64_t)1 << 54, (uint64_t)1 << 55, (uint64_t)1 << 56, (uint64_t)1 << 57, (uint64_t)1 << 58, (uint64_t)1 << 59,
-    (uint64_t)1 << 60, (uint64_t)1 << 61, (uint64_t)1 << 62, (uint64_t)1 << 63};
+//! Taken from https://stackoverflow.com/a/72088344
+static inline uint8_t CountTrailingZeros(uint64_t &x) {
+	static constexpr const uint64_t DEBRUIJN = 0x03f79d71b4cb0a89;
+	static constexpr const uint8_t LOOKUP[] = {0,  47, 1,  56, 48, 27, 2,  60, 57, 49, 41, 37, 28, 16, 3,  61,
+	                                           54, 58, 35, 52, 50, 42, 21, 44, 38, 32, 29, 23, 17, 11, 4,  62,
+	                                           46, 55, 26, 59, 40, 36, 15, 53, 34, 51, 20, 43, 31, 22, 10, 45,
+	                                           25, 39, 14, 33, 19, 30, 9,  24, 13, 18, 8,  12, 7,  6,  5,  63};
+	return LOOKUP[(DEBRUIJN * (x ^ (x - 1))) >> 58];
+}
 
 static inline void ComputeIndexAndCount(uint64_t &hash, uint8_t &prefix) {
 	uint64_t index = hash & ((1 << 12) - 1); /* Register index. */
 	hash >>= 12;                             /* Remove bits used to address the register. */
-	hash |= ((uint64_t)1 << (64 - 12));      /* Make sure the loop terminates
-	                                          and count will be <= Q+1. */
-	idx_t i = 0;
-	while (hash & bits[i]) {
-		i++;
-	}
+	hash |= ((uint64_t)1 << (64 - 12));      /* Make sure the count will be <= Q+1. */
 
+	prefix = CountTrailingZeros(hash) + 1; /* Add 1 since we count the "00000...1" pattern. */
 	hash = index;
-	prefix = i + 1; /* Add 1 since we count the "00000...1" pattern. */
 }
 
 void HyperLogLog::ProcessEntries(VectorData &vdata, PhysicalType type, uint64_t hashes[], uint8_t counts[],

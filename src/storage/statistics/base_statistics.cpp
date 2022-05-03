@@ -123,8 +123,10 @@ void BaseStatistics::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	ValidityStatistics(CanHaveNull(), CanHaveNoNull()).Serialize(writer);
 	Serialize(writer);
-	writer.WriteField<StatisticsType>(stats_type);
-	writer.WriteOptional<BaseStatistics>(distinct_stats);
+	if (type.InternalType() != PhysicalType::BIT) {
+		writer.WriteField<StatisticsType>(stats_type);
+		writer.WriteOptional<BaseStatistics>(distinct_stats);
+	}
 	writer.Finalize();
 }
 

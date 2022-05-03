@@ -31,10 +31,7 @@ public:
 
 	unique_ptr<BaseStatistics> Copy() const override;
 
-	void Serialize(Serializer &serializer) const override;
 	void Serialize(FieldWriter &writer) const override;
-
-	static unique_ptr<ValidityStatistics> Deserialize(Deserializer &source);
 	static unique_ptr<ValidityStatistics> Deserialize(FieldReader &reader);
 
 	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const override;

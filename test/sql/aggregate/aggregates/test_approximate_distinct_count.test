@@ -55,13 +55,13 @@ create  table t as select range a, mod(range,10) b from range(2000);
 query III
 SELECT COUNT( a),approx_count_distinct(a),approx_count_distinct(b) from t
 ----
-2000	1987	10
+2000	1937	10
 
 query I
 SELECT approx_count_distinct(a) from t group by a %2;
 ----
-993
-985
+951
+998
 
 require vector_size 512
 
