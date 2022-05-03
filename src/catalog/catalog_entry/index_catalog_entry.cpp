@@ -27,7 +27,7 @@ string IndexCatalogEntry::ToSQL() {
 	return sql;
 }
 
-pair<idx_t, idx_t> IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &writer) {
+std::pair<idx_t, idx_t> IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &writer) {
 	if (index->type != IndexType::ART) {
 		throw NotImplementedException("The implementation of this index serialization does not exist.");
 	}
