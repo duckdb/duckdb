@@ -34,6 +34,8 @@
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
+#include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -129,10 +131,56 @@ CatalogEntry *SchemaCatalogEntry::CreateType(ClientContext &context, CreateTypeI
 CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
 	auto table = make_unique<TableCatalogEntry>(catalog, this, info);
 	table->storage->info->cardinality = table->storage->GetTotalRows();
+
 	CatalogEntry *entry = AddEntry(context, move(table), info->Base().on_conflict, info->dependencies);
 	if (!entry) {
 		return nullptr;
 	}
+
+	auto table_catalog_entry = (TableCatalogEntry*)entry;
+	auto binder = Binder::CreateBinder(context);
+
+	vector<string>	names;
+	vector<LogicalType> types;
+
+	idx_t table_index = 0;
+
+	auto scan_function = TableScanFunction::GetFunction();
+	auto bind_data = make_unique<TableScanBindData>(table_catalog_entry);
+
+	for (auto& col : table_catalog_entry->columns) {
+		names.push_back(col.name);
+		types.push_back(col.type);
+	}
+
+	auto logical_get =
+		make_unique<LogicalGet>(table_index, scan_function, move(bind_data), types, names);
+	binder->bind_context.AddBaseTable(
+		table_index,
+		table_catalog_entry->name,
+		names,
+		types,
+		vector<string>(),
+		vector<LogicalType>(),
+		*logical_get
+	);
+
+	auto expr_binder = ExpressionBinder(*binder, context);
+	for (auto& col : table_catalog_entry->generated_columns) {
+		auto expression = col.expression->Copy();
+		// expr_binder.target_type = col.type;
+		auto bound_expression = expr_binder.Bind(expression);
+		if (!bound_expression) {
+			throw BinderException("Could not resolve the expression of generated column \"%s\"", col.name);
+		}
+		if (bound_expression->HasSubquery()) {
+			throw BinderException("Expression of generated column \"%s\" contains a subquery, which isn't allowed", col.name);
+		}
+		if (bound_expression->return_type != col.type) {
+			throw BinderException("Return type of the expression(%s) and the specified type(%s) dont match for generated column \"%s\"", bound_expression->return_type.ToString(), col.type.ToString(), col.name);
+		}
+	}
+
 	// add a foreign key constraint in main key table if there is a foreign key constraint
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
 	FindForeignKeyInformation(entry, AlterForeignKeyType::AFT_ADD, fk_arrays);

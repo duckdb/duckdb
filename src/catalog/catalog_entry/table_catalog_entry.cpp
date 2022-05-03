@@ -26,6 +26,8 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -34,10 +36,10 @@ namespace duckdb {
 
 const string &TableCatalogEntry::GetColumnName(TableColumnInfo info) {
 	switch (info.column_type) {
-	case TableColumnType::STANDARD:
-		return columns[info.index].name;
 	case TableColumnType::GENERATED:
 		return generated_columns[info.index].name;
+	default:
+		return columns[info.index].name;
 	}
 }
 
@@ -291,7 +293,48 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddGeneratedColumn(ClientContext &co
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
-	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+	auto result = make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+
+	vector<string>	names;
+	vector<LogicalType> types;
+
+	idx_t table_index = 0;
+
+	auto scan_function = TableScanFunction::GetFunction();
+	auto bind_data = make_unique<TableScanBindData>(result.get());
+
+	for (auto& col : result->columns) {
+		names.push_back(col.name);
+		types.push_back(col.type);
+	}
+
+	auto logical_get =
+		make_unique<LogicalGet>(table_index, scan_function, move(bind_data), types, names);
+	binder->bind_context.AddBaseTable(
+		table_index,
+		result->name,
+		names,
+		types,
+		vector<string>(),
+		vector<LogicalType>(),
+		*logical_get
+	);
+
+	auto expr_binder = ExpressionBinder(*binder, context);
+	auto expression = info.new_column.expression->Copy();
+	// expr_binder.target_type = col.type;
+	auto bound_expression = expr_binder.Bind(expression);
+	if (!bound_expression) {
+		throw BinderException("Could not resolve the expression of generated column \"%s\"", info.new_column.name);
+	}
+	if (bound_expression->HasSubquery()) {
+		throw BinderException("Expression of generated column \"%s\" contains a subquery, which isn't allowed", info.new_column.name);
+	}
+	if (bound_expression->return_type != info.new_column.type) {
+		throw BinderException("Return type of the expression(%s) and the specified type(%s) dont match for generated column \"%s\"", bound_expression->return_type.ToString(), info.new_column.type.ToString(), info.new_column.name);
+	}
+
+	return result;
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, AddColumnInfo &info) {

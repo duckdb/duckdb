@@ -257,6 +257,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				}
 			}
 		}
+
 		// We first check if there are any user types, if yes we check to which custom types they refer.
 		auto bound_info = BindCreateTableInfo(move(stmt.info));
 		auto root = move(bound_info->query);
