@@ -48,15 +48,15 @@ using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftProtocol(Allocator &allocator,
-                                                                                   FileHandle &file_handle, FileOpener &opener) {
-	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle, opener);
+                                                                                   FileHandle &file_handle, FileOpener &opener, bool prefetch_mode) {
+	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle, opener, prefetch_mode);
 	return make_unique<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(move(transport));
 }
 
 static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle, FileOpener& opener) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-	auto proto = CreateThriftProtocol(allocator, file_handle, opener);
+	auto proto = CreateThriftProtocol(allocator, file_handle, opener, false);
 	auto &transport = ((ThriftFileTransport &)*proto->getTransport());
 	auto file_size = transport.GetSize();
 	if (file_size < 12) {
@@ -637,7 +637,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 		                                      FileSystem::DEFAULT_COMPRESSION, file_opener);
 	}
 
-	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, *file_opener);
+	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, *file_opener, state.prefetch_mode);
 	state.root_reader = CreateReader(GetFileMetadata());
 
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);

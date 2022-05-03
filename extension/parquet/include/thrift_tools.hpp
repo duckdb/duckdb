@@ -167,8 +167,10 @@ struct ReadAheadBuffer {
 
 class ThriftFileTransport : public duckdb_apache::thrift::transport::TVirtualTransport<ThriftFileTransport> {
 public:
-	ThriftFileTransport(Allocator &allocator, FileHandle &handle_p, FileOpener& opener)
-	    : allocator(allocator), handle(handle_p), location(0), ra_buffer(ReadAheadBuffer(allocator, handle_p, opener)) {
+	static constexpr size_t PREFETCH_FALLBACK_BUFFERSIZE = 1000000;
+
+	ThriftFileTransport(Allocator &allocator, FileHandle &handle_p, FileOpener& opener, bool prefetch_mode_p)
+	    : allocator(allocator), handle(handle_p), location(0), ra_buffer(ReadAheadBuffer(allocator, handle_p, opener)), prefetch_mode(prefetch_mode_p) {
 	}
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
@@ -181,8 +183,16 @@ public:
 				D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
 				memcpy(buf, prefetch_buffer->data->get() + location - prefetch_buffer->location, len);
 			} else {
-//				std::cout << "Direct read " << location << " for " << len << " bytes\n";
-				handle.Read(buf, len, location);
+				if (prefetch_mode && len < PREFETCH_FALLBACK_BUFFERSIZE) {
+					// We've reached a non-prefetched address, this should not happen but we will introduce our own prefetch read
+					RegisterPrefetch(location, len);
+					PrefetchRegistered();
+					auto prefetch_buffer_fallback = ra_buffer.GetReadHead(location);
+					D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
+					memcpy(buf, prefetch_buffer_fallback->data->get() + location - prefetch_buffer_fallback->location, len);
+ 				} else {
+					handle.Read(buf, len, location);
+				}
 			}
 		}
 		location += len;
@@ -232,6 +242,10 @@ private:
 	Allocator &allocator;
 	FileHandle &handle;
 	idx_t location;
+
+	/// Whether the prefetch mode is enabled. In this mode the DirectIO flag of the handle will be set and the parquet
+	/// reader will manage the read buffering.
+	bool prefetch_mode;
 
 	// Main full row_group prefetch
 	unique_ptr<AllocatedData> prefetched_data;
