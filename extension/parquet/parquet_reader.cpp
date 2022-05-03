@@ -861,6 +861,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				}
 			} else {
 				// Prefetch column-wise
+
 //				std::cout << "Prefetching row group " << group.ordinal << " column-wise\n";
 				for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 
@@ -871,7 +872,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 					auto file_col_idx = state.column_ids[out_col_idx];
 					auto root_reader = ((StructColumnReader *)state.root_reader.get());
 
-					root_reader->GetChildReader(file_col_idx)->Prefetch(trans);
+					root_reader->GetChildReader(file_col_idx)->RegisterPrefetch(trans);
 				}
 				trans.PrefetchRegistered();
 			}

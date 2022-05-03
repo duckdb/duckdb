@@ -39,8 +39,8 @@ public:
 		return child_reader->FileOffset();
 	}
 
-	void Prefetch(ThriftFileTransport & transport) override {
-		child_reader->Prefetch(transport);
+	void RegisterPrefetch(ThriftFileTransport & transport) override {
+		child_reader->RegisterPrefetch(transport);
 	}
 };
 

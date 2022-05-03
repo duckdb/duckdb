@@ -229,7 +229,8 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 		throw std::runtime_error("out of file");
 	}
 
-	if (hfh.flags & FileFlags::FILE_FLAGS_DIRECT_IO || nr_bytes > hfh.READ_BUFFER_LEN) {
+	// Don't buffer when DirectIO is set.
+	if (hfh.flags & FileFlags::FILE_FLAGS_DIRECT_IO && to_read > 0) {
 		GetRangeRequest(hfh, hfh.path, {}, location, (char *)buffer, to_read);
 		hfh.buffer_available = 0;
 		hfh.buffer_idx = 0;

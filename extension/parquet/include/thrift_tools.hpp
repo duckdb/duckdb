@@ -162,6 +162,9 @@ struct ReadAheadBuffer {
 				handle_copies.push_back(std::move(handle));
 			}
 		}
+
+		// Delete the merge set to prevent any further any further merges on the already prefetched buffers.
+		merge_set.clear();
 	}
 };
 
@@ -174,46 +177,35 @@ public:
 	}
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
-		if (prefetched_data && location >= prefetch_location &&
-		    location + len <= prefetch_location + prefetched_data->GetSize()) {
-			memcpy(buf, prefetched_data->get() + location - prefetch_location, len);
+		auto prefetch_buffer = ra_buffer.GetReadHead(location);
+		if (prefetch_buffer != nullptr && location - prefetch_buffer->location + len <= prefetch_buffer->size) {
+			D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
+			memcpy(buf, prefetch_buffer->data->get() + location - prefetch_buffer->location, len);
 		} else {
-			auto prefetch_buffer = ra_buffer.GetReadHead(location);
-			if (prefetch_buffer != nullptr && location - prefetch_buffer->location + len <= prefetch_buffer->size) {
-				D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
-				memcpy(buf, prefetch_buffer->data->get() + location - prefetch_buffer->location, len);
+			if (prefetch_mode && len < PREFETCH_FALLBACK_BUFFERSIZE && len > 0) {
+				// We've reached a non-prefetched address in prefetch_mode, this should normally not happen,
+				// but just in case we fall back to buffered reads. The assertion will trigger in tests in debug mode to
+				// confirm the prefetching works
+				D_ASSERT(false);
+				Prefetch(location, len);
+				auto prefetch_buffer_fallback = ra_buffer.GetReadHead(location);
+				D_ASSERT(location - prefetch_buffer_fallback->location + len <= prefetch_buffer_fallback->size);
+				memcpy(buf, prefetch_buffer_fallback->data->get() + location - prefetch_buffer_fallback->location, len);
 			} else {
-				if (prefetch_mode && len < PREFETCH_FALLBACK_BUFFERSIZE) {
-					// We've reached a non-prefetched address, this should not happen but we will introduce our own prefetch read
-					RegisterPrefetch(location, len);
-					PrefetchRegistered();
-					auto prefetch_buffer_fallback = ra_buffer.GetReadHead(location);
-					D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
-					memcpy(buf, prefetch_buffer_fallback->data->get() + location - prefetch_buffer_fallback->location, len);
- 				} else {
-					handle.Read(buf, len, location);
-				}
+				handle.Read(buf, len, location);
 			}
 		}
 		location += len;
 		return len;
 	}
 
-	/// Old prefetch
 	void Prefetch(idx_t pos, idx_t len) {
-		if (pos + len > handle.GetFileSize()) {
-			throw std::runtime_error("Prefetch requested for bytes outside file");
-		}
-
-//		std::cout << "Prefetch old " << pos << " for " << len << " bytes\n";
-		prefetch_location = pos;
-		prefetched_data = allocator.Allocate(len);
-
-		handle.Read(prefetched_data->get(), len, prefetch_location); // here
+		RegisterPrefetch(pos, len);
+		PrefetchRegistered();
 	}
+
 	void ClearPrefetch() {
-		prefetched_data.reset();
-		prefetched_data = nullptr;
+		ra_buffer.read_heads.clear();
 	}
 
 	/// New prefetch
@@ -246,10 +238,6 @@ private:
 	/// Whether the prefetch mode is enabled. In this mode the DirectIO flag of the handle will be set and the parquet
 	/// reader will manage the read buffering.
 	bool prefetch_mode;
-
-	// Main full row_group prefetch
-	unique_ptr<AllocatedData> prefetched_data;
-	idx_t prefetch_location;
 
 	// Multi-buffer prefetch
 	ReadAheadBuffer ra_buffer;
