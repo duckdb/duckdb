@@ -8,13 +8,19 @@
   s3_register("dbplyr::sql_escape_datetime", "duckdb_connection")
   s3_register("dplyr::tbl", "duckdb_connection")
 
-  duckdb_env <- asNamespace("duckdb")
+  gc()
 
-  # Extract path to DLL to a separate variable
-  # (a complex expression inside dyn.load() crashes RStudio)
+  duckdb_env <- asNamespace("duckdb")
   dllinfo <- duckdb_env$.__NAMESPACE__.$DLLs$duckdb
   path <- unclass(dllinfo)$path
-  dyn.load(path, local = TRUE)
+  dyn.load(path, local = TRUE, now = TRUE)
   NULL
 }
 
+.onUnload <- function(libpath) {
+  message("Unloading")
+  duckdb_env <- asNamespace("duckdb")
+  dllinfo <- duckdb_env$.__NAMESPACE__.$DLLs$duckdb
+  path <- unclass(dllinfo)$path
+  dyn.unload(path)
+}
