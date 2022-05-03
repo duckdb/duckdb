@@ -19,7 +19,8 @@ namespace duckdb {
 class ColumnDefinition {
 public:
 	DUCKDB_API ColumnDefinition(string name, LogicalType type);
-	DUCKDB_API ColumnDefinition(string name, LogicalType type, unique_ptr<ParsedExpression> default_value);
+	DUCKDB_API ColumnDefinition(string name, LogicalType type, unique_ptr<ParsedExpression> default_value,
+	                            CompressionType compression_type);
 
 	//! The name of the entry
 	string name;

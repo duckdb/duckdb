@@ -6,8 +6,9 @@ namespace duckdb {
 ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p) : name(move(name_p)), type(move(type_p)) {
 }
 
-ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> default_value)
-    : name(move(name_p)), type(move(type_p)), default_value(move(default_value)) {
+ColumnDefinition::ColumnDefinition(string name, LogicalType type, unique_ptr<ParsedExpression> default_value,
+                                   CompressionType compression_type)
+    : name(move(name)), type(move(type)), default_value(move(default_value)), compression_type(compression_type) {
 }
 
 ColumnDefinition ColumnDefinition::Copy() const {
@@ -23,6 +24,7 @@ void ColumnDefinition::Serialize(Serializer &serializer) const {
 	writer.WriteString(name);
 	writer.WriteSerializable(type);
 	writer.WriteOptional(default_value);
+	writer.WriteField(compression_type);
 	writer.Finalize();
 }
 
@@ -31,9 +33,11 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
 	auto column_name = reader.ReadRequired<string>();
 	auto column_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto default_value = reader.ReadOptional<ParsedExpression>(nullptr);
+	auto compression_type = reader.ReadField(CompressionType::COMPRESSION_AUTO);
 	reader.Finalize();
 
-	return ColumnDefinition(column_name, column_type, move(default_value));
+
+	return ColumnDefinition(column_name, column_type, move(default_value), compression_type);
 }
 
 } // namespace duckdb

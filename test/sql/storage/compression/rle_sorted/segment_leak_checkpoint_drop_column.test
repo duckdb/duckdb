@@ -1,6 +1,6 @@
 # name: test/sql/storage/compression/rle_sorted/segment_leak_checkpoint_drop_column.test
 # description: Test that we don't add a segment per checkpoint when dropping a column
-# group: [rle]
+# group: [rle_sorted]
 
 #mode output_result
 
@@ -14,12 +14,6 @@ PRAGMA force_compression_sorting=true;
 
 statement ok
 CREATE TABLE integers AS SELECT i, i j FROM range(1024) tbl(i);
-
-statement ok
-CHECKPOINT;
-
-statement ok
-CHECKPOINT;
 
 query III
 SELECT MIN(j), MAX(j), COUNT(*) FROM integers
@@ -41,9 +35,6 @@ query III
 SELECT MIN(j), MAX(j), COUNT(*) FROM integers
 ----
 0	1023	1024
-
-statement ok
-CHECKPOINT;
 
 query I nosort expected_blocks
 select total_blocks from pragma_database_size();

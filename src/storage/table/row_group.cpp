@@ -512,7 +512,7 @@ bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
 				result.data[i].Sequence(this->start + current_row, 1);
 			} else {
 				columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
-				                               false);
+				                               true);
 			}
 		}
 
@@ -606,11 +606,7 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 		sorted_rowgroup->Append(append_state.row_group_append_state, result_chunk, result_chunk.size());
 	}
 
-	this->version_info = sorted_rowgroup->version_info;
 	this->columns = sorted_rowgroup->columns;
-	this->stats = sorted_rowgroup->stats;
-
-	this->Verify();
 }
 
 void RowGroup::CalculateCardinalitiesPerColumn(vector<LogicalType> &types, TableScanState &scan_state,
@@ -629,9 +625,14 @@ void RowGroup::CalculateCardinalitiesPerColumn(vector<LogicalType> &types, Table
 		}
 	}
 
-	// Get the final cardinality counts
+	// Get the final cardinality counts and sort them from low to high
 	for (idx_t i = 0; i < logs.size(); i++) {
-		cardinalities.emplace_back(logs[i].Count(), i);
+		auto current_count = logs[i].Count();
+
+		// Do not use column if above a certain cardinality
+		if (current_count < 500) {
+			cardinalities.emplace_back(logs[i].Count(), i);
+		}
 	}
 	std::sort(cardinalities.begin(), cardinalities.end());
 }
@@ -848,7 +849,7 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	vector<LogicalType> types;
 	vector<column_t> column_ids;
 
-	if (db.config.force_compression_sorting && !columns.empty() && count != 0) {
+	if (db.config.force_compression_sorting && !columns.empty() && count != 0 && table_info.indexes.Empty()) {
 		bool contains_illegal_types = false;
 
 		// collect logical types by iterating the columns
@@ -858,7 +859,9 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 
 			if (type_id == LogicalTypeId::STRUCT || type_id == LogicalTypeId::LIST || type_id == LogicalTypeId::MAP ||
 			    type_id == LogicalTypeId::TABLE || type_id == LogicalTypeId::ENUM ||
-			    type_id == LogicalTypeId::AGGREGATE_STATE || type_id == LogicalTypeId::VARCHAR) {
+			    type_id == LogicalTypeId::AGGREGATE_STATE || type_id == LogicalTypeId::VARCHAR ||
+			    type_id == LogicalTypeId::BLOB || type_id == LogicalTypeId::INTERVAL ||
+			    type_id == LogicalTypeId::UUID) {
 				contains_illegal_types = true;
 				break;
 			}
