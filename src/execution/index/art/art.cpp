@@ -285,6 +285,11 @@ void ART::VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) {
 }
 
 bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
+#ifdef DEBUG
+	for (idx_t k = 0; k < leaf.num_elements; k++) {
+		D_ASSERT(leaf.GetRowId(k) != row_id);
+	}
+#endif
 	if (IsUnique() && leaf.num_elements != 0) {
 		return false;
 	}
@@ -508,7 +513,7 @@ void ART::SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size) {
 
 std::pair<idx_t, idx_t> ART::DepthFirstSearchCheckpoint(duckdb::MetaBlockWriter &writer) {
 	lock_guard<mutex> l(lock);
-	return tree->Serialize(writer);
+	return tree->Serialize(*this, writer);
 }
 
 Node *ART::Lookup(Node *node, Key &key, unsigned depth) {
@@ -728,7 +733,7 @@ static Leaf &FindMinimum(Iterator &it, Node &node) {
 		it.node = (Leaf *)&node;
 		return (Leaf &)node;
 	case NodeType::N4:
-		next = ((Node4 &)node).children[0];
+		next = ((Node4 &)node).children_ptrs[0];
 		break;
 	case NodeType::N16:
 		next = ((Node16 &)node).children[0];

@@ -128,12 +128,12 @@ void Node48::Erase(Node *&node, int pos) {
 	}
 }
 
-std::pair<idx_t, idx_t> Node48::Serialize(duckdb::MetaBlockWriter &writer) {
+std::pair<idx_t, idx_t> Node48::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
 	vector<std::pair<idx_t, idx_t>> child_offsets;
 	for (auto &child : children) {
 		if (child) {
-			child_offsets.push_back(child->Serialize(writer));
+			child_offsets.push_back(child->Serialize(art, writer));
 		} else {
 			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
 		}
@@ -165,6 +165,7 @@ Node48 *Node48::Deserialize(duckdb::MetaBlockReader &reader) {
 	auto prefix_length = reader.Read<uint32_t>();
 	auto node48 = new Node48(prefix_length);
 	node48->count = count;
+	node48->prefix_length = prefix_length;
 
 	for (idx_t i = 0; i < prefix_length; i++) {
 		node48->prefix[i] = reader.Read<uint8_t>();

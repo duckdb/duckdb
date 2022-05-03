@@ -55,13 +55,6 @@ static unique_ptr<Key> CreateCompoundKey(string str_val, int32_t int_val) {
 }
 
 TEST_CASE("Test correct functioning of art keys", "[art]") {
-	bool is_little_endian;
-	int n = 1;
-	if (*(char *)&n == 1) {
-		is_little_endian = true;
-	} else {
-		is_little_endian = false;
-	}
 	// Test tiny int
 	vector<unique_ptr<Key>> keys;
 	keys.push_back(Key::CreateKey<int8_t>(-127));
@@ -232,7 +225,7 @@ TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]
 		uint32_t current_encoded = EncodeFloat(values[0]);
 		for (idx_t i = 1; i < values.size(); i++) {
 			uint32_t next_encoded = EncodeFloat(values[i]);
-			if (!(next_encoded > current_encoded)) {
+			if (next_encoded <= current_encoded) {
 				printf("Failure in Key::EncodeFloat!\n");
 				printf(
 				    "Generated value for key %f (=> %u) is bigger or equal to the generated value for key %f (=> %u)\n",

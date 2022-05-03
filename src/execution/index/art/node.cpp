@@ -33,15 +33,21 @@ Node *Node::GetChildSwizzled(ART &art, uintptr_t pointer) {
 	if (IsSwizzled(pointer)) {
 		// This means our pointer is not yet in memory, gotta deserialize this
 		// first we unset the bae
-		idx_t pointer_size = sizeof(pointer) * 8;
-		pointer = pointer & ~(1UL << pointer_size);
-		uint32_t block_id = pointer >> (pointer_size / 2);
-		uint32_t offset = pointer & 0xffffffff;
-		return Deserialize(art, block_id, offset);
+		auto block_info = GetSwizzledBlockInfo(pointer);
+		return Deserialize(art, block_info.first, block_info.second);
 
 	} else {
 		return (Node *)pointer;
 	}
+}
+
+std::pair<idx_t, idx_t> Node::GetSwizzledBlockInfo(uintptr_t pointer) {
+	D_ASSERT(IsSwizzled(pointer));
+	idx_t pointer_size = sizeof(pointer) * 8;
+	pointer = pointer & ~(1UL << (pointer_size - 1));
+	uint32_t block_id = pointer >> (pointer_size / 2);
+	uint32_t offset = pointer & 0xffffffff;
+	return {block_id, offset};
 }
 
 bool Node::IsSwizzled(uintptr_t pointer) {

@@ -49,7 +49,7 @@ public:
 	virtual idx_t GetMin();
 
 	//! Serialize this Node
-	virtual std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) = 0;
+	virtual std::pair<idx_t, idx_t> Serialize(ART &art, duckdb::MetaBlockWriter &writer) = 0;
 
 	static Node *Deserialize(ART &art, idx_t block_id, idx_t offset);
 
@@ -69,6 +69,7 @@ public:
 	//! Or if its a swizzled pointer.
 	static Node *GetChildSwizzled(ART &art, uintptr_t pointer);
 
+	static std::pair<idx_t, idx_t> GetSwizzledBlockInfo(uintptr_t pointer);
 	//! Checks if a given pointer is a swizzled pointer or not.
 	static bool IsSwizzled(uintptr_t pointer);
 	//! Generate Swizzled Pointer from block id and offset

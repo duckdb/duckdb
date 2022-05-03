@@ -103,12 +103,12 @@ void Node16::Insert(Node *&node, uint8_t key_byte, Node *child) {
 	}
 }
 
-std::pair<idx_t, idx_t> Node16::Serialize(duckdb::MetaBlockWriter &writer) {
+std::pair<idx_t, idx_t> Node16::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
 	vector<std::pair<idx_t, idx_t>> child_offsets;
 	for (auto &child_node : children) {
 		if (child_node) {
-			child_offsets.push_back(child_node->Serialize(writer));
+			child_offsets.push_back(child_node->Serialize(art, writer));
 		} else {
 			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
 		}
@@ -140,7 +140,7 @@ Node16 *Node16::Deserialize(duckdb::MetaBlockReader &reader) {
 	auto prefix_length = reader.Read<uint32_t>();
 	auto node16 = new Node16(prefix_length);
 	node16->count = count;
-
+	node16->prefix_length = prefix_length;
 	for (idx_t i = 0; i < prefix_length; i++) {
 		node16->prefix[i] = reader.Read<uint8_t>();
 	}
@@ -181,7 +181,7 @@ void Node16::Erase(Node *&node, int pos) {
 		auto new_node = new Node4(n->prefix_length);
 		for (unsigned i = 0; i < n->count; i++) {
 			new_node->key[new_node->count] = n->key[i];
-			new_node->children[new_node->count++] = n->children[i];
+			new_node->children_ptrs[new_node->count++] = n->children[i];
 			n->children[i] = nullptr;
 		}
 		CopyPrefix(n, new_node);

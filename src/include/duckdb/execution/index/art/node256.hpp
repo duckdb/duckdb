@@ -40,7 +40,7 @@ public:
 	static void Erase(Node *&node, int pos);
 
 	//! Serialize Node
-	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) override;
+	std::pair<idx_t, idx_t> Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;
 
 	static Node256 *Deserialize(duckdb::MetaBlockReader &source);
 };

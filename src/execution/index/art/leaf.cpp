@@ -21,6 +21,7 @@ Leaf::Leaf(unique_ptr<Key> value, unique_ptr<row_t[]> row_ids, idx_t num_element
 }
 
 void Leaf::Insert(row_t row_id) {
+
 	// Grow array
 	if (num_elements == capacity) {
 		auto new_row_id = unique_ptr<row_t[]>(new row_t[capacity * 2]);
@@ -31,7 +32,7 @@ void Leaf::Insert(row_t row_id) {
 	row_ids[num_elements++] = row_id;
 }
 
-std::pair<idx_t, idx_t> Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
+std::pair<idx_t, idx_t> Leaf::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
 	auto block_id = writer.block->id;
 	auto offset = writer.offset;
 	// Write Node Type

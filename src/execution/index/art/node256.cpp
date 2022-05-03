@@ -95,12 +95,12 @@ void Node256::Erase(Node *&node, int pos) {
 	}
 }
 
-std::pair<idx_t, idx_t> Node256::Serialize(duckdb::MetaBlockWriter &writer) {
+std::pair<idx_t, idx_t> Node256::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
 	vector<std::pair<idx_t, idx_t>> child_offsets;
 	for (auto &child_node : children) {
 		if (child_node) {
-			child_offsets.push_back(child_node->Serialize(writer));
+			child_offsets.push_back(child_node->Serialize(art, writer));
 		} else {
 			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
 		}
@@ -128,7 +128,7 @@ Node256 *Node256::Deserialize(duckdb::MetaBlockReader &reader) {
 	auto prefix_length = reader.Read<uint32_t>();
 	auto node256 = new Node256(prefix_length);
 	node256->count = count;
-
+	node256->prefix_length = prefix_length;
 	for (idx_t i = 0; i < prefix_length; i++) {
 		node256->prefix[i] = reader.Read<uint8_t>();
 	}

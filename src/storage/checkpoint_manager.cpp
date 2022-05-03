@@ -329,7 +329,7 @@ void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reade
 	auto table_catalog =
 	    (TableCatalogEntry *)catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name);
 	auto index_catalog = (IndexCatalogEntry *)schema_catalog->CreateIndex(context, info.get(), table_catalog);
-
+	index_catalog->info = table_catalog->storage->info;
 	// Here we just gotta read the root node
 	auto root_block_id = reader.Read<idx_t>();
 	auto root_offset = reader.Read<idx_t>();
@@ -341,7 +341,7 @@ void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reade
 	for (auto &column_id : info->column_ids) {
 		unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(table_catalog->columns[column_id].name,
 		                                                                    table_catalog->columns[column_id].type,
-		                                                                    ColumnBinding(0, info->column_ids.size())));
+		                                                                    ColumnBinding(0, column_id)));
 
 		bound_expressions.push_back(
 		    make_unique<BoundReferenceExpression>(table_catalog->columns[column_id].type, key_nr++));
@@ -349,7 +349,7 @@ void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reade
 	auto art = make_unique<ART>(info->column_ids, move(unbound_expressions), info->constraint_type, db, root_block_id,
 	                            root_offset);
 	index_catalog->index = art.get();
-	table_catalog->storage->AddIndex(move(art), bound_expressions);
+	table_catalog->storage->info->indexes.AddIndex(move(art));
 }
 
 //===--------------------------------------------------------------------===//
