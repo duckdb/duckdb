@@ -151,6 +151,8 @@ private:
 	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);
 
 	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = nullptr);
+
+	Leaf &FindMinimum(Iterator &it, Node &node);
 };
 
 } // namespace duckdb

@@ -105,10 +105,11 @@ void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
 void Node4::Erase(Node *&node, int pos) {
 	Node4 *n = (Node4 *)node;
 	D_ASSERT(pos < n->count);
-
 	// erase the child and decrease the count
 	// FIXME need a swizzled node method for deletes
-	delete n->children_ptrs[pos];
+	if (!IsSwizzled((uintptr_t)n->children_ptrs[pos])) {
+		delete n->children_ptrs[pos];
+	}
 	n->children_ptrs[pos] = nullptr;
 	n->count--;
 	// potentially move any children backwards

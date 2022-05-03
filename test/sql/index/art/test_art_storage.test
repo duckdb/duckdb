@@ -6,9 +6,6 @@
 load __TEST_DIR__/test_index.db
 
 statement ok
-PRAGMA wal_autocheckpoint='1TB';
-
-statement ok
 CREATE TABLE integers(i integer,j integer)
 
 statement ok

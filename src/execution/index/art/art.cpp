@@ -513,7 +513,10 @@ void ART::SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size) {
 
 std::pair<idx_t, idx_t> ART::DepthFirstSearchCheckpoint(duckdb::MetaBlockWriter &writer) {
 	lock_guard<mutex> l(lock);
-	return tree->Serialize(*this, writer);
+	if (tree) {
+		return tree->Serialize(*this, writer);
+	}
+	return {DConstants::INVALID_INDEX, DConstants::INVALID_INDEX};
 }
 
 Node *ART::Lookup(Node *node, Key &key, unsigned depth) {
@@ -725,7 +728,7 @@ bool ART::SearchGreater(ARTIndexScanState *state, bool inclusive, idx_t max_coun
 //===--------------------------------------------------------------------===//
 // Less Than
 //===--------------------------------------------------------------------===//
-static Leaf &FindMinimum(Iterator &it, Node &node) {
+Leaf &ART::FindMinimum(Iterator &it, Node &node) {
 	Node *next = nullptr;
 	idx_t pos = 0;
 	switch (node.type) {
@@ -733,17 +736,17 @@ static Leaf &FindMinimum(Iterator &it, Node &node) {
 		it.node = (Leaf *)&node;
 		return (Leaf &)node;
 	case NodeType::N4:
-		next = ((Node4 &)node).children_ptrs[0];
+		next = Node::GetChildSwizzled(*this, (uintptr_t)((Node4 &)node).children_ptrs[0]);
 		break;
 	case NodeType::N16:
-		next = ((Node16 &)node).children[0];
+		next = Node::GetChildSwizzled(*this, (uintptr_t)((Node16 &)node).children[0]);
 		break;
 	case NodeType::N48: {
 		auto &n48 = (Node48 &)node;
 		while (n48.child_index[pos] == Node::EMPTY_MARKER) {
 			pos++;
 		}
-		next = n48.children[n48.child_index[pos]];
+		next = Node::GetChildSwizzled(*this, (uintptr_t)n48.children[n48.child_index[pos]]);
 		break;
 	}
 	case NodeType::N256: {
@@ -751,7 +754,7 @@ static Leaf &FindMinimum(Iterator &it, Node &node) {
 		while (!n256.children[pos]) {
 			pos++;
 		}
-		next = n256.children[pos];
+		next = Node::GetChildSwizzled(*this, (uintptr_t)n256.children[pos]);
 		break;
 	}
 	}

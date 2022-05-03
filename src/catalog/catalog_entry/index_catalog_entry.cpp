@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 

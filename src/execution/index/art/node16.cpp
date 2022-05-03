@@ -106,9 +106,19 @@ void Node16::Insert(Node *&node, uint8_t key_byte, Node *child) {
 std::pair<idx_t, idx_t> Node16::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
 	vector<std::pair<idx_t, idx_t>> child_offsets;
-	for (auto &child_node : children) {
-		if (child_node) {
-			child_offsets.push_back(child_node->Serialize(art, writer));
+	for (auto &child_ptr : children) {
+		if (child_ptr) {
+			child_ptr = GetChildSwizzled(art, (uintptr_t)child_ptr);
+			child_offsets.push_back(child_ptr->Serialize(art, writer));
+			//			if (!IsSwizzled((uintptr_t ) child_ptr)){
+			//				// We have to write this big boy
+			//				child_offsets.push_back(child_ptr->Serialize(art, writer));
+			//			} else{
+			//				auto child_node = GetChildSwizzled(art, (node) child_ptr)
+			//				// FIXME Just rewrite same offsets?
+			////				auto block_info =  GetSwizzledBlockInfo((uintptr_t ) child_ptr);
+			////				child_offsets.emplace_back(block_info.first, block_info.second);
+			//			}
 		} else {
 			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
 		}
@@ -160,7 +170,9 @@ Node16 *Node16::Deserialize(duckdb::MetaBlockReader &reader) {
 void Node16::Erase(Node *&node, int pos) {
 	auto n = (Node16 *)node;
 	// erase the child and decrease the count
-	delete n->children[pos];
+	if (!IsSwizzled((uintptr_t)n->children[pos])) {
+		delete n->children[pos];
+	}
 	n->children[pos] = nullptr;
 	n->count--;
 	// potentially move any children backwards
