@@ -162,7 +162,9 @@ Node16 *Node16::Deserialize(duckdb::MetaBlockReader &reader) {
 
 	// Get Child offsets
 	for (idx_t i = 0; i < 16; i++) {
-		node16->children[i] = (Node *)(Node::GenerateSwizzledPointer(reader.Read<idx_t>(), reader.Read<idx_t>()));
+		idx_t block_id = reader.Read<idx_t>();
+		idx_t offset = reader.Read<idx_t>();
+		node16->children[i] = (Node *)(Node::GenerateSwizzledPointer(block_id, offset));
 	}
 	return node16;
 }

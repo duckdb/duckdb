@@ -147,7 +147,9 @@ Node256 *Node256::Deserialize(duckdb::MetaBlockReader &reader) {
 
 	// Get Child offsets
 	for (idx_t i = 0; i < 256; i++) {
-		node256->children[i] = (Node *)(Node::GenerateSwizzledPointer(reader.Read<idx_t>(), reader.Read<idx_t>()));
+		idx_t block_id = reader.Read<idx_t>();
+		idx_t offset = reader.Read<idx_t>();
+		node256->children[i] = (Node *)(Node::GenerateSwizzledPointer(block_id, offset));
 	}
 	return node256;
 }
