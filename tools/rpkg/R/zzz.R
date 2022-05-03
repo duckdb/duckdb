@@ -9,11 +9,12 @@
   s3_register("dplyr::tbl", "duckdb_connection")
 
   duckdb_env <- asNamespace("duckdb")
-  dllinfo <- library.dynam(pkgname, pkgname, lib.loc=libname, local=FALSE)
-  routines <- getDLLRegisteredRoutines(dllinfo)
-  lapply(routines$.Call, function(symbol) {
-    assign(symbol$name, symbol, envir=duckdb_env)
-  })
+
+  # Extract path to DLL to a separate variable
+  # (a complex expression inside dyn.load() crashes RStudio)
+  dllinfo <- duckdb_env$.__NAMESPACE__.$DLLs$duckdb
+  path <- unclass(dllinfo)$path
+  dyn.load(path, local = TRUE)
   NULL
 }
 
