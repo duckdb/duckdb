@@ -110,7 +110,7 @@ inline uint64_t TemplatedHash(const T &elem) {
 	// In the article, these two lines follow
 	//	x *= UINT64_C(0x94d049bb133111eb);
 	//	x ^= x >> 31;
-	// Removing them slightly reduces the bias of the hash function,
+	// Removing them slightly increases the bias of the hash function,
 	// But improves performance
 	return x;
 }
@@ -118,13 +118,6 @@ inline uint64_t TemplatedHash(const T &elem) {
 template <>
 inline uint64_t TemplatedHash(const hugeint_t &elem) {
 	return TemplatedHash<uint64_t>(Load<uint64_t>((data_ptr_t)&elem.upper)) ^ TemplatedHash<uint64_t>(elem.lower);
-}
-
-template <>
-inline uint64_t TemplatedHash(const interval_t &elem) {
-	return TemplatedHash<uint32_t>(Load<uint32_t>((data_ptr_t)&elem.months)) ^
-	       TemplatedHash<uint32_t>(Load<uint32_t>((data_ptr_t)&elem.days)) ^
-	       TemplatedHash<uint64_t>(Load<uint64_t>((data_ptr_t)&elem.micros));
 }
 
 template <idx_t rest>
@@ -222,9 +215,9 @@ static void ComputeHashes(VectorData &vdata, PhysicalType type, uint64_t hashes[
 	case PhysicalType::DOUBLE:
 		return TemplatedComputeHashes<uint64_t>(vdata, count, hashes);
 	case PhysicalType::INT128:
-		return TemplatedComputeHashes<hugeint_t>(vdata, count, hashes);
 	case PhysicalType::INTERVAL:
-		return TemplatedComputeHashes<interval_t>(vdata, count, hashes);
+		static_assert(sizeof(hugeint_t) == sizeof(interval_t), "ComputeHashes assumes these are the same size!");
+		return TemplatedComputeHashes<hugeint_t>(vdata, count, hashes);
 	case PhysicalType::VARCHAR:
 		return TemplatedComputeHashes<string_t>(vdata, count, hashes);
 	default:
