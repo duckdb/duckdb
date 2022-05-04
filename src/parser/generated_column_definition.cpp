@@ -49,13 +49,15 @@ static bool ColumnsContainsColumnRef(const vector<ColumnDefinition> &columns, co
 static void VerifyAndRenameExpression(const string &name, const vector<ColumnDefinition> &columns,
                                       ParsedExpression &expr, vector<string> &unresolved_columns) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto column_ref = (ColumnRefExpression &)expr;
+		auto& column_ref = (ColumnRefExpression &)expr;
 		auto &column_name = column_ref.GetColumnName();
 		if ((!column_ref.IsQualified() || column_ref.GetTableName() == name) &&
 		    ColumnsContainsColumnRef(columns, column_name)) {
 			if (!column_ref.IsQualified()) {
 				auto &names = column_ref.column_names;
-				names.insert(names.begin(), name);
+				// dprintf(2, "TABLE NAME %s BAKED INTO COLUMN REF %s\n", name.c_str(), column_name.c_str());
+				column_ref.column_names.insert(column_ref.column_names.begin(), name);
+				// dprintf(2, "ColumnRef names after: TABLE[%s] - COL[%s]\n", column_ref.column_names[0].c_str(), column_ref.column_names[1].c_str());
 			}
 		} else {
 			unresolved_columns.push_back(column_name);
@@ -84,7 +86,7 @@ void GeneratedColumnDefinition::RenameColumnRefs(RenameColumnInfo &info) {
 void GeneratedColumnDefinition::CheckValidity(const vector<ColumnDefinition> &columns, const string &table_name) {
 	vector<string> unresolved_columns;
 
-	VerifyAndRenameExpression(name, columns, *expression, unresolved_columns);
+	VerifyAndRenameExpression(table_name, columns, *expression, unresolved_columns);
 	if (unresolved_columns.size()) {
 		throw BinderException(
 		    "Not all columns referenced in the generated column expression could be resolved to the table \"%s\"",
