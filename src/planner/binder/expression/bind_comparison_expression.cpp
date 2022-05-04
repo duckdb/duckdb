@@ -101,10 +101,6 @@ LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, Log
 			}
 		}
 		return result_type;
-	case LogicalTypeId::UNKNOWN:
-		// comparing two prepared statement parameters (e.g. SELECT ?=?)
-		// default to VARCHAR
-		return LogicalType::VARCHAR;
 	default:
 		return result_type;
 	}
@@ -128,9 +124,9 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	auto input_type = BoundComparisonExpression::BindComparison(left_sql_type, right_sql_type);
 	// add casts (if necessary)
 	// left.expr = BoundCastExpression::AddCastToType(move(left.expr), input_type);
-	left.expr = ExpressionBinder::BindAddCast(context, move(left.expr), input_type);
+	left.expr = ExpressionBinder::BindAddCast(move(left.expr), input_type);
 	// right.expr = BoundCastExpression::AddCastToType(move(right.expr), input_type);
-	right.expr = ExpressionBinder::BindAddCast(context, move(right.expr), input_type);
+	right.expr = ExpressionBinder::BindAddCast(move(right.expr), input_type);
 	if (input_type.id() == LogicalTypeId::VARCHAR) {
 		// handle collation
 		auto collation = StringType::GetCollation(input_type);

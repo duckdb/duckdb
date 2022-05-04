@@ -1009,6 +1009,11 @@ DUCKDB_API interval_t Value::GetValue() const {
 	return GetValueInternal<interval_t>();
 }
 
+template <>
+DUCKDB_API Value Value::GetValue() const {
+	return Value(*this);
+}
+
 uintptr_t Value::GetPointer() const {
 	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;
@@ -1972,6 +1977,10 @@ void Value::Print() const {
 	Printer::Print(ToString());
 }
 
+bool Value::NotDistinctFrom(const Value &lvalue, const Value &rvalue) {
+	return ValueOperations::NotDistinctFrom(lvalue, rvalue);
+}
+
 bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
 	if (result_value.IsNull() != value.IsNull()) {
 		return false;
@@ -2007,6 +2016,9 @@ bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
 		return left == right;
 	}
 	default:
+		if (result_value.type_.id() == LogicalTypeId::FLOAT || result_value.type_.id() == LogicalTypeId::DOUBLE) {
+			return Value::ValuesAreEqual(value, result_value);
+		}
 		return value == result_value;
 	}
 }

@@ -53,7 +53,7 @@ struct STDDevBaseOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (target->count == 0) {
 			*target = source;
 		} else if (source.count > 0) {

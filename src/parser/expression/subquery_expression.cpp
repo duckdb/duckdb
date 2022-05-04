@@ -11,7 +11,19 @@ SubqueryExpression::SubqueryExpression()
 }
 
 string SubqueryExpression::ToString() const {
-	return "SUBQUERY";
+	switch (subquery_type) {
+	case SubqueryType::ANY:
+		return child->ToString() + " " + ExpressionTypeToOperator(comparison_type) + " ANY(" + subquery->ToString() +
+		       ")";
+	case SubqueryType::EXISTS:
+		return "EXISTS(" + subquery->ToString() + ")";
+	case SubqueryType::NOT_EXISTS:
+		return "NOT EXISTS(" + subquery->ToString() + ")";
+	case SubqueryType::SCALAR:
+		return "(" + subquery->ToString() + ")";
+	default:
+		throw InternalException("Unrecognized type for subquery");
+	}
 }
 
 bool SubqueryExpression::Equals(const SubqueryExpression *a, const SubqueryExpression *b) {

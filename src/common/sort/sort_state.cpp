@@ -421,5 +421,18 @@ void GlobalSortState::CompleteMergeRound(bool keep_radix_data) {
 		sorted_blocks[0]->blob_sorting_data = nullptr;
 	}
 }
+void GlobalSortState::Print() {
+	PayloadScanner scanner(*this, false);
+	DataChunk chunk;
+	chunk.Initialize(scanner.GetPayloadTypes());
+	for (;;) {
+		scanner.Scan(chunk);
+		const auto count = chunk.size();
+		if (!count) {
+			break;
+		}
+		chunk.Print();
+	}
+}
 
 } // namespace duckdb

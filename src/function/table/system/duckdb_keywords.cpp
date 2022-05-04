@@ -34,7 +34,7 @@ unique_ptr<FunctionOperatorData> DuckDBKeywordsInit(ClientContext &context, cons
 }
 
 void DuckDBKeywordsFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                            DataChunk *input, DataChunk &output) {
+                            DataChunk &output) {
 	auto &data = (DuckDBKeywordsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

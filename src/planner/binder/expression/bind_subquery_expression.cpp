@@ -23,11 +23,14 @@ public:
 		throw InternalException("Cannot get select list of bound subquery node");
 	}
 
+	string ToString() const override {
+		throw InternalException("Cannot ToString bound subquery node");
+	}
 	unique_ptr<QueryNode> Copy() const override {
 		throw InternalException("Cannot copy bound subquery node");
 	}
 	void Serialize(FieldWriter &writer) const override {
-		throw InternalException("Cannot copy bound subquery node");
+		throw InternalException("Cannot serialize bound subquery node");
 	}
 };
 
@@ -73,7 +76,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	auto bound_node = move(bound_subquery->bound_node);
 	LogicalType return_type =
 	    expr.subquery_type == SubqueryType::SCALAR ? bound_node->types[0] : LogicalType(LogicalTypeId::BOOLEAN);
-	D_ASSERT(return_type.id() != LogicalTypeId::UNKNOWN);
+	if (return_type.id() == LogicalTypeId::UNKNOWN) {
+		return_type = LogicalType::SQLNULL;
+	}
 
 	auto result = make_unique<BoundSubqueryExpression>(return_type);
 	if (expr.subquery_type == SubqueryType::ANY) {
@@ -82,7 +87,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		D_ASSERT(bound_node->types.size() == 1);
 		auto compare_type = LogicalType::MaxLogicalType(child->expr->return_type, bound_node->types[0]);
 		// child->expr = BoundCastExpression::AddCastToType(move(child->expr), compare_type);
-		child->expr = ExpressionBinder::BindAddCast(context, move(child->expr), compare_type);
+		child->expr = ExpressionBinder::BindAddCast(move(child->expr), compare_type);
 		result->child_type = bound_node->types[0];
 		result->child_target = compare_type;
 	}

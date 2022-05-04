@@ -2,6 +2,7 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/transaction/transaction.hpp"
@@ -15,8 +16,11 @@ struct SystemBindData : public FunctionData {
 	explicit SystemBindData(ClientContext &context) : context(context) {
 	}
 
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<SystemBindData>(context);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		return true;
 	}
 
 	static SystemBindData &GetFrom(ExpressionState &state) {
@@ -38,14 +42,14 @@ static void CurrentQueryFunction(DataChunk &input, ExpressionState &state, Vecto
 
 // current_schema
 static void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	Value val(SystemBindData::GetFrom(state).context.catalog_search_path->GetDefault());
+	Value val(ClientData::Get(SystemBindData::GetFrom(state).context).catalog_search_path->GetDefault());
 	result.Reference(val);
 }
 
 // current_schemas
 static void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	vector<Value> schema_list;
-	vector<string> search_path = SystemBindData::GetFrom(state).context.catalog_search_path->Get();
+	vector<string> search_path = ClientData::Get(SystemBindData::GetFrom(state).context).catalog_search_path->Get();
 	std::transform(search_path.begin(), search_path.end(), std::back_inserter(schema_list),
 	               [](const string &s) -> Value { return Value(s); });
 	auto val = Value::LIST(schema_list);

@@ -1,12 +1,19 @@
 #define DUCKDB_EXTENSION_MAIN
 
+#include "unicode/ucol.h"
+#include "unicode/stringpiece.h"
+#include "unicode/coll.h"
+#include "unicode/sortkey.h"
+#include "unicode/timezone.h"
+#include "unicode/calendar.h"
+
 #include "include/icu-extension.hpp"
-#include "include/icu-collate.hpp"
 #include "include/icu-dateadd.hpp"
 #include "include/icu-datepart.hpp"
 #include "include/icu-datesub.hpp"
 #include "include/icu-datetrunc.hpp"
 #include "include/icu-makedate.hpp"
+#include "include/icu-strptime.hpp"
 
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/connection.hpp"
@@ -45,8 +52,13 @@ struct IcuBindData : public FunctionData {
 		}
 	}
 
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<IcuBindData>(language, country);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (IcuBindData &)other_p;
+		return language == other.language && country == other.country;
 	}
 };
 
@@ -176,7 +188,7 @@ static void ICUTimeZoneCleanup(ClientContext &context, const FunctionData *bind_
 }
 
 static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (ICUTimeZoneData &)*operator_state;
 	idx_t index = 0;
 	while (index < STANDARD_VECTOR_SIZE) {
@@ -247,7 +259,7 @@ static unique_ptr<FunctionOperatorData> ICUCalendarInit(ClientContext &context, 
 }
 
 static void ICUCalendarFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (ICUCalendarData &)*operator_state;
 	idx_t index = 0;
 	while (index < STANDARD_VECTOR_SIZE) {
@@ -338,6 +350,7 @@ void ICUExtension::Load(DuckDB &db) {
 	RegisterICUDateSubFunctions(*con.context);
 	RegisterICUDateTruncFunctions(*con.context);
 	RegisterICUMakeDateFunctions(*con.context);
+	RegisterICUStrptimeFunctions(*con.context);
 
 	// Calendars
 	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, SetICUCalendar);

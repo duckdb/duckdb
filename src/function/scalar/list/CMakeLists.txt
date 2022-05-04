@@ -6,6 +6,7 @@ add_library_unity(
   list_aggregates.cpp
   array_slice.cpp
   list_extract.cpp
+  list_sort.cpp
   list_value.cpp
   range.cpp
   flatten.cpp)

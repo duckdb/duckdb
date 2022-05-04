@@ -170,19 +170,6 @@ LogicalType ExpressionBinder::ExchangeNullType(const LogicalType &type) {
 	return ExchangeType(type, LogicalTypeId::SQLNULL, LogicalType::INTEGER);
 }
 
-void ExpressionBinder::ResolveParameterType(LogicalType &type) {
-	if (type.id() == LogicalTypeId::UNKNOWN) {
-		type = LogicalType::VARCHAR;
-	}
-}
-
-void ExpressionBinder::ResolveParameterType(unique_ptr<Expression> &expr) {
-	if (ContainsType(expr->return_type, LogicalTypeId::UNKNOWN)) {
-		auto result_type = ExchangeType(expr->return_type, LogicalTypeId::UNKNOWN, LogicalType::VARCHAR);
-		expr = BoundCastExpression::AddCastToType(move(expr), result_type);
-	}
-}
-
 unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type,
                                               bool root_expression) {
 	// bind the main expression
@@ -200,7 +187,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	auto bound_expr = (BoundExpression *)expr.get();
 	unique_ptr<Expression> result = move(bound_expr->expr);
 	if (target_type.id() != LogicalTypeId::INVALID) {
-		result = ExpressionBinder::BindAddCast(context, move(result), target_type);
+		result = ExpressionBinder::BindAddCast(move(result), target_type);
 	} else {
 		if (!binder.can_contain_nulls) {
 			// SQL NULL type is only used internally in the binder
@@ -208,12 +195,9 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 			if (ContainsNullType(result->return_type)) {
 				auto result_type = ExchangeNullType(result->return_type);
 				// result = BoundCastExpression::AddCastToType(move(result), result_type);
-				result = ExpressionBinder::BindAddCast(context, move(result), result_type);
+				result = ExpressionBinder::BindAddCast(move(result), result_type);
 			}
 		}
-		// check if we failed to convert any parameters
-		// if we did, we push a cast
-		ExpressionBinder::ResolveParameterType(result);
 	}
 	if (result_type) {
 		*result_type = result->return_type;
@@ -221,7 +205,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	return result;
 }
 
-unique_ptr<Expression> ExpressionBinder::BindAddCast(ClientContext &context, unique_ptr<Expression> expr,
+unique_ptr<Expression> ExpressionBinder::BindAddCast(unique_ptr<Expression> expr,
                                                      const LogicalType &target_type) {
 	unique_ptr<Expression> result = move(expr);
 	if (target_type.id() != LogicalTypeId::CUSTOM) {
@@ -229,16 +213,17 @@ unique_ptr<Expression> ExpressionBinder::BindAddCast(ClientContext &context, uni
 		result = BoundCastExpression::AddCastToType(move(result), target_type);
 	} else if (result->return_type != target_type) {
 		string error;
+		auto context = CustomType::GetContext(target_type);
 		auto input_name = CustomType::GetInputFunction(target_type);
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetCatalog(*context);
 		auto func =
-			catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, input_name, false);
+			catalog.GetEntry(*context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, input_name, false);
 		switch (func->type) {
 		case CatalogType::SCALAR_FUNCTION_ENTRY: {
 			vector<unique_ptr<Expression>> children;
 			children.emplace_back(move(result));
 			unique_ptr<Expression> function =
-				ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, input_name, move(children), error, true);
+				ScalarFunction::BindScalarFunction(*context, DEFAULT_SCHEMA, input_name, move(children), error, true);
 			result = move(function);
 		} break;
 		default:

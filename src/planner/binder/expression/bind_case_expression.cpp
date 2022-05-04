@@ -23,7 +23,6 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		auto &then_expr = (BoundExpression &)*check.then_expr;
 		return_type = LogicalType::MaxLogicalType(return_type, then_expr.expr->return_type);
 	}
-	ExpressionBinder::ResolveParameterType(return_type);
 
 	// bind all the individual components of the CASE statement
 	auto result = make_unique<BoundCaseExpression>(return_type);
@@ -34,12 +33,12 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		BoundCaseCheck result_check;
 		result_check.when_expr = BoundCastExpression::AddCastToType(move(when_expr.expr), LogicalType::BOOLEAN);
 		// result_check.then_expr = BoundCastExpression::AddCastToType(move(then_expr.expr), return_type);
-		result_check.then_expr = ExpressionBinder::BindAddCast(context, move(then_expr.expr), return_type);
+		result_check.then_expr = ExpressionBinder::BindAddCast(move(then_expr.expr), return_type);
 		result->case_checks.push_back(move(result_check));
 	}
 	auto &else_expr = (BoundExpression &)*expr.else_expr;
 	// result->else_expr = BoundCastExpression::AddCastToType(move(else_expr.expr), return_type);
-	result->else_expr = ExpressionBinder::BindAddCast(context, move(else_expr.expr), return_type);
+	result->else_expr = ExpressionBinder::BindAddCast(move(else_expr.expr), return_type);
 	return BindResult(move(result));
 }
 } // namespace duckdb

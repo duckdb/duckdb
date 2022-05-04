@@ -36,7 +36,7 @@
 
 namespace duckdb {
 
-struct ParquetReadBindData : public FunctionData {
+struct ParquetReadBindData : public TableFunctionData {
 	shared_ptr<ParquetReader> initial_reader;
 	vector<string> files;
 	vector<column_t> column_ids;
@@ -173,10 +173,10 @@ public:
 	}
 
 	static void ParquetScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
-	                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output,
+	                                    FunctionOperatorData *operator_state, DataChunk &output,
 	                                    ParallelState *parallel_state_p) {
 		//! FIXME: Have specialized parallel function from pandas scan here
-		ParquetScanImplementation(context, bind_data, operator_state, input, output);
+		ParquetScanImplementation(context, bind_data, operator_state, output);
 	}
 
 	static unique_ptr<FunctionData> ParquetScanBindInternal(ClientContext &context, vector<string> files,
@@ -288,7 +288,7 @@ public:
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, const FunctionData *bind_data_p,
-	                                      FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+	                                      FunctionOperatorData *operator_state, DataChunk &output) {
 		if (!operator_state) {
 			return;
 		}
@@ -389,7 +389,7 @@ public:
 	}
 };
 
-struct ParquetWriteBindData : public FunctionData {
+struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
 	string file_name;
 	vector<string> column_names;
