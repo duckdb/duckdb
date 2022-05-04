@@ -160,8 +160,8 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 		EnumType::SetCatalog(type, enum_type_catalog);
 	} else if (type.id() == LogicalTypeId::CUSTOM) {
 		auto &custom_type_name = CustomType::GetTypeName(type);
-		auto custom_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY,
-		                                                                               schema, custom_type_name, true);
+		auto custom_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(
+		    context, CatalogType::TYPE_ENTRY, schema, custom_type_name, true);
 		CustomType::SetCatalog(type, custom_type_catalog);
 	}
 }
@@ -325,8 +325,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				case CustomTypeParameterId::INPUT_FUNCTION:
 				case CustomTypeParameterId::OUTPUT_FUNCTION: {
 					auto &catalog = Catalog::GetCatalog(context);
-					auto func =
-						catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, iter.second, false);
+					auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA,
+					                             iter.second, false);
 					switch (func->type) {
 					case CatalogType::SCALAR_FUNCTION_ENTRY: {
 						auto function = (ScalarFunctionCatalogEntry *)func;
@@ -356,11 +356,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 						}
 						if (!found) {
 							throw BinderException("function %s(%s) does not exist", func->name,
-													(custom_type == CustomTypeParameterId::INPUT_FUNCTION) ? "VARCHAR"
-																											: base.name);
+							                      (custom_type == CustomTypeParameterId::INPUT_FUNCTION) ? "VARCHAR"
+							                                                                             : base.name);
 						}
 					} break;
-
 
 					default:
 						throw BinderException("Function type is not scalar function!");
@@ -377,8 +376,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			}
 			CustomType::SetContext(base.type, &context);
 			auto schema = BindSchema(base);
-			result.plan =
-				make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, move(stmt.info), schema);
+			result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, move(stmt.info), schema);
 		} else {
 			auto schema = BindSchema(*stmt.info);
 			result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, move(stmt.info), schema);

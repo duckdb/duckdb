@@ -205,8 +205,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	return result;
 }
 
-unique_ptr<Expression> ExpressionBinder::BindAddCast(unique_ptr<Expression> expr,
-                                                     const LogicalType &target_type) {
+unique_ptr<Expression> ExpressionBinder::BindAddCast(unique_ptr<Expression> expr, const LogicalType &target_type) {
 	unique_ptr<Expression> result = move(expr);
 	if (target_type.id() != LogicalTypeId::CUSTOM) {
 		// the binder has a specific target type: add a cast to that type
@@ -216,14 +215,13 @@ unique_ptr<Expression> ExpressionBinder::BindAddCast(unique_ptr<Expression> expr
 		auto context = CustomType::GetContext(target_type);
 		auto input_name = CustomType::GetInputFunction(target_type);
 		auto &catalog = Catalog::GetCatalog(*context);
-		auto func =
-			catalog.GetEntry(*context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, input_name, false);
+		auto func = catalog.GetEntry(*context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, input_name, false);
 		switch (func->type) {
 		case CatalogType::SCALAR_FUNCTION_ENTRY: {
 			vector<unique_ptr<Expression>> children;
 			children.emplace_back(move(result));
 			unique_ptr<Expression> function =
-				ScalarFunction::BindScalarFunction(*context, DEFAULT_SCHEMA, input_name, move(children), error, true);
+			    ScalarFunction::BindScalarFunction(*context, DEFAULT_SCHEMA, input_name, move(children), error, true);
 			result = move(function);
 		} break;
 		default:
