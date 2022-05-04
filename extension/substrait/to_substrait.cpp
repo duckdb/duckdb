@@ -98,10 +98,21 @@ void DuckDBToSubstrait::TransformVarchar(Value &dval, substrait::Expression &sex
 		s_type.set_allocated_decimal(s_decimal);
 		break;
 	}
+		// Substrait ppl think unsigned types are not common, so we have to upcast these beauties
+		// Which completely borks the optimization they are created for
 	case LogicalTypeId::UTINYINT: {
-		// FIXME: Support for unsigned integer types?
+		auto s_integer = new substrait::Type_I16();
+		s_type.set_allocated_i16(s_integer);
+		break;
+	}
+	case LogicalTypeId::USMALLINT: {
 		auto s_integer = new substrait::Type_I32();
 		s_type.set_allocated_i32(s_integer);
+		break;
+	}
+	case LogicalTypeId::UINTEGER: {
+		auto s_integer = new substrait::Type_I64();
+		s_type.set_allocated_i64(s_integer);
 		break;
 	}
 	case LogicalTypeId::INTEGER: {
@@ -157,7 +168,6 @@ void DuckDBToSubstrait::TransformHugeInt(Value &dval, substrait::Expression &sex
 	allocated_decimal->set_allocated_value(decimal_value);
 	sval.set_allocated_decimal(allocated_decimal);
 }
-
 
 void DuckDBToSubstrait::TransformConstant(Value &dval, substrait::Expression &sexpr) {
 	auto &duckdb_type = dval.type();
@@ -417,6 +427,15 @@ substrait::Expression *DuckDBToSubstrait::TransformJoinCond(JoinCondition &dcond
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
 		join_comparision = "gt";
+		break;
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		join_comparision = "is_not_distinct_from";
+		break;
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		join_comparision = "gte";
+		break;
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		join_comparision = "lte";
 		break;
 	default:
 		throw InternalException("Unsupported join comparison");

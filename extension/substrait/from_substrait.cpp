@@ -85,7 +85,6 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 	for (auto &sarg : sexpr.scalar_function().args()) {
 		children.push_back(TransformExpr(sarg));
 	}
-
 	// string compare galore
 	// TODO simplify this
 	if (function_name == "and") {
@@ -111,10 +110,14 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 		                                         move(children[1]));
 	} else if (function_name == "is_not_null") {
 		return make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, move(children[0]));
+	} else if (function_name == "is_not_distinct_from") {
+		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, move(children[0]),
+		                                         move(children[1]));
 	} else if (function_name == "between") {
 		// FIXME: ADD between to substrait extension
 		return make_unique<BetweenExpression>(move(children[0]), move(children[1]), move(children[2]));
 	}
+
 	return make_unique<FunctionExpression>(function_name, move(children));
 }
 
@@ -134,6 +137,8 @@ LogicalType SubstraitToDuckDB::SubstraitToDuckType(const ::substrait::Type &s_ty
 
 	if (s_type.has_bool_()) {
 		return LogicalType(LogicalTypeId::BOOLEAN);
+	} else if (s_type.has_i16()) {
+		return LogicalType(LogicalTypeId::SMALLINT);
 	} else if (s_type.has_i32()) {
 		return LogicalType(LogicalTypeId::INTEGER);
 	} else if (s_type.has_decimal()) {
