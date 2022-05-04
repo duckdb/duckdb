@@ -5,4 +5,5 @@ set -e
 export JULIA_DUCKDB_LIBRARY="`pwd`/../../build/debug/src/libduckdb.dylib"
 #export JULIA_DUCKDB_LIBRARY="/Users/myth/Programs/duckdb-bugfix/build/release/src/libduckdb.dylib"
 
+export JULIA_NUM_THREADS=4
 julia -e "import Pkg; Pkg.activate(\".\"); include(\"test/runtests.jl\")" $1

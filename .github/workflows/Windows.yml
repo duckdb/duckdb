@@ -60,7 +60,7 @@ jobs:
         python scripts/amalgamation.py
         choco install zip -y --force
         zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
-        zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
+        zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j duckdb_odbc-windows-amd64.zip tools/odbc/bin/Release/*
         python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar duckdb_odbc-windows-amd64.zip
 
@@ -71,6 +71,7 @@ jobs:
           libduckdb-windows-amd64.zip
           duckdb_cli-windows-amd64.zip
           tools/jdbc/duckdb_jdbc.jar
+          duckdb_odbc-windows-amd64.zip
 
     - uses: ilammy/msvc-dev-cmd@v1
     - name: Duckdb.dll export symbols with C++ on Windows
@@ -107,7 +108,7 @@ jobs:
         python scripts/amalgamation.py
         choco install zip -y --force
         zip -j duckdb_cli-windows-i386.zip Release/duckdb.exe
-        zip -j libduckdb-windows-i386.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
+        zip -j libduckdb-windows-i386.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-windows-i386.zip duckdb_cli-windows-i386.zip duckdb_jdbc-windows-i386.jar=tools/jdbc/duckdb_jdbc.jar
 
     - uses: actions/upload-artifact@v2
@@ -188,8 +189,8 @@ jobs:
 
     - name: Install psqlodbc
       run: |
-        git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout 9863221be0aa6e921c25818509b0402ebda1e561 && make release)
+        git clone https://github.com/hawkfish/psqlodbc.git
+        (cd psqlodbc && git checkout 96f5683d68e4a288e76ee4b09737478cc592aa98 && make release)
 
     - name: Test psqlodbc
       run: |

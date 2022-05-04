@@ -44,6 +44,8 @@ public:
 	bool requires_valid_transaction;
 	//! Whether or not the result can be streamed to the client
 	bool allow_stream_result;
+	//! Whether or not all parameters have successfully had their types determined
+	bool bound_all_parameters;
 
 	//! The catalog version of when the prepared statement was bound
 	//! If this version is lower than the current catalog version, we have to rebind the prepared statement

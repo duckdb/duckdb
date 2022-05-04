@@ -761,24 +761,13 @@ void NumpyResultConversion::Resize(idx_t new_capacity) {
 	capacity = new_capacity;
 }
 
-void NumpyResultConversion::Append(DataChunk &chunk, unordered_map<idx_t, py::list> *categories) {
+void NumpyResultConversion::Append(DataChunk &chunk) {
 	if (count + chunk.size() > capacity) {
 		Resize(capacity * 2);
 	}
 	auto chunk_types = chunk.GetTypes();
 	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
 		owned_data[col_idx].Append(count, chunk.data[col_idx], chunk.size());
-		if (chunk_types[col_idx].id() == LogicalTypeId::ENUM) {
-			D_ASSERT(categories);
-			// It's an ENUM type, in addition to converting the codes we must convert the categories
-			if (categories->find(col_idx) == categories->end()) {
-				auto &categories_list = EnumType::GetValuesInsertOrder(chunk.data[col_idx].GetType());
-				auto categories_size = EnumType::GetSize(chunk.data[col_idx].GetType());
-				for (idx_t i = 0; i < categories_size; i++) {
-					(*categories)[col_idx].append(py::cast(categories_list.GetValue(i).ToString()));
-				}
-			}
-		}
 	}
 	count += chunk.size();
 #ifdef DEBUG
