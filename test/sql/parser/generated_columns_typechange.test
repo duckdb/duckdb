@@ -17,17 +17,18 @@ SELECT total_profit FROM unit
 20
 
 # Dependency of 'total_price', and CASCADE isnt provided
-statement ok
+statement error
 ALTER TABLE unit ALTER COLUMN price TYPE BOOLEAN;
 
-# # With CASCADE it should succeed
-# statement ok
-# ALTER TABLE unit ALTER COLUMN price TYPE BOOLEAN CASCADE;
-
+# With CASCADE it should succeed
 statement ok
-ALTER TABLE unit RENAME COLUMN price TO value
+ALTER TABLE unit ALTER COLUMN price TYPE BOOLEAN CASCADE;
 
-query III
+# Now the generated column is deleted
+statement error
+SELECT total_profit FROM unit;
+
+query II
 SELECT * FROM unit
 ----
-false   4   4
+1	4

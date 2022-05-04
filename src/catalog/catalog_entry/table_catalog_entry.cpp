@@ -597,18 +597,19 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	}
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 
-	vector<idx_t>	affected_generated_columns;
+	//TODO: check if the expression breaks, only delete it if it does
 	for (idx_t i = 0; i < generated_columns.size(); i++) {
 		auto copy = generated_columns[i].Copy();
 		bool affected = false;
 		DependsOnColumn(*copy.expression, info.column_name, affected);
 		if (affected) {
-			// if (!info.cascade) {
-			// 	throw CatalogException("Could not change the type of the column \"%s\" because 1 or more generated columns depend on it, and the CASCADE option wasn't provided", info.column_name);
-			// }
-			affected_generated_columns.push_back(i);
+			if (!info.cascade) {
+				throw CatalogException("Could not change the type of the column \"%s\" because 1 or more generated columns depend on it, and the CASCADE option wasn't provided", info.column_name);
+			}
 		}
-		create_info->generated_columns.push_back(move(copy));
+		else {
+			create_info->generated_columns.push_back(move(copy));
+		}
 	}
 
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -676,41 +677,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	    make_shared<DataTable>(context, *storage, change_idx, info.target_type, move(bound_columns), *bound_expression);
 	auto result = make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
-	vector<string>	names;
-	vector<LogicalType> types;
-
-	idx_t table_index = 0;
-
-	auto scan_function = TableScanFunction::GetFunction();
-	auto bind_data = make_unique<TableScanBindData>(result.get());
-
-	for (auto& col : result->columns) {
-		names.push_back(col.name);
-		types.push_back(col.type);
-	}
-
-	auto logical_get =
-		make_unique<LogicalGet>(table_index, scan_function, move(bind_data), types, names);
-	binder->bind_context.AddBaseTable(
-		table_index,
-		result->name,
-		names,
-		types,
-		vector<string>(),
-		vector<LogicalType>(),
-		*logical_get
-	);
-
-	ExpressionBinder gen_expr_binder(*binder, context);
-	for (idx_t i = 0; i < affected_generated_columns.size(); i++) {
-		auto index = affected_generated_columns[i];
-		auto& gen_col = generated_columns[index];
-		auto expr = gen_col.expression->Copy();
-		auto err_str = gen_expr_binder.Bind(&expr, 0, true);
-		if (err_str.size()) {
-			throw CatalogException("Could not change type of column \"s\" because a generated column breaks because of this change, use CASCADE to delete this broken generated column instead", info.column_name);
-		}
-	}
 	return result;
 }
 

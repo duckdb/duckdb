@@ -1,4 +1,4 @@
-#line 2 "third_party/libpg_query/src_backend_parser_scan.cpp"
+#line 1 "third_party/libpg_query/src_backend_parser_scan.cpp"
 /*-------------------------------------------------------------------------
  *
  * scan.l
@@ -40,7 +40,7 @@
 
 #include <stdexcept>
 
-#line 44 "third_party/libpg_query/src_backend_parser_scan.cpp"
+#line 43 "third_party/libpg_query/src_backend_parser_scan.cpp"
 
 #define  YY_INT_ALIGNED short int
 
@@ -1146,7 +1146,7 @@ static void check_escape_warning(core_yyscan_t yyscanner);
 extern int	core_yyget_column(yyscan_t yyscanner);
 extern void core_yyset_column(int column_no, yyscan_t yyscanner);
 
-#line 1149 "third_party/libpg_query/src_backend_parser_scan.cpp"
+#line 1148 "third_party/libpg_query/src_backend_parser_scan.cpp"
 #define YY_NO_INPUT 1
 /*
  * OK, here is a short description of lex/flex rules behavior.
@@ -1300,7 +1300,7 @@ extern void core_yyset_column(int column_no, yyscan_t yyscanner);
  * Note that xcstart must appear before operator, as explained above!
  *  Also whitespace (comment) must appear before operator.
  */
-#line 1303 "third_party/libpg_query/src_backend_parser_scan.cpp"
+#line 1302 "third_party/libpg_query/src_backend_parser_scan.cpp"
 
 #define INITIAL 0
 #define xb 1
@@ -1582,7 +1582,7 @@ YY_DECL
 #line 401 "third_party/libpg_query/scan.l"
 
 
-#line 1592 "third_party/libpg_query/src_backend_parser_scan.cpp"
+#line 1591 "third_party/libpg_query/src_backend_parser_scan.cpp"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -2633,7 +2633,7 @@ YY_RULE_SETUP
 #line 1075 "third_party/libpg_query/scan.l"
 YY_FATAL_ERROR( "flex scanner jammed" );
 	YY_BREAK
-#line 2643 "third_party/libpg_query/src_backend_parser_scan.cpp"
+#line 2642 "third_party/libpg_query/src_backend_parser_scan.cpp"
 
 	case YY_END_OF_BUFFER:
 		{
@@ -3685,8 +3685,13 @@ static int yy_init_globals (yyscan_t yyscanner)
     yyg->yy_start_stack =  NULL;
 
 /* Defined in main.c */
-    yyin = (FILE *) 0;
-    yyout = (FILE *) 0;
+#ifdef YY_STDINIT
+    yyin = stdin;
+    yyout = stdout;
+#else
+    yyin = NULL;
+    yyout = NULL;
+#endif
 
     /* For future reference: Set errno on error, since we are called by
      * yylex_init()
