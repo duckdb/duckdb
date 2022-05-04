@@ -144,6 +144,10 @@ function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
 
     result_idx = 1
     for col_idx in init_info.columns
+        if col_idx == 0
+            result_idx += 1
+            continue
+        end
         bind_info.scan_functions[col_idx](
             bind_info.df,
             init_info.pos,

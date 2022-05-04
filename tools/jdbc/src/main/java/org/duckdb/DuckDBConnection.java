@@ -173,7 +173,7 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public void setCatalog(String catalog) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		// not supported => no-op
 	}
 
 	public String getCatalog() throws SQLException {

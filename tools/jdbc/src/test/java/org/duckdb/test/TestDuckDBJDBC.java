@@ -1822,6 +1822,12 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_set_catalog() throws Exception {
+		Connection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		conn.setCatalog("we do not have this feature yet, sorry"); // Should be no-op until implemented
+		conn.close();
+	}
+
 	public static void test_get_table_types_bug1258() throws Exception {
 		Connection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();

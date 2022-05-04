@@ -42,7 +42,6 @@ struct DuckDBPyConnection {
 public:
 	shared_ptr<DuckDB> database;
 	shared_ptr<Connection> connection;
-	unordered_map<string, unique_ptr<RegisteredObject>> registered_objects;
 	unique_ptr<DuckDBPyResult> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
 	std::thread::id thread_id = std::this_thread::get_id();
@@ -82,11 +81,13 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename, bool binary_as_string);
 
-	unique_ptr<DuckDBPyRelation> FromArrowTable(py::object &table, const idx_t rows_per_tuple = 1000000);
+	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object, const idx_t rows_per_tuple = 1000000);
 
 	unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
 
 	unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query);
+
+	unordered_set<string> GetTableNames(const string &query);
 
 	DuckDBPyConnection *UnregisterPythonObject(const string &name);
 
@@ -124,6 +125,8 @@ public:
 
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;
+
+	static bool IsAcceptedArrowObject(string &py_object_type);
 };
 
 } // namespace duckdb

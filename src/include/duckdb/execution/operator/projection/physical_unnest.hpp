@@ -20,17 +20,23 @@ public:
 	PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
 	               PhysicalOperatorType type = PhysicalOperatorType::UNNEST);
 
-	//! The projection list of the SELECT statement (that contains aggregates)
+	//! The projection list of the UNNEST
 	vector<unique_ptr<Expression>> select_list;
 
 public:
 	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                           OperatorState &state) const override;
+	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
 	bool ParallelOperator() const override {
 		return true;
 	}
+
+public:
+	static unique_ptr<OperatorState> GetState(ClientContext &context);
+	static OperatorResultType ExecuteInternal(ClientContext &context, DataChunk &input, DataChunk &chunk,
+	                                          OperatorState &state, const vector<unique_ptr<Expression>> &select_list,
+	                                          bool include_input = true);
 };
 
 } // namespace duckdb

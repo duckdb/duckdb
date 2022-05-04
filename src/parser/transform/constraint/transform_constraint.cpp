@@ -37,10 +37,12 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		for (auto kc = constraint->fk_attrs->head; kc; kc = kc->next) {
 			fk_columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
 		}
-		for (auto kc = constraint->pk_attrs->head; kc; kc = kc->next) {
-			pk_columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
+		if (constraint->pk_attrs) {
+			for (auto kc = constraint->pk_attrs->head; kc; kc = kc->next) {
+				pk_columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
+			}
 		}
-		if (pk_columns.size() != fk_columns.size()) {
+		if (!pk_columns.empty() && pk_columns.size() != fk_columns.size()) {
 			throw ParserException("The number of referencing and referenced columns for foreign keys must be the same");
 		}
 		if (fk_columns.empty()) {

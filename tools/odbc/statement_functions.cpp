@@ -60,6 +60,9 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 		stmt->param_desc->ResetParams(stmt->stmt->n_param);
 
 		stmt->bound_cols.resize(stmt->stmt->ColumnCount());
+
+		stmt->FillIRD();
+
 		return SQL_SUCCESS;
 	});
 }
@@ -80,7 +83,6 @@ SQLRETURN duckdb::BatchExecuteStmt(SQLHSTMT statement_handle) {
 				return fetch_ret;
 			}
 		}
-		stmt->FillIRD();
 		return ret;
 	});
 }

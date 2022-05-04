@@ -15,7 +15,9 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		auto stats_left = PropagateExpression(condition.left);
 		auto stats_right = PropagateExpression(condition.right);
 		if (stats_left && stats_right) {
-			if (condition.null_values_are_equal && stats_left->CanHaveNull() && stats_right->CanHaveNull()) {
+			if ((condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
+			     condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) &&
+			    stats_left->CanHaveNull() && stats_right->CanHaveNull()) {
 				// null values are equal in this join, and both sides can have null values
 				// nothing to do here
 				continue;
@@ -58,6 +60,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				if (join.conditions.size() > 1) {
 					// there are multiple conditions: erase this condition
 					join.conditions.erase(join.conditions.begin() + i);
+					// remove the corresponding statistics
+					join.join_stats.clear();
 					i--;
 					continue;
 				} else {
@@ -103,7 +107,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		// anti joins have inverse statistics propagation
 		// (i.e. if we have an anti join on i: [0, 100] and j: [0, 25], the resulting stats are i:[25,100])
 		// for now we don't handle anti joins
-		if (condition.null_values_are_equal) {
+		if (condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
+		    condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// skip update when null values are equal (for now?)
 			continue;
 		}
@@ -165,11 +170,17 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 	}
 
 	auto join_type = join.join_type;
+	// depending on the join type, we might need to alter the statistics
+	// LEFT, FULL, RIGHT OUTER and SINGLE joins can introduce null values
+	// this requires us to alter the statistics after this point in the query plan
+	bool adds_null_on_left = IsRightOuterJoin(join_type);
+	bool adds_null_on_right = IsLeftOuterJoin(join_type) || join_type == JoinType::SINGLE;
+
 	vector<ColumnBinding> left_bindings, right_bindings;
-	if (IsRightOuterJoin(join_type)) {
+	if (adds_null_on_left) {
 		left_bindings = join.children[0]->GetColumnBindings();
 	}
-	if (IsLeftOuterJoin(join_type)) {
+	if (adds_null_on_right) {
 		right_bindings = join.children[1]->GetColumnBindings();
 	}
 
@@ -185,10 +196,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 		break;
 	}
 
-	// now depending on the join type, we might need to alter the statistics
-	// LEFT, FULL and RIGHT OUTER joins can introduce null values
-	// this requires us to alter the statistics after this point in the query plan
-	if (IsLeftOuterJoin(join_type)) {
+	if (adds_null_on_right) {
 		// left or full outer join: set IsNull() to true for all rhs statistics
 		for (auto &binding : right_bindings) {
 			auto stats = statistics_map.find(binding);
@@ -197,7 +205,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 			}
 		}
 	}
-	if (IsRightOuterJoin(join_type)) {
+	if (adds_null_on_left) {
 		// right or full outer join: set IsNull() to true for all lhs statistics
 		for (auto &binding : left_bindings) {
 			auto stats = statistics_map.find(binding);

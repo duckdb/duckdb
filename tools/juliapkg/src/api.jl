@@ -1223,14 +1223,26 @@ function duckdb_destroy_value(handle)
 end
 
 """
-Creates a value from a string
+Creates a value from a null-terminated string
 
-* value: The varchar value
+* value: The null-terminated string
 * returns: The value. This must be destroyed with `duckdb_destroy_value`.
 """
 function duckdb_create_varchar(handle)
     return ccall((:duckdb_create_varchar, libduckdb), duckdb_value, (Ptr{UInt8},), handle)
 end
+
+"""
+Creates a value from a string
+
+* value: The text
+* length: The length of the text
+* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+"""
+function duckdb_create_varchar_length(text, len)
+    return ccall((:duckdb_create_varchar_length, libduckdb), duckdb_value, (Ptr{UInt8}, UInt64), text, len)
+end
+
 
 """
 Creates a value from an int64
@@ -2501,3 +2513,18 @@ end
 # function duckdb_destroy_arrow(result)
 #     return ccall((:duckdb_destroy_arrow, libduckdb), Cvoid, (Ptr{Ptr{Cvoid}},), result)
 # end
+
+#=
+//===--------------------------------------------------------------------===//
+// Threading Interface
+//===--------------------------------------------------------------------===//
+=#
+# Execute DuckDB tasks on this thread.
+#
+# Will return after `max_tasks` have been executed, or if there are no more tasks present.
+#
+# * database: The database object to execute tasks for
+# * max_tasks: The maximum amount of tasks to execute
+function duckdb_execute_tasks(handle, max_tasks)
+    return ccall((:duckdb_execute_tasks, libduckdb), Cvoid, (duckdb_database, UInt64), handle, max_tasks)
+end

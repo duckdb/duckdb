@@ -32,6 +32,12 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 	                                             ColumnBinding(projection_index, index));
 }
 
+unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpression> expr) {
+	auto result = CreateProjectionReference(*expr, extra_list->size());
+	extra_list->push_back(move(expr));
+	return result;
+}
+
 unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	// in the ORDER BY clause we do not bind children
 	// we bind ONLY to the select list
@@ -102,9 +108,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		                      expr->ToString());
 	}
 	// otherwise we need to push the ORDER BY entry into the select list
-	auto result = CreateProjectionReference(*expr, extra_list->size());
-	extra_list->push_back(move(expr));
-	return result;
+	return CreateExtraReference(move(expr));
 }
 
 } // namespace duckdb

@@ -16,9 +16,9 @@ CALL dbgen(sf=0.01)
 statement ok
 CALL get_substrait('SELECT l_returnflag, l_linestatus, sum(l_quantity) AS sum_qty, sum(l_extendedprice) AS sum_base_price, sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge, avg(l_quantity) AS avg_qty, avg(l_extendedprice) AS avg_price, avg(l_discount) AS avg_disc, count(*) AS count_order FROM lineitem WHERE l_shipdate <= CAST(''1998-09-02'' AS date) GROUP BY l_returnflag, l_linestatus ORDER BY l_returnflag, l_linestatus;')
 
-##Q 02 (Missing DELIM_JOIN and DELIM_GET)
-##statement ok
-##CALL get_substrait('SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment FROM part, supplier, partsupp, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND p_size = 15 AND p_type LIKE ''%BRASS'' AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = ''EUROPE'' AND ps_supplycost = ( SELECT min(ps_supplycost) FROM partsupp, supplier, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = ''EUROPE'') ORDER BY s_acctbal DESC, n_name, s_name, p_partkey LIMIT 100;')
+#Q 02
+statement ok
+CALL get_substrait('SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment FROM part, supplier, partsupp, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND p_size = 15 AND p_type LIKE ''%BRASS'' AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = ''EUROPE'' AND ps_supplycost = ( SELECT min(ps_supplycost) FROM partsupp, supplier, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = ''EUROPE'') ORDER BY s_acctbal DESC, n_name, s_name, p_partkey LIMIT 100;')
 
 #Q 03
 statement ok
@@ -76,9 +76,9 @@ CALL get_substrait('SELECT s_suppkey, s_name, s_address, s_phone, total_revenue 
 #statement ok
 #CALL get_substrait('SELECT p_brand, p_type, p_size, count(DISTINCT ps_suppkey) AS supplier_cnt FROM partsupp, part WHERE p_partkey = ps_partkey AND p_brand <> ''Brand#45'' AND p_type NOT LIKE ''MEDIUM POLISHED%'' AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9) AND ps_suppkey NOT IN ( SELECT s_suppkey FROM supplier WHERE s_comment LIKE ''%Customer%Complaints%'') GROUP BY p_brand, p_type, p_size ORDER BY supplier_cnt DESC, p_brand, p_type, p_size;')
 
-#Q 17  Delim Join
-#statement ok
-#CALL get_substrait('SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = ''Brand#23'' AND p_container = ''MED BOX'' AND l_quantity < ( SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);')
+#Q 17
+statement ok
+CALL get_substrait('SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = ''Brand#23'' AND p_container = ''MED BOX'' AND l_quantity < ( SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);')
 
 #Q 18
 statement ok
@@ -88,9 +88,9 @@ CALL get_substrait('SELECT c_name, c_custkey, o_orderkey, o_orderdate, o_totalpr
 statement ok
 CALL get_substrait('SELECT sum(l_extendedprice * (1 - l_discount)) AS revenue FROM lineitem, part WHERE (p_partkey = l_partkey AND p_brand = ''Brand#12'' AND p_container IN (''SM CASE'', ''SM BOX'', ''SM PACK'', ''SM PKG'') AND l_quantity >= 1 AND l_quantity <= 1 + 10 AND p_size BETWEEN 1 AND 5 AND l_shipmode IN (''AIR'', ''AIR REG'') AND l_shipinstruct = ''DELIVER IN PERSON'') OR (p_partkey = l_partkey AND p_brand = ''Brand#23'' AND p_container IN (''MED BAG'', ''MED BOX'', ''MED PKG'', ''MED PACK'') AND l_quantity >= 10 AND l_quantity <= 10 + 10 AND p_size BETWEEN 1 AND 10 AND l_shipmode IN (''AIR'', ''AIR REG'') AND l_shipinstruct = ''DELIVER IN PERSON'') OR (p_partkey = l_partkey AND p_brand = ''Brand#34'' AND p_container IN (''LG CASE'', ''LG BOX'', ''LG PACK'', ''LG PKG'') AND l_quantity >= 20 AND l_quantity <= 20 + 10 AND p_size BETWEEN 1 AND 15 AND l_shipmode IN (''AIR'', ''AIR REG'') AND l_shipinstruct = ''DELIVER IN PERSON'');')
 
-#Q 20  Delim Join
-#statement ok
-#CALL get_substrait('SELECT s_name, s_address FROM supplier, nation WHERE s_suppkey IN ( SELECT ps_suppkey FROM partsupp WHERE ps_partkey IN ( SELECT p_partkey FROM part WHERE p_name LIKE ''forest%'') AND ps_availqty > ( SELECT 0.5 * sum(l_quantity) FROM lineitem WHERE l_partkey = ps_partkey AND l_suppkey = ps_suppkey AND l_shipdate >= CAST(''1994-01-01'' AS date) AND l_shipdate < CAST(''1995-01-01'' AS date))) AND s_nationkey = n_nationkey AND n_name = ''CANADA'' ORDER BY s_name;')
+#Q 20
+statement ok
+CALL get_substrait('SELECT s_name, s_address FROM supplier, nation WHERE s_suppkey IN ( SELECT ps_suppkey FROM partsupp WHERE ps_partkey IN ( SELECT p_partkey FROM part WHERE p_name LIKE ''forest%'') AND ps_availqty > ( SELECT 0.5 * sum(l_quantity) FROM lineitem WHERE l_partkey = ps_partkey AND l_suppkey = ps_suppkey AND l_shipdate >= CAST(''1994-01-01'' AS date) AND l_shipdate < CAST(''1995-01-01'' AS date))) AND s_nationkey = n_nationkey AND n_name = ''CANADA'' ORDER BY s_name;')
 
 #Q 21 Delim Join
 #statement ok

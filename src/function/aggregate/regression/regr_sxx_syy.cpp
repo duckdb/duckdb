@@ -22,9 +22,9 @@ struct RegrBaseOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
-		RegrCountFunction::Combine<size_t, OP>(source.count, &target->count);
-		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, &target->var_pop);
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+		RegrCountFunction::Combine<size_t, OP>(source.count, &target->count, bind_data);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, &target->var_pop, bind_data);
 	}
 
 	template <class T, class STATE>

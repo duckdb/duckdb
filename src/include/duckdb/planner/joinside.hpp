@@ -16,7 +16,7 @@ namespace duckdb {
 //! JoinCondition represents a left-right comparison join condition
 struct JoinCondition {
 public:
-	JoinCondition() : null_values_are_equal(false) {
+	JoinCondition() {
 	}
 
 	//! Turns the JoinCondition into an expression; note that this destroys the JoinCondition as the expression inherits
@@ -27,17 +27,14 @@ public:
 	unique_ptr<Expression> left;
 	unique_ptr<Expression> right;
 	ExpressionType comparison;
-	//! NULL values are equal for just THIS JoinCondition (instead of the entire join).
-	//! This is only supported by the HashJoin and can only be used in equality comparisons.
-	bool null_values_are_equal = false;
 };
 
 class JoinSide {
 public:
-	enum join_value : uint8_t { NONE, LEFT, RIGHT, BOTH };
+	enum JoinValue : uint8_t { NONE, LEFT, RIGHT, BOTH };
 
 	JoinSide() = default;
-	constexpr JoinSide(join_value val) : value(val) { // NOLINT: Allow implicit conversion from `join_value`
+	constexpr JoinSide(JoinValue val) : value(val) { // NOLINT: Allow implicit conversion from `join_value`
 	}
 
 	bool operator==(JoinSide a) const {
@@ -56,7 +53,7 @@ public:
 	                            unordered_set<idx_t> &right_bindings);
 
 private:
-	join_value value;
+	JoinValue value;
 };
 
 } // namespace duckdb

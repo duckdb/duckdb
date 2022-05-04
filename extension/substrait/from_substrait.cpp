@@ -80,11 +80,12 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformSelectionExpr(const sub
 }
 
 unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(const substrait::Expression &sexpr) {
+	auto function_name = FindFunction(sexpr.scalar_function().function_reference());
 	vector<unique_ptr<ParsedExpression>> children;
 	for (auto &sarg : sexpr.scalar_function().args()) {
 		children.push_back(TransformExpr(sarg));
 	}
-	auto function_name = FindFunction(sexpr.scalar_function().function_reference());
+
 	// string compare galore
 	// TODO simplify this
 	if (function_name == "and") {
@@ -127,7 +128,7 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformIfThenExpr(const substr
 		dcase->case_checks.push_back(move(dif));
 	}
 	dcase->else_expr = TransformExpr(scase.else_());
-	return dcase;
+	return move(dcase);
 }
 LogicalType SubstraitToDuckDB::SubstraitToDuckType(const ::substrait::Type &s_type) {
 
@@ -226,12 +227,16 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformJoinOp(const substrait::Rel &so
 	case substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_RIGHT:
 		djointype = JoinType::RIGHT;
 		break;
+	case substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_SINGLE:
+		djointype = JoinType::SINGLE;
+		break;
 	case substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_SEMI:
 		djointype = JoinType::SEMI;
 		break;
 	default:
 		throw InternalException("Unsupported join type");
 	}
+	vector<unique_ptr<ParsedExpression>> expressions;
 	return make_shared<JoinRelation>(TransformOp(sjoin.left())->Alias("left"),
 	                                 TransformOp(sjoin.right())->Alias("right"), TransformExpr(sjoin.expression()),
 	                                 djointype);

@@ -17,8 +17,8 @@
 #include <random>
 #include <stdlib.h>
 
-#ifndef DUCKDB_PYTHON_LIB_NAME
-#define DUCKDB_PYTHON_LIB_NAME duckdb
+#ifndef DUCKDB_PYTHON_EXTENSION_NAME
+#define DUCKDB_PYTHON_EXTENSION_NAME _duckdb_extension
 #endif
 
 namespace py = pybind11;
@@ -65,7 +65,7 @@ static py::object PyTokenize(const string &query) {
 	return move(result);
 }
 
-PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
+PYBIND11_MODULE(DUCKDB_PYTHON_EXTENSION_NAME, m) {
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyResult::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
@@ -73,7 +73,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	py::options pybind_opts;
 
 	m.doc() = "DuckDB is an embeddable SQL OLAP Database Management System";
-	m.attr("__package__") = "duckdb";
+	m.attr("__package__") = "_duckdb_extension";
 	m.attr("__version__") = DuckDB::LibraryVersion();
 	m.attr("__git_revision__") = DuckDB::SourceID();
 	m.attr("default_connection") = DuckDBPyConnection::DefaultConnection();
@@ -125,10 +125,10 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("from_df", &DuckDBPyRelation::FromDf, "Create a relation object from the Data.Frame df", py::arg("df"),
 	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
-	m.def("from_arrow_table", &DuckDBPyRelation::FromArrowTable, "Create a relation object from an Arrow table",
-	      py::arg("table"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
-	m.def("arrow", &DuckDBPyRelation::FromArrowTable, "Create a relation object from an Arrow table", py::arg("table"),
-	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	m.def("from_arrow", &DuckDBPyRelation::FromArrow, "Create a relation object from an Arrow object",
+	      py::arg("arrow_object"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	m.def("arrow", &DuckDBPyRelation::FromArrow, "Create a relation object from an Arrow object",
+	      py::arg("arrow_object"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("filter", &DuckDBPyRelation::FilterDf, "Filter the Data.Frame df by the filter in filter_expr", py::arg("df"),
 	      py::arg("filter_expr"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("project", &DuckDBPyRelation::ProjectDf, "Project the Data.Frame df by the projection in project_expr",

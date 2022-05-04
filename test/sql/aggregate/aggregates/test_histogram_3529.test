@@ -1,0 +1,29 @@
+# name: test/sql/aggregate/aggregates/test_histogram_3529.test
+# description: Test histogram aggregation issue 3529
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table tmp (c0 integer, c1 integer);
+
+statement ok
+insert into tmp values
+(0,	0),
+(1,	1),
+(2,	0),
+(0,	1),
+(1,	0),
+(2,	1),
+(0,	0),
+(1,	1),
+(2,	0),
+(0,	1);
+
+query II
+SELECT c0, histogram(c1) FROM tmp GROUP BY c0
+----
+0	{0=2, 1=2}
+1	{0=1, 1=2}
+2	{0=2, 1=1}

@@ -3,6 +3,17 @@
 
 namespace duckdb {
 
+string RecursiveCTENode::ToString() const {
+	string result;
+	result += "(" + left->ToString() + ")";
+	result += " UNION ";
+	if (union_all) {
+		result += " ALL ";
+	}
+	result += "(" + right->ToString() + ")";
+	return result;
+}
+
 bool RecursiveCTENode::Equals(const QueryNode *other_p) const {
 	if (!QueryNode::Equals(other_p)) {
 		return false;

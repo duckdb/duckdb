@@ -21,7 +21,7 @@ public:
 	static bool RequiresQuotes(const string &text);
 
 	//! Writes a string that is optionally quoted + escaped so it can be used as an identifier
-	static string WriteOptionallyQuoted(const string &text);
+	static string WriteOptionallyQuoted(const string &text, char quote = '"');
 };
 
 } // namespace duckdb

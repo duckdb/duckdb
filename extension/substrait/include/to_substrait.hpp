@@ -50,6 +50,7 @@ private:
 	//! Methods to transform DuckDBConstants to Substrait Expressions
 	void TransformConstant(duckdb::Value &dval, substrait::Expression &sexpr);
 	void TransformInteger(duckdb::Value &dval, substrait::Expression &sexpr);
+	void TransformDouble(Value &dval, substrait::Expression &sexpr);
 	void TransformBigInt(duckdb::Value &dval, substrait::Expression &sexpr);
 	void TransformDate(duckdb::Value &dval, substrait::Expression &sexpr);
 	void TransformVarchar(duckdb::Value &dval, substrait::Expression &sexpr);

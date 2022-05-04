@@ -124,7 +124,7 @@ static unique_ptr<FunctionOperatorData> dataframe_scan_init(ClientContext &conte
 }
 
 static void dataframe_scan_function(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                    FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (DataFrameScanFunctionData &)*bind_data;
 	auto &state = (DataFrameScanState &)*operator_state;
 	if (state.position >= data.row_count) {

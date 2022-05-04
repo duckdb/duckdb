@@ -30,6 +30,8 @@ add_library_unity(
   local_file_system.cpp
   printer.cpp
   progress_bar.cpp
+  re2_regex.cpp
+  random_engine.cpp
   serializer.cpp
   string_util.cpp
   symbols.cpp
