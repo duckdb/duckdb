@@ -7,22 +7,11 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/parser/parser.hpp"
 
 #include <limits>
 
 namespace duckdb {
-
-static LogicalType ParseTypeFromString(const string &type_string) {
-	auto cast_string = StringUtil::Format("?::%s", type_string);
-	auto cast_expressions = Parser::ParseExpressionList(cast_string);
-	D_ASSERT(cast_expressions.size() == 1);
-	D_ASSERT(cast_expressions[0]->type == ExpressionType::OPERATOR_CAST);
-	auto &cast = (CastExpression &)*cast_expressions[0];
-	return cast.cast_type;
-}
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
                                             vector<LogicalType> &return_types, vector<string> &names) {
@@ -57,7 +46,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 				if (val.type().id() != LogicalTypeId::VARCHAR) {
 					throw BinderException("read_csv requires a type specification as string");
 				}
-				return_types.emplace_back(ParseTypeFromString(StringValue::Get(val)));
+				return_types.emplace_back(TransformStringToLogicalType(StringValue::Get(val)));
 			}
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
