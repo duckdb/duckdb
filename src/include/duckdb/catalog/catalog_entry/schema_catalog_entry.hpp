@@ -36,7 +36,6 @@ struct CreateSchemaInfo;
 struct CreateTableFunctionInfo;
 struct CreateCopyFunctionInfo;
 struct CreateTypeInfo;
-struct CreateCustomTypeInfo;
 
 struct DropInfo;
 
@@ -102,8 +101,6 @@ private:
 	CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
 	//! Create a enum within the given schema
 	CatalogEntry *CreateType(ClientContext &context, CreateTypeInfo *info);
-	//! Create a custom type within the give schema
-	CatalogEntry *CreateCustomType(ClientContext &context, CreateCustomTypeInfo *info);
 
 	//! Drops an entry from the schema
 	void DropEntry(ClientContext &context, DropInfo *info);

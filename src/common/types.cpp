@@ -1,7 +1,6 @@
 #include "duckdb/common/types.hpp"
 
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/custom_type_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/limits.hpp"
@@ -1272,7 +1271,7 @@ struct CustomTypeInfo : public ExtraTypeInfo {
 	string custom_name;
 	LogicalTypeId internal_type;
 	map<CustomTypeParameterId, string> parameters;
-	CustomTypeCatalogEntry *catalog_entry = nullptr;
+	TypeCatalogEntry *catalog_entry = nullptr;
 	ClientContext *context = nullptr;
 
 public:
@@ -1486,14 +1485,14 @@ ClientContext *CustomType::GetContext(const LogicalType &type) {
 	return ((CustomTypeInfo &)*info).context;
 }
 
-void CustomType::SetCatalog(LogicalType &type, CustomTypeCatalogEntry *catalog_entry) {
+void CustomType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
 	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	((CustomTypeInfo &)*info).catalog_entry = catalog_entry;
 }
 
-CustomTypeCatalogEntry *CustomType::GetCatalog(const LogicalType &type) {
+TypeCatalogEntry *CustomType::GetCatalog(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::CUSTOM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);

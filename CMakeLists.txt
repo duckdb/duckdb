@@ -220,7 +220,6 @@ option(BUILD_MAIN_DUCKDB_LIBRARY
 
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
-option(BUILD_CUSTOMTYPE_EXTENSION, "Build the Custom type extension." FALSE)
 option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
 option(BUILD_TPCDS_EXTENSION "Build the TPC-DS extension." FALSE)
 option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
@@ -273,7 +272,6 @@ if(BUILD_PYTHON
   set(BUILD_ICU_EXTENSION TRUE)
   set(BUILD_VISUALIZER_EXTENSION TRUE)
   set(BUILD_PARQUET_EXTENSION TRUE)
-  set(BUILD_CUSTOMTYPE_EXTENSION TRUE)
 endif()
 
 if(BUILD_PYTHON)
@@ -484,11 +482,6 @@ function(add_extension_definitions)
     add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
   endif()
 
-  if(${BUILD_CUSTOMTYPE_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/customtype/include)
-    add_definitions(-DBUILD_CUSTOMTYPE_EXTENSION=${BUILD_CUSTOMTYPE_EXTENSION})
-  endif()
-
   if(${BUILD_TPCH_EXTENSION})
     include_directories(${PROJECT_SOURCE_DIR}/extension/tpch/include)
     add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
@@ -536,10 +529,6 @@ function(add_extension_dependencies LIBRARY)
     add_dependencies(${LIBRARY} parquet_extension)
   endif()
 
-  if(${BUILD_CUSTOMTYPE_EXTENSION})
-    add_dependencies(${LIBRARY} customtype_extension)
-  endif()
-
   if(${BUILD_ICU_EXTENSION})
     add_dependencies(${LIBRARY} icu_extension)
   endif()
@@ -584,10 +573,6 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_PARQUET_EXTENSION})
     target_link_libraries(${LIBRARY} parquet_extension)
-  endif()
-
-  if(${BUILD_CUSTOMTYPE_EXTENSION})
-  target_link_libraries(${LIBRARY} customtype_extension)
   endif()
 
   if(${BUILD_ICU_EXTENSION})

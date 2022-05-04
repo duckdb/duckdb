@@ -2,13 +2,11 @@
 # description: CUSTOM tests
 # group: [custom]
 
-require customtype
-
 statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TYPE box (input := 'box_in', output := 'box_out');
+CREATE TYPE box (input := 'to_base64', output := 'from_base64');
 
 statement ok
 CREATE TABLE person (
@@ -18,12 +16,12 @@ CREATE TABLE person (
 
 
 statement ok
-INSERT INTO person VALUES ('Pedro', 'ok'), ('Mark', 'sad'),('Moe', 'happy'), ('Diego', NULL);
+INSERT INTO person VALUES ('Pedro', 'ok'::BLOB), ('Mark', 'sad'::BLOB),('Moe', 'happy'::BLOB), ('Diego', NULL);
 
 query T
 select current_box::varchar from person
 ----
-ok Box In	
-sad Box In	
-happy Box In	
-NULL	
+b2s=
+c2Fk
+aGFwcHk=
+NULL

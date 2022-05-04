@@ -20,7 +20,6 @@ class Serializer;
 class Deserializer;
 class Value;
 class TypeCatalogEntry;
-class CustomTypeCatalogEntry;
 class Vector;
 class ClientContext;
 //! Type used to represent dates (days since 1970-01-01)
@@ -559,8 +558,8 @@ struct CustomType {
 	DUCKDB_API static void SetInternalType(LogicalType &type, LogicalTypeId internal_type);
 	DUCKDB_API static void SetContext(LogicalType &type, ClientContext *context);
 	DUCKDB_API static ClientContext* GetContext(const LogicalType &type);
-	DUCKDB_API static void SetCatalog(LogicalType &type, CustomTypeCatalogEntry* catalog_entry);
-	DUCKDB_API static CustomTypeCatalogEntry* GetCatalog(const LogicalType &type);
+	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
+	DUCKDB_API static TypeCatalogEntry* GetCatalog(const LogicalType &type);
 	DUCKDB_API static const string GetValue(const Value &val);
 };
 

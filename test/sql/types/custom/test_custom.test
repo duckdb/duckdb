@@ -2,19 +2,17 @@
 # description: CUSTOM tests
 # group: [custom]
 
-require customtype
-
 statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TYPE box (input := 'box_in', output := 'box_out');
+CREATE TYPE box (input := 'to_base64', output := 'from_base64');
 
 # Casts should work
 query I
-select 'happy'::box;
+select 'happy'::BLOB::box;
 ----
-happy Box In Box Out
+happy
 
 # Postgres accept empty CUSTOM
 statement ok
@@ -22,11 +20,11 @@ CREATE TYPE bla();
 
 #Customs with the same name shouldn't work
 statement error
-CREATE TYPE box (input := 'box_in', output := 'box_out');
+CREATE TYPE box (input := 'to_base64', output := 'from_base64');
 
 # Customs with error function key
 statement error
-CREATE TYPE box_2(test := 'box_in');
+CREATE TYPE box_2(test := 'to_base64');
 
 # Customs with error input
 statement error
@@ -45,7 +43,7 @@ DROP TYPE box;
 
 # We can create box again
 statement ok
-CREATE TYPE box (input := 'box_in', output := 'box_out');
+CREATE TYPE box (input := 'to_base64', output := 'from_base64');
 
 #This will drop box
 statement ok
@@ -53,9 +51,9 @@ DROP TYPE IF EXISTS box;
 
 #Customs in structs/lists/maps
 statement ok
-CREATE TYPE box (input := 'box_in', output := 'box_out');
+CREATE TYPE box (input := 'to_base64', output := 'from_base64');
 
 #query I
 #select ['happy']::box[]
 #----
-#[happy Box In Box Out]
+#[happy]

@@ -1,11 +1,10 @@
-#include "duckdb/parser/parsed_data/create_custom_type_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/pair.hpp"
-#include <iostream>
 
 namespace duckdb {
 
@@ -42,7 +41,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateTypeStmt *>(node);
 	D_ASSERT(stmt);
 	auto result = make_unique<CreateStatement>();
-	auto info = make_unique<CreateCustomTypeInfo>();
+	auto info = make_unique<CreateTypeInfo>();
 	auto name = GetStringFromPgList(stmt->name)[0];
 	info->name = name;
 	map<CustomTypeParameterId, string> parameters;

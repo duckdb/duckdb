@@ -88,9 +88,6 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::TYPE_ENTRY:
 		log->WriteCreateType((TypeCatalogEntry *)parent);
 		break;
-	case CatalogType::TYPE_CUSTOM_ENTRY:
-		log->WriteCreateCustomType((CustomTypeCatalogEntry *)parent);
-		break;
 	case CatalogType::DELETED_ENTRY:
 		switch (entry->type) {
 		case CatalogType::TABLE_ENTRY: {
@@ -116,9 +113,6 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			break;
 		case CatalogType::TYPE_ENTRY:
 			log->WriteDropType((TypeCatalogEntry *)entry);
-			break;
-		case CatalogType::TYPE_CUSTOM_ENTRY:
-			log->WriteDropCustomType((CustomTypeCatalogEntry *)entry);
 			break;
 		case CatalogType::INDEX_ENTRY:
 		case CatalogType::PREPARED_STATEMENT:

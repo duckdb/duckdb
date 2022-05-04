@@ -1,6 +1,5 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/custom_type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -101,20 +100,6 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 	for (auto &dependency : old_dependencies) {
 		if (dependency->type == CatalogType::TYPE_ENTRY) {
 			auto user_type = (TypeCatalogEntry *)dependency;
-			auto table = (TableCatalogEntry *)new_obj;
-			bool deleted_dependency = true;
-			for (auto &column : table->columns) {
-				if (column.type == user_type->user_type) {
-					deleted_dependency = false;
-					break;
-				}
-			}
-			if (deleted_dependency) {
-				to_delete.push_back(dependency);
-				continue;
-			}
-		} else if (dependency->type == CatalogType::TYPE_CUSTOM_ENTRY) {
-			auto user_type = (CustomTypeCatalogEntry *)dependency;
 			auto table = (TableCatalogEntry *)new_obj;
 			bool deleted_dependency = true;
 			for (auto &column : table->columns) {

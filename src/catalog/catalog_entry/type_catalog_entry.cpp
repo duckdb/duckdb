@@ -55,6 +55,19 @@ string TypeCatalogEntry::ToSQL() {
 		ss << ");";
 		break;
 	}
+	case (LogicalTypeId::CUSTOM): {
+		ss << "CREATE TYPE ";
+		ss << KeywordHelper::WriteOptionallyQuoted(name);
+		ss << " (";
+		auto parameters = CustomType::GetParameters(user_type);
+		idx_t i = 0;
+		for (auto const &iter : parameters) {
+			ss << (i == 0 ? "" : ", ") << TransformCustomTypeParameterToString(iter.first) << " := '" << iter.second << "'";
+			i++;
+		}
+		ss << ");";
+		break;
+	}
 	default:
 		throw InternalException("Logical Type can't be used as a User Defined Type");
 	}

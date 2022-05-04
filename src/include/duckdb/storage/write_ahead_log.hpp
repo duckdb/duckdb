@@ -30,7 +30,6 @@ class SequenceCatalogEntry;
 class ScalarMacroCatalogEntry;
 class ViewCatalogEntry;
 class TypeCatalogEntry;
-class CustomTypeCatalogEntry;
 class TableCatalogEntry;
 class Transaction;
 class TransactionManager;
@@ -81,8 +80,6 @@ public:
 	void WriteCreateType(TypeCatalogEntry *entry);
 	void WriteDropType(TypeCatalogEntry *entry);
 
-	void WriteCreateCustomType(CustomTypeCatalogEntry *entry);
-	void WriteDropCustomType(CustomTypeCatalogEntry *entry);
 	//! Sets the table used for subsequent insert/delete/update commands
 	void WriteSetTable(string &schema, string &table);
 

@@ -28,7 +28,6 @@ struct CreateViewInfo;
 struct CreateSequenceInfo;
 struct CreateCollationInfo;
 struct CreateTypeInfo;
-struct CreateCustomTypeInfo;
 struct CreateTableInfo;
 
 class ClientContext;
@@ -122,8 +121,6 @@ public:
 	DUCKDB_API CatalogEntry *CreateSequence(ClientContext &context, CreateSequenceInfo *info);
 	//! Creates a Enum in the catalog.
 	DUCKDB_API CatalogEntry *CreateType(ClientContext &context, CreateTypeInfo *info);
-	//! Creates a Custom type in the catalog
-	DUCKDB_API CatalogEntry *CreateCustomType(ClientContext &context, CreateCustomTypeInfo *info);
 	//! Creates a collation in the catalog
 	DUCKDB_API CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
 
@@ -149,9 +146,7 @@ public:
 	                                        CreateSequenceInfo *info);
 	//! Creates a enum in the catalog.
 	DUCKDB_API CatalogEntry *CreateType(ClientContext &context, SchemaCatalogEntry *schema, CreateTypeInfo *info);
-	//! Creates a custom type in the catalog
-	DUCKDB_API CatalogEntry *CreateCustomType(ClientContext &context, SchemaCatalogEntry *schema,
-	                                          CreateCustomTypeInfo *info);
+
 	//! Creates a collation in the catalog
 	DUCKDB_API CatalogEntry *CreateCollation(ClientContext &context, SchemaCatalogEntry *schema,
 	                                         CreateCollationInfo *info);

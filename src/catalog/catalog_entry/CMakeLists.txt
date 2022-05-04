@@ -3,7 +3,6 @@ add_library_unity(
   OBJECT
   copy_function_catalog_entry.cpp
   type_catalog_entry.cpp
-  custom_type_catalog_entry.cpp
   index_catalog_entry.cpp
   scalar_macro_catalog_entry.cpp
   pragma_function_catalog_entry.cpp

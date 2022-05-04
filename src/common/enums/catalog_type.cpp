@@ -11,8 +11,6 @@ string CatalogTypeToString(CatalogType type) {
 		return "Collation";
 	case CatalogType::TYPE_ENTRY:
 		return "Type";
-	case CatalogType::TYPE_CUSTOM_ENTRY:
-		return "Custom Type";
 	case CatalogType::TABLE_ENTRY:
 		return "Table";
 	case CatalogType::SCHEMA_ENTRY:

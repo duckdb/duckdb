@@ -2,13 +2,11 @@
 # description: CUSTOM types used in table tests
 # group: [custom]
 
-require customtype
-
 statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TYPE box (input := 'box_in', output := 'box_out');
+CREATE TYPE box (input := 'to_base64', output := 'from_base64');
 
 # Test with non existent custom type
 statement error
@@ -24,23 +22,23 @@ CREATE TABLE person (
 );
 
 statement ok
-INSERT INTO person VALUES ('Moe', 'happy');
+INSERT INTO person VALUES ('Moe', 'happy'::BLOB);
 
 query TT
 select * from person
 ----
-Moe	happy Box In Box Out
+Moe	happy
 
 statement ok
-INSERT INTO person VALUES ('Pedro', 'ok');
+INSERT INTO person VALUES ('Pedro', 'ok'::BLOB);
 
 statement ok
-INSERT INTO person VALUES ('Mark', 'sad');
+INSERT INTO person VALUES ('Mark', 'sad'::BLOB);
 
 query TT
-select * from person where current_box = 'sad'
+select * from person where current_box = 'sad'::BLOB
 ----
-Mark	sad Box In Box Out
+Mark	sad
 
 statement ok
 CREATE TABLE pets (
@@ -49,10 +47,10 @@ CREATE TABLE pets (
 );
 
 statement ok
-INSERT INTO pets VALUES ('Anne', 'happy');
+INSERT INTO pets VALUES ('Anne', 'happy'::BLOB);
 
 statement ok
-INSERT INTO pets VALUES ('Oogie Boogie', 'ok');
+INSERT INTO pets VALUES ('Oogie Boogie', 'ok'::BLOB);
 
 #Null Values in the column are allowed
 statement ok
@@ -61,8 +59,8 @@ INSERT INTO pets VALUES ('Mr. Fluffles McFluffingstein', NULL);
 query TT
 select * from pets;
 ----
-Anne	happy Box In Box Out
-Oogie Boogie	ok Box In Box Out
+Anne	happy
+Oogie Boogie	ok
 Mr. Fluffles McFluffingstein	NULL
 
 query TT

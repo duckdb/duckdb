@@ -6,7 +6,6 @@
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/custom_type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -147,13 +146,10 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	});
 
 	vector<TypeCatalogEntry *> custom_types;
-	vector<CustomTypeCatalogEntry *> new_custom_types;
 	schema.Scan(CatalogType::TYPE_ENTRY, [&](CatalogEntry *entry) {
 		D_ASSERT(!entry->internal);
 		if (entry->type == CatalogType::TYPE_ENTRY) {
 			custom_types.push_back((TypeCatalogEntry *)entry);
-		} else if (entry->type == CatalogType::TYPE_CUSTOM_ENTRY) {
-			new_custom_types.push_back((CustomTypeCatalogEntry *)entry);
 		}
 	});
 
@@ -179,7 +175,6 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 
 	FieldWriter writer(*metadata_writer);
 	writer.WriteField<uint32_t>(custom_types.size());
-	writer.WriteField<uint32_t>(new_custom_types.size());
 	writer.WriteField<uint32_t>(sequences.size());
 	writer.WriteField<uint32_t>(tables.size());
 	writer.WriteField<uint32_t>(views.size());
@@ -190,11 +185,6 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	// write the custom_types
 	for (auto &custom_type : custom_types) {
 		WriteType(*custom_type);
-	}
-
-	// write the new_custom_types
-	for (auto &custom_type : new_custom_types) {
-		WriteCustomType(*custom_type);
 	}
 
 	// write the sequences
@@ -235,7 +225,6 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	// first read all the counts
 	FieldReader field_reader(reader);
 	uint32_t enum_count = field_reader.ReadRequired<uint32_t>();
-	uint32_t custom_count = field_reader.ReadRequired<uint32_t>();
 	uint32_t seq_count = field_reader.ReadRequired<uint32_t>();
 	uint32_t table_count = field_reader.ReadRequired<uint32_t>();
 	uint32_t view_count = field_reader.ReadRequired<uint32_t>();
@@ -246,11 +235,6 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	// now read the enums
 	for (uint32_t i = 0; i < enum_count; i++) {
 		ReadType(context, reader);
-	}
-
-	// now read the custom types
-	for (uint32_t i = 0; i < custom_count; i++) {
-		ReadCustomType(context, reader);
 	}
 
 	// read the sequences
@@ -315,22 +299,10 @@ void CheckpointManager::ReadType(ClientContext &context, MetaBlockReader &reader
 	auto info = TypeCatalogEntry::Deserialize(reader);
 
 	auto &catalog = Catalog::GetCatalog(db);
+	if (info->type.id() == LogicalTypeId::CUSTOM) {
+		CustomType::SetContext(info->type, &context);
+	}
 	catalog.CreateType(context, info.get());
-}
-
-//===--------------------------------------------------------------------===//
-// New Custom Types
-//===--------------------------------------------------------------------===//
-void CheckpointManager::WriteCustomType(CustomTypeCatalogEntry &table) {
-	table.Serialize(*metadata_writer);
-}
-
-void CheckpointManager::ReadCustomType(ClientContext &context, MetaBlockReader &reader) {
-	auto info = CustomTypeCatalogEntry::Deserialize(reader);
-
-	auto &catalog = Catalog::GetCatalog(db);
-	CustomType::SetContext(info->type, &context);
-	catalog.CreateCustomType(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//

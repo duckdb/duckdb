@@ -25,7 +25,6 @@ class SequenceCatalogEntry;
 class TableCatalogEntry;
 class ViewCatalogEntry;
 class TypeCatalogEntry;
-class CustomTypeCatalogEntry;
 
 struct PartialColumnSegment {
 	ColumnSegment *segment;
@@ -84,7 +83,6 @@ private:
 	void WriteMacro(ScalarMacroCatalogEntry &table);
 	void WriteTableMacro(TableMacroCatalogEntry &table);
 	void WriteType(TypeCatalogEntry &table);
-	void WriteCustomType(CustomTypeCatalogEntry &table);
 
 	void ReadSchema(ClientContext &context, MetaBlockReader &reader);
 	void ReadTable(ClientContext &context, MetaBlockReader &reader);
@@ -93,7 +91,6 @@ private:
 	void ReadMacro(ClientContext &context, MetaBlockReader &reader);
 	void ReadTableMacro(ClientContext &context, MetaBlockReader &reader);
 	void ReadType(ClientContext &context, MetaBlockReader &reader);
-	void ReadCustomType(ClientContext &context, MetaBlockReader &reader);
 
 private:
 	//! A map of (available space -> PartialBlock) for partially filled blocks

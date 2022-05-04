@@ -13,7 +13,6 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/custom_type_catalog_entry.hpp"
 #include "duckdb/catalog/default/default_functions.hpp"
 #include "duckdb/catalog/default/default_views.hpp"
 #include "duckdb/common/exception.hpp"
@@ -27,7 +26,6 @@
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
-#include "duckdb/parser/parsed_data/create_custom_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
@@ -125,11 +123,6 @@ CatalogEntry *SchemaCatalogEntry::CreateSequence(ClientContext &context, CreateS
 
 CatalogEntry *SchemaCatalogEntry::CreateType(ClientContext &context, CreateTypeInfo *info) {
 	auto sequence = make_unique<TypeCatalogEntry>(catalog, this, info);
-	return AddEntry(context, move(sequence), info->on_conflict);
-}
-
-CatalogEntry *SchemaCatalogEntry::CreateCustomType(ClientContext &context, CreateCustomTypeInfo *info) {
-	auto sequence = make_unique<CustomTypeCatalogEntry>(catalog, this, info);
 	return AddEntry(context, move(sequence), info->on_conflict);
 }
 
@@ -348,7 +341,6 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 	case CatalogType::COLLATION_ENTRY:
 		return collations;
 	case CatalogType::TYPE_ENTRY:
-	case CatalogType::TYPE_CUSTOM_ENTRY:
 		return types;
 	default:
 		throw InternalException("Unsupported catalog type in schema");

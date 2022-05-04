@@ -92,8 +92,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CREATE_SEQUENCE";
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
 		return "CREATE_TYPE";
-	case LogicalOperatorType::LOGICAL_CREATE_CUSTOM_TYPE:
-		return "CREATE_CUSTOM_TYPE";
 	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
 		return "CREATE_VIEW";
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:

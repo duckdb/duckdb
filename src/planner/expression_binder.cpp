@@ -12,6 +12,9 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+
+#include "duckdb/function/scalar_macro_function.hpp"
 
 namespace duckdb {
 
@@ -227,13 +230,20 @@ unique_ptr<Expression> ExpressionBinder::BindAddCast(ClientContext &context, uni
 	} else if (result->return_type != target_type) {
 		string error;
 		auto input_name = CustomType::GetInputFunction(target_type);
-		vector<unique_ptr<Expression>> children;
-		children.emplace_back(move(result));
-		// result = move(ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, input_name, move(children), error,
-		// true));
-		unique_ptr<Expression> function =
-		    ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, input_name, move(children), error, true);
-		result = move(function);
+		auto &catalog = Catalog::GetCatalog(context);
+		auto func =
+			catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, input_name, false);
+		switch (func->type) {
+		case CatalogType::SCALAR_FUNCTION_ENTRY: {
+			vector<unique_ptr<Expression>> children;
+			children.emplace_back(move(result));
+			unique_ptr<Expression> function =
+				ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, input_name, move(children), error, true);
+			result = move(function);
+		} break;
+		default:
+			throw BinderException("Function type is not scalar function!");
+		}
 		if (!result) {
 			throw BinderException(error);
 		}

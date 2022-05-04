@@ -25,7 +25,11 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 	case PhysicalType::DOUBLE:
 		return ((NumericStatistics &)stats).CheckZonemap(comparison_type, constant);
 	case PhysicalType::VARCHAR:
-		return ((StringStatistics &)stats).CheckZonemap(comparison_type, constant.ToString());
+		if (constant.type().id() == LogicalTypeId::CUSTOM) {
+			return ((StringStatistics &)stats).CheckZonemap(comparison_type, StringValue::Get(constant));
+		} else {
+			return ((StringStatistics &)stats).CheckZonemap(comparison_type, constant.ToString());
+		}
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
