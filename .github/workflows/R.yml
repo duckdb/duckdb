@@ -37,13 +37,14 @@ jobs:
     container: ubuntu:16.04
 
     steps:
+    - uses: actions/checkout@v3
     - uses: ./.github/actions/ubuntu_16_setup
       with:
         openssl: 1
 
     - uses: ./.github/actions/build_extensions
       with:
-        run_tests:0
+        run_tests: 0
 
     - uses: actions/upload-artifact@v2
       with:
