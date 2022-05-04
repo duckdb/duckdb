@@ -16,6 +16,7 @@
 namespace duckdb {
 
 class ColumnDefinition;
+struct RenameColumnInfo;
 
 //! A generated column of a table.
 class GeneratedColumnDefinition {
@@ -36,6 +37,7 @@ public:
 public:
 	//! Has to be run on a newly added generated column to ensure that its valid
 	void CheckValidity(const vector<ColumnDefinition> &columns, const string &table_name);
+	void RenameColumnRefs(RenameColumnInfo& info);
 	DUCKDB_API GeneratedColumnDefinition Copy() const;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;

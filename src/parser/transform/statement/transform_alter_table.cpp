@@ -62,6 +62,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_AlterColumnType: {
+			bool cascade = command->behavior == duckdb_libpgquery::PG_DROP_CASCADE;
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)command->def;
 			auto column_definition = TransformColumnDefinition(cdef);
 
@@ -73,7 +74,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 				expr = make_unique<CastExpression>(column_definition.type, move(colref));
 			}
 			result->info = make_unique<ChangeColumnTypeInfo>(qname.schema, qname.name, command->name,
-			                                                 column_definition.type, move(expr));
+			                                                 column_definition.type, move(expr), cascade);
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_DropConstraint:

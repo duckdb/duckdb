@@ -3,6 +3,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
 namespace duckdb {
 
@@ -63,6 +64,21 @@ static void VerifyAndRenameExpression(const string &name, const vector<ColumnDef
 	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
 		VerifyAndRenameExpression(name, columns, (ParsedExpression &)child, unresolved_columns);
 	});
+}
+
+static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &colref = (ColumnRefExpression &)expr;
+		if (colref.column_names.back() == info.old_name) {
+			colref.column_names.back() = info.new_name;
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { RenameExpression((ParsedExpression &)child, info); });
+}
+
+void GeneratedColumnDefinition::RenameColumnRefs(RenameColumnInfo &info) {
+	RenameExpression(*expression, info);
 }
 
 void GeneratedColumnDefinition::CheckValidity(const vector<ColumnDefinition> &columns, const string &table_name) {

@@ -184,7 +184,7 @@ public:
 //===--------------------------------------------------------------------===//
 struct ChangeColumnTypeInfo : public AlterTableInfo {
 	ChangeColumnTypeInfo(string schema, string table, string column_name, LogicalType target_type,
-	                     unique_ptr<ParsedExpression> expression);
+	                     unique_ptr<ParsedExpression> expression, bool cascade);
 	~ChangeColumnTypeInfo() override;
 
 	//! The column name to alter
@@ -193,6 +193,8 @@ struct ChangeColumnTypeInfo : public AlterTableInfo {
 	LogicalType target_type;
 	//! The expression used for data conversion
 	unique_ptr<ParsedExpression> expression;
+	//! Whether 'CASCADE' was specified or not (used for generated columns)
+	bool cascade;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;

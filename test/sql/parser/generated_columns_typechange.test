@@ -1,0 +1,33 @@
+# name: test/sql/parser/generated_columns_typechange.test
+# description: Test changing types of dependencies of generated columns
+# group: [parser]
+
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+statement ok
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL;
+
+query I
+SELECT total_profit FROM unit
+----
+20
+
+# Dependency of 'total_price', and CASCADE isnt provided
+statement ok
+ALTER TABLE unit ALTER COLUMN price TYPE BOOLEAN;
+
+# # With CASCADE it should succeed
+# statement ok
+# ALTER TABLE unit ALTER COLUMN price TYPE BOOLEAN CASCADE;
+
+statement ok
+ALTER TABLE unit RENAME COLUMN price TO value
+
+query III
+SELECT * FROM unit
+----
+false   4   4
