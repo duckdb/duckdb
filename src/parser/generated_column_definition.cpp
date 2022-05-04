@@ -56,7 +56,7 @@ static void VerifyAndRenameExpression(const string &name, const vector<ColumnDef
 			if (!column_ref.IsQualified()) {
 				auto &names = column_ref.column_names;
 				// dprintf(2, "TABLE NAME %s BAKED INTO COLUMN REF %s\n", name.c_str(), column_name.c_str());
-				column_ref.column_names.insert(column_ref.column_names.begin(), name);
+				names.insert(names.begin(), name);
 				// dprintf(2, "ColumnRef names after: TABLE[%s] - COL[%s]\n", column_ref.column_names[0].c_str(), column_ref.column_names[1].c_str());
 			}
 		} else {
@@ -77,6 +77,20 @@ static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](const ParsedExpression &child) { RenameExpression((ParsedExpression &)child, info); });
+}
+
+static void _RenameTable(ParsedExpression& expr, const RenameTableInfo& info) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &colref = (ColumnRefExpression &)expr;
+		colref.column_names[0] = info.new_table_name;
+	}
+
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { _RenameTable((ParsedExpression &)child, info); });
+}
+
+void GeneratedColumnDefinition::RenameTable(const RenameTableInfo& info) {
+	_RenameTable(*expression, info);
 }
 
 void GeneratedColumnDefinition::RenameColumnRefs(RenameColumnInfo &info) {

@@ -1,0 +1,20 @@
+# name: test/sql/parser/generated_column_renametable.test
+# description: Test generated columns after renaming a table
+# group: [parser]
+
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+statement ok
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+
+statement ok
+ALTER TABLE unit RENAME TO not_unit;
+
+query III
+SELECT * FROM not_unit;
+----
+5	4	20
