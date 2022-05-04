@@ -47,14 +47,14 @@ unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(FieldReader &read
 void DistinctStatistics::Update(Vector &v, idx_t count) {
 	VectorData vdata;
 	v.Orrify(count, vdata);
-	Update(vdata, v.GetType().InternalType(), count);
+	Update(vdata, v.GetType(), count);
 }
 
-void DistinctStatistics::Update(VectorData &vdata, PhysicalType ptype, idx_t count) {
+void DistinctStatistics::Update(VectorData &vdata, const LogicalType &type, idx_t count) {
 	uint64_t indices[STANDARD_VECTOR_SIZE];
 	uint8_t counts[STANDARD_VECTOR_SIZE];
 
-	HyperLogLog::ProcessEntries(vdata, ptype, indices, counts, count);
+	HyperLogLog::ProcessEntries(vdata, type, indices, counts, count);
 	log->AddToLog(vdata, count, indices, counts);
 }
 

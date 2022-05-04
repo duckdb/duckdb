@@ -91,10 +91,10 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type, Statist
 		result = make_unique<StringStatistics>(move(type), stats_type);
 		break;
 	case PhysicalType::STRUCT:
-		result = make_unique<StructStatistics>(move(type), stats_type);
+		result = make_unique<StructStatistics>(move(type));
 		break;
 	case PhysicalType::LIST:
-		result = make_unique<ListStatistics>(move(type), stats_type);
+		result = make_unique<ListStatistics>(move(type));
 		break;
 	case PhysicalType::INTERVAL:
 	default:
@@ -123,7 +123,8 @@ void BaseStatistics::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	ValidityStatistics(CanHaveNull(), CanHaveNoNull()).Serialize(writer);
 	Serialize(writer);
-	if (type.InternalType() != PhysicalType::BIT) {
+	auto ptype = type.InternalType();
+	if (ptype != PhysicalType::BIT) {
 		writer.WriteField<StatisticsType>(stats_type);
 		writer.WriteOptional<BaseStatistics>(distinct_stats);
 	}
@@ -137,7 +138,8 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	FieldReader reader(source);
 	auto validity_stats = ValidityStatistics::Deserialize(reader);
 	unique_ptr<BaseStatistics> result;
-	switch (type.InternalType()) {
+	auto ptype = type.InternalType();
+	switch (ptype) {
 	case PhysicalType::BIT:
 		result = ValidityStatistics::Deserialize(reader);
 		break;
@@ -170,11 +172,13 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	default:
 		throw InternalException("Unimplemented type for statistics deserialization");
 	}
-	if (result->type.InternalType() != PhysicalType::BIT) {
+
+	if (ptype != PhysicalType::BIT) {
 		result->validity_stats = move(validity_stats);
 		result->stats_type = reader.ReadField<StatisticsType>(StatisticsType::LOCAL_STATS);
 		result->distinct_stats = reader.ReadOptional<DistinctStatistics>(nullptr);
 	}
+
 	reader.Finalize();
 	return result;
 }

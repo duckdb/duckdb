@@ -17,7 +17,7 @@ class Value;
 
 class ListStatistics : public BaseStatistics {
 public:
-	explicit ListStatistics(LogicalType type, StatisticsType stats_type);
+	explicit ListStatistics(LogicalType type);
 
 	unique_ptr<BaseStatistics> child_stats;
 

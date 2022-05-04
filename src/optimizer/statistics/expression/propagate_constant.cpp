@@ -44,7 +44,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 		return move(result);
 	}
 	case PhysicalType::STRUCT: {
-		auto result = make_unique<StructStatistics>(input.type(), StatisticsType::GLOBAL_STATS);
+		auto result = make_unique<StructStatistics>(input.type());
 		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
 		if (input.IsNull()) {
 			for (auto &child_stat : result->child_stats) {
@@ -60,7 +60,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 		return move(result);
 	}
 	case PhysicalType::LIST: {
-		auto result = make_unique<ListStatistics>(input.type(), StatisticsType::GLOBAL_STATS);
+		auto result = make_unique<ListStatistics>(input.type());
 		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
 		if (input.IsNull()) {
 			result->child_stats.reset();

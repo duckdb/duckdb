@@ -48,7 +48,7 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 
 unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, BoundFunctionExpression &expr,
                                           FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats) {
-	auto list_stats = make_unique<ListStatistics>(expr.return_type, StatisticsType::LOCAL_STATS);
+	auto list_stats = make_unique<ListStatistics>(expr.return_type);
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		if (child_stats[i]) {
 			list_stats->child_stats->Merge(*child_stats[i]);

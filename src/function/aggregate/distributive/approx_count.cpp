@@ -68,7 +68,7 @@ static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], FunctionDat
 	uint64_t indices[STANDARD_VECTOR_SIZE];
 	uint8_t counts[STANDARD_VECTOR_SIZE];
 
-	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType().InternalType(), indices, counts, count);
+	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType(), indices, counts, count);
 	agg_state->log->AddToLog(vdata, count, indices, counts);
 }
 
@@ -93,7 +93,7 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], FunctionData *bin
 	uint64_t indices[STANDARD_VECTOR_SIZE];
 	uint8_t counts[STANDARD_VECTOR_SIZE];
 
-	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType().InternalType(), indices, counts, count);
+	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType(), indices, counts, count);
 	HyperLogLog::AddToLogs(vdata, count, indices, counts, (HyperLogLog ***)states, sdata.sel);
 }
 

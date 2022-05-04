@@ -197,8 +197,8 @@ void TemplatedComputeHashes(VectorData &vdata, const idx_t &count, uint64_t hash
 	}
 }
 
-static void ComputeHashes(VectorData &vdata, PhysicalType type, uint64_t hashes[], idx_t count) {
-	switch (type) {
+static void ComputeHashes(VectorData &vdata, const LogicalType &type, uint64_t hashes[], idx_t count) {
+	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::UINT8:
@@ -244,7 +244,7 @@ static inline void ComputeIndexAndCount(uint64_t &hash, uint8_t &prefix) {
 	hash = index;
 }
 
-void HyperLogLog::ProcessEntries(VectorData &vdata, PhysicalType type, uint64_t hashes[], uint8_t counts[],
+void HyperLogLog::ProcessEntries(VectorData &vdata, const LogicalType &type, uint64_t hashes[], uint8_t counts[],
                                  idx_t count) {
 	ComputeHashes(vdata, type, hashes, count);
 	for (idx_t i = 0; i < count; i++) {

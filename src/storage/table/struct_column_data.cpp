@@ -220,7 +220,7 @@ void StructColumnData::CommitDropColumn() {
 struct StructColumnCheckpointState : public ColumnCheckpointState {
 	StructColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
 	    : ColumnCheckpointState(row_group, column_data, writer) {
-		global_stats = make_unique<StructStatistics>(column_data.type, StatisticsType::GLOBAL_STATS);
+		global_stats = make_unique<StructStatistics>(column_data.type);
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;
@@ -228,7 +228,7 @@ struct StructColumnCheckpointState : public ColumnCheckpointState {
 
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
-		auto stats = make_unique<StructStatistics>(column_data.type, StatisticsType::GLOBAL_STATS);
+		auto stats = make_unique<StructStatistics>(column_data.type);
 		D_ASSERT(stats->child_stats.size() == child_states.size());
 		stats->validity_stats = validity_state->GetStatistics();
 		for (idx_t i = 0; i < child_states.size(); i++) {

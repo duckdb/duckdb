@@ -5,15 +5,14 @@
 
 namespace duckdb {
 
-StructStatistics::StructStatistics(LogicalType type_p, StatisticsType stats_type)
-    : BaseStatistics(move(type_p), stats_type) {
+StructStatistics::StructStatistics(LogicalType type_p) : BaseStatistics(move(type_p), StatisticsType::LOCAL_STATS) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	InitializeBase();
 
 	auto &child_types = StructType::GetChildTypes(type);
 	child_stats.resize(child_types.size());
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		child_stats[i] = BaseStatistics::CreateEmpty(child_types[i].second, stats_type);
+		child_stats[i] = BaseStatistics::CreateEmpty(child_types[i].second, StatisticsType::LOCAL_STATS);
 	}
 }
 
@@ -38,7 +37,7 @@ FilterPropagateResult StructStatistics::CheckZonemap(ExpressionType comparison_t
 // LCOV_EXCL_STOP
 
 unique_ptr<BaseStatistics> StructStatistics::Copy() const {
-	auto result = make_unique<StructStatistics>(type, stats_type);
+	auto result = make_unique<StructStatistics>(type);
 	result->CopyBase(*this);
 
 	for (idx_t i = 0; i < child_stats.size(); i++) {
@@ -60,7 +59,7 @@ void StructStatistics::Serialize(FieldWriter &writer) const {
 
 unique_ptr<BaseStatistics> StructStatistics::Deserialize(FieldReader &reader, LogicalType type) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
-	auto result = make_unique<StructStatistics>(move(type), StatisticsType::LOCAL_STATS);
+	auto result = make_unique<StructStatistics>(move(type));
 	auto &child_types = StructType::GetChildTypes(result->type);
 
 	auto child_type_count = reader.ReadRequired<uint32_t>();
@@ -71,7 +70,7 @@ unique_ptr<BaseStatistics> StructStatistics::Deserialize(FieldReader &reader, Lo
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		auto has_child = source.Read<bool>();
 		if (has_child) {
-			result->child_stats[i] = reader.ReadRequiredSerializable<BaseStatistics>(child_types[i].second);
+			result->child_stats[i] = BaseStatistics::Deserialize(source, child_types[i].second);
 		} else {
 			result->child_stats[i].reset();
 		}
