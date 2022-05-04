@@ -107,11 +107,8 @@ inline uint64_t TemplatedHash(const T &elem) {
 	x ^= x >> 30;
 	x *= UINT64_C(0xbf58476d1ce4e5b9);
 	x ^= x >> 27;
-	// In the article, these two lines follow
-	//	x *= UINT64_C(0x94d049bb133111eb);
-	//	x ^= x >> 31;
-	// Removing them slightly increases the bias of the hash function,
-	// But improves performance
+	x *= UINT64_C(0x94d049bb133111eb);
+	x ^= x >> 31;
 	return x;
 }
 
