@@ -16,7 +16,7 @@
 namespace duckdb {
 
 static LogicalType ParseTypeFromString(string type_string) {
-	auto cast_string = StringUtil::Format("?::%s", type_string);
+	auto cast_string = StringUtil::Format("?::%s", move(type_string));
 	auto cast_expressions = Parser::ParseExpressionList(cast_string);
 	D_ASSERT(cast_expressions.size() == 1);
 	D_ASSERT(cast_expressions[0]->type == ExpressionType::OPERATOR_CAST);
