@@ -27,8 +27,8 @@ dbFetch__duckdb_result <- function(res, n = -1, ...) {
   if (!is_wholenumber(n)) {
     stop("n needs to be not a whole number")
   }
-  if (res@stmt_lst$type != "SELECT") {
-    warning("Should not call dbFetch() on results that do not come from SELECT")
+  if (res@stmt_lst$type != "SELECT" && res@stmt_lst$type != "RELATION") {
+    warning("Should not call dbFetch() on results that do not come from SELECT, got ", res@stmt_lst$type)
     return(data.frame())
   }
 

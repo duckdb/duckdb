@@ -8,6 +8,8 @@
 #include "duckdb/common/result_arrow_wrapper.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 
+#include "duckdb/parser/statement/relation_statement.hpp"
+
 using namespace duckdb;
 using namespace cpp11::literals;
 
@@ -29,28 +31,27 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 	}
 }
 
-[[cpp11::register]] cpp11::list rapi_prepare(duckdb::conn_eptr_t conn, std::string query) {
+[[cpp11::register]] SEXP rapi_get_substrait(duckdb::conn_eptr_t conn, std::string query) {
+
 	if (!conn || !conn->conn) {
-		cpp11::stop("rapi_prepare: Invalid connection");
+		cpp11::stop("rapi_prepare_substrait: Invalid connection");
 	}
 
-	auto statements = conn->conn->ExtractStatements(query.c_str());
-	if (statements.empty()) {
-		// no statements to execute
-		cpp11::stop("rapi_prepare: No statements to execute");
+	auto rel = conn->conn->TableFunction("get_substrait", {Value(query)});
+	auto res = rel->Execute();
+	auto chunk = res->Fetch();
+	auto blob_string = StringValue::Get(chunk->GetValue(0, 0));
+
+	SEXP rawval = NEW_RAW(blob_string.size());
+	if (!rawval) {
+		throw std::bad_alloc();
 	}
-	// if there are multiple statements, we directly execute the statements besides the last one
-	// we only return the result of the last statement to the user, unless one of the previous statements fails
-	for (idx_t i = 0; i + 1 < statements.size(); i++) {
-		auto res = conn->conn->Query(move(statements[i]));
-		if (!res->success) {
-			cpp11::stop("rapi_prepare: Failed to execute statement %s\nError: %s", query.c_str(), res->error.c_str());
-		}
-	}
-	auto stmt = conn->conn->Prepare(move(statements.back()));
-	if (!stmt->success) {
-		cpp11::stop("rapi_prepare: Failed to prepare query %s\nError: %s", query.c_str(), stmt->error.c_str());
-	}
+	memcpy(RAW_POINTER(rawval), blob_string.data(), blob_string.size());
+
+	return rawval;
+}
+
+static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const string &query, idx_t n_param) {
 
 	cpp11::writable::list retlist;
 	retlist.reserve(6);
@@ -123,9 +124,56 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 	}
 
 	retlist.push_back({"rtypes"_nm = rtypes});
-	retlist.push_back({"n_param"_nm = stmtholder->stmt->n_param});
+	retlist.push_back({"n_param"_nm = n_param});
 
 	return retlist;
+}
+
+[[cpp11::register]] cpp11::list rapi_prepare_substrait(duckdb::conn_eptr_t conn, cpp11::sexp query) {
+	if (!conn || !conn->conn) {
+		cpp11::stop("rapi_prepare_substrait: Invalid connection");
+	}
+
+	if (!IS_RAW(query)) {
+		cpp11::stop("rapi_prepare_substrait: Query is not a raw()/BLOB");
+	}
+
+	auto rel = conn->conn->TableFunction("from_substrait", {Value::BLOB(RAW_POINTER(query), LENGTH(query))});
+	auto relation_stmt = make_unique<RelationStatement>(rel);
+	relation_stmt->n_param = 0;
+	relation_stmt->query = "";
+	auto stmt = conn->conn->Prepare(move(relation_stmt));
+	if (!stmt->success) {
+		cpp11::stop("rapi_prepare_substrait: Failed to prepare query %s\nError: %s", stmt->error.c_str());
+	}
+
+	return construct_retlist(move(stmt), "", 0);
+}
+
+[[cpp11::register]] cpp11::list rapi_prepare(duckdb::conn_eptr_t conn, std::string query) {
+	if (!conn || !conn->conn) {
+		cpp11::stop("rapi_prepare: Invalid connection");
+	}
+
+	auto statements = conn->conn->ExtractStatements(query.c_str());
+	if (statements.empty()) {
+		// no statements to execute
+		cpp11::stop("rapi_prepare: No statements to execute");
+	}
+	// if there are multiple statements, we directly execute the statements besides the last one
+	// we only return the result of the last statement to the user, unless one of the previous statements fails
+	for (idx_t i = 0; i + 1 < statements.size(); i++) {
+		auto res = conn->conn->Query(move(statements[i]));
+		if (!res->success) {
+			cpp11::stop("rapi_prepare: Failed to execute statement %s\nError: %s", query.c_str(), res->error.c_str());
+		}
+	}
+	auto stmt = conn->conn->Prepare(move(statements.back()));
+	if (!stmt->success) {
+		cpp11::stop("rapi_prepare: Failed to prepare query %s\nError: %s", query.c_str(), stmt->error.c_str());
+	}
+	auto n_param = stmt->n_param;
+	return construct_retlist(move(stmt), query, n_param);
 }
 
 [[cpp11::register]] cpp11::list rapi_bind(duckdb::stmt_eptr_t stmt, cpp11::list params, bool arrow) {
