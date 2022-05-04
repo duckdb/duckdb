@@ -629,8 +629,8 @@ substrait::Rel *DuckDBToSubstrait::TransformGet(LogicalOperator &dop) {
 	// Add Table Schema
 	sget->mutable_named_table()->add_names(table_scan_bind_data.table->name);
 	auto base_schema = new ::substrait::NamedStruct();
-	for (idx_t i = 0; i < dget.names.size(); i ++){
-		if (dget.types[i].id() == LogicalTypeId::STRUCT){
+	for (idx_t i = 0; i < dget.names.size(); i++) {
+		if (dget.types[i].id() == LogicalTypeId::STRUCT) {
 			throw std::runtime_error("Structs are not yet accepted in table scans");
 		}
 		base_schema->add_names(dget.names[i]);

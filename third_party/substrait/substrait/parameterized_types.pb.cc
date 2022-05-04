@@ -379,106 +379,92 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
 
 const char descriptor_table_protodef_substrait_2fparameterized_5ftypes_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
   "\n#substrait/parameterized_types.proto\022\ts"
-  "ubstrait\032\024substrait/type.proto\"\226\034\n\021Param"
-  "eterizedType\022-\n\004bool\030\001 \001(\0132\027.substrait.T"
-  "ype.BooleanH\000R\004bool\022$\n\002i8\030\002 \001(\0132\022.substr"
-  "ait.Type.I8H\000R\002i8\022\'\n\003i16\030\003 \001(\0132\023.substra"
-  "it.Type.I16H\000R\003i16\022\'\n\003i32\030\005 \001(\0132\023.substr"
-  "ait.Type.I32H\000R\003i32\022\'\n\003i64\030\007 \001(\0132\023.subst"
-  "rait.Type.I64H\000R\003i64\022*\n\004fp32\030\n \001(\0132\024.sub"
-  "strait.Type.FP32H\000R\004fp32\022*\n\004fp64\030\013 \001(\0132\024"
-  ".substrait.Type.FP64H\000R\004fp64\0220\n\006string\030\014"
-  " \001(\0132\026.substrait.Type.StringH\000R\006string\0220"
-  "\n\006binary\030\r \001(\0132\026.substrait.Type.BinaryH\000"
-  "R\006binary\0229\n\ttimestamp\030\016 \001(\0132\031.substrait."
-  "Type.TimestampH\000R\ttimestamp\022*\n\004date\030\020 \001("
-  "\0132\024.substrait.Type.DateH\000R\004date\022*\n\004time\030"
-  "\021 \001(\0132\024.substrait.Type.TimeH\000R\004time\022C\n\ri"
-  "nterval_year\030\023 \001(\0132\034.substrait.Type.Inte"
-  "rvalYearH\000R\014intervalYear\022@\n\014interval_day"
-  "\030\024 \001(\0132\033.substrait.Type.IntervalDayH\000R\013i"
-  "ntervalDay\022@\n\014timestamp_tz\030\035 \001(\0132\033.subst"
-  "rait.Type.TimestampTZH\000R\013timestampTz\022*\n\004"
-  "uuid\030  \001(\0132\024.substrait.Type.UUIDH\000R\004uuid"
-  "\022T\n\nfixed_char\030\025 \001(\01323.substrait.Paramet"
-  "erizedType.ParameterizedFixedCharH\000R\tfix"
-  "edChar\022M\n\007varchar\030\026 \001(\01321.substrait.Para"
-  "meterizedType.ParameterizedVarCharH\000R\007va"
-  "rchar\022Z\n\014fixed_binary\030\027 \001(\01325.substrait."
-  "ParameterizedType.ParameterizedFixedBina"
-  "ryH\000R\013fixedBinary\022M\n\007decimal\030\030 \001(\01321.sub"
-  "strait.ParameterizedType.ParameterizedDe"
-  "cimalH\000R\007decimal\022J\n\006struct\030\031 \001(\01320.subst"
-  "rait.ParameterizedType.ParameterizedStru"
-  "ctH\000R\006struct\022D\n\004list\030\033 \001(\0132..substrait.P"
-  "arameterizedType.ParameterizedListH\000R\004li"
-  "st\022A\n\003map\030\034 \001(\0132-.substrait.Parameterize"
-  "dType.ParameterizedMapH\000R\003map\0222\n\024user_de"
-  "fined_pointer\030\037 \001(\rH\000R\022userDefinedPointe"
-  "r\022S\n\016type_parameter\030! \001(\0132*.substrait.Pa"
-  "rameterizedType.TypeParameterH\000R\rtypePar"
-  "ameter\032Y\n\rTypeParameter\022\022\n\004name\030\001 \001(\tR\004n"
-  "ame\0224\n\006bounds\030\002 \003(\0132\034.substrait.Paramete"
-  "rizedTypeR\006bounds\032\346\001\n\020IntegerParameter\022\022"
-  "\n\004name\030\001 \001(\tR\004name\022`\n\025range_start_inclus"
-  "ive\030\002 \001(\0132,.substrait.ParameterizedType."
-  "NullableIntegerR\023rangeStartInclusive\022\\\n\023"
-  "range_end_exclusive\030\003 \001(\0132,.substrait.Pa"
-  "rameterizedType.NullableIntegerR\021rangeEn"
-  "dExclusive\032\'\n\017NullableInteger\022\024\n\005value\030\001"
-  " \001(\003R\005value\032\310\001\n\026ParameterizedFixedChar\022B"
-  "\n\006length\030\001 \001(\0132*.substrait.Parameterized"
-  "Type.IntegerOptionR\006length\022+\n\021variation_"
-  "pointer\030\002 \001(\rR\020variationPointer\022=\n\013nulla"
-  "bility\030\003 \001(\0162\033.substrait.Type.Nullabilit"
-  "yR\013nullability\032\306\001\n\024ParameterizedVarChar\022"
-  "B\n\006length\030\001 \001(\0132*.substrait.Parameterize"
-  "dType.IntegerOptionR\006length\022+\n\021variation"
-  "_pointer\030\002 \001(\rR\020variationPointer\022=\n\013null"
-  "ability\030\003 \001(\0162\033.substrait.Type.Nullabili"
-  "tyR\013nullability\032\312\001\n\030ParameterizedFixedBi"
-  "nary\022B\n\006length\030\001 \001(\0132*.substrait.Paramet"
-  "erizedType.IntegerOptionR\006length\022+\n\021vari"
-  "ation_pointer\030\002 \001(\rR\020variationPointer\022=\n"
-  "\013nullability\030\003 \001(\0162\033.substrait.Type.Null"
-  "abilityR\013nullability\032\216\002\n\024ParameterizedDe"
-  "cimal\022@\n\005scale\030\001 \001(\0132*.substrait.Paramet"
-  "erizedType.IntegerOptionR\005scale\022H\n\tpreci"
-  "sion\030\002 \001(\0132*.substrait.ParameterizedType"
-  ".IntegerOptionR\tprecision\022+\n\021variation_p"
-  "ointer\030\003 \001(\rR\020variationPointer\022=\n\013nullab"
-  "ility\030\004 \001(\0162\033.substrait.Type.Nullability"
-  "R\013nullability\032\265\001\n\023ParameterizedStruct\0222\n"
-  "\005types\030\001 \003(\0132\034.substrait.ParameterizedTy"
-  "peR\005types\022+\n\021variation_pointer\030\002 \001(\rR\020va"
-  "riationPointer\022=\n\013nullability\030\003 \001(\0162\033.su"
-  "bstrait.Type.NullabilityR\013nullability\032z\n"
-  "\030ParameterizedNamedStruct\022\024\n\005names\030\001 \003(\t"
-  "R\005names\022H\n\006struct\030\002 \001(\01320.substrait.Para"
-  "meterizedType.ParameterizedStructR\006struc"
-  "t\032\261\001\n\021ParameterizedList\0220\n\004type\030\001 \001(\0132\034."
-  "substrait.ParameterizedTypeR\004type\022+\n\021var"
-  "iation_pointer\030\002 \001(\rR\020variationPointer\022="
-  "\n\013nullability\030\003 \001(\0162\033.substrait.Type.Nul"
-  "labilityR\013nullability\032\342\001\n\020ParameterizedM"
-  "ap\022.\n\003key\030\001 \001(\0132\034.substrait.Parameterize"
-  "dTypeR\003key\0222\n\005value\030\002 \001(\0132\034.substrait.Pa"
-  "rameterizedTypeR\005value\022+\n\021variation_poin"
-  "ter\030\003 \001(\rR\020variationPointer\022=\n\013nullabili"
-  "ty\030\004 \001(\0162\033.substrait.Type.NullabilityR\013n"
-  "ullability\032\212\001\n\rIntegerOption\022\032\n\007literal\030"
-  "\001 \001(\005H\000R\007literal\022M\n\tparameter\030\002 \001(\0132-.su"
-  "bstrait.ParameterizedType.IntegerParamet"
-  "erH\000R\tparameterB\016\n\014integer_typeB\006\n\004kindB"
-  "+\n\022io.substrait.protoP\001\252\002\022Substrait.Prot"
-  "obufb\006proto3"
+  "ubstrait\032\024substrait/type.proto\"\271\027\n\021Param"
+  "eterizedType\022\'\n\004bool\030\001 \001(\0132\027.substrait.T"
+  "ype.BooleanH\000\022 \n\002i8\030\002 \001(\0132\022.substrait.Ty"
+  "pe.I8H\000\022\"\n\003i16\030\003 \001(\0132\023.substrait.Type.I1"
+  "6H\000\022\"\n\003i32\030\005 \001(\0132\023.substrait.Type.I32H\000\022"
+  "\"\n\003i64\030\007 \001(\0132\023.substrait.Type.I64H\000\022$\n\004f"
+  "p32\030\n \001(\0132\024.substrait.Type.FP32H\000\022$\n\004fp6"
+  "4\030\013 \001(\0132\024.substrait.Type.FP64H\000\022(\n\006strin"
+  "g\030\014 \001(\0132\026.substrait.Type.StringH\000\022(\n\006bin"
+  "ary\030\r \001(\0132\026.substrait.Type.BinaryH\000\022.\n\tt"
+  "imestamp\030\016 \001(\0132\031.substrait.Type.Timestam"
+  "pH\000\022$\n\004date\030\020 \001(\0132\024.substrait.Type.DateH"
+  "\000\022$\n\004time\030\021 \001(\0132\024.substrait.Type.TimeH\000\022"
+  "5\n\rinterval_year\030\023 \001(\0132\034.substrait.Type."
+  "IntervalYearH\000\0223\n\014interval_day\030\024 \001(\0132\033.s"
+  "ubstrait.Type.IntervalDayH\000\0223\n\014timestamp"
+  "_tz\030\035 \001(\0132\033.substrait.Type.TimestampTZH\000"
+  "\022$\n\004uuid\030  \001(\0132\024.substrait.Type.UUIDH\000\022I"
+  "\n\nfixed_char\030\025 \001(\01323.substrait.Parameter"
+  "izedType.ParameterizedFixedCharH\000\022D\n\007var"
+  "char\030\026 \001(\01321.substrait.ParameterizedType"
+  ".ParameterizedVarCharH\000\022M\n\014fixed_binary\030"
+  "\027 \001(\01325.substrait.ParameterizedType.Para"
+  "meterizedFixedBinaryH\000\022D\n\007decimal\030\030 \001(\0132"
+  "1.substrait.ParameterizedType.Parameteri"
+  "zedDecimalH\000\022B\n\006struct\030\031 \001(\01320.substrait"
+  ".ParameterizedType.ParameterizedStructH\000"
+  "\022>\n\004list\030\033 \001(\0132..substrait.Parameterized"
+  "Type.ParameterizedListH\000\022<\n\003map\030\034 \001(\0132-."
+  "substrait.ParameterizedType.Parameterize"
+  "dMapH\000\022\036\n\024user_defined_pointer\030\037 \001(\rH\000\022D"
+  "\n\016type_parameter\030! \001(\0132*.substrait.Param"
+  "eterizedType.TypeParameterH\000\032K\n\rTypePara"
+  "meter\022\014\n\004name\030\001 \001(\t\022,\n\006bounds\030\002 \003(\0132\034.su"
+  "bstrait.ParameterizedType\032\270\001\n\020IntegerPar"
+  "ameter\022\014\n\004name\030\001 \001(\t\022K\n\025range_start_incl"
+  "usive\030\002 \001(\0132,.substrait.ParameterizedTyp"
+  "e.NullableInteger\022I\n\023range_end_exclusive"
+  "\030\003 \001(\0132,.substrait.ParameterizedType.Nul"
+  "lableInteger\032 \n\017NullableInteger\022\r\n\005value"
+  "\030\001 \001(\003\032\241\001\n\026ParameterizedFixedChar\022:\n\006len"
+  "gth\030\001 \001(\0132*.substrait.ParameterizedType."
+  "IntegerOption\022\031\n\021variation_pointer\030\002 \001(\r"
+  "\0220\n\013nullability\030\003 \001(\0162\033.substrait.Type.N"
+  "ullability\032\237\001\n\024ParameterizedVarChar\022:\n\006l"
+  "ength\030\001 \001(\0132*.substrait.ParameterizedTyp"
+  "e.IntegerOption\022\031\n\021variation_pointer\030\002 \001"
+  "(\r\0220\n\013nullability\030\003 \001(\0162\033.substrait.Type"
+  ".Nullability\032\243\001\n\030ParameterizedFixedBinar"
+  "y\022:\n\006length\030\001 \001(\0132*.substrait.Parameteri"
+  "zedType.IntegerOption\022\031\n\021variation_point"
+  "er\030\002 \001(\r\0220\n\013nullability\030\003 \001(\0162\033.substrai"
+  "t.Type.Nullability\032\335\001\n\024ParameterizedDeci"
+  "mal\0229\n\005scale\030\001 \001(\0132*.substrait.Parameter"
+  "izedType.IntegerOption\022=\n\tprecision\030\002 \001("
+  "\0132*.substrait.ParameterizedType.IntegerO"
+  "ption\022\031\n\021variation_pointer\030\003 \001(\r\0220\n\013null"
+  "ability\030\004 \001(\0162\033.substrait.Type.Nullabili"
+  "ty\032\217\001\n\023ParameterizedStruct\022+\n\005types\030\001 \003("
+  "\0132\034.substrait.ParameterizedType\022\031\n\021varia"
+  "tion_pointer\030\002 \001(\r\0220\n\013nullability\030\003 \001(\0162"
+  "\033.substrait.Type.Nullability\032k\n\030Paramete"
+  "rizedNamedStruct\022\r\n\005names\030\001 \003(\t\022@\n\006struc"
+  "t\030\002 \001(\01320.substrait.ParameterizedType.Pa"
+  "rameterizedStruct\032\214\001\n\021ParameterizedList\022"
+  "*\n\004type\030\001 \001(\0132\034.substrait.ParameterizedT"
+  "ype\022\031\n\021variation_pointer\030\002 \001(\r\0220\n\013nullab"
+  "ility\030\003 \001(\0162\033.substrait.Type.Nullability"
+  "\032\267\001\n\020ParameterizedMap\022)\n\003key\030\001 \001(\0132\034.sub"
+  "strait.ParameterizedType\022+\n\005value\030\002 \001(\0132"
+  "\034.substrait.ParameterizedType\022\031\n\021variati"
+  "on_pointer\030\003 \001(\r\0220\n\013nullability\030\004 \001(\0162\033."
+  "substrait.Type.Nullability\032v\n\rIntegerOpt"
+  "ion\022\021\n\007literal\030\001 \001(\005H\000\022B\n\tparameter\030\002 \001("
+  "\0132-.substrait.ParameterizedType.IntegerP"
+  "arameterH\000B\016\n\014integer_typeB\006\n\004kindBW\n\022io"
+  ".substrait.protoP\001Z*github.com/substrait"
+  "-io/substrait-go/proto\252\002\022Substrait.Proto"
+  "bufb\006proto3"
   ;
 static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_substrait_2fparameterized_5ftypes_2eproto_deps[1] = {
   &::descriptor_table_substrait_2ftype_2eproto,
 };
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_substrait_2fparameterized_5ftypes_2eproto_once;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_substrait_2fparameterized_5ftypes_2eproto = {
-  false, false, 3732, descriptor_table_protodef_substrait_2fparameterized_5ftypes_2eproto, "substrait/parameterized_types.proto", 
+  false, false, 3171, descriptor_table_protodef_substrait_2fparameterized_5ftypes_2eproto, "substrait/parameterized_types.proto", 
   &descriptor_table_substrait_2fparameterized_5ftypes_2eproto_once, descriptor_table_substrait_2fparameterized_5ftypes_2eproto_deps, 1, 13,
   schemas, file_default_instances, TableStruct_substrait_2fparameterized_5ftypes_2eproto::offsets,
   file_level_metadata_substrait_2fparameterized_5ftypes_2eproto, file_level_enum_descriptors_substrait_2fparameterized_5ftypes_2eproto, file_level_service_descriptors_substrait_2fparameterized_5ftypes_2eproto,
@@ -568,7 +554,7 @@ const char* ParameterizedType_TypeParameter::_InternalParse(const char* ptr, ::P
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // string name = 1 [json_name = "name"];
+      // string name = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_name();
@@ -578,7 +564,7 @@ const char* ParameterizedType_TypeParameter::_InternalParse(const char* ptr, ::P
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.ParameterizedType bounds = 2 [json_name = "bounds"];
+      // repeated .substrait.ParameterizedType bounds = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -620,7 +606,7 @@ uint8_t* ParameterizedType_TypeParameter::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // string name = 1 [json_name = "name"];
+  // string name = 1;
   if (!this->_internal_name().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
@@ -630,7 +616,7 @@ uint8_t* ParameterizedType_TypeParameter::_InternalSerialize(
         1, this->_internal_name(), target);
   }
 
-  // repeated .substrait.ParameterizedType bounds = 2 [json_name = "bounds"];
+  // repeated .substrait.ParameterizedType bounds = 2;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_bounds_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -654,14 +640,14 @@ size_t ParameterizedType_TypeParameter::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.ParameterizedType bounds = 2 [json_name = "bounds"];
+  // repeated .substrait.ParameterizedType bounds = 2;
   total_size += 1UL * this->_internal_bounds_size();
   for (const auto& msg : this->bounds_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // string name = 1 [json_name = "name"];
+  // string name = 1;
   if (!this->_internal_name().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
@@ -835,7 +821,7 @@ const char* ParameterizedType_IntegerParameter::_InternalParse(const char* ptr, 
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // string name = 1 [json_name = "name"];
+      // string name = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_name();
@@ -845,7 +831,7 @@ const char* ParameterizedType_IntegerParameter::_InternalParse(const char* ptr, 
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ParameterizedType.NullableInteger range_start_inclusive = 2 [json_name = "rangeStartInclusive"];
+      // .substrait.ParameterizedType.NullableInteger range_start_inclusive = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_range_start_inclusive(), ptr);
@@ -853,7 +839,7 @@ const char* ParameterizedType_IntegerParameter::_InternalParse(const char* ptr, 
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ParameterizedType.NullableInteger range_end_exclusive = 3 [json_name = "rangeEndExclusive"];
+      // .substrait.ParameterizedType.NullableInteger range_end_exclusive = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_range_end_exclusive(), ptr);
@@ -890,7 +876,7 @@ uint8_t* ParameterizedType_IntegerParameter::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // string name = 1 [json_name = "name"];
+  // string name = 1;
   if (!this->_internal_name().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
@@ -900,7 +886,7 @@ uint8_t* ParameterizedType_IntegerParameter::_InternalSerialize(
         1, this->_internal_name(), target);
   }
 
-  // .substrait.ParameterizedType.NullableInteger range_start_inclusive = 2 [json_name = "rangeStartInclusive"];
+  // .substrait.ParameterizedType.NullableInteger range_start_inclusive = 2;
   if (this->_internal_has_range_start_inclusive()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -908,7 +894,7 @@ uint8_t* ParameterizedType_IntegerParameter::_InternalSerialize(
         2, _Internal::range_start_inclusive(this), target, stream);
   }
 
-  // .substrait.ParameterizedType.NullableInteger range_end_exclusive = 3 [json_name = "rangeEndExclusive"];
+  // .substrait.ParameterizedType.NullableInteger range_end_exclusive = 3;
   if (this->_internal_has_range_end_exclusive()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -932,21 +918,21 @@ size_t ParameterizedType_IntegerParameter::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // string name = 1 [json_name = "name"];
+  // string name = 1;
   if (!this->_internal_name().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
         this->_internal_name());
   }
 
-  // .substrait.ParameterizedType.NullableInteger range_start_inclusive = 2 [json_name = "rangeStartInclusive"];
+  // .substrait.ParameterizedType.NullableInteger range_start_inclusive = 2;
   if (this->_internal_has_range_start_inclusive()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *range_start_inclusive_);
   }
 
-  // .substrait.ParameterizedType.NullableInteger range_end_exclusive = 3 [json_name = "rangeEndExclusive"];
+  // .substrait.ParameterizedType.NullableInteger range_end_exclusive = 3;
   if (this->_internal_has_range_end_exclusive()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -1085,7 +1071,7 @@ const char* ParameterizedType_NullableInteger::_InternalParse(const char* ptr, :
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // int64 value = 1 [json_name = "value"];
+      // int64 value = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           value_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -1122,7 +1108,7 @@ uint8_t* ParameterizedType_NullableInteger::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // int64 value = 1 [json_name = "value"];
+  // int64 value = 1;
   if (this->_internal_value() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(1, this->_internal_value(), target);
@@ -1144,7 +1130,7 @@ size_t ParameterizedType_NullableInteger::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // int64 value = 1 [json_name = "value"];
+  // int64 value = 1;
   if (this->_internal_value() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64SizePlusOne(this->_internal_value());
   }
@@ -1285,7 +1271,7 @@ const char* ParameterizedType_ParameterizedFixedChar::_InternalParse(const char*
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.ParameterizedType.IntegerOption length = 1 [json_name = "length"];
+      // .substrait.ParameterizedType.IntegerOption length = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_length(), ptr);
@@ -1293,7 +1279,7 @@ const char* ParameterizedType_ParameterizedFixedChar::_InternalParse(const char*
         } else
           goto handle_unusual;
         continue;
-      // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+      // uint32 variation_pointer = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -1301,7 +1287,7 @@ const char* ParameterizedType_ParameterizedFixedChar::_InternalParse(const char*
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+      // .substrait.Type.Nullability nullability = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -1339,7 +1325,7 @@ uint8_t* ParameterizedType_ParameterizedFixedChar::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType.IntegerOption length = 1 [json_name = "length"];
+  // .substrait.ParameterizedType.IntegerOption length = 1;
   if (this->_internal_has_length()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1347,13 +1333,13 @@ uint8_t* ParameterizedType_ParameterizedFixedChar::_InternalSerialize(
         1, _Internal::length(this), target, stream);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_variation_pointer(), target);
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -1376,19 +1362,19 @@ size_t ParameterizedType_ParameterizedFixedChar::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType.IntegerOption length = 1 [json_name = "length"];
+  // .substrait.ParameterizedType.IntegerOption length = 1;
   if (this->_internal_has_length()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *length_);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
@@ -1541,7 +1527,7 @@ const char* ParameterizedType_ParameterizedVarChar::_InternalParse(const char* p
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.ParameterizedType.IntegerOption length = 1 [json_name = "length"];
+      // .substrait.ParameterizedType.IntegerOption length = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_length(), ptr);
@@ -1549,7 +1535,7 @@ const char* ParameterizedType_ParameterizedVarChar::_InternalParse(const char* p
         } else
           goto handle_unusual;
         continue;
-      // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+      // uint32 variation_pointer = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -1557,7 +1543,7 @@ const char* ParameterizedType_ParameterizedVarChar::_InternalParse(const char* p
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+      // .substrait.Type.Nullability nullability = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -1595,7 +1581,7 @@ uint8_t* ParameterizedType_ParameterizedVarChar::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType.IntegerOption length = 1 [json_name = "length"];
+  // .substrait.ParameterizedType.IntegerOption length = 1;
   if (this->_internal_has_length()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1603,13 +1589,13 @@ uint8_t* ParameterizedType_ParameterizedVarChar::_InternalSerialize(
         1, _Internal::length(this), target, stream);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_variation_pointer(), target);
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -1632,19 +1618,19 @@ size_t ParameterizedType_ParameterizedVarChar::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType.IntegerOption length = 1 [json_name = "length"];
+  // .substrait.ParameterizedType.IntegerOption length = 1;
   if (this->_internal_has_length()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *length_);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
@@ -1797,7 +1783,7 @@ const char* ParameterizedType_ParameterizedFixedBinary::_InternalParse(const cha
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.ParameterizedType.IntegerOption length = 1 [json_name = "length"];
+      // .substrait.ParameterizedType.IntegerOption length = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_length(), ptr);
@@ -1805,7 +1791,7 @@ const char* ParameterizedType_ParameterizedFixedBinary::_InternalParse(const cha
         } else
           goto handle_unusual;
         continue;
-      // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+      // uint32 variation_pointer = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -1813,7 +1799,7 @@ const char* ParameterizedType_ParameterizedFixedBinary::_InternalParse(const cha
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+      // .substrait.Type.Nullability nullability = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -1851,7 +1837,7 @@ uint8_t* ParameterizedType_ParameterizedFixedBinary::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType.IntegerOption length = 1 [json_name = "length"];
+  // .substrait.ParameterizedType.IntegerOption length = 1;
   if (this->_internal_has_length()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1859,13 +1845,13 @@ uint8_t* ParameterizedType_ParameterizedFixedBinary::_InternalSerialize(
         1, _Internal::length(this), target, stream);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_variation_pointer(), target);
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -1888,19 +1874,19 @@ size_t ParameterizedType_ParameterizedFixedBinary::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType.IntegerOption length = 1 [json_name = "length"];
+  // .substrait.ParameterizedType.IntegerOption length = 1;
   if (this->_internal_has_length()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *length_);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
@@ -2068,7 +2054,7 @@ const char* ParameterizedType_ParameterizedDecimal::_InternalParse(const char* p
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.ParameterizedType.IntegerOption scale = 1 [json_name = "scale"];
+      // .substrait.ParameterizedType.IntegerOption scale = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_scale(), ptr);
@@ -2076,7 +2062,7 @@ const char* ParameterizedType_ParameterizedDecimal::_InternalParse(const char* p
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ParameterizedType.IntegerOption precision = 2 [json_name = "precision"];
+      // .substrait.ParameterizedType.IntegerOption precision = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_precision(), ptr);
@@ -2084,7 +2070,7 @@ const char* ParameterizedType_ParameterizedDecimal::_InternalParse(const char* p
         } else
           goto handle_unusual;
         continue;
-      // uint32 variation_pointer = 3 [json_name = "variationPointer"];
+      // uint32 variation_pointer = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -2092,7 +2078,7 @@ const char* ParameterizedType_ParameterizedDecimal::_InternalParse(const char* p
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Nullability nullability = 4 [json_name = "nullability"];
+      // .substrait.Type.Nullability nullability = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -2130,7 +2116,7 @@ uint8_t* ParameterizedType_ParameterizedDecimal::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType.IntegerOption scale = 1 [json_name = "scale"];
+  // .substrait.ParameterizedType.IntegerOption scale = 1;
   if (this->_internal_has_scale()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2138,7 +2124,7 @@ uint8_t* ParameterizedType_ParameterizedDecimal::_InternalSerialize(
         1, _Internal::scale(this), target, stream);
   }
 
-  // .substrait.ParameterizedType.IntegerOption precision = 2 [json_name = "precision"];
+  // .substrait.ParameterizedType.IntegerOption precision = 2;
   if (this->_internal_has_precision()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2146,13 +2132,13 @@ uint8_t* ParameterizedType_ParameterizedDecimal::_InternalSerialize(
         2, _Internal::precision(this), target, stream);
   }
 
-  // uint32 variation_pointer = 3 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 3;
   if (this->_internal_variation_pointer() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(3, this->_internal_variation_pointer(), target);
   }
 
-  // .substrait.Type.Nullability nullability = 4 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 4;
   if (this->_internal_nullability() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -2175,26 +2161,26 @@ size_t ParameterizedType_ParameterizedDecimal::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType.IntegerOption scale = 1 [json_name = "scale"];
+  // .substrait.ParameterizedType.IntegerOption scale = 1;
   if (this->_internal_has_scale()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *scale_);
   }
 
-  // .substrait.ParameterizedType.IntegerOption precision = 2 [json_name = "precision"];
+  // .substrait.ParameterizedType.IntegerOption precision = 2;
   if (this->_internal_has_precision()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *precision_);
   }
 
-  // uint32 variation_pointer = 3 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 3;
   if (this->_internal_variation_pointer() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
   }
 
-  // .substrait.Type.Nullability nullability = 4 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 4;
   if (this->_internal_nullability() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
@@ -2338,7 +2324,7 @@ const char* ParameterizedType_ParameterizedStruct::_InternalParse(const char* pt
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.ParameterizedType types = 1 [json_name = "types"];
+      // repeated .substrait.ParameterizedType types = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -2351,7 +2337,7 @@ const char* ParameterizedType_ParameterizedStruct::_InternalParse(const char* pt
         } else
           goto handle_unusual;
         continue;
-      // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+      // uint32 variation_pointer = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -2359,7 +2345,7 @@ const char* ParameterizedType_ParameterizedStruct::_InternalParse(const char* pt
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+      // .substrait.Type.Nullability nullability = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -2397,7 +2383,7 @@ uint8_t* ParameterizedType_ParameterizedStruct::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.ParameterizedType types = 1 [json_name = "types"];
+  // repeated .substrait.ParameterizedType types = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_types_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -2405,13 +2391,13 @@ uint8_t* ParameterizedType_ParameterizedStruct::_InternalSerialize(
       InternalWriteMessage(1, this->_internal_types(i), target, stream);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_variation_pointer(), target);
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -2434,19 +2420,19 @@ size_t ParameterizedType_ParameterizedStruct::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.ParameterizedType types = 1 [json_name = "types"];
+  // repeated .substrait.ParameterizedType types = 1;
   total_size += 1UL * this->_internal_types_size();
   for (const auto& msg : this->types_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
@@ -2592,7 +2578,7 @@ const char* ParameterizedType_ParameterizedNamedStruct::_InternalParse(const cha
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated string names = 1 [json_name = "names"];
+      // repeated string names = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -2607,7 +2593,7 @@ const char* ParameterizedType_ParameterizedNamedStruct::_InternalParse(const cha
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ParameterizedType.ParameterizedStruct struct = 2 [json_name = "struct"];
+      // .substrait.ParameterizedType.ParameterizedStruct struct = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_struct_(), ptr);
@@ -2644,7 +2630,7 @@ uint8_t* ParameterizedType_ParameterizedNamedStruct::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated string names = 1 [json_name = "names"];
+  // repeated string names = 1;
   for (int i = 0, n = this->_internal_names_size(); i < n; i++) {
     const auto& s = this->_internal_names(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -2654,7 +2640,7 @@ uint8_t* ParameterizedType_ParameterizedNamedStruct::_InternalSerialize(
     target = stream->WriteString(1, s, target);
   }
 
-  // .substrait.ParameterizedType.ParameterizedStruct struct = 2 [json_name = "struct"];
+  // .substrait.ParameterizedType.ParameterizedStruct struct = 2;
   if (this->_internal_has_struct_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2678,7 +2664,7 @@ size_t ParameterizedType_ParameterizedNamedStruct::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated string names = 1 [json_name = "names"];
+  // repeated string names = 1;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(names_.size());
   for (int i = 0, n = names_.size(); i < n; i++) {
@@ -2686,7 +2672,7 @@ size_t ParameterizedType_ParameterizedNamedStruct::ByteSizeLong() const {
       names_.Get(i));
   }
 
-  // .substrait.ParameterizedType.ParameterizedStruct struct = 2 [json_name = "struct"];
+  // .substrait.ParameterizedType.ParameterizedStruct struct = 2;
   if (this->_internal_has_struct_()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -2831,7 +2817,7 @@ const char* ParameterizedType_ParameterizedList::_InternalParse(const char* ptr,
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.ParameterizedType type = 1 [json_name = "type"];
+      // .substrait.ParameterizedType type = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_type(), ptr);
@@ -2839,7 +2825,7 @@ const char* ParameterizedType_ParameterizedList::_InternalParse(const char* ptr,
         } else
           goto handle_unusual;
         continue;
-      // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+      // uint32 variation_pointer = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -2847,7 +2833,7 @@ const char* ParameterizedType_ParameterizedList::_InternalParse(const char* ptr,
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+      // .substrait.Type.Nullability nullability = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -2885,7 +2871,7 @@ uint8_t* ParameterizedType_ParameterizedList::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType type = 1 [json_name = "type"];
+  // .substrait.ParameterizedType type = 1;
   if (this->_internal_has_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2893,13 +2879,13 @@ uint8_t* ParameterizedType_ParameterizedList::_InternalSerialize(
         1, _Internal::type(this), target, stream);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_variation_pointer(), target);
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -2922,19 +2908,19 @@ size_t ParameterizedType_ParameterizedList::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType type = 1 [json_name = "type"];
+  // .substrait.ParameterizedType type = 1;
   if (this->_internal_has_type()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *type_);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
@@ -3102,7 +3088,7 @@ const char* ParameterizedType_ParameterizedMap::_InternalParse(const char* ptr, 
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.ParameterizedType key = 1 [json_name = "key"];
+      // .substrait.ParameterizedType key = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_key(), ptr);
@@ -3110,7 +3096,7 @@ const char* ParameterizedType_ParameterizedMap::_InternalParse(const char* ptr, 
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ParameterizedType value = 2 [json_name = "value"];
+      // .substrait.ParameterizedType value = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_value(), ptr);
@@ -3118,7 +3104,7 @@ const char* ParameterizedType_ParameterizedMap::_InternalParse(const char* ptr, 
         } else
           goto handle_unusual;
         continue;
-      // uint32 variation_pointer = 3 [json_name = "variationPointer"];
+      // uint32 variation_pointer = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -3126,7 +3112,7 @@ const char* ParameterizedType_ParameterizedMap::_InternalParse(const char* ptr, 
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Nullability nullability = 4 [json_name = "nullability"];
+      // .substrait.Type.Nullability nullability = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -3164,7 +3150,7 @@ uint8_t* ParameterizedType_ParameterizedMap::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType key = 1 [json_name = "key"];
+  // .substrait.ParameterizedType key = 1;
   if (this->_internal_has_key()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3172,7 +3158,7 @@ uint8_t* ParameterizedType_ParameterizedMap::_InternalSerialize(
         1, _Internal::key(this), target, stream);
   }
 
-  // .substrait.ParameterizedType value = 2 [json_name = "value"];
+  // .substrait.ParameterizedType value = 2;
   if (this->_internal_has_value()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3180,13 +3166,13 @@ uint8_t* ParameterizedType_ParameterizedMap::_InternalSerialize(
         2, _Internal::value(this), target, stream);
   }
 
-  // uint32 variation_pointer = 3 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 3;
   if (this->_internal_variation_pointer() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(3, this->_internal_variation_pointer(), target);
   }
 
-  // .substrait.Type.Nullability nullability = 4 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 4;
   if (this->_internal_nullability() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -3209,26 +3195,26 @@ size_t ParameterizedType_ParameterizedMap::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType key = 1 [json_name = "key"];
+  // .substrait.ParameterizedType key = 1;
   if (this->_internal_has_key()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *key_);
   }
 
-  // .substrait.ParameterizedType value = 2 [json_name = "value"];
+  // .substrait.ParameterizedType value = 2;
   if (this->_internal_has_value()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *value_);
   }
 
-  // uint32 variation_pointer = 3 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 3;
   if (this->_internal_variation_pointer() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
   }
 
-  // .substrait.Type.Nullability nullability = 4 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 4;
   if (this->_internal_nullability() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
@@ -3419,7 +3405,7 @@ const char* ParameterizedType_IntegerOption::_InternalParse(const char* ptr, ::P
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // int32 literal = 1 [json_name = "literal"];
+      // int32 literal = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           _internal_set_literal(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr));
@@ -3427,7 +3413,7 @@ const char* ParameterizedType_IntegerOption::_InternalParse(const char* ptr, ::P
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ParameterizedType.IntegerParameter parameter = 2 [json_name = "parameter"];
+      // .substrait.ParameterizedType.IntegerParameter parameter = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_parameter(), ptr);
@@ -3464,13 +3450,13 @@ uint8_t* ParameterizedType_IntegerOption::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // int32 literal = 1 [json_name = "literal"];
+  // int32 literal = 1;
   if (_internal_has_literal()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(1, this->_internal_literal(), target);
   }
 
-  // .substrait.ParameterizedType.IntegerParameter parameter = 2 [json_name = "parameter"];
+  // .substrait.ParameterizedType.IntegerParameter parameter = 2;
   if (_internal_has_parameter()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3495,12 +3481,12 @@ size_t ParameterizedType_IntegerOption::ByteSizeLong() const {
   (void) cached_has_bits;
 
   switch (integer_type_case()) {
-    // int32 literal = 1 [json_name = "literal"];
+    // int32 literal = 1;
     case kLiteral: {
       total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_literal());
       break;
     }
-    // .substrait.ParameterizedType.IntegerParameter parameter = 2 [json_name = "parameter"];
+    // .substrait.ParameterizedType.IntegerParameter parameter = 2;
     case kParameter: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -4543,7 +4529,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Type.Boolean bool = 1 [json_name = "bool"];
+      // .substrait.Type.Boolean bool = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_bool_(), ptr);
@@ -4551,7 +4537,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.I8 i8 = 2 [json_name = "i8"];
+      // .substrait.Type.I8 i8 = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_i8(), ptr);
@@ -4559,7 +4545,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.I16 i16 = 3 [json_name = "i16"];
+      // .substrait.Type.I16 i16 = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_i16(), ptr);
@@ -4567,7 +4553,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.I32 i32 = 5 [json_name = "i32"];
+      // .substrait.Type.I32 i32 = 5;
       case 5:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
           ptr = ctx->ParseMessage(_internal_mutable_i32(), ptr);
@@ -4575,7 +4561,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.I64 i64 = 7 [json_name = "i64"];
+      // .substrait.Type.I64 i64 = 7;
       case 7:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 58)) {
           ptr = ctx->ParseMessage(_internal_mutable_i64(), ptr);
@@ -4583,7 +4569,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.FP32 fp32 = 10 [json_name = "fp32"];
+      // .substrait.Type.FP32 fp32 = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_fp32(), ptr);
@@ -4591,7 +4577,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.FP64 fp64 = 11 [json_name = "fp64"];
+      // .substrait.Type.FP64 fp64 = 11;
       case 11:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 90)) {
           ptr = ctx->ParseMessage(_internal_mutable_fp64(), ptr);
@@ -4599,7 +4585,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.String string = 12 [json_name = "string"];
+      // .substrait.Type.String string = 12;
       case 12:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 98)) {
           ptr = ctx->ParseMessage(_internal_mutable_string(), ptr);
@@ -4607,7 +4593,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Binary binary = 13 [json_name = "binary"];
+      // .substrait.Type.Binary binary = 13;
       case 13:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 106)) {
           ptr = ctx->ParseMessage(_internal_mutable_binary(), ptr);
@@ -4615,7 +4601,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Timestamp timestamp = 14 [json_name = "timestamp"];
+      // .substrait.Type.Timestamp timestamp = 14;
       case 14:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 114)) {
           ptr = ctx->ParseMessage(_internal_mutable_timestamp(), ptr);
@@ -4623,7 +4609,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Date date = 16 [json_name = "date"];
+      // .substrait.Type.Date date = 16;
       case 16:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 130)) {
           ptr = ctx->ParseMessage(_internal_mutable_date(), ptr);
@@ -4631,7 +4617,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Time time = 17 [json_name = "time"];
+      // .substrait.Type.Time time = 17;
       case 17:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 138)) {
           ptr = ctx->ParseMessage(_internal_mutable_time(), ptr);
@@ -4639,7 +4625,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.IntervalYear interval_year = 19 [json_name = "intervalYear"];
+      // .substrait.Type.IntervalYear interval_year = 19;
       case 19:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 154)) {
           ptr = ctx->ParseMessage(_internal_mutable_interval_year(), ptr);
@@ -4647,7 +4633,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.IntervalDay interval_day = 20 [json_name = "intervalDay"];
+      // .substrait.Type.IntervalDay interval_day = 20;
       case 20:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 162)) {
           ptr = ctx->ParseMessage(_internal_mutable_interval_day(), ptr);
@@ -4655,7 +4641,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ParameterizedType.ParameterizedFixedChar fixed_char = 21 [json_name = "fixedChar"];
+      // .substrait.ParameterizedType.ParameterizedFixedChar fixed_char = 21;
       case 21:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 170)) {
           ptr = ctx->ParseMessage(_internal_mutable_fixed_char(), ptr);
@@ -4663,7 +4649,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ParameterizedType.ParameterizedVarChar varchar = 22 [json_name = "varchar"];
+      // .substrait.ParameterizedType.ParameterizedVarChar varchar = 22;
       case 22:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 178)) {
           ptr = ctx->ParseMessage(_internal_mutable_varchar(), ptr);
@@ -4671,7 +4657,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ParameterizedType.ParameterizedFixedBinary fixed_binary = 23 [json_name = "fixedBinary"];
+      // .substrait.ParameterizedType.ParameterizedFixedBinary fixed_binary = 23;
       case 23:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 186)) {
           ptr = ctx->ParseMessage(_internal_mutable_fixed_binary(), ptr);
@@ -4679,7 +4665,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ParameterizedType.ParameterizedDecimal decimal = 24 [json_name = "decimal"];
+      // .substrait.ParameterizedType.ParameterizedDecimal decimal = 24;
       case 24:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 194)) {
           ptr = ctx->ParseMessage(_internal_mutable_decimal(), ptr);
@@ -4687,7 +4673,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ParameterizedType.ParameterizedStruct struct = 25 [json_name = "struct"];
+      // .substrait.ParameterizedType.ParameterizedStruct struct = 25;
       case 25:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 202)) {
           ptr = ctx->ParseMessage(_internal_mutable_struct_(), ptr);
@@ -4695,7 +4681,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ParameterizedType.ParameterizedList list = 27 [json_name = "list"];
+      // .substrait.ParameterizedType.ParameterizedList list = 27;
       case 27:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 218)) {
           ptr = ctx->ParseMessage(_internal_mutable_list(), ptr);
@@ -4703,7 +4689,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ParameterizedType.ParameterizedMap map = 28 [json_name = "map"];
+      // .substrait.ParameterizedType.ParameterizedMap map = 28;
       case 28:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 226)) {
           ptr = ctx->ParseMessage(_internal_mutable_map(), ptr);
@@ -4711,7 +4697,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.TimestampTZ timestamp_tz = 29 [json_name = "timestampTz"];
+      // .substrait.Type.TimestampTZ timestamp_tz = 29;
       case 29:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 234)) {
           ptr = ctx->ParseMessage(_internal_mutable_timestamp_tz(), ptr);
@@ -4719,7 +4705,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // uint32 user_defined_pointer = 31 [json_name = "userDefinedPointer"];
+      // uint32 user_defined_pointer = 31;
       case 31:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 248)) {
           _internal_set_user_defined_pointer(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr));
@@ -4727,7 +4713,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.UUID uuid = 32 [json_name = "uuid"];
+      // .substrait.Type.UUID uuid = 32;
       case 32:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 2)) {
           ptr = ctx->ParseMessage(_internal_mutable_uuid(), ptr);
@@ -4735,7 +4721,7 @@ const char* ParameterizedType::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ParameterizedType.TypeParameter type_parameter = 33 [json_name = "typeParameter"];
+      // .substrait.ParameterizedType.TypeParameter type_parameter = 33;
       case 33:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_type_parameter(), ptr);
@@ -4772,7 +4758,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Type.Boolean bool = 1 [json_name = "bool"];
+  // .substrait.Type.Boolean bool = 1;
   if (_internal_has_bool_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4780,7 +4766,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         1, _Internal::bool_(this), target, stream);
   }
 
-  // .substrait.Type.I8 i8 = 2 [json_name = "i8"];
+  // .substrait.Type.I8 i8 = 2;
   if (_internal_has_i8()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4788,7 +4774,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         2, _Internal::i8(this), target, stream);
   }
 
-  // .substrait.Type.I16 i16 = 3 [json_name = "i16"];
+  // .substrait.Type.I16 i16 = 3;
   if (_internal_has_i16()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4796,7 +4782,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         3, _Internal::i16(this), target, stream);
   }
 
-  // .substrait.Type.I32 i32 = 5 [json_name = "i32"];
+  // .substrait.Type.I32 i32 = 5;
   if (_internal_has_i32()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4804,7 +4790,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         5, _Internal::i32(this), target, stream);
   }
 
-  // .substrait.Type.I64 i64 = 7 [json_name = "i64"];
+  // .substrait.Type.I64 i64 = 7;
   if (_internal_has_i64()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4812,7 +4798,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         7, _Internal::i64(this), target, stream);
   }
 
-  // .substrait.Type.FP32 fp32 = 10 [json_name = "fp32"];
+  // .substrait.Type.FP32 fp32 = 10;
   if (_internal_has_fp32()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4820,7 +4806,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         10, _Internal::fp32(this), target, stream);
   }
 
-  // .substrait.Type.FP64 fp64 = 11 [json_name = "fp64"];
+  // .substrait.Type.FP64 fp64 = 11;
   if (_internal_has_fp64()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4828,7 +4814,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         11, _Internal::fp64(this), target, stream);
   }
 
-  // .substrait.Type.String string = 12 [json_name = "string"];
+  // .substrait.Type.String string = 12;
   if (_internal_has_string()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4836,7 +4822,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         12, _Internal::string(this), target, stream);
   }
 
-  // .substrait.Type.Binary binary = 13 [json_name = "binary"];
+  // .substrait.Type.Binary binary = 13;
   if (_internal_has_binary()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4844,7 +4830,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         13, _Internal::binary(this), target, stream);
   }
 
-  // .substrait.Type.Timestamp timestamp = 14 [json_name = "timestamp"];
+  // .substrait.Type.Timestamp timestamp = 14;
   if (_internal_has_timestamp()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4852,7 +4838,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         14, _Internal::timestamp(this), target, stream);
   }
 
-  // .substrait.Type.Date date = 16 [json_name = "date"];
+  // .substrait.Type.Date date = 16;
   if (_internal_has_date()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4860,7 +4846,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         16, _Internal::date(this), target, stream);
   }
 
-  // .substrait.Type.Time time = 17 [json_name = "time"];
+  // .substrait.Type.Time time = 17;
   if (_internal_has_time()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4868,7 +4854,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         17, _Internal::time(this), target, stream);
   }
 
-  // .substrait.Type.IntervalYear interval_year = 19 [json_name = "intervalYear"];
+  // .substrait.Type.IntervalYear interval_year = 19;
   if (_internal_has_interval_year()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4876,7 +4862,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         19, _Internal::interval_year(this), target, stream);
   }
 
-  // .substrait.Type.IntervalDay interval_day = 20 [json_name = "intervalDay"];
+  // .substrait.Type.IntervalDay interval_day = 20;
   if (_internal_has_interval_day()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4884,7 +4870,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         20, _Internal::interval_day(this), target, stream);
   }
 
-  // .substrait.ParameterizedType.ParameterizedFixedChar fixed_char = 21 [json_name = "fixedChar"];
+  // .substrait.ParameterizedType.ParameterizedFixedChar fixed_char = 21;
   if (_internal_has_fixed_char()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4892,7 +4878,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         21, _Internal::fixed_char(this), target, stream);
   }
 
-  // .substrait.ParameterizedType.ParameterizedVarChar varchar = 22 [json_name = "varchar"];
+  // .substrait.ParameterizedType.ParameterizedVarChar varchar = 22;
   if (_internal_has_varchar()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4900,7 +4886,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         22, _Internal::varchar(this), target, stream);
   }
 
-  // .substrait.ParameterizedType.ParameterizedFixedBinary fixed_binary = 23 [json_name = "fixedBinary"];
+  // .substrait.ParameterizedType.ParameterizedFixedBinary fixed_binary = 23;
   if (_internal_has_fixed_binary()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4908,7 +4894,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         23, _Internal::fixed_binary(this), target, stream);
   }
 
-  // .substrait.ParameterizedType.ParameterizedDecimal decimal = 24 [json_name = "decimal"];
+  // .substrait.ParameterizedType.ParameterizedDecimal decimal = 24;
   if (_internal_has_decimal()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4916,7 +4902,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         24, _Internal::decimal(this), target, stream);
   }
 
-  // .substrait.ParameterizedType.ParameterizedStruct struct = 25 [json_name = "struct"];
+  // .substrait.ParameterizedType.ParameterizedStruct struct = 25;
   if (_internal_has_struct_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4924,7 +4910,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         25, _Internal::struct_(this), target, stream);
   }
 
-  // .substrait.ParameterizedType.ParameterizedList list = 27 [json_name = "list"];
+  // .substrait.ParameterizedType.ParameterizedList list = 27;
   if (_internal_has_list()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4932,7 +4918,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         27, _Internal::list(this), target, stream);
   }
 
-  // .substrait.ParameterizedType.ParameterizedMap map = 28 [json_name = "map"];
+  // .substrait.ParameterizedType.ParameterizedMap map = 28;
   if (_internal_has_map()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4940,7 +4926,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         28, _Internal::map(this), target, stream);
   }
 
-  // .substrait.Type.TimestampTZ timestamp_tz = 29 [json_name = "timestampTz"];
+  // .substrait.Type.TimestampTZ timestamp_tz = 29;
   if (_internal_has_timestamp_tz()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4948,13 +4934,13 @@ uint8_t* ParameterizedType::_InternalSerialize(
         29, _Internal::timestamp_tz(this), target, stream);
   }
 
-  // uint32 user_defined_pointer = 31 [json_name = "userDefinedPointer"];
+  // uint32 user_defined_pointer = 31;
   if (_internal_has_user_defined_pointer()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(31, this->_internal_user_defined_pointer(), target);
   }
 
-  // .substrait.Type.UUID uuid = 32 [json_name = "uuid"];
+  // .substrait.Type.UUID uuid = 32;
   if (_internal_has_uuid()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4962,7 +4948,7 @@ uint8_t* ParameterizedType::_InternalSerialize(
         32, _Internal::uuid(this), target, stream);
   }
 
-  // .substrait.ParameterizedType.TypeParameter type_parameter = 33 [json_name = "typeParameter"];
+  // .substrait.ParameterizedType.TypeParameter type_parameter = 33;
   if (_internal_has_type_parameter()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4987,175 +4973,175 @@ size_t ParameterizedType::ByteSizeLong() const {
   (void) cached_has_bits;
 
   switch (kind_case()) {
-    // .substrait.Type.Boolean bool = 1 [json_name = "bool"];
+    // .substrait.Type.Boolean bool = 1;
     case kBool: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.bool__);
       break;
     }
-    // .substrait.Type.I8 i8 = 2 [json_name = "i8"];
+    // .substrait.Type.I8 i8 = 2;
     case kI8: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.i8_);
       break;
     }
-    // .substrait.Type.I16 i16 = 3 [json_name = "i16"];
+    // .substrait.Type.I16 i16 = 3;
     case kI16: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.i16_);
       break;
     }
-    // .substrait.Type.I32 i32 = 5 [json_name = "i32"];
+    // .substrait.Type.I32 i32 = 5;
     case kI32: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.i32_);
       break;
     }
-    // .substrait.Type.I64 i64 = 7 [json_name = "i64"];
+    // .substrait.Type.I64 i64 = 7;
     case kI64: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.i64_);
       break;
     }
-    // .substrait.Type.FP32 fp32 = 10 [json_name = "fp32"];
+    // .substrait.Type.FP32 fp32 = 10;
     case kFp32: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.fp32_);
       break;
     }
-    // .substrait.Type.FP64 fp64 = 11 [json_name = "fp64"];
+    // .substrait.Type.FP64 fp64 = 11;
     case kFp64: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.fp64_);
       break;
     }
-    // .substrait.Type.String string = 12 [json_name = "string"];
+    // .substrait.Type.String string = 12;
     case kString: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.string_);
       break;
     }
-    // .substrait.Type.Binary binary = 13 [json_name = "binary"];
+    // .substrait.Type.Binary binary = 13;
     case kBinary: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.binary_);
       break;
     }
-    // .substrait.Type.Timestamp timestamp = 14 [json_name = "timestamp"];
+    // .substrait.Type.Timestamp timestamp = 14;
     case kTimestamp: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.timestamp_);
       break;
     }
-    // .substrait.Type.Date date = 16 [json_name = "date"];
+    // .substrait.Type.Date date = 16;
     case kDate: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.date_);
       break;
     }
-    // .substrait.Type.Time time = 17 [json_name = "time"];
+    // .substrait.Type.Time time = 17;
     case kTime: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.time_);
       break;
     }
-    // .substrait.Type.IntervalYear interval_year = 19 [json_name = "intervalYear"];
+    // .substrait.Type.IntervalYear interval_year = 19;
     case kIntervalYear: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.interval_year_);
       break;
     }
-    // .substrait.Type.IntervalDay interval_day = 20 [json_name = "intervalDay"];
+    // .substrait.Type.IntervalDay interval_day = 20;
     case kIntervalDay: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.interval_day_);
       break;
     }
-    // .substrait.Type.TimestampTZ timestamp_tz = 29 [json_name = "timestampTz"];
+    // .substrait.Type.TimestampTZ timestamp_tz = 29;
     case kTimestampTz: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.timestamp_tz_);
       break;
     }
-    // .substrait.Type.UUID uuid = 32 [json_name = "uuid"];
+    // .substrait.Type.UUID uuid = 32;
     case kUuid: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.uuid_);
       break;
     }
-    // .substrait.ParameterizedType.ParameterizedFixedChar fixed_char = 21 [json_name = "fixedChar"];
+    // .substrait.ParameterizedType.ParameterizedFixedChar fixed_char = 21;
     case kFixedChar: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.fixed_char_);
       break;
     }
-    // .substrait.ParameterizedType.ParameterizedVarChar varchar = 22 [json_name = "varchar"];
+    // .substrait.ParameterizedType.ParameterizedVarChar varchar = 22;
     case kVarchar: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.varchar_);
       break;
     }
-    // .substrait.ParameterizedType.ParameterizedFixedBinary fixed_binary = 23 [json_name = "fixedBinary"];
+    // .substrait.ParameterizedType.ParameterizedFixedBinary fixed_binary = 23;
     case kFixedBinary: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.fixed_binary_);
       break;
     }
-    // .substrait.ParameterizedType.ParameterizedDecimal decimal = 24 [json_name = "decimal"];
+    // .substrait.ParameterizedType.ParameterizedDecimal decimal = 24;
     case kDecimal: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.decimal_);
       break;
     }
-    // .substrait.ParameterizedType.ParameterizedStruct struct = 25 [json_name = "struct"];
+    // .substrait.ParameterizedType.ParameterizedStruct struct = 25;
     case kStruct: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.struct__);
       break;
     }
-    // .substrait.ParameterizedType.ParameterizedList list = 27 [json_name = "list"];
+    // .substrait.ParameterizedType.ParameterizedList list = 27;
     case kList: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.list_);
       break;
     }
-    // .substrait.ParameterizedType.ParameterizedMap map = 28 [json_name = "map"];
+    // .substrait.ParameterizedType.ParameterizedMap map = 28;
     case kMap: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.map_);
       break;
     }
-    // uint32 user_defined_pointer = 31 [json_name = "userDefinedPointer"];
+    // uint32 user_defined_pointer = 31;
     case kUserDefinedPointer: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32Size(
           this->_internal_user_defined_pointer());
       break;
     }
-    // .substrait.ParameterizedType.TypeParameter type_parameter = 33 [json_name = "typeParameter"];
+    // .substrait.ParameterizedType.TypeParameter type_parameter = 33;
     case kTypeParameter: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
