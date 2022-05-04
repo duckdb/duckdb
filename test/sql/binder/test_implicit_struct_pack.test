@@ -1,0 +1,33 @@
+# name: test/sql/binder/test_implicit_struct_pack.test
+# description: Test implicit struct pack when selecting table alias
+# group: [binder]
+
+statement ok
+create table test as select range i from range(3)
+
+query T
+select test from test
+----
+{'i': 0}
+{'i': 1}
+{'i': 2}
+
+query T nosort q0
+select test from main.test
+
+query T nosort q0
+select main.test from main.test
+
+statement error
+select main.test from main.test t
+
+statement error
+select main.t from main.test t
+
+query T
+WITH data AS (
+    SELECT 1 as a, 2 as b, 3 as c
+)
+SELECT d FROM data d
+----
+{'a': 1, 'b': 2, 'c': 3}
