@@ -1,18 +1,18 @@
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "duckdb/parser/expression/positional_reference_expression.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
 
 namespace duckdb {
 
@@ -175,6 +175,35 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 	}
 }
 
+unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpression &colref) {
+	if (colref.column_names.size() > 2) {
+		return nullptr;
+	}
+	string error_message;
+	auto &table_name = colref.column_names.back();
+	auto binding = binder.bind_context.GetBinding(table_name, error_message);
+	if (!binding) {
+		return nullptr;
+	}
+	if (colref.column_names.size() == 2) {
+		// "schema_name.table_name"
+		auto table_entry = binding->GetTableEntry();
+		if (!table_entry) {
+			return nullptr;
+		}
+		auto &schema_name = colref.column_names[0];
+		if (table_entry->schema->name != schema_name || table_entry->name != table_name) {
+			return nullptr;
+		}
+	}
+	// We found the table, now create the struct_pack expression
+	vector<unique_ptr<ParsedExpression>> child_exprs;
+	for (const auto &column_name : binding->names) {
+		child_exprs.push_back(make_unique<ColumnRefExpression>(column_name, table_name));
+	}
+	return make_unique<FunctionExpression>("struct_pack", move(child_exprs));
+}
+
 BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t depth) {
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		return BindResult(make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
@@ -182,7 +211,10 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	string error_message;
 	auto expr = QualifyColumnName(colref_p, error_message);
 	if (!expr) {
-		return BindResult(binder.FormatError(colref_p, error_message));
+		expr = CreateStructPack(colref_p);
+		if (!expr) {
+			return BindResult(binder.FormatError(colref_p, error_message));
+		}
 	}
 	if (expr->type != ExpressionType::COLUMN_REF) {
 		return BindExpression(&expr, depth);
