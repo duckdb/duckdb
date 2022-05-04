@@ -54,7 +54,7 @@ static jfieldID J_DuckVector_varlen;
 
 static jclass J_ByteBuffer;
 
-jint JNI_OnLoad(JavaVM *vm, void *reserved) {
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	// Get JNIEnv from vm
 	JNIEnv *env;
 	if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION) != JNI_OK) {
@@ -147,7 +147,7 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
 	return JNI_VERSION;
 }
 
-void JNI_OnUnload(JavaVM *vm, void *reserved) {
+JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 	// Get JNIEnv from vm
 	JNIEnv *env;
 	vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION);
