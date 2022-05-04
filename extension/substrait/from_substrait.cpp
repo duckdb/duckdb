@@ -96,7 +96,7 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 		                                         move(children[1]));
 	} else if (function_name == "equal") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(children[0]), move(children[1]));
-	} else if (function_name == "not_equals") {
+	} else if (function_name == "not_equal") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOTEQUAL, move(children[0]),
 		                                         move(children[1]));
 	} else if (function_name == "lte") {
@@ -111,7 +111,7 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 	} else if (function_name == "is_not_null") {
 		return make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, move(children[0]));
 	} else if (function_name == "between") {
-		//! FIXME: ADD between to substrait extension
+		// FIXME: ADD between to substrait extension
 		return make_unique<BetweenExpression>(move(children[0]), move(children[1]), move(children[2]));
 	}
 	return make_unique<FunctionExpression>(function_name, move(children));
@@ -368,7 +368,6 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformRootOp(const substrait::RelRoot
 shared_ptr<Relation> SubstraitToDuckDB::TransformPlan() {
 	D_ASSERT(!plan.relations().empty());
 	auto d_plan = TransformRootOp(plan.relations(0).root());
-	d_plan->Print();
 	return d_plan;
 }
 

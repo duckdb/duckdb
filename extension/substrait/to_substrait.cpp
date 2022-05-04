@@ -139,6 +139,21 @@ void DuckDBToSubstrait::TransformBoolean(Value &dval, substrait::Expression &sex
 	auto &sval = *sexpr.mutable_literal();
 	sval.set_boolean(dval.GetValue<bool>());
 }
+
+void DuckDBToSubstrait::TransformHugeInt(Value &dval, substrait::Expression &sexpr) {
+	auto &sval = *sexpr.mutable_literal();
+	auto *allocated_decimal = new ::substrait::Expression_Literal_Decimal();
+	auto hugeint_str = dval.ToString();
+	allocated_decimal->set_scale(0);
+	allocated_decimal->set_precision((int32_t)hugeint_str.size());
+
+	auto *decimal_value = new string();
+	*decimal_value = hugeint_str;
+	allocated_decimal->set_allocated_value(decimal_value);
+	sval.set_allocated_decimal(allocated_decimal);
+}
+
+
 void DuckDBToSubstrait::TransformConstant(Value &dval, substrait::Expression &sexpr) {
 	auto &duckdb_type = dval.type();
 	switch (duckdb_type.id()) {
@@ -156,6 +171,9 @@ void DuckDBToSubstrait::TransformConstant(Value &dval, substrait::Expression &se
 		break;
 	case LogicalTypeId::VARCHAR:
 		TransformVarchar(dval, sexpr);
+		break;
+	case LogicalTypeId::HUGEINT:
+		TransformHugeInt(dval, sexpr);
 		break;
 	case LogicalTypeId::BOOLEAN:
 		TransformBoolean(dval, sexpr);
@@ -630,7 +648,7 @@ substrait::Rel *DuckDBToSubstrait::TransformGet(LogicalOperator &dop) {
 	sget->mutable_named_table()->add_names(table_scan_bind_data.table->name);
 	auto base_schema = new ::substrait::NamedStruct();
 	for (idx_t i = 0; i < dget.names.size(); i++) {
-		if (dget.types[i].id() == LogicalTypeId::STRUCT) {
+		if (dget.returned_types[i].id() == LogicalTypeId::STRUCT) {
 			throw std::runtime_error("Structs are not yet accepted in table scans");
 		}
 		base_schema->add_names(dget.names[i]);

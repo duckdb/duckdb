@@ -55,8 +55,8 @@ static void ToSubFunction(ClientContext &context, const FunctionData *bind_data,
 		auto sub_relation = SubstraitPlanToDuckDBRel(new_conn, serialized);
 		auto substrait_result = sub_relation->Execute();
 		if (!actual_result->Equals(*substrait_result)) {
-			query_plan->Print();
-			sub_relation->Print();
+//			query_plan->Print();
+//			sub_relation->Print();
 			throw InternalException("The query result of DuckDB's query plan does not match Substrait");
 		}
 	}
