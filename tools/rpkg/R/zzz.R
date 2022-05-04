@@ -8,12 +8,10 @@
   s3_register("dbplyr::sql_escape_datetime", "duckdb_connection")
   s3_register("dplyr::tbl", "duckdb_connection")
 
-  gc()
-
   duckdb_env <- asNamespace("duckdb")
   dllinfo <- duckdb_env$.__NAMESPACE__.$DLLs$duckdb
   path <- unclass(dllinfo)$path
-  dyn.load(path, local = TRUE, now = TRUE)
+  dyn.load(path, local = FALSE, now = TRUE)
   NULL
 }
 
