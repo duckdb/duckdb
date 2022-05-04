@@ -61,7 +61,7 @@ public:
 	LogicalType target_type;
 
 	MacroBinding *macro_binding;
-	vector<LambdaBinding *> lambda_bindings;
+	vector<LambdaBinding> *lambda_bindings = nullptr;
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,

@@ -37,12 +37,12 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 
 	// no table name: find a binding that contains this
 
-	if (binder.lambda_bindings.size() != 0) {
-		for (idx_t i = 0; i < binder.lambda_bindings.size(); i++) {
-			if (binder.lambda_bindings[i]->HasMatchingBinding(column_name)) {
+	if (lambda_bindings) {
+		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
+			if ((*lambda_bindings)[i].HasMatchingBinding(column_name)) {
 				// first priority are lambda bindings TODO: throw a warning when this name conflicts
-				D_ASSERT(!binder.lambda_bindings[i]->alias.empty());
-				return make_unique<ColumnRefExpression>(column_name, binder.lambda_bindings[i]->alias);
+				D_ASSERT(!(*lambda_bindings)[i].alias.empty());
+				return make_unique<ColumnRefExpression>(column_name, (*lambda_bindings)[i].alias);
 			}
 		}
 	}
@@ -211,10 +211,10 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	BindResult result;
 
 	auto found_lambda_binding = false;
-	if (binder.lambda_bindings.size() != 0) {
-		for (idx_t i = 0; i < binder.lambda_bindings.size(); i++) {
-			if (table_name == binder.lambda_bindings[i]->alias) {
-				result = binder.lambda_bindings[i]->Bind(colref, depth);
+	if (lambda_bindings) {
+		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
+			if (table_name == (*lambda_bindings)[i].alias) {
+				result = (*lambda_bindings)[i].Bind(colref, depth);
 				found_lambda_binding = true;
 				break;
 			}

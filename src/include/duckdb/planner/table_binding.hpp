@@ -91,8 +91,6 @@ struct LambdaBinding : public Binding {
 public:
 	LambdaBinding(vector<LogicalType> types_p, vector<string> names_p, string lambda_name);
 
-	//! Arguments - TODO: are these required for the lambda binding?
-	vector<unique_ptr<ParsedExpression>> arguments;
 	//! The name of the lambda
 	string lambda_name;
 

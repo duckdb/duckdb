@@ -46,16 +46,25 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		}
 
 		// create a lambda binding and push it to the lambda bindings vector
-		auto new_lambda_binding = make_unique<LambdaBinding>(column_types, column_names, lhs_alias);
-		lambda_bindings.push_back(new_lambda_binding.get());
-		auto lambda_bindings_count = lambda_bindings.size();
+		vector<LambdaBinding> local_bindings;
+		if (!lambda_bindings) {
+			lambda_bindings = &local_bindings;
+		}
+		LambdaBinding new_lambda_binding(column_types, column_names, lhs_alias);
+		lambda_bindings->push_back(new_lambda_binding);
+		auto lambda_bindings_count = (*lambda_bindings).size();
 
-		// create bindings for the lambda parameters
-		// binder.bind_context.AddGenericBinding(-1, lhs_alias, dummy_column_names, column_types);
+		// bind the lhs expressions
+		for (idx_t i = 0; i < expr.lhs.size(); i++) {
+			auto result = BindExpression(&expr.lhs[i], depth, false);
+			if (result.HasError()) {
+				return BindResult(error);
+			}
+		}
 
-		auto result = ExpressionBinder::BindExpression(&expr.rhs, depth, false);
-		D_ASSERT(lambda_bindings_count == lambda_bindings.size());
-		lambda_bindings.pop_back();
+		auto result = BindExpression(&expr.rhs, depth, false);
+		D_ASSERT(lambda_bindings_count == (*lambda_bindings).size());
+		(*lambda_bindings).pop_back();
 
 		// now bind the rhs as a normal expression
 		return result;
@@ -64,7 +73,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	D_ASSERT(expr.lhs.size() == 1);
 	auto lhs_expr = expr.lhs[0]->Copy();
 	OperatorExpression arrow_expr(ExpressionType::ARROW, move(lhs_expr), move(expr.rhs));
-	return ExpressionBinder::BindExpression(arrow_expr, depth);
+	return BindExpression(arrow_expr, depth);
 }
 
 } // namespace duckdb

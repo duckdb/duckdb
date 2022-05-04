@@ -153,16 +153,13 @@ unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colre
 	return arg;
 }
 
-// TODO: LAMBDA_NAME is the same table for all lambda bindings, is this correct?
 LambdaBinding::LambdaBinding(vector<LogicalType> types_p, vector<string> names_p, string lambda_name_p)
-    : Binding(LambdaBinding::LAMBDA_NAME, move(types_p), move(names_p), -1), // normal binding
-      lambda_name(move(lambda_name_p))                                       // lambda name
+    : Binding(LambdaBinding::LAMBDA_NAME + lambda_name_p, move(types_p), move(names_p), -1), // normal binding
+      lambda_name(move(lambda_name_p))                                                       // lambda name
 {
 }
 
 BindResult LambdaBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
-
-	// TODO: is this correct?
 
 	column_t column_index;
 	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
@@ -172,7 +169,6 @@ BindResult LambdaBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	binding.table_index = index;
 	binding.column_index = column_index;
 
-	// we are binding a parameter to create the macro, no arguments are supplied
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), types[column_index], binding, depth));
 }
 

@@ -27,10 +27,10 @@ Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool i
 	parameters = nullptr;
 	parameter_types = nullptr;
 	if (parent) {
-		// We have to inherit macro parameter bindings from the parent binder, if there is a parent.
-		macro_binding = parent->macro_binding;
 
-		// TODO: what is the parent/do we need to inherit the lambda bindings in the lambda_bindings vector?
+		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
+		macro_binding = parent->macro_binding;
+		lambda_bindings = parent->lambda_bindings;
 
 		if (inherit_ctes) {
 			// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
@@ -320,10 +320,10 @@ bool Binder::HasMatchingBinding(const string &schema_name, const string &table_n
 	Binding *binding;
 
 	auto found_lambda_binding = false;
-	if (lambda_bindings.size() != 0) {
-		for (idx_t i = 0; i < lambda_bindings.size(); i++) {
-			if (table_name == lambda_bindings[i]->alias) {
-				binding = lambda_bindings[i];
+	if (lambda_bindings) {
+		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
+			if (table_name == (*lambda_bindings)[i].alias) {
+				binding = &(*lambda_bindings)[i];
 				found_lambda_binding = true;
 				break;
 			}
