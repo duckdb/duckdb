@@ -173,7 +173,7 @@ public:
 	static constexpr size_t PREFETCH_FALLBACK_BUFFERSIZE = 1000000;
 
 	ThriftFileTransport(Allocator &allocator, FileHandle &handle_p, FileOpener &opener, bool prefetch_mode_p)
-	    : allocator(allocator), handle(handle_p), location(0), ra_buffer(ReadAheadBuffer(allocator, handle_p, opener)),
+	    : handle(handle_p), location(0), ra_buffer(ReadAheadBuffer(allocator, handle_p, opener)),
 	      prefetch_mode(prefetch_mode_p) {
 	}
 
@@ -228,7 +228,6 @@ public:
 	}
 
 private:
-	Allocator &allocator;
 	FileHandle &handle;
 	idx_t location;
 

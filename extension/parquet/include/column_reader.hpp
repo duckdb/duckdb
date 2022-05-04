@@ -82,6 +82,8 @@ protected:
 	virtual void DictReference(Vector &result);
 	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result);
 
+	virtual void SkipInternal(idx_t num_values);
+
 	bool HasDefines() {
 		return max_define > 0;
 	}
@@ -99,6 +101,8 @@ protected:
 
 	ParquetReader &reader;
 	LogicalType type;
+
+	idx_t pending_skips = 0;
 
 private:
 	void PrepareRead(parquet_filter_t &filter);

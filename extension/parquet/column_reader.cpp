@@ -87,7 +87,6 @@ void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport) {
 size_t ColumnReader::TotalCompressedSize() {
 	if (!chunk) {
 		return 0;
-		throw std::runtime_error("TotalCompressedSize called on ColumnReader with no chunk");
 	}
 
 	return chunk->meta_data.total_compressed_size;
@@ -384,6 +383,11 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 	trans.SetLocation(chunk_read_offset);
 
+	// Perform any skips that were not applied yet.
+	if (pending_skips > 0) {
+		SkipInternal(pending_skips);
+	}
+
 	idx_t result_offset = 0;
 	auto to_read = num_values;
 
@@ -459,6 +463,12 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 }
 
 void ColumnReader::Skip(idx_t num_values) {
+	pending_skips += num_values;
+}
+
+void ColumnReader::SkipInternal(idx_t num_values) {
+	pending_skips -= num_values;
+
 	dummy_define.zero();
 	dummy_repeat.zero();
 
@@ -564,6 +574,10 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 	idx_t result_offset = 0;
 	auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
 	auto &result_mask = FlatVector::Validity(result_out);
+
+	if (pending_skips > 0) {
+		SkipInternal(pending_skips);
+	}
 
 	D_ASSERT(ListVector::GetListSize(result_out) == 0);
 	// if an individual list is longer than STANDARD_VECTOR_SIZE we actually have to loop the child read to fill it
@@ -673,7 +687,9 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 
 // ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 //                             Vector &result_out)
-void ListColumnReader::Skip(idx_t num_values) {
+void ListColumnReader::SkipInternal(idx_t num_values) {
+	pending_skips -= num_values;
+
 	parquet_filter_t filter;
 	auto define_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
 	auto repeat_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
@@ -754,6 +770,10 @@ idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, ui
                                Vector &result) {
 	auto &struct_entries = StructVector::GetEntries(result);
 	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
+
+	if (pending_skips > 0) {
+		SkipInternal(pending_skips);
+	}
 
 	idx_t read_count = num_values;
 	for (idx_t i = 0; i < struct_entries.size(); i++) {
