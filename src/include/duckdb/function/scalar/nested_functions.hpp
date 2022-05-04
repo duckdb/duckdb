@@ -10,6 +10,8 @@
 
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/common/map.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 
@@ -26,6 +28,11 @@ struct VariableReturnBindData : public FunctionData {
 		auto &other = (const VariableReturnBindData &)other_p;
 		return stype == other.stype;
 	}
+};
+
+template <class T, class MAP_TYPE = map<T, idx_t>>
+struct HistogramAggState {
+	MAP_TYPE *hist;
 };
 
 struct ArraySliceFun {
@@ -76,6 +83,16 @@ struct ListPositionFun {
 };
 
 struct ListAggregateFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct ListDistinctFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct ListUniqueFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
