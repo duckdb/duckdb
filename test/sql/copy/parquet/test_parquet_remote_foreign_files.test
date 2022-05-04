@@ -73,16 +73,16 @@ SELECT assignedLicenses[1] FROM parquet_scan('https://raw.githubusercontent.com/
 ----
 {'disabledPlans': [bea4c11e-220a-4e6d-8eb8-8ea15d019f90], 'skuId': c7df2760-2c81-4ef7-b578-5b5392b571df}
 
-# test with multiple files
+# multiple files
 query II
-select * from parquet_scan(['https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/glob/t1.parquet', 'https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/glob/t2.parquet']) order by i
+select * from parquet_scan(['https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/glob/t1.parquet', 'https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/glob/t2.parquet'])
 ----
 1	a
 2	b
 
-# test with glob pattern
-query II
-select * from parquet_scan(['https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/glob/t1.parquet', 'https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/glob/t2.parquet']) order by i
+# Malformed parquet to test fallback from prefetch
+query IIII
+select * from parquet_scan('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/arrow/nation.dict-malformed.parquet') limit 2;
 ----
-1	a
-2	b
+0	ALGERIA	0	 haggle. carefully final deposits detect slyly agai
+1	ARGENTINA	1	al foxes promise slyly according to the regular accounts. bold requests alon

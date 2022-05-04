@@ -187,8 +187,7 @@ public:
 				// We've reached a non-prefetched address in prefetch_mode, this should normally not happen,
 				// but just in case we fall back to buffered reads. The assertion will trigger in tests in debug mode to
 				// confirm the prefetching works
-				D_ASSERT(false);
-				Prefetch(location, len);
+				Prefetch(location, MinValue<size_t>(PREFETCH_FALLBACK_BUFFERSIZE, handle.GetFileSize() - location));
 				auto prefetch_buffer_fallback = ra_buffer.GetReadHead(location);
 				D_ASSERT(location - prefetch_buffer_fallback->location + len <= prefetch_buffer_fallback->size);
 				memcpy(buf, prefetch_buffer_fallback->data->get() + location - prefetch_buffer_fallback->location, len);
@@ -205,18 +204,15 @@ public:
 		PrefetchRegistered();
 	}
 
-	void ClearPrefetch() {
-		ra_buffer.read_heads.clear();
-	}
-
 	/// New prefetch
 	void RegisterPrefetch(idx_t pos, idx_t len) {
 		ra_buffer.AddReadHead(pos, len);
 	}
+
 	void PrefetchRegistered() {
 		ra_buffer.Prefetch();
 	}
-	void ClearRegisterPrefetch() {
+	void ClearPrefetch() {
 		ra_buffer.read_heads.clear();
 	}
 
@@ -236,12 +232,12 @@ private:
 	FileHandle &handle;
 	idx_t location;
 
+	// Multi-buffer prefetch
+	ReadAheadBuffer ra_buffer;
+
 	/// Whether the prefetch mode is enabled. In this mode the DirectIO flag of the handle will be set and the parquet
 	/// reader will manage the read buffering.
 	bool prefetch_mode;
-
-	// Multi-buffer prefetch
-	ReadAheadBuffer ra_buffer;
 };
 
 } // namespace duckdb

@@ -814,7 +814,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		state.group_offset = 0;
 
 		auto &trans = (ThriftFileTransport &)*state.thrift_file_proto->getTransport();
-		trans.ClearRegisterPrefetch();
+		trans.ClearPrefetch();
+		state.have_prefetched_group = false;
 
 		if ((idx_t)state.current_group == state.group_idx_list.size()) {
 			state.finished = true;
@@ -852,15 +853,12 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 			if (scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
 				// Prefetch the whole row group
-				if (!state.have_prefetched_group ||
-				    state.prefetched_group != state.group_idx_list[state.current_group]) {
+				if (!state.have_prefetched_group) {
 					auto total_compressed_size = GetGroupCompressedSize(state);
 					if (total_compressed_size > 0) {
-						trans.RegisterPrefetch(GetGroupOffset(state), total_row_group_span);
-						trans.PrefetchRegistered();
+						trans.Prefetch(GetGroupOffset(state), total_row_group_span);
 					}
 					state.have_prefetched_group = true;
-					state.prefetched_group = state.group_idx_list[state.current_group];
 				}
 			} else {
 				// Prefetch column-wise
