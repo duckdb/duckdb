@@ -19,7 +19,7 @@ SELECT a FROM test LIMIT 1
 
 # decimal limit
 query I
-SELECT a FROM test LIMIT 1.5
+SELECT a FROM test LIMIT 1.25
 ----
 11
 
