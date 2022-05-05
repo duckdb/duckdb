@@ -607,6 +607,41 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	}
 
 	this->columns = sorted_rowgroup->columns;
+
+	// Sort the indexes
+
+//	// Initialize DataChunk for key columns and payload (the entire RowGroup)
+//	DataChunk payload_indexes;
+//	payload.Initialize(types);
+//
+//	// Initialize the sorting states
+//	RowGroupSortBindData sort_state_indexes(types, column_ids, db);
+//	auto &global_sort_state_indexes = *sort_state.global_sort_state;
+//	LocalSortState local_sort_state_indexes;
+//	local_sort_state.Initialize(global_sort_state_indexes, global_sort_state_indexes.buffer_manager);
+//
+//	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
+//		payload_indexes.data.push_back(Vector)
+//	}
+//	local_sort_state.SinkChunk(keys, payload);
+
+//	if (version_info){
+//		for (idx_t vector_idx = 0; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
+//			auto current_info = (ChunkVectorInfo *)version_info->info[vector_idx].get();
+//			if (!current_info) {
+//				continue;
+//			}
+//			if (current_info->any_deleted) {
+//				any_deletions = true;
+//				for (auto i : current_info->delete_id) {
+//					deletion_ids.push_back(i);
+//				}
+//				auto i = current_info->deleted[2].load();
+//				current_info->deleted[2] = current_info->deleted[1].load();
+//				current_info->deleted[1] = i;
+//			}
+//		}
+//	}
 }
 
 void RowGroup::CalculateCardinalitiesPerColumn(vector<LogicalType> &types, TableScanState &scan_state,
@@ -848,6 +883,9 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	states.reserve(columns.size());
 	vector<LogicalType> types;
 	vector<column_t> column_ids;
+//	bool any_deletions = false;
+//	vector<idx_t> deletion_ids;
+
 
 	if (db.config.force_compression_sorting && !columns.empty() && count != 0 && table_info.indexes.Empty()) {
 		bool contains_illegal_types = false;

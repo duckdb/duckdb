@@ -24,7 +24,7 @@ DELETE FROM test WHERE a=12
 #COMMIT;
 
 query I
-SELECT a FROM test ORDER BY a
+SELECT a FROM test
 ----
 11
 13
@@ -32,7 +32,7 @@ SELECT a FROM test ORDER BY a
 restart
 
 query I
-SELECT a FROM test ORDER BY a
+SELECT a FROM test
 ----
 11
 13
