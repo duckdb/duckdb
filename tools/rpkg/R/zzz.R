@@ -14,11 +14,3 @@
   dyn.load(path, local = FALSE, now = TRUE)
   NULL
 }
-
-.onUnload <- function(libpath) {
-  message("Unloading")
-  duckdb_env <- asNamespace("duckdb")
-  dllinfo <- duckdb_env$.__NAMESPACE__.$DLLs$duckdb
-  path <- unclass(dllinfo)$path
-  dyn.unload(path)
-}
