@@ -116,6 +116,7 @@ public:
 
 	idx_t bytes_read = 0;
 	idx_t requests_made = 0;
+	idx_t head_requests_made = 0;
 	idx_t bytes_requested = 0;
 
 	~HTTPFileSystem();

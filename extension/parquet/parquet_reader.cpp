@@ -803,6 +803,20 @@ void ParquetReader::Scan(ParquetReaderScanState &state, DataChunk &result) {
 	}
 }
 
+// TODO can be optimized also move to nicer spot
+static bool AllNone(parquet_filter_t filter, size_t n) {
+	if (n == STANDARD_VECTOR_SIZE) {
+		return filter.none();
+	} else {
+		for (idx_t i = 0; i < n; i++) {
+			if (filter[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+}
+
 bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &result) {
 	if (state.finished) {
 		return false;
@@ -851,7 +865,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				    "Malformed parquet file: sum of total compressed bytes of columns seems incorrect");
 			}
 
-			if (scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+			if (!state.filters && scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
 				// Prefetch the whole row group
 				if (!state.have_prefetched_group) {
 					auto total_compressed_size = GetGroupCompressedSize(state);
@@ -861,8 +875,10 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 					state.have_prefetched_group = true;
 				}
 			} else {
-				// Prefetch column-wise
+				// TODO: can we make lazy prefetch work?
+				bool lazy_fetch = false; //state.filters;
 
+				// Prefetch column-wise
 				//				std::cout << "Prefetching row group " << group.ordinal << " column-wise\n";
 				for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 
@@ -873,9 +889,15 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 					auto file_col_idx = state.column_ids[out_col_idx];
 					auto root_reader = ((StructColumnReader *)state.root_reader.get());
 
-					root_reader->GetChildReader(file_col_idx)->RegisterPrefetch(trans);
+					bool has_filter = state.filters && state.filters->filters.find(out_col_idx) != state.filters->filters.end();
+					root_reader->GetChildReader(file_col_idx)->RegisterPrefetch(trans, !(lazy_fetch && !has_filter));
 				}
-				trans.PrefetchRegistered();
+
+				trans.FinalizeRegistration();
+
+				if (!lazy_fetch) {
+					trans.PrefetchRegistered();
+				}
 			}
 		}
 		return true;
@@ -909,7 +931,9 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		for (auto &filter_col : state.filters->filters) {
 			auto file_col_idx = state.column_ids[filter_col.first];
 
-			if (filter_mask.none()) { // if no rows are left we can stop checking filters
+			// TODO: filter_mask.none() will always be false if we're scanning less than vector size. This prevents the row_group skipping of columns
+			// that are never scanned.
+			if (AllNone(filter_mask, this_output_chunk_rows)) { // if no rows are left we can stop checking filters
 				break;
 			}
 
@@ -930,7 +954,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			}
 			auto file_col_idx = state.column_ids[out_col_idx];
 
-			if (filter_mask.none()) {
+			if (AllNone(filter_mask, this_output_chunk_rows)) {
 				root_reader->GetChildReader(file_col_idx)->Skip(result.size());
 				continue;
 			}

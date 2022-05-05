@@ -23,6 +23,7 @@ struct ReadHead {
 
 	/// Current info
 	unique_ptr<AllocatedData> data;
+	bool data_isset = false;
 
 	idx_t GetEnd() const {
 		return size + location;
@@ -89,7 +90,10 @@ struct ReadAheadBuffer {
 		read_heads.emplace_front(ReadHead(pos, len));
 		total_size += len;
 		auto &read_head = read_heads.front();
-		merge_set.insert(&read_head);
+
+		if (merge_buffers) {
+			merge_set.insert(&read_head);
+		}
 
 		if (read_head.GetEnd() > handle.GetFileSize()) {
 			throw std::runtime_error("Prefetch registered for bytes outside file");
@@ -111,7 +115,8 @@ struct ReadAheadBuffer {
 		std::vector<thread> download_threads;
 		std::vector<unique_ptr<FileHandle>> handles_in_progress;
 
-		bool async = read_heads.size() >= 2;
+		// Todo this may not make sense as long as we're needing a head request per openfile
+		bool async = false && read_heads.size() >= 2;
 
 		for (auto &read_head : read_heads) {
 			read_head.Allocate(allocator);
@@ -137,17 +142,19 @@ struct ReadAheadBuffer {
 				thread upload_thread(
 				    [](ReadHead &read_head, FileHandle *file_handle) {
 					    file_handle->Read(read_head.data->get(), read_head.size, read_head.location);
-					    //					    std::cout << "Prefetch async new " << read_head.location << " for " <<
-					    //read_head.size
-					    //					              << " bytes\n";
+					    read_head.data_isset = true;
+//					    					    std::cout << "Prefetch async new " << read_head.location << " for " <<
+//					    read_head.size
+//					    					              << " bytes\n";
 				    },
 				    std::ref(read_head), file_handle_ptr);
 
 				download_threads.push_back(std::move(upload_thread));
 			} else {
 				handle.Read(read_head.data->get(), read_head.size, read_head.location);
-				//				std::cout << "Prefetch sync new " << read_head.location << " for " << read_head.size
-				//				          << " bytes\n";
+				read_head.data_isset = true;
+//								std::cout << "Prefetch sync new " << read_head.location << " for " << read_head.size
+//								          << " bytes\n";
 			}
 		}
 
@@ -162,9 +169,6 @@ struct ReadAheadBuffer {
 				handle_copies.push_back(std::move(handle));
 			}
 		}
-
-		// Delete the merge set to prevent any further any further merges on the already prefetched buffers.
-		merge_set.clear();
 	}
 };
 
@@ -173,7 +177,7 @@ public:
 	static constexpr size_t PREFETCH_FALLBACK_BUFFERSIZE = 1000000;
 
 	ThriftFileTransport(Allocator &allocator, FileHandle &handle_p, FileOpener &opener, bool prefetch_mode_p)
-	    : handle(handle_p), location(0), ra_buffer(ReadAheadBuffer(allocator, handle_p, opener)),
+	    : handle(handle_p), location(0), allocator(allocator), ra_buffer(ReadAheadBuffer(allocator, handle_p, opener)),
 	      prefetch_mode(prefetch_mode_p) {
 	}
 
@@ -181,12 +185,17 @@ public:
 		auto prefetch_buffer = ra_buffer.GetReadHead(location);
 		if (prefetch_buffer != nullptr && location - prefetch_buffer->location + len <= prefetch_buffer->size) {
 			D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
+
+			if(!prefetch_buffer->data_isset) {
+//				std::cout << "Lazy prefetch async new " << prefetch_buffer->location << " for " <<
+//				    prefetch_buffer->size << " bytes \n";
+				prefetch_buffer->Allocate(allocator);
+				handle.Read(prefetch_buffer->data->get(), prefetch_buffer->size, prefetch_buffer->location);
+				prefetch_buffer->data_isset = true;
+			}
 			memcpy(buf, prefetch_buffer->data->get() + location - prefetch_buffer->location, len);
 		} else {
 			if (prefetch_mode && len < PREFETCH_FALLBACK_BUFFERSIZE && len > 0) {
-				// We've reached a non-prefetched address in prefetch_mode, this should normally not happen,
-				// but just in case we fall back to buffered reads. The assertion will trigger in tests in debug mode to
-				// confirm the prefetching works
 				Prefetch(location, MinValue<size_t>(PREFETCH_FALLBACK_BUFFERSIZE, handle.GetFileSize() - location));
 				auto prefetch_buffer_fallback = ra_buffer.GetReadHead(location);
 				D_ASSERT(location - prefetch_buffer_fallback->location + len <= prefetch_buffer_fallback->size);
@@ -201,12 +210,17 @@ public:
 
 	void Prefetch(idx_t pos, idx_t len) {
 		RegisterPrefetch(pos, len);
+		FinalizeRegistration();
 		PrefetchRegistered();
 	}
 
 	/// New prefetch
-	void RegisterPrefetch(idx_t pos, idx_t len) {
-		ra_buffer.AddReadHead(pos, len);
+	void RegisterPrefetch(idx_t pos, idx_t len, bool can_merge = true) {
+		ra_buffer.AddReadHead(pos, len, can_merge);
+	}
+
+	void FinalizeRegistration() {
+		ra_buffer.merge_set.clear();
 	}
 
 	void PrefetchRegistered() {
@@ -230,6 +244,8 @@ public:
 private:
 	FileHandle &handle;
 	idx_t location;
+
+	Allocator& allocator;
 
 	// Multi-buffer prefetch
 	ReadAheadBuffer ra_buffer;

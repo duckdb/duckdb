@@ -76,11 +76,12 @@ idx_t ColumnReader::MaxRepeat() const {
 	return max_repeat;
 }
 
-void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport) {
+void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
 	if (chunk) {
 		auto size = chunk->meta_data.total_compressed_size;
 
-		transport.RegisterPrefetch(FileOffset(), size);
+//		std::cout << "registering " << schema.name << " @ " << FileOffset() << " for " << size << "\n";
+		transport.RegisterPrefetch(FileOffset(), size, allow_merge);
 	}
 }
 
@@ -383,6 +384,8 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 	trans.SetLocation(chunk_read_offset);
 
+//	std::cout << "\nReading from " << schema.name << "\n";
+
 	// Perform any skips that were not applied yet.
 	if (pending_skips > 0) {
 		SkipInternal(pending_skips);
@@ -474,9 +477,18 @@ void ColumnReader::SkipInternal(idx_t num_values) {
 
 	// TODO this can be optimized, for example we dont actually have to bitunpack offsets
 	Vector dummy_result(type, nullptr);
-	auto values_read =
-	    Read(num_values, none_filter, (uint8_t *)dummy_define.ptr, (uint8_t *)dummy_repeat.ptr, dummy_result);
-	if (values_read != num_values) {
+
+	idx_t remaining = num_values;
+	idx_t read = 0;
+
+	while(remaining) {
+		idx_t to_read = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE);
+		read +=
+		    Read(to_read, none_filter, (uint8_t *)dummy_define.ptr, (uint8_t *)dummy_repeat.ptr, dummy_result);
+		remaining -= to_read;
+	}
+
+	if (read != num_values) {
 		throw std::runtime_error("Row count mismatch when skipping rows");
 	}
 }
@@ -801,9 +813,9 @@ void StructColumnReader::Skip(idx_t num_values) {
 	}
 }
 
-void StructColumnReader::RegisterPrefetch(ThriftFileTransport &transport) {
+void StructColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
 	for (auto &child : child_readers) {
-		child->RegisterPrefetch(transport);
+		child->RegisterPrefetch(transport, allow_merge);
 	}
 }
 
