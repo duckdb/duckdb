@@ -530,7 +530,7 @@ size_t ParquetReader::GetGroupCompressedSize(ParquetReaderScanState &state) {
 		}
 	}
 
-	if (total_compressed_size != 0 && calc_compressed_size != 0 && total_compressed_size != calc_compressed_size) {
+	if (total_compressed_size != 0 && calc_compressed_size != 0 && (idx_t)total_compressed_size != calc_compressed_size) {
 		throw std::runtime_error("mismatch between calculated compressed size and reported compressed size");
 	}
 
@@ -854,7 +854,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 		auto &group = GetGroup(state);
 		// Should we exponential increase?
-		if (state.prefetch_mode && state.group_offset != group.num_rows) {
+		if (state.prefetch_mode && state.group_offset != (idx_t)group.num_rows) {
 			//			std::cout << "Prefetching row group " << state.group_idx_list[state.current_group] << "
 			// entirely\n";
 			size_t total_row_group_span = GetGroupSpan(state);
@@ -939,7 +939,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			}
 
 			//			std::cout << "Reading filter for col " <<
-			//root_reader->GetChildReader(file_col_idx)->Schema().name
+			// root_reader->GetChildReader(file_col_idx)->Schema().name
 			//<< "\n";
 			root_reader->GetChildReader(file_col_idx)
 			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[filter_col.first]);
@@ -989,7 +989,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			}
 
 			//			std::cout << "Reading nofilter for col " <<
-			//root_reader->GetChildReader(file_col_idx)->Schema().name
+			// root_reader->GetChildReader(file_col_idx)->Schema().name
 			//<< "\n";
 			root_reader->GetChildReader(file_col_idx)
 			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[out_col_idx]);

@@ -143,8 +143,8 @@ struct ReadAheadBuffer {
 				    [](ReadHead &read_head, FileHandle *file_handle) {
 					    file_handle->Read(read_head.data->get(), read_head.size, read_head.location);
 					    read_head.data_isset = true;
-					    //					    					    std::cout << "Prefetch async new " << read_head.location << " for
-					    //" << 					    read_head.size
+					    //					    					    std::cout << "Prefetch async new " << read_head.location << "
+					    //for " << 					    read_head.size
 					    //					    					              << " bytes\n";
 				    },
 				    std::ref(read_head), file_handle_ptr);
@@ -154,7 +154,7 @@ struct ReadAheadBuffer {
 				handle.Read(read_head.data->get(), read_head.size, read_head.location);
 				read_head.data_isset = true;
 				//								std::cout << "Prefetch sync new " << read_head.location << " for " <<
-				//read_head.size
+				// read_head.size
 				//								          << " bytes\n";
 			}
 		}
