@@ -250,6 +250,12 @@ private:
 
 	unique_ptr<SampleOptions> TransformSampleOptions(duckdb_libpgquery::PGNode *options);
 
+bool ConstraintIsOfType(duckdb_libpgquery::PGListCell* cell, duckdb_libpgquery::PGConstrType type) {
+	auto constraint = reinterpret_cast<duckdb_libpgquery::PGConstraint *>(cell->data.ptr_value);
+	D_ASSERT(constraint);
+	return constraint->contype == type;
+}
+
 private:
 	//! Current stack depth
 	idx_t stack_depth;

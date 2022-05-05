@@ -25,10 +25,12 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)command->def;
 			auto centry = TransformColumnDefinition(cdef);
 
+			bool default_constraint_set = false;
 			unique_ptr<Constraint> generated_constraint = nullptr;
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
 					auto constraint = TransformConstraint(constr, centry, 0);
+					default_constraint_set = default_constraint_set || ConstraintIsOfType(constr, duckdb_libpgquery::PG_CONSTR_DEFAULT);
 					if (!constraint) {
 						continue;
 					}
@@ -41,6 +43,9 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			}
 			if (generated_constraint) {
 				D_ASSERT(generated_constraint->type == ConstraintType::GENERATED);
+				if (default_constraint_set) {
+					throw BinderException("DEFAULT constraint on GENERATED column \"%s\" is not allowed", centry.name);
+				}
 				auto gen_constraint = (GeneratedConstraint *)generated_constraint.get();
 				auto generated_column =
 				    GeneratedColumnDefinition(centry.name, move(centry.type), move(gen_constraint->expression));

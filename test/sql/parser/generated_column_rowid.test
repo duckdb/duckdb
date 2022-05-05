@@ -1,0 +1,22 @@
+# name: test/sql/parser/generated_column_alias.test
+# description: Test generated columns using AS
+# group: [parser]
+
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+statement ok
+INSERT INTO unit VALUES (4,5)
+
+# Should be able to reference rowid in this expression
+statement ok
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * rowid) VIRTUAL;
+
+query III
+SELECT total_profit FROM unit;
+---
+5	4	0
+4	5	4
