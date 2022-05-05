@@ -6,7 +6,6 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/thread.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/likely.hpp"
@@ -42,7 +41,7 @@ struct ReadHeadComparator {
 		auto a_end = a->location + a->size;
 		auto b_start = b->location;
 
-		if (DUCKDB_LIKELY(a_end <= NumericLimits<idx_t>::Maximum() - ALLOW_GAP)) {
+		if (a_end <= NumericLimits<idx_t>::Maximum() - ALLOW_GAP) {
 			a_end += ALLOW_GAP;
 		}
 
@@ -60,8 +59,6 @@ struct ReadAheadBuffer {
 
 	/// The list of read heads
 	std::list<ReadHead> read_heads;
-	/// Store copies of file handles for efficient async prefetching.
-	vector<unique_ptr<FileHandle>> handle_copies;
 	/// Set for merging consecutive ranges
 	std::set<ReadHead *, ReadHeadComparator> merge_set;
 
@@ -112,12 +109,6 @@ struct ReadAheadBuffer {
 
 	/// Prefetch all read heads
 	void Prefetch() {
-		std::vector<thread> download_threads;
-		std::vector<unique_ptr<FileHandle>> handles_in_progress;
-
-		// Todo this may not make sense as long as we're needing a head request per openfile
-		bool async = false && read_heads.size() >= 2;
-
 		for (auto &read_head : read_heads) {
 			read_head.Allocate(allocator);
 
@@ -125,50 +116,8 @@ struct ReadAheadBuffer {
 				throw std::runtime_error("Prefetch registered requested for bytes outside file");
 			}
 
-			if (async) {
-				unique_ptr<FileHandle> file_handle;
-				if (handle_copies.size() > 0) {
-					file_handle = std::move(handle_copies.back());
-					handle_copies.pop_back();
-				} else {
-					auto flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO;
-					file_handle = handle.file_system.OpenFile(handle.path, flags, FileSystem::DEFAULT_LOCK,
-					                                          FileSystem::DEFAULT_COMPRESSION, &file_opener);
-				}
-				auto file_handle_ptr = file_handle.get();
-				handles_in_progress.push_back(std::move(file_handle));
-
-				// Start download thread
-				thread upload_thread(
-				    [](ReadHead &read_head, FileHandle *file_handle) {
-					    file_handle->Read(read_head.data->get(), read_head.size, read_head.location);
-					    read_head.data_isset = true;
-					    //					    					    std::cout << "Prefetch async new " << read_head.location << "
-					    //for " << 					    read_head.size
-					    //					    					              << " bytes\n";
-				    },
-				    std::ref(read_head), file_handle_ptr);
-
-				download_threads.push_back(std::move(upload_thread));
-			} else {
-				handle.Read(read_head.data->get(), read_head.size, read_head.location);
-				read_head.data_isset = true;
-				//								std::cout << "Prefetch sync new " << read_head.location << " for " <<
-				// read_head.size
-				//								          << " bytes\n";
-			}
-		}
-
-		if (async) {
-			// Await all outstanding requests
-			for (auto &thread : download_threads) {
-				thread.join();
-			}
-
-			// Store handles for reuse
-			for (auto &handle : handles_in_progress) {
-				handle_copies.push_back(std::move(handle));
-			}
+			handle.Read(read_head.data->get(), read_head.size, read_head.location);
+			read_head.data_isset = true;
 		}
 	}
 };
