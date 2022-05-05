@@ -5,12 +5,16 @@
 statement ok
 PRAGMA enable_verification
 
+foreach datatype TINYINT SMALLINT INTEGER BIGINT HUGEINT
+
 query I
-select cast(0.55 as integer) as x;
+SELECT CAST(0.55 AS ${datatype}) as x;
 ----
 1
 
 query I
-select cast(-0.55 as integer) as x;
+SELECT CAST(-0.55 AS ${datatype}) as x;
 ----
 -1
+
+endloop
