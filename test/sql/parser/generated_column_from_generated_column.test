@@ -1,0 +1,23 @@
+# name: test/sql/parser/generated_column_from_generated_column.test
+# description: Expected behavior when trying to create a generated column from a generated column
+# group: [parser]
+
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+statement ok
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+
+statement ok
+SELECT total_profit FROM unit
+
+# Cant create a generated column, from another generated column
+statement error
+ALTER TABLE unit ADD COLUMN also_total_profit INTEGER GENERATED ALWAYS AS (total_profit) VIRTUAL;
+
+# Column doesn't exist, failed to create it before
+statement error
+SELECT also_total_profit FROM unit
