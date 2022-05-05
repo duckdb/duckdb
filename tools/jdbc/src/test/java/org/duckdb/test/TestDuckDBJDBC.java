@@ -697,6 +697,38 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_multiple_statements_execution() throws Exception {
+		Connection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		ResultSet rs = stmt
+				.executeQuery(
+						"CREATE TABLE integers(i integer);\n" +
+								"insert into integers select * from range(10);" +
+								"select * from integers;");
+		int i = 0;
+		while (rs.next()) {
+			assertEquals(rs.getInt("i"), i);
+			i++;
+		}
+		assertEquals(i, 10);
+	}
+
+	public static void test_multiple_statements_exception() throws Exception {
+		Connection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		boolean succ = false;
+		try {
+			stmt.executeQuery(
+					"CREATE TABLE integers(i integer, i boolean);\n" +
+							"CREATE TABLE integers2(i integer);\n" +
+							"insert into integers2 select * from range(10);\n" +
+							"select * from integers2;");
+			succ = true;
+		} catch (Exception ex) {
+			assertFalse(succ);
+		}
+	}
+
 	public static void test_bigdecimal() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
@@ -1820,38 +1852,6 @@ public class TestDuckDBJDBC {
 		rs.close();
 		assertEquals(conn.getCatalog(), catalog);
 		conn.close();
-	}
-
-	public static void test_multiple_statements_execution() throws Exception {
-		Connection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
-		Statement stmt = conn.createStatement();
-		ResultSet rs = stmt
-				.executeQuery(
-						"CREATE TABLE integers(i integer);\n" +
-								"insert into integers select * from range(10);" +
-								"select * from integers;");
-		int i = 0;
-		while (rs.next()) {
-			assertEquals(rs.getInt("i"), i);
-			i++;
-		}
-		assertEquals(i, 10);
-	}
-
-	public static void test_multiple_statements_exception() throws Exception {
-		Connection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
-		Statement stmt = conn.createStatement();
-		boolean succ = false;
-		try {
-			stmt.executeQuery(
-					"CREATE TABLE integers(i integer, i boolean);\n" +
-							"CREATE TABLE integers2(i integer);\n" +
-							"insert into integers2 select * from range(10);\n" +
-							"select * from integers2;");
-			succ = true;
-		} catch (Exception ex) {
-			assertFalse(succ);
-		}
 	}
 
 	public static void test_set_catalog() throws Exception {
