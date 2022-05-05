@@ -97,12 +97,16 @@ SELECT CASE
 ----
 1
 
-# List version
+# List versions
 query I
 SELECT approx_quantile(r, [0.25, 0.5, 0.75]) FROM quantile
 ----
 [2498, 5010, 7500]
 
+query I
+SELECT reservoir_quantile(r, [0.25, 0.5, 0.75], 1000) FROM quantile
+----
+[2732, 5291, 7671]
 
 # Errors
 statement error
@@ -191,12 +195,6 @@ FROM (
     UNION ALL SELECT 'b' AS a, 1.0 AS b
     ) y
 GROUP BY a
-
-# List version
-query I
-SELECT reservoir_quantile(r, [0.25, 0.5, 0.75], 1000) FROM quantile
-----
-[2415, 4829, 7476]
 
 statement error
 SELECT reservoir_quantile(r, r)  from quantile
