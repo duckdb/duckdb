@@ -257,23 +257,16 @@ endloop
 
 endloop
 
+query II
+SELECT dt + 1, dt - 1 FROM specials
+----
+infinity	infinity
+-infinity	-infinity
+1970-01-02	1969-12-31
+
 query I
-SELECT 'infinity'::DATE + 1;
+SELECT dt + '12:34:56'::TIME FROM specials
 ----
 infinity
-
-query I
-SELECT '-infinity'::DATE + 1;
-----
 -infinity
-
-query I
-SELECT 'infinity'::DATE - 1;
-----
-infinity
-
-query I
-SELECT '-infinity'::DATE - 1;
-----
--infinity
-
+1970-01-01 12:34:56

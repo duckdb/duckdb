@@ -65,11 +65,13 @@ date_t AddOperator::Operation(int32_t left, date_t right) {
 
 template <>
 timestamp_t AddOperator::Operation(date_t left, dtime_t right) {
+	if (left == date_t::infinity()) {
+		return timestamp_t::infinity();
+	} else if (left == date_t::ninfinity()) {
+		return timestamp_t::ninfinity();
+	}
 	timestamp_t result;
 	if (!Timestamp::TryFromDatetime(left, right, result)) {
-		throw OutOfRangeException("Timestamp out of range");
-	}
-	if (!Value::IsFinite(result)) {
 		throw OutOfRangeException("Timestamp out of range");
 	}
 	return result;
