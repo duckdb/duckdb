@@ -80,7 +80,7 @@ void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_m
 	if (chunk) {
 		auto size = chunk->meta_data.total_compressed_size;
 
-//		std::cout << "registering " << schema.name << " @ " << FileOffset() << " for " << size << "\n";
+		//		std::cout << "registering " << schema.name << " @ " << FileOffset() << " for " << size << "\n";
 		transport.RegisterPrefetch(FileOffset(), size, allow_merge);
 	}
 }
@@ -93,11 +93,10 @@ size_t ColumnReader::TotalCompressedSize() {
 	return chunk->meta_data.total_compressed_size;
 }
 
+// Note: For some reason, it's not trivial to determine where all Column data is stored. Chunk->file_offset
+// apparently is not the first page of the data. Therefore we determine the address of the first page by taking the
+// minimum of all page offsets.
 idx_t ColumnReader::FileOffset() const {
-	// Note: For some reason, it's not trivial to determine where all Column data is stored. Chunk->file_offset
-	// apparently is not the first page of the data. Therefore we determine the address of the first page by taking the
-	// minimum of all page offsets.
-
 	if (!chunk) {
 		throw std::runtime_error("FileOffset called on ColumnReader with no chunk");
 	}
@@ -384,11 +383,9 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 	trans.SetLocation(chunk_read_offset);
 
-//	std::cout << "\nReading from " << schema.name << "\n";
-
 	// Perform any skips that were not applied yet.
 	if (pending_skips > 0) {
-		SkipInternal(pending_skips);
+		ApplyPendingSkips(pending_skips);
 	}
 
 	idx_t result_offset = 0;
@@ -469,7 +466,7 @@ void ColumnReader::Skip(idx_t num_values) {
 	pending_skips += num_values;
 }
 
-void ColumnReader::SkipInternal(idx_t num_values) {
+void ColumnReader::ApplyPendingSkips(idx_t num_values) {
 	pending_skips -= num_values;
 
 	dummy_define.zero();
@@ -481,10 +478,9 @@ void ColumnReader::SkipInternal(idx_t num_values) {
 	idx_t remaining = num_values;
 	idx_t read = 0;
 
-	while(remaining) {
+	while (remaining) {
 		idx_t to_read = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE);
-		read +=
-		    Read(to_read, none_filter, (uint8_t *)dummy_define.ptr, (uint8_t *)dummy_repeat.ptr, dummy_result);
+		read += Read(to_read, none_filter, (uint8_t *)dummy_define.ptr, (uint8_t *)dummy_repeat.ptr, dummy_result);
 		remaining -= to_read;
 	}
 
@@ -588,7 +584,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 	auto &result_mask = FlatVector::Validity(result_out);
 
 	if (pending_skips > 0) {
-		SkipInternal(pending_skips);
+		ApplyPendingSkips(pending_skips);
 	}
 
 	D_ASSERT(ListVector::GetListSize(result_out) == 0);
@@ -699,7 +695,7 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 
 // ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 //                             Vector &result_out)
-void ListColumnReader::SkipInternal(idx_t num_values) {
+void ListColumnReader::ApplyPendingSkips(idx_t num_values) {
 	pending_skips -= num_values;
 
 	parquet_filter_t filter;
@@ -784,7 +780,7 @@ idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, ui
 	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
 
 	if (pending_skips > 0) {
-		SkipInternal(pending_skips);
+		ApplyPendingSkips(pending_skips);
 	}
 
 	idx_t read_count = num_values;

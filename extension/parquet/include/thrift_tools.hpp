@@ -143,9 +143,9 @@ struct ReadAheadBuffer {
 				    [](ReadHead &read_head, FileHandle *file_handle) {
 					    file_handle->Read(read_head.data->get(), read_head.size, read_head.location);
 					    read_head.data_isset = true;
-//					    					    std::cout << "Prefetch async new " << read_head.location << " for " <<
-//					    read_head.size
-//					    					              << " bytes\n";
+					    //					    					    std::cout << "Prefetch async new " << read_head.location << " for
+					    //" << 					    read_head.size
+					    //					    					              << " bytes\n";
 				    },
 				    std::ref(read_head), file_handle_ptr);
 
@@ -153,8 +153,9 @@ struct ReadAheadBuffer {
 			} else {
 				handle.Read(read_head.data->get(), read_head.size, read_head.location);
 				read_head.data_isset = true;
-//								std::cout << "Prefetch sync new " << read_head.location << " for " << read_head.size
-//								          << " bytes\n";
+				//								std::cout << "Prefetch sync new " << read_head.location << " for " <<
+				//read_head.size
+				//								          << " bytes\n";
 			}
 		}
 
@@ -186,9 +187,9 @@ public:
 		if (prefetch_buffer != nullptr && location - prefetch_buffer->location + len <= prefetch_buffer->size) {
 			D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
 
-			if(!prefetch_buffer->data_isset) {
-//				std::cout << "Lazy prefetch async new " << prefetch_buffer->location << " for " <<
-//				    prefetch_buffer->size << " bytes \n";
+			if (!prefetch_buffer->data_isset) {
+				//				std::cout << "Lazy prefetch async new " << prefetch_buffer->location << " for " <<
+				//				    prefetch_buffer->size << " bytes \n";
 				prefetch_buffer->Allocate(allocator);
 				handle.Read(prefetch_buffer->data->get(), prefetch_buffer->size, prefetch_buffer->location);
 				prefetch_buffer->data_isset = true;
@@ -245,7 +246,7 @@ private:
 	FileHandle &handle;
 	idx_t location;
 
-	Allocator& allocator;
+	Allocator &allocator;
 
 	// Multi-buffer prefetch
 	ReadAheadBuffer ra_buffer;

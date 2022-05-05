@@ -82,7 +82,8 @@ protected:
 	virtual void DictReference(Vector &result);
 	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result);
 
-	virtual void SkipInternal(idx_t num_values);
+	// applies any skips that were registered using Skip()
+	virtual void ApplyPendingSkips(idx_t num_values);
 
 	bool HasDefines() {
 		return max_define > 0;

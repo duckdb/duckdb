@@ -36,40 +36,9 @@ class ChunkCollection;
 class BaseStatistics;
 class TableFilterSet;
 
-// TODO: Types of prefetching:
-// 1. Whole row group fetch: more than X% of data in row group scanned, total size below WHOLE_GROUP_PREFETCH_MAX_SIZE
-// 		a) No filters: we just prefetch the whole row_group
-//		b) With filters: do some heuristics to determine if we want to still do it.
-// 2. Grouped column fetch: less than X% scanned, but total size below
-//		a) No filters: group columns that are adjacent in memory, prefetch whole groups.
-//		b) With filters: do some heuristics to determine if we want to still do it.
-// 3. Grouped column fetch: less than X% scanned, total size exceeds our buffers
-//		a) No filters: dont group columns
-
-// TODO: Number 2 may be more complex? say we're scanning 10 columns with no touching buffers and we have 8 threads.
-// this means that for 10MB prefetch we're looking at 10*10*8 = 800MB Cache. this is quite a lot very quickly.
-// also consider there is an 11th column which we can not buffer because we exceed our buffer limit. This means
-// we need to either make our buffers smaller reducing the effectiveness.
-// So say we want to scan with 20 buffers so we cannot buffer at full capacity.
-// If we take 10x10x8 plus the standard 1MB read for others, we will get: 800 + 10x1*8 = 880 MB of memory for
-// This is actually fine i guess? We can simply rely on the old mechanism when we run out of buffers.
-
-// TODO: But what if our columns are longer than our maximum buffer length?
-// How to do cache invalidation in this case?
-// - Maybe add a column_id + row_group_id key to the prefetch cache?
-// - Or maybe automatically delete it when we read to the end?
-// Either way we can fallback to the normal 1MB reads for anything else?
-
 struct ParquetReaderPrefetchConfig {
-	/// The upper limit below which whole row groups will be prefetched
-	static constexpr size_t WHOLE_GROUP_PREFETCH_MAX_SIZE = 1 << 23; // 8 MiB
-	/// Percentage of data in a row group span that should be scanned for enabling whole group prefetch
+	// Percentage of data in a row group span that should be scanned for enabling whole group prefetch
 	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.95;
-
-	/// The lowest avg column size for which to enable column chunk caching
-	static constexpr size_t COLUMN_CHUNK_CACHE_LOWER_LIMIT = 1; // tiny
-	/// The upper limit below which we may enable the column chunk cache
-	static constexpr size_t COLUMN_CHUNK_CACHE_MAX_SIZE = 1 << 26; // 64 MiB (* NUM_THREADS = 512MB max)
 };
 
 struct ParquetReaderScanState {
@@ -88,11 +57,9 @@ struct ParquetReaderScanState {
 	ResizeableBuffer define_buf;
 	ResizeableBuffer repeat_buf;
 
-	bool have_prefetched_group = false;
-	idx_t prefetched_group;
-
 	// Enable the prefetching mode for high latency filesystems such as HTTPFS
 	bool prefetch_mode = false;
+	bool current_group_prefetched = false;
 };
 
 struct ParquetOptions {
@@ -159,6 +126,8 @@ private:
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	size_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
+	// the group span is the distance between the min page offset and the max page offset plus the max page compressed
+	// size
 	size_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);

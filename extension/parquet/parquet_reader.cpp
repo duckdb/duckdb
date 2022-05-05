@@ -626,6 +626,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 	if (!state.file_handle || state.file_handle->path != file_handle->path) {
 		auto flags = FileFlags::FILE_FLAGS_READ;
 
+		// For HTTP
 		if (file_handle->file_system.GetName() == "HTTPFileSystem") {
 			state.prefetch_mode = true;
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
@@ -803,7 +804,7 @@ void ParquetReader::Scan(ParquetReaderScanState &state, DataChunk &result) {
 	}
 }
 
-// TODO can be optimized also move to nicer spot
+// TODO can be optimized, also move to nicer spot
 static bool AllNone(parquet_filter_t filter, size_t n) {
 	if (n == STANDARD_VECTOR_SIZE) {
 		return filter.none();
@@ -829,7 +830,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 		auto &trans = (ThriftFileTransport &)*state.thrift_file_proto->getTransport();
 		trans.ClearPrefetch();
-		state.have_prefetched_group = false;
+		state.current_group_prefetched = false;
 
 		if ((idx_t)state.current_group == state.group_idx_list.size()) {
 			state.finished = true;
@@ -855,7 +856,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		// Should we exponential increase?
 		if (state.prefetch_mode && state.group_offset != group.num_rows) {
 			//			std::cout << "Prefetching row group " << state.group_idx_list[state.current_group] << "
-			//entirely\n";
+			// entirely\n";
 			size_t total_row_group_span = GetGroupSpan(state);
 
 			double scan_percentage = (double)(to_scan_compressed_bytes) / total_row_group_span;
@@ -867,16 +868,17 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 			if (!state.filters && scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
 				// Prefetch the whole row group
-				if (!state.have_prefetched_group) {
+				if (!state.current_group_prefetched) {
 					auto total_compressed_size = GetGroupCompressedSize(state);
 					if (total_compressed_size > 0) {
 						trans.Prefetch(GetGroupOffset(state), total_row_group_span);
 					}
-					state.have_prefetched_group = true;
+					state.current_group_prefetched = true;
 				}
 			} else {
-				// TODO: can we make lazy prefetch work?
-				bool lazy_fetch = false; //state.filters;
+				// TODO: while theoretically nice, both tpc-h and tpch-ds show very little (<1%) reduction in data at
+				// the cost of significantly more requests due to less prefetch buffer merging.
+				bool lazy_fetch = false; // state.filters;
 
 				// Prefetch column-wise
 				//				std::cout << "Prefetching row group " << group.ordinal << " column-wise\n";
@@ -889,7 +891,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 					auto file_col_idx = state.column_ids[out_col_idx];
 					auto root_reader = ((StructColumnReader *)state.root_reader.get());
 
-					bool has_filter = state.filters && state.filters->filters.find(out_col_idx) != state.filters->filters.end();
+					bool has_filter =
+					    state.filters && state.filters->filters.find(out_col_idx) != state.filters->filters.end();
 					root_reader->GetChildReader(file_col_idx)->RegisterPrefetch(trans, !(lazy_fetch && !has_filter));
 				}
 
@@ -930,14 +933,13 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		// first load the columns that are used in filters
 		for (auto &filter_col : state.filters->filters) {
 			auto file_col_idx = state.column_ids[filter_col.first];
-
-			// TODO: filter_mask.none() will always be false if we're scanning less than vector size. This prevents the row_group skipping of columns
-			// that are never scanned.
+			// row_group skipping of columns that are never scanned.
 			if (AllNone(filter_mask, this_output_chunk_rows)) { // if no rows are left we can stop checking filters
 				break;
 			}
 
-			//			std::cout << "Reading filter for col " << root_reader->GetChildReader(file_col_idx)->Schema().name
+			//			std::cout << "Reading filter for col " <<
+			//root_reader->GetChildReader(file_col_idx)->Schema().name
 			//<< "\n";
 			root_reader->GetChildReader(file_col_idx)
 			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[filter_col.first]);
@@ -959,7 +961,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				continue;
 			}
 			// TODO handle ROWID here, too
-			//			std::cout << "Reading mask for col " << root_reader->GetChildReader(file_col_idx)->Schema().name <<
+			//			std::cout << "Reading mask for col " << root_reader->GetChildReader(file_col_idx)->Schema().name
+			//<<
 			//"\n";
 			root_reader->GetChildReader(file_col_idx)
 			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[out_col_idx]);
@@ -985,7 +988,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				continue;
 			}
 
-			//			std::cout << "Reading nofilter for col " << root_reader->GetChildReader(file_col_idx)->Schema().name
+			//			std::cout << "Reading nofilter for col " <<
+			//root_reader->GetChildReader(file_col_idx)->Schema().name
 			//<< "\n";
 			root_reader->GetChildReader(file_col_idx)
 			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[out_col_idx]);
