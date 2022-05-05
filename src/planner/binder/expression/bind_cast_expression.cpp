@@ -30,7 +30,6 @@ BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
 			parameter.return_type = expr.cast_type;
 		} else {
 			// otherwise add a cast to the target type
-			// child.expr = BoundCastExpression::AddCastToType(move(child.expr), expr.cast_type);
 			child.expr = ExpressionBinder::BindAddCast(move(child.expr), expr.cast_type);
 		}
 	}

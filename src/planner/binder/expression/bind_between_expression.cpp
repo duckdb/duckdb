@@ -30,11 +30,8 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	auto input_type = BoundComparisonExpression::BindComparison(input_sql_type, lower_sql_type);
 	input_type = BoundComparisonExpression::BindComparison(input_type, upper_sql_type);
 	// add casts (if necessary)
-	// input.expr = BoundCastExpression::AddCastToType(move(input.expr), input_type);
 	input.expr = ExpressionBinder::BindAddCast(move(input.expr), input_type);
-	// lower.expr = BoundCastExpression::AddCastToType(move(lower.expr), input_type);
 	lower.expr = ExpressionBinder::BindAddCast(move(lower.expr), input_type);
-	// upper.expr = BoundCastExpression::AddCastToType(move(upper.expr), input_type);
 	upper.expr = ExpressionBinder::BindAddCast(move(upper.expr), input_type);
 	if (input_type.id() == LogicalTypeId::VARCHAR) {
 		// handle collation

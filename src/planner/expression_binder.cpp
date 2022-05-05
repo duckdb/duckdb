@@ -194,7 +194,6 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 			// cast to INTEGER if we encounter it outside of the binder
 			if (ContainsNullType(result->return_type)) {
 				auto result_type = ExchangeNullType(result->return_type);
-				// result = BoundCastExpression::AddCastToType(move(result), result_type);
 				result = ExpressionBinder::BindAddCast(move(result), result_type);
 			}
 		}

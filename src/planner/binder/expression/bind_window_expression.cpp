@@ -88,7 +88,6 @@ static unique_ptr<Expression> CastWindowExpression(unique_ptr<ParsedExpression> 
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 
 	auto &bound = (BoundExpression &)*expr;
-	// bound.expr = BoundCastExpression::AddCastToType(move(bound.expr), type);
 	bound.expr = ExpressionBinder::BindAddCast(move(bound.expr), type);
 
 	return move(bound.expr);
@@ -170,13 +169,13 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		case ExpressionType::WINDOW_NTILE:
 			// ntile(bigint)
 			if (argno == 0) {
-				bound.expr = BoundCastExpression::AddCastToType(move(bound.expr), LogicalType::BIGINT);
+				bound.expr = ExpressionBinder::BindAddCast(move(bound.expr), LogicalType::BIGINT);
 			}
 			break;
 		case ExpressionType::WINDOW_NTH_VALUE:
 			// nth_value(<expr>, index)
 			if (argno == 1) {
-				bound.expr = BoundCastExpression::AddCastToType(move(bound.expr), LogicalType::BIGINT);
+				bound.expr = ExpressionBinder::BindAddCast(move(bound.expr), LogicalType::BIGINT);
 			}
 		default:
 			break;
@@ -269,7 +268,6 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		}
 
 		// Cast all three to match
-		// bound_order.expr = BoundCastExpression::AddCastToType(move(bound_order.expr), order_type);
 		bound_order.expr = ExpressionBinder::BindAddCast(move(bound_order.expr), order_type);
 		start_type = end_type = order_type;
 	}
