@@ -3,10 +3,10 @@
 #include <list>
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
-#include "duckdb/common/thread.hpp"
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/thread.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/likely.hpp"
