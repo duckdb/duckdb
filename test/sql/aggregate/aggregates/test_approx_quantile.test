@@ -99,14 +99,32 @@ SELECT CASE
 
 # List versions
 query I
-SELECT approx_quantile(r, [0.25, 0.5, 0.75]) FROM quantile
+SELECT [
+	(a[1] BETWEEN (q[1] - 100) AND (q[1] + 100)),
+	(a[2] BETWEEN (q[2] - 100) AND (q[2] + 100)),
+	(a[3] BETWEEN (q[3] - 100) AND (q[3] + 100)),
+	]
+FROM (
+	SELECT approx_quantile(r, [0.25, 0.5, 0.75]) AS a,
+		   quantile(r, [0.25, 0.5, 0.75]) AS q,
+	FROM quantile
+) tbl;
 ----
-[2498, 5010, 7500]
+[True, True, True]
 
 query I
-SELECT reservoir_quantile(r, [0.25, 0.5, 0.75], 1000) FROM quantile
+SELECT [
+	(a[1] BETWEEN (q[1] - 100) AND (q[1] + 100)),
+	(a[2] BETWEEN (q[2] - 100) AND (q[2] + 100)),
+	(a[3] BETWEEN (q[3] - 100) AND (q[3] + 100)),
+	]
+FROM (
+	SELECT reservoir_quantile(r, [0.25, 0.5, 0.75], 4096) AS a,
+		   quantile(r, [0.25, 0.5, 0.75]) AS q,
+	FROM quantile
+) tbl;
 ----
-[2732, 5291, 7671]
+[True, True, True]
 
 # Errors
 statement error
