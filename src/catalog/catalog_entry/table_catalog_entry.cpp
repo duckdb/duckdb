@@ -155,8 +155,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	case AlterTableType::RENAME_TABLE: {
 		auto rename_info = (RenameTableInfo *)table_info;
 		auto copied_table = Copy(context);
-		auto& entry = (TableCatalogEntry&)*copied_table;
-		for (auto& gen_col : entry.generated_columns) {
+		auto &entry = (TableCatalogEntry &)*copied_table;
+		for (auto &gen_col : entry.generated_columns) {
 			gen_col.RenameTable(*rename_info);
 		}
 		copied_table->name = rename_info->new_table_name;
@@ -202,11 +202,45 @@ static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 	    expr, [&](const ParsedExpression &child) { RenameExpression((ParsedExpression &)child, info); });
 }
 
+unique_ptr<CatalogEntry> TableCatalogEntry::RenameGeneratedColumn(ClientContext &context, RenameColumnInfo &info,
+                                                                  const TableColumnInfo &rename_info) {
+	D_ASSERT(rename_info.column_type == TableColumnType::GENERATED);
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	// Copy all the columns
+	for (idx_t i = 0; i < columns.size(); i++) {
+		auto copy = columns[i].Copy();
+		create_info->columns.push_back(move(copy));
+	}
+	auto index = rename_info.index;
+	// now we copy all the generated columns except the removed one
+	for (idx_t i = 0; i < generated_columns.size(); i++) {
+		auto copy = generated_columns[i].Copy();
+		if (i == index) {
+			D_ASSERT(copy.name == info.old_name);
+			copy.name = info.new_name;
+		}
+		create_info->generated_columns.push_back(move(copy));
+	}
+
+	// Copy all the constraints
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto constraint = constraints[i]->Copy();
+		create_info->constraints.push_back(move(constraint));
+	}
+
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+}
+
 unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
+	auto rename_info = GetColumnInfo(info.old_name);
+	if (rename_info.column_type == TableColumnType::GENERATED) {
+		return RenameGeneratedColumn(context, info, rename_info);
+	}
+	auto rename_idx = rename_info.index;
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
-	auto rename_info = GetColumnInfo(info.old_name);
-	auto rename_idx = rename_info.index;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		ColumnDefinition copy = columns[i].Copy();
 
@@ -299,9 +333,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddGeneratedColumn(ClientContext &co
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
-	auto result = make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+	auto result =
+	    make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 
-	vector<string>	names;
+	vector<string> names;
 	vector<LogicalType> types;
 
 	idx_t table_index = 0;
@@ -309,22 +344,14 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddGeneratedColumn(ClientContext &co
 	auto scan_function = TableScanFunction::GetFunction();
 	auto bind_data = make_unique<TableScanBindData>(result.get());
 
-	for (auto& col : result->columns) {
+	for (auto &col : result->columns) {
 		names.push_back(col.name);
 		types.push_back(col.type);
 	}
 
-	auto logical_get =
-		make_unique<LogicalGet>(table_index, scan_function, move(bind_data), types, names);
-	binder->bind_context.AddBaseTable(
-		table_index,
-		result->name,
-		names,
-		types,
-		vector<string>(),
-		vector<LogicalType>(),
-		*logical_get
-	);
+	auto logical_get = make_unique<LogicalGet>(table_index, scan_function, move(bind_data), types, names);
+	binder->bind_context.AddBaseTable(table_index, result->name, names, types, vector<string>(), vector<LogicalType>(),
+	                                  *logical_get);
 
 	auto expr_binder = ExpressionBinder(*binder, context);
 	auto expression = info.new_column.expression->Copy();
@@ -334,10 +361,13 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddGeneratedColumn(ClientContext &co
 		throw BinderException("Could not resolve the expression of generated column \"%s\"", info.new_column.name);
 	}
 	if (bound_expression->HasSubquery()) {
-		throw BinderException("Expression of generated column \"%s\" contains a subquery, which isn't allowed", info.new_column.name);
+		throw BinderException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
+		                      info.new_column.name);
 	}
 	if (bound_expression->return_type != info.new_column.type) {
-		throw BinderException("Return type of the expression(%s) and the specified type(%s) dont match for generated column \"%s\"", bound_expression->return_type.ToString(), info.new_column.type.ToString(), info.new_column.name);
+		throw BinderException(
+		    "Return type of the expression(%s) and the specified type(%s) dont match for generated column \"%s\"",
+		    bound_expression->return_type.ToString(), info.new_column.type.ToString(), info.new_column.name);
 	}
 
 	return result;
@@ -555,7 +585,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::ChangeGeneratedColumnType(ClientContext &context, ChangeColumnTypeInfo& info) {
+unique_ptr<CatalogEntry> TableCatalogEntry::ChangeGeneratedColumnType(ClientContext &context,
+                                                                      ChangeColumnTypeInfo &info) {
 	auto change_info = GetColumnInfo(info.column_name);
 	D_ASSERT(change_info.column_type == TableColumnType::GENERATED);
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
@@ -601,17 +632,18 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	}
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 
-	//TODO: check if the expression breaks, only delete it if it does
+	// TODO: check if the expression breaks, only delete it if it does
 	for (idx_t i = 0; i < generated_columns.size(); i++) {
 		auto copy = generated_columns[i].Copy();
 		bool affected = false;
 		DependsOnColumn(*copy.expression, info.column_name, affected);
 		if (affected) {
 			if (!info.cascade) {
-				throw CatalogException("Could not change the type of the column \"%s\" because 1 or more generated columns depend on it, and the CASCADE option wasn't provided", info.column_name);
+				throw CatalogException("Could not change the type of the column \"%s\" because 1 or more generated "
+				                       "columns depend on it, and the CASCADE option wasn't provided",
+				                       info.column_name);
 			}
-		}
-		else {
+		} else {
 			create_info->generated_columns.push_back(move(copy));
 		}
 	}
@@ -679,8 +711,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, change_idx, info.target_type, move(bound_columns), *bound_expression);
-	auto result = make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
-	                                      new_storage);
+	auto result =
+	    make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
 	return result;
 }
 

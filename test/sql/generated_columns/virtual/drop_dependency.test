@@ -1,6 +1,6 @@
 # name: test/sql/generated_columns/virtual/drop_dependency.test
 # description: Remove dependency of a generated column
-# group: [generated_columns]
+# group: [virtual]
 
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);

@@ -38,9 +38,9 @@ public:
 public:
 	//! Has to be run on a newly added generated column to ensure that its valid
 	void CheckValidity(const vector<ColumnDefinition> &columns, const string &table_name);
-	void RenameColumnRefs(RenameColumnInfo& info);
+	void RenameColumnRefs(RenameColumnInfo &info);
 	DUCKDB_API GeneratedColumnDefinition Copy() const;
-	void RenameTable(const RenameTableInfo& info);
+	void RenameTable(const RenameTableInfo &info);
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static GeneratedColumnDefinition Deserialize(Deserializer &source);
 };

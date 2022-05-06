@@ -1,6 +1,6 @@
 # name: test/sql/generated_columns/virtual/ambiguity.test
 # description: Test if the columnrefs in a generated-column expression can result in ambiguity
-# group: [generated_columns]
+# group: [virtual]
 
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);

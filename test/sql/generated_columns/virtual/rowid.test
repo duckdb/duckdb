@@ -1,6 +1,6 @@
 # name: test/sql/generated_columns/virtual/rowid.test
 # description: Create a generated column using the 'rowid' system column
-# group: [generated_columns]
+# group: [virtual]
 
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
@@ -15,8 +15,8 @@ INSERT INTO unit VALUES (4,5)
 statement ok
 ALTER TABLE unit ADD COLUMN total_profit BIGINT GENERATED ALWAYS AS (price * rowid) VIRTUAL;
 
-query III
+query I
 SELECT total_profit FROM unit;
----
-5	4	0
-4	5	4
+----
+0
+4

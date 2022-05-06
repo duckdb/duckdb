@@ -101,7 +101,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
 					auto constraint = TransformConstraint(constr, centry, info->columns.size());
-					default_constraint_set = default_constraint_set || ConstraintIsOfType(constr, duckdb_libpgquery::PG_CONSTR_DEFAULT);
+					default_constraint_set =
+					    default_constraint_set || ConstraintIsOfType(constr, duckdb_libpgquery::PG_CONSTR_DEFAULT);
 					if (constraint) {
 						if (constraint->type == ConstraintType::GENERATED) {
 							if (generated) {

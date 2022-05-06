@@ -1,6 +1,6 @@
 # name: test/sql/generated_columns/virtual/default.test
 # description: Usage of DEFAULT constraint in conjunction with GENERATED ALWAYS AS <expression> VIRTUAL
-# group: [generated_columns]
+# group: [virtual]
 
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);

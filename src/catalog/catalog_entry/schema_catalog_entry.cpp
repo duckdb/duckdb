@@ -137,7 +137,7 @@ CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreat
 		return nullptr;
 	}
 
-	auto table_catalog_entry = (TableCatalogEntry*)entry;
+	auto table_catalog_entry = (TableCatalogEntry *)entry;
 	auto binder = Binder::CreateBinder(context);
 
 	auto table_ref = make_unique<BaseTableRef>();
@@ -148,7 +148,7 @@ CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreat
 	binder->Bind(*ref);
 
 	auto expr_binder = ExpressionBinder(*binder, context);
-	for (auto& col : table_catalog_entry->generated_columns) {
+	for (auto &col : table_catalog_entry->generated_columns) {
 		auto expression = col.expression->Copy();
 		// expr_binder.target_type = col.type;
 		auto bound_expression = expr_binder.Bind(expression);
@@ -156,10 +156,13 @@ CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreat
 			throw BinderException("Could not resolve the expression of generated column \"%s\"", col.name);
 		}
 		if (bound_expression->HasSubquery()) {
-			throw BinderException("Expression of generated column \"%s\" contains a subquery, which isn't allowed", col.name);
+			throw BinderException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
+			                      col.name);
 		}
 		if (bound_expression->return_type != col.type) {
-			throw BinderException("Return type of the expression(%s) and the specified type(%s) dont match for generated column \"%s\"", bound_expression->return_type.ToString(), col.type.ToString(), col.name);
+			throw BinderException(
+			    "Return type of the expression(%s) and the specified type(%s) dont match for generated column \"%s\"",
+			    bound_expression->return_type.ToString(), col.type.ToString(), col.name);
 		}
 	}
 

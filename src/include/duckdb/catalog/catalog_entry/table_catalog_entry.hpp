@@ -83,6 +83,8 @@ public:
 
 private:
 	const string &GetColumnName(TableColumnInfo info);
+	unique_ptr<CatalogEntry> RenameGeneratedColumn(ClientContext &context, RenameColumnInfo &info,
+	                                               const TableColumnInfo &rename_info);
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
 	unique_ptr<CatalogEntry> AddGeneratedColumn(ClientContext &context, AddGeneratedColumnInfo &info);
 	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo &info);

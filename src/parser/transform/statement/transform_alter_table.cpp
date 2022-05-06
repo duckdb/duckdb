@@ -30,7 +30,8 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
 					auto constraint = TransformConstraint(constr, centry, 0);
-					default_constraint_set = default_constraint_set || ConstraintIsOfType(constr, duckdb_libpgquery::PG_CONSTR_DEFAULT);
+					default_constraint_set =
+					    default_constraint_set || ConstraintIsOfType(constr, duckdb_libpgquery::PG_CONSTR_DEFAULT);
 					if (!constraint) {
 						continue;
 					}

@@ -234,8 +234,8 @@ ChangeColumnTypeInfo::~ChangeColumnTypeInfo() {
 }
 
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
-	return make_unique_base<AlterInfo, ChangeColumnTypeInfo>(schema, name, column_name, target_type,
-	                                                         expression->Copy(), cascade);
+	return make_unique_base<AlterInfo, ChangeColumnTypeInfo>(schema, name, column_name, target_type, expression->Copy(),
+	                                                         cascade);
 }
 
 void ChangeColumnTypeInfo::SerializeAlterTable(FieldWriter &writer) const {

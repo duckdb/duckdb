@@ -1,6 +1,6 @@
 # name: test/sql/generated_columns/virtual/typechange_dependency.test
 # description: Test changing types of dependencies of generated columns
-# group: [generated_columns]
+# group: [virtual]
 
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);

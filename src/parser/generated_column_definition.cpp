@@ -52,7 +52,7 @@ static bool ColumnsContainsColumnRef(const vector<ColumnDefinition> &columns, co
 static void VerifyAndRenameExpression(const string &name, const vector<ColumnDefinition> &columns,
                                       ParsedExpression &expr, vector<string> &unresolved_columns) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto& column_ref = (ColumnRefExpression &)expr;
+		auto &column_ref = (ColumnRefExpression &)expr;
 		auto &column_name = column_ref.GetColumnName();
 		if ((!column_ref.IsQualified() || column_ref.GetTableName() == name) &&
 		    ColumnsContainsColumnRef(columns, column_name)) {
@@ -60,7 +60,8 @@ static void VerifyAndRenameExpression(const string &name, const vector<ColumnDef
 				auto &names = column_ref.column_names;
 				// dprintf(2, "TABLE NAME %s BAKED INTO COLUMN REF %s\n", name.c_str(), column_name.c_str());
 				names.insert(names.begin(), name);
-				// dprintf(2, "ColumnRef names after: TABLE[%s] - COL[%s]\n", column_ref.column_names[0].c_str(), column_ref.column_names[1].c_str());
+				// dprintf(2, "ColumnRef names after: TABLE[%s] - COL[%s]\n", column_ref.column_names[0].c_str(),
+				// column_ref.column_names[1].c_str());
 			}
 		} else {
 			unresolved_columns.push_back(column_name);
@@ -82,7 +83,7 @@ static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 	    expr, [&](const ParsedExpression &child) { RenameExpression((ParsedExpression &)child, info); });
 }
 
-static void _RenameTable(ParsedExpression& expr, const RenameTableInfo& info) {
+static void _RenameTable(ParsedExpression &expr, const RenameTableInfo &info) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
 		colref.column_names[0] = info.new_table_name;
@@ -92,7 +93,7 @@ static void _RenameTable(ParsedExpression& expr, const RenameTableInfo& info) {
 	    expr, [&](const ParsedExpression &child) { _RenameTable((ParsedExpression &)child, info); });
 }
 
-void GeneratedColumnDefinition::RenameTable(const RenameTableInfo& info) {
+void GeneratedColumnDefinition::RenameTable(const RenameTableInfo &info) {
 	_RenameTable(*expression, info);
 }
 
