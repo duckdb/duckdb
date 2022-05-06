@@ -1,0 +1,28 @@
+# name: benchmark/micro/window/window_partition.benchmark
+# description: Range join between integers
+# group: [window]
+
+name Window Partition
+group window
+
+load
+SELECT SETSEED(0.8675309);
+CREATE TABLE df AS
+	SELECT
+		idx,
+		random() AS a,
+		random() AS b,
+		round(random() * 10000)::INTEGER AS c,
+	FROM range(1000000) tbl(idx)
+;
+
+run
+SELECT SUM(a)
+FROM (
+	SELECT idx,
+		SUM(a) over (PARTITION BY c ORDER BY idx ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS a
+	FROM df
+);
+
+result I
+25474151.276410

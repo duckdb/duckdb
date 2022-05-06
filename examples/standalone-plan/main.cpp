@@ -187,7 +187,7 @@ void CreateAggregateFunction(Connection &con, string name, vector<LogicalType> a
 //===--------------------------------------------------------------------===//
 // Custom Table Scan Function
 //===--------------------------------------------------------------------===//
-struct MyBindData : public FunctionData {
+struct MyBindData : public TableFunctionData {
 	MyBindData(string name_p) : table_name(move(name_p)) {
 	}
 

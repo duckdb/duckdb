@@ -26,8 +26,8 @@ typedef void (*aggregate_initialize_t)(data_ptr_t state);
 //! The type used for updating hashed aggregate functions
 typedef void (*aggregate_update_t)(Vector inputs[], FunctionData *bind_data, idx_t input_count, Vector &state,
                                    idx_t count);
-//! The type used for combining hashed aggregate states (optional)
-typedef void (*aggregate_combine_t)(Vector &state, Vector &combined, idx_t count);
+//! The type used for combining hashed aggregate states
+typedef void (*aggregate_combine_t)(Vector &state, Vector &combined, FunctionData *bind_data, idx_t count);
 //! The type used for finalizing hashed aggregate function payloads
 typedef void (*aggregate_finalize_t)(Vector &state, FunctionData *bind_data, Vector &result, idx_t count, idx_t offset);
 //! The type used for propagating statistics in aggregate functions (optional)
@@ -131,7 +131,8 @@ public:
 	DUCKDB_API static unique_ptr<BoundAggregateExpression>
 	BindAggregateFunction(ClientContext &context, AggregateFunction bound_function,
 	                      vector<unique_ptr<Expression>> children, unique_ptr<Expression> filter = nullptr,
-	                      bool is_distinct = false, unique_ptr<BoundOrderModifier> order_bys = nullptr);
+	                      bool is_distinct = false, unique_ptr<BoundOrderModifier> order_bys = nullptr,
+	                      bool cast_parameters = true);
 
 	DUCKDB_API static unique_ptr<FunctionData> BindSortedAggregate(AggregateFunction &bound_function,
 	                                                               vector<unique_ptr<Expression>> &children,
@@ -237,8 +238,8 @@ public:
 	}
 
 	template <class STATE, class OP>
-	static void StateCombine(Vector &source, Vector &target, idx_t count) {
-		AggregateExecutor::Combine<STATE, OP>(source, target, count);
+	static void StateCombine(Vector &source, Vector &target, FunctionData *bind_data, idx_t count) {
+		AggregateExecutor::Combine<STATE, OP>(source, target, bind_data, count);
 	}
 
 	template <class STATE, class RESULT_TYPE, class OP>

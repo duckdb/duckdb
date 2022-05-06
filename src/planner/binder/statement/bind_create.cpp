@@ -27,12 +27,14 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 
 namespace duckdb {
 
 SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	if (info.schema.empty()) {
-		info.schema = info.temporary ? TEMP_SCHEMA : context.catalog_search_path->GetDefault();
+		info.schema = info.temporary ? TEMP_SCHEMA : ClientData::Get(context).catalog_search_path->GetDefault();
 	}
 
 	if (!info.temporary) {
@@ -152,6 +154,35 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 	}
 }
 
+static void FindMatchingPrimaryKeyColumns(vector<unique_ptr<Constraint>> &constraints, ForeignKeyConstraint &fk) {
+	if (!fk.pk_columns.empty()) {
+		return;
+	}
+	// find the matching primary key constraint
+	for (auto &constr : constraints) {
+		if (constr->type != ConstraintType::UNIQUE) {
+			continue;
+		}
+		auto &unique = (UniqueConstraint &)*constr;
+		if (!unique.is_primary_key) {
+			continue;
+		}
+		idx_t column_count;
+		if (unique.index != DConstants::INVALID_INDEX) {
+			fk.info.pk_keys.push_back(unique.index);
+			column_count = 1;
+		} else {
+			fk.pk_columns = unique.columns;
+			column_count = unique.columns.size();
+		}
+		if (column_count != fk.fk_columns.size()) {
+			throw BinderException("The number of referencing and referenced columns for foreign keys must be the same");
+		}
+		return;
+	}
+	throw BinderException("there is no primary key for referenced table \"%s\"", fk.info.table);
+}
+
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
@@ -232,13 +263,15 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 				continue;
 			}
-			D_ASSERT(fk.info.pk_keys.empty() && !fk.pk_columns.empty());
+			D_ASSERT(fk.info.pk_keys.empty());
 			if (create_info.table == fk.info.table) {
 				fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
+				FindMatchingPrimaryKeyColumns(create_info.constraints, fk);
 			} else {
 				// have to resolve referenced table
 				auto pk_table_entry_ptr = catalog.GetEntry<TableCatalogEntry>(context, fk.info.schema, fk.info.table);
-				D_ASSERT(!fk.pk_columns.empty() && fk.info.pk_keys.empty());
+				D_ASSERT(fk.info.pk_keys.empty());
+				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->constraints, fk);
 				for (auto &keyname : fk.pk_columns) {
 					auto entry = pk_table_entry_ptr->name_map.find(keyname);
 					if (entry == pk_table_entry_ptr->name_map.end()) {

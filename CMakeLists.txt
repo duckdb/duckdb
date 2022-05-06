@@ -228,7 +228,7 @@ option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extensio
 option(BUILD_JSON_EXTENSION "Build the JSON extension." FALSE)
 option(BUILD_EXCEL_EXTENSION "Build the excel extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
-option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
+option(BUILD_SQLSMITH_EXTENSION "Enable building of the SQLSmith extension." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(BUILD_SUBSTRAIT_EXTENSION "Enable building of Substrait Extension." FALSE)
@@ -282,7 +282,7 @@ if(BUILD_PYTHON)
 endif()
 
 if(BUILD_SQLSMITH)
-  set(BUILD_TPCH_EXTENSION TRUE)
+  set(BUILD_SQLSMITH_EXTENSION TRUE)
 endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)
@@ -522,6 +522,11 @@ function(add_extension_definitions)
     include_directories(${PROJECT_SOURCE_DIR}/extension/excel/include)
     add_definitions(-DBUILD_EXCEL_EXTENSION=${BUILD_EXCEL_EXTENSION})
   endif()
+
+  if(${BUILD_SQLSMITH_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/sqlsmith/include)
+    add_definitions(-DBUILD_SQLSMITH_EXTENSION=${BUILD_SQLSMITH_EXTENSION})
+  endif()
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
@@ -564,6 +569,11 @@ function(add_extension_dependencies LIBRARY)
   if(${BUILD_EXCEL_EXTENSION})
     add_dependencies(${LIBRARY} excel_extension)
   endif()
+
+  if(${BUILD_SQLSMITH_EXTENSION})
+    add_dependencies(${LIBRARY} sqlsmith_extension)
+  endif()
+
 endfunction()
 
 function(link_extension_libraries LIBRARY)
@@ -610,6 +620,10 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_EXCEL_EXTENSION})
     target_link_libraries(${LIBRARY} excel_extension)
+  endif()
+
+  if(${BUILD_SQLSMITH_EXTENSION})
+    target_link_libraries(${LIBRARY} sqlsmith_extension)
   endif()
 endfunction()
 
