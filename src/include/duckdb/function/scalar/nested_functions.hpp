@@ -55,6 +55,10 @@ struct MapFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct MapFromEntriesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct MapExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
