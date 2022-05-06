@@ -588,6 +588,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 unique_ptr<CatalogEntry> TableCatalogEntry::ChangeGeneratedColumnType(ClientContext &context,
                                                                       ChangeColumnTypeInfo &info) {
 	auto change_info = GetColumnInfo(info.column_name);
+	auto index = change_info.index;
 	D_ASSERT(change_info.column_type == TableColumnType::GENERATED);
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 
@@ -599,7 +600,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeGeneratedColumnType(ClientCont
 	// Copy all the generated columns
 	for (idx_t i = 0; i < generated_columns.size(); i++) {
 		auto copy = generated_columns[i].Copy();
-		if (i == change_info.index) {
+		if (i == index) {
 			copy.type = info.target_type;
 		}
 		create_info->generated_columns.push_back(move(copy));
@@ -612,7 +613,43 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeGeneratedColumnType(ClientCont
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
-	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+	auto result =
+	    make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+	vector<string> names;
+	vector<LogicalType> types;
+
+	idx_t table_index = 0;
+
+	auto scan_function = TableScanFunction::GetFunction();
+	auto bind_data = make_unique<TableScanBindData>(result.get());
+
+	for (auto &col : result->columns) {
+		names.push_back(col.name);
+		types.push_back(col.type);
+	}
+
+	auto logical_get = make_unique<LogicalGet>(table_index, scan_function, move(bind_data), types, names);
+	binder->bind_context.AddBaseTable(table_index, result->name, names, types, vector<string>(), vector<LogicalType>(),
+	                                  *logical_get);
+
+	auto &col = result->generated_columns[index];
+	auto expr_binder = ExpressionBinder(*binder, context);
+	auto expression = col.expression->Copy();
+	// expr_binder.target_type = col.type;
+	auto bound_expression = expr_binder.Bind(expression);
+	if (!bound_expression) {
+		throw BinderException("Could not resolve the expression of generated column \"%s\"", col.name);
+	}
+	if (bound_expression->HasSubquery()) {
+		throw BinderException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
+		                      col.name);
+	}
+	if (bound_expression->return_type != col.type) {
+		throw BinderException(
+		    "Return type of the expression(%s) and the specified type(%s) dont match for generated column \"%s\"",
+		    bound_expression->return_type.ToString(), col.type.ToString(), name);
+	}
+	return (move(result));
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
