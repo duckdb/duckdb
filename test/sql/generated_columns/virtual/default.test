@@ -1,6 +1,6 @@
-# name: test/sql/parser/generated_column_default.test
-# description: Generated columns with DEFAULT tag
-# group: [parser]
+# name: test/sql/generated_columns/virtual/default.test
+# description: Usage of DEFAULT constraint in conjunction with GENERATED ALWAYS AS <expression> VIRTUAL
+# group: [generated_columns]
 
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
@@ -11,7 +11,7 @@ INSERT INTO unit VALUES (5,4)
 statement ok
 INSERT INTO unit VALUES (4,5)
 
-# Generated columns can not be created with a DEFAULT constraint
+# (ALTER) Generated columns can not be created with a DEFAULT constraint
 statement error
 ALTER TABLE unit ADD COLUMN total_profit INTEGER DEFAULT 1 GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
 
@@ -19,7 +19,7 @@ ALTER TABLE unit ADD COLUMN total_profit INTEGER DEFAULT 1 GENERATED ALWAYS AS (
 statement error
 SELECT total_profit FROM unit;
 
-# Table will fail to create
+# (CREATE) Generated columns can not be created with a DEFAULT constraint
 statement error
 CREATE TABLE unit2 (
 	price INTEGER,

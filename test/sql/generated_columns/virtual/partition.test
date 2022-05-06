@@ -1,6 +1,6 @@
-# name: test/sql/parser/generated_column_default.test
-# description: Generated columns with DEFAULT tag
-# group: [parser]
+# name: test/sql/generated_columns/virtual/partition.test
+# description: Using a generated column as a PARTITION BY key
+# group: [generated_columns]
 
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER, name VARCHAR);

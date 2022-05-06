@@ -1,6 +1,6 @@
-# name: test/sql/parser/generated_column_on_create.test
-# description: Create a table with a generated column
-# group: [parser]
+# name: test/sql/generated_columns/virtual/create_table.test
+# description: Add a generated column on creation of a table
+# group: [generated_columns]
 
 # Function doesnt exist, neither does the referenced column
 statement error

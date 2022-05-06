@@ -1,6 +1,6 @@
-# name: test/sql/parser/generated_columns_ambiguous.test
+# name: test/sql/generated_columns/virtual/ambiguity.test
 # description: Test if the columnrefs in a generated-column expression can result in ambiguity
-# group: [parser]
+# group: [generated_columns]
 
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
@@ -14,5 +14,7 @@ INSERT INTO unit VALUES (5,4)
 statement ok
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL;
 
+# Because the table name is baked into the ColumnRefs of the generated-column expression, this doesnt result in ambiguity
+# Otherwise 'price' and 'amount_sold' would be ambiguous because they are also present in 'unit2'
 statement ok
 SELECT total_profit FROM unit, unit2

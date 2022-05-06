@@ -1,6 +1,6 @@
-# name: test/sql/parser/generated_column_alias.test
-# description: Test generated columns using AS
-# group: [parser]
+# name: test/sql/generated_columns/virtual/drop_dependency.test
+# description: Remove dependency of a generated column
+# group: [generated_columns]
 
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);

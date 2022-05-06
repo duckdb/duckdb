@@ -1,6 +1,6 @@
-# name: test/sql/parser/generated_columns_rename.test
+# name: test/sql/generated_columns/virtual/rename_dependency.test
 # description: Test renaming dependencies of generated columns
-# group: [parser]
+# group: [generated_columns]
 
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
