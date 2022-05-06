@@ -10,3 +10,18 @@ query I
 select timestamptz '2021-11-15 02:30:00';
 ----
 2021-11-15 02:30:00+00
+
+# Cast from TIMESTAMP
+query I
+select '2021-11-15 02:30:00'::TIMESTAMP::TIMESTAMPTZ;
+----
+2021-11-15 02:30:00+00
+
+# No casting to DATE or TIME
+
+foreach datatype DATE TIME
+
+statement error
+SELECT '2021-04-29 10:50:09-05'::TIMESTAMPTZ::{datatype}
+
+endloop

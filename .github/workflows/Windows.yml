@@ -190,7 +190,7 @@ jobs:
     - name: Install psqlodbc
       run: |
         git clone https://github.com/hawkfish/psqlodbc.git
-        (cd psqlodbc && git checkout 61a0cb01ff98917ae34232129ef74cd929fde1ed && make release)
+        (cd psqlodbc && git checkout 96f5683d68e4a288e76ee4b09737478cc592aa98 && make release)
 
     - name: Test psqlodbc
       run: |
