@@ -57,6 +57,8 @@ public:
 		return sink;
 	}
 
+	bool OrderedParallelPipeline() const;
+
 private:
 	//! Whether or not the pipeline has been readied
 	bool ready;
@@ -81,6 +83,7 @@ private:
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
 
 	bool ScheduleParallel(shared_ptr<Event> &event);
+	bool Parallel(bool check_sink = false) const;
 };
 
 } // namespace duckdb

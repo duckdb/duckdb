@@ -111,10 +111,12 @@ void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
 	event->SetTasks(move(tasks));
 }
 
-bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
-	if (!sink->ParallelSink()) {
-		return false;
-	}
+bool Pipeline::Parallel(bool check_sink) const {
+	if (check_sink) {
+        if (!sink->ParallelSink()) {
+            return false;
+        }
+    }
 	if (!source->ParallelSource()) {
 		return false;
 	}
@@ -123,6 +125,13 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 			return false;
 		}
 	}
+    return true;
+}
+
+bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
+    if (!Parallel(true)) {
+        return false;
+    }
 	idx_t max_threads = source_state->MaxThreads();
 	return LaunchScanTasks(event, max_threads);
 }
@@ -222,6 +231,10 @@ vector<PhysicalOperator *> Pipeline::GetOperators() const {
 		result.push_back(sink);
 	}
 	return result;
+}
+
+bool Pipeline::OrderedParallelPipeline() const {
+    return source->OrderedSource() && Parallel();
 }
 
 } // namespace duckdb
