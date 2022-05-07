@@ -18,6 +18,7 @@ add_library_unity(
   perfect_aggregate_hashtable.cpp
   physical_operator.cpp
   physical_plan_generator.cpp
+  physical_materialize.cpp
   radix_partitioned_hashtable.cpp
   reservoir_sample.cpp
   window_segment_tree.cpp)
