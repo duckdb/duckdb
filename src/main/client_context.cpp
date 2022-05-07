@@ -239,6 +239,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
     } else {
         result->collection = move(executor.materialized_sink->GetResult());
         executor.materialized_sink.reset();
+        CleanupInternal(lock, result.get());
     }
 	return move(result);
 }
