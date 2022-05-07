@@ -107,6 +107,10 @@ void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, Glo
 					break;
 				}
 			} else {
+			    lstate.is_ordered = state.operator_data->is_ordered;
+                if (lstate.is_ordered) {
+                    lstate.source_index = ((OrderedFunctionOperatorData*)(state.operator_data.get()))->data_index;
+                }
 				return;
 			}
 		} while (true);

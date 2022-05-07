@@ -5,6 +5,9 @@ namespace duckdb {
 FunctionOperatorData::~FunctionOperatorData() {
 }
 
+OrderedFunctionOperatorData::~OrderedFunctionOperatorData() {
+}
+
 TableFunctionInfo::~TableFunctionInfo() {
 }
 

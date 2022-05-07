@@ -22,7 +22,7 @@ namespace duckdb {
 bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind_data,
                                 FunctionOperatorData *operator_state, ParallelState *parallel_state_p);
 
-struct TableScanOperatorData : public FunctionOperatorData {
+struct TableScanOperatorData : public OrderedFunctionOperatorData {
 	//! The current position in the scan
 	TableScanState scan_state;
 	vector<column_t> column_ids;
@@ -69,7 +69,7 @@ static void TableScanFunc(ClientContext &context, const FunctionData *bind_data_
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
 	auto &state = (TableScanOperatorData &)*operator_state;
 	auto &transaction = Transaction::GetTransaction(context);
-	bind_data.table->storage->Scan(transaction, output, state.scan_state, state.column_ids);
+	bind_data.table->storage->Scan(transaction, output, state.scan_state, state.column_ids, state.data_index);
 	bind_data.chunk_count++;
 }
 

@@ -22,7 +22,16 @@ struct ParallelState;
 class TableFilterSet;
 
 struct FunctionOperatorData {
+    bool is_ordered = false;
 	DUCKDB_API virtual ~FunctionOperatorData();
+};
+
+struct OrderedFunctionOperatorData : FunctionOperatorData {
+    OrderedFunctionOperatorData() {
+        is_ordered = true;
+    }
+	idx_t data_index = DConstants::INVALID_INDEX;
+	DUCKDB_API virtual ~OrderedFunctionOperatorData();
 };
 
 struct TableFunctionInfo {

@@ -357,15 +357,18 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 	}
 }
 
-void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids) {
+void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids,
+        idx_t &row_group_idx) {
 	// scan the persistent segments
 	if (ScanBaseTable(transaction, result, state)) {
 		D_ASSERT(result.size() > 0);
+		row_group_idx = state.row_group_scan_state.row_group->index;
 		return;
 	}
 
 	// scan the transaction-local segments
 	transaction.storage.Scan(state.local_state, column_ids, result);
+	row_group_idx = transaction.transaction_id;
 }
 
 bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state) {

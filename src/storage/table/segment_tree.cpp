@@ -54,6 +54,7 @@ void SegmentTree::AppendSegment(unique_ptr<SegmentBase> segment) {
 	} else {
 		root_node = move(segment);
 	}
+	node.node->index = nodes.size() - 1;
 }
 
 void SegmentTree::Replace(SegmentTree &other) {
