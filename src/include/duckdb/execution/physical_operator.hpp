@@ -48,6 +48,8 @@ public:
 
 class LocalSinkState {
 public:
+    bool is_ordered = false;
+    idx_t source_index = DConstants::INVALID_INDEX;
 	virtual ~LocalSinkState() {
 	}
 };
@@ -64,6 +66,8 @@ public:
 
 class LocalSourceState {
 public:
+    bool is_ordered = false;
+    idx_t source_index = DConstants::INVALID_INDEX;
 	virtual ~LocalSourceState() {
 	}
 };
