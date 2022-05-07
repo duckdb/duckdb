@@ -273,6 +273,11 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	}
 	for (auto &node : profiler.timings) {
 		auto entry = tree_map.find(node.first);
+		// TODO: for now, PhysicalMaterialize is not intialized
+		// thus does not exist in tree_map
+        if (entry == tree_map.end()) {
+            continue;
+        }
 		D_ASSERT(entry != tree_map.end());
 
 		entry->second->info.time += node.second.time;
