@@ -140,6 +140,10 @@ public:
 		return false;
 	}
 
+    virtual bool OrderedSource() const {
+        return false;
+    }
+
 public:
 	// Sink interface
 
