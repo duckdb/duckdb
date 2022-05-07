@@ -77,5 +77,9 @@ SinkFinalizeType PhysicalMaterialize::Finalize(Pipeline &pipeline, Event &event,
     return SinkFinalizeType::READY;
 }
 
+ChunkCollection PhysicalMaterialize::GetResult() {
+    D_ASSERT(sink_state != nullptr);
+    return move(reinterpret_cast<MaterializeGlobalSinkState*>(sink_state.get())->result_set);
+}
 
 } // namespace duckdb

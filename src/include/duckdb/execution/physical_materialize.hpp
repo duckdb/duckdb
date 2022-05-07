@@ -29,6 +29,8 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+	ChunkCollection GetResult();
 };
 
 } // namespace duckdb
