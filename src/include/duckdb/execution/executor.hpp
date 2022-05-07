@@ -14,6 +14,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/execution/physical_materialize.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -82,6 +83,9 @@ public:
 
 	void ReschedulePipelines(const vector<shared_ptr<Pipeline>> &pipelines, vector<shared_ptr<Event>> &events);
 
+public:
+	unique_ptr<PhysicalMaterialize> materialized_sink;
+
 private:
 	void ScheduleEvents();
 	void ScheduleEventsInternal(const vector<shared_ptr<Pipeline>> &pipelines,
@@ -102,6 +106,8 @@ private:
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
 	void ThrowExceptionInternal();
+
+	bool MaybeMaterializeResult(Pipeline *root_pipeline);
 
 private:
 	PhysicalOperator *physical_plan;
