@@ -100,6 +100,13 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 			StartOperator(pipeline.sink);
 			D_ASSERT(pipeline.sink);
 			D_ASSERT(pipeline.sink->sink_state);
+
+            if (local_source_state->is_ordered) {
+                D_ASSERT(local_source_state->source_index != DConstants::INVALID_INDEX);
+                local_sink_state->is_ordered = true;
+                local_sink_state->source_index = local_source_state->source_index;
+            }
+
 			auto sink_result = pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, sink_chunk);
 			EndOperator(pipeline.sink, nullptr);
 			if (sink_result == SinkResultType::FINISHED) {
