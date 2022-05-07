@@ -49,6 +49,8 @@ public:
 	bool ParallelSource() const override {
 		return true;
 	}
+
+    bool OrderedSource() const override;
 };
 
 } // namespace duckdb

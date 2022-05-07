@@ -72,6 +72,10 @@ unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientCont
 	return make_unique<TableScanGlobalState>(context, *this);
 }
 
+bool PhysicalTableScan::OrderedSource() const {
+    return function.ordered_scan_function;
+}
+
 void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                 LocalSourceState &lstate) const {
 	D_ASSERT(!column_ids.empty());

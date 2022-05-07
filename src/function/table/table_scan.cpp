@@ -359,6 +359,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.table_scan_progress = TableScanProgress;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
+	scan_function.ordered_scan_function = true;
 	return scan_function;
 }
 

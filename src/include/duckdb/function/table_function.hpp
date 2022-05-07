@@ -105,7 +105,7 @@ public:
 	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
 	              bool filter_pushdown = false, table_function_progress_t query_progress = nullptr,
-	              table_in_out_function_t in_out_function = nullptr);
+	              table_in_out_function_t in_out_function = nullptr, bool ordered_scan_function = false);
 	DUCKDB_API
 	TableFunction(const vector<LogicalType> &arguments, table_function_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_t init = nullptr, table_statistics_t statistics = nullptr,
@@ -169,6 +169,8 @@ public:
 	//! Whether or not the table function supports filter pushdown. If not supported a filter will be added
 	//! that applies the table filter directly.
 	bool filter_pushdown;
+	//! Whether or not the table funtion is a scan function that generates data with order
+	bool ordered_scan_function;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 };

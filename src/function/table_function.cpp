@@ -21,13 +21,13 @@ TableFunction::TableFunction(string name, vector<LogicalType> arguments, table_f
                              table_function_parallel_t parallel_function, table_function_init_parallel_t parallel_init,
                              table_function_parallel_state_next_t parallel_state_next, bool projection_pushdown,
                              bool filter_pushdown, table_function_progress_t query_progress,
-                             table_in_out_function_t in_out_function)
+                             table_in_out_function_t in_out_function, bool ordered_scan_function)
     : SimpleNamedParameterFunction(move(name), move(arguments)), bind(bind), init(init), function(function),
       in_out_function(in_out_function), statistics(statistics), cleanup(cleanup), dependency(dependency),
       cardinality(cardinality), pushdown_complex_filter(pushdown_complex_filter), to_string(to_string),
       max_threads(max_threads), init_parallel_state(init_parallel_state), parallel_function(parallel_function),
       parallel_init(parallel_init), parallel_state_next(parallel_state_next), table_scan_progress(query_progress),
-      projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown) {
+      projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown), ordered_scan_function(ordered_scan_function) {
 }
 
 TableFunction::TableFunction(const vector<LogicalType> &arguments, table_function_t function,
