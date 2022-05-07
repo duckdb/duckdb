@@ -755,12 +755,13 @@ bool Executor::MaybeMaterializeResult(Pipeline *root_pipeline) {
         return false;
     }
     // Don't support UNION ALL and RIGHT OUTER JOIN for now
-    if (union_pipelines.find(root_pipeline.get()) != union_pipelines.end()
+    if (union_pipelines.find(root_pipeline) != union_pipelines.end()
             || child_pipelines.find(root_pipeline) != child_pipelines.end()) {
         return false;
     }
 
     materialized_sink = root_pipeline->AddMaterializedSink();
+    return true;
 }
 
 } // namespace duckdb

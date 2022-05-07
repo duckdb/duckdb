@@ -205,8 +205,9 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	D_ASSERT(active_query->open_result == &pending);
 	D_ASSERT(active_query->prepared);
 	auto &prepared = *active_query->prepared;
+	auto &executor = GetExecutor();
 	bool create_stream_result = prepared.allow_stream_result && allow_stream_result
-	    && !config.force_result_set_materialization;
+	    && (executor.materialized_sink == nullptr);
 	if (create_stream_result) {
 		active_query->progress_bar.reset();
 		query_progress = -1;
@@ -220,7 +221,6 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	}
 	// create a materialized result by continuously fetching
 	auto result = make_unique<MaterializedQueryResult>(pending.statement_type, pending.types, pending.names);
-	auto &executor = GetExecutor();
 	if (executor.materialized_sink == nullptr) {
         while (true) {
             auto chunk = FetchInternal(lock, GetExecutor(), *result);
