@@ -237,4 +237,16 @@ bool Pipeline::OrderedParallelPipeline() const {
     return source->OrderedSource() && Parallel();
 }
 
+unique_ptr<PhysicalMaterialize> Pipeline::AddMaterializedSink() {
+    D_ASSERT(sink == nullptr);
+    auto last_op = operators.empty() ? source : operators.back();
+    auto materialized_sink = make_unique<PhysicalMaterialize>(last_op->types, last_op->estimated_cardinality);
+    sink = materialized_sink.get();
+    return materialized_sink;
+}
+
+bool Pipeline::IsMaterializedSinkPipeline() const {
+    return sink != nullptr && sink->type == PhysicalOperatorType::MATERIALIZE;
+}
+
 } // namespace duckdb

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_materialize.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -58,6 +59,10 @@ public:
 	}
 
 	bool OrderedParallelPipeline() const;
+
+	unique_ptr<PhysicalMaterialize> AddMaterializedSink();
+
+	bool IsMaterializedSinkPipeline() const;
 
 private:
 	//! Whether or not the pipeline has been readied
