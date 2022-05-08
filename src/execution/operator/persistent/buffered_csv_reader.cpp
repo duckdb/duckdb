@@ -1756,7 +1756,7 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 		std::unique_lock<std::mutex> lck(ra_fetch_lock);
 		ra_fetch_cv.wait(lck, [&] { return !ra_fetch_in_progress; });
 	}
-	bool use_large_buffers = false  && !file_handle->PlainFileSource() && mode == ParserMode::PARSING;
+	bool use_large_buffers = !file_handle->PlainFileSource() && mode == ParserMode::PARSING;
 	idx_t buffer_read_size = use_large_buffers ? INITIAL_BUFFER_SIZE_MAX : INITIAL_BUFFER_SIZE;
 	idx_t maximum_line_size = use_large_buffers ? 2 * INITIAL_BUFFER_SIZE_MAX : options.maximum_line_size;
 
