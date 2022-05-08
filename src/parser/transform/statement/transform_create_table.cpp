@@ -95,6 +95,24 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		case duckdb_libpgquery::T_PGColumnDef: {
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)c->data.ptr_value;
 			auto centry = TransformColumnDefinition(cdef);
+			if (centry.type.IsSerial()) {
+				// create a sequence associated with the column
+				auto sequence = make_unique<CreateSequenceInfo>();
+				sequence->name = info->table + "_" + centry.name + "_seq";
+				if (centry.type.id() == LogicalTypeId::SMALLSERIAL) {
+					sequence->max_value = NumericLimits<int16_t>::Maximum();
+				} else if (centry.type.id() == LogicalTypeId::SERIAL) {
+					sequence->max_value = NumericLimits<int32_t>::Maximum();
+				}
+				int index = info->columns.size();
+				info->sequences.push_back(sequence);
+				info->constraints.push_back(make_unique<NotNullConstraint>(index));
+
+				// make the default value arg for the serial column
+				vector<unique_ptr<ParsedExpression>> children;
+				children.push_back(make_unique<ConstantExpression>(Value(sequence->name)));
+				centry.default_value = make_unique<FunctionExpression>("nextval", move(children));
+			}
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
 					auto constraint = TransformConstraint(constr, centry, info->columns.size());

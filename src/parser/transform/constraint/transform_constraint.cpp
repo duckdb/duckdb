@@ -61,6 +61,9 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 	D_ASSERT(constraint);
 	switch (constraint->contype) {
 	case duckdb_libpgquery::PG_CONSTR_NOTNULL:
+		if (column.type.IsSerial()) {
+			return nullptr;
+		}
 		return make_unique<NotNullConstraint>(index);
 	case duckdb_libpgquery::PG_CONSTR_CHECK:
 		return TransformConstraint(cell);
@@ -71,6 +74,9 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 	case duckdb_libpgquery::PG_CONSTR_NULL:
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_DEFAULT:
+		if (column.type.IsSerial()) {
+			throw ParserException("Serial column types may not have default values");
+		}
 		column.default_value = TransformExpression(constraint->raw_expr);
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_COMPRESSION:
