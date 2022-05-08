@@ -51,16 +51,19 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::UTINYINT:
 		return PhysicalType::UINT8;
 	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::SMALLSERIAL:
 		return PhysicalType::INT16;
 	case LogicalTypeId::USMALLINT:
 		return PhysicalType::UINT16;
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::SERIAL:
 		return PhysicalType::INT32;
 	case LogicalTypeId::UINTEGER:
 		return PhysicalType::UINT32;
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::BIGSERIAL:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -173,6 +176,10 @@ constexpr const LogicalTypeId LogicalType::POINTER;
 
 constexpr const LogicalTypeId LogicalType::VARCHAR;
 constexpr const LogicalTypeId LogicalType::JSON;
+
+constexpr const LogicalTypeId LogicalType::SMALLSERIAL;
+constexpr const LogicalTypeId LogicalType::SERIAL;
+constexpr const LogicalTypeId LogicalType::BIGSERIAL;
 
 constexpr const LogicalTypeId LogicalType::BLOB;
 constexpr const LogicalTypeId LogicalType::INTERVAL;
@@ -437,6 +444,12 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "USER";
 	case LogicalTypeId::JSON:
 		return "JSON";
+	case LogicalTypeId::SMALLSERIAL:
+		return "SMALLSERIAL";
+	case LogicalTypeId::SERIAL:
+		return "SERIAL";
+	case LogicalTypeId::BIGSERIAL:
+		return "BIGSERIAL";
 	}
 	return "UNDEFINED";
 }
@@ -566,6 +579,12 @@ LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
 		return LogicalTypeId::TIME_TZ;
 	} else if (lower_str == "json") {
 		return LogicalTypeId::JSON;
+	} else if (lower_str == "smallserial" || lower_str == "serial2") {
+		return LogicalTypeId::SMALLSERIAL;
+	} else if (lower_str == "serial" || lower_str == "serial4") {
+		return LogicalTypeId::SERIAL;
+	} else if (lower_str == "bigserial" || lower_str == "serial8") {
+		return LogicalTypeId::BIGSERIAL;
 	} else if (lower_str == "null") {
 		return LogicalTypeId::SQLNULL;
 	} else {
