@@ -64,7 +64,7 @@ public:
 	idx_t MaxRepeat() const;
 
 	virtual idx_t FileOffset() const;
-	virtual size_t TotalCompressedSize();
+	virtual uint64_t TotalCompressedSize();
 	virtual idx_t GroupRowsAvailable();
 	virtual void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
 

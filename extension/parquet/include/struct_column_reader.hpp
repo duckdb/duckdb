@@ -30,7 +30,7 @@ public:
 
 	void Skip(idx_t num_values) override;
 	idx_t GroupRowsAvailable() override;
-	size_t TotalCompressedSize() override;
+	uint64_t TotalCompressedSize() override;
 	void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) override;
 };
 

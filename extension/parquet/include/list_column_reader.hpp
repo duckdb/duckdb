@@ -31,7 +31,7 @@ public:
 		return child_column_reader->GroupRowsAvailable() + overflow_child_count;
 	}
 
-	size_t TotalCompressedSize() override {
+	uint64_t TotalCompressedSize() override {
 		return child_column_reader->TotalCompressedSize();
 	}
 

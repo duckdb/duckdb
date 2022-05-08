@@ -124,11 +124,11 @@ private:
 	                                               idx_t depth, idx_t max_define, idx_t max_repeat,
 	                                               idx_t &next_schema_idx, idx_t &next_file_idx);
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
-	size_t GetGroupCompressedSize(ParquetReaderScanState &state);
+	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
 	// the group span is the distance between the min page offset and the max page offset plus the max page compressed
 	// size
-	size_t GetGroupSpan(ParquetReaderScanState &state);
+	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
 

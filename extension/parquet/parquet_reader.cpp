@@ -517,7 +517,7 @@ const ParquetRowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 	return file_meta_data->row_groups[state.group_idx_list[state.current_group]];
 }
 
-size_t ParquetReader::GetGroupCompressedSize(ParquetReaderScanState &state) {
+uint64_t ParquetReader::GetGroupCompressedSize(ParquetReaderScanState &state) {
 	auto &group = GetGroup(state);
 	auto total_compressed_size = group.total_compressed_size;
 
@@ -530,14 +530,15 @@ size_t ParquetReader::GetGroupCompressedSize(ParquetReaderScanState &state) {
 		}
 	}
 
-	if (total_compressed_size != 0 && calc_compressed_size != 0 && (idx_t)total_compressed_size != calc_compressed_size) {
+	if (total_compressed_size != 0 && calc_compressed_size != 0 &&
+	    (idx_t)total_compressed_size != calc_compressed_size) {
 		throw std::runtime_error("mismatch between calculated compressed size and reported compressed size");
 	}
 
 	return total_compressed_size ? total_compressed_size : calc_compressed_size;
 }
 
-size_t ParquetReader::GetGroupSpan(ParquetReaderScanState &state) {
+uint64_t ParquetReader::GetGroupSpan(ParquetReaderScanState &state) {
 	auto &group = GetGroup(state);
 	idx_t min_offset = NumericLimits<idx_t>::Maximum();
 	idx_t max_offset = NumericLimits<idx_t>::Minimum();
@@ -805,7 +806,7 @@ void ParquetReader::Scan(ParquetReaderScanState &state, DataChunk &result) {
 }
 
 // TODO can be optimized, also move to nicer spot
-static bool AllNone(parquet_filter_t filter, size_t n) {
+static bool AllNone(parquet_filter_t filter, uint64_t n) {
 	if (n == STANDARD_VECTOR_SIZE) {
 		return filter.none();
 	} else {
@@ -837,7 +838,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			return false;
 		}
 
-		size_t to_scan_compressed_bytes = 0;
+		uint64_t to_scan_compressed_bytes = 0;
 		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 			// this is a special case where we are not interested in the actual contents of the file
 			if (state.column_ids[out_col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
@@ -857,7 +858,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		if (state.prefetch_mode && state.group_offset != (idx_t)group.num_rows) {
 			//			std::cout << "Prefetching row group " << state.group_idx_list[state.current_group] << "
 			// entirely\n";
-			size_t total_row_group_span = GetGroupSpan(state);
+			uint64_t total_row_group_span = GetGroupSpan(state);
 
 			double scan_percentage = (double)(to_scan_compressed_bytes) / total_row_group_span;
 

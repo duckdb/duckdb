@@ -15,10 +15,10 @@ namespace duckdb {
 
 /// A ReadHead for prefetching data in a specific range
 struct ReadHead {
-	ReadHead(idx_t location, size_t size) : location(location), size(size) {};
+	ReadHead(idx_t location, uint64_t size) : location(location), size(size) {};
 	/// Hint info
 	idx_t location;
-	size_t size;
+	uint64_t size;
 
 	/// Current info
 	unique_ptr<AllocatedData> data;
@@ -35,7 +35,7 @@ struct ReadHead {
 
 // Comparator for ReadHeads that are either overlapping, adjacent, or within ALLOW_GAP bytes from each other
 struct ReadHeadComparator {
-	static constexpr size_t ALLOW_GAP = 1 << 14; // 16 KiB
+	static constexpr uint64_t ALLOW_GAP = 1 << 14; // 16 KiB
 	bool operator()(const ReadHead *a, const ReadHead *b) const {
 		auto a_start = a->location;
 		auto a_end = a->location + a->size;
@@ -69,7 +69,7 @@ struct ReadAheadBuffer {
 	idx_t total_size = 0;
 
 	/// Add a read head to the prefetching list
-	void AddReadHead(idx_t pos, idx_t len, bool merge_buffers = true) {
+	void AddReadHead(idx_t pos, uint64_t len, bool merge_buffers = true) {
 		// Attempt to merge with existing
 		if (merge_buffers) {
 			ReadHead new_read_head {pos, len};
@@ -124,7 +124,7 @@ struct ReadAheadBuffer {
 
 class ThriftFileTransport : public duckdb_apache::thrift::transport::TVirtualTransport<ThriftFileTransport> {
 public:
-	static constexpr size_t PREFETCH_FALLBACK_BUFFERSIZE = 1000000;
+	static constexpr uint64_t PREFETCH_FALLBACK_BUFFERSIZE = 1000000;
 
 	ThriftFileTransport(Allocator &allocator, FileHandle &handle_p, FileOpener &opener, bool prefetch_mode_p)
 	    : handle(handle_p), location(0), allocator(allocator), ra_buffer(ReadAheadBuffer(allocator, handle_p, opener)),
@@ -146,7 +146,7 @@ public:
 			memcpy(buf, prefetch_buffer->data->get() + location - prefetch_buffer->location, len);
 		} else {
 			if (prefetch_mode && len < PREFETCH_FALLBACK_BUFFERSIZE && len > 0) {
-				Prefetch(location, MinValue<size_t>(PREFETCH_FALLBACK_BUFFERSIZE, handle.GetFileSize() - location));
+				Prefetch(location, MinValue<uint64_t>(PREFETCH_FALLBACK_BUFFERSIZE, handle.GetFileSize() - location));
 				auto prefetch_buffer_fallback = ra_buffer.GetReadHead(location);
 				D_ASSERT(location - prefetch_buffer_fallback->location + len <= prefetch_buffer_fallback->size);
 				memcpy(buf, prefetch_buffer_fallback->data->get() + location - prefetch_buffer_fallback->location, len);
@@ -158,14 +158,14 @@ public:
 		return len;
 	}
 
-	void Prefetch(idx_t pos, idx_t len) {
+	void Prefetch(idx_t pos, uint64_t len) {
 		RegisterPrefetch(pos, len);
 		FinalizeRegistration();
 		PrefetchRegistered();
 	}
 
 	/// New prefetch
-	void RegisterPrefetch(idx_t pos, idx_t len, bool can_merge = true) {
+	void RegisterPrefetch(idx_t pos, uint64_t len, bool can_merge = true) {
 		ra_buffer.AddReadHead(pos, len, can_merge);
 	}
 

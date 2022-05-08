@@ -78,14 +78,14 @@ idx_t ColumnReader::MaxRepeat() const {
 
 void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
 	if (chunk) {
-		auto size = chunk->meta_data.total_compressed_size;
+		uint64_t size = chunk->meta_data.total_compressed_size;
 
 		//		std::cout << "registering " << schema.name << " @ " << FileOffset() << " for " << size << "\n";
 		transport.RegisterPrefetch(FileOffset(), size, allow_merge);
 	}
 }
 
-size_t ColumnReader::TotalCompressedSize() {
+uint64_t ColumnReader::TotalCompressedSize() {
 	if (!chunk) {
 		return 0;
 	}
@@ -815,8 +815,8 @@ void StructColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool a
 	}
 }
 
-size_t StructColumnReader::TotalCompressedSize() {
-	size_t size = 0;
+uint64_t StructColumnReader::TotalCompressedSize() {
+	uint64_t size = 0;
 	for (auto &child : child_readers) {
 		size += child->TotalCompressedSize();
 	}
