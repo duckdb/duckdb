@@ -30,6 +30,10 @@ public:
 		return true;
 	}
 
+	virtual bool SinkOrderMatters() const {
+		return false;
+	}
+
 	ChunkCollection GetResult();
 };
 

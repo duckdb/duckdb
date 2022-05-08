@@ -185,13 +185,7 @@ void PipelineExecutor::CacheChunk(DataChunk &current_chunk, idx_t operator_idx) 
 				// chunk cache not full: probe again
 				current_chunk.Reset();
 			}
-        } else if (is_pipeline_order_preserving && cached_chunks[operator_idx]->size() > 0) {
-            DataChunk tmp_chunk;
-			auto &chunk_cache = *cached_chunks[operator_idx];
-            tmp_chunk.Move(current_chunk);
-            current_chunk.Move(chunk_cache);
-            chunk_cache.Move(tmp_chunk);
-        }
+		}
 	}
 #endif
 }
