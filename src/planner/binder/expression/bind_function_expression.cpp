@@ -30,7 +30,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
 	case CatalogType::MACRO_ENTRY:
 		// macro function
-		return BindMacro(function, (MacroCatalogEntry *)func, depth, expr_ptr);
+		return BindMacro(function, (ScalarMacroCatalogEntry *)func, depth, expr_ptr);
 	default:
 		// aggregate function
 		return BindAggregate(function, (AggregateFunctionCatalogEntry *)func, depth);
@@ -55,12 +55,13 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < function.children.size(); i++) {
 		auto &child = (BoundExpression &)*function.children[i];
+		D_ASSERT(child.expr);
 		children.push_back(move(child.expr));
 	}
 	unique_ptr<Expression> result =
 	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
 	if (!result) {
-		return BindResult(binder.FormatError(function, error));
+		throw BinderException(binder.FormatError(function, error));
 	}
 	return BindResult(move(result));
 }

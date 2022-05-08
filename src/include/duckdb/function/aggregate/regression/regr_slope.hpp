@@ -33,9 +33,9 @@ struct RegrSlopeOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
-		CovarOperation::Combine<CovarState, OP>(source.cov_pop, &target->cov_pop);
-		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, &target->var_pop);
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+		CovarOperation::Combine<CovarState, OP>(source.cov_pop, &target->cov_pop, bind_data);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, &target->var_pop, bind_data);
 	}
 
 	template <class T, class STATE>
@@ -45,7 +45,7 @@ struct RegrSlopeOperation {
 		} else {
 			auto cov = state->cov_pop.co_moment / state->cov_pop.count;
 			auto var_pop = state->var_pop.count > 1 ? (state->var_pop.dsquared / state->var_pop.count) : 0;
-			if (!Value::DoubleIsValid(var_pop)) {
+			if (!Value::DoubleIsFinite(var_pop)) {
 				throw OutOfRangeException("VARPOP is out of range!");
 			}
 			if (var_pop == 0) {

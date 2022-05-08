@@ -16,7 +16,7 @@ class DataTable;
 class WriteAheadLog;
 struct TableAppendState;
 
-class LocalTableStorage {
+class LocalTableStorage : public std::enable_shared_from_this<LocalTableStorage> {
 public:
 	explicit LocalTableStorage(DataTable &table);
 	~LocalTableStorage();
@@ -99,7 +99,7 @@ private:
 
 private:
 	Transaction &transaction;
-	unordered_map<DataTable *, unique_ptr<LocalTableStorage>> table_storage;
+	unordered_map<DataTable *, shared_ptr<LocalTableStorage>> table_storage;
 
 	void Flush(DataTable &table, LocalTableStorage &storage);
 };

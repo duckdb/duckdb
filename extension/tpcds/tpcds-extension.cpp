@@ -27,12 +27,10 @@ struct DSDGenFunctionData : public TableFunctionData {
 	bool keys = false;
 };
 
-static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value> &inputs,
-                                           named_parameter_map_t &named_parameters,
-                                           vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunctionBindInput &input,
                                            vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<DSDGenFunctionData>();
-	for (auto &kv : named_parameters) {
+	for (auto &kv : input.named_parameters) {
 		if (kv.first == "sf") {
 			result->sf = kv.second.GetValue<double>();
 		} else if (kv.first == "schema") {
@@ -51,7 +49,7 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value>
 }
 
 static void DsdgenFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                           DataChunk *input, DataChunk &output) {
+                           DataChunk &output) {
 	auto &data = (DSDGenFunctionData &)*bind_data;
 	if (data.finished) {
 		return;
@@ -74,11 +72,8 @@ unique_ptr<FunctionOperatorData> TPCDSInit(ClientContext &context, const Functio
 	return move(result);
 }
 
-static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, vector<Value> &inputs,
-                                               named_parameter_map_t &named_parameters,
-                                               vector<LogicalType> &input_table_types,
-                                               vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                               vector<string> &names) {
+static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, TableFunctionBindInput &input,
+                                               vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("query_nr");
 	return_types.emplace_back(LogicalType::INTEGER);
 
@@ -89,7 +84,7 @@ static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, vector<Va
 }
 
 static void TPCDSQueryFunction(ClientContext &context, const FunctionData *bind_data,
-                               FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                               FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (TPCDSData &)*operator_state;
 	idx_t tpcds_queries = tpcds::DSDGenWrapper::QueriesCount();
 	if (data.offset >= tpcds_queries) {
@@ -109,10 +104,7 @@ static void TPCDSQueryFunction(ClientContext &context, const FunctionData *bind_
 	output.SetCardinality(chunk_count);
 }
 
-static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, vector<Value> &inputs,
-                                                     named_parameter_map_t &named_parameters,
-                                                     vector<LogicalType> &input_table_types,
-                                                     vector<string> &input_table_names,
+static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
                                                      vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("query_nr");
 	return_types.emplace_back(LogicalType::INTEGER);
@@ -127,7 +119,7 @@ static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, vec
 }
 
 static void TPCDSQueryAnswerFunction(ClientContext &context, const FunctionData *bind_data,
-                                     FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                     FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (TPCDSData &)*operator_state;
 	idx_t tpcds_queries = tpcds::DSDGenWrapper::QueriesCount();
 	vector<double> scale_factors {1, 10};

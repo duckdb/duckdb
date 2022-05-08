@@ -184,6 +184,10 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		bound_function.arguments[1] = LogicalType::INTEGER;
 		bound_function.arguments[2] = LogicalType::INTEGER;
 		break;
+	case LogicalTypeId::UNKNOWN:
+		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
+		bound_function.return_type = LogicalType::SQLNULL;
+		break;
 	default:
 		throw BinderException("ARRAY_SLICE can only operate on LISTs and VARCHARs");
 	}
@@ -194,7 +198,7 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 void ArraySliceFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
-	                   ArraySliceFunction, false, ArraySliceBind);
+	                   ArraySliceFunction, false, false, ArraySliceBind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction({"array_slice", "list_slice"}, fun);
 }

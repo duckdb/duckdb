@@ -84,6 +84,9 @@ bool Pipeline::GetProgressInternal(ClientContext &context, PhysicalOperator *op,
 			if (!GetProgressInternal(context, op_child.get(), child_percentage)) {
 				return false;
 			}
+			if (!Value::DoubleIsFinite(child_percentage)) {
+				return false;
+			}
 			progress.push_back(child_percentage);
 			cardinality.push_back(op_child->estimated_cardinality);
 			total_cardinality += op_child->estimated_cardinality;
@@ -158,6 +161,13 @@ void Pipeline::Reset() {
 	if (sink && !sink->sink_state) {
 		sink->sink_state = sink->GetGlobalSinkState(GetClientContext());
 	}
+
+	for (auto &op : operators) {
+		if (op && !op->op_state) {
+			op->op_state = op->GetGlobalOperatorState(GetClientContext());
+		}
+	}
+
 	ResetSource();
 }
 

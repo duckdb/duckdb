@@ -21,13 +21,10 @@ struct ToSubstraitFunctionData : public TableFunctionData {
 	bool finished = false;
 };
 
-static unique_ptr<FunctionData> ToSubstraitBind(ClientContext &context, vector<Value> &inputs,
-                                                named_parameter_map_t &named_parameters,
-                                                vector<LogicalType> &input_table_types,
-                                                vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                vector<string> &names) {
+static unique_ptr<FunctionData> ToSubstraitBind(ClientContext &context, TableFunctionBindInput &input,
+                                                vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<ToSubstraitFunctionData>();
-	result->query = inputs[0].ToString();
+	result->query = input.inputs[0].ToString();
 	return_types.emplace_back(LogicalType::BLOB);
 	names.emplace_back("Plan Blob");
 	return move(result);
@@ -39,7 +36,7 @@ shared_ptr<Relation> SubstraitPlanToDuckDBRel(Connection &conn, string &serializ
 }
 
 static void ToSubFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk *input, DataChunk &output) {
+                          DataChunk &output) {
 	auto &data = (ToSubstraitFunctionData &)*bind_data;
 	if (data.finished) {
 		return;
@@ -57,6 +54,7 @@ static void ToSubFunction(ClientContext &context, const FunctionData *bind_data,
 		auto actual_result = new_conn.Query(data.query);
 		auto sub_relation = SubstraitPlanToDuckDBRel(new_conn, serialized);
 		auto substrait_result = sub_relation->Execute();
+		substrait_result->names = actual_result->names;
 		if (!actual_result->Equals(*substrait_result)) {
 			query_plan->Print();
 			sub_relation->Print();
@@ -73,14 +71,11 @@ struct FromSubstraitFunctionData : public TableFunctionData {
 	unique_ptr<Connection> conn;
 };
 
-static unique_ptr<FunctionData> FromSubstraitBind(ClientContext &context, vector<Value> &inputs,
-                                                  named_parameter_map_t &named_parameters,
-                                                  vector<LogicalType> &input_table_types,
-                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                  vector<string> &names) {
+static unique_ptr<FunctionData> FromSubstraitBind(ClientContext &context, TableFunctionBindInput &input,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<FromSubstraitFunctionData>();
 	result->conn = make_unique<Connection>(*context.db);
-	string serialized = inputs[0].GetValueUnsafe<string>();
+	string serialized = input.inputs[0].GetValueUnsafe<string>();
 	result->plan = SubstraitPlanToDuckDBRel(*result->conn, serialized);
 	for (auto &column : result->plan->Columns()) {
 		return_types.emplace_back(column.type);
@@ -90,7 +85,7 @@ static unique_ptr<FunctionData> FromSubstraitBind(ClientContext &context, vector
 }
 
 static void FromSubFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                            DataChunk *input, DataChunk &output) {
+                            DataChunk &output) {
 	auto &data = (FromSubstraitFunctionData &)*bind_data;
 	if (!data.res) {
 		data.res = data.plan->Execute();

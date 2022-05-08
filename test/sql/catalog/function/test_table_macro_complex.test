@@ -1,0 +1,63 @@
+# name: test/sql/catalog/function/test_table_macro_complex.test
+# description: Test SELECT Macro
+# group: [function]
+
+statement ok
+CREATE MACRO my_values(m,s) as TABLE select * from (values  (1.0*m+s,'adam'), (2.0*m+s,'ben'),
+(3.0*m+s,'cris'), (4.0*m+s,'desmond'),(5.0*m+s, 'eric'));
+
+query I
+SELECT sum(col0) from my_values(10.0,5.0);
+----
+175.00
+
+# recursive union select  macro
+statement ok
+CREATE MACRO my_values_union(m1,s1,m2,s2) as TABLE select * from my_values(m1,s1) UNION select * from my_values(m2,s2);
+
+query I
+select max(col0)  from my_values_union(1.0,2.0,3.0,20.0);
+----
+35.00
+
+# ranges
+statement ok
+CREATE MACRO dates_between(date_min, date_max, ilimit:=100) AS TABLE WITH dates(date) AS
+(SELECT * FROM range(date '0000-01-01', date '3000-01-01', interval '1' month))
+SELECT * FROM dates WHERE date between date_min AND date_max;
+
+
+query T
+select * from dates_between('2021-01-01', '2021-02-04');
+----
+2021-01-01 00:00:00
+2021-02-01 00:00:00
+
+statement ok
+CREATE MACRO fibonacci(n0, n1, nlimit, noffset) AS TABLE
+WITH RECURSIVE fib AS (
+      SELECT 1 AS n,
+             n0::bigint AS "fibₙ",
+             n1::bigint AS "fibₙ₊₁"
+   UNION ALL
+      SELECT n+1,
+             "fibₙ₊₁",
+             "fibₙ" + "fibₙ₊₁"
+      FROM fib
+)
+SELECT n, "fibₙ" FROM fib
+LIMIT nlimit OFFSET noffset;
+
+
+
+query II
+SELECT * FROM fibonacci(1, 2, 5, 10);
+----
+11	144
+12	233
+13	377  
+14	610
+15	987
+
+
+

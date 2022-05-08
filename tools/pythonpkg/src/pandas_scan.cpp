@@ -52,13 +52,10 @@ PandasScanFunction::PandasScanFunction()
                     PandasScanParallelStateNext, true, false, PandasProgress) {
 }
 
-unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, vector<Value> &inputs,
-                                                            named_parameter_map_t &named_parameters,
-                                                            vector<LogicalType> &input_table_types,
-                                                            vector<string> &input_table_names,
+unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, TableFunctionBindInput &input,
                                                             vector<LogicalType> &return_types, vector<string> &names) {
 	py::gil_scoped_acquire acquire;
-	py::handle df((PyObject *)(inputs[0].GetPointer()));
+	py::handle df((PyObject *)(input.inputs[0].GetPointer()));
 
 	vector<PandasColumnBindData> pandas_bind_data;
 	VectorConversion::BindPandas(df, pandas_bind_data, return_types, names);
@@ -138,16 +135,16 @@ double PandasScanFunction::PandasProgress(ClientContext &context, const Function
 }
 
 void PandasScanFunction::PandasScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
-                                                FunctionOperatorData *operator_state, DataChunk *input,
-                                                DataChunk &output, ParallelState *parallel_state_p) {
+                                                FunctionOperatorData *operator_state, DataChunk &output,
+                                                ParallelState *parallel_state_p) {
 	//! FIXME: Have specialized parallel function from pandas scan here
-	PandasScanFunc(context, bind_data, operator_state, input, output);
+	PandasScanFunc(context, bind_data, operator_state, output);
 }
 
 //! The main pandas scan function: note that this can be called in parallel without the GIL
 //! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 void PandasScanFunction::PandasScanFunc(ClientContext &context, const FunctionData *bind_data,
-                                        FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                        FunctionOperatorData *operator_state, DataChunk &output) {
 	if (!operator_state) {
 		return;
 	}

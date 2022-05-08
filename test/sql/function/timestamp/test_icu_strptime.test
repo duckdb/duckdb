@@ -1,0 +1,235 @@
+# name: test/sql/function/timestamp/test_icu_strptime.test
+# description: Test sequence overflow
+# group: [timestamp]
+
+require icu
+
+# Set a known time zone
+statement ok
+SET TimeZone = 'America/Los_Angeles';
+
+statement ok
+PRAGMA enable_verification
+
+# Parse TZ
+query I
+select strptime('2022-03-05 17:59:17.877 CST', '%Y-%m-%d %H:%M:%S.%g %Z');
+----
+2022-03-05 23:59:17.877+00
+
+# NULLs
+query I
+select strptime('2022-03-05 17:59:17.877 CST', NULL);
+----
+NULL
+
+query I
+select strptime(NULL, '%Y-%m-%d %H:%M:%S.%g %Z');
+----
+NULL
+
+#
+# Same date, multiple TZ names
+#
+
+statement ok
+CREATE TABLE zones AS (
+	SELECT median(name) as tz_name
+	FROM pg_timezone_names()
+	GROUP BY ALL
+	ORDER BY utc_offset
+);
+
+statement ok
+CREATE TABLE abbrevs AS (
+	SELECT median(abbrev) as tz_name
+	FROM pg_timezone_names()
+	GROUP BY ALL
+	ORDER BY utc_offset
+);
+
+# Full zone names
+query II
+SELECT strptime('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
+FROM zones
+ORDER BY tstz
+----
+2022-03-05 03:59:17.877+00	Etc/GMT-14
+2022-03-05 04:14:17.877+00	NZ-CHAT
+2022-03-05 04:59:17.877+00	Pacific/Auckland
+2022-03-05 04:59:17.877+00	Pacific/Enderbury
+2022-03-05 06:59:17.877+00	Australia/Melbourne
+2022-03-05 06:59:17.877+00	Australia/LHI
+2022-03-05 06:59:17.877+00	Pacific/Efate
+2022-03-05 08:29:17.877+00	Australia/Darwin
+2022-03-05 08:59:17.877+00	Asia/Tokyo
+2022-03-05 09:14:17.877+00	Australia/Eucla
+2022-03-05 09:59:17.877+00	Asia/Shanghai
+2022-03-05 10:59:17.877+00	Asia/Novosibirsk
+2022-03-05 11:29:17.877+00	Asia/Yangon
+2022-03-05 11:59:17.877+00	Asia/Omsk
+2022-03-05 12:14:17.877+00	Asia/Kathmandu
+2022-03-05 12:29:17.877+00	Asia/Colombo
+2022-03-05 12:59:17.877+00	Asia/Oral
+2022-03-05 13:29:17.877+00	Asia/Kabul
+2022-03-05 13:59:17.877+00	Europe/Astrakhan
+2022-03-05 14:29:17.877+00	Asia/Tehran
+2022-03-05 14:59:17.877+00	Asia/Qatar
+2022-03-05 15:59:17.877+00	Asia/Jerusalem
+2022-03-05 16:59:17.877+00	Europe/Budapest
+2022-03-05 17:59:17.877+00	Etc/GMT-0
+2022-03-05 18:59:17.877+00	Atlantic/Azores
+2022-03-05 19:59:17.877+00	Atlantic/South_Georgia
+2022-03-05 20:59:17.877+00	America/Cordoba
+2022-03-05 21:29:17.877+00	CNT
+2022-03-05 21:59:17.877+00	America/Martinique
+2022-03-05 22:59:17.877+00	America/Louisville
+2022-03-05 23:59:17.877+00	America/Rankin_Inlet
+2022-03-06 00:59:17.877+00	America/Shiprock
+2022-03-06 01:59:17.877+00	Mexico/BajaNorte
+2022-03-06 02:59:17.877+00	America/Sitka
+2022-03-06 03:29:17.877+00	Pacific/Marquesas
+2022-03-06 03:59:17.877+00	Pacific/Johnston
+2022-03-06 04:59:17.877+00	Pacific/Niue
+2022-03-06 05:59:17.877+00	Etc/GMT+12
+
+# Abbreviations
+query II
+SELECT strptime('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
+FROM abbrevs
+ORDER BY tstz
+----
+2022-03-05 03:59:17.877+00	Etc/GMT-14
+2022-03-05 04:14:17.877+00	NZ-CHAT
+2022-03-05 04:59:17.877+00	NST
+2022-03-05 04:59:17.877+00	Pacific/Enderbury
+2022-03-05 06:59:17.877+00	Australia/Hobart
+2022-03-05 06:59:17.877+00	Australia/LHI
+2022-03-05 06:59:17.877+00	Pacific/Efate
+2022-03-05 07:29:17.877+00	Australia/Adelaide
+2022-03-05 08:59:17.877+00	Etc/GMT-9
+2022-03-05 09:14:17.877+00	Australia/Eucla
+2022-03-05 09:59:17.877+00	Australia/West
+2022-03-05 10:59:17.877+00	Asia/Phnom_Penh
+2022-03-05 11:29:17.877+00	Asia/Yangon
+2022-03-05 11:59:17.877+00	Asia/Thimbu
+2022-03-05 12:14:17.877+00	Asia/Kathmandu
+2022-03-05 12:29:17.877+00	IST
+2022-03-05 12:59:17.877+00	Asia/Qyzylorda
+2022-03-05 13:29:17.877+00	Asia/Kabul
+2022-03-05 13:59:17.877+00	Europe/Samara
+2022-03-05 14:29:17.877+00	Iran
+2022-03-05 14:59:17.877+00	EAT
+2022-03-05 15:59:17.877+00	CAT
+2022-03-05 16:59:17.877+00	Europe/Brussels
+2022-03-05 17:59:17.877+00	GB
+2022-03-05 18:59:17.877+00	Atlantic/Azores
+2022-03-05 19:59:17.877+00	Atlantic/South_Georgia
+2022-03-05 20:59:17.877+00	America/Cordoba
+2022-03-05 21:29:17.877+00	CNT
+2022-03-05 21:59:17.877+00	PRT
+2022-03-05 22:59:17.877+00	America/Panama
+2022-03-05 23:59:17.877+00	America/Regina
+2022-03-06 00:59:17.877+00	Canada/Yukon
+2022-03-06 01:59:17.877+00	PST
+2022-03-06 02:59:17.877+00	America/Nome
+2022-03-06 03:29:17.877+00	Pacific/Marquesas
+2022-03-06 03:59:17.877+00	Pacific/Johnston
+2022-03-06 04:59:17.877+00	Pacific/Niue
+2022-03-06 05:59:17.877+00	Etc/GMT+12
+
+#
+# UTC Offsets
+#
+
+statement ok
+CREATE TABLE offsets AS (
+	SELECT
+		CASE WHEN EXTRACT(MINUTE FROM utc_offset) <> 0
+		THEN
+			CASE WHEN utc_offset < INTERVAL 0 SECOND
+				THEN LEFT(utc_offset, 6)
+				ELSE '+' || LEFT(utc_offset, 5)
+			END
+		ELSE
+			CASE WHEN utc_offset < INTERVAL 0 SECOND
+				THEN LEFT(utc_offset, 3)
+				ELSE '+' || LEFT(utc_offset, 2)
+			END
+		END AS utc_offset
+	FROM (
+		SELECT DISTINCT utc_offset
+		FROM pg_timezone_names()
+		ORDER BY ALL
+	) z
+);
+
+# These should be TSTZs because there is an offset specified.
+query II
+SELECT strptime('2022-03-05 17:59:17.877 ' || utc_offset, '%Y-%m-%d %H:%M:%S.%g %z') tstz, utc_offset
+FROM offsets
+ORDER BY tstz
+----
+2022-03-05 03:59:17.877+00	+14
+2022-03-05 04:59:17.877+00	+13
+2022-03-05 05:14:17.877+00	+12:45
+2022-03-05 05:59:17.877+00	+12
+2022-03-05 06:59:17.877+00	+11
+2022-03-05 07:29:17.877+00	+10:30
+2022-03-05 07:59:17.877+00	+10
+2022-03-05 08:29:17.877+00	+09:30
+2022-03-05 08:59:17.877+00	+09
+2022-03-05 09:14:17.877+00	+08:45
+2022-03-05 09:59:17.877+00	+08
+2022-03-05 10:59:17.877+00	+07
+2022-03-05 11:29:17.877+00	+06:30
+2022-03-05 11:59:17.877+00	+06
+2022-03-05 12:14:17.877+00	+05:45
+2022-03-05 12:29:17.877+00	+05:30
+2022-03-05 12:59:17.877+00	+05
+2022-03-05 13:29:17.877+00	+04:30
+2022-03-05 13:59:17.877+00	+04
+2022-03-05 14:29:17.877+00	+03:30
+2022-03-05 14:59:17.877+00	+03
+2022-03-05 15:59:17.877+00	+02
+2022-03-05 16:59:17.877+00	+01
+2022-03-05 17:59:17.877+00	+00
+2022-03-05 18:59:17.877+00	-01
+2022-03-05 19:59:17.877+00	-02
+2022-03-05 20:59:17.877+00	-03
+2022-03-05 21:29:17.877+00	-03:30
+2022-03-05 21:59:17.877+00	-04
+2022-03-05 22:59:17.877+00	-05
+2022-03-05 23:59:17.877+00	-06
+2022-03-06 00:59:17.877+00	-07
+2022-03-06 01:59:17.877+00	-08
+2022-03-06 02:59:17.877+00	-09
+2022-03-06 03:29:17.877+00	-09:30
+2022-03-06 03:59:17.877+00	-10
+2022-03-06 04:59:17.877+00	-11
+2022-03-06 05:59:17.877+00	-12
+
+#
+# Errors/Coverage
+#
+
+# Multiple formats are not allowed
+statement ok
+CREATE TABLE multiples (s VARCHAR, f VARCHAR);
+
+statement ok
+INSERT INTO multiples VALUES
+	('2022-03-05 17:59:17.877 CST', '%Y-%m-%d %H:%M:%S.%g %Z'),
+	('2022-03-05 17:59:17.877', '%Y-%m-%d %H:%M:%S.%g'),
+;
+
+statement error
+SELECT strptime(s, f) FROM multiples;
+
+# Invalid format
+statement error
+select strptime('2022-03-05 17:59:17.877 CST', '%C');
+
+# Parse error
+statement error
+select strptime('2022-03-05 17:59:17.877 CST', '%Y-%m-%d %H:%M:%S.%g');

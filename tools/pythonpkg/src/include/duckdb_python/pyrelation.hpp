@@ -12,15 +12,21 @@
 #include "duckdb.hpp"
 #include "arrow_array_stream.hpp"
 #include "duckdb_python/pyconnection.hpp"
+#include "duckdb/main/external_dependencies.hpp"
 
 namespace duckdb {
 
 struct DuckDBPyResult;
 
-class PythonDependencies : public ExtraDependencies {
+class PythonDependencies : public ExternalDependency {
 public:
-	explicit PythonDependencies(py::function map_function) : map_function(map_function) {};
+	explicit PythonDependencies(py::function map_function)
+	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), map_function(std::move(map_function)) {};
+	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object)
+	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), py_object(std::move(py_object)) {};
+
 	py::function map_function;
+	unique_ptr<RegisteredObject> py_object;
 };
 
 struct DuckDBPyRelation {
@@ -52,10 +58,16 @@ public:
 	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation>
-	FromParquetDefault(const string &filename, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation>
-	FromArrowTable(py::object &table, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	GetSubstrait(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
+	static unique_ptr<DuckDBPyRelation>
+	FromParquetDefault(const string &filename, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
+	static unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object,
+	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Project(const string &expr);
 

@@ -6,10 +6,13 @@ on:
   pull_request:
     paths-ignore:
       - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/juliapkg/**'
       - 'tools/nodejs/**'
       - 'tools/pythonpkg/**'
-      - '.github/workflows/NodeJS.yml'
-      - '.github/workflows/Python.yml'
+      - '.github/workflows/**'
+      - '!.github/workflows/R.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -35,7 +38,7 @@ jobs:
       LIBARROW_BINARY : 'false'
       ARROW_RUNTIME_SIMD_LEVEL : 'AVX2'
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -103,7 +106,7 @@ jobs:
     needs: rstats-linux
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -135,7 +138,7 @@ jobs:
     needs: rstats-linux
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 

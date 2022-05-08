@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/constraints/check_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
@@ -25,10 +26,7 @@ struct DuckDBConstraintsData : public FunctionOperatorData {
 	idx_t constraint_offset;
 };
 
-static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, vector<Value> &inputs,
-                                                      named_parameter_map_t &named_parameters,
-                                                      vector<LogicalType> &input_table_types,
-                                                      vector<string> &input_table_names,
+static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, TableFunctionBindInput &input,
                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -77,13 +75,13 @@ unique_ptr<FunctionOperatorData> DuckDBConstraintsInit(ClientContext &context, c
 	};
 
 	// check the temp schema as well
-	context.temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
-	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
+	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
 void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_data,
-                               FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                               FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (DuckDBConstraintsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

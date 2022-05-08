@@ -1,15 +1,13 @@
 #include "duckdb/storage/checkpoint_manager.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/serializer.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
@@ -24,6 +22,7 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -152,44 +151,63 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 		custom_types.push_back((TypeCatalogEntry *)entry);
 	});
 
-	vector<MacroCatalogEntry *> macros;
+	vector<ScalarMacroCatalogEntry *> macros;
 	schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->internal) {
 			return;
 		}
 		if (entry->type == CatalogType::MACRO_ENTRY) {
-			macros.push_back((MacroCatalogEntry *)entry);
+			macros.push_back((ScalarMacroCatalogEntry *)entry);
 		}
 	});
 
+	vector<TableMacroCatalogEntry *> table_macros;
+	schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
+		if (entry->internal) {
+			return;
+		}
+		if (entry->type == CatalogType::TABLE_MACRO_ENTRY) {
+			table_macros.push_back((TableMacroCatalogEntry *)entry);
+		}
+	});
+
+	FieldWriter writer(*metadata_writer);
+	writer.WriteField<uint32_t>(custom_types.size());
+	writer.WriteField<uint32_t>(sequences.size());
+	writer.WriteField<uint32_t>(tables.size());
+	writer.WriteField<uint32_t>(views.size());
+	writer.WriteField<uint32_t>(macros.size());
+	writer.WriteField<uint32_t>(table_macros.size());
+	writer.Finalize();
+
 	// write the custom_types
-	metadata_writer->Write<uint32_t>(custom_types.size());
 	for (auto &custom_type : custom_types) {
 		WriteType(*custom_type);
 	}
 
 	// write the sequences
-	metadata_writer->Write<uint32_t>(sequences.size());
 	for (auto &seq : sequences) {
 		WriteSequence(*seq);
 	}
 	// reorder tables because of foreign key constraint
 	ReorderTableEntries(tables);
 	// now write the tables
-	metadata_writer->Write<uint32_t>(tables.size());
 	for (auto &table : tables) {
 		WriteTable(*table);
 	}
 	// now write the views
-	metadata_writer->Write<uint32_t>(views.size());
 	for (auto &view : views) {
 		WriteView(*view);
 	}
 
 	// finally write the macro's
-	metadata_writer->Write<uint32_t>(macros.size());
 	for (auto &macro : macros) {
 		WriteMacro(*macro);
+	}
+
+	// finally write the macro's
+	for (auto &macro : table_macros) {
+		WriteTableMacro(*macro);
 	}
 }
 
@@ -202,32 +220,41 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateSchema(context, info.get());
 
+	// first read all the counts
+	FieldReader field_reader(reader);
+	uint32_t enum_count = field_reader.ReadRequired<uint32_t>();
+	uint32_t seq_count = field_reader.ReadRequired<uint32_t>();
+	uint32_t table_count = field_reader.ReadRequired<uint32_t>();
+	uint32_t view_count = field_reader.ReadRequired<uint32_t>();
+	uint32_t macro_count = field_reader.ReadRequired<uint32_t>();
+	uint32_t table_macro_count = field_reader.ReadRequired<uint32_t>();
+	field_reader.Finalize();
+
 	// now read the enums
-	uint32_t enum_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < enum_count; i++) {
 		ReadType(context, reader);
 	}
 
 	// read the sequences
-	uint32_t seq_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < seq_count; i++) {
 		ReadSequence(context, reader);
 	}
 	// read the table count and recreate the tables
-	uint32_t table_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < table_count; i++) {
 		ReadTable(context, reader);
 	}
 	// now read the views
-	uint32_t view_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < view_count; i++) {
 		ReadView(context, reader);
 	}
 
 	// finally read the macro's
-	uint32_t macro_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < macro_count; i++) {
 		ReadMacro(context, reader);
+	}
+
+	for (uint32_t i = 0; i < table_macro_count; i++) {
+		ReadTableMacro(context, reader);
 	}
 }
 
@@ -276,13 +303,22 @@ void CheckpointManager::ReadType(ClientContext &context, MetaBlockReader &reader
 //===--------------------------------------------------------------------===//
 // Macro's
 //===--------------------------------------------------------------------===//
-void CheckpointManager::WriteMacro(MacroCatalogEntry &macro) {
+void CheckpointManager::WriteMacro(ScalarMacroCatalogEntry &macro) {
 	macro.Serialize(*metadata_writer);
 }
 
 void CheckpointManager::ReadMacro(ClientContext &context, MetaBlockReader &reader) {
-	auto info = MacroCatalogEntry::Deserialize(reader);
+	auto info = ScalarMacroCatalogEntry::Deserialize(reader);
+	auto &catalog = Catalog::GetCatalog(db);
+	catalog.CreateFunction(context, info.get());
+}
 
+void CheckpointManager::WriteTableMacro(TableMacroCatalogEntry &macro) {
+	macro.Serialize(*metadata_writer);
+}
+
+void CheckpointManager::ReadTableMacro(ClientContext &context, MetaBlockReader &reader) {
+	auto info = TableMacroCatalogEntry::Deserialize(reader);
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateFunction(context, info.get());
 }

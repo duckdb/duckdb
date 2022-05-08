@@ -16,11 +16,8 @@ struct DuckDBTypesData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, vector<Value> &inputs,
-                                                named_parameter_map_t &named_parameters,
-                                                vector<LogicalType> &input_table_types,
-                                                vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                vector<string> &names) {
+static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFunctionBindInput &input,
+                                                vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -55,7 +52,7 @@ unique_ptr<FunctionOperatorData> DuckDBTypesInit(ClientContext &context, const F
 }
 
 void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                         DataChunk *input, DataChunk &output) {
+                         DataChunk &output) {
 	auto &data = (DuckDBTypesData &)*operator_state;
 	if (data.offset >= data.types.size()) {
 		// finished returning values

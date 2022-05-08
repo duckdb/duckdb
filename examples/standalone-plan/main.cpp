@@ -98,7 +98,8 @@ void RunExampleDuckDBCatalog() {
 //===--------------------------------------------------------------------===//
 void CreateMyScanFunction(Connection &con);
 
-unique_ptr<TableFunctionRef> MyReplacementScan(const string &table_name, void *data) {
+unique_ptr<TableFunctionRef> MyReplacementScan(ClientContext &context, const string &table_name,
+                                               ReplacementScanData *data) {
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
@@ -186,7 +187,7 @@ void CreateAggregateFunction(Connection &con, string name, vector<LogicalType> a
 //===--------------------------------------------------------------------===//
 // Custom Table Scan Function
 //===--------------------------------------------------------------------===//
-struct MyBindData : public FunctionData {
+struct MyBindData : public TableFunctionData {
 	MyBindData(string name_p) : table_name(move(name_p)) {
 	}
 
@@ -200,11 +201,9 @@ struct MyBindData : public FunctionData {
 // myothertable
 // k: 1, 10, 20
 // (see MyScanNode)
-static unique_ptr<FunctionData> MyScanBind(ClientContext &context, vector<Value> &inputs,
-                                           named_parameter_map_t &named_parameters,
-                                           vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+static unique_ptr<FunctionData> MyScanBind(ClientContext &context, TableFunctionBindInput &input,
                                            vector<LogicalType> &return_types, vector<string> &names) {
-	auto table_name = inputs[0].ToString();
+	auto table_name = input.inputs[0].ToString();
 	if (table_name == "mytable") {
 		names.emplace_back("i");
 		return_types.emplace_back(LogicalType::INTEGER);

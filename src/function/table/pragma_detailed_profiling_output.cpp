@@ -4,7 +4,9 @@
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/common/limits.hpp"
+
 namespace duckdb {
 
 struct PragmaDetailedProfilingOutputOperatorData : public FunctionOperatorData {
@@ -21,10 +23,7 @@ struct PragmaDetailedProfilingOutputData : public TableFunctionData {
 	vector<LogicalType> types;
 };
 
-static unique_ptr<FunctionData> PragmaDetailedProfilingOutputBind(ClientContext &context, vector<Value> &inputs,
-                                                                  named_parameter_map_t &named_parameters,
-                                                                  vector<LogicalType> &input_table_types,
-                                                                  vector<string> &input_table_names,
+static unique_ptr<FunctionData> PragmaDetailedProfilingOutputBind(ClientContext &context, TableFunctionBindInput &input,
                                                                   vector<LogicalType> &return_types,
                                                                   vector<string> &names) {
 	names.emplace_back("OPERATOR_ID");
@@ -108,8 +107,7 @@ static void ExtractFunctions(ChunkCollection &collection, ExpressionInfo &info, 
 }
 
 static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                                  FunctionOperatorData *operator_state, DataChunk *input,
-                                                  DataChunk &output) {
+                                                  FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &state = (PragmaDetailedProfilingOutputOperatorData &)*operator_state;
 	auto &data = (PragmaDetailedProfilingOutputData &)*bind_data_p;
 
@@ -125,11 +123,12 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 		int operator_counter = 1;
 		int function_counter = 1;
 		int expression_counter = 1;
-		if (context.query_profiler_history->GetPrevProfilers().empty()) {
+		if (ClientData::Get(context).query_profiler_history->GetPrevProfilers().empty()) {
 			return;
 		}
 		// For each Operator
-		for (auto op : context.query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
+		for (auto op :
+		     ClientData::Get(context).query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
 			// For each Expression Executor
 			for (auto &expr_executor : op.second->info.executors_info) {
 				// For each Expression tree

@@ -1,5 +1,7 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/common/pair.hpp"
+#include <cmath>
+#include <limits>
 
 namespace duckdb {
 
@@ -102,6 +104,13 @@ static vector<TestType> GetTestTypes() {
 	                             Value(LogicalType::INTEGER), Value::INTEGER(-42)});
 	result.emplace_back(int_list_type, "int_array", empty_int_list, int_list);
 
+	auto double_list_type = LogicalType::LIST(LogicalType::DOUBLE);
+	auto empty_double_list = Value::EMPTYLIST(LogicalType::DOUBLE);
+	auto double_list = Value::LIST(
+	    {Value::DOUBLE(42), Value::DOUBLE(NAN), Value::DOUBLE(std::numeric_limits<double>::infinity()),
+	     Value::DOUBLE(-std::numeric_limits<double>::infinity()), Value(LogicalType::DOUBLE), Value::DOUBLE(-42)});
+	result.emplace_back(double_list_type, "double_array", empty_double_list, double_list);
+
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto empty_varchar_list = Value::EMPTYLIST(LogicalType::VARCHAR);
 	auto varchar_list =
@@ -167,11 +176,8 @@ static vector<TestType> GetTestTypes() {
 	return result;
 }
 
-static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, vector<Value> &inputs,
-                                                 named_parameter_map_t &named_parameters,
-                                                 vector<LogicalType> &input_table_types,
-                                                 vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                 vector<string> &names) {
+static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFunctionBindInput &input,
+                                                 vector<LogicalType> &return_types, vector<string> &names) {
 	auto test_types = GetTestTypes();
 	for (auto &test_type : test_types) {
 		return_types.push_back(move(test_type.type));
@@ -196,7 +202,7 @@ unique_ptr<FunctionOperatorData> TestAllTypesInit(ClientContext &context, const 
 }
 
 void TestAllTypesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk *input, DataChunk &output) {
+                          DataChunk &output) {
 	auto &data = (TestAllTypesData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

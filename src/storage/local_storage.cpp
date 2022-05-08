@@ -23,7 +23,7 @@ void LocalTableStorage::InitializeScan(LocalScanState &state, TableFilterSet *ta
 		// nothing to scan
 		return;
 	}
-	state.SetStorage(this);
+	state.SetStorage(shared_from_this());
 
 	state.chunk_index = 0;
 	state.max_index = collection.ChunkCount() - 1;
@@ -47,12 +47,12 @@ LocalScanState::~LocalScanState() {
 	SetStorage(nullptr);
 }
 
-void LocalScanState::SetStorage(LocalTableStorage *new_storage) {
-	if (storage != nullptr) {
+void LocalScanState::SetStorage(shared_ptr<LocalTableStorage> new_storage) {
+	if (storage) {
 		D_ASSERT(storage->active_scans > 0);
 		storage->active_scans--;
 	}
-	storage = new_storage;
+	storage = move(new_storage);
 	if (storage) {
 		storage->active_scans++;
 	}
@@ -166,7 +166,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 	auto entry = table_storage.find(table);
 	LocalTableStorage *storage;
 	if (entry == table_storage.end()) {
-		auto new_storage = make_unique<LocalTableStorage>(*table);
+		auto new_storage = make_shared<LocalTableStorage>(*table);
 		storage = new_storage.get();
 		table_storage.insert(make_pair(table, move(new_storage)));
 	} else {
@@ -302,14 +302,26 @@ static void UpdateChunk(Vector &data, Vector &updates, Vector &row_ids, idx_t co
 	case PhysicalType::INT8:
 		TemplatedUpdateLoop<int8_t>(data, updates, row_ids, count, base_index);
 		break;
+	case PhysicalType::UINT8:
+		TemplatedUpdateLoop<uint8_t>(data, updates, row_ids, count, base_index);
+		break;
 	case PhysicalType::INT16:
 		TemplatedUpdateLoop<int16_t>(data, updates, row_ids, count, base_index);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedUpdateLoop<uint16_t>(data, updates, row_ids, count, base_index);
 		break;
 	case PhysicalType::INT32:
 		TemplatedUpdateLoop<int32_t>(data, updates, row_ids, count, base_index);
 		break;
+	case PhysicalType::UINT32:
+		TemplatedUpdateLoop<uint32_t>(data, updates, row_ids, count, base_index);
+		break;
 	case PhysicalType::INT64:
 		TemplatedUpdateLoop<int64_t>(data, updates, row_ids, count, base_index);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedUpdateLoop<uint64_t>(data, updates, row_ids, count, base_index);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedUpdateLoop<float>(data, updates, row_ids, count, base_index);

@@ -33,16 +33,16 @@ struct RegrR2Operation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
-		CorrOperation::Combine<CorrState, OP>(source.corr, &target->corr);
-		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop_x, &target->var_pop_x);
-		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop_y, &target->var_pop_y);
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+		CorrOperation::Combine<CorrState, OP>(source.corr, &target->corr, bind_data);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop_x, &target->var_pop_x, bind_data);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop_y, &target->var_pop_y, bind_data);
 	}
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *fd, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		auto var_pop_x = state->var_pop_x.count > 1 ? (state->var_pop_x.dsquared / state->var_pop_x.count) : 0;
-		if (!Value::DoubleIsValid(var_pop_x)) {
+		if (!Value::DoubleIsFinite(var_pop_x)) {
 			throw OutOfRangeException("VARPOP(X) is out of range!");
 		}
 		if (var_pop_x == 0) {
@@ -50,7 +50,7 @@ struct RegrR2Operation {
 			return;
 		}
 		auto var_pop_y = state->var_pop_y.count > 1 ? (state->var_pop_y.dsquared / state->var_pop_y.count) : 0;
-		if (!Value::DoubleIsValid(var_pop_y)) {
+		if (!Value::DoubleIsFinite(var_pop_y)) {
 			throw OutOfRangeException("VARPOP(Y) is out of range!");
 		}
 		if (var_pop_y == 0) {

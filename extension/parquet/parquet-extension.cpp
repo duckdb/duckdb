@@ -36,7 +36,7 @@
 
 namespace duckdb {
 
-struct ParquetReadBindData : public FunctionData {
+struct ParquetReadBindData : public TableFunctionData {
 	shared_ptr<ParquetReader> initial_reader;
 	vector<string> files;
 	vector<column_t> column_ids;
@@ -173,10 +173,10 @@ public:
 	}
 
 	static void ParquetScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
-	                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output,
+	                                    FunctionOperatorData *operator_state, DataChunk &output,
 	                                    ParallelState *parallel_state_p) {
 		//! FIXME: Have specialized parallel function from pandas scan here
-		ParquetScanImplementation(context, bind_data, operator_state, input, output);
+		ParquetScanImplementation(context, bind_data, operator_state, output);
 	}
 
 	static unique_ptr<FunctionData> ParquetScanBindInternal(ClientContext &context, vector<string> files,
@@ -199,18 +199,15 @@ public:
 		return files;
 	}
 
-	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, vector<Value> &inputs,
-	                                                named_parameter_map_t &named_parameters,
-	                                                vector<LogicalType> &input_table_types,
-	                                                vector<string> &input_table_names,
+	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
 		auto &config = DBConfig::GetConfig(context);
 		if (!config.enable_external_access) {
 			throw PermissionException("Scanning Parquet files is disabled through configuration");
 		}
-		auto file_name = inputs[0].GetValue<string>();
+		auto file_name = input.inputs[0].GetValue<string>();
 		ParquetOptions parquet_options(context);
-		for (auto &kv : named_parameters) {
+		for (auto &kv : input.named_parameters) {
 			if (kv.first == "binary_as_string") {
 				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
 			}
@@ -220,10 +217,7 @@ public:
 		return ParquetScanBindInternal(context, move(files), return_types, names, parquet_options);
 	}
 
-	static unique_ptr<FunctionData> ParquetScanBindList(ClientContext &context, vector<Value> &inputs,
-	                                                    named_parameter_map_t &named_parameters,
-	                                                    vector<LogicalType> &input_table_types,
-	                                                    vector<string> &input_table_names,
+	static unique_ptr<FunctionData> ParquetScanBindList(ClientContext &context, TableFunctionBindInput &input,
 	                                                    vector<LogicalType> &return_types, vector<string> &names) {
 		auto &config = DBConfig::GetConfig(context);
 		if (!config.enable_external_access) {
@@ -231,7 +225,7 @@ public:
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		vector<string> files;
-		for (auto &val : ListValue::GetChildren(inputs[0])) {
+		for (auto &val : ListValue::GetChildren(input.inputs[0])) {
 			auto glob_files = ParquetGlob(fs, val.ToString(), context);
 			files.insert(files.end(), glob_files.begin(), glob_files.end());
 		}
@@ -239,7 +233,7 @@ public:
 			throw IOException("Parquet reader needs at least one file to read");
 		}
 		ParquetOptions parquet_options(context);
-		for (auto &kv : named_parameters) {
+		for (auto &kv : input.named_parameters) {
 			if (kv.first == "binary_as_string") {
 				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
 			}
@@ -294,7 +288,7 @@ public:
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, const FunctionData *bind_data_p,
-	                                      FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+	                                      FunctionOperatorData *operator_state, DataChunk &output) {
 		if (!operator_state) {
 			return;
 		}
@@ -395,7 +389,7 @@ public:
 	}
 };
 
-struct ParquetWriteBindData : public FunctionData {
+struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
 	string file_name;
 	vector<string> column_names;
@@ -496,7 +490,8 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ClientContext &context
 	return make_unique<ParquetWriteLocalState>();
 }
 
-unique_ptr<TableFunctionRef> ParquetScanReplacement(const string &table_name, void *data) {
+unique_ptr<TableFunctionRef> ParquetScanReplacement(ClientContext &context, const string &table_name,
+                                                    ReplacementScanData *data) {
 	if (!StringUtil::EndsWith(StringUtil::Lower(table_name), ".parquet")) {
 		return nullptr;
 	}

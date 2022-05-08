@@ -7,12 +7,12 @@
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/common/tree_renderer.hpp"
-#include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include <utility>
 #include <algorithm>
 
@@ -39,7 +39,7 @@ string QueryProfiler::GetSaveLocation() const {
 }
 
 QueryProfiler &QueryProfiler::Get(ClientContext &context) {
-	return *context.profiler;
+	return *ClientData::Get(context).profiler;
 }
 
 void QueryProfiler::StartQuery(string query, bool is_explain_analyze) {
@@ -83,6 +83,7 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	case PhysicalOperatorType::HASH_JOIN:
 	case PhysicalOperatorType::CROSS_PRODUCT:
 	case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
+	case PhysicalOperatorType::IE_JOIN:
 	case PhysicalOperatorType::DELIM_JOIN:
 	case PhysicalOperatorType::UNION:
 	case PhysicalOperatorType::RECURSIVE_CTE:
@@ -238,7 +239,7 @@ void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t 
 	if (!enabled) {
 		return;
 	}
-	if (!Value::DoubleIsValid(time)) {
+	if (!Value::DoubleIsFinite(time)) {
 		return;
 	}
 	auto entry = timings.find(op);

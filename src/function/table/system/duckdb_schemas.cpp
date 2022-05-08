@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
@@ -15,11 +16,8 @@ struct DuckDBSchemasData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> DuckDBSchemasBind(ClientContext &context, vector<Value> &inputs,
-                                                  named_parameter_map_t &named_parameters,
-                                                  vector<LogicalType> &input_table_types,
-                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                  vector<string> &names) {
+static unique_ptr<FunctionData> DuckDBSchemasBind(ClientContext &context, TableFunctionBindInput &input,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("oid");
 	return_types.emplace_back(LogicalType::BIGINT);
 
@@ -43,13 +41,13 @@ unique_ptr<FunctionOperatorData> DuckDBSchemasInit(ClientContext &context, const
 	Catalog::GetCatalog(context).ScanSchemas(
 	    context, [&](CatalogEntry *entry) { result->entries.push_back((SchemaCatalogEntry *)entry); });
 	// get the temp schema as well
-	result->entries.push_back(context.temporary_objects.get());
+	result->entries.push_back(ClientData::Get(context).temporary_objects.get());
 
 	return move(result);
 }
 
 void DuckDBSchemasFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                           DataChunk *input, DataChunk &output) {
+                           DataChunk &output) {
 	auto &data = (DuckDBSchemasData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

@@ -5,7 +5,8 @@
 namespace duckdb {
 
 PreparedStatementData::PreparedStatementData(StatementType type)
-    : statement_type(type), read_only(true), requires_valid_transaction(true), allow_stream_result(false) {
+    : statement_type(type), read_only(true), requires_valid_transaction(true), allow_stream_result(false),
+      bound_all_parameters(true) {
 }
 
 PreparedStatementData::~PreparedStatementData() {

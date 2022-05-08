@@ -65,5 +65,5 @@ void duckdb_disconnect(duckdb_connection *connection) {
 duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckdb_result *out) {
 	Connection *conn = (Connection *)connection;
 	auto result = conn->Query(query);
-	return duckdb_translate_result(result.get(), out);
+	return duckdb_translate_result(move(result), out);
 }

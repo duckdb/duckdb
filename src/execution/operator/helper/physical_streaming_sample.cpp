@@ -53,7 +53,7 @@ unique_ptr<OperatorState> PhysicalStreamingSample::GetOperatorState(ClientContex
 }
 
 OperatorResultType PhysicalStreamingSample::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                    OperatorState &state) const {
+                                                    GlobalOperatorState &gstate, OperatorState &state) const {
 	switch (method) {
 	case SampleMethod::BERNOULLI_SAMPLE:
 		BernoulliSample(input, chunk, state);

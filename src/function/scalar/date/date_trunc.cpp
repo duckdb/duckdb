@@ -6,9 +6,6 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/string_util.hpp"
 
-// TODO date_trunc function should also handle interval data type when it is implemented. See
-// https://www.postgresql.org/docs/9.1/functions-datetime.html
-
 namespace duckdb {
 
 struct DateTrunc {
@@ -219,6 +216,101 @@ timestamp_t DateTrunc::MicrosecondOperator::Operation(date_t input) {
 	return DayOperator::Operation<date_t, timestamp_t>(input);
 }
 
+// INTERVAL specialisations
+template <>
+interval_t DateTrunc::MillenniumOperator::Operation(interval_t input) {
+	input.days = 0;
+	input.micros = 0;
+	input.months = (input.months / Interval::MONTHS_PER_MILLENIUM) * Interval::MONTHS_PER_MILLENIUM;
+	return input;
+}
+
+template <>
+interval_t DateTrunc::CenturyOperator::Operation(interval_t input) {
+	input.days = 0;
+	input.micros = 0;
+	input.months = (input.months / Interval::MONTHS_PER_CENTURY) * Interval::MONTHS_PER_CENTURY;
+	return input;
+}
+
+template <>
+interval_t DateTrunc::DecadeOperator::Operation(interval_t input) {
+	input.days = 0;
+	input.micros = 0;
+	input.months = (input.months / Interval::MONTHS_PER_DECADE) * Interval::MONTHS_PER_DECADE;
+	return input;
+}
+
+template <>
+interval_t DateTrunc::YearOperator::Operation(interval_t input) {
+	input.days = 0;
+	input.micros = 0;
+	input.months = (input.months / Interval::MONTHS_PER_YEAR) * Interval::MONTHS_PER_YEAR;
+	return input;
+}
+
+template <>
+interval_t DateTrunc::QuarterOperator::Operation(interval_t input) {
+	input.days = 0;
+	input.micros = 0;
+	input.months = (input.months / Interval::MONTHS_PER_QUARTER) * Interval::MONTHS_PER_QUARTER;
+	return input;
+}
+
+template <>
+interval_t DateTrunc::MonthOperator::Operation(interval_t input) {
+	input.days = 0;
+	input.micros = 0;
+	return input;
+}
+
+template <>
+interval_t DateTrunc::WeekOperator::Operation(interval_t input) {
+	input.micros = 0;
+	input.days = (input.days / Interval::DAYS_PER_WEEK) * Interval::DAYS_PER_WEEK;
+	return input;
+}
+
+template <>
+interval_t DateTrunc::ISOYearOperator::Operation(interval_t input) {
+	return YearOperator::Operation<interval_t, interval_t>(input);
+}
+
+template <>
+interval_t DateTrunc::DayOperator::Operation(interval_t input) {
+	input.micros = 0;
+	return input;
+}
+
+template <>
+interval_t DateTrunc::HourOperator::Operation(interval_t input) {
+	input.micros = (input.micros / Interval::MICROS_PER_HOUR) * Interval::MICROS_PER_HOUR;
+	return input;
+}
+
+template <>
+interval_t DateTrunc::MinuteOperator::Operation(interval_t input) {
+	input.micros = (input.micros / Interval::MICROS_PER_MINUTE) * Interval::MICROS_PER_MINUTE;
+	return input;
+}
+
+template <>
+interval_t DateTrunc::SecondOperator::Operation(interval_t input) {
+	input.micros = (input.micros / Interval::MICROS_PER_SEC) * Interval::MICROS_PER_SEC;
+	return input;
+}
+
+template <>
+interval_t DateTrunc::MillisecondOperator::Operation(interval_t input) {
+	input.micros = (input.micros / Interval::MICROS_PER_MSEC) * Interval::MICROS_PER_MSEC;
+	return input;
+}
+
+template <>
+interval_t DateTrunc::MicrosecondOperator::Operation(interval_t input) {
+	return input;
+}
+
 template <class TA, class TR>
 static TR TruncateElement(DatePartSpecifier type, TA element) {
 	switch (type) {
@@ -322,7 +414,7 @@ static void DateTruncUnaryExecutor(DatePartSpecifier type, Vector &left, Vector 
 	}
 }
 
-template <typename T>
+template <typename TA, typename TR>
 static void DateTruncFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto &part_arg = args.data[0];
@@ -335,20 +427,22 @@ static void DateTruncFunction(DataChunk &args, ExpressionState &state, Vector &r
 			ConstantVector::SetNull(result, true);
 		} else {
 			const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
-			DateTruncUnaryExecutor<T, timestamp_t>(type, date_arg, result, args.size());
+			DateTruncUnaryExecutor<TA, TR>(type, date_arg, result, args.size());
 		}
 	} else {
-		BinaryExecutor::ExecuteStandard<string_t, T, timestamp_t, DateTruncBinaryOperator>(part_arg, date_arg, result,
-		                                                                                   args.size());
+		BinaryExecutor::ExecuteStandard<string_t, TA, TR, DateTruncBinaryOperator>(part_arg, date_arg, result,
+		                                                                           args.size());
 	}
 }
 
 void DateTruncFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet date_trunc("date_trunc");
 	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
-	                                      DateTruncFunction<timestamp_t>));
-	date_trunc.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::TIMESTAMP, DateTruncFunction<date_t>));
+	                                      DateTruncFunction<timestamp_t, timestamp_t>));
+	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::TIMESTAMP,
+	                                      DateTruncFunction<date_t, timestamp_t>));
+	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::INTERVAL,
+	                                      DateTruncFunction<interval_t, interval_t>));
 	set.AddFunction(date_trunc);
 	date_trunc.name = "datetrunc";
 	set.AddFunction(date_trunc);

@@ -36,7 +36,7 @@ struct SkewnessOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (source.n == 0) {
 			return;
 		}
@@ -65,8 +65,8 @@ struct SkewnessOperation {
 		target[idx] = temp1 * temp *
 		              (state->sum_cub - 3 * state->sum_sqr * state->sum * temp + 2 * pow(state->sum, 3) * temp * temp) /
 		              div;
-		if (!Value::DoubleIsValid(target[idx])) {
-			mask.SetInvalid(idx);
+		if (!Value::DoubleIsFinite(target[idx])) {
+			throw OutOfRangeException("SKEW is out of range!");
 		}
 	}
 

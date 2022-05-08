@@ -24,11 +24,14 @@ public:
 	unique_ptr<TableRef> from_table;
 	vector<string> columns;
 	vector<unique_ptr<ParsedExpression>> expressions;
+	//! keep track of optional returningList if statement contains a RETURNING keyword
+	vector<unique_ptr<ParsedExpression>> returning_list;
 
 protected:
 	UpdateStatement(const UpdateStatement &other);
 
 public:
+	string ToString() const override;
 	unique_ptr<SQLStatement> Copy() const override;
 };
 

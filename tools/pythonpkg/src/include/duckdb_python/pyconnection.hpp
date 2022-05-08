@@ -42,10 +42,10 @@ struct DuckDBPyConnection {
 public:
 	shared_ptr<DuckDB> database;
 	shared_ptr<Connection> connection;
-	unordered_map<string, unique_ptr<RegisteredObject>> registered_objects;
 	unique_ptr<DuckDBPyResult> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
 	std::thread::id thread_id = std::this_thread::get_id();
+	bool check_same_thread = true;
 
 public:
 	explicit DuckDBPyConnection(std::thread::id thread_id_p = std::this_thread::get_id()) : thread_id(thread_id_p) {
@@ -81,7 +81,13 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename, bool binary_as_string);
 
-	unique_ptr<DuckDBPyRelation> FromArrowTable(py::object &table, const idx_t rows_per_tuple = 1000000);
+	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object, const idx_t rows_per_tuple = 1000000);
+
+	unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
+
+	unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query);
+
+	unordered_set<string> GetTableNames(const string &query);
 
 	DuckDBPyConnection *UnregisterPythonObject(const string &name);
 
@@ -112,12 +118,15 @@ public:
 
 	py::object FetchRecordBatchReader(const idx_t chunk_size) const;
 
-	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
+	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config,
+	                                              bool check_same_thread);
 
 	static vector<Value> TransformPythonParamList(py::handle params);
 
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;
+
+	static bool IsAcceptedArrowObject(string &py_object_type);
 };
 
 } // namespace duckdb

@@ -51,7 +51,11 @@ const vector<ColumnDefinition> &JoinRelation::Columns() {
 
 string JoinRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth);
-	str = "Join " + JoinTypeToString(join_type);
+	str += "Join " + JoinTypeToString(join_type);
+	if (condition) {
+		str += " " + condition->GetName();
+	}
+
 	return str + "\n" + left->ToString(depth + 1) + "\n" + right->ToString(depth + 1);
 }
 

@@ -13,12 +13,47 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 
 namespace duckdb {
 
-bool Binder::BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
-                                    vector<Value> &parameters, named_parameter_map_t &named_parameters,
-                                    unique_ptr<BoundSubqueryRef> &subquery, string &error) {
+static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function) {
+	return table_function.functions.size() == 1 && table_function.functions[0].arguments.size() == 1 &&
+	       table_function.functions[0].arguments[0].id() == LogicalTypeId::TABLE;
+}
+
+bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
+                                         unique_ptr<BoundSubqueryRef> &subquery, string &error) {
+	auto binder = Binder::CreateBinder(this->context, this, true);
+	if (expressions.size() == 1 && expressions[0]->type == ExpressionType::SUBQUERY) {
+		// general case: argument is a subquery, bind it as part of the node
+		auto &se = (SubqueryExpression &)*expressions[0];
+		auto node = binder->BindNode(*se.subquery->node);
+		subquery = make_unique<BoundSubqueryRef>(move(binder), move(node));
+		return true;
+	}
+	// special case: non-subquery parameter to table-in table-out function
+	// generate a subquery and bind that (i.e. UNNEST([1,2,3]) becomes UNNEST((SELECT [1,2,3]))
+	auto select_node = make_unique<SelectNode>();
+	select_node->select_list = move(expressions);
+	select_node->from_table = make_unique<EmptyTableRef>();
+	auto node = binder->BindNode(*select_node);
+	subquery = make_unique<BoundSubqueryRef>(move(binder), move(node));
+	return true;
+}
+
+bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
+                                         vector<unique_ptr<ParsedExpression>> &expressions,
+                                         vector<LogicalType> &arguments, vector<Value> &parameters,
+                                         named_parameter_map_t &named_parameters,
+                                         unique_ptr<BoundSubqueryRef> &subquery, string &error) {
+	if (IsTableInTableOutFunction(table_function)) {
+		// special case binding for table-in table-out function
+		arguments.emplace_back(LogicalTypeId::TABLE);
+		return BindTableInTableOutFunction(expressions, subquery, error);
+	}
 	bool seen_subquery = false;
 	for (auto &child : expressions) {
 		string parameter_name;
@@ -48,6 +83,7 @@ bool Binder::BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expres
 			arguments.emplace_back(LogicalTypeId::TABLE);
 			continue;
 		}
+
 		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
 		LogicalType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
@@ -78,20 +114,48 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
 	auto fexpr = (FunctionExpression *)ref.function.get();
 
+	TableFunctionCatalogEntry *function = nullptr;
+
+	// fetch the function from the catalog
+	auto &catalog = Catalog::GetCatalog(context);
+
+	auto func_catalog = catalog.GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr->schema,
+	                                     fexpr->function_name, false, error_context);
+
+	if (func_catalog->type == CatalogType::TABLE_FUNCTION_ENTRY) {
+		function = (TableFunctionCatalogEntry *)func_catalog;
+	} else if (func_catalog->type == CatalogType::TABLE_MACRO_ENTRY) {
+		auto macro_func = (TableMacroCatalogEntry *)func_catalog;
+		auto query_node = BindTableMacro(*fexpr, macro_func, 0);
+		D_ASSERT(query_node);
+
+		auto binder = Binder::CreateBinder(context, this);
+		binder->can_contain_nulls = true;
+
+		binder->alias = ref.alias.empty() ? "unnamed_query" : ref.alias;
+		auto query = binder->BindNode(*query_node);
+
+		idx_t bind_index = query->GetRootIndex();
+		// string alias;
+		string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index) : ref.alias);
+
+		auto result = make_unique<BoundSubqueryRef>(move(binder), move(query));
+		// remember ref here is TableFunctionRef and NOT base class
+		bind_context.AddSubquery(bind_index, alias, ref, *result->subquery);
+		MoveCorrelatedExpressions(*result->binder);
+		return move(result);
+	}
+
 	// evaluate the input parameters to the function
 	vector<LogicalType> arguments;
 	vector<Value> parameters;
 	named_parameter_map_t named_parameters;
 	unique_ptr<BoundSubqueryRef> subquery;
 	string error;
-	if (!BindFunctionParameters(fexpr->children, arguments, parameters, named_parameters, subquery, error)) {
+	if (!BindTableFunctionParameters(*function, fexpr->children, arguments, parameters, named_parameters, subquery,
+	                                 error)) {
 		throw BinderException(FormatError(ref, error));
 	}
-
-	// fetch the function from the catalog
-	auto &catalog = Catalog::GetCatalog(context);
-	auto function =
-	    catalog.GetEntry<TableFunctionCatalogEntry>(context, fexpr->schema, fexpr->function_name, false, error_context);
 
 	// select the function based on the input parameters
 	idx_t best_function_idx = Function::BindFunction(function->name, function->functions, arguments, error);
@@ -125,11 +189,19 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	vector<LogicalType> return_types;
 	vector<string> return_names;
 	if (table_function.bind) {
-		bind_data = table_function.bind(context, parameters, named_parameters, input_table_types, input_table_names,
-		                                return_types, return_names);
+		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
+		                                  table_function.function_info.get());
+		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 	}
-	D_ASSERT(return_types.size() == return_names.size());
-	D_ASSERT(return_types.size() > 0);
+	if (return_types.size() != return_names.size()) {
+		throw InternalException(
+		    "Failed to bind \"%s\": Table function return_types and return_names must be of the same size",
+		    table_function.name);
+	}
+	if (return_types.empty()) {
+		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
+		                        table_function.name);
+	}
 	// overwrite the names with any supplied aliases
 	for (idx_t i = 0; i < ref.column_name_alias.size() && i < return_names.size(); i++) {
 		return_names[i] = ref.column_name_alias[i];

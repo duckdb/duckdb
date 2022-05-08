@@ -60,6 +60,9 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 		stmt->param_desc->ResetParams(stmt->stmt->n_param);
 
 		stmt->bound_cols.resize(stmt->stmt->ColumnCount());
+
+		stmt->FillIRD();
+
 		return SQL_SUCCESS;
 	});
 }
@@ -80,7 +83,6 @@ SQLRETURN duckdb::BatchExecuteStmt(SQLHSTMT statement_handle) {
 				return fetch_ret;
 			}
 		}
-
 		return ret;
 	});
 }
@@ -827,8 +829,8 @@ SQLRETURN duckdb::BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT para
 			ipd_record->sql_desc_precision = column_size;
 		}
 
-		if (ipd_record->SetValueType(parameter_type) == SQL_ERROR ||
-		    apd_record->SetValueType(value_type) == SQL_ERROR) {
+		if (ipd_record->SetSqlDataType(parameter_type) == SQL_ERROR ||
+		    apd_record->SetSqlDataType(value_type) == SQL_ERROR) {
 			stmt->error_messages.emplace_back("Error while binding parameter/value type.");
 			return SQL_ERROR;
 		}

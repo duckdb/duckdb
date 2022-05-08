@@ -7,7 +7,7 @@ require parquet
 query TTT
 select * from parquet_scan('data/parquet-testing/nan-float.parquet') order by 1
 ----
-NULL	bar	0
 -1	foo	1
 2.5	baz	1
+inf	bar	0
 

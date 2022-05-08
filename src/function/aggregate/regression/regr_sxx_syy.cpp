@@ -22,9 +22,9 @@ struct RegrBaseOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
-		RegrCountFunction::Combine<size_t, OP>(source.count, &target->count);
-		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, &target->var_pop);
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+		RegrCountFunction::Combine<size_t, OP>(source.count, &target->count, bind_data);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, &target->var_pop, bind_data);
 	}
 
 	template <class T, class STATE>
@@ -34,7 +34,7 @@ struct RegrBaseOperation {
 			return;
 		}
 		auto var_pop = state->var_pop.count > 1 ? (state->var_pop.dsquared / state->var_pop.count) : 0;
-		if (!Value::DoubleIsValid(var_pop)) {
+		if (!Value::DoubleIsFinite(var_pop)) {
 			throw OutOfRangeException("VARPOP is out of range!");
 		}
 		RegrCountFunction::Finalize<T, size_t>(result, fd, &state->count, target, mask, idx);

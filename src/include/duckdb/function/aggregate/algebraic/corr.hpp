@@ -41,10 +41,10 @@ struct CorrOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
-		CovarOperation::Combine<CovarState, OP>(source.cov_pop, &target->cov_pop);
-		STDDevBaseOperation::Combine<StddevState, OP>(source.dev_pop_x, &target->dev_pop_x);
-		STDDevBaseOperation::Combine<StddevState, OP>(source.dev_pop_y, &target->dev_pop_y);
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+		CovarOperation::Combine<CovarState, OP>(source.cov_pop, &target->cov_pop, bind_data);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.dev_pop_x, &target->dev_pop_x, bind_data);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.dev_pop_y, &target->dev_pop_y, bind_data);
 	}
 
 	template <class T, class STATE>
@@ -54,12 +54,12 @@ struct CorrOperation {
 		} else {
 			auto cov = state->cov_pop.co_moment / state->cov_pop.count;
 			auto std_x = state->dev_pop_x.count > 1 ? sqrt(state->dev_pop_x.dsquared / state->dev_pop_x.count) : 0;
-			if (!Value::DoubleIsValid(std_x)) {
-				throw OutOfRangeException("STDDEV_POP for X is invalid!");
+			if (!Value::DoubleIsFinite(std_x)) {
+				throw OutOfRangeException("STDDEV_POP for X is out of range!");
 			}
 			auto std_y = state->dev_pop_y.count > 1 ? sqrt(state->dev_pop_y.dsquared / state->dev_pop_y.count) : 0;
-			if (!Value::DoubleIsValid(std_y)) {
-				throw OutOfRangeException("STDDEV_POP for Y is invalid!");
+			if (!Value::DoubleIsFinite(std_y)) {
+				throw OutOfRangeException("STDDEV_POP for Y is out of range!");
 			}
 			if (std_x * std_y == 0) {
 				mask.SetInvalid(idx);

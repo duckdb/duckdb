@@ -64,7 +64,7 @@ class TestNonDefaultConn(object):
         conn.execute("insert into t values (1)")
         test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4]})
         test_arrow = pa.Table.from_pandas(test_df)
-        rel = duckdb.from_arrow_table(test_arrow, connection=conn)
+        rel = duckdb.from_arrow(test_arrow, connection=conn)
         assert rel.query('t_2','select count(*) from t inner join t_2 on (a = i)').fetchall()[0] ==  (1,)
         rel = duckdb.arrow(test_arrow, connection=conn)
         assert rel.query('t_2','select count(*) from t inner join t_2 on (a = i)').fetchall()[0] ==  (1,)

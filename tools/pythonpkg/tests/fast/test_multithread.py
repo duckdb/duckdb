@@ -11,6 +11,10 @@ try:
 except:
     can_run = False
 
+def connect_duck(duckdb_conn):
+    out = duckdb_conn.execute('select i from (values (42), (84), (NULL), (128)) tbl(i)').fetchall()
+    assert out == [(42,), (84,), (None,), (128,)]
+
 class DuckDBThreaded:
     def __init__(self,duckdb_insert_thread_count,thread_function):
         self.duckdb_insert_thread_count = duckdb_insert_thread_count
@@ -41,7 +45,9 @@ class DuckDBThreaded:
 
         assert (return_value)
 
+
 def execute_query_same_connection(duckdb_conn, queue):
+
     try:
         out = duckdb_conn.execute('select i from (values (42), (84), (NULL), (128)) tbl(i)')
         queue.put(False)
@@ -262,12 +268,12 @@ def from_df(duckdb_conn, queue):
     except:
         queue.put(False)
 
-def from_arrow_table(duckdb_conn, queue):
+def from_arrow(duckdb_conn, queue):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     arrow_tbl = pa.Table.from_pydict({'my_column':pa.array([1,2,3,4,5],type=pa.int64())})
     try:
-        out = duckdb_conn.from_arrow_table(arrow_tbl)
+        out = duckdb_conn.from_arrow(arrow_tbl)
         queue.put(True)
     except:
         queue.put(False)
@@ -405,10 +411,10 @@ class TestDuckMultithread(object):
         duck_threads = DuckDBThreaded(10,from_df)
         duck_threads.multithread_test() 
 
-    def test_from_arrow_table(self, duckdb_cursor):
+    def test_from_arrow(self, duckdb_cursor):
         if not can_run:
             return
-        duck_threads = DuckDBThreaded(10,from_arrow_table)
+        duck_threads = DuckDBThreaded(10,from_arrow)
         duck_threads.multithread_test()
  
     def test_from_csv_auto(self, duckdb_cursor):
@@ -425,6 +431,13 @@ class TestDuckMultithread(object):
 
     def test_cursor(self, duckdb_cursor):
         duck_threads = DuckDBThreaded(10,cursor)
-        duck_threads.multithread_test(False)    
+        duck_threads.multithread_test(False)
+
+    def test_check_same_thread_false(self, duckdb_cursor):
+        con = duckdb.connect(check_same_thread=False)
+
+        x = threading.Thread(target=connect_duck, args=(con,))
+        x.start()
+
 
 

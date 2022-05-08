@@ -38,7 +38,7 @@ struct KurtosisOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (source.n == 0) {
 			return;
 		}
@@ -74,8 +74,8 @@ struct KurtosisOperation {
 			mask.SetInvalid(idx);
 		} // LCOV_EXCL_STOP
 		target[idx] = (n - 1) * ((n + 1) * m4 / (m2 * m2) - 3 * (n - 1)) / ((n - 2) * (n - 3));
-		if (!Value::DoubleIsValid(target[idx])) {
-			mask.SetInvalid(idx);
+		if (!Value::DoubleIsFinite(target[idx])) {
+			throw OutOfRangeException("Kurtosis is out of range!");
 		}
 	}
 

@@ -33,6 +33,8 @@ public:
 		return max_count;
 	}
 
+	unique_ptr<Expression> CreateExtraReference(unique_ptr<ParsedExpression> expr);
+
 private:
 	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, idx_t index);
 

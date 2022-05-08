@@ -588,7 +588,7 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 		break;
 	}
 
-	if (rec_number <= 0 || rec_number > (SQLSMALLINT)records.size()) {
+	if (rec_number <= 0) {
 		error_messages.emplace_back("Invalid descriptor index");
 		return SQL_ERROR;
 	}
@@ -836,6 +836,21 @@ SQLRETURN DescRecord::SetValueType(SQLSMALLINT value_type) {
 	return SQL_SUCCESS;
 }
 
+SQLRETURN DescRecord::SetSqlDataType(SQLSMALLINT type) {
+	sql_desc_type = sql_desc_concise_type = type;
+	if (OdbcInterval::IsIntervalType(type)) {
+		sql_desc_type = SQL_INTERVAL;
+		sql_desc_concise_type = type;
+		auto interval_code = OdbcInterval::GetIntervalCode(type);
+		if (interval_code == SQL_ERROR) {
+			return SQL_ERROR;
+		}
+		sql_desc_datetime_interval_code = interval_code;
+	}
+
+	return SQL_SUCCESS;
+}
+
 SQLRETURN DescRecord::SetSqlDescType(SQLSMALLINT type) {
 	std::vector<duckdb::TypeInfo> vec_typeinfo;
 	ApiInfo::FindDataType(type, vec_typeinfo);
@@ -844,7 +859,8 @@ SQLRETURN DescRecord::SetSqlDescType(SQLSMALLINT type) {
 	}
 	auto type_info = vec_typeinfo.front();
 	// for consistency check set all other fields according with the first returned TypeInfo
-	sql_desc_type = type_info.sql_data_type;
+	SetSqlDataType(type_info.sql_data_type);
+
 	sql_desc_datetime_interval_code = type_info.sql_datetime_sub;
 	sql_desc_precision = type_info.column_size;
 	sql_desc_datetime_interval_precision = type_info.interval_precision;
@@ -855,6 +871,18 @@ SQLRETURN DescRecord::SetSqlDescType(SQLSMALLINT type) {
 	return SQL_SUCCESS;
 }
 
+void DescRecord::SetDescUnsignedField(const duckdb::LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+		sql_desc_unsigned = SQL_TRUE;
+		break;
+	default:
+		sql_desc_unsigned = SQL_FALSE;
+	}
+}
 //! DescHeader functions ******************************************************
 DescHeader::DescHeader() {
 	Reset();

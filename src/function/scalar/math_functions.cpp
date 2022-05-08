@@ -36,6 +36,10 @@ void BuiltinFunctions::RegisterMathFunctions() {
 	Register<NextAfterFun>();
 
 	Register<EvenFun>();
+
+	Register<IsNanFun>();
+	Register<IsInfiniteFun>();
+	Register<IsFiniteFun>();
 }
 
 } // namespace duckdb

@@ -20,11 +20,8 @@ public:
 public:
 	PandasScanFunction();
 
-	static unique_ptr<FunctionData> PandasScanBind(ClientContext &context, vector<Value> &inputs,
-	                                               named_parameter_map_t &named_parameters,
-	                                               vector<LogicalType> &input_table_types,
-	                                               vector<string> &input_table_names, vector<LogicalType> &return_types,
-	                                               vector<string> &names);
+	static unique_ptr<FunctionData> PandasScanBind(ClientContext &context, TableFunctionBindInput &input,
+	                                               vector<LogicalType> &return_types, vector<string> &names);
 
 	static unique_ptr<FunctionOperatorData> PandasScanInit(ClientContext &context, const FunctionData *bind_data_p,
 	                                                       const vector<column_t> &column_ids,
@@ -49,10 +46,10 @@ public:
 	//! The main pandas scan function: note that this can be called in parallel without the GIL
 	//! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 	static void PandasScanFunc(ClientContext &context, const FunctionData *bind_data,
-	                           FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output);
+	                           FunctionOperatorData *operator_state, DataChunk &output);
 
 	static void PandasScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
-	                                   FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output,
+	                                   FunctionOperatorData *operator_state, DataChunk &output,
 	                                   ParallelState *parallel_state_p);
 
 	static unique_ptr<NodeStatistics> PandasScanCardinality(ClientContext &context, const FunctionData *bind_data);

@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
@@ -16,10 +17,7 @@ struct DuckDBSequencesData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> DuckDBSequencesBind(ClientContext &context, vector<Value> &inputs,
-                                                    named_parameter_map_t &named_parameters,
-                                                    vector<LogicalType> &input_table_types,
-                                                    vector<string> &input_table_names,
+static unique_ptr<FunctionData> DuckDBSequencesBind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -73,13 +71,13 @@ unique_ptr<FunctionOperatorData> DuckDBSequencesInit(ClientContext &context, con
 	};
 
 	// check the temp schema as well
-	context.temporary_objects->Scan(context, CatalogType::SEQUENCE_ENTRY,
-	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::SEQUENCE_ENTRY,
+	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
 void DuckDBSequencesFunction(ClientContext &context, const FunctionData *bind_data,
-                             FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                             FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (DuckDBSequencesData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

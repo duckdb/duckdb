@@ -10,9 +10,15 @@
 
 namespace duckdb {
 
-struct ParquetMetaDataBindData : public FunctionData {
+struct ParquetMetaDataBindData : public TableFunctionData {
 	vector<LogicalType> return_types;
 	vector<string> files;
+
+public:
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const ParquetMetaDataBindData &)other_p;
+		return other.return_types == return_types && files == other.files;
+	}
 };
 
 struct ParquetMetaDataOperatorData : public FunctionOperatorData {
@@ -384,9 +390,7 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 }
 
 template <bool SCHEMA>
-unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, vector<Value> &inputs,
-                                             named_parameter_map_t &named_parameters,
-                                             vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.enable_external_access) {
@@ -398,7 +402,7 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, vector<Valu
 		ParquetMetaDataOperatorData::BindMetaData(return_types, names);
 	}
 
-	auto file_name = inputs[0].GetValue<string>();
+	auto file_name = input.inputs[0].GetValue<string>();
 	auto result = make_unique<ParquetMetaDataBindData>();
 
 	FileSystem &fs = FileSystem::GetFileSystem(context);
@@ -429,7 +433,7 @@ unique_ptr<FunctionOperatorData> ParquetMetaDataInit(ClientContext &context, con
 
 template <bool SCHEMA>
 void ParquetMetaDataImplementation(ClientContext &context, const FunctionData *bind_data_p,
-                                   FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                   FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (ParquetMetaDataOperatorData &)*operator_state;
 	auto &bind_data = (ParquetMetaDataBindData &)*bind_data_p;
 	while (true) {

@@ -2,10 +2,12 @@
 
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/join/physical_iejoin.hpp"
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -263,7 +265,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		lock_guard<mutex> elock(executor_lock);
 		physical_plan = plan;
 
-		this->profiler = context.profiler;
+		this->profiler = ClientData::Get(context).profiler;
 		profiler->Initialize(physical_plan);
 		this->producer = scheduler.CreateProducer();
 
@@ -425,6 +427,7 @@ void Executor::AddChildPipeline(Pipeline *current) {
 
 void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 	D_ASSERT(current);
+	op->op_state.reset();
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
 		op->sink_state.reset();
@@ -483,6 +486,35 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			}
 			BuildPipelines(op->children[0].get(), current);
 			break;
+		case PhysicalOperatorType::IE_JOIN: {
+			D_ASSERT(op->children.size() == 2);
+			if (recursive_cte) {
+				throw NotImplementedException("IEJoins are not supported in recursive CTEs yet");
+			}
+
+			// Build the LHS
+			auto lhs_pipeline = make_shared<Pipeline>(*this);
+			lhs_pipeline->sink = op;
+			D_ASSERT(op->children[0].get());
+			BuildPipelines(op->children[0].get(), lhs_pipeline.get());
+
+			// Build the RHS
+			auto rhs_pipeline = make_shared<Pipeline>(*this);
+			rhs_pipeline->sink = op;
+			D_ASSERT(op->children[1].get());
+			BuildPipelines(op->children[1].get(), rhs_pipeline.get());
+
+			// RHS => LHS => current
+			current->AddDependency(rhs_pipeline);
+			rhs_pipeline->AddDependency(lhs_pipeline);
+
+			pipelines.emplace_back(move(lhs_pipeline));
+			pipelines.emplace_back(move(rhs_pipeline));
+
+			// Now build both and scan
+			current->source = op;
+			return;
+		}
 		case PhysicalOperatorType::DELIM_JOIN: {
 			// duplicate eliminated join
 			// for delim joins, recurse into the actual join

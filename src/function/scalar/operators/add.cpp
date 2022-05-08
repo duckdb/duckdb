@@ -19,7 +19,7 @@ namespace duckdb {
 template <>
 float AddOperator::Operation(float left, float right) {
 	auto result = left + right;
-	if (!Value::FloatIsValid(result)) {
+	if (!Value::FloatIsFinite(result)) {
 		throw OutOfRangeException("Overflow in addition of float!");
 	}
 	return result;
@@ -28,7 +28,7 @@ float AddOperator::Operation(float left, float right) {
 template <>
 double AddOperator::Operation(double left, double right) {
 	auto result = left + right;
-	if (!Value::DoubleIsValid(result)) {
+	if (!Value::DoubleIsFinite(result)) {
 		throw OutOfRangeException("Overflow in addition of double!");
 	}
 	return result;

@@ -6,8 +6,8 @@
 namespace duckdb {
 
 MapFunction::MapFunction()
-    : TableFunction("python_map_function", {LogicalType::TABLE, LogicalType::POINTER}, MapFunctionExec,
-                    MapFunctionBind) {
+    : TableFunction("python_map_function", {LogicalType::TABLE, LogicalType::POINTER}, nullptr, MapFunctionBind) {
+	in_out_function = MapFunctionExec;
 }
 
 struct MapFunctionData : public TableFunctionData {
@@ -43,18 +43,15 @@ static py::handle FunctionCall(NumpyResultConversion &conversion, vector<string>
 
 // we call the passed function with a zero-row data frame to infer the output columns and their names.
 // they better not change in the actual execution ^^
-unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, vector<Value> &inputs,
-                                                      named_parameter_map_t &named_parameters,
-                                                      vector<LogicalType> &input_table_types,
-                                                      vector<string> &input_table_names,
+unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	py::gil_scoped_acquire acquire;
 
 	auto data_uptr = make_unique<MapFunctionData>();
 	auto &data = *data_uptr;
-	data.function = (PyObject *)inputs[0].GetPointer();
-	data.in_names = input_table_names;
-	data.in_types = input_table_types;
+	data.function = (PyObject *)input.inputs[0].GetPointer();
+	data.in_names = input.input_table_names;
+	data.in_types = input.input_table_types;
 
 	NumpyResultConversion conversion(data.in_types, 0);
 	auto df = FunctionCall(conversion, data.in_names, data.function);
@@ -70,20 +67,19 @@ static string TypeVectorToString(vector<LogicalType> &types) {
 	return StringUtil::Join(types, types.size(), ", ", [](const LogicalType &argument) { return argument.ToString(); });
 }
 
-void MapFunction::MapFunctionExec(ClientContext &context, const FunctionData *bind_data,
-                                  FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-
+OperatorResultType MapFunction::MapFunctionExec(ClientContext &context, const FunctionData *bind_data_p,
+                                                FunctionOperatorData *state_p, DataChunk &input, DataChunk &output) {
 	py::gil_scoped_acquire acquire;
 
-	if (input->size() == 0) {
-		return;
+	if (input.size() == 0) {
+		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
-	auto &data = (MapFunctionData &)*bind_data;
+	auto &data = (MapFunctionData &)*bind_data_p;
 
-	D_ASSERT(input->GetTypes() == data.in_types);
-	NumpyResultConversion conversion(data.in_types, input->size());
-	conversion.Append(*input);
+	D_ASSERT(input.GetTypes() == data.in_types);
+	NumpyResultConversion conversion(data.in_types, input.size());
+	conversion.Append(input);
 
 	auto df = FunctionCall(conversion, data.in_names, data.function);
 
@@ -119,6 +115,7 @@ void MapFunction::MapFunctionExec(ClientContext &context, const FunctionData *bi
 		                                output.data[col_idx]);
 	}
 	output.SetCardinality(row_count);
+	return OperatorResultType::NEED_MORE_INPUT;
 }
 
 } // namespace duckdb

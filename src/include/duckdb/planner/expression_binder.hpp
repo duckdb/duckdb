@@ -23,7 +23,7 @@ class QueryNode;
 
 class ScalarFunctionCatalogEntry;
 class AggregateFunctionCatalogEntry;
-class MacroCatalogEntry;
+class ScalarMacroCatalogEntry;
 class CatalogEntry;
 class SimpleFunction;
 
@@ -58,6 +58,8 @@ public:
 	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
+
+	MacroBinding *macro_binding;
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
@@ -97,13 +99,12 @@ public:
 	static bool ContainsType(const LogicalType &type, LogicalTypeId target);
 	static LogicalType ExchangeType(const LogicalType &type, LogicalTypeId target, LogicalType new_type);
 
-	static void ResolveParameterType(LogicalType &type);
-	static void ResolveParameterType(unique_ptr<Expression> &expr);
-
 	//! Bind the given expresion. Unlike Bind(), this does *not* mute the given ParsedExpression.
 	//! Exposed to be used from sub-binders that aren't subclasses of ExpressionBinder.
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
+
+	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
 
 protected:
 	BindResult BindExpression(BetweenExpression &expr, idx_t depth);
@@ -119,7 +120,6 @@ protected:
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(PositionalReferenceExpression &ref, idx_t depth);
-	BindResult BindExpression(StarExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
 
 protected:
@@ -127,10 +127,8 @@ protected:
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
-	virtual BindResult BindMacro(FunctionExpression &expr, MacroCatalogEntry *macro, idx_t depth,
+	virtual BindResult BindMacro(FunctionExpression &expr, ScalarMacroCatalogEntry *macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> *expr_ptr);
-
-	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();
@@ -138,7 +136,6 @@ protected:
 	Binder &binder;
 	ClientContext &context;
 	ExpressionBinder *stored_binder;
-	MacroBinding *macro_binding;
 	vector<BoundColumnReferenceInfo> bound_columns;
 };
 

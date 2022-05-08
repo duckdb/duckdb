@@ -7,12 +7,15 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
+
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/common/enums/operator_result_type.hpp"
 
 #include <functional>
 
 namespace duckdb {
+
 class BaseStatistics;
 class LogicalGet;
 struct ParallelState;
@@ -22,16 +25,32 @@ struct FunctionOperatorData {
 	DUCKDB_API virtual ~FunctionOperatorData();
 };
 
+struct TableFunctionInfo {
+	DUCKDB_API virtual ~TableFunctionInfo();
+};
+
 struct TableFilterCollection {
 	DUCKDB_API explicit TableFilterCollection(TableFilterSet *table_filters);
 
 	TableFilterSet *table_filters;
 };
 
-typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, vector<Value> &inputs,
-                                                          named_parameter_map_t &named_parameters,
-                                                          vector<LogicalType> &input_table_types,
-                                                          vector<string> &input_table_names,
+struct TableFunctionBindInput {
+	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
+	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+	                       TableFunctionInfo *info)
+	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
+	      input_table_names(input_table_names), info(info) {
+	}
+
+	vector<Value> &inputs;
+	named_parameter_map_t &named_parameters;
+	vector<LogicalType> &input_table_types;
+	vector<string> &input_table_names;
+	TableFunctionInfo *info;
+};
+
+typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,
                                                           vector<LogicalType> &return_types, vector<string> &names);
 typedef unique_ptr<FunctionOperatorData> (*table_function_init_t)(ClientContext &context, const FunctionData *bind_data,
                                                                   const vector<column_t> &column_ids,
@@ -39,10 +58,14 @@ typedef unique_ptr<FunctionOperatorData> (*table_function_init_t)(ClientContext 
 typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context, const FunctionData *bind_data,
                                                          column_t column_index);
 typedef void (*table_function_t)(ClientContext &context, const FunctionData *bind_data,
-                                 FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output);
+                                 FunctionOperatorData *operator_state, DataChunk &output);
+
+typedef OperatorResultType (*table_in_out_function_t)(ClientContext &context, const FunctionData *bind_data,
+                                                      FunctionOperatorData *operator_state, DataChunk &input,
+                                                      DataChunk &output);
 
 typedef void (*table_function_parallel_t)(ClientContext &context, const FunctionData *bind_data,
-                                          FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output,
+                                          FunctionOperatorData *operator_state, DataChunk &output,
                                           ParallelState *parallel_state);
 
 typedef void (*table_function_cleanup_t)(ClientContext &context, const FunctionData *bind_data,
@@ -81,7 +104,8 @@ public:
 	              table_function_parallel_t parallel_function = nullptr,
 	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
-	              bool filter_pushdown = false, table_function_progress_t query_progress = nullptr);
+	              bool filter_pushdown = false, table_function_progress_t query_progress = nullptr,
+	              table_in_out_function_t in_out_function = nullptr);
 	DUCKDB_API
 	TableFunction(const vector<LogicalType> &arguments, table_function_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_t init = nullptr, table_statistics_t statistics = nullptr,
@@ -93,7 +117,8 @@ public:
 	              table_function_parallel_t parallel_function = nullptr,
 	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
-	              bool filter_pushdown = false, table_function_progress_t query_progress = nullptr);
+	              bool filter_pushdown = false, table_function_progress_t query_progress = nullptr,
+	              table_in_out_function_t in_out_function = nullptr);
 	DUCKDB_API TableFunction();
 
 	//! Bind function
@@ -106,6 +131,8 @@ public:
 	table_function_init_t init;
 	//! The main function
 	table_function_t function;
+	//! The table in-out function (if this is an in-out function)
+	table_in_out_function_t in_out_function;
 	//! (Optional) statistics function
 	//! Returns the statistics of a specified column
 	table_statistics_t statistics;
@@ -142,6 +169,8 @@ public:
 	//! Whether or not the table function supports filter pushdown. If not supported a filter will be added
 	//! that applies the table filter directly.
 	bool filter_pushdown;
+	//! Additional function info, passed to the bind
+	shared_ptr<TableFunctionInfo> function_info;
 };
 
 } // namespace duckdb

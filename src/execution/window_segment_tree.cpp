@@ -4,8 +4,6 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/helper.hpp"
 
-#include <cmath>
-
 namespace duckdb {
 
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info,
@@ -129,7 +127,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 			pdata[i] = begin_ptr + i * state.size();
 		}
 		v.Verify(inputs.size());
-		aggregate.combine(v, s, inputs.size());
+		aggregate.combine(v, s, bind_info, inputs.size());
 	}
 }
 

@@ -41,6 +41,10 @@ unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFuncti
 			// decimal type: add cast to double
 			bound_function.arguments.emplace_back(LogicalType::DOUBLE);
 			break;
+		case LogicalTypeId::UNKNOWN:
+			// parameter: accept any input and rebind later
+			bound_function.arguments.emplace_back(LogicalType::ANY);
+			break;
 		default:
 			// all other types: add cast to string
 			bound_function.arguments.emplace_back(LogicalType::VARCHAR);

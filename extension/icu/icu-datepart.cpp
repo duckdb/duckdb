@@ -217,12 +217,12 @@ struct ICUDatePart : public ICUDateFunc {
 
 		adapters_t adapters;
 
-		bool Equals(FunctionData &other_p) override {
+		bool Equals(const FunctionData &other_p) const override {
 			const auto &other = (BindAdapterData &)other_p;
 			return BindData::Equals(other_p) && adapters == other.adapters;
 		}
 
-		unique_ptr<FunctionData> Copy() override {
+		unique_ptr<FunctionData> Copy() const override {
 			return make_unique<BindAdapterData>(*this);
 		}
 	};
@@ -393,7 +393,7 @@ struct ICUDatePart : public ICUDateFunc {
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static ScalarFunction GetUnaryPartCodeFunction(const LogicalType &temporal_type) {
 		return ScalarFunction({temporal_type}, LogicalType::BIGINT, UnaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>,
-		                      false, BindDatePart);
+		                      false, false, BindDatePart);
 	}
 
 	static void AddUnaryPartCodeFunctions(const string &name, ClientContext &context) {
@@ -407,14 +407,15 @@ struct ICUDatePart : public ICUDateFunc {
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static ScalarFunction GetBinaryPartCodeFunction(const LogicalType &temporal_type) {
 		return ScalarFunction({LogicalType::VARCHAR, temporal_type}, LogicalType::BIGINT,
-		                      BinaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>, false, BindDatePart);
+		                      BinaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>, false, false, BindDatePart);
 	}
 
 	template <typename INPUT_TYPE>
 	static ScalarFunction GetStructFunction(const LogicalType &temporal_type) {
 		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
 		auto result_type = LogicalType::STRUCT({});
-		return ScalarFunction({part_type, temporal_type}, result_type, StructFunction<INPUT_TYPE>, false, BindStruct);
+		return ScalarFunction({part_type, temporal_type}, result_type, StructFunction<INPUT_TYPE>, false, false,
+		                      BindStruct);
 	}
 
 	static void AddDatePartFunctions(const string &name, ClientContext &context) {
@@ -435,7 +436,7 @@ struct ICUDatePart : public ICUDateFunc {
 	template <typename INPUT_TYPE>
 	static ScalarFunction GetLastDayFunction(const LogicalType &temporal_type) {
 		return ScalarFunction({temporal_type}, LogicalType::DATE, UnaryTimestampFunction<INPUT_TYPE, date_t>, false,
-		                      BindLastDate);
+		                      false, BindLastDate);
 	}
 	static void AddLastDayFunctions(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);

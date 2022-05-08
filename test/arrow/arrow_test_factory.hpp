@@ -37,4 +37,24 @@ struct SimpleFactory {
 		//! Pass ownership to caller
 		return stream_wrapper;
 	}
+
+	static void GetSchema(uintptr_t factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
+		//! Create a new batch reader
+		auto &factory = *reinterpret_cast<SimpleFactory *>(factory_ptr); //! NOLINT
+		REQUIRE_RESULT(auto reader, arrow::RecordBatchReader::Make(factory.batches, factory.schema));
+
+		//! Export C arrow stream stream
+		auto stream_wrapper = duckdb::make_unique<duckdb::ArrowArrayStreamWrapper>();
+		stream_wrapper->arrow_array_stream.release = nullptr;
+		auto maybe_ok = arrow::ExportRecordBatchReader(reader, &stream_wrapper->arrow_array_stream);
+		if (!maybe_ok.ok()) {
+			if (stream_wrapper->arrow_array_stream.release) {
+				stream_wrapper->arrow_array_stream.release(&stream_wrapper->arrow_array_stream);
+			}
+			return;
+		}
+
+		//! Pass ownership to caller
+		stream_wrapper->arrow_array_stream.get_schema(&stream_wrapper->arrow_array_stream, &schema.arrow_schema);
+	}
 };

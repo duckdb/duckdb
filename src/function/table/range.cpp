@@ -14,14 +14,19 @@ struct RangeFunctionBindData : public TableFunctionData {
 	hugeint_t start;
 	hugeint_t end;
 	hugeint_t increment;
+
+public:
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const RangeFunctionBindData &)other_p;
+		return other.start == start && other.end == end && other.increment == increment;
+	}
 };
 
 template <bool GENERATE_SERIES>
-static unique_ptr<FunctionData>
-RangeFunctionBind(ClientContext &context, vector<Value> &inputs, named_parameter_map_t &named_parameters,
-                  vector<LogicalType> &input_table_types, vector<string> &input_table_names,
-                  vector<LogicalType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, TableFunctionBindInput &input,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<RangeFunctionBindData>();
+	auto &inputs = input.inputs;
 	if (inputs.size() < 2) {
 		// single argument: only the end is specified
 		result->start = 0;
@@ -73,7 +78,7 @@ static unique_ptr<FunctionOperatorData> RangeFunctionInit(ClientContext &context
 }
 
 static void RangeFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *state_p,
-                          DataChunk *input, DataChunk &output) {
+                          DataChunk &output) {
 	auto &bind_data = (RangeFunctionBindData &)*bind_data_p;
 	auto &state = (RangeFunctionState &)*state_p;
 
@@ -110,6 +115,13 @@ struct RangeDateTimeBindData : public TableFunctionData {
 	bool inclusive_bound;
 	bool greater_than_check;
 
+public:
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const RangeDateTimeBindData &)other_p;
+		return other.start == start && other.end == end && other.increment == increment &&
+		       other.inclusive_bound == inclusive_bound && other.greater_than_check == greater_than_check;
+	}
+
 	bool Finished(timestamp_t current_value) {
 		if (greater_than_check) {
 			if (inclusive_bound) {
@@ -128,11 +140,10 @@ struct RangeDateTimeBindData : public TableFunctionData {
 };
 
 template <bool GENERATE_SERIES>
-static unique_ptr<FunctionData>
-RangeDateTimeBind(ClientContext &context, vector<Value> &inputs, named_parameter_map_t &named_parameters,
-                  vector<LogicalType> &input_table_types, vector<string> &input_table_names,
-                  vector<LogicalType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> RangeDateTimeBind(ClientContext &context, TableFunctionBindInput &input,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<RangeDateTimeBindData>();
+	auto &inputs = input.inputs;
 	D_ASSERT(inputs.size() == 3);
 	result->start = inputs[0].GetValue<timestamp_t>();
 	result->end = inputs[1].GetValue<timestamp_t>();
@@ -186,7 +197,7 @@ static unique_ptr<FunctionOperatorData> RangeDateTimeInit(ClientContext &context
 }
 
 static void RangeDateTimeFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                  FunctionOperatorData *state_p, DataChunk *input, DataChunk &output) {
+                                  FunctionOperatorData *state_p, DataChunk &output) {
 	auto &bind_data = (RangeDateTimeBindData &)*bind_data_p;
 	auto &state = (RangeDateTimeState &)*state_p;
 	if (state.finished) {
