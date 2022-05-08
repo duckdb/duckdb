@@ -82,6 +82,8 @@ private:
 	//! Cached chunks for any operators that require caching
 	vector<unique_ptr<DataChunk>> cached_chunks;
 
+	bool is_pipeline_order_preserving;
+
 private:
 	void StartOperator(PhysicalOperator *op);
 	void EndOperator(PhysicalOperator *op, DataChunk *chunk);
@@ -97,6 +99,7 @@ private:
 
 	static bool CanCacheType(const LogicalType &type);
 	void CacheChunk(DataChunk &input, idx_t operator_idx);
+	void FlushCache();
 };
 
 } // namespace duckdb
