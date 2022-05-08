@@ -21,10 +21,10 @@ statement ok
 INSERT INTO test_fetch_delay (SELECT (i%2) * 2, (i%2) * 2 from range(0,2500000) as tbl(i));
 
 statement ok
-COPY test_fetch_delay to 's3://test-bucket-ceiveran/skip_delay.parquet';
+COPY test_fetch_delay to 's3://test-bucket/skip_delay.parquet';
 
 statement ok
-CREATE TABLE test as SELECT * from 's3://test-bucket-ceiveran/skip_delay.parquet' where a = 1;
+CREATE TABLE test as SELECT * from 's3://test-bucket/skip_delay.parquet' where a = 1;
 
 query I
 SELECT COUNT(*) FROM test;
