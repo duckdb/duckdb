@@ -2,6 +2,7 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
 
 namespace duckdb {
@@ -98,20 +99,29 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			if (centry.type.IsSerial()) {
 				// create a sequence associated with the column
 				auto sequence = make_unique<CreateSequenceInfo>();
-				sequence->name = info->table + "_" + centry.name + "_seq";
+				string seq_name = info->table + "_" + centry.name + "_seq";
+				sequence->name = seq_name;
 				if (centry.type.id() == LogicalTypeId::SMALLSERIAL) {
 					sequence->max_value = NumericLimits<int16_t>::Maximum();
+					centry.type = LogicalType(LogicalType::SMALLINT);
 				} else if (centry.type.id() == LogicalTypeId::SERIAL) {
 					sequence->max_value = NumericLimits<int32_t>::Maximum();
+					centry.type = LogicalType(LogicalType::INTEGER);
+				} else {
+					centry.type = LogicalType(LogicalType::BIGINT);
 				}
+				info->sequences.push_back(move(sequence));
+
+				// serial implies not null as well
 				int index = info->columns.size();
-				info->sequences.push_back(sequence);
 				info->constraints.push_back(make_unique<NotNullConstraint>(index));
 
 				// make the default value arg for the serial column
 				vector<unique_ptr<ParsedExpression>> children;
-				children.push_back(make_unique<ConstantExpression>(Value(sequence->name)));
+				children.push_back(make_unique<ConstantExpression>(Value(seq_name)));
 				centry.default_value = make_unique<FunctionExpression>("nextval", move(children));
+
+
 			}
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {

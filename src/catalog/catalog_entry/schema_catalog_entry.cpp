@@ -133,6 +133,15 @@ CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreat
 	if (!entry) {
 		return nullptr;
 	}
+
+	// create any sequences that are owned by this table
+	unordered_set<CatalogEntry*> table_dep;
+	table_dep.insert(entry);
+	for (auto& create_seq : info->Base().sequences) {
+		auto sequence = make_unique<SequenceCatalogEntry>(catalog, this, create_seq.get());
+		AddEntry(context, move(sequence), info->Base().on_conflict, table_dep);
+	}
+
 	// add a foreign key constraint in main key table if there is a foreign key constraint
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
 	FindForeignKeyInformation(entry, AlterForeignKeyType::AFT_ADD, fk_arrays);
