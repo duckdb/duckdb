@@ -5,8 +5,10 @@
 statement ok
 PRAGMA enable_verification
 
+# statement ok
+# select list_value(1,2,3)
+
 query I
 select MAP_FROM_ENTRIES(ARRAY[(1, 'x'), (2, 'y')]);
 ----
-{1='x', 2='y'}
-
+{1=x, 2=y}
