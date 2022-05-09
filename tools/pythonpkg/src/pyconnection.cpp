@@ -91,6 +91,17 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
+	    .def("__enter__", [](DuckDBPyConnection &self, string database = ":memory:", bool read_only = false, py::dict config = py::dict(),
+	                                              bool check_same_thread = true) {
+				return DuckDBPyConnection::Connect(database,read_only,config, check_same_thread); // uses placement-new
+			})
+	    .def("__exit__", [](DuckDBPyConnection &self, const py::object& exc_type, const py::object& exc, const py::object& traceback) {
+		    if (!exc.is_none() || !exc_type.is_none() || !traceback.is_none()){
+			    throw NotImplementedException("Can't handle this");
+		    }
+				self.Close();
+		        return true;
+			})
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names");
 
