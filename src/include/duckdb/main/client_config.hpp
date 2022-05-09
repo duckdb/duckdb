@@ -50,7 +50,7 @@ struct ClientConfig {
 	//! Force out-of-core computation for operators that support it, used for testing
 	bool force_external = false;
 	//! Force result set materialization
-	bool force_result_set_materialization = true;
+	bool force_result_set_materialization = false;
 	//! Maximum bits allowed for using a perfect hash table (i.e. the perfect HT can hold up to 2^perfect_ht_threshold
 	//! elements)
 	idx_t perfect_ht_threshold = 12;

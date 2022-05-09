@@ -275,7 +275,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		auto entry = tree_map.find(node.first);
 		// TODO: for now, PhysicalMaterialize is not intialized
 		// thus does not exist in tree_map
-		if (entry == tree_map.end()) {
+		if (entry == tree_map.end() && node.first->type == PhysicalOperatorType::MATERIALIZE) {
 			continue;
 		}
 		D_ASSERT(entry != tree_map.end());

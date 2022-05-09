@@ -17,7 +17,7 @@ CREATE TABLE test(i BIGINT)
 statement ok
 INSERT INTO test SELECT range FROM range(1024*120*20)
 
-query R
+query I
 SELECT * FROM test WHERE i % (1024*60) = 0;
 ----
 0
@@ -60,3 +60,26 @@ SELECT * FROM test WHERE i % (1024*60) = 0;
 2273280
 2334720
 2396160
+
+statement ok
+CREATE TABLE test1(i BIGINT)
+
+statement ok
+INSERT INTO test1 SELECT range FROM range(1024*120*4)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test1 SELECT range FROM range(1024*120*3)
+
+query I
+SELECT * FROM test1 WHERE i % (1024*120) = 0;
+----
+0
+122880
+245760
+368640
+0
+122880
+245760
