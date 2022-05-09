@@ -18,12 +18,12 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 		}
 	}
 
-	//Get the arguments vector
-	auto& array = args.data[0];
+	// Get the arguments vector
+	auto &array = args.data[0];
 	idx_t pair_amount = ListVector::GetListSize(array);
-	auto& entries = ListVector::GetEntry(array);
+	auto &entries = ListVector::GetEntry(array);
 
-	//Prepare the result vectors
+	// Prepare the result vectors
 	result.Resize(0, pair_amount);
 	auto &child_entries = StructVector::GetEntries(result);
 	D_ASSERT(child_entries.size() == 2);
@@ -32,13 +32,13 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 
 	auto key_data = FlatVector::GetData<list_entry_t>(*key_vector);
 	auto value_data = FlatVector::GetData<list_entry_t>(*value_vector);
-	//Transform to mapped values
+	// Transform to mapped values
 	key_data[0].offset = 0;
 	value_data[0].offset = 0;
 	for (idx_t i = 0; i < pair_amount; i++) {
 		auto element = entries.GetValue(i);
 		D_ASSERT(element.type().id() == LogicalTypeId::STRUCT);
-		auto& key_value = StructValue::GetChildren(element);
+		auto &key_value = StructValue::GetChildren(element);
 		ListVector::PushBack(*key_vector, key_value[0]);
 		ListVector::PushBack(*value_vector, key_value[1]);
 	}
@@ -49,21 +49,21 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 }
 
 static unique_ptr<FunctionData> MapFromEntriesBind(ClientContext &context, ScalarFunction &bound_function,
-                                        vector<unique_ptr<Expression>> &arguments) {
+                                                   vector<unique_ptr<Expression>> &arguments) {
 	child_list_t<LogicalType> child_types;
 
 	if (arguments.size() != 1) {
 		throw Exception("We need one list of structs for a map");
 	}
-	auto& list = arguments[0]->return_type;
+	auto &list = arguments[0]->return_type;
 	if (list.id() != LogicalTypeId::LIST) {
 		throw Exception("Argument is not a list");
 	}
-	auto& elem_type = ListType::GetChildType(list);
+	auto &elem_type = ListType::GetChildType(list);
 	if (elem_type.id() != LogicalTypeId::STRUCT) {
 		throw Exception("Elements of list aren't structs");
 	}
-	auto& children = StructType::GetChildTypes(elem_type);
+	auto &children = StructType::GetChildTypes(elem_type);
 	if (children.size() != 2) {
 		throw Exception("Struct should only contain 2 fields, a key and a value");
 	}
