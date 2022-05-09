@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+enum class HLLStorageType { UNCOMPRESSED = 1 };
+
 class FieldWriter;
 class FieldReader;
 

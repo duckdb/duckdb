@@ -89,11 +89,13 @@ unique_ptr<HyperLogLog> HyperLogLog::Copy() {
 }
 
 void HyperLogLog::Serialize(FieldWriter &writer) const {
+	writer.WriteField<HLLStorageType>(HLLStorageType::UNCOMPRESSED);
 	writer.WriteBlob(GetPtr(), GetSize());
 }
 
 unique_ptr<HyperLogLog> HyperLogLog::Deserialize(FieldReader &reader) {
 	auto result = make_unique<HyperLogLog>();
+	reader.ReadField<HLLStorageType>(HLLStorageType::UNCOMPRESSED);
 	reader.ReadBlob(result->GetPtr(), GetSize());
 	return result;
 }
@@ -256,6 +258,7 @@ void HyperLogLog::AddToLogs(VectorData &vdata, idx_t count, uint64_t indices[], 
 }
 
 void HyperLogLog::AddToLog(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[]) {
+	lock_guard<mutex> guard(lock);
 	AddToSingleLogInternal(vdata, count, indices, counts, hll);
 }
 

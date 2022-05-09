@@ -1,8 +1,8 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
-//#include "duckdb/storage/statistics/distinct_statistics.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
+
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
