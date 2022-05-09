@@ -22,13 +22,15 @@ struct ParallelState;
 class TableFilterSet;
 
 struct FunctionOperatorData {
-	FunctionOperatorData(bool is_ordered = false) : is_ordered(is_ordered) {}
-    bool is_ordered;
+	FunctionOperatorData(bool is_ordered = false) : is_ordered(is_ordered) {
+	}
+	bool is_ordered;
 	DUCKDB_API virtual ~FunctionOperatorData();
 };
 
 struct OrderedFunctionOperatorData : FunctionOperatorData {
-    OrderedFunctionOperatorData() : FunctionOperatorData(true) {}
+	OrderedFunctionOperatorData() : FunctionOperatorData(true) {
+	}
 	idx_t data_index = DConstants::INVALID_INDEX;
 	DUCKDB_API virtual ~OrderedFunctionOperatorData();
 };

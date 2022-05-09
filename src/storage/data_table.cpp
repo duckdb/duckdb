@@ -358,7 +358,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 }
 
 void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids,
-        idx_t &row_group_idx) {
+                     idx_t &row_group_idx) {
 	// scan the persistent segments
 	if (ScanBaseTable(transaction, result, state)) {
 		D_ASSERT(result.size() > 0);

@@ -274,12 +274,12 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		BuildPipelines(physical_plan, root_pipeline.get());
 
 		auto materialize_result = MaybeMaterializeResult(root_pipeline.get());
-        if (materialize_result) {
-            pipelines.push_back(root_pipeline);
-        } else {
-            root_pipeline_idx = 0;
-            ExtractPipelines(root_pipeline, root_pipelines);
-        }
+		if (materialize_result) {
+			pipelines.push_back(root_pipeline);
+		} else {
+			root_pipeline_idx = 0;
+			ExtractPipelines(root_pipeline, root_pipelines);
+		}
 		this->total_pipelines = pipelines.size();
 
 		VerifyPipelines();
@@ -746,22 +746,22 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 }
 
 bool Executor::MaybeMaterializeResult(Pipeline *root_pipeline) {
-    D_ASSERT(materialized_sink == nullptr);
+	D_ASSERT(materialized_sink == nullptr);
 
-    if (!context.config.force_result_set_materialization) {
-        return false;
-    }
-    if (!root_pipeline->OrderedParallelPipeline()) {
-        return false;
-    }
-    // Don't support UNION ALL and RIGHT OUTER JOIN for now
-    if (union_pipelines.find(root_pipeline) != union_pipelines.end()
-            || child_pipelines.find(root_pipeline) != child_pipelines.end()) {
-        return false;
-    }
+	if (!context.config.force_result_set_materialization) {
+		return false;
+	}
+	if (!root_pipeline->OrderedParallelPipeline()) {
+		return false;
+	}
+	// Don't support UNION ALL and RIGHT OUTER JOIN for now
+	if (union_pipelines.find(root_pipeline) != union_pipelines.end() ||
+	    child_pipelines.find(root_pipeline) != child_pipelines.end()) {
+		return false;
+	}
 
-    materialized_sink = root_pipeline->AddMaterializedSink();
-    return true;
+	materialized_sink = root_pipeline->AddMaterializedSink();
+	return true;
 }
 
 } // namespace duckdb

@@ -137,10 +137,10 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
 	    PragmaFunction::PragmaStatement("disable_checkpoint_on_shutdown", PragmaDisableCheckpointOnShutdown));
 
-    set.AddFunction(PragmaFunction::PragmaStatement("force_result_set_materialization",
-        PragmaEnableForceResultSetMaterialization));
+	set.AddFunction(
+	    PragmaFunction::PragmaStatement("force_result_set_materialization", PragmaEnableForceResultSetMaterialization));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_force_result_set_materialization",
-        PragmaDisableForceResultSetMaterialization));
+	                                                PragmaDisableForceResultSetMaterialization));
 }
 
 } // namespace duckdb

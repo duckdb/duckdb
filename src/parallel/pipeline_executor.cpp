@@ -59,21 +59,21 @@ bool PipelineExecutor::Execute(idx_t max_chunks) {
 			exhausted_source = true;
 			break;
 		}
-        if (is_pipeline_order_preserving) {
-            D_ASSERT(local_source_state->is_ordered);
-            D_ASSERT(local_source_state->source_index != DConstants::INVALID_INDEX);
-            if (!local_sink_state->is_ordered) {
-                D_ASSERT(local_sink_state->source_index == DConstants::INVALID_INDEX);
-                local_sink_state->is_ordered = true;
-                local_sink_state->source_index = local_source_state->source_index;
-            } else {
-                D_ASSERT(local_sink_state->source_index != DConstants::INVALID_INDEX);
-                if (local_sink_state->source_index != local_source_state->source_index) {
-                    FlushCache();
-                    local_sink_state->source_index = local_source_state->source_index;
-                }
-            }
-        }
+		if (is_pipeline_order_preserving) {
+			D_ASSERT(local_source_state->is_ordered);
+			D_ASSERT(local_source_state->source_index != DConstants::INVALID_INDEX);
+			if (!local_sink_state->is_ordered) {
+				D_ASSERT(local_sink_state->source_index == DConstants::INVALID_INDEX);
+				local_sink_state->is_ordered = true;
+				local_sink_state->source_index = local_source_state->source_index;
+			} else {
+				D_ASSERT(local_sink_state->source_index != DConstants::INVALID_INDEX);
+				if (local_sink_state->source_index != local_source_state->source_index) {
+					FlushCache();
+					local_sink_state->source_index = local_source_state->source_index;
+				}
+			}
+		}
 		auto result = ExecutePushInternal(source_chunk);
 		if (result == OperatorResultType::FINISHED) {
 			finished_processing = true;
@@ -136,7 +136,7 @@ void PipelineExecutor::PushFinalize() {
 	finalized = true;
 	// flush all caches
 	if (!finished_processing) {
-	    FlushCache();
+		FlushCache();
 	}
 	D_ASSERT(local_sink_state);
 	// run the combine for the sink
@@ -348,13 +348,13 @@ void PipelineExecutor::EndOperator(PhysicalOperator *op, DataChunk *chunk) {
 }
 
 void PipelineExecutor::FlushCache() {
-    D_ASSERT(in_process_operators.empty());
-    for (idx_t i = 0; i < cached_chunks.size(); i++) {
-        if (cached_chunks[i] && cached_chunks[i]->size() > 0) {
-            ExecutePushInternal(*cached_chunks[i], i + 1);
-            cached_chunks[i].reset();
-        }
-    }
+	D_ASSERT(in_process_operators.empty());
+	for (idx_t i = 0; i < cached_chunks.size(); i++) {
+		if (cached_chunks[i] && cached_chunks[i]->size() > 0) {
+			ExecutePushInternal(*cached_chunks[i], i + 1);
+			cached_chunks[i].reset();
+		}
+	}
 }
 
 } // namespace duckdb

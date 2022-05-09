@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-    class TableScanLocalState;
+class TableScanLocalState;
 
 //! Represents a scan of a base table
 class PhysicalTableScan : public PhysicalOperator {
@@ -52,10 +52,10 @@ public:
 		return true;
 	}
 
-    bool OrderedSource() const override;
+	bool OrderedSource() const override;
 
 private:
-    void SetOrder(TableScanLocalState &lstate) const;
+	void SetOrder(TableScanLocalState &lstate) const;
 };
 
 } // namespace duckdb

@@ -9,7 +9,7 @@ namespace duckdb {
 
 class PhysicalMaterialize : public PhysicalOperator {
 public:
-    PhysicalMaterialize(vector<LogicalType> types, idx_t estimated_cardinality);
+	PhysicalMaterialize(vector<LogicalType> types, idx_t estimated_cardinality);
 
 public:
 	// Sink interface
@@ -17,7 +17,7 @@ public:
 	                    DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	        GlobalSinkState &gstate) const override;
+	                          GlobalSinkState &gstate) const override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;

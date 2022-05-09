@@ -154,7 +154,8 @@ public:
 	//! from offset and store them in result. Offset is incremented with how many
 	//! elements were returned.
 	//! Returns true if all pushed down filters were executed during data fetching
-	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids, idx_t &row_group_idx);
+	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids,
+	          idx_t &row_group_idx);
 
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_ids,

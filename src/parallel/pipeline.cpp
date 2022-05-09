@@ -113,10 +113,10 @@ void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
 
 bool Pipeline::Parallel(bool check_sink) const {
 	if (check_sink) {
-        if (!sink->ParallelSink()) {
-            return false;
-        }
-    }
+		if (!sink->ParallelSink()) {
+			return false;
+		}
+	}
 	if (!source->ParallelSource()) {
 		return false;
 	}
@@ -125,13 +125,13 @@ bool Pipeline::Parallel(bool check_sink) const {
 			return false;
 		}
 	}
-    return true;
+	return true;
 }
 
 bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
-    if (!Parallel(true)) {
-        return false;
-    }
+	if (!Parallel(true)) {
+		return false;
+	}
 	idx_t max_threads = source_state->MaxThreads();
 	return LaunchScanTasks(event, max_threads);
 }
@@ -234,19 +234,19 @@ vector<PhysicalOperator *> Pipeline::GetOperators() const {
 }
 
 bool Pipeline::OrderedParallelPipeline() const {
-    return source->OrderedSource() && Parallel();
+	return source->OrderedSource() && Parallel();
 }
 
 unique_ptr<PhysicalMaterialize> Pipeline::AddMaterializedSink() {
-    D_ASSERT(sink == nullptr);
-    auto last_op = operators.empty() ? source : operators.back();
-    auto materialized_sink = make_unique<PhysicalMaterialize>(last_op->types, last_op->estimated_cardinality);
-    sink = materialized_sink.get();
-    return materialized_sink;
+	D_ASSERT(sink == nullptr);
+	auto last_op = operators.empty() ? source : operators.back();
+	auto materialized_sink = make_unique<PhysicalMaterialize>(last_op->types, last_op->estimated_cardinality);
+	sink = materialized_sink.get();
+	return materialized_sink;
 }
 
 bool Pipeline::IsMaterializedSinkPipeline() const {
-    return sink != nullptr && sink->type == PhysicalOperatorType::MATERIALIZE;
+	return sink != nullptr && sink->type == PhysicalOperatorType::MATERIALIZE;
 }
 
 } // namespace duckdb

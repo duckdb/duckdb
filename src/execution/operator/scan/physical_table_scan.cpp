@@ -74,15 +74,15 @@ unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientCont
 }
 
 bool PhysicalTableScan::OrderedSource() const {
-    return function.ordered_scan_function;
+	return function.ordered_scan_function;
 }
 
 void PhysicalTableScan::SetOrder(TableScanLocalState &lstate) const {
-    if (OrderedSource()) {
-        D_ASSERT(lstate.operator_data->is_ordered);
-        lstate.is_ordered = true;
-        lstate.source_index = ((OrderedFunctionOperatorData*)(lstate.operator_data.get()))->data_index;
-    }
+	if (OrderedSource()) {
+		D_ASSERT(lstate.operator_data->is_ordered);
+		lstate.is_ordered = true;
+		lstate.source_index = ((OrderedFunctionOperatorData *)(lstate.operator_data.get()))->data_index;
+	}
 }
 
 void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
