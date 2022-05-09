@@ -108,8 +108,9 @@ SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
 	stmt->res = stmt->stmt->Execute(values);
 
 	if (!stmt->res->success) {
-		stmt->error_messages.emplace_back(stmt->res->error);
-		return SQL_ERROR;
+		duckdb::DiagRecord diag_rec("Statement execution was not successful", duckdb::SQLStateType::GENERAL_ERROR,
+			                            stmt->dbc->GetDataSourceName());
+		throw duckdb::OdbcException("SingleExecuteStmt", SQL_ERROR, diag_rec);
 	}
 	stmt->open = true;
 	if (ret == SQL_STILL_EXECUTING) {

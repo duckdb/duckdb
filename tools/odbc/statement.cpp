@@ -82,19 +82,61 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 		}
 		case SQL_ATTR_IMP_PARAM_DESC:
 		case SQL_ATTR_IMP_ROW_DESC: {
-			stmt->error_messages.emplace_back("Invalid use of an automatically allocated descriptor handle.");
-			return SQL_ERROR;
+			duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
+											SQLStateType::INVALID_USE_AUTO_ALLOC_DESCRIPTOR, stmt->dbc->GetDataSourceName());
+			throw duckdb::OdbcException("SQLSetStmtAttr", SQL_ERROR, diag_rec);
 		}
 		case SQL_ATTR_PARAM_BIND_OFFSET_PTR: {
 			stmt->param_desc->SetBindOffesetPtr((SQLLEN *)value_ptr);
 			return SQL_SUCCESS;
 		}
-		case SQL_ATTR_CONCURRENCY:
-			// needs to be implemented
+		case SQL_ATTR_CONCURRENCY: {
+			SQLULEN value = (SQLULEN) (uintptr_t) value_ptr;
+			if (value != SQL_CONCUR_LOCK) {
+				duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
+											SQLStateType::OPTION_VALUE_CHANGED, stmt->dbc->GetDataSourceName());
+				throw duckdb::OdbcException("SQLSetStmtAttr", SQL_SUCCESS_WITH_INFO, diag_rec);
+			}
 			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_QUERY_TIMEOUT:
+			return SQL_SUCCESS;
+		case SQL_ATTR_RETRIEVE_DATA: {
+			SQLULEN value = (SQLULEN) (uintptr_t) value_ptr;
+			switch (value) {
+			case SQL_RD_ON:
+			case SQL_RD_OFF:
+				break;
+			default:
+				/* Invalid attribute value */
+				duckdb::DiagRecord diag_rec("Invalid attribute value: " + std::to_string(attribute),
+											SQLStateType::INVALID_ATTR_VALUE, stmt->dbc->GetDataSourceName());
+				throw duckdb::OdbcException("SQLSetStmtAttr", SQL_ERROR, diag_rec);
+			}
+			stmt->retrieve_data = value;
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_CURSOR_SCROLLABLE: {
+			SQLULEN value = (SQLULEN) (uintptr_t) value_ptr;
+			switch (value) {
+			case SQL_NONSCROLLABLE:
+				stmt->odbc_fetcher->cursor_type = SQL_CURSOR_FORWARD_ONLY;
+				break;
+			case SQL_SCROLLABLE:
+				stmt->odbc_fetcher->cursor_type = SQL_CURSOR_STATIC;
+				break;
+			default:
+				duckdb::DiagRecord diag_rec("Invalid attribute value:" + std::to_string(attribute),
+										SQLStateType::INVALID_ATTR_VALUE, stmt->dbc->GetDataSourceName());
+				throw duckdb::OdbcException("SQLSetStmtAttr", SQL_ERROR, diag_rec);
+			}
+			stmt->odbc_fetcher->cursor_scrollable = value;
+			return SQL_SUCCESS;
+		}
 		default:
-			stmt->error_messages.emplace_back("Unsupported attribute type.");
-			return SQL_ERROR;
+			duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
+										SQLStateType::OPTION_VALUE_CHANGED, stmt->dbc->GetDataSourceName());
+			throw duckdb::OdbcException("SQLSetStmtAttr", SQL_SUCCESS_WITH_INFO, diag_rec);
 		}
 	});
 }
@@ -192,12 +234,27 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 			*(SQLULEN *)value_ptr = stmt->odbc_fetcher->cursor_type;
 			return SQL_SUCCESS;
 		}
+		case SQL_ATTR_CONCURRENCY: {
+			//*(SQLULEN *)value_ptr = SQL_CONCUR_READ_ONLY;
+			*(SQLULEN *)value_ptr = SQL_CONCUR_LOCK;
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_QUERY_TIMEOUT: {
+			*((SQLINTEGER *) value_ptr) = 0;
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_RETRIEVE_DATA: {
+			*((SQLULEN *) value_ptr) = stmt->retrieve_data;
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_CURSOR_SCROLLABLE: {
+			*((SQLULEN *) value_ptr) = stmt->odbc_fetcher->cursor_scrollable;
+			return SQL_SUCCESS;
+		}
 		case SQL_ATTR_ASYNC_ENABLE:
 #ifdef SQL_ATTR_ASYNC_STMT_EVENT
 		case SQL_ATTR_ASYNC_STMT_EVENT:
 #endif
-		case SQL_ATTR_CONCURRENCY:
-		case SQL_ATTR_CURSOR_SCROLLABLE:
 		case SQL_ATTR_CURSOR_SENSITIVITY:
 		case SQL_ATTR_ENABLE_AUTO_IPD:
 		case SQL_ATTR_FETCH_BOOKMARK_PTR:
@@ -208,16 +265,15 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 		case SQL_ATTR_NOSCAN:
 		case SQL_ATTR_PARAM_OPERATION_PTR:
 		case SQL_ATTR_PARAM_STATUS_PTR:
-		case SQL_ATTR_QUERY_TIMEOUT:
-		case SQL_ATTR_RETRIEVE_DATA:
 		case SQL_ATTR_ROW_BIND_OFFSET_PTR:
 		case SQL_ATTR_ROW_NUMBER:
 		case SQL_ATTR_ROW_OPERATION_PTR:
 		case SQL_ATTR_SIMULATE_CURSOR:
 		case SQL_ATTR_USE_BOOKMARKS:
 		default:
-			stmt->error_messages.emplace_back("Unsupported attribute type.");
-			return SQL_ERROR;
+			duckdb::DiagRecord diag_rec("Unsupported attribute type:" + std::to_string(attribute),
+										SQLStateType::INVALID_ATTR_OPTION_ID, stmt->dbc->GetDataSourceName());
+			throw duckdb::OdbcException("SQLSetStmtAttr", SQL_ERROR, diag_rec);
 		}
 	});
 }
