@@ -85,20 +85,19 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
 const char descriptor_table_protodef_substrait_2fplan_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
   "\n\024substrait/plan.proto\022\tsubstrait\032\027subst"
   "rait/algebra.proto\032%substrait/extensions"
-  "/extensions.proto\"c\n\007PlanRel\022\"\n\003rel\030\001 \001("
-  "\0132\016.substrait.RelH\000R\003rel\022(\n\004root\030\002 \001(\0132\022"
-  ".substrait.RelRootH\000R\004rootB\n\n\010rel_type\"\343"
-  "\002\n\004Plan\022O\n\016extension_uris\030\001 \003(\0132(.substr"
-  "ait.extensions.SimpleExtensionURIR\rexten"
-  "sionUris\022P\n\nextensions\030\002 \003(\01320.substrait"
-  ".extensions.SimpleExtensionDeclarationR\n"
-  "extensions\0220\n\trelations\030\003 \003(\0132\022.substrai"
-  "t.PlanRelR\trelations\022X\n\023advanced_extensi"
-  "ons\030\004 \001(\0132\'.substrait.extensions.Advance"
-  "dExtensionR\022advancedExtensions\022,\n\022expect"
-  "ed_type_urls\030\005 \003(\tR\020expectedTypeUrlsB+\n\022"
-  "io.substrait.protoP\001\252\002\022Substrait.Protobu"
-  "fb\006proto3"
+  "/extensions.proto\"X\n\007PlanRel\022\035\n\003rel\030\001 \001("
+  "\0132\016.substrait.RelH\000\022\"\n\004root\030\002 \001(\0132\022.subs"
+  "trait.RelRootH\000B\n\n\010rel_type\"\227\002\n\004Plan\022@\n\016"
+  "extension_uris\030\001 \003(\0132(.substrait.extensi"
+  "ons.SimpleExtensionURI\022D\n\nextensions\030\002 \003"
+  "(\01320.substrait.extensions.SimpleExtensio"
+  "nDeclaration\022%\n\trelations\030\003 \003(\0132\022.substr"
+  "ait.PlanRel\022D\n\023advanced_extensions\030\004 \001(\013"
+  "2\'.substrait.extensions.AdvancedExtensio"
+  "n\022\032\n\022expected_type_urls\030\005 \003(\tBW\n\022io.subs"
+  "trait.protoP\001Z*github.com/substrait-io/s"
+  "ubstrait-go/proto\252\002\022Substrait.Protobufb\006"
+  "proto3"
   ;
 static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_substrait_2fplan_2eproto_deps[2] = {
   &::descriptor_table_substrait_2falgebra_2eproto,
@@ -106,7 +105,7 @@ static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor
 };
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_substrait_2fplan_2eproto_once;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_substrait_2fplan_2eproto = {
-  false, false, 609, descriptor_table_protodef_substrait_2fplan_2eproto, "substrait/plan.proto", 
+  false, false, 566, descriptor_table_protodef_substrait_2fplan_2eproto, "substrait/plan.proto", 
   &descriptor_table_substrait_2fplan_2eproto_once, descriptor_table_substrait_2fplan_2eproto_deps, 2, 2,
   schemas, file_default_instances, TableStruct_substrait_2fplan_2eproto::offsets,
   file_level_metadata_substrait_2fplan_2eproto, file_level_enum_descriptors_substrait_2fplan_2eproto, file_level_service_descriptors_substrait_2fplan_2eproto,
@@ -281,7 +280,7 @@ const char* PlanRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Rel rel = 1 [json_name = "rel"];
+      // .substrait.Rel rel = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_rel(), ptr);
@@ -289,7 +288,7 @@ const char* PlanRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.RelRoot root = 2 [json_name = "root"];
+      // .substrait.RelRoot root = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_root(), ptr);
@@ -326,7 +325,7 @@ uint8_t* PlanRel::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Rel rel = 1 [json_name = "rel"];
+  // .substrait.Rel rel = 1;
   if (_internal_has_rel()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -334,7 +333,7 @@ uint8_t* PlanRel::_InternalSerialize(
         1, _Internal::rel(this), target, stream);
   }
 
-  // .substrait.RelRoot root = 2 [json_name = "root"];
+  // .substrait.RelRoot root = 2;
   if (_internal_has_root()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -359,14 +358,14 @@ size_t PlanRel::ByteSizeLong() const {
   (void) cached_has_bits;
 
   switch (rel_type_case()) {
-    // .substrait.Rel rel = 1 [json_name = "rel"];
+    // .substrait.Rel rel = 1;
     case kRel: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rel_type_.rel_);
       break;
     }
-    // .substrait.RelRoot root = 2 [json_name = "root"];
+    // .substrait.RelRoot root = 2;
     case kRoot: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -539,7 +538,7 @@ const char* Plan::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::inter
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.extensions.SimpleExtensionURI extension_uris = 1 [json_name = "extensionUris"];
+      // repeated .substrait.extensions.SimpleExtensionURI extension_uris = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -552,7 +551,7 @@ const char* Plan::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::inter
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.extensions.SimpleExtensionDeclaration extensions = 2 [json_name = "extensions"];
+      // repeated .substrait.extensions.SimpleExtensionDeclaration extensions = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -565,7 +564,7 @@ const char* Plan::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::inter
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.PlanRel relations = 3 [json_name = "relations"];
+      // repeated .substrait.PlanRel relations = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr -= 1;
@@ -578,7 +577,7 @@ const char* Plan::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::inter
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extensions = 4 [json_name = "advancedExtensions"];
+      // .substrait.extensions.AdvancedExtension advanced_extensions = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extensions(), ptr);
@@ -586,7 +585,7 @@ const char* Plan::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::inter
         } else
           goto handle_unusual;
         continue;
-      // repeated string expected_type_urls = 5 [json_name = "expectedTypeUrls"];
+      // repeated string expected_type_urls = 5;
       case 5:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
           ptr -= 1;
@@ -630,7 +629,7 @@ uint8_t* Plan::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.extensions.SimpleExtensionURI extension_uris = 1 [json_name = "extensionUris"];
+  // repeated .substrait.extensions.SimpleExtensionURI extension_uris = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_extension_uris_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -638,7 +637,7 @@ uint8_t* Plan::_InternalSerialize(
       InternalWriteMessage(1, this->_internal_extension_uris(i), target, stream);
   }
 
-  // repeated .substrait.extensions.SimpleExtensionDeclaration extensions = 2 [json_name = "extensions"];
+  // repeated .substrait.extensions.SimpleExtensionDeclaration extensions = 2;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_extensions_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -646,7 +645,7 @@ uint8_t* Plan::_InternalSerialize(
       InternalWriteMessage(2, this->_internal_extensions(i), target, stream);
   }
 
-  // repeated .substrait.PlanRel relations = 3 [json_name = "relations"];
+  // repeated .substrait.PlanRel relations = 3;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_relations_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -654,7 +653,7 @@ uint8_t* Plan::_InternalSerialize(
       InternalWriteMessage(3, this->_internal_relations(i), target, stream);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extensions = 4 [json_name = "advancedExtensions"];
+  // .substrait.extensions.AdvancedExtension advanced_extensions = 4;
   if (this->_internal_has_advanced_extensions()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -662,7 +661,7 @@ uint8_t* Plan::_InternalSerialize(
         4, _Internal::advanced_extensions(this), target, stream);
   }
 
-  // repeated string expected_type_urls = 5 [json_name = "expectedTypeUrls"];
+  // repeated string expected_type_urls = 5;
   for (int i = 0, n = this->_internal_expected_type_urls_size(); i < n; i++) {
     const auto& s = this->_internal_expected_type_urls(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -688,28 +687,28 @@ size_t Plan::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.extensions.SimpleExtensionURI extension_uris = 1 [json_name = "extensionUris"];
+  // repeated .substrait.extensions.SimpleExtensionURI extension_uris = 1;
   total_size += 1UL * this->_internal_extension_uris_size();
   for (const auto& msg : this->extension_uris_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // repeated .substrait.extensions.SimpleExtensionDeclaration extensions = 2 [json_name = "extensions"];
+  // repeated .substrait.extensions.SimpleExtensionDeclaration extensions = 2;
   total_size += 1UL * this->_internal_extensions_size();
   for (const auto& msg : this->extensions_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // repeated .substrait.PlanRel relations = 3 [json_name = "relations"];
+  // repeated .substrait.PlanRel relations = 3;
   total_size += 1UL * this->_internal_relations_size();
   for (const auto& msg : this->relations_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // repeated string expected_type_urls = 5 [json_name = "expectedTypeUrls"];
+  // repeated string expected_type_urls = 5;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(expected_type_urls_.size());
   for (int i = 0, n = expected_type_urls_.size(); i < n; i++) {
@@ -717,7 +716,7 @@ size_t Plan::ByteSizeLong() const {
       expected_type_urls_.Get(i));
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extensions = 4 [json_name = "advancedExtensions"];
+  // .substrait.extensions.AdvancedExtension advanced_extensions = 4;
   if (this->_internal_has_advanced_extensions()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
