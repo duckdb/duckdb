@@ -3,7 +3,6 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
-#include "duckdb/parser/constraints/generated_constraint.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_info.hpp"
 
 namespace duckdb {
@@ -98,36 +97,34 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)c->data.ptr_value;
 			auto centry = TransformColumnDefinition(cdef);
 			TableColumnType column_type = TableColumnType::STANDARD;
-			unique_ptr<Constraint> generated = nullptr;
+			unique_ptr<ParsedExpression> generated_expression;
 			bool default_constraint_set = false;
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
+					if (ConstraintIsOfType(constr, duckdb_libpgquery::PG_CONSTR_GENERATED)) {
+						if (generated_expression) {
+							throw ParserException("Generated constraint provided twice for the same column");
+						}
+						generated_expression = TransformGeneratedExpression(constr);
+						column_type = TableColumnType::GENERATED;
+						continue;
+					}
 					auto constraint = TransformConstraint(constr, centry, info->columns.size());
 					default_constraint_set =
 					    default_constraint_set || ConstraintIsOfType(constr, duckdb_libpgquery::PG_CONSTR_DEFAULT);
 					if (constraint) {
-						if (constraint->type == ConstraintType::GENERATED) {
-							if (generated) {
-								throw NotImplementedException("Columns can only have 1 GENERATED constraint");
-							}
-							generated = move(constraint);
-							column_type = TableColumnType::GENERATED;
-						} else {
-							info->constraints.push_back(move(constraint));
-						}
+						info->constraints.push_back(move(constraint));
 					}
 				}
 			}
 			if (column_type == TableColumnType::STANDARD) {
 				info->columns.push_back(move(centry));
 			} else {
-				D_ASSERT(generated->type == ConstraintType::GENERATED);
 				if (default_constraint_set) {
 					throw BinderException("DEFAULT constraint on GENERATED column \"%s\" is not allowed", centry.name);
 				}
-				auto gen_constraint = (GeneratedConstraint *)generated.get();
 				auto generated_column =
-				    GeneratedColumnDefinition(centry.name, move(centry.type), move(gen_constraint->expression));
+				    GeneratedColumnDefinition(centry.name, move(centry.type), move(generated_expression));
 				info->generated_columns.push_back(move(generated_column));
 			}
 			break;
