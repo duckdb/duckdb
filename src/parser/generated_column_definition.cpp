@@ -83,18 +83,18 @@ static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 	    expr, [&](const ParsedExpression &child) { RenameExpression((ParsedExpression &)child, info); });
 }
 
-static void _RenameTable(ParsedExpression &expr, const RenameTableInfo &info) {
+static void InnerRenameTable(ParsedExpression &expr, const RenameTableInfo &info) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
 		colref.column_names[0] = info.new_table_name;
 	}
 
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { _RenameTable((ParsedExpression &)child, info); });
+	    expr, [&](const ParsedExpression &child) { InnerRenameTable((ParsedExpression &)child, info); });
 }
 
 void GeneratedColumnDefinition::RenameTable(const RenameTableInfo &info) {
-	_RenameTable(*expression, info);
+	InnerRenameTable(*expression, info);
 }
 
 void GeneratedColumnDefinition::RenameColumnRefs(RenameColumnInfo &info) {
@@ -105,7 +105,7 @@ void GeneratedColumnDefinition::CheckValidity(const vector<ColumnDefinition> &co
 	vector<string> unresolved_columns;
 
 	VerifyAndRenameExpression(table_name, columns, *expression, unresolved_columns);
-	if (unresolved_columns.size()) {
+	if (!unresolved_columns.empty()) {
 		throw BinderException(
 		    "Not all columns referenced in the generated column expression could be resolved to the table \"%s\"",
 		    table_name);

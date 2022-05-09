@@ -34,7 +34,7 @@
 
 namespace duckdb {
 
-const string &TableCatalogEntry::GetColumnName(TableColumnInfo info) {
+const string &TableCatalogEntry::GetColumnName(const TableColumnInfo& info) {
 	switch (info.column_type) {
 	case TableColumnType::GENERATED:
 		return generated_columns[info.index].name;

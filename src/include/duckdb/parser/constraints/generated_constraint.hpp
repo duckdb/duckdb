@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 
