@@ -154,20 +154,20 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 		idx_t fixed_size = std::stoi(parameters);
 		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
 		return LogicalType::BLOB;
-	} else if (format[0] == 't' && format[1] == 's'){
+	} else if (format[0] == 't' && format[1] == 's') {
 		// Timestamp with Timezone
-		if (format[2] == 'n'){
+		if (format[2] == 'n') {
 			arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::NANOSECONDS);
-		} else if (format[2] == 'u'){
+		} else if (format[2] == 'u') {
 			arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MICROSECONDS);
-		} else if (format[2] == 'm'){
+		} else if (format[2] == 'm') {
 			arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
-		} else if (format[2] == 's'){
+		} else if (format[2] == 's') {
 			arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::SECONDS);
 		} else {
-			throw NotImplementedException(" Timestamptz precision of not accepted" );
+			throw NotImplementedException(" Timestamptz precision of not accepted");
 		}
-		//TODO right now we just get the UTC value. We probably want to support this properly in the future
+		// TODO right now we just get the UTC value. We probably want to support this properly in the future
 		return LogicalType::TIMESTAMP_TZ;
 	} else {
 		throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
@@ -531,8 +531,8 @@ void TimeConversion(Vector &vector, ArrowArray &array, ArrowScanState &scan_stat
 	}
 }
 
-void TimestampTZConversion(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, int64_t nested_offset, idx_t size,
-                    int64_t conversion) {
+void TimestampTZConversion(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, int64_t nested_offset,
+                           idx_t size, int64_t conversion) {
 	auto tgt_ptr = (timestamp_t *)FlatVector::GetData(vector);
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr = (int64_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
@@ -628,7 +628,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS:{
+	case LogicalTypeId::TIMESTAMP_NS: {
 		DirectConversion(vector, array, scan_state, nested_offset);
 		break;
 	}
@@ -709,7 +709,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		}
 		break;
 	}
-	case LogicalTypeId::TIMESTAMP_TZ:{
+	case LogicalTypeId::TIMESTAMP_TZ: {
 		auto precision = arrow_convert_data[col_idx]->date_time_precision[arrow_convert_idx.second++];
 		switch (precision) {
 		case ArrowDateTimeType::SECONDS: {

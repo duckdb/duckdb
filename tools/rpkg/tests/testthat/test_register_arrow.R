@@ -320,6 +320,40 @@ test_that("duckdb_register_arrow() performs selection pushdown timestamp type", 
   duckdb::duckdb_unregister_arrow(con, "testarrow")
 })
 
+test_that("duckdb_register_arrow() performs selection pushdown timestamptz type", {
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  dbExecute(con, paste0("CREATE TABLE test (a  TIMESTAMPTZ, b TIMESTAMPTZ, c TIMESTAMPTZ)"))
+  dbExecute(con, "INSERT INTO  test VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),(NULL,NULL,NULL)")
+  arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE))
+  duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
+
+  # Try ==
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a ='2008-01-01 00:00:01'")[[1]], 1)
+  # Try >
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a >'2008-01-01 00:00:01'")[[1]], 2)
+  # Try >=
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a >='2010-01-01 10:00:01'")[[1]], 2)
+  # Try <
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a <'2010-01-01 10:00:01'")[[1]], 1)
+  # Try <=
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a <='2010-01-01 10:00:01'")[[1]], 2)
+
+  # Try Is Null
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a IS NULL")[[1]], 1)
+  # Try Is Not Null
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a IS NOT NULL")[[1]], 3)
+
+  # Try And
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a='2010-01-01 10:00:01' and b ='2008-01-01 00:00:01'")[[1]], 0)
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a ='2020-03-01 10:00:01' and b = '2010-01-01 10:00:01' and c = '2020-03-01 10:00:01'")[[1]], 1)
+  # Try Or
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a = '2020-03-01 10:00:01' or b ='2008-01-01 00:00:01'")[[1]], 2)
+
+  duckdb::duckdb_unregister_arrow(con, "testarrow")
+})
+
 test_that("duckdb_register_arrow() performs selection pushdown date type", {
   con <- dbConnect(duckdb::duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
