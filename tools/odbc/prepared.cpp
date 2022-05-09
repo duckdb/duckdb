@@ -32,7 +32,11 @@ SQLRETURN SQL_API SQLNumResultCols(SQLHSTMT statement_handle, SQLSMALLINT *colum
 		if (!column_count_ptr) {
 			return SQL_ERROR;
 		}
-		*column_count_ptr = (SQLSMALLINT)stmt->stmt->GetTypes().size();
+		*column_count_ptr = (SQLSMALLINT)stmt->stmt->ColumnCount();
+
+		if (stmt->stmt->data->statement_type != duckdb::StatementType::SELECT_STATEMENT) {
+			*column_count_ptr = 0;
+		}
 		return SQL_SUCCESS;
 	});
 }
