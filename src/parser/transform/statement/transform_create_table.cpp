@@ -120,8 +120,6 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 				vector<unique_ptr<ParsedExpression>> children;
 				children.push_back(make_unique<ConstantExpression>(Value(seq_name)));
 				centry.default_value = make_unique<FunctionExpression>("nextval", move(children));
-
-
 			}
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {

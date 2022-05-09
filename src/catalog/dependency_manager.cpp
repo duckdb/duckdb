@@ -27,7 +27,7 @@ void DependencyManager::AddObject(ClientContext &context, CatalogEntry *object,
 	if (object->type == CatalogType::INDEX_ENTRY || object->type == CatalogType::SEQUENCE_ENTRY) {
 		dependency_type = DependencyType::DEPENDENCY_AUTOMATIC;
 	}
-	
+
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies) {
 		dependents_map[dependency].insert(Dependency(object, dependency_type));

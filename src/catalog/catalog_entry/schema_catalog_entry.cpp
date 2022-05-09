@@ -135,9 +135,9 @@ CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreat
 	}
 
 	// create any sequences that are owned by this table
-	unordered_set<CatalogEntry*> table_dep;
+	unordered_set<CatalogEntry *> table_dep;
 	table_dep.insert(entry);
-	for (auto& create_seq : info->Base().sequences) {
+	for (auto &create_seq : info->Base().sequences) {
 		auto sequence = make_unique<SequenceCatalogEntry>(catalog, this, create_seq.get());
 		AddEntry(context, move(sequence), info->Base().on_conflict, table_dep);
 	}

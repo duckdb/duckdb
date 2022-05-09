@@ -124,7 +124,8 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 		if (!seqname.IsNull()) {
 			D_ASSERT(seqname.type().id() == LogicalTypeId::VARCHAR);
 			auto qname = QualifiedName::Parse(StringValue::Get(seqname));
-			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, qname.schema, qname.name, true /* if exists */);
+			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, qname.schema, qname.name,
+			                                                                       true /* if exists */);
 		}
 	}
 	return make_unique<NextvalBindData>(context, sequence);
