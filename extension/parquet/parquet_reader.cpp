@@ -805,20 +805,6 @@ void ParquetReader::Scan(ParquetReaderScanState &state, DataChunk &result) {
 	}
 }
 
-// TODO can be optimized, also move to nicer spot
-static bool AllNone(parquet_filter_t filter, uint64_t n) {
-	if (n == STANDARD_VECTOR_SIZE) {
-		return filter.none();
-	} else {
-		for (idx_t i = 0; i < n; i++) {
-			if (filter[i]) {
-				return false;
-			}
-		}
-		return true;
-	}
-}
-
 bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &result) {
 	if (state.finished) {
 		return false;
@@ -920,6 +906,11 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 	parquet_filter_t filter_mask;
 	filter_mask.set();
 
+	// mask out unused part of bitset
+	for (idx_t i = this_output_chunk_rows; i < STANDARD_VECTOR_SIZE; i++) {
+		filter_mask.set(i, false);
+	}
+
 	state.define_buf.zero();
 	state.repeat_buf.zero();
 
@@ -935,7 +926,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		for (auto &filter_col : state.filters->filters) {
 			auto file_col_idx = state.column_ids[filter_col.first];
 			// row_group skipping of columns that are never scanned.
-			if (AllNone(filter_mask, this_output_chunk_rows)) { // if no rows are left we can stop checking filters
+			if (filter_mask.none()) { // if no rows are left we can stop checking filters
 				break;
 			}
 
@@ -957,7 +948,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			}
 			auto file_col_idx = state.column_ids[out_col_idx];
 
-			if (AllNone(filter_mask, this_output_chunk_rows)) {
+			if (filter_mask.none()) {
 				root_reader->GetChildReader(file_col_idx)->Skip(result.size());
 				continue;
 			}
