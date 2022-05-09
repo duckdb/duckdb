@@ -13,19 +13,11 @@
 
 namespace duckdb {
 
-struct ListBindData : public FunctionData {
-	ListBindData() {
-	}
-
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<ListBindData>();
-	}
-};
-
 struct ListFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 struct HistogramFun {
 	static void RegisterFunction(BuiltinFunctions &set);
+	static AggregateFunction GetHistogramUnorderedMap(LogicalType &type);
 };
 } // namespace duckdb

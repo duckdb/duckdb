@@ -7,6 +7,7 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
@@ -194,7 +195,7 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &sch
                                        QueryErrorContext error_context) {
 	D_ASSERT(!schema_name.empty());
 	if (schema_name == TEMP_SCHEMA) {
-		return context.temporary_objects.get();
+		return ClientData::Get(context).temporary_objects.get();
 	}
 	auto entry = schemas->GetEntry(context, schema_name);
 	if (!entry && !if_exists) {
@@ -269,7 +270,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 		return {schema, entry};
 	}
 
-	const auto &paths = context.catalog_search_path->Get();
+	const auto &paths = ClientData::Get(context).catalog_search_path->Get();
 	for (const auto &path : paths) {
 		auto lookup = LookupEntry(context, type, path, name, true, error_context);
 		if (lookup.Found()) {

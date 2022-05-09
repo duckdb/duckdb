@@ -1302,7 +1302,7 @@ struct StructDatePart {
 		    : VariableReturnBindData(stype), part_codes(part_codes_p) {
 		}
 
-		unique_ptr<FunctionData> Copy() override {
+		unique_ptr<FunctionData> Copy() const override {
 			return make_unique<BindData>(stype, part_codes);
 		}
 	};

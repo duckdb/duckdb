@@ -899,7 +899,7 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 		case VerifyExistenceType::APPEND_FK: {
 			// found node no exists in tree
 			exception_msg =
-			    "violates foreign key constraint because key \"" + key_name + "\" no exist in referenced table";
+			    "violates foreign key constraint because key \"" + key_name + "\" does not exist in referenced table";
 			break;
 		}
 		case VerifyExistenceType::DELETE_FK: {

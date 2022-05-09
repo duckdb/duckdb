@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/aggregate/nested_functions.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -18,15 +19,18 @@ struct ListAggregatesBindData : public FunctionData {
 	LogicalType stype;
 	unique_ptr<Expression> aggr_expr;
 
-	unique_ptr<FunctionData> Copy() override;
+	unique_ptr<FunctionData> Copy() const override {
+		return make_unique<ListAggregatesBindData>(stype, aggr_expr->Copy());
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const ListAggregatesBindData &)other_p;
+		return stype == other.stype && aggr_expr->Equals(other.aggr_expr.get());
+	}
 };
 
 ListAggregatesBindData::ListAggregatesBindData(const LogicalType &stype_p, unique_ptr<Expression> aggr_expr_p)
     : stype(stype_p), aggr_expr(move(aggr_expr_p)) {
-}
-
-unique_ptr<FunctionData> ListAggregatesBindData::Copy() {
-	return make_unique<ListAggregatesBindData>(stype, aggr_expr->Copy());
 }
 
 ListAggregatesBindData::~ListAggregatesBindData() {
@@ -50,9 +54,73 @@ struct StateVector {
 	Vector state_vector;
 };
 
-static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+struct AggregateFunctor {
+	template <class T, class MAP_TYPE = unordered_map<T, idx_t>>
+	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
+	}
+};
 
-	D_ASSERT(args.ColumnCount() == 2);
+struct DistinctFunctor {
+	template <class T, class MAP_TYPE = unordered_map<T, idx_t>>
+	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
+
+		VectorData sdata;
+		state_vector.Orrify(count, sdata);
+		auto states = (HistogramAggState<T, MAP_TYPE> **)sdata.data;
+
+		auto result_data = FlatVector::GetData<list_entry_t>(result);
+
+		idx_t offset = 0;
+		for (idx_t i = 0; i < count; i++) {
+
+			auto state = states[sdata.sel->get_index(i)];
+			result_data[i].offset = offset;
+
+			if (!state->hist) {
+				result_data[i].length = 0;
+				continue;
+			}
+
+			result_data[i].length = state->hist->size();
+			offset += state->hist->size();
+
+			for (auto &entry : *state->hist) {
+				auto bucket_value = Value::CreateValue(entry.first);
+				ListVector::PushBack(result, bucket_value);
+			}
+		}
+		result.Verify(count);
+	}
+};
+
+struct UniqueFunctor {
+	template <class T, class MAP_TYPE = unordered_map<T, idx_t>>
+	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
+
+		VectorData sdata;
+		state_vector.Orrify(count, sdata);
+		auto states = (HistogramAggState<T, MAP_TYPE> **)sdata.data;
+
+		auto result_data = FlatVector::GetData<uint64_t>(result);
+
+		for (idx_t i = 0; i < count; i++) {
+
+			auto state = states[sdata.sel->get_index(i)];
+
+			if (!state->hist) {
+				result_data[i] = 0;
+				continue;
+			}
+
+			result_data[i] = state->hist->size();
+		}
+		result.Verify(count);
+	}
+};
+
+template <class OP, bool IS_AGGR = false>
+static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+
 	auto count = args.size();
 	Vector &lists = args.data[0];
 
@@ -145,8 +213,174 @@ static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vecto
 		aggr.function.update(&slice, aggr.bind_info.get(), 1, state_vector_update, states_idx);
 	}
 
-	// finalize all the aggregate states
-	aggr.function.finalize(state_vector.state_vector, aggr.bind_info.get(), result, count, 0);
+	if (IS_AGGR) {
+		// finalize all the aggregate states
+		aggr.function.finalize(state_vector.state_vector, aggr.bind_info.get(), result, count, 0);
+
+	} else {
+		// finalize manually to use the map
+		D_ASSERT(aggr.function.arguments.size() == 1);
+		auto key_type = aggr.function.arguments[0];
+
+		switch (key_type.InternalType()) {
+		case PhysicalType::BOOL:
+			OP::template ListExecuteFunction<bool>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::UINT8:
+			OP::template ListExecuteFunction<uint8_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::UINT16:
+			OP::template ListExecuteFunction<uint16_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::UINT32:
+			OP::template ListExecuteFunction<uint32_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::UINT64:
+			OP::template ListExecuteFunction<uint64_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::INT8:
+			OP::template ListExecuteFunction<int8_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::INT16:
+			OP::template ListExecuteFunction<int16_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::INT32:
+			OP::template ListExecuteFunction<int32_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::INT64:
+			OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::FLOAT:
+			OP::template ListExecuteFunction<float>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::DOUBLE:
+			OP::template ListExecuteFunction<double>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::DATE32:
+			OP::template ListExecuteFunction<int32_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::DATE64:
+			OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::TIMESTAMP:
+			OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::TIME32:
+			OP::template ListExecuteFunction<int32_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::TIME64:
+			OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::STRING:
+			OP::template ListExecuteFunction<string>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::LARGE_STRING:
+			OP::template ListExecuteFunction<string>(result, state_vector.state_vector, count);
+			break;
+		case PhysicalType::VARCHAR:
+			OP::template ListExecuteFunction<string>(result, state_vector.state_vector, count);
+			break;
+		default:
+			throw InternalException("Unimplemented histogram aggregate");
+		}
+	}
+}
+
+static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+
+	D_ASSERT(args.ColumnCount() == 2);
+	ListAggregatesFunction<AggregateFunctor, true>(args, state, result);
+}
+
+static void ListDistinctFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+
+	D_ASSERT(args.ColumnCount() == 1);
+	ListAggregatesFunction<DistinctFunctor>(args, state, result);
+}
+
+static void ListUniqueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+
+	D_ASSERT(args.ColumnCount() == 1);
+	ListAggregatesFunction<UniqueFunctor>(args, state, result);
+}
+
+template <bool IS_AGGR = false>
+static unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_function,
+                                                           const LogicalType &list_child_type,
+                                                           AggregateFunction &aggr_function) {
+
+	// create the child expression and its type
+	vector<unique_ptr<Expression>> children;
+	auto expr = make_unique<BoundConstantExpression>(Value(list_child_type));
+	children.push_back(move(expr));
+
+	auto bound_aggr_function = AggregateFunction::BindAggregateFunction(context, aggr_function, move(children));
+	bound_function.arguments[0] = LogicalType::LIST(bound_aggr_function->function.arguments[0]);
+
+	if (IS_AGGR) {
+		bound_function.return_type = bound_aggr_function->function.return_type;
+	}
+
+	return make_unique<ListAggregatesBindData>(bound_function.return_type, move(bound_aggr_function));
+}
+
+template <bool IS_AGGR = false>
+static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
+
+	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
+		bound_function.arguments[0] = LogicalType::SQLNULL;
+		bound_function.return_type = LogicalType::SQLNULL;
+		return make_unique<VariableReturnBindData>(bound_function.return_type);
+	}
+
+	bool is_parameter = arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN;
+	auto list_child_type = is_parameter ? LogicalTypeId::UNKNOWN : ListType::GetChildType(arguments[0]->return_type);
+
+	string function_name = "histogram";
+	if (IS_AGGR) { // get the name of the aggregate function
+
+		if (!arguments[1]->IsFoldable()) {
+			throw InvalidInputException("Aggregate function name must be a constant");
+		}
+		// get the function name
+		Value function_value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+		function_name = function_value.ToString();
+	}
+
+	// look up the aggregate function in the catalog
+	QueryErrorContext error_context(nullptr, 0);
+	auto func = (AggregateFunctionCatalogEntry *)Catalog::GetCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
+	    context, DEFAULT_SCHEMA, function_name, false, error_context);
+	D_ASSERT(func->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
+
+	if (is_parameter) {
+		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
+		bound_function.return_type = LogicalType::SQLNULL;
+		return nullptr;
+	}
+
+	// find a matching aggregate function
+	string error;
+	vector<LogicalType> types;
+	types.push_back(list_child_type);
+	auto best_function_idx = Function::BindFunction(func->name, func->functions, types, error);
+	if (best_function_idx == DConstants::INVALID_INDEX) {
+		throw BinderException("No matching aggregate function");
+	}
+
+	// found a matching function, bind it as an aggregate
+	auto &best_function = func->functions[best_function_idx];
+
+	if (IS_AGGR) {
+		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, list_child_type, best_function);
+	}
+
+	// create the unordered map histogram function
+	D_ASSERT(best_function.arguments.size() == 1);
+	auto key_type = best_function.arguments[0];
+	auto aggr_function = HistogramFun::GetHistogramUnorderedMap(key_type);
+	return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, list_child_type, aggr_function);
 }
 
 static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, ScalarFunction &bound_function,
@@ -156,63 +390,54 @@ static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, Scalar
 	D_ASSERT(bound_function.arguments.size() == 2);
 	D_ASSERT(arguments.size() == 2);
 
-	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-		return make_unique<VariableReturnBindData>(bound_function.return_type);
-	}
+	return ListAggregatesBind<true>(context, bound_function, arguments);
+}
 
-	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
-	auto list_child_type = ListType::GetChildType(arguments[0]->return_type);
-	bound_function.return_type = list_child_type;
+static unique_ptr<FunctionData> ListDistinctBind(ClientContext &context, ScalarFunction &bound_function,
+                                                 vector<unique_ptr<Expression>> &arguments) {
 
-	if (!arguments[1]->IsFoldable()) {
-		throw InvalidInputException("Aggregate function name must be a constant");
-	}
+	D_ASSERT(bound_function.arguments.size() == 1);
+	D_ASSERT(arguments.size() == 1);
+	bound_function.return_type = arguments[0]->return_type;
 
-	// get the function name
-	Value function_value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-	auto function_name = function_value.ToString();
+	return ListAggregatesBind<>(context, bound_function, arguments);
+}
 
-	vector<LogicalType> types;
-	types.push_back(list_child_type);
+static unique_ptr<FunctionData> ListUniqueBind(ClientContext &context, ScalarFunction &bound_function,
+                                               vector<unique_ptr<Expression>> &arguments) {
 
-	// create the child expression and its type
-	vector<unique_ptr<Expression>> children;
-	auto expr = make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL));
-	expr->return_type = list_child_type;
-	children.push_back(move(expr));
+	D_ASSERT(bound_function.arguments.size() == 1);
+	D_ASSERT(arguments.size() == 1);
+	bound_function.return_type = LogicalType::UBIGINT;
 
-	// look up the aggregate function in the catalog
-	QueryErrorContext error_context(nullptr, 0);
-	auto func = (AggregateFunctionCatalogEntry *)Catalog::GetCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
-	    context, DEFAULT_SCHEMA, function_name, false, error_context);
-	D_ASSERT(func->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
-
-	// find a matching aggregate function
-	string error;
-	auto best_function_idx = Function::BindFunction(func->name, func->functions, types, error);
-	if (best_function_idx == DConstants::INVALID_INDEX) {
-		throw BinderException("No matching aggregate function");
-	}
-
-	// found a matching function, bind it as an aggregate
-	auto &best_function = func->functions[best_function_idx];
-	auto bound_aggr_function = AggregateFunction::BindAggregateFunction(context, best_function, move(children));
-
-	bound_function.arguments[0] =
-	    LogicalType::LIST(bound_aggr_function->function.arguments[0]); // for proper casting of the vectors
-	bound_function.return_type = bound_aggr_function->function.return_type;
-	return make_unique<ListAggregatesBindData>(bound_function.return_type, move(bound_aggr_function));
+	return ListAggregatesBind<>(context, bound_function, arguments);
 }
 
 ScalarFunction ListAggregateFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
-	                      ListAggregateFunction, false, false, ListAggregateBind, nullptr, nullptr, nullptr);
+	                      ListAggregateFunction, false, false, ListAggregateBind);
+}
+
+ScalarFunction ListDistinctFun::GetFunction() {
+	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
+	                      ListDistinctFunction, false, false, ListDistinctBind);
+}
+
+ScalarFunction ListUniqueFun::GetFunction() {
+	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::UBIGINT, ListUniqueFunction, false, false,
+	                      ListUniqueBind);
 }
 
 void ListAggregateFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"list_aggregate", "array_aggregate", "list_aggr", "array_aggr"}, GetFunction());
+}
+
+void ListDistinctFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction({"list_distinct", "array_distinct"}, GetFunction());
+}
+
+void ListUniqueFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction({"list_unique", "array_unique"}, GetFunction());
 }
 
 } // namespace duckdb

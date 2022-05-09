@@ -46,6 +46,7 @@ static void testRunner() {
 		initial_dbpath = TestCreatePath(storage_name + ".db");
 	}
 	SQLLogicTestRunner runner(move(initial_dbpath));
+	runner.output_sql = Catch::getCurrentContext().getConfig()->outputSQL();
 	runner.ExecuteFile(name);
 }
 

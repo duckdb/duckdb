@@ -1,11 +1,107 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression_util.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
 SelectNode::SelectNode()
     : QueryNode(QueryNodeType::SELECT_NODE), aggregate_handling(AggregateHandling::STANDARD_HANDLING) {
+}
+
+string SelectNode::ToString() const {
+	string result;
+	result = CTEToString();
+	result += "SELECT ";
+
+	// search for a distinct modifier
+	for (idx_t modifier_idx = 0; modifier_idx < modifiers.size(); modifier_idx++) {
+		if (modifiers[modifier_idx]->type == ResultModifierType::DISTINCT_MODIFIER) {
+			auto &distinct_modifier = (DistinctModifier &)*modifiers[modifier_idx];
+			result += "DISTINCT ";
+			if (!distinct_modifier.distinct_on_targets.empty()) {
+				result += "ON (";
+				for (idx_t k = 0; k < distinct_modifier.distinct_on_targets.size(); k++) {
+					if (k > 0) {
+						result += ", ";
+					}
+					result += distinct_modifier.distinct_on_targets[k]->ToString();
+				}
+				result += ") ";
+			}
+		}
+	}
+	for (idx_t i = 0; i < select_list.size(); i++) {
+		if (i > 0) {
+			result += ", ";
+		}
+		result += select_list[i]->ToString();
+		if (!select_list[i]->alias.empty()) {
+			result += " AS " + KeywordHelper::WriteOptionallyQuoted(select_list[i]->alias);
+		}
+	}
+	if (from_table && from_table->type != TableReferenceType::EMPTY) {
+		result += " FROM " + from_table->ToString();
+	}
+	if (where_clause) {
+		result += " WHERE " + where_clause->ToString();
+	}
+	if (!groups.grouping_sets.empty()) {
+		result += " GROUP BY ";
+		// if we are dealing with multiple grouping sets, we have to add a few additional brackets
+		bool grouping_sets = groups.grouping_sets.size() > 1;
+		if (grouping_sets) {
+			result += "GROUPING SETS (";
+		}
+		for (idx_t i = 0; i < groups.grouping_sets.size(); i++) {
+			auto &grouping_set = groups.grouping_sets[i];
+			if (i > 0) {
+				result += ",";
+			}
+			if (grouping_set.empty()) {
+				result += "()";
+				continue;
+			}
+			if (grouping_sets) {
+				result += "(";
+			}
+			bool first = true;
+			for (auto &grp : grouping_set) {
+				if (!first) {
+					result += ", ";
+				}
+				result += groups.group_expressions[grp]->ToString();
+				first = false;
+			}
+			if (grouping_sets) {
+				result += ")";
+			}
+		}
+		if (grouping_sets) {
+			result += ")";
+		}
+	} else if (aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
+		result += " GROUP BY ALL";
+	}
+	if (having) {
+		result += " HAVING " + having->ToString();
+	}
+	if (qualify) {
+		result += " QUALIFY " + qualify->ToString();
+	}
+	if (sample) {
+		result += " USING SAMPLE ";
+		result += sample->sample_size.ToString();
+		if (sample->is_percentage) {
+			result += "%";
+		}
+		result += " (" + SampleMethodToString(sample->method);
+		if (sample->seed >= 0) {
+			result += ", " + std::to_string(sample->seed);
+		}
+		result += ")";
+	}
+	return result + ResultModifiersToString();
 }
 
 bool SelectNode::Equals(const QueryNode *other_p) const {

@@ -229,6 +229,22 @@ void DuckDBPyResult::FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversi
 	}
 }
 
+void InsertCategory(QueryResult &result, unordered_map<idx_t, py::list> &categories) {
+	for (idx_t col_idx = 0; col_idx < result.types.size(); col_idx++) {
+		auto &type = result.types[col_idx];
+		if (type.id() == LogicalTypeId::ENUM) {
+			// It's an ENUM type, in addition to converting the codes we must convert the categories
+			if (categories.find(col_idx) == categories.end()) {
+				auto &categories_list = EnumType::GetValuesInsertOrder(type);
+				auto categories_size = EnumType::GetSize(type);
+				for (idx_t i = 0; i < categories_size; i++) {
+					categories[col_idx].append(py::cast(categories_list.GetValue(i).ToString()));
+				}
+			}
+		}
+	}
+}
+
 py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
 	if (!result) {
 		throw std::runtime_error("result closed");
@@ -246,8 +262,9 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		auto &materialized = (MaterializedQueryResult &)*result;
 		for (auto &chunk : materialized.collection.Chunks()) {
-			conversion.Append(*chunk, &categories);
+			conversion.Append(*chunk);
 		}
+		InsertCategory(materialized, categories);
 		materialized.collection.Reset();
 	} else {
 		D_ASSERT(result->type == QueryResultType::STREAM_RESULT);
@@ -268,7 +285,8 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 				//! finished
 				break;
 			}
-			conversion.Append(*chunk, &categories);
+			conversion.Append(*chunk);
+			InsertCategory(*stream_result, categories);
 		}
 	}
 

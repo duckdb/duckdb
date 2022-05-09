@@ -91,7 +91,7 @@ ifeq (${STATIC_OPENSSL}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DOPENSSL_USE_STATIC_LIBS=1
 endif
 ifeq (${BUILD_SQLSMITH}, 1)
-	EXTENSIONS:=${EXTENSIONS} -DBUILD_SQLSMITH=1
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_SQLSMITH_EXTENSION=1
 endif
 ifeq (${BUILD_TPCE}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_TPCE=1
@@ -251,6 +251,6 @@ sqlsmith: debug
 clangd:
 	mkdir -p ./build/clangd && \
 	cd ./build/clangd && \
-	cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ../.. && \
+	cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ${EXTENSIONS} ../.. && \
 	cd ../.. && \
 	ln -sf ./build/clangd/compile_commands.json ./compile_commands.json

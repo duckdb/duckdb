@@ -148,7 +148,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	}
 
 	// bind the aggregate
-	idx_t best_function = Function::BindFunction(func->name, func->functions, types, error);
+	bool cast_parameters;
+	idx_t best_function = Function::BindFunction(func->name, func->functions, types, error, cast_parameters);
 	if (best_function == DConstants::INVALID_INDEX) {
 		throw BinderException(binder.FormatError(aggr, error));
 	}
@@ -168,8 +169,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		}
 	}
 
-	auto aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children),
-	                                                          move(bound_filter), aggr.distinct, move(order_bys));
+	auto aggregate = AggregateFunction::BindAggregateFunction(
+	    context, bound_function, move(children), move(bound_filter), aggr.distinct, move(order_bys), cast_parameters);
 	if (aggr.export_state) {
 		aggregate = ExportAggregateFunction::Bind(move(aggregate));
 	}

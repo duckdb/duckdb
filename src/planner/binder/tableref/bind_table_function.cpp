@@ -14,12 +14,46 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 
 namespace duckdb {
 
-bool Binder::BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
-                                    vector<Value> &parameters, named_parameter_map_t &named_parameters,
-                                    unique_ptr<BoundSubqueryRef> &subquery, string &error) {
+static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function) {
+	return table_function.functions.size() == 1 && table_function.functions[0].arguments.size() == 1 &&
+	       table_function.functions[0].arguments[0].id() == LogicalTypeId::TABLE;
+}
+
+bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
+                                         unique_ptr<BoundSubqueryRef> &subquery, string &error) {
+	auto binder = Binder::CreateBinder(this->context, this, true);
+	if (expressions.size() == 1 && expressions[0]->type == ExpressionType::SUBQUERY) {
+		// general case: argument is a subquery, bind it as part of the node
+		auto &se = (SubqueryExpression &)*expressions[0];
+		auto node = binder->BindNode(*se.subquery->node);
+		subquery = make_unique<BoundSubqueryRef>(move(binder), move(node));
+		return true;
+	}
+	// special case: non-subquery parameter to table-in table-out function
+	// generate a subquery and bind that (i.e. UNNEST([1,2,3]) becomes UNNEST((SELECT [1,2,3]))
+	auto select_node = make_unique<SelectNode>();
+	select_node->select_list = move(expressions);
+	select_node->from_table = make_unique<EmptyTableRef>();
+	auto node = binder->BindNode(*select_node);
+	subquery = make_unique<BoundSubqueryRef>(move(binder), move(node));
+	return true;
+}
+
+bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
+                                         vector<unique_ptr<ParsedExpression>> &expressions,
+                                         vector<LogicalType> &arguments, vector<Value> &parameters,
+                                         named_parameter_map_t &named_parameters,
+                                         unique_ptr<BoundSubqueryRef> &subquery, string &error) {
+	if (IsTableInTableOutFunction(table_function)) {
+		// special case binding for table-in table-out function
+		arguments.emplace_back(LogicalTypeId::TABLE);
+		return BindTableInTableOutFunction(expressions, subquery, error);
+	}
 	bool seen_subquery = false;
 	for (auto &child : expressions) {
 		string parameter_name;
@@ -49,6 +83,7 @@ bool Binder::BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expres
 			arguments.emplace_back(LogicalTypeId::TABLE);
 			continue;
 		}
+
 		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
 		LogicalType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
@@ -89,9 +124,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 
 	if (func_catalog->type == CatalogType::TABLE_FUNCTION_ENTRY) {
 		function = (TableFunctionCatalogEntry *)func_catalog;
-
 	} else if (func_catalog->type == CatalogType::TABLE_MACRO_ENTRY) {
-
 		auto macro_func = (TableMacroCatalogEntry *)func_catalog;
 		auto query_node = BindTableMacro(*fexpr, macro_func, 0);
 		D_ASSERT(query_node);
@@ -119,7 +152,8 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	named_parameter_map_t named_parameters;
 	unique_ptr<BoundSubqueryRef> subquery;
 	string error;
-	if (!BindFunctionParameters(fexpr->children, arguments, parameters, named_parameters, subquery, error)) {
+	if (!BindTableFunctionParameters(*function, fexpr->children, arguments, parameters, named_parameters, subquery,
+	                                 error)) {
 		throw BinderException(FormatError(ref, error));
 	}
 
