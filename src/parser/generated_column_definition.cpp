@@ -38,10 +38,10 @@ GeneratedColumnDefinition GeneratedColumnDefinition::Deserialize(Deserializer &s
 }
 
 static bool ColumnsContainsColumnRef(const vector<ColumnDefinition> &columns, const string &columnref) {
+	if (columnref == "rowid") {
+		return true;
+	}
 	for (auto &col : columns) {
-		if (columnref == "rowid") {
-			return true;
-		}
 		if (col.name == columnref) {
 			return true;
 		}
