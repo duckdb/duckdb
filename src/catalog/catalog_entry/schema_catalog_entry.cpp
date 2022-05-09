@@ -142,7 +142,7 @@ CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreat
 
 	idx_t table_index = 0;
 
-	auto table_catalog_entry = (TableCatalogEntry*)entry;
+	auto table_catalog_entry = (TableCatalogEntry *)entry;
 	auto scan_function = TableScanFunction::GetFunction();
 	auto bind_data = make_unique<TableScanBindData>(table_catalog_entry);
 
@@ -153,8 +153,8 @@ CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreat
 
 	auto binder = Binder::CreateBinder(context);
 	auto logical_get = make_unique<LogicalGet>(table_index, scan_function, move(bind_data), types, names);
-	binder->bind_context.AddBaseTable(table_index, table_catalog_entry->name, names, types, vector<string>(), vector<LogicalType>(),
-	                                  *logical_get);
+	binder->bind_context.AddBaseTable(table_index, table_catalog_entry->name, names, types, vector<string>(),
+	                                  vector<LogicalType>(), *logical_get);
 
 	auto expr_binder = ExpressionBinder(*binder, context, false);
 	for (auto &col : table_catalog_entry->generated_columns) {

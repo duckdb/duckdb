@@ -82,7 +82,7 @@ public:
 	TableColumnInfo GetColumnInfo(string &name, bool if_exists = false);
 
 private:
-	const string &GetColumnName(const TableColumnInfo& info);
+	const string &GetColumnName(const TableColumnInfo &info);
 	unique_ptr<CatalogEntry> RenameGeneratedColumn(ClientContext &context, RenameColumnInfo &info,
 	                                               const TableColumnInfo &rename_info);
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
