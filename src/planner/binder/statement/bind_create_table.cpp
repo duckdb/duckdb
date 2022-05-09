@@ -167,24 +167,20 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	}
 }
 
-void Binder::BindGeneratedColumns(vector<GeneratedColumnDefinition> &generated_columns, const CreateTableInfo& info) {
+void Binder::BindGeneratedColumns(vector<GeneratedColumnDefinition> &generated_columns, const CreateTableInfo &info) {
 	vector<string> names;
 	vector<LogicalType> types;
 
-	idx_t table_index = 0;
-
-	auto scan_function = TableScanFunction::GetFunction();
-	auto bind_data = make_unique<TableScanBindData>();
-
+	names.push_back("rowid");
+	types.push_back(LogicalType::BIGINT);
 	for (auto &col : info.columns) {
 		names.push_back(col.name);
 		types.push_back(col.type);
 	}
+	auto table_index = GenerateTableIndex();
 
-	auto logical_get = make_unique<LogicalGet>(table_index, scan_function, move(bind_data), types, names);
-	this->bind_context.AddBaseTable(table_index, info.table, names, types, vector<string>(), vector<LogicalType>(),
-	                                  *logical_get);
-	for (auto& col : generated_columns) {
+	this->bind_context.AddGenericBinding(table_index, info.table, names, types);
+	for (auto &col : generated_columns) {
 		auto expr_binder = ExpressionBinder(*this, context);
 		auto expression = col.expression->Copy();
 		// expr_binder.target_type = col.type;
@@ -194,12 +190,12 @@ void Binder::BindGeneratedColumns(vector<GeneratedColumnDefinition> &generated_c
 		}
 		if (bound_expression->HasSubquery()) {
 			throw BinderException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
-								col.name);
+			                      col.name);
 		}
 		if (bound_expression->return_type != col.type) {
 			throw BinderException(
-				"Return type of the expression(%s) and the specified type(%s) dont match for generated column \"%s\"",
-				bound_expression->return_type.ToString(), col.type.ToString(), col.name);
+			    "Return type of the expression(%s) and the specified type(%s) dont match for generated column \"%s\"",
+			    bound_expression->return_type.ToString(), col.type.ToString(), col.name);
 		}
 	}
 }

@@ -189,7 +189,7 @@ private:
 
 private:
 	//! Bind the expressions of generated columns to check for errors
-	void BindGeneratedColumns(vector<GeneratedColumnDefinition> &generated_columns, const CreateTableInfo& info);
+	void BindGeneratedColumns(vector<GeneratedColumnDefinition> &generated_columns, const CreateTableInfo &info);
 	//! Bind the default values of the columns of a table
 	void BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults);
 	//! Bind a limit value (LIMIT or OFFSET)
