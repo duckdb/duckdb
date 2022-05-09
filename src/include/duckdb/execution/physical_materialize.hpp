@@ -30,8 +30,8 @@ public:
 		return true;
 	}
 
-	virtual bool SinkOrderMatters() const {
-		return false;
+	virtual bool SinkOrderMatters() const override {
+		return true;
 	}
 
 	ChunkCollection GetResult();
