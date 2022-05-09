@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "hyperloglog.hpp"
 
@@ -38,7 +39,7 @@ public:
 	//! Get pointer to the HLL
 	data_ptr_t GetPtr() const;
 	//! Get copy of the HLL
-	unique_ptr<HyperLogLog> Copy() const;
+	unique_ptr<HyperLogLog> Copy();
 	//! (De)Serialize the HLL
 	void Serialize(FieldWriter &writer) const;
 	static unique_ptr<HyperLogLog> Deserialize(FieldReader &reader);
@@ -58,5 +59,6 @@ private:
 	explicit HyperLogLog(void *hll);
 
 	void *hll;
+	mutex lock;
 };
 } // namespace duckdb

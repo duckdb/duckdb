@@ -80,8 +80,9 @@ data_ptr_t HyperLogLog::GetPtr() const {
 	return (data_ptr_t)((duckdb_hll::robj *)hll)->ptr;
 }
 
-unique_ptr<HyperLogLog> HyperLogLog::Copy() const {
+unique_ptr<HyperLogLog> HyperLogLog::Copy() {
 	auto result = make_unique<HyperLogLog>();
+	lock_guard<mutex> guard(lock);
 	memcpy(result->GetPtr(), GetPtr(), GetSize());
 	D_ASSERT(result->Count() == Count());
 	return result;
