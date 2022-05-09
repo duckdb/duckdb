@@ -169,10 +169,10 @@ public:
 	}
 
 	idx_t Read(void *buffer, idx_t nr_bytes) {
-		if (!plain_file_source) {
+		if (!plain_file_source) { // Invalid read of size 1 (called from 1825)
 			// not a plain file source: we need to do some bookkeeping around the reset functionality
 			idx_t result_offset = 0;
-			if (read_position < buffer_size) {
+			if (read_position < buffer_size) { // invalid read of size 8 (called from 1825)
 				// we need to read from our cached buffer
 				auto buffer_read_count = MinValue<idx_t>(nr_bytes, buffer_size - read_position);
 				memcpy(buffer, cached_buffer.get() + read_position, buffer_read_count);
@@ -1747,15 +1747,16 @@ final_state:
 }
 
 bool BufferedCSVReader::ReadBuffer(idx_t &start) {
+	if (ra_fetch_in_progress) {
+		std::unique_lock<std::mutex> lck(ra_fetch_lock);
+		ra_fetch_cv.wait(lck, [&] { return !ra_fetch_in_progress; });
+	}
+
 	auto old_buffer = move(buffer);
 	idx_t read_count;
 	// the remaining part of the last buffer
 	idx_t remaining = buffer_size - start;
 
-	if (ra_fetch_in_progress) {
-		std::unique_lock<std::mutex> lck(ra_fetch_lock);
-		ra_fetch_cv.wait(lck, [&] { return !ra_fetch_in_progress; });
-	}
 	bool use_large_buffers = !file_handle->PlainFileSource() && mode == ParserMode::PARSING;
 	idx_t buffer_read_size = use_large_buffers ? INITIAL_BUFFER_SIZE_MAX : INITIAL_BUFFER_SIZE;
 	idx_t maximum_line_size = use_large_buffers ? 2 * INITIAL_BUFFER_SIZE_MAX : options.maximum_line_size;
@@ -1821,8 +1822,8 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 		ra_fetch_in_progress = true;
 		thread t(
 		    [&](size_t read_size, size_t alloc_size) {
-			    read_ahead_buffer = unique_ptr<char[]>(new char[alloc_size]);
-			    ra_buffer_size = file_handle->Read(read_ahead_buffer.get() + options.maximum_line_size, read_size);
+			    read_ahead_buffer = unique_ptr<char[]>(new char[alloc_size]); // Invalid write of size 8
+			    ra_buffer_size = file_handle->Read(read_ahead_buffer.get() + options.maximum_line_size, read_size); // Invalid write of size 8
 			    ra_is_eof = ra_buffer_size != read_size;
 			    ra_fetch_in_progress = false;
 			    ra_fetch_cv.notify_one();
