@@ -1,0 +1,62 @@
+# name: test/sql/parallelism/intraquery/test_parallel_materialization_order.test
+# description: Test the order gurantee of parallel result set materialization
+# group: [intraquery]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA force_result_set_materialization
+
+statement ok
+CREATE TABLE test(i BIGINT)
+
+statement ok
+INSERT INTO test SELECT range FROM range(1024*120*20)
+
+query R
+SELECT * FROM test WHERE i % (1024*60) = 0;
+----
+0
+61440
+122880
+184320
+245760
+307200
+368640
+430080
+491520
+552960
+614400
+675840
+737280
+798720
+860160
+921600
+983040
+1044480
+1105920
+1167360
+1228800
+1290240
+1351680
+1413120
+1474560
+1536000
+1597440
+1658880
+1720320
+1781760
+1843200
+1904640
+1966080
+2027520
+2088960
+2150400
+2211840
+2273280
+2334720
+2396160
