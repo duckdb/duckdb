@@ -425,13 +425,9 @@ static bool TimestampTzCastSwitch(Vector &source, Vector &result, idx_t count, s
 		// timestamp with time zone to varchar
 		VectorStringCast<timestamp_t, duckdb::StringCastTZ>(source, result, count);
 		break;
-	case LogicalTypeId::DATE:
-		// timestamp with time zone to date
-		UnaryExecutor::Execute<timestamp_t, date_t, duckdb::Cast>(source, result, count);
-		break;
-	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
-		// timestamp with time zone to time
+		// timestamp with time zone to time with time zone.
+		// TODO: set the offset to +00
 		UnaryExecutor::Execute<timestamp_t, dtime_t, duckdb::Cast>(source, result, count);
 		break;
 	case LogicalTypeId::TIMESTAMP:
