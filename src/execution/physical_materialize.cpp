@@ -1,4 +1,3 @@
-#include <iostream>
 #include "duckdb/execution/physical_materialize.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 
@@ -61,7 +60,6 @@ void PhysicalMaterialize::Combine(ExecutionContext &context, GlobalSinkState &st
 
 	lock_guard<mutex> glock(gstate.lock);
 	for (idx_t i = 0; i < source.data_indexes.size(); i++) {
-		// TODO: transaction local storage?
 		D_ASSERT(gstate.collection_map.find(source.data_indexes[i]) == gstate.collection_map.end());
 		gstate.collection_map[source.data_indexes[i]] = move(source.collections[i]);
 	}
