@@ -8,6 +8,8 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 #include <algorithm>
 
@@ -165,6 +167,43 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	}
 }
 
+void Binder::BindGeneratedColumns(vector<GeneratedColumnDefinition> &generated_columns, const CreateTableInfo& info) {
+	vector<string> names;
+	vector<LogicalType> types;
+
+	idx_t table_index = 0;
+
+	auto scan_function = TableScanFunction::GetFunction();
+	auto bind_data = make_unique<TableScanBindData>();
+
+	for (auto &col : info.columns) {
+		names.push_back(col.name);
+		types.push_back(col.type);
+	}
+
+	auto logical_get = make_unique<LogicalGet>(table_index, scan_function, move(bind_data), types, names);
+	this->bind_context.AddBaseTable(table_index, info.table, names, types, vector<string>(), vector<LogicalType>(),
+	                                  *logical_get);
+	for (auto& col : generated_columns) {
+		auto expr_binder = ExpressionBinder(*this, context);
+		auto expression = col.expression->Copy();
+		// expr_binder.target_type = col.type;
+		auto bound_expression = expr_binder.Bind(expression);
+		if (!bound_expression) {
+			throw BinderException("Could not resolve the expression of generated column \"%s\"", col.name);
+		}
+		if (bound_expression->HasSubquery()) {
+			throw BinderException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
+								col.name);
+		}
+		if (bound_expression->return_type != col.type) {
+			throw BinderException(
+				"Return type of the expression(%s) and the specified type(%s) dont match for generated column \"%s\"",
+				bound_expression->return_type.ToString(), col.type.ToString(), col.name);
+		}
+	}
+}
+
 void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults) {
 	for (idx_t i = 0; i < columns.size(); i++) {
 		unique_ptr<Expression> bound_default;
@@ -223,6 +262,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			}
 		}
 	}
+	// bind the generated column expressions
+	BindGeneratedColumns(base.generated_columns, base);
 	this->allow_stream_result = false;
 	return result;
 }
