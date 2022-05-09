@@ -2,6 +2,7 @@
 #include "statement_functions.hpp"
 #include "odbc_fetch.hpp"
 #include "parameter_descriptor.hpp"
+#include "row_descriptor.hpp"
 
 SQLRETURN SQL_API SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                              SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
@@ -29,7 +30,14 @@ static SQLRETURN ExecuteBeforeFetch(SQLHSTMT statement_handle) {
 }
 
 SQLRETURN SQL_API SQLFetch(SQLHSTMT statement_handle) {
-	auto ret = ExecuteBeforeFetch(statement_handle);
+	auto ret = duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
+		return stmt->odbc_fetcher->DummyFetch();
+	});
+	if (ret != SQL_NEED_DATA) {
+		return ret;
+	}
+
+	ret = ExecuteBeforeFetch(statement_handle);
 	if (ret != SQL_SUCCESS) {
 		return ret;
 	}
@@ -55,7 +63,7 @@ SQLRETURN SQL_API SQLRowCount(SQLHSTMT statement_handle, SQLLEN *row_count_ptr) 
 			return SQL_ERROR;
 		}
 		// TODO row_count isn't work well yet, left to fix latter
-		*row_count_ptr = stmt->odbc_fetcher->row_count;
+		*row_count_ptr = stmt->odbc_fetcher->GetRowCount();
 
 		// *row_count_ptr = -1; // we don't actually know most of the time
 		return SQL_SUCCESS;
