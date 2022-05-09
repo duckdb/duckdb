@@ -226,8 +226,10 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "ttu";
 		break;
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
 		child.format = "tsu:";
+		break;
+	case LogicalTypeId::TIMESTAMP_TZ:
+		child.format = "tsu:UTC";
 		break;
 	case LogicalTypeId::TIMESTAMP_SEC:
 		child.format = "tss:";

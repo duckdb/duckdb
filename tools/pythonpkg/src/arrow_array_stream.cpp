@@ -104,9 +104,13 @@ py::object GetScalar(Value &constant) {
 		py::object date_type = py::module_::import("pyarrow").attr("time64");
 		return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("us")));
 	}
-	case LogicalTypeId::TIMESTAMP: {
+	case LogicalTypeId::TIMESTAMP:{
 		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
 		return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("us")));
+	}
+	case LogicalTypeId::TIMESTAMP_TZ:{
+		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
+		return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("us", py::arg("tz") = "UTC")));
 	}
 	case LogicalTypeId::UTINYINT:
 		return dataset_scalar(constant.GetValue<uint8_t>());
