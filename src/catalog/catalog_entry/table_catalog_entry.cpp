@@ -38,8 +38,10 @@ const string &TableCatalogEntry::GetColumnName(const TableColumnInfo& info) {
 	switch (info.column_type) {
 	case TableColumnType::GENERATED:
 		return generated_columns[info.index].name;
-	default:
+	case TableColumnType::STANDARD:
 		return columns[info.index].name;
+	default:
+		throw InternalException("Unsupported TableColumnType");
 	}
 }
 
