@@ -1,3 +1,4 @@
+#include <iostream>
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -76,6 +77,14 @@ bool PhysicalTableScan::OrderedSource() const {
     return function.ordered_scan_function;
 }
 
+void PhysicalTableScan::SetOrder(TableScanLocalState &lstate) const {
+    if (OrderedSource()) {
+        D_ASSERT(lstate.operator_data->is_ordered);
+        lstate.is_ordered = true;
+        lstate.source_index = ((OrderedFunctionOperatorData*)(lstate.operator_data.get()))->data_index;
+    }
+}
+
 void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                 LocalSourceState &lstate) const {
 	D_ASSERT(!column_ids.empty());
@@ -86,6 +95,7 @@ void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, Glo
 		// sequential scan
 		function.function(context.client, bind_data.get(), state.operator_data.get(), chunk);
 		if (chunk.size() != 0) {
+			SetOrder(state);
 			return;
 		}
 	} else {
@@ -107,10 +117,7 @@ void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, Glo
 					break;
 				}
 			} else {
-			    lstate.is_ordered = state.operator_data->is_ordered;
-                if (lstate.is_ordered) {
-                    lstate.source_index = ((OrderedFunctionOperatorData*)(state.operator_data.get()))->data_index;
-                }
+				SetOrder(state);
 				return;
 			}
 		} while (true);
