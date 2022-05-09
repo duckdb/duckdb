@@ -60,17 +60,39 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 		D_ASSERT(function.children.size() == 2);
 
+		// get or (if none exists) set the alias of the list to later retrieve its table index
+		/* TODO.
+		auto list_alias = function.children[0]->alias;
+		if (list_alias.empty()) {
+		    list_alias = "__duckdb__internal_lambda_list_alias_" + to_string(depth);
+		    function.children[0]->alias = list_alias;
+		}
+		*/
+
 		// bind the list parameter
 		BindChild(function.children[0], depth, error);
+		if (!error.empty()) {
+			return BindResult(error);
+		}
 
 		// get the logical type of the children of the list
 		auto &list_child = (BoundExpression &)*function.children[0];
 		D_ASSERT(list_child.expr->return_type.id() == LogicalTypeId::LIST);
 		auto list_child_type = ListType::GetChildType(list_child.expr->return_type);
 
+		// get the table index of the list
+		/* TODO
+		string list_binding_error;
+		auto list_binding = binder.bind_context.GetBinding(list_alias, list_binding_error);
+		if (!list_binding_error.empty()) {
+		    return BindResult(list_binding_error);
+		}
+		 */
+
 		// bind the lambda parameter
 		auto &lambda_expr = (LambdaExpression &)*function.children[1];
-		BindResult result = BindExpression(lambda_expr, depth, lambda_param_count, list_child_type);
+		// TODO: 7 is just a placeholder dummy number
+		BindResult result = BindExpression(lambda_expr, depth, lambda_param_count, list_child_type, 7);
 
 		if (result.HasError()) {
 			error = result.error;
