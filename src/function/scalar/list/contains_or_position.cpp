@@ -63,6 +63,10 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 	VectorData value_data;
 	value_vector.Orrify(count, value_data);
 
+	// not required for a comparison of nested types
+	auto child_value = FlatVector::GetData<CHILD_TYPE>(child_vector);
+	auto values = FlatVector::GetData<CHILD_TYPE>(value_vector);
+
 	for (idx_t i = 0; i < count; i++) {
 		auto list_index = list_data.sel->get_index(i);
 		auto value_index = value_data.sel->get_index(i);
@@ -73,23 +77,18 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 		}
 
 		const auto &list_entry = list_entries[list_index];
-		auto source_idx = child_data.sel->get_index(list_entry.offset);
 
-		// not required for a comparison of nested types
-		auto child_value = FlatVector::GetData<CHILD_TYPE>(child_vector);
-		auto values = FlatVector::GetData<CHILD_TYPE>(value_vector);
-
-		result_entries[list_index] = OP::Initialize();
+		result_entries[i] = OP::Initialize();
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
-			auto child_value_idx = source_idx + child_idx;
 
+			auto child_value_idx = child_data.sel->get_index(list_entry.offset + child_idx);
 			if (!child_data.validity.RowIsValid(child_value_idx)) {
 				continue;
 			}
 
 			if (!is_nested) {
 				if (ValueEqualsOrNot<CHILD_TYPE>(child_value[child_value_idx], values[value_index])) {
-					result_entries[list_index] = OP::UpdateResultEntries(child_idx);
+					result_entries[i] = OP::UpdateResultEntries(child_idx);
 					break; // Found value in list, no need to look further
 				}
 			} else {
@@ -97,7 +96,7 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 				// to more efficiently compare nested types
 				if (ValueEqualsOrNot<Value>(child_vector.GetValue(child_value_idx),
 				                            value_vector.GetValue(value_index))) {
-					result_entries[list_index] = OP::UpdateResultEntries(child_idx);
+					result_entries[i] = OP::UpdateResultEntries(child_idx);
 					break; // Found value in list, no need to look further
 				}
 			}
@@ -180,10 +179,22 @@ static unique_ptr<FunctionData> ListContainsOrPositionBind(ClientContext &contex
 		bound_function.arguments[0] = list;
 		bound_function.arguments[1] = value;
 		bound_function.return_type = LogicalTypeId::SQLNULL;
+	} else if (list.id() == LogicalTypeId::UNKNOWN) {
+		bound_function.return_type = RETURN_TYPE;
+		if (value.id() != LogicalTypeId::UNKNOWN) {
+			// only list is a parameter, cast it to a list of value type
+			bound_function.arguments[0] = LogicalType::LIST(value);
+			bound_function.arguments[1] = value;
+		}
+	} else if (value.id() == LogicalTypeId::UNKNOWN) {
+		// only value is a parameter: we expect the child type of list
+		auto const &child_type = ListType::GetChildType(list);
+		bound_function.arguments[0] = list;
+		bound_function.arguments[1] = child_type;
+		bound_function.return_type = RETURN_TYPE;
 	} else {
-		auto const &child_type = ListType::GetChildType(arguments[0]->return_type);
+		auto const &child_type = ListType::GetChildType(list);
 		auto max_child_type = LogicalType::MaxLogicalType(child_type, value);
-		ExpressionBinder::ResolveParameterType(max_child_type);
 		auto list_type = LogicalType::LIST(max_child_type);
 
 		bound_function.arguments[0] = list_type;

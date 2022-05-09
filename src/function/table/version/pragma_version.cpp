@@ -27,7 +27,7 @@ static unique_ptr<FunctionOperatorData> PragmaVersionInit(ClientContext &context
 }
 
 static void PragmaVersionFunction(ClientContext &context, const FunctionData *bind_data,
-                                  FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                  FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (PragmaVersionData &)*operator_state;
 	if (data.finished) {
 		// finished returning values
@@ -71,7 +71,7 @@ string DuckDB::Platform() {
 	arch = "arm64";
 #endif
 
-#if defined(__GNUC__) && __GNUC__ == 4
+#if !defined(_GLIBCXX_USE_CXX11_ABI) || _GLIBCXX_USE_CXX11_ABI == 0
 	if (os == "linux") {
 		postfix = "_gcc4";
 	}

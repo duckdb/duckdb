@@ -985,7 +985,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
 }
 
 void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const FunctionData *bind_data,
-                                           FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                           FunctionOperatorData *operator_state, DataChunk &output) {
 
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	auto &state = (ArrowScanState &)*operator_state;
@@ -1010,8 +1010,8 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 }
 
 void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const FunctionData *bind_data,
-                                                   FunctionOperatorData *operator_state, DataChunk *input,
-                                                   DataChunk &output, ParallelState *parallel_state_p) {
+                                                   FunctionOperatorData *operator_state, DataChunk &output,
+                                                   ParallelState *parallel_state_p) {
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	auto &state = (ArrowScanState &)*operator_state;
 	//! Out of tuples in this chunk

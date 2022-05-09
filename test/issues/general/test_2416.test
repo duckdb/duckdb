@@ -83,8 +83,13 @@ EXECUTE v3(NULL)
 ----
 NULL
 
-statement error
+statement ok
 PREPARE v4 AS SELECT array_length($1)
+
+query I
+EXECUTE v4([1, 2, 3])
+----
+3
 
 statement ok
 create macro array_l(my_arr) as array_length(my_arr);

@@ -22,7 +22,7 @@ struct CTableFunctionInfo : public TableFunctionInfo {
 	duckdb_delete_callback_t delete_callback = nullptr;
 };
 
-struct CTableBindData : public FunctionData {
+struct CTableBindData : public TableFunctionData {
 	~CTableBindData() {
 		if (bind_data && delete_callback) {
 			delete_callback(bind_data);
@@ -121,7 +121,7 @@ unique_ptr<FunctionOperatorData> CTableFunctionInit(ClientContext &context, cons
 }
 
 void CTableFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *operator_state,
-                    DataChunk *input, DataChunk &output) {
+                    DataChunk &output) {
 	auto &bind_data = (CTableBindData &)*bind_data_p;
 	auto &init_data = (CTableInitData &)*operator_state;
 	CTableInternalFunctionInfo function_info(bind_data, init_data);

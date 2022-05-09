@@ -351,13 +351,13 @@ struct QuantileBindData : public FunctionData {
 		std::sort(order.begin(), order.end(), lt);
 	}
 
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<QuantileBindData>(quantiles);
 	}
 
-	bool Equals(FunctionData &other_p) override {
+	bool Equals(const FunctionData &other_p) const override {
 		auto &other = (QuantileBindData &)other_p;
-		return quantiles == other.quantiles;
+		return quantiles == other.quantiles && order == other.order;
 	}
 
 	vector<double> quantiles;
@@ -384,7 +384,7 @@ struct QuantileOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (source.v.empty()) {
 			return;
 		}

@@ -4,7 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/index.hpp"
 
@@ -64,13 +64,13 @@ unique_ptr<FunctionOperatorData> DuckDBIndexesInit(ClientContext &context, const
 	};
 
 	// check the temp schema as well
-	context.temporary_objects->Scan(context, CatalogType::INDEX_ENTRY,
-	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::INDEX_ENTRY,
+	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
 void DuckDBIndexesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                           DataChunk *input, DataChunk &output) {
+                           DataChunk &output) {
 	auto &data = (DuckDBIndexesData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

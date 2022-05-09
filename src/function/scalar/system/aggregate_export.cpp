@@ -7,7 +7,6 @@
 namespace duckdb {
 
 // aggregate state export
-
 struct ExportAggregateBindData : public FunctionData {
 	AggregateFunction &aggr;
 	idx_t state_size;
@@ -16,9 +15,13 @@ struct ExportAggregateBindData : public FunctionData {
 	    : aggr(aggr_p), state_size(state_size_p) {
 	}
 
-	unique_ptr<FunctionData> Copy() override {
-
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<ExportAggregateBindData>(aggr, state_size);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const ExportAggregateBindData &)other_p;
+		return aggr == other.aggr && state_size == other.state_size;
 	}
 
 	static ExportAggregateBindData &GetFrom(ExpressionState &state) {
@@ -27,7 +30,7 @@ struct ExportAggregateBindData : public FunctionData {
 	}
 };
 
-struct CombineState : public FunctionData {
+struct CombineState : public FunctionLocalState {
 	idx_t state_size;
 
 	unique_ptr<data_t[]> state_buffer0, state_buffer1;
@@ -39,18 +42,14 @@ struct CombineState : public FunctionData {
 	      state_vector0(Value::POINTER((uintptr_t)state_buffer0.get())),
 	      state_vector1(Value::POINTER((uintptr_t)state_buffer1.get())) {
 	}
-
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<CombineState>(state_size);
-	}
 };
 
-static unique_ptr<FunctionData> InitCombineState(const BoundFunctionExpression &expr, FunctionData *bind_data_p) {
+static unique_ptr<FunctionLocalState> InitCombineState(const BoundFunctionExpression &expr, FunctionData *bind_data_p) {
 	auto &bind_data = *(ExportAggregateBindData *)bind_data_p;
 	return make_unique<CombineState>(bind_data.state_size);
 }
 
-struct FinalizeState : public FunctionData {
+struct FinalizeState : public FunctionLocalState {
 	idx_t state_size;
 	unique_ptr<data_t[]> state_buffer;
 	Vector addresses;
@@ -60,13 +59,10 @@ struct FinalizeState : public FunctionData {
 	      state_buffer(unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * AlignValue(state_size_p)])),
 	      addresses(LogicalType::POINTER) {
 	}
-
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<FinalizeState>(state_size);
-	}
 };
 
-static unique_ptr<FunctionData> InitFinalizeState(const BoundFunctionExpression &expr, FunctionData *bind_data_p) {
+static unique_ptr<FunctionLocalState> InitFinalizeState(const BoundFunctionExpression &expr,
+                                                        FunctionData *bind_data_p) {
 	auto &bind_data = *(ExportAggregateBindData *)bind_data_p;
 	return make_unique<FinalizeState>(bind_data.state_size);
 }
@@ -163,7 +159,7 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		memcpy(local_state.state_buffer0.get(), state0.GetDataUnsafe(), bind_data.state_size);
 		memcpy(local_state.state_buffer1.get(), state1.GetDataUnsafe(), bind_data.state_size);
 
-		bind_data.aggr.combine(local_state.state_vector0, local_state.state_vector1, 1);
+		bind_data.aggr.combine(local_state.state_vector0, local_state.state_vector1, nullptr, 1);
 
 		result_ptr[i] =
 		    StringVector::AddStringOrBlob(result, (const char *)local_state.state_buffer1.get(), bind_data.state_size);
@@ -242,8 +238,13 @@ ExportAggregateFunctionBindData::ExportAggregateFunctionBindData(unique_ptr<Expr
 	aggregate = unique_ptr<BoundAggregateExpression>((BoundAggregateExpression *)aggregate_p.release());
 }
 
-unique_ptr<FunctionData> ExportAggregateFunctionBindData::Copy() {
+unique_ptr<FunctionData> ExportAggregateFunctionBindData::Copy() const {
 	return make_unique<ExportAggregateFunctionBindData>(aggregate->Copy());
+}
+
+bool ExportAggregateFunctionBindData::Equals(const FunctionData &other_p) const {
+	auto &other = (const ExportAggregateFunctionBindData &)other_p;
+	return aggregate->Equals(other.aggregate.get());
 }
 
 unique_ptr<BoundAggregateExpression>

@@ -43,7 +43,7 @@ jobs:
       PYTEST_TIMEOUT: '600'
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -98,7 +98,7 @@ jobs:
       AWS_DEFAULT_REGION: us-east-1
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -106,7 +106,12 @@ jobs:
       run: |
         yum install -y gcc gcc-c++ git cmake make
         yum install -y epel-release
-        yum install -y make gcc perl-core pcre-devel wget zlib-devel
+        yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
+
+    - name: Install AWS CLI
+      run: |
+        python3 -m pip install awscli
+        aws --version
 
     - name: Install i686 dependencies
       if: ${{matrix.arch == 'i686'}}
@@ -169,12 +174,12 @@ jobs:
       matrix:
         arch: [i686, x86_64]
         python_build: [cp37-*, cp38-*, cp39-*,cp310-*]
-        isMaster:
-          - ${{ github.ref == 'refs/heads/master' }}
+        isRelease:
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
-          - isMaster: false
+          - isRelease: false
             python_build: 'cp38-*'
-          - isMaster: false
+          - isRelease: false
             python_build: 'cp39-*'
     needs: centos7-extensions
     env:
@@ -186,7 +191,7 @@ jobs:
       DUCKDB_BUILD_UNITY: 1
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -230,7 +235,7 @@ jobs:
         fi
 
    osx-python3:
-      if: github.ref == 'refs/heads/master'
+      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
       name: Python 3 OSX
       runs-on: macos-latest
       strategy:
@@ -246,7 +251,7 @@ jobs:
         DUCKDB_BUILD_UNITY: 1
 
       steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -283,22 +288,22 @@ jobs:
       strategy:
        matrix:
         python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*]
-        isMaster:
-          - ${{ github.ref == 'refs/heads/master' }}
+        isRelease:
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
-          - isMaster: false
+          - isRelease: false
             python_build: 'cp37-*'
-          - isMaster: false
+          - isRelease: false
             python_build: 'cp38-*'
-          - isMaster: false
+          - isRelease: false
             python_build: 'cp39-*'
       needs: linux-python3-9
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
-        CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+        CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" "psutil>=5.9.0"'
         CIBW_TEST_REQUIRES: 'pytest'
-        CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" mypy'
+        CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" mypy "psutil>=5.9.0"'
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         SETUPTOOLS_USE_DISTUTILS: 'stdlib'
@@ -306,7 +311,7 @@ jobs:
         DUCKDB_BUILD_UNITY: 1
 
       steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -343,7 +348,7 @@ jobs:
       needs: linux-python3-9
 
       steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -352,7 +357,7 @@ jobs:
           python-version: '3.7'
 
       - name: Install
-        run: pip install numpy pytest pandas mypy
+        run: pip install numpy pytest pandas mypy psutil
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main

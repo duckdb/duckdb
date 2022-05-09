@@ -144,6 +144,14 @@ struct ExplainOutputSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct ExternalThreadsSetting {
+	static constexpr const char *Name = "external_threads";
+	static constexpr const char *Description = "The number of external threads that work on DuckDB tasks.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ForceCompressionSetting {
 	static constexpr const char *Name = "force_compression";
 	static constexpr const char *Description = "DEBUG SETTING: forces a specific compression method to be used";
