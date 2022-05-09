@@ -329,6 +329,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				get.function.parallel_state_next = nullptr;
 				get.function.table_scan_progress = nullptr;
 				get.function.filter_pushdown = false;
+				get.function.ordered_scan_function = false;
 			} else {
 				bind_data.result_ids.clear();
 			}
