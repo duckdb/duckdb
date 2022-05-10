@@ -12,14 +12,25 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
+#include "duckdb/catalog/catalog_entry/table_column_info.hpp"
 
 namespace duckdb {
+
+enum ColumnExpressionType { DEFAULT, GENERATED };
+
+struct ColumnExpression {
+	unique_ptr<ParsedExpression> expression;
+	ColumnExpressionType type;
+	ColumnExpression(unique_ptr<ParsedExpression> expression, ColumnExpressionType type = ColumnExpressionType::DEFAULT)
+	    : expression(move(expression)), type(type) {
+	}
+};
 
 //! A column of a table.
 class ColumnDefinition {
 public:
 	DUCKDB_API ColumnDefinition(string name, LogicalType type);
-	DUCKDB_API ColumnDefinition(string name, LogicalType type, unique_ptr<ParsedExpression> default_value);
+	DUCKDB_API ColumnDefinition(string name, LogicalType type, ColumnExpression expression);
 
 	//! The name of the entry
 	string name;
@@ -31,12 +42,20 @@ public:
 	unique_ptr<ParsedExpression> default_value;
 	//! Compression Type used for this column
 	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
+	//! The category of the column
+	TableColumnType category = TableColumnType::STANDARD;
 
 public:
+	ParsedExpression &GeneratedExpression();
 	DUCKDB_API ColumnDefinition Copy() const;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static ColumnDefinition Deserialize(Deserializer &source);
+
+private:
+private:
+	//! Used by Generated Columns
+	unique_ptr<ParsedExpression> generated_expression;
 };
 
 } // namespace duckdb
