@@ -274,8 +274,9 @@ inline const unsigned char *ASN1_STRING_get0_data(const ASN1_STRING *asn1) {
 #endif
 
 #ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wexit-time-destructors"
+// commented out to satisfy R CMD check
+//#pragma clang diagnostic push
+//#pragma clang diagnostic ignored "-Wexit-time-destructors"
 #endif
 
 /*
@@ -8190,7 +8191,8 @@ inline SSL_CTX *Client::ssl_context() const {
 } // namespace CPPHTTPLIB_NAMESPACE
 
 #ifdef __clang__
-#pragma clang diagnostic pop
+// commented out to satisfy R CMD check
+//#pragma clang diagnostic pop
 #endif
 
 #endif // CPPHTTPLIB_HTTPLIB_H
