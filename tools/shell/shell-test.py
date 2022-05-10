@@ -195,17 +195,13 @@ show table1;
 # test display of call
 test('''
 CALL range(4);
-''', out='4')
+''', out='3')
 
 # test display of prepare/execute
 test('''
-PREPARE v1 AS SELECT 42
-CALL range(4);
-''', out='4')
-
-
-
-
+PREPARE v1 AS SELECT ?::INT;
+EXECUTE v1(42);
+''', out='42')
 
 
 # this should be fixed
