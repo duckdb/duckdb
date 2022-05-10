@@ -140,7 +140,7 @@ if(BUILD_PYTHON
       COMMAND
         DUCKDB_R_BINDIR=${CMAKE_BINARY_DIR}
         DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
-        DUCKDB_R_LIBS=\"${duckdb_libs}\" python rconfigure.py
+        DUCKDB_R_LIBS=\"${duckdb_libs}\" python3 rconfigure.py
       DEPENDS duckdb
       WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/rpkg
       COMMENT Configure
