@@ -180,41 +180,36 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
 const char descriptor_table_protodef_substrait_2fextensions_2fextensions_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
   "\n%substrait/extensions/extensions.proto\022"
   "\024substrait.extensions\032\031google/protobuf/a"
-  "ny.proto\"X\n\022SimpleExtensionURI\0220\n\024extens"
-  "ion_uri_anchor\030\001 \001(\rR\022extensionUriAnchor"
-  "\022\020\n\003uri\030\002 \001(\tR\003uri\"\264\006\n\032SimpleExtensionDe"
-  "claration\022g\n\016extension_type\030\001 \001(\0132>.subs"
-  "trait.extensions.SimpleExtensionDeclarat"
-  "ion.ExtensionTypeH\000R\rextensionType\022\203\001\n\030e"
-  "xtension_type_variation\030\002 \001(\0132G.substrai"
-  "t.extensions.SimpleExtensionDeclaration."
-  "ExtensionTypeVariationH\000R\026extensionTypeV"
-  "ariation\022s\n\022extension_function\030\003 \001(\0132B.s"
-  "ubstrait.extensions.SimpleExtensionDecla"
-  "ration.ExtensionFunctionH\000R\021extensionFun"
-  "ction\032|\n\rExtensionType\0226\n\027extension_uri_"
-  "reference\030\001 \001(\rR\025extensionUriReference\022\037"
-  "\n\013type_anchor\030\002 \001(\rR\ntypeAnchor\022\022\n\004name\030"
-  "\003 \001(\tR\004name\032\230\001\n\026ExtensionTypeVariation\0226"
-  "\n\027extension_uri_reference\030\001 \001(\rR\025extensi"
-  "onUriReference\0222\n\025type_variation_anchor\030"
-  "\002 \001(\rR\023typeVariationAnchor\022\022\n\004name\030\003 \001(\t"
-  "R\004name\032\210\001\n\021ExtensionFunction\0226\n\027extensio"
-  "n_uri_reference\030\001 \001(\rR\025extensionUriRefer"
-  "ence\022\'\n\017function_anchor\030\002 \001(\rR\016functionA"
-  "nchor\022\022\n\004name\030\003 \001(\tR\004nameB\016\n\014mapping_typ"
-  "e\"\205\001\n\021AdvancedExtension\0228\n\014optimization\030"
-  "\001 \001(\0132\024.google.protobuf.AnyR\014optimizatio"
-  "n\0226\n\013enhancement\030\002 \001(\0132\024.google.protobuf"
-  ".AnyR\013enhancementB+\n\022io.substrait.protoP"
-  "\001\252\002\022Substrait.Protobufb\006proto3"
+  "ny.proto\"\?\n\022SimpleExtensionURI\022\034\n\024extens"
+  "ion_uri_anchor\030\001 \001(\r\022\013\n\003uri\030\002 \001(\t\"\357\004\n\032Si"
+  "mpleExtensionDeclaration\022X\n\016extension_ty"
+  "pe\030\001 \001(\0132>.substrait.extensions.SimpleEx"
+  "tensionDeclaration.ExtensionTypeH\000\022k\n\030ex"
+  "tension_type_variation\030\002 \001(\0132G.substrait"
+  ".extensions.SimpleExtensionDeclaration.E"
+  "xtensionTypeVariationH\000\022`\n\022extension_fun"
+  "ction\030\003 \001(\0132B.substrait.extensions.Simpl"
+  "eExtensionDeclaration.ExtensionFunctionH"
+  "\000\032S\n\rExtensionType\022\037\n\027extension_uri_refe"
+  "rence\030\001 \001(\r\022\023\n\013type_anchor\030\002 \001(\r\022\014\n\004name"
+  "\030\003 \001(\t\032f\n\026ExtensionTypeVariation\022\037\n\027exte"
+  "nsion_uri_reference\030\001 \001(\r\022\035\n\025type_variat"
+  "ion_anchor\030\002 \001(\r\022\014\n\004name\030\003 \001(\t\032[\n\021Extens"
+  "ionFunction\022\037\n\027extension_uri_reference\030\001"
+  " \001(\r\022\027\n\017function_anchor\030\002 \001(\r\022\014\n\004name\030\003 "
+  "\001(\tB\016\n\014mapping_type\"j\n\021AdvancedExtension"
+  "\022*\n\014optimization\030\001 \001(\0132\024.google.protobuf"
+  ".Any\022)\n\013enhancement\030\002 \001(\0132\024.google.proto"
+  "buf.AnyBb\n\022io.substrait.protoP\001Z5github."
+  "com/substrait-io/substrait-go/proto/exte"
+  "nsions\252\002\022Substrait.Protobufb\006proto3"
   ;
 static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_substrait_2fextensions_2fextensions_2eproto_deps[1] = {
   &::descriptor_table_google_2fprotobuf_2fany_2eproto,
 };
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_substrait_2fextensions_2fextensions_2eproto_once;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_substrait_2fextensions_2fextensions_2eproto = {
-  false, false, 1190, descriptor_table_protodef_substrait_2fextensions_2fextensions_2eproto, "substrait/extensions/extensions.proto", 
+  false, false, 995, descriptor_table_protodef_substrait_2fextensions_2fextensions_2eproto, "substrait/extensions/extensions.proto", 
   &descriptor_table_substrait_2fextensions_2fextensions_2eproto_once, descriptor_table_substrait_2fextensions_2fextensions_2eproto_deps, 1, 6,
   schemas, file_default_instances, TableStruct_substrait_2fextensions_2fextensions_2eproto::offsets,
   file_level_metadata_substrait_2fextensions_2fextensions_2eproto, file_level_enum_descriptors_substrait_2fextensions_2fextensions_2eproto, file_level_service_descriptors_substrait_2fextensions_2fextensions_2eproto,
@@ -305,7 +300,7 @@ const char* SimpleExtensionURI::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // uint32 extension_uri_anchor = 1 [json_name = "extensionUriAnchor"];
+      // uint32 extension_uri_anchor = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           extension_uri_anchor_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -313,7 +308,7 @@ const char* SimpleExtensionURI::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // string uri = 2 [json_name = "uri"];
+      // string uri = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           auto str = _internal_mutable_uri();
@@ -352,13 +347,13 @@ uint8_t* SimpleExtensionURI::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // uint32 extension_uri_anchor = 1 [json_name = "extensionUriAnchor"];
+  // uint32 extension_uri_anchor = 1;
   if (this->_internal_extension_uri_anchor() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(1, this->_internal_extension_uri_anchor(), target);
   }
 
-  // string uri = 2 [json_name = "uri"];
+  // string uri = 2;
   if (!this->_internal_uri().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_uri().data(), static_cast<int>(this->_internal_uri().length()),
@@ -384,14 +379,14 @@ size_t SimpleExtensionURI::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // string uri = 2 [json_name = "uri"];
+  // string uri = 2;
   if (!this->_internal_uri().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
         this->_internal_uri());
   }
 
-  // uint32 extension_uri_anchor = 1 [json_name = "extensionUriAnchor"];
+  // uint32 extension_uri_anchor = 1;
   if (this->_internal_extension_uri_anchor() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_extension_uri_anchor());
   }
@@ -541,7 +536,7 @@ const char* SimpleExtensionDeclaration_ExtensionType::_InternalParse(const char*
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // uint32 extension_uri_reference = 1 [json_name = "extensionUriReference"];
+      // uint32 extension_uri_reference = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           extension_uri_reference_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -549,7 +544,7 @@ const char* SimpleExtensionDeclaration_ExtensionType::_InternalParse(const char*
         } else
           goto handle_unusual;
         continue;
-      // uint32 type_anchor = 2 [json_name = "typeAnchor"];
+      // uint32 type_anchor = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           type_anchor_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -557,7 +552,7 @@ const char* SimpleExtensionDeclaration_ExtensionType::_InternalParse(const char*
         } else
           goto handle_unusual;
         continue;
-      // string name = 3 [json_name = "name"];
+      // string name = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           auto str = _internal_mutable_name();
@@ -596,19 +591,19 @@ uint8_t* SimpleExtensionDeclaration_ExtensionType::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // uint32 extension_uri_reference = 1 [json_name = "extensionUriReference"];
+  // uint32 extension_uri_reference = 1;
   if (this->_internal_extension_uri_reference() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(1, this->_internal_extension_uri_reference(), target);
   }
 
-  // uint32 type_anchor = 2 [json_name = "typeAnchor"];
+  // uint32 type_anchor = 2;
   if (this->_internal_type_anchor() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_type_anchor(), target);
   }
 
-  // string name = 3 [json_name = "name"];
+  // string name = 3;
   if (!this->_internal_name().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
@@ -634,19 +629,19 @@ size_t SimpleExtensionDeclaration_ExtensionType::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // string name = 3 [json_name = "name"];
+  // string name = 3;
   if (!this->_internal_name().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
         this->_internal_name());
   }
 
-  // uint32 extension_uri_reference = 1 [json_name = "extensionUriReference"];
+  // uint32 extension_uri_reference = 1;
   if (this->_internal_extension_uri_reference() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_extension_uri_reference());
   }
 
-  // uint32 type_anchor = 2 [json_name = "typeAnchor"];
+  // uint32 type_anchor = 2;
   if (this->_internal_type_anchor() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_type_anchor());
   }
@@ -804,7 +799,7 @@ const char* SimpleExtensionDeclaration_ExtensionTypeVariation::_InternalParse(co
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // uint32 extension_uri_reference = 1 [json_name = "extensionUriReference"];
+      // uint32 extension_uri_reference = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           extension_uri_reference_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -812,7 +807,7 @@ const char* SimpleExtensionDeclaration_ExtensionTypeVariation::_InternalParse(co
         } else
           goto handle_unusual;
         continue;
-      // uint32 type_variation_anchor = 2 [json_name = "typeVariationAnchor"];
+      // uint32 type_variation_anchor = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           type_variation_anchor_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -820,7 +815,7 @@ const char* SimpleExtensionDeclaration_ExtensionTypeVariation::_InternalParse(co
         } else
           goto handle_unusual;
         continue;
-      // string name = 3 [json_name = "name"];
+      // string name = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           auto str = _internal_mutable_name();
@@ -859,19 +854,19 @@ uint8_t* SimpleExtensionDeclaration_ExtensionTypeVariation::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // uint32 extension_uri_reference = 1 [json_name = "extensionUriReference"];
+  // uint32 extension_uri_reference = 1;
   if (this->_internal_extension_uri_reference() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(1, this->_internal_extension_uri_reference(), target);
   }
 
-  // uint32 type_variation_anchor = 2 [json_name = "typeVariationAnchor"];
+  // uint32 type_variation_anchor = 2;
   if (this->_internal_type_variation_anchor() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_type_variation_anchor(), target);
   }
 
-  // string name = 3 [json_name = "name"];
+  // string name = 3;
   if (!this->_internal_name().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
@@ -897,19 +892,19 @@ size_t SimpleExtensionDeclaration_ExtensionTypeVariation::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // string name = 3 [json_name = "name"];
+  // string name = 3;
   if (!this->_internal_name().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
         this->_internal_name());
   }
 
-  // uint32 extension_uri_reference = 1 [json_name = "extensionUriReference"];
+  // uint32 extension_uri_reference = 1;
   if (this->_internal_extension_uri_reference() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_extension_uri_reference());
   }
 
-  // uint32 type_variation_anchor = 2 [json_name = "typeVariationAnchor"];
+  // uint32 type_variation_anchor = 2;
   if (this->_internal_type_variation_anchor() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_type_variation_anchor());
   }
@@ -1067,7 +1062,7 @@ const char* SimpleExtensionDeclaration_ExtensionFunction::_InternalParse(const c
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // uint32 extension_uri_reference = 1 [json_name = "extensionUriReference"];
+      // uint32 extension_uri_reference = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           extension_uri_reference_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -1075,7 +1070,7 @@ const char* SimpleExtensionDeclaration_ExtensionFunction::_InternalParse(const c
         } else
           goto handle_unusual;
         continue;
-      // uint32 function_anchor = 2 [json_name = "functionAnchor"];
+      // uint32 function_anchor = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           function_anchor_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -1083,7 +1078,7 @@ const char* SimpleExtensionDeclaration_ExtensionFunction::_InternalParse(const c
         } else
           goto handle_unusual;
         continue;
-      // string name = 3 [json_name = "name"];
+      // string name = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           auto str = _internal_mutable_name();
@@ -1122,19 +1117,19 @@ uint8_t* SimpleExtensionDeclaration_ExtensionFunction::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // uint32 extension_uri_reference = 1 [json_name = "extensionUriReference"];
+  // uint32 extension_uri_reference = 1;
   if (this->_internal_extension_uri_reference() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(1, this->_internal_extension_uri_reference(), target);
   }
 
-  // uint32 function_anchor = 2 [json_name = "functionAnchor"];
+  // uint32 function_anchor = 2;
   if (this->_internal_function_anchor() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_function_anchor(), target);
   }
 
-  // string name = 3 [json_name = "name"];
+  // string name = 3;
   if (!this->_internal_name().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
@@ -1160,19 +1155,19 @@ size_t SimpleExtensionDeclaration_ExtensionFunction::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // string name = 3 [json_name = "name"];
+  // string name = 3;
   if (!this->_internal_name().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
         this->_internal_name());
   }
 
-  // uint32 extension_uri_reference = 1 [json_name = "extensionUriReference"];
+  // uint32 extension_uri_reference = 1;
   if (this->_internal_extension_uri_reference() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_extension_uri_reference());
   }
 
-  // uint32 function_anchor = 2 [json_name = "functionAnchor"];
+  // uint32 function_anchor = 2;
   if (this->_internal_function_anchor() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_function_anchor());
   }
@@ -1418,7 +1413,7 @@ const char* SimpleExtensionDeclaration::_InternalParse(const char* ptr, ::PROTOB
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.extensions.SimpleExtensionDeclaration.ExtensionType extension_type = 1 [json_name = "extensionType"];
+      // .substrait.extensions.SimpleExtensionDeclaration.ExtensionType extension_type = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_extension_type(), ptr);
@@ -1426,7 +1421,7 @@ const char* SimpleExtensionDeclaration::_InternalParse(const char* ptr, ::PROTOB
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.SimpleExtensionDeclaration.ExtensionTypeVariation extension_type_variation = 2 [json_name = "extensionTypeVariation"];
+      // .substrait.extensions.SimpleExtensionDeclaration.ExtensionTypeVariation extension_type_variation = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_extension_type_variation(), ptr);
@@ -1434,7 +1429,7 @@ const char* SimpleExtensionDeclaration::_InternalParse(const char* ptr, ::PROTOB
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.SimpleExtensionDeclaration.ExtensionFunction extension_function = 3 [json_name = "extensionFunction"];
+      // .substrait.extensions.SimpleExtensionDeclaration.ExtensionFunction extension_function = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_extension_function(), ptr);
@@ -1471,7 +1466,7 @@ uint8_t* SimpleExtensionDeclaration::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.extensions.SimpleExtensionDeclaration.ExtensionType extension_type = 1 [json_name = "extensionType"];
+  // .substrait.extensions.SimpleExtensionDeclaration.ExtensionType extension_type = 1;
   if (_internal_has_extension_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1479,7 +1474,7 @@ uint8_t* SimpleExtensionDeclaration::_InternalSerialize(
         1, _Internal::extension_type(this), target, stream);
   }
 
-  // .substrait.extensions.SimpleExtensionDeclaration.ExtensionTypeVariation extension_type_variation = 2 [json_name = "extensionTypeVariation"];
+  // .substrait.extensions.SimpleExtensionDeclaration.ExtensionTypeVariation extension_type_variation = 2;
   if (_internal_has_extension_type_variation()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1487,7 +1482,7 @@ uint8_t* SimpleExtensionDeclaration::_InternalSerialize(
         2, _Internal::extension_type_variation(this), target, stream);
   }
 
-  // .substrait.extensions.SimpleExtensionDeclaration.ExtensionFunction extension_function = 3 [json_name = "extensionFunction"];
+  // .substrait.extensions.SimpleExtensionDeclaration.ExtensionFunction extension_function = 3;
   if (_internal_has_extension_function()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1512,21 +1507,21 @@ size_t SimpleExtensionDeclaration::ByteSizeLong() const {
   (void) cached_has_bits;
 
   switch (mapping_type_case()) {
-    // .substrait.extensions.SimpleExtensionDeclaration.ExtensionType extension_type = 1 [json_name = "extensionType"];
+    // .substrait.extensions.SimpleExtensionDeclaration.ExtensionType extension_type = 1;
     case kExtensionType: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *mapping_type_.extension_type_);
       break;
     }
-    // .substrait.extensions.SimpleExtensionDeclaration.ExtensionTypeVariation extension_type_variation = 2 [json_name = "extensionTypeVariation"];
+    // .substrait.extensions.SimpleExtensionDeclaration.ExtensionTypeVariation extension_type_variation = 2;
     case kExtensionTypeVariation: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *mapping_type_.extension_type_variation_);
       break;
     }
-    // .substrait.extensions.SimpleExtensionDeclaration.ExtensionFunction extension_function = 3 [json_name = "extensionFunction"];
+    // .substrait.extensions.SimpleExtensionDeclaration.ExtensionFunction extension_function = 3;
     case kExtensionFunction: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -1709,7 +1704,7 @@ const char* AdvancedExtension::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .google.protobuf.Any optimization = 1 [json_name = "optimization"];
+      // .google.protobuf.Any optimization = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_optimization(), ptr);
@@ -1717,7 +1712,7 @@ const char* AdvancedExtension::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .google.protobuf.Any enhancement = 2 [json_name = "enhancement"];
+      // .google.protobuf.Any enhancement = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_enhancement(), ptr);
@@ -1754,7 +1749,7 @@ uint8_t* AdvancedExtension::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .google.protobuf.Any optimization = 1 [json_name = "optimization"];
+  // .google.protobuf.Any optimization = 1;
   if (this->_internal_has_optimization()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1762,7 +1757,7 @@ uint8_t* AdvancedExtension::_InternalSerialize(
         1, _Internal::optimization(this), target, stream);
   }
 
-  // .google.protobuf.Any enhancement = 2 [json_name = "enhancement"];
+  // .google.protobuf.Any enhancement = 2;
   if (this->_internal_has_enhancement()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1786,14 +1781,14 @@ size_t AdvancedExtension::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .google.protobuf.Any optimization = 1 [json_name = "optimization"];
+  // .google.protobuf.Any optimization = 1;
   if (this->_internal_has_optimization()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *optimization_);
   }
 
-  // .google.protobuf.Any enhancement = 2 [json_name = "enhancement"];
+  // .google.protobuf.Any enhancement = 2;
   if (this->_internal_has_enhancement()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
