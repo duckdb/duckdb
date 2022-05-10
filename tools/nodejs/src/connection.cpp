@@ -23,7 +23,7 @@ Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 }
 
 struct ConnectTask : public Task {
-	ConnectTask(Connection &connection_, Napi::Function callback_) : Task(connection_, callback_) {
+	ConnectTask(Connection &connection, Napi::Function callback) : Task(connection, callback) {
 	}
 
 	void DoWork() override {
@@ -78,7 +78,7 @@ struct JSArgs {
 	std::string error;
 };
 
-static Napi::Value transform_vector(Napi::Env env, duckdb::Vector &vec, duckdb::idx_t rows, bool copy) {
+static Napi::Value TransformVector(Napi::Env env, duckdb::Vector &vec, duckdb::idx_t rows, bool copy) {
 	Napi::EscapableHandleScope scope(env);
 
 	Napi::Array data_buffers(Napi::Array::New(env));
@@ -147,17 +147,17 @@ static Napi::Value transform_vector(Napi::Env env, duckdb::Vector &vec, duckdb::
 	return scope.Escape(desc);
 }
 
-void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, nullptr_t *, JSArgs *jsargs) {
+void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *, JSArgs *jsargs) {
 	try { // if we dont catch exceptions here we terminate node if one happens ^^
 
 		// set up descriptor and data arrays
 		Napi::Array args_descr(Napi::Array::New(env, jsargs->args->ColumnCount()));
 		for (duckdb::idx_t col_idx = 0; col_idx < jsargs->args->ColumnCount(); col_idx++) {
 			auto &vec = jsargs->args->data[col_idx];
-			auto arg_descr = transform_vector(env, vec, jsargs->rows, true);
+			auto arg_descr = TransformVector(env, vec, jsargs->rows, true);
 			args_descr.Set(col_idx, arg_descr);
 		}
-		auto ret_descr = transform_vector(env, *jsargs->result, jsargs->rows, false);
+		auto ret_descr = TransformVector(env, *jsargs->result, jsargs->rows, false);
 
 		Napi::Object descr(Napi::Object::New(env));
 		descr.Set("rows", jsargs->rows);
@@ -222,8 +222,8 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, nullptr_t *, JSA
 }
 
 struct RegisterTask : public Task {
-	RegisterTask(Connection &connection_, std::string name_, std::string return_type_name_, Napi::Function callback_)
-	    : Task(connection_, callback_), name(name_), return_type_name(return_type_name_) {
+	RegisterTask(Connection &connection, std::string name, std::string return_type_name, Napi::Function callback)
+	    : Task(connection, callback), name(std::move(name)), return_type_name(std::move(return_type_name)) {
 	}
 
 	void DoWork() override {
@@ -282,8 +282,8 @@ Napi::Value Connection::Register(const Napi::CallbackInfo &info) {
 		return env.Null();
 	}
 
-	auto udf = DuckDBNodeUDFFUnction::New(env, udf_callback, "duckdb_node_udf" + name, 0, 1, nullptr,
-	                                      [](Napi::Env, void *, nullptr_t *ctx) {});
+	auto udf = duckdb_node_udf_function_t::New(env, udf_callback, "duckdb_node_udf" + name, 0, 1, nullptr,
+	                                      [](Napi::Env, void *, std::nullptr_t *ctx) {});
 
 	// we have to unref the udf because otherwise there is a circular ref with the connection somehow(?)
 	// this took far too long to figure out
@@ -297,8 +297,8 @@ Napi::Value Connection::Register(const Napi::CallbackInfo &info) {
 }
 
 struct UnregisterTask : public Task {
-	UnregisterTask(Connection &connection_, std::string name_, Napi::Function callback_)
-	    : Task(connection_, callback_), name(name_) {
+	UnregisterTask(Connection &connection, std::string name, Napi::Function callback)
+	    : Task(connection, callback), name(std::move(name)) {
 	}
 
 	void DoWork() override {
@@ -340,8 +340,8 @@ Napi::Value Connection::Unregister(const Napi::CallbackInfo &info) {
 }
 
 struct ExecTask : public Task {
-	ExecTask(Connection &connection_, std::string sql_, Napi::Function callback_)
-	    : Task(connection_, callback_), sql(sql_) {
+	ExecTask(Connection &connection, std::string sql, Napi::Function callback)
+	    : Task(connection, callback), sql(std::move(sql)) {
 	}
 
 	void DoWork() override {
@@ -349,7 +349,7 @@ struct ExecTask : public Task {
 
 		success = true;
 		auto statements = connection.connection->ExtractStatements(sql);
-		if (statements.size() == 0) {
+		if (statements.empty()) {
 			return;
 		}
 

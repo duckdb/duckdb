@@ -1,4 +1,5 @@
 #include "duckdb_node.hpp"
+#include <cassert>
 
 namespace node_duckdb {
 
@@ -10,7 +11,7 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 	Napi::Function t =
 	    DefineClass(env, "Statement",
 	                {InstanceMethod("run", &Statement::Run), InstanceMethod("all", &Statement::All),
-	                 InstanceMethod("each", &Statement::Each), InstanceMethod("finalize", &Statement::Finalize_)});
+	                 InstanceMethod("each", &Statement::Each), InstanceMethod("finalize", &Statement::Finish)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -20,7 +21,7 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 }
 
 struct PrepareTask : public Task {
-	PrepareTask(Statement &statement_, Napi::Function callback_) : Task(statement_, callback_) {
+	PrepareTask(Statement &statement, Napi::Function callback) : Task(statement, callback) {
 	}
 
 	void DoWork() override {
@@ -77,7 +78,7 @@ Statement::~Statement() {
 }
 
 // A Napi InstanceOf for Javascript Objects "Date" and "RegExp"
-static bool other_instance_of(Napi::Object source, const char *object_type) {
+static bool OtherInstanceOf(Napi::Object source, const char *object_type) {
 	if (strcmp(object_type, "Date") == 0) {
 		return source.InstanceOf(source.Env().Global().Get(object_type).As<Napi::Function>());
 	} else if (strcmp(object_type, "RegExp") == 0) {
@@ -87,10 +88,10 @@ static bool other_instance_of(Napi::Object source, const char *object_type) {
 	return false;
 }
 
-static duckdb::Value bind_parameter(const Napi::Value source) {
+static duckdb::Value BindParameter(const Napi::Value source) {
 	if (source.IsString()) {
 		return duckdb::Value(source.As<Napi::String>().Utf8Value());
-	} else if (other_instance_of(source.As<Napi::Object>(), "RegExp")) {
+	} else if (OtherInstanceOf(source.As<Napi::Object>(), "RegExp")) {
 		return duckdb::Value(source.ToString().Utf8Value());
 	} else if (source.IsNumber()) {
 		if (Utils::OtherIsInt(source.As<Napi::Number>())) {
@@ -208,6 +209,7 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 	Napi::EscapableHandleScope scope(env);
 	std::vector<Napi::String> node_names;
 	assert(names.size() == chunk.ColumnCount());
+	node_names.reserve(names.size());
 	for (auto &name : names) {
 		node_names.push_back(Napi::String::New(env, name));
 	}
@@ -240,8 +242,8 @@ struct StatementParam {
 };
 
 struct RunPreparedTask : public Task {
-	RunPreparedTask(Statement &statement_, duckdb::unique_ptr<StatementParam> params_, RunType run_type_)
-	    : Task(statement_, params_->callback), params(move(params_)), run_type(run_type_) {
+	RunPreparedTask(Statement &statement, duckdb::unique_ptr<StatementParam> params, RunType run_type)
+	    : Task(statement, params->callback), params(move(params)), run_type(run_type) {
 	}
 
 	void DoWork() override {
@@ -352,7 +354,7 @@ duckdb::unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInf
 		if (p.IsUndefined()) {
 			continue;
 		}
-		params->params.push_back(bind_parameter(p));
+		params->params.push_back(BindParameter(p));
 	}
 	return params;
 }
@@ -377,8 +379,8 @@ Napi::Value Statement::Each(const Napi::CallbackInfo &info) {
 	return info.This();
 }
 
-struct FinalizeTask : public Task {
-	FinalizeTask(Statement &statement_, Napi::Function callback_) : Task(statement_, callback_) {
+struct FinishTask : public Task {
+	FinishTask(Statement &statement, Napi::Function callback) : Task(statement, callback) {
 	}
 
 	void DoWork() override {
@@ -387,7 +389,7 @@ struct FinalizeTask : public Task {
 	}
 };
 
-Napi::Value Statement::Finalize_(const Napi::CallbackInfo &info) {
+Napi::Value Statement::Finish(const Napi::CallbackInfo &info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 
@@ -397,7 +399,7 @@ Napi::Value Statement::Finalize_(const Napi::CallbackInfo &info) {
 		callback = info[0].As<Napi::Function>();
 	}
 
-	connection_ref->database_ref->Schedule(env, duckdb::make_unique<FinalizeTask>(*this, callback));
+	connection_ref->database_ref->Schedule(env, duckdb::make_unique<FinishTask>(*this, callback));
 	return env.Null();
 }
 
