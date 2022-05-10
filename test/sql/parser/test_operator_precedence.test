@@ -56,3 +56,18 @@ query I
 SELECT (16/2)**4;
 ----
 4096
+
+query I
+SELECT 2**3**2;
+----
+64
+
+query I
+SELECT 2^3**2;
+----
+64
+
+query I
+SELECT 2**3^2;
+----
+64

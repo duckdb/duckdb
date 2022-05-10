@@ -141,8 +141,7 @@
 %left		Op OPERATOR		/* multi-character ops and user-defined operators */
 %left		'+' '-'
 %left		'*' '/' '%'
-%left		'^'
-%left		POWER_OF
+%left		'^' POWER_OF
 /* Unary Operators */
 %left		AT				/* sets precedence for AT TIME ZONE */
 %left		COLLATE
