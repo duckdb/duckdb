@@ -23,9 +23,14 @@ COPY (select * from 'test/sql/copy/csv/data/glob/i1/integer.csv') to 's3://test-
 statement ok
 CREATE TABLE dates(d DATE);
 
-# simple globbing
 statement ok
 COPY dates FROM 's3://test-bucket/copy_csv_glob_s3/copy/a?/*.csv' (AUTO_DETECT 1);
+
+# simple globbing for both url styles
+foreach urlstyle path vhost
+
+statement ok
+SET s3_url_style='${urlstyle}'
 
 query I
 SELECT * FROM dates ORDER BY 1
@@ -44,3 +49,4 @@ SELECT * FROM dates ORDER BY 1
 statement error
 COPY dates FROM read_csv('s3://test-bucket/copy_csv_glob_s3/copy/*/a*a.csv', auto_detect=1)
 
+endloop

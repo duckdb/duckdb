@@ -152,7 +152,7 @@ public:
 
 	void FlushAllBuffers(S3FileHandle &handle);
 
-	static ParsedS3Url S3UrlParse(string url, const S3AuthParams& params);
+	static ParsedS3Url S3UrlParse(string url, const S3AuthParams &params);
 
 	static std::string UrlEncode(const std::string &input, bool encode_slash = false);
 
