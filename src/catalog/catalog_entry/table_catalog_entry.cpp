@@ -605,9 +605,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	// TODO: check if the expression breaks, only delete it if it does
 	for (idx_t i = 0; i < generated_columns.size(); i++) {
 		auto copy = generated_columns[i].Copy();
-		bool affected = false;
-		DependsOnColumn(*copy.expression, info.column_name, affected);
-		if (affected) {
+		if (DependsOnColumn(*copy.expression, info.column_name)) {
 			if (!info.cascade) {
 				throw CatalogException("Could not change the type of the column \"%s\" because 1 or more generated "
 				                       "columns depend on it, and the CASCADE option wasn't provided",
