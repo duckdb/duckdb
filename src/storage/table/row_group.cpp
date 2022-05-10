@@ -492,6 +492,10 @@ void RowGroup::ScanCommitted(RowGroupScanState &state, DataChunk &result, TableS
 
 bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
 	auto &column_ids = state.parent.column_ids;
+	auto &table_filters = state.parent.table_filters;
+	auto &adaptive_filter = state.parent.adaptive_filter;
+	bool ALLOW_UPDATES = false;
+	Transaction *transaction = nullptr;
 	while (true) {
 		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row) {
 			// exceeded the amount of rows to scan
@@ -501,19 +505,99 @@ bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
 		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row - current_row);
 
 		idx_t count;
-		count = max_count;
+		SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
 
-		// scan all vectors completely: full scan without deletions or table filters
-		for (idx_t i = 0; i < column_ids.size(); i++) {
-			auto column = column_ids[i];
-			if (column == COLUMN_IDENTIFIER_ROW_ID) {
-				// scan row id
-				D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
-				result.data[i].Sequence(this->start + current_row, 1);
-			} else {
-				columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
-				                               true);
+		auto &transaction_manager = TransactionManager::Get(db);
+		auto lowest_active_start = transaction_manager.LowestActiveStart();
+		auto lowest_active_id = transaction_manager.LowestActiveId();
+
+		count = state.row_group->GetCommittedSelVector(lowest_active_start, lowest_active_id, state.vector_index,
+		                                               valid_sel, max_count);
+		if (count == 0) {
+			// nothing to scan for this vector, skip the entire vector
+			NextVector(state);
+			continue;
+		}
+		if (count == max_count && !table_filters) {
+			// scan all vectors completely: full scan without deletions or table filters
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				auto column = column_ids[i];
+				if (column == COLUMN_IDENTIFIER_ROW_ID) {
+					// scan row id
+					D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
+					result.data[i].Sequence(this->start + current_row, 1);
+				} else {
+					columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
+												   ALLOW_UPDATES);
+				}
 			}
+		} else {
+			// partial scan: we have deletions or table filters
+			idx_t approved_tuple_count = count;
+			SelectionVector sel;
+			if (count != max_count) {
+				sel.Initialize(valid_sel);
+			} else {
+				sel.Initialize(nullptr);
+			}
+			//! first, we scan the columns with filters, fetch their data and generate a selection vector.
+			//! get runtime statistics
+			auto start_time = high_resolution_clock::now();
+			if (table_filters) {
+				D_ASSERT(ALLOW_UPDATES);
+				for (idx_t i = 0; i < table_filters->filters.size(); i++) {
+					auto tf_idx = adaptive_filter->permutation[i];
+					auto col_idx = column_ids[tf_idx];
+					columns[col_idx]->Select(*transaction, state.vector_index, state.column_scans[tf_idx],
+					                         result.data[tf_idx], sel, approved_tuple_count,
+					                         *table_filters->filters[tf_idx]);
+				}
+				for (auto &table_filter : table_filters->filters) {
+					result.data[table_filter.first].Slice(sel, approved_tuple_count);
+				}
+			}
+			if (approved_tuple_count == 0) {
+				// all rows were filtered out by the table filters
+				// skip this vector in all the scans that were not scanned yet
+				D_ASSERT(table_filters);
+				result.Reset();
+				for (idx_t i = 0; i < column_ids.size(); i++) {
+					auto col_idx = column_ids[i];
+					if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+						continue;
+					}
+					if (table_filters->filters.find(i) == table_filters->filters.end()) {
+						columns[col_idx]->Skip(state.column_scans[i]);
+					}
+				}
+				state.vector_index++;
+				continue;
+			}
+			//! Now we use the selection vector to fetch data for the other columns.
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				if (!table_filters || table_filters->filters.find(i) == table_filters->filters.end()) {
+					auto column = column_ids[i];
+					if (column == COLUMN_IDENTIFIER_ROW_ID) {
+						D_ASSERT(result.data[i].GetType().InternalType() == PhysicalType::INT64);
+						result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
+						auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
+						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
+							result_data[sel_idx] = this->start + current_row + sel.get_index(sel_idx);
+						}
+					} else {
+						D_ASSERT(!transaction);
+						columns[column]->FilterScanCommitted(state.vector_index, state.column_scans[i],
+															 result.data[i], sel, approved_tuple_count,
+															 ALLOW_UPDATES);
+					}
+				}
+			}
+			auto end_time = high_resolution_clock::now();
+			if (adaptive_filter && table_filters->filters.size() > 1) {
+				adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
+			}
+			D_ASSERT(approved_tuple_count > 0);
+			count = approved_tuple_count;
 		}
 
 		result.SetCardinality(count);
@@ -540,18 +624,18 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	vector<std::tuple<idx_t, idx_t>> cardinalities;
 
 	// Calculate the column cardinalities
-	CalculateCardinalitiesPerColumn(types, scan_state, cardinalities);
+//	CalculateCardinalitiesPerColumn(types, scan_state, cardinalities);
 
 	// Get types for the key column
-	for (auto i : cardinalities) {
-		// Retrieve the index from the sorted tuples
-		key_types.push_back(types[std::get<1>(i)]);
-	}
+//	for (auto i : cardinalities) {
+//		// Retrieve the index from the sorted tuples
+//		key_types.push_back(types[std::get<1>(i)]);
+//	}
 
 	// Initialize DataChunk for key columns and payload (the entire RowGroup)
-	DataChunk keys;
+//	DataChunk keys;
 	DataChunk payload;
-	keys.Initialize(key_types);
+//	keys.Initialize(key_types);
 	payload.Initialize(types);
 
 	// Initialize the sorting states
@@ -565,13 +649,14 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	InitializeScan(scan_state.row_group_scan_state);
 	while (next_chunk) {
 		next_chunk = ScanToDataChunks(scan_state.row_group_scan_state, payload);
-
+//		keys.Normalify();
+		payload.Normalify();
 		// Select key columns from lowest to highest cardinality
-		for (idx_t i = 0; i < cardinalities.size(); i++) {
-			keys.data[i].Reference(payload.data[std::get<1>(cardinalities[i])]);
-			keys.SetCardinality(payload.size());
-		}
-		local_sort_state.SinkChunk(keys, payload);
+//		for (idx_t i = 0; i < cardinalities.size(); i++) {
+//			keys.data[i].Reference(payload.data[std::get<1>(cardinalities[i])]);
+//			keys.SetCardinality(payload.size());
+//		}
+		local_sort_state.SinkChunk(payload, payload);
 
 		// Do not continue sort if payload is empty
 		if (payload.size() == 0) {
@@ -607,41 +692,9 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	}
 
 	this->columns = sorted_rowgroup->columns;
-
-	// Sort the indexes
-
-//	// Initialize DataChunk for key columns and payload (the entire RowGroup)
-//	DataChunk payload_indexes;
-//	payload.Initialize(types);
-//
-//	// Initialize the sorting states
-//	RowGroupSortBindData sort_state_indexes(types, column_ids, db);
-//	auto &global_sort_state_indexes = *sort_state.global_sort_state;
-//	LocalSortState local_sort_state_indexes;
-//	local_sort_state.Initialize(global_sort_state_indexes, global_sort_state_indexes.buffer_manager);
-//
-//	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
-//		payload_indexes.data.push_back(Vector)
-//	}
-//	local_sort_state.SinkChunk(keys, payload);
-
-//	if (version_info){
-//		for (idx_t vector_idx = 0; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
-//			auto current_info = (ChunkVectorInfo *)version_info->info[vector_idx].get();
-//			if (!current_info) {
-//				continue;
-//			}
-//			if (current_info->any_deleted) {
-//				any_deletions = true;
-//				for (auto i : current_info->delete_id) {
-//					deletion_ids.push_back(i);
-//				}
-//				auto i = current_info->deleted[2].load();
-//				current_info->deleted[2] = current_info->deleted[1].load();
-//				current_info->deleted[1] = i;
-//			}
-//		}
-//	}
+	this->stats = sorted_rowgroup->stats;
+	this->version_info = sorted_rowgroup->version_info;
+	this->Verify();
 }
 
 void RowGroup::CalculateCardinalitiesPerColumn(vector<LogicalType> &types, TableScanState &scan_state,
@@ -655,6 +708,7 @@ void RowGroup::CalculateCardinalitiesPerColumn(vector<LogicalType> &types, Table
 	bool next_chunk = true;
 	while (next_chunk) {
 		next_chunk = ScanToDataChunks(scan_state.row_group_scan_state, result);
+		result.Normalify();
 		for (idx_t i = 0; i < columns.size(); i++) {
 			logs[i].Add(result.data[i].GetData(), sizeof(types[i].InternalType()));
 		}
