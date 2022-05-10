@@ -1,5 +1,6 @@
 import duckdb
 
-with duckdb.connect() as con:
-    res = con.execute("select 1").fetchall()
-    print (res)
+class TestContextManager(object):
+    def test_context_manager(self, duckdb_cursor):
+        with duckdb.connect(database=':memory:', read_only=False) as con:
+            assert con.execute("select 1").fetchall() == [(1,)]
