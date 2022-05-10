@@ -18,3 +18,10 @@ ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS(price * amo
 # Otherwise 'price' and 'amount_sold' would be ambiguous because they are also present in 'unit2'
 statement ok
 SELECT total_profit FROM unit, unit2
+
+statement ok
+ALTER TABLE unit2 ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price / amount_sold) VIRTUAL;
+
+# When using the table name, we avoid ambiguity
+statement ok
+SELECT unit.total_profit FROM unit, unit2

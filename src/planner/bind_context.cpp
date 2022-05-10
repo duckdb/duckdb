@@ -166,12 +166,12 @@ unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &ta
 	auto binding = GetBinding(table_name, error_message);
 	D_ASSERT(binding);
 	auto table_catalog_entry = binding->GetTableEntry();
-	D_ASSERT(table_catalog_entry); //Should only be called on a TableBinding
+	D_ASSERT(table_catalog_entry); // Should only be called on a TableBinding
 
-	//Get the index of the generated column
+	// Get the index of the generated column
 	auto column_index = binding->GetBindingIndex(column_name, TableColumnType::GENERATED);
-	//Get a copy of the generated column
-	//TODO: bake the table name into the ColumnRefExpressions here
+	// Get a copy of the generated column
+	// TODO: bake the table name into the ColumnRefExpressions here
 	auto expression = table_catalog_entry->generated_columns[column_index].expression->Copy();
 	return expression;
 }

@@ -120,10 +120,16 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		// -> part1 is a table, part2 is a column
 		// -> part1 is a column, part2 is a property of that column (i.e. struct_extract)
 
-		// first check if part1 is a table
-		if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], error_message)) {
+		// first check if part1 is a table, and part2 is a standard column
+		if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], error_message,
+		                              TableColumnType::STANDARD)) {
 			// it is! return the colref directly
 			return binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1]);
+		}
+		// then check if part1 is a table, and part2 is a generated column
+		else if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], error_message,
+		                                   TableColumnType::GENERATED)) {
+			return binder.bind_context.ExpandGeneratedColumn(colref.column_names[0], colref.column_names[1]);
 		} else {
 			if (binder.bind_context.GetMatchingBinding(colref.column_names[1], TableColumnType::GENERATED) ==
 			    colref.column_names[0]) {

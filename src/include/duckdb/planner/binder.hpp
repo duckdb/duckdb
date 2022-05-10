@@ -154,9 +154,10 @@ public:
 
 	static void BindLogicalType(ClientContext &context, LogicalType &type, const string &schema = "");
 
-	bool HasMatchingBinding(const string &table_name, const string &column_name, string &error_message);
+	bool HasMatchingBinding(const string &table_name, const string &column_name, string &error_message,
+	                        TableColumnType type = TableColumnType::STANDARD);
 	bool HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
-	                        string &error_message);
+	                        string &error_message, TableColumnType type = TableColumnType::STANDARD);
 
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();
