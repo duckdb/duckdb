@@ -119,7 +119,7 @@ protected:
 	BindResult BindExpression(ConstantExpression &expr, idx_t depth);
 	BindResult BindExpression(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> *expr_ptr);
 	BindResult BindExpression(LambdaExpression &expr, idx_t depth, idx_t lambda_param_count,
-	                          LogicalType list_child_type, idx_t table_idx);
+	                          LogicalType list_child_type);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(PositionalReferenceExpression &ref, idx_t depth);

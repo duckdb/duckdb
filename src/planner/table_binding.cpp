@@ -153,8 +153,8 @@ unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colre
 	return arg;
 }
 
-LambdaBinding::LambdaBinding(vector<LogicalType> types_p, vector<string> names_p, string lambda_name_p, idx_t table_idx)
-    : Binding(LambdaBinding::LAMBDA_NAME + lambda_name_p, move(types_p), move(names_p), table_idx), // normal binding
+LambdaBinding::LambdaBinding(vector<LogicalType> types_p, vector<string> names_p, string lambda_name_p)
+    : Binding(LambdaBinding::LAMBDA_NAME + lambda_name_p, move(types_p), move(names_p), -1), // normal binding
       lambda_name(move(lambda_name_p))                                                              // lambda name
 {
 }

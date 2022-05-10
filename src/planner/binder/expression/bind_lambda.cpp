@@ -9,7 +9,7 @@
 namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, idx_t lambda_param_count,
-                                            LogicalType list_child_type, idx_t table_idx) {
+                                            LogicalType list_child_type) {
 
 	string error;
 
@@ -50,7 +50,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		if (!lambda_bindings) {
 			lambda_bindings = &local_bindings;
 		}
-		LambdaBinding new_lambda_binding(column_types, column_names, lhs_alias, table_idx);
+		LambdaBinding new_lambda_binding(column_types, column_names, lhs_alias);
 		lambda_bindings->push_back(new_lambda_binding);
 		auto lambda_bindings_count = (*lambda_bindings).size();
 

@@ -89,7 +89,7 @@ struct LambdaBinding : public Binding {
 	static constexpr const char *LAMBDA_NAME = "__duckdb__internal_lambda_";
 
 public:
-	LambdaBinding(vector<LogicalType> types_p, vector<string> names_p, string lambda_name, idx_t table_idx);
+	LambdaBinding(vector<LogicalType> types_p, vector<string> names_p, string lambda_name);
 
 	//! The name of the lambda
 	string lambda_name;
