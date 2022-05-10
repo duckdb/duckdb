@@ -445,10 +445,10 @@ int32_t Date::ExtractISODayOfTheWeek(date_t date) {
 	// 7  = 4
 	if (date.days < 0) {
 		// negative date: start off at 4 and cycle downwards
-		return (7 - ((-date.days + 3) % 7));
+		return (7 - ((-int64_t(date.days) + 3) % 7));
 	} else {
 		// positive date: start off at 4 and cycle upwards
-		return ((date.days + 3) % 7) + 1;
+		return ((int64_t(date.days) + 3) % 7) + 1;
 	}
 }
 
