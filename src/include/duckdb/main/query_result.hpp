@@ -33,6 +33,8 @@ public:
 	QueryResultType type;
 	//! The type of the statement that created this result
 	StatementType statement_type;
+	//! Properties of the statement
+	StatementProperties properties;
 	//! The SQL types of the result
 	vector<LogicalType> types;
 	//! The names of the result
