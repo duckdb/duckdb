@@ -103,8 +103,8 @@ jobs:
     - name: R CMD check
       run: |
         cd tools/rpkg
-        R CMD check --as-cran -o /tmp duckdb_*.tar.gz
-        if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
+        _R_CHECK_PKG_SIZES_=FALSE R CMD check --as-cran -o /tmp duckdb_*.tar.gz
+        if egrep 'NOTE|WARNING|ERROR' /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
     - name: Valgrind
       run: |
@@ -197,8 +197,8 @@ jobs:
         R CMD build .
         R CMD INSTALL duckdb_*.tar.gz
         (cd tests && R -f testthat.R)
-        R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
-        if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
+        _R_CHECK_PKG_SIZES_=FALSE R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
+        if egrep 'NOTE|WARNING|ERROR' /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
   rubsan:
     name: R UBSAN
