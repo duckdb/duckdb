@@ -20,11 +20,9 @@ enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDI
 
 class BaseQueryResult {
 public:
-	//! Creates a successful empty query result
-	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
-	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
-	                           vector<string> names);
+	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
+	                           vector<LogicalType> types, vector<string> names);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API BaseQueryResult(QueryResultType type, string error);
 	DUCKDB_API virtual ~BaseQueryResult();
@@ -55,11 +53,9 @@ public:
 //! incrementally fetch data from the database.
 class QueryResult : public BaseQueryResult {
 public:
-	//! Creates a successful empty query result
-	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
-	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
-	                       vector<string> names);
+	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
+	                       vector<LogicalType> types, vector<string> names);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API QueryResult(QueryResultType type, string error);
 	DUCKDB_API virtual ~QueryResult() override;
