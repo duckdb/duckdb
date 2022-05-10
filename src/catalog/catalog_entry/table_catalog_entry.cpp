@@ -357,7 +357,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	                                      new_storage);
 }
 
-void DependsOnColumn(const ParsedExpression &expr, const string &column, bool &result) {
+void InnerDependsOnColumn(const ParsedExpression &expr, const string &column, bool &result) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto column_ref = (ColumnRefExpression &)expr;
 		auto &column_name = column_ref.GetColumnName();
@@ -366,7 +366,13 @@ void DependsOnColumn(const ParsedExpression &expr, const string &column, bool &r
 		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { DependsOnColumn(child, column, result); });
+	    expr, [&](const ParsedExpression &child) { InnerDependsOnColumn(child, column, result); });
+}
+
+bool DependsOnColumn(const ParsedExpression &expr, const string &column) {
+	bool result;
+	InnerDependsOnColumn(expr, column, result);
+	return result;
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::RemoveGeneratedColumn(ClientContext &context, RemoveColumnInfo &info,
@@ -414,9 +420,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 
 	idx_t removed_generated_columns = 0;
 	for (idx_t i = 0; i < generated_columns.size(); i++) {
-		bool remove;
-		DependsOnColumn(*generated_columns[i].expression, columns[removed_index].name, remove);
-		if (remove) {
+		if (DependsOnColumn(*generated_columns[i].expression, columns[removed_index].name)) {
 			removed_generated_columns++;
 			continue;
 		}
