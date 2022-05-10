@@ -46,20 +46,15 @@ unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(duckdb_libpgquery
 	return make_unique<CollateExpression>(collation, move(child));
 }
 
-ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGColumnDef *cdef) {
-	string colname;
-	if (cdef->colname) {
-		colname = cdef->colname;
-	}
-	LogicalType target_type = TransformTypeName(cdef->typeName);
+ConstrainedLogicalType Transformer::TransformColumnTypeDefinition(duckdb_libpgquery::PGColumnDef *cdef) {
+	ConstrainedLogicalType target = TransformTypeName(cdef->typeName, true /* is_column_definition */);
 	if (cdef->collClause) {
-		if (target_type.id() != LogicalTypeId::VARCHAR) {
+		if (target.type.id() != LogicalTypeId::VARCHAR) {
 			throw ParserException("Only VARCHAR columns can have collations!");
 		}
-		target_type = LogicalType::VARCHAR_COLLATION(TransformCollation(cdef->collClause));
+		target.type = LogicalType::VARCHAR_COLLATION(TransformCollation(cdef->collClause));
 	}
-
-	return ColumnDefinition(colname, target_type);
+	return target;
 }
 
 unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery::PGNode *node) {
@@ -95,20 +90,20 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		switch (node->type) {
 		case duckdb_libpgquery::T_PGColumnDef: {
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)c->data.ptr_value;
-			auto centry = TransformColumnDefinition(cdef);
-			if (centry.type.IsSerial()) {
+			string colname = cdef->colname;
+			auto constrained_type = TransformColumnTypeDefinition(cdef);
+			auto centry = ColumnDefinition(colname, constrained_type.type);
+			if (constrained_type.is_serial) {
 				// create a sequence associated with the column
 				auto sequence = make_unique<CreateSequenceInfo>();
-				string seq_name = info->table + "_" + centry.name + "_seq";
+				string seq_name = info->table + "_" + colname + "_seq";
 				sequence->name = seq_name;
-				if (centry.type.id() == LogicalTypeId::SMALLSERIAL) {
+				if (constrained_type.type.id() == LogicalTypeId::SMALLINT) {
 					sequence->max_value = NumericLimits<int16_t>::Maximum();
-					centry.type = LogicalType(LogicalType::SMALLINT);
-				} else if (centry.type.id() == LogicalTypeId::SERIAL) {
+				} else if (constrained_type.type.id() == LogicalTypeId::INTEGER) {
 					sequence->max_value = NumericLimits<int32_t>::Maximum();
-					centry.type = LogicalType(LogicalType::INTEGER);
 				} else {
-					centry.type = LogicalType(LogicalType::BIGINT);
+					sequence->max_value = NumericLimits<int64_t>::Maximum();
 				}
 				info->sequences.push_back(move(sequence));
 
@@ -129,7 +124,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 					}
 				}
 			}
-			info->columns.push_back(move(centry));
+			info->columns.push_back(centry);
 			break;
 		}
 		case duckdb_libpgquery::T_PGConstraint: {

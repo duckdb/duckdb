@@ -23,6 +23,7 @@
 namespace duckdb {
 
 class ColumnDefinition;
+class ConstrainedLogicalType;
 class StackChecker;
 struct OrderByNode;
 struct CopyInfo;
@@ -190,7 +191,7 @@ private:
 
 	string TransformCollation(duckdb_libpgquery::PGCollateClause *collate);
 
-	ColumnDefinition TransformColumnDefinition(duckdb_libpgquery::PGColumnDef *cdef);
+	ConstrainedLogicalType TransformColumnTypeDefinition(duckdb_libpgquery::PGColumnDef *cdef);
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
@@ -227,7 +228,7 @@ private:
 	QualifiedName TransformQualifiedName(duckdb_libpgquery::PGRangeVar *root);
 
 	//! Transform a Postgres TypeName string into a LogicalType
-	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName *name);
+	ConstrainedLogicalType TransformTypeName(duckdb_libpgquery::PGTypeName *name, bool is_column_definition);
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression
 	bool TransformGroupBy(duckdb_libpgquery::PGList *group, SelectNode &result);

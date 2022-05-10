@@ -2,12 +2,13 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
+#include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
 
-LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_name) {
+ConstrainedLogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_name, bool is_column_definition) {
 	if (type_name->type != duckdb_libpgquery::T_PGTypeName) {
 		throw ParserException("Expected a type");
 	}
@@ -16,6 +17,21 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 	auto name = (reinterpret_cast<duckdb_libpgquery::PGValue *>(type_name->names->tail->data.ptr_value)->val.str);
 	// transform it to the SQL type
 	LogicalTypeId base_type = TransformStringToLogicalTypeId(name);
+
+	bool is_serial = false;
+	int check_length = 0;
+	if (is_column_definition && base_type == LogicalTypeId::USER) {
+		// Check to see whether or this is actually a serial type
+		auto lower_name = StringUtil::Lower(name);
+		if (lower_name == "serial" || lower_name == "serial4") {
+			base_type = LogicalTypeId::INTEGER;
+		} else if (lower_name == "bigserial" || lower_name == "serial8") {
+			base_type = LogicalTypeId::BIGINT;
+		} else if (lower_name == "smallserial" || lower_name == "serial2") {
+			base_type = LogicalTypeId::SMALLINT;
+		}
+		is_serial = true;
+	}
 
 	LogicalType result_type;
 	if (base_type == LogicalTypeId::STRUCT) {
@@ -44,8 +60,8 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			}
 			name_collision_set.insert(entry_name);
 
-			auto entry_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)entry_type_node);
-			children.push_back(make_pair(entry_name, entry_type));
+			auto entry = TransformTypeName((duckdb_libpgquery::PGTypeName *)entry_type_node, false);
+			children.push_back(make_pair(entry_name, entry.type));
 		}
 		D_ASSERT(!children.empty());
 		result_type = LogicalType::STRUCT(move(children));
@@ -56,11 +72,11 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			throw ParserException("Map type needs exactly two entries, key and value type");
 		}
 		child_list_t<LogicalType> children;
-		auto key_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->head->data.ptr_value);
-		auto value_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->tail->data.ptr_value);
+		auto key_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->head->data.ptr_value, false);
+		auto value_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->tail->data.ptr_value, false);
 
-		children.push_back({"key", LogicalType::LIST(key_type)});
-		children.push_back({"value", LogicalType::LIST(value_type)});
+		children.push_back({"key", LogicalType::LIST(key_type.type)});
+		children.push_back({"value", LogicalType::LIST(value_type.type)});
 
 		D_ASSERT(children.size() == 2);
 
@@ -102,7 +118,9 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			if (modifier_idx > 1) {
 				throw ParserException("VARCHAR only supports a single modifier");
 			}
-			// FIXME: create CHECK constraint based on varchar width
+			if (is_column_definition) {
+				check_length = width;
+			}
 			width = 0;
 			result_type = LogicalType::VARCHAR;
 			break;
@@ -147,7 +165,10 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			StackCheck(extra_stack++);
 		}
 	}
-	return result_type;
+	ConstrainedLogicalType result(result_type);
+	result.is_serial = is_serial;
+	result.check_length = check_length;
+	return result;
 }
 
 } // namespace duckdb

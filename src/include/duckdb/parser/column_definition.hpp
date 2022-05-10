@@ -39,4 +39,14 @@ public:
 	DUCKDB_API static ColumnDefinition Deserialize(Deserializer &source);
 };
 
+//! A logical type definition in conjunction with any constraints implied by the type
+struct ConstrainedLogicalType {
+	LogicalType type;
+	bool is_serial = false;
+	int check_length = 0;
+	
+	DUCKDB_API ConstrainedLogicalType(LogicalType type): type(type) {
+	}
+};
+
 } // namespace duckdb

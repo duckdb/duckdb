@@ -360,9 +360,6 @@ enum class LogicalTypeId : uint8_t {
 	HASH = 52,
 	VALIDITY = 53,
 	UUID = 54,
-	SMALLSERIAL = 55,
-	SERIAL = 56,
-	BIGSERIAL = 57,
 
 	STRUCT = 100,
 	LIST = 101,
@@ -425,12 +422,6 @@ struct LogicalType {
 	DUCKDB_API bool IsIntegral() const;
 	DUCKDB_API bool IsNumeric() const;
 	DUCKDB_API hash_t Hash() const;
-	inline bool IsSerial() const {
-		return id_ == LogicalTypeId::SMALLSERIAL ||
-			id_ == LogicalTypeId::SERIAL ||
-			id_ == LogicalTypeId::BIGSERIAL;
-	}
-
 
 	DUCKDB_API static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);
 
@@ -480,9 +471,6 @@ public:
 	static constexpr const LogicalTypeId INVALID = LogicalTypeId::INVALID;
 	static constexpr const LogicalTypeId JSON = LogicalTypeId::JSON;
 	static constexpr const LogicalTypeId ROW_TYPE = LogicalTypeId::BIGINT;
-	static constexpr const LogicalTypeId SMALLSERIAL = LogicalTypeId::SMALLSERIAL;
-	static constexpr const LogicalTypeId SERIAL = LogicalTypeId::SERIAL;
-	static constexpr const LogicalTypeId BIGSERIAL = LogicalTypeId::BIGSERIAL;
 
 	// explicitly allowing these functions to be capitalized to be in-line with the remaining functions
 	DUCKDB_API static LogicalType DECIMAL(int width, int scale);                 // NOLINT

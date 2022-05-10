@@ -11,10 +11,10 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 
 	// get the type to cast to
 	auto type_name = root->typeName;
-	LogicalType target_type = TransformTypeName(type_name);
+	auto target = TransformTypeName(type_name, false /* is_column_definition */);
 
 	// check for a constant BLOB value, then return ConstantExpression with BLOB
-	if (!root->tryCast && target_type == LogicalType::BLOB && root->arg->type == duckdb_libpgquery::T_PGAConst) {
+	if (!root->tryCast && target.type == LogicalType::BLOB && root->arg->type == duckdb_libpgquery::T_PGAConst) {
 		auto c = reinterpret_cast<duckdb_libpgquery::PGAConst *>(root->arg);
 		if (c->val.type == duckdb_libpgquery::T_PGString) {
 			return make_unique<ConstantExpression>(Value::BLOB(string(c->val.val.str)));
@@ -25,7 +25,7 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 	bool try_cast = root->tryCast;
 
 	// now create a cast operation
-	return make_unique<CastExpression>(target_type, move(expression), try_cast);
+	return make_unique<CastExpression>(target.type, move(expression), try_cast);
 }
 
 } // namespace duckdb
