@@ -179,7 +179,11 @@ void Binder::BindGeneratedColumns(vector<GeneratedColumnDefinition> &generated_c
 	}
 	auto table_index = GenerateTableIndex();
 
-	this->bind_context.AddGenericBinding(table_index, info.table, names, types);
+	string ignore;
+	if (!this->bind_context.GetBinding(info.table, ignore)) {
+		//If a binding with this name is already added, this would throw an exception
+		this->bind_context.AddGenericBinding(table_index, info.table, names, types);
+	}
 	for (auto &col : generated_columns) {
 		auto expr_binder = ExpressionBinder(*this, context);
 		auto expression = col.expression->Copy();
