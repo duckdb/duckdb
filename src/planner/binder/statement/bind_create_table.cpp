@@ -171,21 +171,35 @@ void Binder::BindGeneratedColumns(vector<GeneratedColumnDefinition> &generated_c
 	vector<string> names;
 	vector<LogicalType> types;
 
-	names.push_back("rowid");
-	types.push_back(LogicalType::BIGINT);
+	D_ASSERT(info.type == CatalogType::TABLE_ENTRY);
+	//Add the 'rowid' column so we can succesfully bind to the system column
+	bool add_row_id = true;
+	//TODO: add generated columns so we can resolve generated_column<->generated_column expressions
+	for (auto &col : info.generated_columns) {
+		//Corner case: if a generated column is named 'rowid' the system column would be referenced here, but then fail in the actual SELECT,
+		//as 'rowid' system wouldn't be added because it is already occupied in the name map
+		if (col.name == "rowid") {
+			add_row_id = false;
+		}
+	}
 	for (auto &col : info.columns) {
+		if (col.name == "rowid") {
+			add_row_id = false;
+		}
 		names.push_back(col.name);
 		types.push_back(col.type);
 	}
+	if (add_row_id) {
+		names.push_back("rowid");
+		types.push_back(LogicalType::BIGINT);
+	}
 	auto table_index = GenerateTableIndex();
 
-	string ignore;
-	if (!this->bind_context.GetBinding(info.table, ignore)) {
-		//If a binding with this name is already added, this would throw an exception
-		this->bind_context.AddGenericBinding(table_index, info.table, names, types);
-	}
+	//Create a new binder because we dont need (or want) these bindings in this scope
+	auto binder = Binder::CreateBinder(context);
+	binder->bind_context.AddGenericBinding(table_index, info.table, names, types);
 	for (auto &col : generated_columns) {
-		auto expr_binder = ExpressionBinder(*this, context);
+		auto expr_binder = ExpressionBinder(*binder, context);
 		auto expression = col.expression->Copy();
 		// expr_binder.target_type = col.type;
 		auto bound_expression = expr_binder.Bind(expression);

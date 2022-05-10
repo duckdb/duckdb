@@ -20,3 +20,39 @@ SELECT total_profit FROM unit;
 ----
 0
 4
+
+# Add a standard column named 'rowid' with a different type
+statement error
+ALTER TABLE unit ADD COLUMN rowid INTEGER;
+
+# Add a standard column named 'rowid' with the same type
+statement ok
+ALTER TABLE unit ADD COLUMN rowid BIGINT;
+
+query I
+SELECT total_profit FROM unit;
+----
+NULL
+NULL
+
+# Cant create a generated column named 'rowid' that also tries to reference the 'rowid' system column
+statement error
+CREATE TABLE tbl (
+	price INTEGER,
+	rowid BIGINT GENERATED ALWAYS AS (rowid) VIRTUAL
+);
+
+# Reference a standard column named 'rowid'
+statement ok
+CREATE TABLE tbl (
+	rowid INTEGER,
+	index INTEGER GENERATED ALWAYS AS (rowid) VIRTUAL
+)
+
+statement ok
+INSERT INTO tbl VALUES (5)
+
+query I
+SELECT index FROM tbl;
+----
+5

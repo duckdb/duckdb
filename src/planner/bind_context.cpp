@@ -162,14 +162,16 @@ unordered_set<string> BindContext::GetMatchingBindings(const string &column_name
 
 unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &table_name, const string &column_name) {
 	string error_message;
-	vector<string> names;
-	names.push_back(table_name);
-	names.push_back(column_name);
 
 	auto binding = GetBinding(table_name, error_message);
+	D_ASSERT(binding);
 	auto table_catalog_entry = binding->GetTableEntry();
+	D_ASSERT(table_catalog_entry); //Should only be called on a TableBinding
 
+	//Get the index of the generated column
 	auto column_index = binding->GetBindingIndex(column_name, TableColumnType::GENERATED);
+	//Get a copy of the generated column
+	//TODO: bake the table name into the ColumnRefExpressions here
 	auto expression = table_catalog_entry->generated_columns[column_index].expression->Copy();
 	return expression;
 }
