@@ -76,6 +76,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		}
 		column.category = TableColumnType::GENERATED;
 		column.SetGeneratedExpression(TransformExpression(constraint->raw_expr));
+		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_DEFAULT:
 		if (column.category == TableColumnType::GENERATED) {
 			throw InvalidInputException("DEFAULT constraint on GENERATED column \"%s\" is not allowed", column.name);
