@@ -6,9 +6,6 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-START TRANSACTION;
-
-statement ok
 CREATE TABLE test(i INTEGER, j INTEGER);
 
 statement ok
@@ -30,6 +27,3 @@ SELECT i FROM test WHERE (i IS NULL AND j IS NULL) OR (i=j);
 1
 2
 NULL
-
-statement ok
-ROLLBACK;
