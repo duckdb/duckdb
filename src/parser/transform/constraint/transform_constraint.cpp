@@ -70,7 +70,16 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		return make_unique<UniqueConstraint>(index, false);
 	case duckdb_libpgquery::PG_CONSTR_NULL:
 		return nullptr;
+	case duckdb_libpgquery::PG_CONSTR_GENERATED:
+		if (column.default_value) {
+			throw InvalidInputException("DEFAULT constraint on GENERATED column \"%s\" is not allowed", column.name);
+		}
+		column.category = TableColumnType::GENERATED;
+		column.SetGeneratedExpression(TransformExpression(constraint->raw_expr));
 	case duckdb_libpgquery::PG_CONSTR_DEFAULT:
+		if (column.category == TableColumnType::GENERATED) {
+			throw InvalidInputException("DEFAULT constraint on GENERATED column \"%s\" is not allowed", column.name);
+		}
 		column.default_value = TransformExpression(constraint->raw_expr);
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_COMPRESSION:

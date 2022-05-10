@@ -152,28 +152,6 @@ unique_ptr<AlterInfo> RenameTableInfo::Deserialize(FieldReader &reader, string s
 }
 
 //===--------------------------------------------------------------------===//
-// AddGeneratedColumnInfo
-//===--------------------------------------------------------------------===//
-AddGeneratedColumnInfo::AddGeneratedColumnInfo(string schema, string table, GeneratedColumnDefinition new_column)
-    : AlterTableInfo(AlterTableType::ADD_GENERATED_COLUMN, move(schema), move(table)), new_column(move(new_column)) {
-}
-AddGeneratedColumnInfo::~AddGeneratedColumnInfo() {
-}
-
-unique_ptr<AlterInfo> AddGeneratedColumnInfo::Copy() const {
-	return make_unique_base<AlterInfo, AddGeneratedColumnInfo>(schema, name, new_column.Copy());
-}
-
-void AddGeneratedColumnInfo::SerializeAlterTable(FieldWriter &writer) const {
-	writer.WriteSerializable(new_column);
-}
-
-unique_ptr<AlterInfo> AddGeneratedColumnInfo::Deserialize(FieldReader &reader, string schema, string table) {
-	auto new_column = reader.ReadRequiredSerializable<GeneratedColumnDefinition, GeneratedColumnDefinition>();
-	return make_unique<AddGeneratedColumnInfo>(move(schema), move(table), move(new_column));
-}
-
-//===--------------------------------------------------------------------===//
 // AddColumnInfo
 //===--------------------------------------------------------------------===//
 AddColumnInfo::AddColumnInfo(string schema_p, string table_p, ColumnDefinition new_column)

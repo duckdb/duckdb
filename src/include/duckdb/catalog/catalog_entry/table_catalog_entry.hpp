@@ -27,7 +27,6 @@ struct BoundCreateTableInfo;
 
 struct RenameColumnInfo;
 struct AddColumnInfo;
-struct AddGeneratedColumnInfo;
 struct RemoveColumnInfo;
 struct SetDefaultInfo;
 struct ChangeColumnTypeInfo;
@@ -86,7 +85,6 @@ private:
 	unique_ptr<CatalogEntry> RenameGeneratedColumn(ClientContext &context, RenameColumnInfo &info,
 	                                               const TableColumnInfo &rename_info);
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
-	unique_ptr<CatalogEntry> AddGeneratedColumn(ClientContext &context, AddGeneratedColumnInfo &info);
 	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo &info);
 	unique_ptr<CatalogEntry> RemoveGeneratedColumn(ClientContext &context, RemoveColumnInfo &info, idx_t index);
 	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo &info);

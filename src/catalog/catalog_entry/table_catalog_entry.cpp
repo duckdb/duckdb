@@ -160,10 +160,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		copied_table->name = rename_info->new_table_name;
 		return copied_table;
 	}
-	case AlterTableType::ADD_GENERATED_COLUMN: {
-		auto add_generated_info = (AddGeneratedColumnInfo *)table_info;
-		return AddGeneratedColumn(context, *add_generated_info);
-	}
 	case AlterTableType::ADD_COLUMN: {
 		auto add_info = (AddColumnInfo *)table_info;
 		return AddColumn(context, *add_info);
@@ -304,46 +300,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::AddGeneratedColumn(ClientContext &context, AddGeneratedColumnInfo &info) {
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-
-	// Copy all the columns
-	for (idx_t i = 0; i < columns.size(); i++) {
-		auto copy = columns[i].Copy();
-		create_info->columns.push_back(move(copy));
-	}
-
-	// now we copy all the generated columns
-	for (idx_t i = 0; i < generated_columns.size(); i++) {
-		auto copy = generated_columns[i].Copy();
-		create_info->generated_columns.push_back(move(copy));
-	}
-	// and we add the new generated column
-	info.new_column.oid = columns.size();
-	info.new_column.CheckValidity(create_info->columns, info.name);
-	create_info->generated_columns.push_back(info.new_column.Copy());
-
-	// Copy all the constraints
-	for (idx_t i = 0; i < constraints.size(); i++) {
-		auto constraint = constraints[i]->Copy();
-		create_info->constraints.push_back(move(constraint));
-	}
-
-	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
-	auto result =
-	    make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
-	return result;
-}
-
 unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, AddColumnInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		create_info->columns.push_back(columns[i].Copy());
-	}
-	for (auto &gen_column : generated_columns) {
-		create_info->generated_columns.push_back(gen_column.Copy());
 	}
 	Binder::BindLogicalType(context, info.new_column.type, schema->name);
 	info.new_column.oid = columns.size();
@@ -351,6 +312,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	if (info.new_column.category == TableColumnType::GENERATED) {
+		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
+		                                      storage);
+	}
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, info.new_column, bound_create_info->bound_defaults.back().get());
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),

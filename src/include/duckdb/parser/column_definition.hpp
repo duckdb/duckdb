@@ -46,6 +46,7 @@ public:
 	TableColumnType category = TableColumnType::STANDARD;
 
 public:
+	void SetGeneratedExpression(unique_ptr<ParsedExpression> expression);
 	ParsedExpression &GeneratedExpression();
 	DUCKDB_API ColumnDefinition Copy() const;
 

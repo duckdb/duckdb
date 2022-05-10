@@ -24,35 +24,16 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)command->def;
 			auto centry = TransformColumnDefinition(cdef);
 
-			bool default_constraint_set = false;
 			unique_ptr<ParsedExpression> generated_expression;
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
-					if (ConstraintIsOfType(constr, duckdb_libpgquery::PG_CONSTR_GENERATED)) {
-						if (generated_expression) {
-							throw ParserException("Generated constraint provided twice for the same column");
-						}
-						generated_expression = TransformGeneratedExpression(constr);
-						continue;
-					}
 					auto constraint = TransformConstraint(constr, centry, 0);
-					default_constraint_set =
-					    default_constraint_set || ConstraintIsOfType(constr, duckdb_libpgquery::PG_CONSTR_DEFAULT);
 					if (constraint) {
 						throw ParserException("Adding columns with constraints not yet supported");
 					}
 				}
 			}
-			if (generated_expression) {
-				if (default_constraint_set) {
-					throw BinderException("DEFAULT constraint on GENERATED column \"%s\" is not allowed", centry.name);
-				}
-				auto generated_column =
-				    GeneratedColumnDefinition(centry.name, move(centry.type), move(generated_expression));
-				result->info = make_unique<AddGeneratedColumnInfo>(qname.schema, qname.name, move(generated_column));
-			} else {
-				result->info = make_unique<AddColumnInfo>(qname.schema, qname.name, move(centry));
-			}
+			result->info = make_unique<AddColumnInfo>(qname.schema, qname.name, move(centry));
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_DropColumn: {

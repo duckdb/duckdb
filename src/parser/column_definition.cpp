@@ -24,6 +24,14 @@ ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, ColumnExpr
 	}
 }
 
+void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> expression) {
+	if (default_value) {
+		throw InvalidInputException("DEFAULT constraint on GENERATED column \"%s\" is not allowed", name);
+	}
+	category = TableColumnType::GENERATED;
+	generated_expression = move(expression);
+}
+
 ParsedExpression &ColumnDefinition::GeneratedExpression() {
 	D_ASSERT(category == TableColumnType::GENERATED);
 	return *generated_expression;
@@ -33,6 +41,7 @@ ColumnDefinition ColumnDefinition::Copy() const {
 	ColumnDefinition copy(name, type);
 	copy.oid = oid;
 	copy.default_value = default_value ? default_value->Copy() : nullptr;
+	copy.generated_expression = generated_expression ? generated_expression->Copy() : nullptr;
 	copy.compression_type = compression_type;
 	return copy;
 }
@@ -42,6 +51,7 @@ void ColumnDefinition::Serialize(Serializer &serializer) const {
 	writer.WriteString(name);
 	writer.WriteSerializable(type);
 	writer.WriteOptional(default_value);
+	writer.WriteOptional(generated_expression);
 	writer.Finalize();
 }
 
@@ -50,9 +60,23 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
 	auto column_name = reader.ReadRequired<string>();
 	auto column_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto default_value = reader.ReadOptional<ParsedExpression>(nullptr);
+	auto generated_expression = reader.ReadOptional<ParsedExpression>(nullptr);
 	reader.Finalize();
 
-	return ColumnDefinition(column_name, column_type, ColumnExpression(move(default_value)));
+	auto category = TableColumnType::STANDARD;
+	if (generated_expression) {
+		category = TableColumnType::GENERATED;
+	}
+
+	switch (category) {
+	case TableColumnType::STANDARD:
+		return ColumnDefinition(column_name, column_type, ColumnExpression(move(default_value)));
+	case TableColumnType::GENERATED:
+		return ColumnDefinition(column_name, column_type,
+		                        ColumnExpression(move(generated_expression), ColumnExpressionType::GENERATED));
+	default:
+		throw NotImplementedException("Type not implemented for TableColumnType");
+	}
 }
 
 } // namespace duckdb

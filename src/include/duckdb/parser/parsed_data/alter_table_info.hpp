@@ -128,22 +128,6 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
-// AddGeneratedColumnInfo
-//===--------------------------------------------------------------------===//
-struct AddGeneratedColumnInfo : public AlterTableInfo {
-	AddGeneratedColumnInfo(string schema, string table, GeneratedColumnDefinition new_column);
-	~AddGeneratedColumnInfo() override;
-
-	//! New generated column
-	GeneratedColumnDefinition new_column;
-
-public:
-	unique_ptr<AlterInfo> Copy() const override;
-	void SerializeAlterTable(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, string schema, string table);
-};
-
-//===--------------------------------------------------------------------===//
 // AddColumnInfo
 //===--------------------------------------------------------------------===//
 struct AddColumnInfo : public AlterTableInfo {
