@@ -40,7 +40,6 @@ duckdb::scalar_function_t duckdb::SQLiteUDFWrapper::CreateSQLiteScalarFunction(d
 				db_sqlite3->errCode = SQLITE_OK;
 			}
 			// call the UDF on that tuple
-			memset(&context.result, 0, sizeof(sqlite3_value));
 			context.isError = SQLITE_OK;
 			sqlite_udf(&context, argc, argv.get());
 
