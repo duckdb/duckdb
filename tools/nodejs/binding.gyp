@@ -5,6 +5,7 @@
             "sources": [
                 "src/duckdb_node.cpp",
                 "src/database.cpp",
+                "src/data_chunk.cpp",
                 "src/connection.cpp",
                 "src/statement.cpp",
                 "src/utils.cpp",

@@ -1,4 +1,6 @@
+#include "duckdb.hpp"
 #include "duckdb_node.hpp"
+#include "napi.h"
 
 #include <thread>
 

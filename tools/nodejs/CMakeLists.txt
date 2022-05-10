@@ -9,7 +9,7 @@ find_path (NODE_ROOT_DIR
 if (NODE_ROOT_DIR)
     macro(add_node_include_dir DIR)
         if (IS_DIRECTORY ${DIR} AND NOT ${DIR} STREQUAL "/usr/include")
-            set(NODE_INCLUDE_DIRS ${NODEJS_INCLUDE_DIRS} ${DIR})
+            set(NODE_INCLUDE_DIRS ${NODE_INCLUDE_DIRS} ${DIR})
         endif()
     endmacro()
     add_node_include_dir(${NODE_ROOT_DIR})
@@ -21,12 +21,13 @@ if (NODE_ROOT_DIR)
     add_node_include_dir(${NODE_ROOT_DIR}/src)
 else()
     unset(NODE_INCLUDE_DIRS)
-    message(ERROR " couldn't find node headers")
+    message(ERROR "Failed to find node headers")
 endif()
 
 # ----------------------------------------------------
 # Include headers
 
+message(STATUS "NODE_INCLUDE_DIRS=${NODE_INCLUDE_DIRS}")
 include_directories(src)
 include_directories(${NODE_INCLUDE_DIRS})
 include_directories(./node_modules/node-addon-api/)
@@ -35,7 +36,7 @@ include_directories(./node_modules/node-addon-api/)
 # Build library
 
 set(CMAKE_SHARED_LINKER_FLAGS "-bundle" "-undefined dynamic_lookup")
-add_library(node_duckdb src/duckdb_node.cpp src/database.cpp src/connection.cpp
+add_library(node_duckdb src/duckdb_node.cpp src/database.cpp src/data_chunk.cpp src/connection.cpp
                         src/statement.cpp src/utils.cpp)
 target_link_libraries(node_duckdb duckdb_static)
 link_threads(node_duckdb)
