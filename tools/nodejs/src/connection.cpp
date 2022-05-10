@@ -3,6 +3,7 @@
 #include "napi.h"
 
 #include <thread>
+#include <iostream>
 
 namespace node_duckdb {
 
@@ -80,91 +81,19 @@ struct JSArgs {
 	std::string error;
 };
 
-static Napi::Value TransformVector(Napi::Env env, duckdb::Vector &vec, duckdb::idx_t rows, bool copy) {
-	Napi::EscapableHandleScope scope(env);
-
-	Napi::Array data_buffers(Napi::Array::New(env));
-
-	auto data_buffer_index = -1;
-	auto length_buffer_index = -1;
-	auto validity_buffer_index = -1;
-
-	auto validity_buffer = Napi::Buffer<uint8_t>::New(env, rows);
-	auto validity = duckdb::FlatVector::Validity(vec);
-	auto validity_ptr = validity_buffer.Data();
-	for (duckdb::idx_t row_idx = 0; row_idx < rows; row_idx++) {
-		validity_ptr[row_idx] = validity.RowIsValid(row_idx);
-	}
-	data_buffers.Set(data_buffers.Length(), validity_buffer);
-	validity_buffer_index = data_buffers.Length() - 1;
-
-	auto &vec_type = vec.GetType();
-
-	switch (vec_type.id()) {
-	case duckdb::LogicalTypeId::BOOLEAN:
-	case duckdb::LogicalTypeId::UTINYINT:
-	case duckdb::LogicalTypeId::TINYINT:
-	case duckdb::LogicalTypeId::USMALLINT:
-	case duckdb::LogicalTypeId::SMALLINT:
-	case duckdb::LogicalTypeId::INTEGER:
-	case duckdb::LogicalTypeId::UINTEGER:
-	case duckdb::LogicalTypeId::FLOAT:
-	case duckdb::LogicalTypeId::DOUBLE: {
-		auto data_buffer = Napi::Buffer<uint8_t>::New(env, rows * duckdb::GetTypeIdSize(vec_type.InternalType()));
-		// TODO this is technically not neccessary but it fixes a crash in Node 14. Some weird data ownership issue.
-		memcpy(data_buffer.Data(), duckdb::FlatVector::GetData<uint8_t>(vec),
-		       rows * duckdb::GetTypeIdSize(vec_type.InternalType()));
-
-		data_buffers.Set(data_buffers.Length(), data_buffer);
-		data_buffer_index = data_buffers.Length() - 1;
-		break;
-	}
-	case duckdb::LogicalTypeId::VARCHAR: {
-		Napi::Array string_buffers(Napi::Array::New(env, rows));
-		if (copy) {
-			auto string_vec_ptr = duckdb::FlatVector::GetData<duckdb::string_t>(vec);
-			for (duckdb::idx_t row_idx = 0; row_idx < rows; row_idx++) {
-				string_buffers.Set(row_idx, validity_ptr[row_idx]
-				                                ? Napi::String::New(env, string_vec_ptr[row_idx].GetDataUnsafe(),
-				                                                    string_vec_ptr[row_idx].GetSize())
-				                                : Napi::Value());
-			}
-		}
-		data_buffers.Set(data_buffers.Length(), string_buffers);
-		data_buffer_index = data_buffers.Length() - 1;
-		break;
-	}
-	default:
-		throw duckdb::NotImplementedException(vec_type.ToString());
-	}
-
-	Napi::Object desc(Napi::Object::New(env));
-	desc.Set("logical_type", vec_type.ToString());
-	desc.Set("physical_type", TypeIdToString(vec_type.InternalType()));
-	desc.Set("validity_buffer", validity_buffer_index);
-	desc.Set("data_buffer", data_buffer_index);
-	desc.Set("length_buffer", length_buffer_index);
-	desc.Set("data_buffers", data_buffers);
-
-	return scope.Escape(desc);
-}
-
 void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *, JSArgs *jsargs) {
 	try { // if we dont catch exceptions here we terminate node if one happens ^^
+		Napi::EscapableHandleScope scope(env);
 
-		// set up descriptor and data arrays
-		Napi::Array args_descr(Napi::Array::New(env, jsargs->args->ColumnCount()));
-		for (duckdb::idx_t col_idx = 0; col_idx < jsargs->args->ColumnCount(); col_idx++) {
-			auto &vec = jsargs->args->data[col_idx];
-			auto arg_descr = TransformVector(env, vec, jsargs->rows, true);
-			args_descr.Set(col_idx, arg_descr);
-		}
-		auto ret_descr = TransformVector(env, *jsargs->result, jsargs->rows, false);
-
-		Napi::Object descr(Napi::Object::New(env));
+		// Set up descriptor and data arrays
+		auto descr = Napi::Object::New(env);
+		auto chunk = EncodeDataChunk(env, *jsargs->args, true, true);
+		descr.Set("args", scope.Escape(chunk));
 		descr.Set("rows", jsargs->rows);
-		descr.Set("args", args_descr);
-		descr.Set("ret", ret_descr);
+		auto ret = Napi::Object::New(env);
+		ret.Set("sqlType", jsargs->result->GetType().ToString());
+        ret.Set("physicalType", TypeIdToString(jsargs->result->GetType().InternalType()));
+		descr.Set("ret", ret);
 
 		// actually call the UDF, or rather its vectorized wrapper from duckdb.js/Connection.prototype.register wrapper
 		jsudf({descr});
@@ -183,39 +112,41 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *
 		}
 
 		// transform the result back to a vector
-		auto return_validity = ret_descr.ToObject()
-		                           .Get("data_buffers")
-		                           .ToObject()
-		                           .Get(ret_descr.ToObject().Get("validity_buffer"))
-		                           .As<Napi::Buffer<uint8_t>>();
+		auto return_validity = ret.ToObject()
+		                           .Get("validity")
+		                           .As<Napi::Uint8Array>();
 		for (duckdb::idx_t row_idx = 0; row_idx < jsargs->rows; row_idx++) {
 			duckdb::FlatVector::SetNull(*jsargs->result, row_idx, !return_validity[row_idx]);
 		}
 
-		if (jsargs->result->GetType().id() == duckdb::LogicalTypeId::VARCHAR) {
-			auto return_string_array = ret_descr.ToObject()
-			                               .Get("data_buffers")
-			                               .ToObject()
-			                               .Get(ret_descr.ToObject().Get("data_buffer"))
-			                               .ToObject();
-			auto return_string_vec_ptr = duckdb::FlatVector::GetData<duckdb::string_t>(*jsargs->result);
-
-			for (duckdb::idx_t row_idx = 0; row_idx < jsargs->rows; row_idx++) {
-				if (!return_validity[row_idx]) {
-					duckdb::FlatVector::SetNull(*jsargs->result, row_idx, true);
-				} else {
-					auto str = return_string_array.Get(row_idx).As<Napi::String>();
-					return_string_vec_ptr[row_idx] = duckdb::StringVector::AddString(*jsargs->result, str);
+		switch (jsargs->result->GetType().id()) {
+			case duckdb::LogicalTypeId::DOUBLE: {
+				auto data = ret.Get("data").As<Napi::Float64Array>();
+				auto out = duckdb::FlatVector::GetData<double>(*jsargs->result);
+				memcpy(out, data.Data(),
+					jsargs->rows * duckdb::GetTypeIdSize(jsargs->result->GetType().InternalType()));
+				break;
+			}
+			case duckdb::LogicalTypeId::INTEGER: {
+				auto data = ret.Get("data").As<Napi::Uint32Array>();
+				auto out = duckdb::FlatVector::GetData<uint32_t>(*jsargs->result);
+				memcpy(out, data.Data(),
+					jsargs->rows * duckdb::GetTypeIdSize(jsargs->result->GetType().InternalType()));
+				break;
+			}
+			case duckdb::LogicalTypeId::VARCHAR: {
+				auto data = ret.Get("data").As<Napi::Array>();
+				auto out = duckdb::FlatVector::GetData<duckdb::string_t>(*jsargs->result);
+				for (size_t i = 0; i < data.Length(); ++i) {
+					out[i] = duckdb::string_t(data.Get(i).ToString());
+				}
+				break;
+			}
+			default: {
+				for (duckdb::idx_t row_idx = 0; row_idx < jsargs->rows; row_idx++) {
+					duckdb::FlatVector::SetNull(*jsargs->result, row_idx, false);
 				}
 			}
-		} else {
-			auto return_data = ret_descr.ToObject()
-			                       .Get("data_buffers")
-			                       .ToObject()
-			                       .Get(ret_descr.ToObject().Get("data_buffer"))
-			                       .As<Napi::Buffer<uint8_t>>();
-			memcpy(duckdb::FlatVector::GetData<uint8_t>(*jsargs->result), return_data.Data(),
-			       jsargs->rows * duckdb::GetTypeIdSize(jsargs->result->GetType().InternalType()));
 		}
 	} catch (const std::exception &e) {
 		jsargs->error = e.what();

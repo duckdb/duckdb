@@ -159,4 +159,6 @@ public:
 	}
 };
 
+Napi::Array EncodeDataChunk(Napi::Env env, duckdb::DataChunk& chunk, bool with_types, bool with_data);
+
 } // namespace node_duckdb

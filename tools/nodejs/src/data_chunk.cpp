@@ -7,10 +7,10 @@
 
 namespace node_duckdb {
 
-Napi::Object BuildDataChunk(Napi::Env env, duckdb::DataChunk& chunk, bool with_types, bool with_data) {
+Napi::Array EncodeDataChunk(Napi::Env env, duckdb::DataChunk& chunk, bool with_types, bool with_data) {
     Napi::Array col_descs(Napi::Array::New(env, chunk.ColumnCount()));
     for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
-    	Napi::Object col_desc(Napi::Object::New(env));
+    	auto col_desc = Napi::Object::New(env);
 
         // Make sure we only have flat vectors hereafter (for now)
         auto& chunk_vec = chunk.data[col_idx];
@@ -20,7 +20,7 @@ Napi::Object BuildDataChunk(Napi::Env env, duckdb::DataChunk& chunk, bool with_t
 
         // Do a post-order DFS traversal
         std::vector<std::tuple<bool, duckdb::Vector*, Napi::Object, size_t, size_t>> pending;
-        pending.emplace_back(false, &chunk_vec, Napi::Object(Napi::Object::New(env)), 0, 0);
+        pending.emplace_back(false, &chunk_vec, Napi::Object::New(env), 0, 0);
 
         while (!pending.empty()) {
             // Unpack DFS node
