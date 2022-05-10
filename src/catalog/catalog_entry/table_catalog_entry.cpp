@@ -242,8 +242,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	for (idx_t i = 0; i < columns.size(); i++) {
 		create_info->columns.push_back(columns[i].Copy());
 	}
-	for (idx_t constr_idx = 0; constr_idx < constraints.size(); constr_idx++) {
-		auto &constraint = constraints[constr_idx];
+	for (auto &constraint : constraints) {
 		create_info->constraints.push_back(constraint->Copy());
 	}
 	Binder::BindLogicalType(context, info.new_column.type, schema->name);
