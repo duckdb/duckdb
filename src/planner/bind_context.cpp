@@ -9,6 +9,7 @@
 
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
@@ -160,6 +161,17 @@ unordered_set<string> BindContext::GetMatchingBindings(const string &column_name
 	return result;
 }
 
+static void BakeTableName(ParsedExpression &expr, const string &table_name) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &colref = (ColumnRefExpression &)expr;
+		D_ASSERT(!colref.IsQualified()); // If triggered - CheckValidity wasn't ran on the generated column
+		auto &col_names = colref.column_names;
+		col_names.insert(col_names.begin(), table_name);
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { BakeTableName((ParsedExpression &)child, table_name); });
+}
+
 unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &table_name, const string &column_name) {
 	string error_message;
 
@@ -173,6 +185,7 @@ unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &ta
 	// Get a copy of the generated column
 	// TODO: bake the table name into the ColumnRefExpressions here
 	auto expression = table_catalog_entry->generated_columns[column_index].expression->Copy();
+	BakeTableName(*expression, binding->alias);
 	return expression;
 }
 

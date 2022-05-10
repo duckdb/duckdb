@@ -49,27 +49,32 @@ static bool ColumnsContainsColumnRef(const vector<ColumnDefinition> &columns, co
 	return false;
 }
 
-static void VerifyAndRenameExpression(const string &name, const vector<ColumnDefinition> &columns,
-                                      ParsedExpression &expr, vector<string> &unresolved_columns) {
+static void StripTableName(ColumnRefExpression &expr, const string &table_name) {
+	D_ASSERT(expr.IsQualified());
+	auto &name = expr.GetTableName();
+	auto &col_name = expr.GetColumnName();
+	if (name != table_name) {
+		throw BinderException("Column \"%s\" tries to reference a table outside of %s", expr.GetColumnName(),
+		                      table_name);
+	}
+	// Replace the column_names vector with only the column name
+	expr.column_names = vector<string> {col_name};
+}
+
+static void VerifyColumnRefs(const string &name, const vector<ColumnDefinition> &columns, ParsedExpression &expr) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &column_ref = (ColumnRefExpression &)expr;
 		auto &column_name = column_ref.GetColumnName();
-		if ((!column_ref.IsQualified() || column_ref.GetTableName() == name) &&
-		    ColumnsContainsColumnRef(columns, column_name)) {
-			if (!column_ref.IsQualified()) {
-				auto &names = column_ref.column_names;
-				// dprintf(2, "TABLE NAME %s BAKED INTO COLUMN REF %s\n", name.c_str(), column_name.c_str());
-				names.insert(names.begin(), name);
-				// dprintf(2, "ColumnRef names after: TABLE[%s] - COL[%s]\n", column_ref.column_names[0].c_str(),
-				// column_ref.column_names[1].c_str());
-			}
-		} else {
-			unresolved_columns.push_back(column_name);
+		bool exists_in_table = ColumnsContainsColumnRef(columns, column_name);
+		if (!exists_in_table) {
+			throw BinderException("Column \"%s\" could not be found in table %s", column_name, name);
+		}
+		if (column_ref.IsQualified()) {
+			StripTableName(column_ref, name);
 		}
 	}
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
-		VerifyAndRenameExpression(name, columns, (ParsedExpression &)child, unresolved_columns);
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { VerifyColumnRefs(name, columns, (ParsedExpression &)child); });
 }
 
 static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
@@ -83,33 +88,12 @@ static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 	    expr, [&](const ParsedExpression &child) { RenameExpression((ParsedExpression &)child, info); });
 }
 
-static void InnerRenameTable(ParsedExpression &expr, const RenameTableInfo &info) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
-		colref.column_names[0] = info.new_table_name;
-	}
-
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { InnerRenameTable((ParsedExpression &)child, info); });
-}
-
-void GeneratedColumnDefinition::RenameTable(const RenameTableInfo &info) {
-	InnerRenameTable(*expression, info);
-}
-
 void GeneratedColumnDefinition::RenameColumnRefs(RenameColumnInfo &info) {
 	RenameExpression(*expression, info);
 }
 
 void GeneratedColumnDefinition::CheckValidity(const vector<ColumnDefinition> &columns, const string &table_name) {
-	vector<string> unresolved_columns;
-
-	VerifyAndRenameExpression(table_name, columns, *expression, unresolved_columns);
-	if (!unresolved_columns.empty()) {
-		throw BinderException(
-		    "Not all columns referenced in the generated column expression could be resolved to the table \"%s\"",
-		    table_name);
-	}
+	VerifyColumnRefs(table_name, columns, *expression);
 }
 
 } // namespace duckdb

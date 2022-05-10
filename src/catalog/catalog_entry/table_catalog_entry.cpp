@@ -157,10 +157,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	case AlterTableType::RENAME_TABLE: {
 		auto rename_info = (RenameTableInfo *)table_info;
 		auto copied_table = Copy(context);
-		auto &entry = (TableCatalogEntry &)*copied_table;
-		for (auto &gen_col : entry.generated_columns) {
-			gen_col.RenameTable(*rename_info);
-		}
 		copied_table->name = rename_info->new_table_name;
 		return copied_table;
 	}
