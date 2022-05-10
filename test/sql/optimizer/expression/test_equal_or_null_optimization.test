@@ -6,13 +6,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE test(i INTEGER, j INTEGER);
+CREATE TABLE test(i INTEGER, j INTEGER, k integer);
 
 statement ok
-INSERT INTO test VALUES (1,1), (2,2), (NULL,NULL)
-
-statement ok
-PRAGMA explain_output = 'OPTIMIZED_ONLY';
+INSERT INTO test VALUES (1,1,3), (2,2,4), (NULL,NULL,NULL);
 
 query I rowsort
 SELECT i FROM test WHERE (i=j) OR (i IS NULL AND j IS NULL);
@@ -21,9 +18,38 @@ SELECT i FROM test WHERE (i=j) OR (i IS NULL AND j IS NULL);
 2
 NULL
 
+query I nosort distinctrewrite1
+EXPLAIN SELECT (i=j) OR (i IS NULL AND j IS NULL) FROM test;
+----
+
+query I nosort distinctrewrite1
+EXPLAIN SELECT i IS NOT DISTINCT FROM j FROM test;
+----
+
 query I rowsort
 SELECT i FROM test WHERE (i IS NULL AND j IS NULL) OR (i=j);
 ----
 1
 2
 NULL
+
+query I nosort distinctrewrite2
+EXPLAIN SELECT (i IS NULL AND j IS NULL) OR (i=j) FROM test;
+----
+
+query I nosort distinctrewrite2
+EXPLAIN SELECT i IS NOT DISTINCT FROM j FROM test;
+----
+
+# this one cannot be rewritten
+query I nosort
+SELECT i FROM test WHERE (i=k) OR (i IS NULL AND j IS NULL);
+----
+NULL
+
+# neither this one
+query I nosort
+SELECT i FROM test WHERE (i=j) OR (i IS NULL AND j = 1);
+----
+1
+2
