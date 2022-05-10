@@ -10,7 +10,6 @@
 
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/parser/generated_column_definition.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/constraint.hpp"
 
@@ -77,7 +76,7 @@ enum class AlterTableType : uint8_t {
 	ALTER_COLUMN_TYPE = 5,
 	SET_DEFAULT = 6,
 	FOREIGN_KEY_CONSTRAINT = 7,
-	ADD_GENERATED_COLUMN = 8
+	// ADD_GENERATED_COLUMN = 8
 };
 
 struct AlterTableInfo : public AlterInfo {

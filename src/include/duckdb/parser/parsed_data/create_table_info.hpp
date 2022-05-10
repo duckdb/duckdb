@@ -11,7 +11,6 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/parser/generated_column_definition.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 
@@ -27,8 +26,6 @@ struct CreateTableInfo : public CreateInfo {
 	string table;
 	//! List of columns of the table
 	vector<ColumnDefinition> columns;
-	//! List of generated columns of the table
-	vector<GeneratedColumnDefinition> generated_columns;
 	//! List of constraints on the table
 	vector<unique_ptr<Constraint>> constraints;
 	//! CREATE TABLE from QUERY
@@ -40,9 +37,6 @@ public:
 		CopyProperties(*result);
 		for (auto &column : columns) {
 			result->columns.push_back(column.Copy());
-		}
-		for (auto &generated_column : generated_columns) {
-			result->generated_columns.push_back(generated_column.Copy());
 		}
 		for (auto &constraint : constraints) {
 			result->constraints.push_back(constraint->Copy());

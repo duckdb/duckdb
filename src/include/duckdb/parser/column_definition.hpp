@@ -16,6 +16,9 @@
 
 namespace duckdb {
 
+struct RenameColumnInfo;
+struct RenameTableInfo;
+
 enum ColumnExpressionType { DEFAULT, GENERATED };
 
 struct ColumnExpression {
@@ -52,6 +55,16 @@ public:
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static ColumnDefinition Deserialize(Deserializer &source);
+
+	//! Whether this column is a Generated Column
+	bool Generated() const;
+
+	//===--------------------------------------------------------------------===//
+	// Generated Columns (VIRTUAL)
+	//===--------------------------------------------------------------------===//
+	//! Has to be run on a newly added generated column to ensure that its valid
+	void CheckValidity(const vector<ColumnDefinition> &columns, const string &table_name);
+	void RenameColumnRefs(RenameColumnInfo &info);
 
 private:
 private:

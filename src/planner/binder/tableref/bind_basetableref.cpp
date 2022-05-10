@@ -106,22 +106,15 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// TODO: bundle the type and name vector in a struct (e.g PackedColumnMetadata)
 		vector<LogicalType> table_types;
 		vector<string> table_names;
-		vector<LogicalType> table_gtypes;
-		vector<string> table_gnames;
 		for (auto &col : table->columns) {
 			table_types.push_back(col.type);
 			table_names.push_back(col.name);
-		}
-		for (auto &col : table->generated_columns) {
-			table_gtypes.push_back(col.type);
-			table_gnames.push_back(col.name);
 		}
 		table_names = BindContext::AliasColumnNames(alias, table_names, ref.column_name_alias);
 
 		auto logical_get =
 		    make_unique<LogicalGet>(table_index, scan_function, move(bind_data), table_types, table_names);
-		bind_context.AddBaseTable(table_index, alias, table_names, table_types, table_gnames, table_gtypes,
-		                          *logical_get);
+		bind_context.AddBaseTable(table_index, alias, table_names, table_types, *logical_get);
 		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, move(logical_get));
 	}
 	case CatalogType::VIEW_ENTRY: {

@@ -32,16 +32,7 @@ static void CreateColumnMap(BoundCreateTableInfo &info, bool allow_duplicate_nam
 			}
 		}
 
-		auto column_info = TableColumnInfo(oid);
-		info.name_map[col.name] = column_info;
-		col.oid = oid;
-	}
-	for (uint64_t oid = 0; oid < base.generated_columns.size(); oid++) {
-		auto &col = base.generated_columns[oid];
-		if (info.name_map.find(col.name) != info.name_map.end()) {
-			throw CatalogException("Column with name %s already exists!", col.name);
-		}
-		auto column_info = TableColumnInfo(oid, TableColumnType::GENERATED);
+		auto column_info = TableColumnInfo(oid, col.category);
 		info.name_map[col.name] = column_info;
 		col.oid = oid;
 	}
@@ -167,24 +158,22 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	}
 }
 
-void Binder::BindGeneratedColumns(vector<GeneratedColumnDefinition> &generated_columns, const CreateTableInfo &info) {
+void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const CreateTableInfo &info) {
 	vector<string> names;
 	vector<LogicalType> types;
 
 	D_ASSERT(info.type == CatalogType::TABLE_ENTRY);
 	// Add the 'rowid' column so we can succesfully bind to the system column
 	bool add_row_id = true;
-	// TODO: add generated columns so we can resolve generated_column<->generated_column expressions
-	for (auto &col : info.generated_columns) {
-		// Corner case: if a generated column is named 'rowid' the system column would be referenced here, but then fail
-		// in the actual SELECT, as 'rowid' system wouldn't be added because it is already occupied in the name map
-		if (col.name == "rowid") {
-			add_row_id = false;
-		}
-	}
+	// Corner case: if a generated column is named 'rowid' the system column would be referenced here, but then fail
+	// in the actual SELECT, as 'rowid' system wouldn't be added because it is already occupied in the name map
 	for (auto &col : info.columns) {
 		if (col.name == "rowid") {
 			add_row_id = false;
+		}
+		// TODO: add generated columns so we can resolve generated_column<->generated_column expressions
+		if (!col.Generated()) {
+			continue;
 		}
 		names.push_back(col.name);
 		types.push_back(col.type);
@@ -198,9 +187,13 @@ void Binder::BindGeneratedColumns(vector<GeneratedColumnDefinition> &generated_c
 	// Create a new binder because we dont need (or want) these bindings in this scope
 	auto binder = Binder::CreateBinder(context);
 	binder->bind_context.AddGenericBinding(table_index, info.table, names, types);
-	for (auto &col : generated_columns) {
+	for (auto &col : columns) {
+		if (!col.Generated()) {
+			// Skip regular columns
+			continue;
+		}
 		auto expr_binder = ExpressionBinder(*binder, context);
-		auto expression = col.expression->Copy();
+		auto expression = col.GeneratedExpression().Copy();
 		// expr_binder.target_type = col.type;
 		auto bound_expression = expr_binder.Bind(expression);
 		if (!bound_expression) {
@@ -277,7 +270,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		}
 	}
 	// bind the generated column expressions
-	BindGeneratedColumns(base.generated_columns, base);
+	BindGeneratedColumns(base.columns, base);
 	this->allow_stream_result = false;
 	return result;
 }

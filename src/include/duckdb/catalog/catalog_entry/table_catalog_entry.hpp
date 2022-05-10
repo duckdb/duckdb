@@ -11,7 +11,6 @@
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/parser/generated_column_definition.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -43,7 +42,6 @@ public:
 	std::shared_ptr<DataTable> storage;
 	//! A list of columns that are part of this table
 	vector<ColumnDefinition> columns;
-	vector<GeneratedColumnDefinition> generated_columns;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<Constraint>> constraints;
 	//! A list of constraints that are part of this table

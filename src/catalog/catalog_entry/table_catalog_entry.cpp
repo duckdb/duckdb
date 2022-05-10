@@ -35,9 +35,10 @@
 namespace duckdb {
 
 const string &TableCatalogEntry::GetColumnName(const TableColumnInfo &info) {
+	// TODO: remove this distinction here, not needed anymore
 	switch (info.column_type) {
 	case TableColumnType::GENERATED:
-		return generated_columns[info.index].name;
+		return columns[info.index].name;
 	case TableColumnType::STANDARD:
 		return columns[info.index].name;
 	default:
@@ -85,19 +86,15 @@ void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, ve
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
                                      std::shared_ptr<DataTable> inherited_storage)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table), storage(move(inherited_storage)),
-      columns(move(info->Base().columns)), generated_columns(move(info->Base().generated_columns)),
-      constraints(move(info->Base().constraints)), bound_constraints(move(info->bound_constraints)) {
+      columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
+      bound_constraints(move(info->bound_constraints)) {
 	this->temporary = info->Base().temporary;
 	// add lower case aliases
 	for (idx_t i = 0; i < columns.size(); i++) {
+		auto category = columns[i].category;
 		D_ASSERT(name_map.find(columns[i].name) == name_map.end());
-		auto column_info = TableColumnInfo(i);
+		auto column_info = TableColumnInfo(i, category);
 		name_map[columns[i].name] = column_info;
-	}
-	for (idx_t i = 0; i < generated_columns.size(); i++) {
-		D_ASSERT(name_map.find(generated_columns[i].name) == name_map.end());
-		auto column_info = TableColumnInfo(i, TableColumnType::GENERATED);
-		name_map[generated_columns[i].name] = column_info;
 	}
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
@@ -200,20 +197,15 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameGeneratedColumn(ClientContext 
                                                                   const TableColumnInfo &rename_info) {
 	D_ASSERT(rename_info.column_type == TableColumnType::GENERATED);
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-	// Copy all the columns
+	// Copy all the columns, except the removed one
+	auto index = rename_info.index;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
-		create_info->columns.push_back(move(copy));
-	}
-	auto index = rename_info.index;
-	// now we copy all the generated columns except the removed one
-	for (idx_t i = 0; i < generated_columns.size(); i++) {
-		auto copy = generated_columns[i].Copy();
 		if (i == index) {
 			D_ASSERT(copy.name == info.old_name);
 			copy.name = info.new_name;
 		}
-		create_info->generated_columns.push_back(move(copy));
+		create_info->columns.push_back(move(copy));
 	}
 
 	// Copy all the constraints
@@ -242,11 +234,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		if (rename_idx == i) {
 			create_info->columns[i].name = info.new_name;
 		}
-	}
-	for (auto &gen_column : generated_columns) {
-		auto column = gen_column.Copy();
-		column.RenameColumnRefs(info);
-		create_info->generated_columns.push_back(move(column));
+		auto &col = create_info->columns[i];
+		if (col.Generated()) {
+			col.RenameColumnRefs(info);
+		}
 	}
 	for (idx_t c_idx = 0; c_idx < constraints.size(); c_idx++) {
 		auto copy = constraints[c_idx]->Copy();
@@ -346,17 +337,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveGeneratedColumn(ClientContext 
 
 	// Copy all the columns
 	for (idx_t i = 0; i < columns.size(); i++) {
-		auto copy = columns[i].Copy();
-		create_info->columns.push_back(move(copy));
-	}
-
-	// now we copy all the generated columns except the removed one
-	for (idx_t i = 0; i < generated_columns.size(); i++) {
 		if (i == index) {
 			continue;
 		}
-		auto copy = generated_columns[i].Copy();
-		create_info->generated_columns.push_back(move(copy));
+		auto copy = columns[i].Copy();
+		create_info->columns.push_back(move(copy));
 	}
 
 	// Copy all the constraints
@@ -384,21 +369,19 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	create_info->temporary = temporary;
 
 	idx_t removed_generated_columns = 0;
-	for (idx_t i = 0; i < generated_columns.size(); i++) {
-		if (DependsOnColumn(*generated_columns[i].expression, columns[removed_index].name)) {
+	for (idx_t i = 0; i < columns.size(); i++) {
+		if (removed_index == i) {
+			continue;
+		}
+		auto &col = columns[i];
+		if (col.Generated() && DependsOnColumn(col.GeneratedExpression(), columns[removed_index].name)) {
 			removed_generated_columns++;
 			continue;
 		}
-		create_info->generated_columns.push_back(generated_columns[i].Copy());
+		create_info->columns.push_back(columns[i].Copy());
 	}
-	for (idx_t i = 0; i < columns.size(); i++) {
-		if (removed_index != i) {
-			create_info->columns.push_back(columns[i].Copy());
-		} else {
-			if (removed_generated_columns && !info.cascade) {
-				throw CatalogException("Cannot drop column: column is a dependency of 1 or more generated column(s)");
-			}
-		}
+	if (removed_generated_columns && !info.cascade) {
+		throw CatalogException("Cannot drop column: column is a dependency of 1 or more generated column(s)");
 	}
 	if (create_info->columns.empty()) {
 		throw CatalogException("Cannot drop column: table only has one column remaining!");
@@ -499,12 +482,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		auto copy = columns[i].Copy();
 		if (default_idx == i) {
 			// set the default value of this column
+			D_ASSERT(!copy.Generated()); // Shouldnt reach here - DEFAULT value isn't supported for Generated Columns
 			copy.default_value = info.expression ? info.expression->Copy() : nullptr;
 		}
 		create_info->columns.push_back(move(copy));
-	}
-	for (auto &gen_column : generated_columns) {
-		create_info->generated_columns.push_back(gen_column.Copy());
 	}
 	// Copy all the constraints
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -527,15 +508,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeGeneratedColumnType(ClientCont
 	// Copy all the columns
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
-		create_info->columns.push_back(move(copy));
-	}
-	// Copy all the generated columns
-	for (idx_t i = 0; i < generated_columns.size(); i++) {
-		auto copy = generated_columns[i].Copy();
 		if (i == index) {
 			copy.type = info.target_type;
 		}
-		create_info->generated_columns.push_back(move(copy));
+		create_info->columns.push_back(move(copy));
 	}
 	// Copy all the constraints
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -567,25 +543,20 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	}
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 
-	// TODO: check if the expression breaks, only delete it if it does
-	for (idx_t i = 0; i < generated_columns.size(); i++) {
-		auto copy = generated_columns[i].Copy();
-		if (DependsOnColumn(*copy.expression, info.column_name)) {
-			if (!info.cascade) {
-				throw CatalogException("Could not change the type of the column \"%s\" because 1 or more generated "
-				                       "columns depend on it, and the CASCADE option wasn't provided",
-				                       info.column_name);
-			}
-		} else {
-			create_info->generated_columns.push_back(move(copy));
-		}
-	}
-
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
 		if (change_idx == i) {
 			// set the default value of this column
 			copy.type = info.target_type;
+		}
+		// TODO: check if the generated_expression breaks, only delete it if it does
+		if (copy.Generated() && DependsOnColumn(copy.GeneratedExpression(), info.column_name)) {
+			// if (!info.cascade) {
+			//	throw CatalogException("Could not change the type of the column \"%s\" because 1 or more generated "
+			//	                       "columns depend on it, and the CASCADE option wasn't provided",
+			//	                       info.column_name);
+			// }
+			continue;
 		}
 		create_info->columns.push_back(move(copy));
 	}
@@ -655,9 +626,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContex
 	for (idx_t i = 0; i < columns.size(); i++) {
 		create_info->columns.push_back(columns[i].Copy());
 	}
-	for (auto &gen_column : generated_columns) {
-		create_info->generated_columns.push_back(gen_column.Copy());
-	}
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
 		if (constraint->type == ConstraintType::FOREIGN_KEY) {
@@ -710,7 +678,6 @@ void TableCatalogEntry::Serialize(Serializer &serializer) {
 	writer.WriteString(schema->name);
 	writer.WriteString(name);
 	writer.WriteRegularSerializableList(columns);
-	writer.WriteRegularSerializableList(generated_columns);
 	writer.WriteSerializableList(constraints);
 	writer.Finalize();
 }
@@ -722,8 +689,6 @@ unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source)
 	info->schema = reader.ReadRequired<string>();
 	info->table = reader.ReadRequired<string>();
 	info->columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>();
-	info->generated_columns =
-	    reader.ReadRequiredSerializableList<GeneratedColumnDefinition, GeneratedColumnDefinition>();
 	info->constraints = reader.ReadRequiredSerializableList<Constraint>();
 	reader.Finalize();
 
@@ -823,9 +788,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	for (idx_t i = 0; i < columns.size(); i++) {
 		create_info->columns.push_back(columns[i].Copy());
-	}
-	for (auto &gen_column : generated_columns) {
-		create_info->generated_columns.push_back(gen_column.Copy());
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
