@@ -79,8 +79,6 @@ idx_t ColumnReader::MaxRepeat() const {
 void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
 	if (chunk) {
 		uint64_t size = chunk->meta_data.total_compressed_size;
-
-		//		std::cout << "registering " << schema.name << " @ " << FileOffset() << " for " << size << "\n";
 		transport.RegisterPrefetch(FileOffset(), size, allow_merge);
 	}
 }
@@ -93,7 +91,7 @@ uint64_t ColumnReader::TotalCompressedSize() {
 	return chunk->meta_data.total_compressed_size;
 }
 
-// Note: For some reason, it's not trivial to determine where all Column data is stored. Chunk->file_offset
+// Note: It's not trivial to determine where all Column data is stored. Chunk->file_offset
 // apparently is not the first page of the data. Therefore we determine the address of the first page by taking the
 // minimum of all page offsets.
 idx_t ColumnReader::FileOffset() const {

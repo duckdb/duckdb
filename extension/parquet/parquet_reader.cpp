@@ -34,7 +34,6 @@
 #include <cassert>
 #include <chrono>
 #include <cstring>
-#include <iostream>
 
 namespace duckdb {
 
@@ -627,7 +626,6 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 	if (!state.file_handle || state.file_handle->path != file_handle->path) {
 		auto flags = FileFlags::FILE_FLAGS_READ;
 
-		// For HTTP
 		if (file_handle->file_system.GetName() == "HTTPFileSystem") {
 			state.prefetch_mode = true;
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
@@ -840,10 +838,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		}
 
 		auto &group = GetGroup(state);
-		// Should we exponential increase?
 		if (state.prefetch_mode && state.group_offset != (idx_t)group.num_rows) {
-			//			std::cout << "Prefetching row group " << state.group_idx_list[state.current_group] << "
-			// entirely\n";
+
 			uint64_t total_row_group_span = GetGroupSpan(state);
 
 			double scan_percentage = (double)(to_scan_compressed_bytes) / total_row_group_span;
@@ -863,12 +859,11 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 					state.current_group_prefetched = true;
 				}
 			} else {
-				// TODO: while theoretically nice, both tpc-h and tpch-ds show very little (<1%) reduction in data at
-				// the cost of significantly more requests due to less prefetch buffer merging.
-				bool lazy_fetch = false; // state.filters;
+				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
+				// fetched on the first read to that buffer.
+				bool lazy_fetch = state.filters;
 
 				// Prefetch column-wise
-				//				std::cout << "Prefetching row group " << group.ordinal << " column-wise\n";
 				for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 
 					if (state.column_ids[out_col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
@@ -930,9 +925,6 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				break;
 			}
 
-			//			std::cout << "Reading filter for col " <<
-			// root_reader->GetChildReader(file_col_idx)->Schema().name
-			//<< "\n";
 			root_reader->GetChildReader(file_col_idx)
 			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[filter_col.first]);
 
@@ -953,9 +945,6 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				continue;
 			}
 			// TODO handle ROWID here, too
-			//			std::cout << "Reading mask for col " << root_reader->GetChildReader(file_col_idx)->Schema().name
-			//<<
-			//"\n";
 			root_reader->GetChildReader(file_col_idx)
 			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[out_col_idx]);
 		}

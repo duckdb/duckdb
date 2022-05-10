@@ -66,6 +66,8 @@ public:
 	virtual idx_t FileOffset() const;
 	virtual uint64_t TotalCompressedSize();
 	virtual idx_t GroupRowsAvailable();
+
+	// register the range this reader will touch for prefetching
 	virtual void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
 
 	virtual unique_ptr<BaseStatistics> Stats(const std::vector<ColumnChunk> &columns);

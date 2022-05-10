@@ -117,7 +117,6 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	//	head_requests_made++;
 	auto &hfs = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
@@ -131,17 +130,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	return make_unique<ResponseWrapper>(res.value());
 }
 
-HTTPFileSystem::~HTTPFileSystem() {
-	//		std::cout << "Bytes read : " << bytes_read << std::endl;
-	//		std::cout << "Bytes requested : " << bytes_requested << std::endl;
-	//		std::cout << "Requests made: " << requests_made << std::endl;
-	//		std::cout << "Head requests: " << head_requests_made << std::endl;
-}
-
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                             idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
-	requests_made++;
-	bytes_requested += buffer_out_len;
 	auto &hfs = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
@@ -221,7 +211,6 @@ std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t
 // Buffered read from http file.
 // Note that buffering is disabled when FileFlags::FILE_FLAGS_DIRECT_IO is set
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	bytes_read += nr_bytes;
 	auto &hfh = (HTTPFileHandle &)handle;
 	idx_t to_read = nr_bytes;
 	idx_t buffer_offset = 0;

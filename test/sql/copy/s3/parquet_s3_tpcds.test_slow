@@ -1,6 +1,6 @@
-# name: test/sql/copy/parquet/parquet_http_prefetch_tpcds.test
+# name: test/sql/copy/s3/parquet_s3_tpcds.test_slow
 # description: Test all tpcds queries on tpch sf0.01 over s3
-# group: [parquet]
+# group: [s3]
 
 require parquet
 

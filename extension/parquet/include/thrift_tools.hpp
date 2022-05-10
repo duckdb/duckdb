@@ -1,5 +1,4 @@
 #pragma once
-#include <iostream>
 #include <list>
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
@@ -8,19 +7,18 @@
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/allocator.hpp"
-#include "duckdb/common/likely.hpp"
 #endif
 
 namespace duckdb {
 
-/// A ReadHead for prefetching data in a specific range
+// A ReadHead for prefetching data in a specific range
 struct ReadHead {
 	ReadHead(idx_t location, uint64_t size) : location(location), size(size) {};
-	/// Hint info
+	// Hint info
 	idx_t location;
 	uint64_t size;
 
-	/// Current info
+	// Current info
 	unique_ptr<AllocatedData> data;
 	bool data_isset = false;
 
@@ -49,17 +47,17 @@ struct ReadHeadComparator {
 	}
 };
 
-/// Two-step read ahead buffer
-/// 1: register all ranges that will be read, merging ranges that are consecutive
-/// 2: prefetch all registered ranges
+// Two-step read ahead buffer
+// 1: register all ranges that will be read, merging ranges that are consecutive
+// 2: prefetch all registered ranges
 struct ReadAheadBuffer {
 	ReadAheadBuffer(Allocator &allocator, FileHandle &handle, FileOpener &opener)
 	    : allocator(allocator), handle(handle), file_opener(opener) {
 	}
 
-	/// The list of read heads
+	// The list of read heads
 	std::list<ReadHead> read_heads;
-	/// Set for merging consecutive ranges
+	// Set for merging consecutive ranges
 	std::set<ReadHead *, ReadHeadComparator> merge_set;
 
 	Allocator &allocator;
@@ -68,7 +66,7 @@ struct ReadAheadBuffer {
 
 	idx_t total_size = 0;
 
-	/// Add a read head to the prefetching list
+	// Add a read head to the prefetching list
 	void AddReadHead(idx_t pos, uint64_t len, bool merge_buffers = true) {
 		// Attempt to merge with existing
 		if (merge_buffers) {
@@ -97,7 +95,7 @@ struct ReadAheadBuffer {
 		}
 	}
 
-	/// Returns the relevant read head
+	// Returns the relevant read head
 	ReadHead *GetReadHead(idx_t pos) {
 		for (auto &read_head : read_heads) {
 			if (pos >= read_head.location && pos < read_head.GetEnd()) {
@@ -107,7 +105,7 @@ struct ReadAheadBuffer {
 		return nullptr;
 	}
 
-	/// Prefetch all read heads
+	// Prefetch all read heads
 	void Prefetch() {
 		for (auto &read_head : read_heads) {
 			read_head.Allocate(allocator);
@@ -137,8 +135,6 @@ public:
 			D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
 
 			if (!prefetch_buffer->data_isset) {
-				//				std::cout << "Lazy prefetch async new " << prefetch_buffer->location << " for " <<
-				//				    prefetch_buffer->size << " bytes \n";
 				prefetch_buffer->Allocate(allocator);
 				handle.Read(prefetch_buffer->data->get(), prefetch_buffer->size, prefetch_buffer->location);
 				prefetch_buffer->data_isset = true;
@@ -158,26 +154,31 @@ public:
 		return len;
 	}
 
+	// Prefetch a single buffer
 	void Prefetch(idx_t pos, uint64_t len) {
-		RegisterPrefetch(pos, len);
+		RegisterPrefetch(pos, len, false);
 		FinalizeRegistration();
 		PrefetchRegistered();
 	}
 
-	/// New prefetch
+	// Register a buffer for prefixing
 	void RegisterPrefetch(idx_t pos, uint64_t len, bool can_merge = true) {
 		ra_buffer.AddReadHead(pos, len, can_merge);
 	}
 
+	// Prevents any further merges, should be called before PrefetchRegistered
 	void FinalizeRegistration() {
 		ra_buffer.merge_set.clear();
 	}
 
+	// Prefetch all previously registered ranges
 	void PrefetchRegistered() {
 		ra_buffer.Prefetch();
 	}
+
 	void ClearPrefetch() {
 		ra_buffer.read_heads.clear();
+		ra_buffer.merge_set.clear();
 	}
 
 	void SetLocation(idx_t location_p) {
@@ -200,8 +201,8 @@ private:
 	// Multi-buffer prefetch
 	ReadAheadBuffer ra_buffer;
 
-	/// Whether the prefetch mode is enabled. In this mode the DirectIO flag of the handle will be set and the parquet
-	/// reader will manage the read buffering.
+	// Whether the prefetch mode is enabled. In this mode the DirectIO flag of the handle will be set and the parquet
+	// reader will manage the read buffering.
 	bool prefetch_mode;
 };
 

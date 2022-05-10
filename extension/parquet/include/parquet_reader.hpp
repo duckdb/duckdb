@@ -57,7 +57,6 @@ struct ParquetReaderScanState {
 	ResizeableBuffer define_buf;
 	ResizeableBuffer repeat_buf;
 
-	// Enable the prefetching mode for high latency filesystems such as HTTPFS
 	bool prefetch_mode = false;
 	bool current_group_prefetched = false;
 };
@@ -126,8 +125,7 @@ private:
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
-	// the group span is the distance between the min page offset and the max page offset plus the max page compressed
-	// size
+	// Group span is the distance between the min page offset and the max page offset plus the max page compressed size
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);

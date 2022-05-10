@@ -273,9 +273,6 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 		column_writers[col_idx]->FinalizeWrite(*write_state);
 	}
 
-	row_group.total_compressed_size = writer->GetTotalWritten() - row_group.file_offset;
-	row_group.__isset.total_compressed_size = true;
-
 	// append the row group to the file meta data
 	file_meta_data.row_groups.push_back(row_group);
 	file_meta_data.num_rows += buffer.Count();
