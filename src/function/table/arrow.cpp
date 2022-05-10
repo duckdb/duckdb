@@ -526,7 +526,7 @@ void TimeConversion(Vector &vector, ArrowArray &array, ArrowScanState &scan_stat
 			continue;
 		}
 		if (!TryMultiplyOperator::Operation((int64_t)src_ptr[row], conversion, tgt_ptr[row].micros)) {
-			throw ConversionException("Could not convert Interval to Microsecond");
+			throw ConversionException("Could not convert Time to Microsecond");
 		}
 	}
 }
@@ -544,7 +544,7 @@ void TimestampTZConversion(Vector &vector, ArrowArray &array, ArrowScanState &sc
 			continue;
 		}
 		if (!TryMultiplyOperator::Operation(src_ptr[row], conversion, tgt_ptr[row].value)) {
-			throw ConversionException("Could not convert Interval to Microsecond");
+			throw ConversionException("Could not convert TimestampTZ to Microsecond");
 		}
 	}
 }

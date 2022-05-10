@@ -22,7 +22,8 @@ duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema 
 		return DuckDBSuccess;
 	}
 	auto wrapper = (ArrowResultWrapper *)result;
-	QueryResult::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names);
+	QueryResult::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
+	                           wrapper->timezone_config);
 	return DuckDBSuccess;
 }
 
@@ -84,6 +85,14 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 		return DuckDBError;
 	}
 	auto arrow_wrapper = new ArrowResultWrapper();
+	if (wrapper->statement->context->config.set_variables.find("TimeZone") ==
+	    wrapper->statement->context->config.set_variables.end()) {
+		arrow_wrapper->timezone_config = "UTC";
+	} else {
+		arrow_wrapper->timezone_config =
+		    wrapper->statement->context->config.set_variables["TimeZone"].GetValue<std::string>();
+	}
+
 	auto result = wrapper->statement->Execute(wrapper->values, false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	arrow_wrapper->result = duckdb::unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));

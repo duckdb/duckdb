@@ -155,9 +155,11 @@ void InitializeChild(ArrowSchema &child, const string &name = "") {
 	child.metadata = nullptr;
 	child.dictionary = nullptr;
 }
-void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type);
+void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
+                    string &config_timezone);
 
-void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type) {
+void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
+                       string &config_timezone) {
 	child.format = "+m";
 	//! Map has one child which is a struct
 	child.n_children = 1;
@@ -172,10 +174,11 @@ void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 	struct_child_types.push_back(std::make_pair("key", ListType::GetChildType(StructType::GetChildType(type, 0))));
 	struct_child_types.push_back(std::make_pair("value", ListType::GetChildType(StructType::GetChildType(type, 1))));
 	auto struct_type = LogicalType::STRUCT(move(struct_child_types));
-	SetArrowFormat(root_holder, *child.children[0], struct_type);
+	SetArrowFormat(root_holder, *child.children[0], struct_type, config_timezone);
 }
 
-void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type) {
+void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
+                    string &config_timezone) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		child.format = "b";
@@ -228,9 +231,17 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::TIMESTAMP:
 		child.format = "tsu:";
 		break;
-	case LogicalTypeId::TIMESTAMP_TZ:
-		child.format = "tsu:UTC";
+	case LogicalTypeId::TIMESTAMP_TZ: {
+		string format = "tsu:" + config_timezone;
+		unique_ptr<char[]> format_ptr = unique_ptr<char[]>(new char[format.size() + 1]);
+		for (size_t i = 0; i < format.size(); i++) {
+			format_ptr[i] = format[i];
+		}
+		format_ptr[format.size()] = '\0';
+		root_holder.owned_type_names.push_back(move(format_ptr));
+		child.format = root_holder.owned_type_names.back().get();
 		break;
+	}
 	case LogicalTypeId::TIMESTAMP_SEC:
 		child.format = "tss:";
 		break;
@@ -274,7 +285,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		InitializeChild(root_holder.nested_children.back()[0]);
 		child.children = &root_holder.nested_children_ptr.back()[0];
 		child.children[0]->name = "l";
-		SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type));
+		SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), config_timezone);
 		break;
 	}
 	case LogicalTypeId::STRUCT: {
@@ -302,12 +313,12 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			root_holder.owned_type_names.push_back(move(name_ptr));
 
 			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
-			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second);
+			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, config_timezone);
 		}
 		break;
 	}
 	case LogicalTypeId::MAP: {
-		SetArrowMapFormat(root_holder, child, type);
+		SetArrowMapFormat(root_holder, child, type, config_timezone);
 		break;
 	}
 	case LogicalTypeId::ENUM: {
@@ -338,7 +349,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	}
 }
 
-void QueryResult::ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> &types, vector<string> &names) {
+void QueryResult::ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> &types, vector<string> &names,
+                                string &config_timezone) {
 	D_ASSERT(out_schema);
 	D_ASSERT(types.size() == names.size());
 	idx_t column_count = types.size();
@@ -366,7 +378,7 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> &ty
 
 		auto &child = root_holder->children[col_idx];
 		InitializeChild(child, names[col_idx]);
-		SetArrowFormat(*root_holder, child, types[col_idx]);
+		SetArrowFormat(*root_holder, child, types[col_idx], config_timezone);
 	}
 
 	// Release ownership to caller
