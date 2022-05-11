@@ -124,7 +124,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 					}
 				}
 			}
-			info->columns.push_back(centry);
+			info->columns.push_back(move(centry));
 			break;
 		}
 		case duckdb_libpgquery::T_PGConstraint: {

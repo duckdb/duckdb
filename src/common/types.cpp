@@ -174,10 +174,6 @@ constexpr const LogicalTypeId LogicalType::POINTER;
 constexpr const LogicalTypeId LogicalType::VARCHAR;
 constexpr const LogicalTypeId LogicalType::JSON;
 
-constexpr const LogicalTypeId LogicalType::SMALLSERIAL;
-constexpr const LogicalTypeId LogicalType::SERIAL;
-constexpr const LogicalTypeId LogicalType::BIGSERIAL;
-
 constexpr const LogicalTypeId LogicalType::BLOB;
 constexpr const LogicalTypeId LogicalType::INTERVAL;
 constexpr const LogicalTypeId LogicalType::ROW_TYPE;

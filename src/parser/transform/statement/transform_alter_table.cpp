@@ -22,7 +22,12 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 		switch (command->subtype) {
 		case duckdb_libpgquery::PG_AT_AddColumn: {
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)command->def;
-			auto centry = TransformColumnDefinition(cdef);
+			string column_name = cdef->colname;
+			auto target = TransformColumnTypeDefinition(cdef);
+			ColumnDefinition centry = ColumnDefinition(column_name, target.type);
+			if (target.is_serial) {
+				throw ParserException("Adding columns with constraints not yet supported");
+			}
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
 					auto constraint = TransformConstraint(constr, centry, 0);
@@ -45,17 +50,18 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 		}
 		case duckdb_libpgquery::PG_AT_AlterColumnType: {
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)command->def;
-			auto column_definition = TransformColumnDefinition(cdef);
+			auto constrained_type = TransformColumnTypeDefinition(cdef);
 
 			unique_ptr<ParsedExpression> expr;
 			if (cdef->raw_default) {
 				expr = TransformExpression(cdef->raw_default);
 			} else {
 				auto colref = make_unique<ColumnRefExpression>(command->name);
-				expr = make_unique<CastExpression>(column_definition.type, move(colref));
+				expr = make_unique<CastExpression>(constrained_type.type, move(colref));
 			}
+			//TODO(jwills): need to add constraint/sequence info here as well I think
 			result->info = make_unique<ChangeColumnTypeInfo>(qname.schema, qname.name, command->name,
-			                                                 column_definition.type, move(expr));
+			                                                 constrained_type.type, move(expr));
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_DropConstraint:

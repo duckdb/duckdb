@@ -40,13 +40,13 @@ public:
 };
 
 //! A logical type definition in conjunction with any constraints implied by the type
-struct ConstrainedLogicalType {
+class ConstrainedLogicalType {
+public:
 	LogicalType type;
 	bool is_serial = false;
 	int check_length = 0;
 	
-	DUCKDB_API ConstrainedLogicalType(LogicalType type): type(type) {
-	}
+	DUCKDB_API ConstrainedLogicalType(LogicalType type): type(type) {}
 };
 
 } // namespace duckdb
