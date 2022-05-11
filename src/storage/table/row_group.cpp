@@ -330,7 +330,8 @@ bool RowGroup::CheckZonemapSegments(RowGroupScanState &state) {
 template <TableScanType TYPE>
 void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result) {
 	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
-	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
+	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED &&
+	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT;
 	auto &table_filters = state.parent.table_filters;
 	auto &column_ids = state.parent.column_ids;
 	auto &adaptive_filter = state.parent.adaptive_filter;
@@ -369,7 +370,20 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 				NextVector(state);
 				continue;
 			}
-		} else {
+		} else if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT) {
+			auto &transaction_manager = TransactionManager::Get(db);
+			auto lowest_active_start = transaction_manager.LowestActiveStart();
+			auto lowest_active_id = transaction_manager.LowestActiveId()-1;
+
+			count = state.row_group->GetCommittedSelVector(lowest_active_start, lowest_active_id, state.vector_index,
+			                                               valid_sel, max_count);
+			if (count == 0) {
+				// nothing to scan for this vector, skip the entire vector
+				NextVector(state);
+				continue;
+			}
+		}
+		else {
 			count = max_count;
 		}
 		if (count == max_count && !table_filters) {
@@ -484,6 +498,9 @@ void RowGroup::ScanCommitted(RowGroupScanState &state, DataChunk &result, TableS
 		break;
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED:
 		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED>(nullptr, state, result);
+		break;
+	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT:
+		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT>(nullptr, state, result);
 		break;
 	default:
 		throw InternalException("Unrecognized table scan type");
@@ -643,13 +660,12 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	auto &global_sort_state = *sort_state.global_sort_state;
 	LocalSortState local_sort_state;
 	local_sort_state.Initialize(global_sort_state, global_sort_state.buffer_manager);
+	idx_t new_count = 0;
 
 	// Scan the RowGroup into the DataChunks
-	bool next_chunk = true;
 	InitializeScan(scan_state.row_group_scan_state);
-	while (next_chunk) {
-		next_chunk = ScanToDataChunks(scan_state.row_group_scan_state, payload);
-//		keys.Normalify();
+	while (scan_state.row_group_scan_state.vector_index * STANDARD_VECTOR_SIZE < scan_state.row_group_scan_state.max_row) {
+		ScanCommitted(scan_state.row_group_scan_state, payload, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT);
 		payload.Normalify();
 		// Select key columns from lowest to highest cardinality
 //		for (idx_t i = 0; i < cardinalities.size(); i++) {
@@ -657,11 +673,11 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 //			keys.SetCardinality(payload.size());
 //		}
 		local_sort_state.SinkChunk(payload, payload);
+		new_count += payload.size();
+	}
 
-		// Do not continue sort if payload is empty
-		if (payload.size() == 0) {
-			return;
-		}
+	if (new_count == 0) {
+		return;
 	}
 
 	// add local state to global state, which sorts the data
@@ -677,7 +693,7 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	sorted_rowgroup->InitializeEmpty(types);
 
 	TableAppendState append_state;
-	sorted_rowgroup->InitializeAppendInternal(append_state.row_group_append_state);
+	sorted_rowgroup->InitializeAppendInternal(append_state.row_group_append_state, new_count);
 
 	PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 	DataChunk result_chunk;
@@ -694,6 +710,7 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	this->columns = sorted_rowgroup->columns;
 	this->stats = sorted_rowgroup->stats;
 	this->version_info = sorted_rowgroup->version_info;
+	this->count.operator=(new_count);
 	this->Verify();
 }
 
@@ -705,9 +722,13 @@ void RowGroup::CalculateCardinalitiesPerColumn(vector<LogicalType> &types, Table
 	vector<HyperLogLog> logs(columns.size());
 	InitializeScan(scan_state.row_group_scan_state);
 
-	bool next_chunk = true;
-	while (next_chunk) {
-		next_chunk = ScanToDataChunks(scan_state.row_group_scan_state, result);
+	// Check if we need to scan
+	if (scan_state.row_group_scan_state.vector_index * STANDARD_VECTOR_SIZE >= scan_state.row_group_scan_state.max_row) {
+		return;
+	}
+
+	while (scan_state.row_group_scan_state.vector_index * STANDARD_VECTOR_SIZE < scan_state.row_group_scan_state.max_row) {
+		ScanCommitted(scan_state.row_group_scan_state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
 		result.Normalify();
 		for (idx_t i = 0; i < columns.size(); i++) {
 			logs[i].Add(result.data[i].GetData(), sizeof(types[i].InternalType()));
@@ -858,9 +879,9 @@ void RowGroup::RevertAppend(idx_t row_group_start) {
 	Verify();
 }
 
-void RowGroup::InitializeAppendInternal(RowGroupAppendState &append_state) {
+void RowGroup::InitializeAppendInternal(RowGroupAppendState &append_state, idx_t offset_in_row_group) {
 	append_state.row_group = this;
-	append_state.offset_in_row_group = this->count;
+	append_state.offset_in_row_group = offset_in_row_group;
 	// for each column, initialize the append state
 	append_state.states = unique_ptr<ColumnAppendState[]>(new ColumnAppendState[columns.size()]);
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -870,7 +891,7 @@ void RowGroup::InitializeAppendInternal(RowGroupAppendState &append_state) {
 
 void RowGroup::InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state,
                                 idx_t remaining_append_count) {
-	InitializeAppendInternal(append_state);
+	InitializeAppendInternal(append_state, this->count);
 	// append the version info for this row_group
 	idx_t append_count = MinValue<idx_t>(remaining_append_count, RowGroup::ROW_GROUP_SIZE - this->count);
 	AppendVersionInfo(transaction, this->count, append_count, transaction.transaction_id);

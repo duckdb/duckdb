@@ -122,7 +122,7 @@ public:
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
 	static RowGroupPointer Deserialize(Deserializer &source, const vector<ColumnDefinition> &columns);
 
-	void InitializeAppendInternal(RowGroupAppendState &append_state);
+	void InitializeAppendInternal(RowGroupAppendState &append_state, idx_t offset_in_row_group);
 	void InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state, idx_t remaining_append_count);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 
