@@ -24,6 +24,9 @@ Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<strin
 		// BREAKING_FIX_ME: missing category, everything is labeled STANDARD now
 		auto category = i < categories.size() ? categories[i] : TableColumnType::STANDARD;
 		auto column_info = TableColumnInfo(i, category);
+		if (column_info.column_type == TableColumnType::GENERATED) {
+			dprintf(2, "\nTABLE BINDING - GEN COL: %s\n", name.c_str());
+		}
 		name_map[name] = column_info;
 	}
 }

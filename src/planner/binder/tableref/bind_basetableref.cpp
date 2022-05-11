@@ -111,6 +111,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			table_types.push_back(col.type);
 			table_names.push_back(col.name);
 			table_categories.push_back(col.category);
+			//if (col.category == TableColumnType::GENERATED) {
+			//	dprintf(2, "\nGEN COL: %s\n", col.name.c_str());
+			//}
 		}
 		table_names = BindContext::AliasColumnNames(alias, table_names, ref.column_name_alias);
 

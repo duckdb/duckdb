@@ -94,6 +94,9 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		auto category = columns[i].category;
 		D_ASSERT(name_map.find(columns[i].name) == name_map.end());
 		auto column_info = TableColumnInfo(i, category);
+		//if (column_info.column_type == TableColumnType::GENERATED) {
+		//	dprintf(2, "\nTABLE CATALOG ENTRY - GEN COL: %s\n", columns[i].name.c_str());
+		//}
 		name_map[columns[i].name] = column_info;
 	}
 	// add the "rowid" alias, if there is no rowid column specified in the table

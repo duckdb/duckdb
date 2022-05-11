@@ -9,24 +9,24 @@
 #);
 
 # Return type and type of the generated column dont match
-statement error
-CREATE TABLE unit (
-    total_profit BOOLEAN GENERATED ALWAYS AS(word) VIRTUAL,
-    word VARCHAR,
-    price INTEGER,
-    amount_sold INTEGER,
-);
+#statement error
+#CREATE TABLE unit (
+#    total_profit BOOLEAN GENERATED ALWAYS AS(word) VIRTUAL,
+#    word VARCHAR,
+#    price INTEGER,
+#    amount_sold INTEGER,
+#);
 
-# Expression contains a subquery
-statement error
-CREATE TABLE unit (
-    total_profit BOOLEAN GENERATED ALWAYS AS((SELECT 1)) VIRTUAL,
-    word VARCHAR,
-    price INTEGER,
-    amount_sold INTEGER,
-);
+## Expression contains a subquery
+#statement error
+#CREATE TABLE unit (
+#    total_profit BOOLEAN GENERATED ALWAYS AS((SELECT 1)) VIRTUAL,
+#    word VARCHAR,
+#    price INTEGER,
+#    amount_sold INTEGER,
+#);
 
-statement ok
+statement error
 CREATE TABLE unit (
     total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL,
     price INTEGER,
