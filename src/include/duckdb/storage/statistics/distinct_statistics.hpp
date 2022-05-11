@@ -39,6 +39,11 @@ public:
 	void Update(VectorData &update_data, const LogicalType &ptype, idx_t count);
 
 	string ToString() const override;
+
+private:
+	//! For distinct statistics we sample the input
+	//! This speeds up insertions
+	static constexpr const double SAMPLE_RATE = 0.1;
 };
 
 } // namespace duckdb

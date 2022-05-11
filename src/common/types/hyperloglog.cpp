@@ -95,8 +95,14 @@ void HyperLogLog::Serialize(FieldWriter &writer) const {
 
 unique_ptr<HyperLogLog> HyperLogLog::Deserialize(FieldReader &reader) {
 	auto result = make_unique<HyperLogLog>();
-	reader.ReadField<HLLStorageType>(HLLStorageType::UNCOMPRESSED);
-	reader.ReadBlob(result->GetPtr(), GetSize());
+	auto storage_type = reader.ReadRequired<HLLStorageType>();
+	switch (storage_type) {
+	case HLLStorageType::UNCOMPRESSED:
+		reader.ReadBlob(result->GetPtr(), GetSize());
+		break;
+	default:
+		throw SerializationException("Unknown HyperLogLog storage type!");
+	}
 	return result;
 }
 
@@ -259,7 +265,7 @@ void HyperLogLog::AddToLogs(VectorData &vdata, idx_t count, uint64_t indices[], 
 
 void HyperLogLog::AddToLog(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[]) {
 	lock_guard<mutex> guard(lock);
-	AddToSingleLogInternal(vdata, count, indices, counts, hll);
+	AddToSingleLogInternal(vdata, count / 10, indices, counts, hll);
 }
 
 } // namespace duckdb

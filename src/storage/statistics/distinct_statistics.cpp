@@ -54,6 +54,8 @@ void DistinctStatistics::Update(VectorData &vdata, const LogicalType &type, idx_
 	uint64_t indices[STANDARD_VECTOR_SIZE];
 	uint8_t counts[STANDARD_VECTOR_SIZE];
 
+	D_ASSERT(count != 0);
+	count = idx_t(SAMPLE_RATE * double(count)) + 1;
 	HyperLogLog::ProcessEntries(vdata, type, indices, counts, count);
 	log->AddToLog(vdata, count, indices, counts);
 }
