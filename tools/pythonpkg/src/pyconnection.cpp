@@ -533,7 +533,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 		auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
 		// search local dictionary
 		if (local_dict) {
-			auto result = TryReplacement(local_dict, py_table_name, *registered_objects, context.db->config);
+			auto result = TryReplacement(local_dict, py_table_name, *registered_objects, context.config);
 			if (result) {
 				return result;
 			}
@@ -541,7 +541,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 		// search global dictionary
 		auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
 		if (global_dict) {
-			auto result = TryReplacement(global_dict, py_table_name, *registered_objects, context.db->config);
+			auto result = TryReplacement(global_dict, py_table_name, *registered_objects, context.config);
 			if (result) {
 				return result;
 			}
