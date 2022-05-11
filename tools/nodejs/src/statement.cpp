@@ -1,4 +1,5 @@
 #include "duckdb_node.hpp"
+
 #include <cassert>
 
 namespace node_duckdb {

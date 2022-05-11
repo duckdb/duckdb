@@ -2,8 +2,8 @@
 #include "duckdb_node.hpp"
 #include "napi.h"
 
-#include <thread>
 #include <iostream>
+#include <thread>
 
 namespace node_duckdb {
 
@@ -92,7 +92,7 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *
 		descr.Set("rows", jsargs->rows);
 		auto ret = Napi::Object::New(env);
 		ret.Set("sqlType", jsargs->result->GetType().ToString());
-        ret.Set("physicalType", TypeIdToString(jsargs->result->GetType().InternalType()));
+		ret.Set("physicalType", TypeIdToString(jsargs->result->GetType().InternalType()));
 		descr.Set("ret", ret);
 
 		// actually call the UDF, or rather its vectorized wrapper from duckdb.js/Connection.prototype.register wrapper
@@ -112,41 +112,37 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *
 		}
 
 		// transform the result back to a vector
-		auto return_validity = ret.ToObject()
-		                           .Get("validity")
-		                           .As<Napi::Uint8Array>();
+		auto return_validity = ret.ToObject().Get("validity").As<Napi::Uint8Array>();
 		for (duckdb::idx_t row_idx = 0; row_idx < jsargs->rows; row_idx++) {
 			duckdb::FlatVector::SetNull(*jsargs->result, row_idx, !return_validity[row_idx]);
 		}
 
 		switch (jsargs->result->GetType().id()) {
-			case duckdb::LogicalTypeId::DOUBLE: {
-				auto data = ret.Get("data").As<Napi::Float64Array>();
-				auto out = duckdb::FlatVector::GetData<double>(*jsargs->result);
-				memcpy(out, data.Data(),
-					jsargs->rows * duckdb::GetTypeIdSize(jsargs->result->GetType().InternalType()));
-				break;
+		case duckdb::LogicalTypeId::DOUBLE: {
+			auto data = ret.Get("data").As<Napi::Float64Array>();
+			auto out = duckdb::FlatVector::GetData<double>(*jsargs->result);
+			memcpy(out, data.Data(), jsargs->rows * duckdb::GetTypeIdSize(jsargs->result->GetType().InternalType()));
+			break;
+		}
+		case duckdb::LogicalTypeId::INTEGER: {
+			auto data = ret.Get("data").As<Napi::Uint32Array>();
+			auto out = duckdb::FlatVector::GetData<uint32_t>(*jsargs->result);
+			memcpy(out, data.Data(), jsargs->rows * duckdb::GetTypeIdSize(jsargs->result->GetType().InternalType()));
+			break;
+		}
+		case duckdb::LogicalTypeId::VARCHAR: {
+			auto data = ret.Get("data").As<Napi::Array>();
+			auto out = duckdb::FlatVector::GetData<duckdb::string_t>(*jsargs->result);
+			for (size_t i = 0; i < data.Length(); ++i) {
+				out[i] = duckdb::string_t(data.Get(i).ToString());
 			}
-			case duckdb::LogicalTypeId::INTEGER: {
-				auto data = ret.Get("data").As<Napi::Uint32Array>();
-				auto out = duckdb::FlatVector::GetData<uint32_t>(*jsargs->result);
-				memcpy(out, data.Data(),
-					jsargs->rows * duckdb::GetTypeIdSize(jsargs->result->GetType().InternalType()));
-				break;
+			break;
+		}
+		default: {
+			for (duckdb::idx_t row_idx = 0; row_idx < jsargs->rows; row_idx++) {
+				duckdb::FlatVector::SetNull(*jsargs->result, row_idx, false);
 			}
-			case duckdb::LogicalTypeId::VARCHAR: {
-				auto data = ret.Get("data").As<Napi::Array>();
-				auto out = duckdb::FlatVector::GetData<duckdb::string_t>(*jsargs->result);
-				for (size_t i = 0; i < data.Length(); ++i) {
-					out[i] = duckdb::string_t(data.Get(i).ToString());
-				}
-				break;
-			}
-			default: {
-				for (duckdb::idx_t row_idx = 0; row_idx < jsargs->rows; row_idx++) {
-					duckdb::FlatVector::SetNull(*jsargs->result, row_idx, false);
-				}
-			}
+		}
 		}
 	} catch (const std::exception &e) {
 		jsargs->error = e.what();
@@ -216,7 +212,7 @@ Napi::Value Connection::Register(const Napi::CallbackInfo &info) {
 	}
 
 	auto udf = duckdb_node_udf_function_t::New(env, udf_callback, "duckdb_node_udf" + name, 0, 1, nullptr,
-	                                      [](Napi::Env, void *, std::nullptr_t *ctx) {});
+	                                           [](Napi::Env, void *, std::nullptr_t *ctx) {});
 
 	// we have to unref the udf because otherwise there is a circular ref with the connection somehow(?)
 	// this took far too long to figure out
