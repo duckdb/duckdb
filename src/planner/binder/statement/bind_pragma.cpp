@@ -29,6 +29,7 @@ BoundStatement Binder::Bind(PragmaStatement &stmt) {
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 	result.plan = make_unique<LogicalPragma>(bound_function, *stmt.info);
+	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }
 

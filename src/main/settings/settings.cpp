@@ -393,6 +393,17 @@ Value LogQueryPathSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Maximum Expression Depth
+//===--------------------------------------------------------------------===//
+void MaximumExpressionDepthSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).max_expression_depth = input.GetValue<uint64_t>();
+}
+
+Value MaximumExpressionDepthSetting::GetSetting(ClientContext &context) {
+	return Value::UBIGINT(ClientConfig::GetConfig(context).max_expression_depth);
+}
+
+//===--------------------------------------------------------------------===//
 // Maximum Memory
 //===--------------------------------------------------------------------===//
 void MaximumMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

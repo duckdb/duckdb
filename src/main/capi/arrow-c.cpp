@@ -56,7 +56,7 @@ idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
 	auto wrapper = (ArrowResultWrapper *)result;
 	idx_t rows_changed = 0;
 	idx_t row_count = wrapper->result->collection.Count();
-	if (row_count > 0 && StatementTypeReturnChanges(wrapper->result->statement_type)) {
+	if (row_count > 0 && wrapper->result->properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
 		auto row_changes = wrapper->result->GetValue(0, 0);
 		if (!row_changes.IsNull() && row_changes.TryCastAs(LogicalType::BIGINT)) {
 			rows_changed = row_changes.GetValue<int64_t>();

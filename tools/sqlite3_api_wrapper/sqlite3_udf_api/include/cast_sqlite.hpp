@@ -76,8 +76,7 @@ struct CastToSQLiteValue {
 		static sqlite3_value Operation(SRC blob) {
 			sqlite3_value sqlite_blob;
 			sqlite_blob.type = SQLiteTypeValue::BLOB;
-			sqlite_blob.n = blob.GetSize();
-			sqlite_blob.str_t = blob;
+			sqlite_blob.str = blob.GetString();
 			return sqlite_blob;
 		}
 	};

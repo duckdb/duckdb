@@ -6,13 +6,10 @@
 
 namespace duckdb {
 
-BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type)
-    : type(type), statement_type(statement_type), success(true) {
-}
-
-BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types_p,
-                                 vector<string> names_p)
-    : type(type), statement_type(statement_type), types(move(types_p)), names(move(names_p)), success(true) {
+BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
+                                 vector<LogicalType> types_p, vector<string> names_p)
+    : type(type), statement_type(statement_type), properties(properties), types(move(types_p)), names(move(names_p)),
+      success(true) {
 	D_ASSERT(types.size() == names.size());
 }
 
@@ -32,12 +29,9 @@ idx_t BaseQueryResult::ColumnCount() {
 	return types.size();
 }
 
-QueryResult::QueryResult(QueryResultType type, StatementType statement_type) : BaseQueryResult(type, statement_type) {
-}
-
-QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types_p,
-                         vector<string> names_p)
-    : BaseQueryResult(type, statement_type, move(types_p), move(names_p)) {
+QueryResult::QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
+                         vector<LogicalType> types_p, vector<string> names_p)
+    : BaseQueryResult(type, statement_type, properties, move(types_p), move(names_p)) {
 }
 
 QueryResult::QueryResult(QueryResultType type, string error) : BaseQueryResult(type, move(error)) {

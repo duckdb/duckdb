@@ -314,7 +314,8 @@ bool deprecated_materialize_result(duckdb_result *result) {
 		result->__deprecated_columns[i].__deprecated_name = (char *)result_data->result->names[i].c_str();
 	}
 	result->__deprecated_row_count = materialized.collection.Count();
-	if (result->__deprecated_row_count > 0 && StatementTypeReturnChanges(materialized.statement_type)) {
+	if (result->__deprecated_row_count > 0 &&
+	    materialized.properties.return_type == StatementReturnType::CHANGED_ROWS) {
 		// update total changes
 		auto row_changes = materialized.GetValue(0, 0);
 		if (!row_changes.IsNull() && row_changes.TryCastAs(LogicalType::BIGINT)) {
