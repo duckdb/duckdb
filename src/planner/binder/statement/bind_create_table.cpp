@@ -172,7 +172,7 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 			add_row_id = false;
 		}
 		// TODO: add generated columns so we can resolve generated_column<->generated_column expressions
-		if (!col.Generated()) {
+		if (col.Generated()) {
 			continue;
 		}
 		names.push_back(col.name);

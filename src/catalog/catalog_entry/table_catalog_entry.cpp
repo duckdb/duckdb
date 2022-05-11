@@ -105,6 +105,9 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		// create the physical storage
 		vector<ColumnDefinition> colum_def_copy;
 		for (auto &col_def : columns) {
+			if (col_def.Generated()) {
+				continue;
+			}
 			colum_def_copy.push_back(col_def.Copy());
 		}
 		storage = make_shared<DataTable>(catalog->db, schema->name, name, move(colum_def_copy), move(info->data));
