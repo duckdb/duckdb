@@ -53,7 +53,7 @@ Connection.prototype.register = function(name, return_type, fun) {
                     case 'STRUCT<?>': {
                         const tmp = {};
                         const children = [];
-                        for (let j = 0; j < (arg.children?.length || 0); ++j) {
+                        for (let j = 0; j < (arg.children.length || 0); ++j) {
                             const attr = arg.children[j];
                             const child = buildResolver(attr);
                             children.push((row) => {
