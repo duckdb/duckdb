@@ -28,7 +28,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 
 	if (!table->temporary) {
 		// delete from persistent table: not read only!
-		this->read_only = false;
+		properties.read_only = false;
 	}
 
 	// plan any tables from the various using clauses
@@ -89,7 +89,8 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		result.plan = move(del);
 		result.names = {"Count"};
 		result.types = {LogicalType::BIGINT};
-		this->allow_stream_result = false;
+		properties.allow_stream_result = false;
+		properties.return_type = StatementReturnType::CHANGED_ROWS;
 	}
 	return result;
 }

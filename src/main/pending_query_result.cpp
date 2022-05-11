@@ -6,7 +6,8 @@ namespace duckdb {
 
 PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, PreparedStatementData &statement,
                                        vector<LogicalType> types_p)
-    : BaseQueryResult(QueryResultType::PENDING_RESULT, statement.statement_type, move(types_p), statement.names),
+    : BaseQueryResult(QueryResultType::PENDING_RESULT, statement.statement_type, statement.properties, move(types_p),
+                      statement.names),
       context(move(context_p)) {
 }
 

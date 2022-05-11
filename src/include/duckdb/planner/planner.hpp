@@ -33,10 +33,7 @@ public:
 	shared_ptr<Binder> binder;
 	ClientContext &context;
 
-	bool read_only;
-	bool requires_valid_transaction;
-	bool allow_stream_result;
-	bool bound_all_parameters;
+	StatementProperties properties;
 
 private:
 	void CreatePlan(SQLStatement &statement);

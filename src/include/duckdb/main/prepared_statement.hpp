@@ -46,6 +46,8 @@ public:
 	idx_t ColumnCount();
 	//! Returns the statement type of the underlying prepared statement object
 	StatementType GetStatementType();
+	//! Returns the underlying statement properties
+	StatementProperties GetStatementProperties();
 	//! Returns the result SQL types of the prepared statement
 	const vector<LogicalType> &GetTypes();
 	//! Returns the result names of the prepared statement
