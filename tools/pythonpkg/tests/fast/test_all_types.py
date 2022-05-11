@@ -123,7 +123,6 @@ class TestAllTypes(object):
 
 		conn = duckdb.connect()
 		for cur_type in all_types:
-			print(cur_type)
 			if cur_type in replacement_values:
 				dataframe = conn.execute("select "+replacement_values[cur_type]).df()
 			else:
