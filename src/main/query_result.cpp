@@ -3,6 +3,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/arrow.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -384,6 +385,23 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> &ty
 	// Release ownership to caller
 	out_schema->private_data = root_holder.release();
 	out_schema->release = ReleaseDuckDBArrowSchema;
+}
+
+string QueryResult::GetConfigTimezone(QueryResult &query_result) {
+	switch (query_result.type) {
+	case QueryResultType::MATERIALIZED_RESULT: {
+		auto actual_context = ((MaterializedQueryResult &)query_result).context.lock();
+		if (!actual_context) {
+			throw std::runtime_error("This connection is closed");
+		}
+		return ClientConfig::ExtractTimezoneFromConfig(actual_context->config);
+	}
+	case QueryResultType::STREAM_RESULT: {
+		return ClientConfig::ExtractTimezoneFromConfig(((StreamQueryResult &)query_result).context->config);
+	}
+	default:
+		throw std::runtime_error("Can't extract timezone configuration from query type ");
+	}
 }
 
 } // namespace duckdb

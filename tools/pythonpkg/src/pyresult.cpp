@@ -332,12 +332,7 @@ bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx
 		return false;
 	}
 	ArrowSchema arrow_schema;
-	string timezone_config;
-	if (config.set_variables.find("TimeZone") == config.set_variables.end()) {
-		timezone_config = "UTC";
-	} else {
-		timezone_config = config.set_variables["TimeZone"].GetValue<std::string>();
-	}
+	string timezone_config = QueryResult::GetConfigTimezone(*result);
 	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
 	TransformDuckToArrowChunk(arrow_schema, *data_chunk, batches);
 	return true;
@@ -370,13 +365,8 @@ py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 
 	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
 	ArrowSchema schema;
-	string timezone_config;
-	if (config.set_variables.find("TimeZone") == config.set_variables.end()) {
-		timezone_config = "UTC";
-	} else {
-		timezone_config = config.set_variables["TimeZone"].GetValue<std::string>();
-	}
 
+	auto timezone_config = QueryResult::GetConfigTimezone(*result);
 	QueryResult::ToArrowSchema(&schema, result->types, result->names, timezone_config);
 	auto schema_obj = schema_import_func((uint64_t)&schema);
 

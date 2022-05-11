@@ -1,7 +1,7 @@
 library("testthat")
 library("DBI")
 
-# skip_on_cran()
+skip_on_cran()
 skip_on_os("windows")
 skip_if_not_installed("arrow", "5.0.0")
 # Skip if parquet is not a capability as an indicator that Arrow is fully installed.
@@ -510,3 +510,5 @@ test_that("duckdb can read arrow timestamptz", {
     duckdb::duckdb_unregister_arrow(con, "timestamps")
   }
 })
+
+

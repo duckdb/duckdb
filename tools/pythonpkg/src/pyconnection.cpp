@@ -151,7 +151,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			                         to_string(py::len(single_query_params)) + " given");
 		}
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
-		auto res = make_unique<DuckDBPyResult>(connection->context->config);
+		auto res = make_unique<DuckDBPyResult>();
 		{
 			py::gil_scoped_release release;
 			res->result = prep->Execute(args);

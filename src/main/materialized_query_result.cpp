@@ -8,8 +8,8 @@ MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type)
 }
 
 MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, vector<LogicalType> types,
-                                                 vector<string> names)
-    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, move(types), move(names)) {
+                                                 vector<string> names, const shared_ptr<ClientContext> &context)
+    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, move(types), move(names)), context(context) {
 }
 
 MaterializedQueryResult::MaterializedQueryResult(string error)

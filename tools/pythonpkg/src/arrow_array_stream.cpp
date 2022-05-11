@@ -83,7 +83,7 @@ void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowS
 	}
 }
 
-py::object GetScalar(Value &constant, string timezone_config) {
+py::object GetScalar(Value &constant, const string &timezone_config) {
 	py::object scalar = py::module_::import("pyarrow").attr("scalar");
 	py::object dataset_scalar = py::module_::import("pyarrow.dataset").attr("scalar");
 	py::object scalar_value;
@@ -155,7 +155,7 @@ py::object GetScalar(Value &constant, string timezone_config) {
 	}
 }
 
-py::object TransformFilterRecursive(TableFilter *filter, const string &column_name, string timezone_config) {
+py::object TransformFilterRecursive(TableFilter *filter, const string &column_name, const string &timezone_config) {
 
 	py::object field = py::module_::import("pyarrow.dataset").attr("field");
 	switch (filter->filter_type) {
@@ -229,12 +229,7 @@ py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterCollec
 	auto filters_map = &filter_collection.table_filters->filters;
 	auto it = filters_map->begin();
 	D_ASSERT(columns.find(it->first) != columns.end());
-	string timezone_config;
-	if (config.set_variables.find("TimeZone") == config.set_variables.end()) {
-		timezone_config = "UTC";
-	} else {
-		timezone_config = config.set_variables["TimeZone"].GetValue<std::string>();
-	}
+	string timezone_config = ClientConfig::ExtractTimezoneFromConfig(config);
 	py::object expression = TransformFilterRecursive(it->second.get(), columns[it->first], timezone_config);
 	while (it != filters_map->end()) {
 		py::object child_expression = TransformFilterRecursive(it->second.get(), columns[it->first], timezone_config);

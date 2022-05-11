@@ -24,10 +24,8 @@ public:
 	unordered_map<idx_t, py::list> categories;
 	// Holds the categorical type of Categorical/ENUM types
 	unordered_map<idx_t, py::object> categories_type;
-	// Database Config
-	ClientConfig &config;
 
-	explicit DuckDBPyResult(ClientConfig &config) : config(config) {};
+	explicit DuckDBPyResult() {};
 
 public:
 	static void Initialize(py::handle &m);

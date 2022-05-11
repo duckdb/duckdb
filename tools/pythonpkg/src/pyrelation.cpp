@@ -405,7 +405,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(py::object df, DuckDBP
 }
 
 py::object DuckDBPyRelation::ToDF() {
-	auto res = make_unique<DuckDBPyResult>(rel->context.GetContext()->config);
+	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
@@ -417,7 +417,7 @@ py::object DuckDBPyRelation::ToDF() {
 }
 
 py::object DuckDBPyRelation::Fetchone() {
-	auto res = make_unique<DuckDBPyResult>(rel->context.GetContext()->config);
+	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
@@ -429,7 +429,7 @@ py::object DuckDBPyRelation::Fetchone() {
 }
 
 py::object DuckDBPyRelation::Fetchall() {
-	auto res = make_unique<DuckDBPyResult>(rel->context.GetContext()->config);
+	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
@@ -441,7 +441,7 @@ py::object DuckDBPyRelation::Fetchall() {
 }
 
 py::object DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
-	auto res = make_unique<DuckDBPyResult>(rel->context.GetContext()->config);
+	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
@@ -453,7 +453,7 @@ py::object DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 }
 
 py::object DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
-	auto res = make_unique<DuckDBPyResult>(rel->context.GetContext()->config);
+	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
@@ -509,7 +509,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_nam
 }
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
-	auto res = make_unique<DuckDBPyResult>(rel->context.GetContext()->config);
+	auto res = make_unique<DuckDBPyResult>();
 	res->result = rel->Query(view_name, sql_query);
 	if (!res->result->success) {
 		throw std::runtime_error(res->result->error);
@@ -518,7 +518,7 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Query(const string &view_name, cons
 }
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
-	auto res = make_unique<DuckDBPyResult>(rel->context.GetContext()->config);
+	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
