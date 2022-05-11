@@ -50,6 +50,8 @@ public:
 	case_insensitive_map_t<TableColumnInfo> name_map;
 
 public:
+	//! For debugging purposes, count how many columns are STANDARD
+	idx_t StandardColumnCount() const;
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
 	//! Returns whether or not a column with the given name exists, of the given column type
 	bool ColumnExists(const string &name, TableColumnType type = TableColumnType::STANDARD);

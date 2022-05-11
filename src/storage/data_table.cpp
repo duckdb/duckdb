@@ -232,6 +232,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 vector<LogicalType> DataTable::GetTypes() {
 	vector<LogicalType> types;
 	for (auto &it : column_definitions) {
+		if (it.Generated()) {
+			continue;
+		}
 		types.push_back(it.type);
 	}
 	return types;
@@ -621,7 +624,8 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	if (chunk.size() == 0) {
 		return;
 	}
-	if (chunk.ColumnCount() != table.columns.size()) {
+	// FIXME: could be an assertion instead?
+	if (chunk.ColumnCount() != table.StandardColumnCount()) {
 		throw InternalException("Mismatch in column count for append");
 	}
 	if (!is_root) {
@@ -710,6 +714,10 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 	vector<column_t> column_ids;
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < this->column_definitions.size(); i++) {
+		auto &col = this->column_definitions[i];
+		if (col.Generated()) {
+			continue;
+		}
 		column_ids.push_back(i);
 		types.push_back(column_definitions[i].type);
 	}

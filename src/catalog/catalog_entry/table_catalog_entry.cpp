@@ -94,9 +94,9 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		auto category = columns[i].category;
 		D_ASSERT(name_map.find(columns[i].name) == name_map.end());
 		auto column_info = TableColumnInfo(i, category);
-		//if (column_info.column_type == TableColumnType::GENERATED) {
+		// if (column_info.column_type == TableColumnType::GENERATED) {
 		//	dprintf(2, "\nTABLE CATALOG ENTRY - GEN COL: %s\n", columns[i].name.c_str());
-		//}
+		// }
 		name_map[columns[i].name] = column_info;
 	}
 	// add the "rowid" alias, if there is no rowid column specified in the table
@@ -107,11 +107,13 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	if (!storage) {
 		// create the physical storage
 		vector<ColumnDefinition> colum_def_copy;
+		vector<ColumnDefinition> get_columns;
 		for (auto &col_def : columns) {
 			if (col_def.Generated()) {
 				continue;
 			}
 			colum_def_copy.push_back(col_def.Copy());
+			get_columns.push_back(col_def.Copy());
 		}
 		storage = make_shared<DataTable>(catalog->db, schema->name, name, move(colum_def_copy), move(info->data));
 
@@ -125,13 +127,13 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				if (unique.is_primary_key) {
 					constraint_type = IndexConstraintType::PRIMARY;
 				}
-				AddDataTableIndex(storage.get(), columns, unique.keys, constraint_type);
+				AddDataTableIndex(storage.get(), get_columns, unique.keys, constraint_type);
 			} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
 				// foreign key constraint: create a foreign key index
 				auto &bfk = (BoundForeignKeyConstraint &)*constraint;
 				if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
 				    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
-					AddDataTableIndex(storage.get(), columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN);
+					AddDataTableIndex(storage.get(), get_columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN);
 				}
 			}
 		}
@@ -144,6 +146,16 @@ bool TableCatalogEntry::ColumnExists(const string &name, TableColumnType type) {
 		return false;
 	}
 	return iterator->second.column_type == type;
+}
+
+idx_t TableCatalogEntry::StandardColumnCount() const {
+	idx_t count = 0;
+	for (auto &col : columns) {
+		if (col.category == TableColumnType::STANDARD) {
+			count++;
+		}
+	}
+	return count;
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
@@ -672,6 +684,9 @@ ColumnDefinition &TableCatalogEntry::GetColumn(const string &name, TableColumnTy
 vector<LogicalType> TableCatalogEntry::GetTypes() {
 	vector<LogicalType> types;
 	for (auto &it : columns) {
+		if (it.Generated()) {
+			continue;
+		}
 		types.push_back(it.type);
 	}
 	return types;

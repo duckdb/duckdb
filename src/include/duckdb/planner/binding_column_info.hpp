@@ -15,9 +15,10 @@
 namespace duckdb {
 
 struct BindingColumnInfo {
-	BindingColumnInfo(string name, LogicalType type, TableColumnInfo info) : name(name), type(type), info(info) {}
+	BindingColumnInfo(string name, LogicalType type, TableColumnInfo info) : name(name), type(type), info(info) {
+	}
 	string name;
-	LogicalType	type;
+	LogicalType type;
 	TableColumnInfo info;
 };
 

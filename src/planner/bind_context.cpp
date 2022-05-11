@@ -388,7 +388,8 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
-                               const vector<LogicalType> &types, const vector<TableColumnType> &categories, LogicalGet &get) {
+                               const vector<LogicalType> &types, const vector<TableColumnType> &categories,
+                               LogicalGet &get) {
 	AddBinding(alias, make_unique<TableBinding>(alias, types, names, categories, get, index, true));
 }
 
@@ -439,12 +440,12 @@ void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
                                     const vector<LogicalType> &types) {
-	vector<TableColumnType>	categories;
+	vector<TableColumnType> categories;
 	AddGenericBinding(index, alias, names, types, categories);
 }
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
-									const vector<LogicalType> &types, const vector<TableColumnType> &categories) {
+                                    const vector<LogicalType> &types, const vector<TableColumnType> &categories) {
 	AddBinding(alias, make_unique<Binding>(alias, types, names, categories, index));
 }
 

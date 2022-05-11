@@ -107,18 +107,23 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		vector<LogicalType> table_types;
 		vector<string> table_names;
 		vector<TableColumnType> table_categories;
+
+		vector<LogicalType> return_types;
+		vector<string> return_names;
 		for (auto &col : table->columns) {
 			table_types.push_back(col.type);
 			table_names.push_back(col.name);
 			table_categories.push_back(col.category);
-			//if (col.category == TableColumnType::GENERATED) {
-			//	dprintf(2, "\nGEN COL: %s\n", col.name.c_str());
-			//}
+			if (col.Generated()) {
+				continue;
+			}
+			return_types.push_back(col.type);
+			return_names.push_back(col.name);
 		}
 		table_names = BindContext::AliasColumnNames(alias, table_names, ref.column_name_alias);
 
-		auto logical_get =
-		    make_unique<LogicalGet>(table_index, scan_function, move(bind_data), table_types, table_names);
+		auto logical_get = make_unique<LogicalGet>(table_index, scan_function, move(bind_data), move(return_types),
+		                                           move(return_names));
 		bind_context.AddBaseTable(table_index, alias, table_names, table_types, table_categories, *logical_get);
 		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, move(logical_get));
 	}

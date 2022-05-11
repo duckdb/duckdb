@@ -26,7 +26,7 @@
 #    amount_sold INTEGER,
 #);
 
-statement error
+statement ok
 CREATE TABLE unit (
     total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL,
     price INTEGER,
@@ -37,7 +37,7 @@ statement ok
 INSERT INTO unit VALUES (5,4)
 
 query I
-SELECT total_profit FROM unit;
+SELECT * FROM unit;
 ----
 20
 

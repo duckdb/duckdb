@@ -12,7 +12,8 @@
 
 namespace duckdb {
 
-Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<string> colnames, vector<TableColumnType> categories, idx_t index)
+Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<string> colnames,
+                 vector<TableColumnType> categories, idx_t index)
     : alias(alias), index(index), types(move(coltypes)), names(move(colnames)), categories(move(categories)) {
 	D_ASSERT(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
@@ -22,10 +23,10 @@ Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<strin
 			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias, name);
 		}
 		// BREAKING_FIX_ME: missing category, everything is labeled STANDARD now
-		auto category = i < categories.size() ? categories[i] : TableColumnType::STANDARD;
+		auto category = i < this->categories.size() ? this->categories[i] : TableColumnType::STANDARD;
 		auto column_info = TableColumnInfo(i, category);
-		if (column_info.column_type == TableColumnType::GENERATED) {
-			dprintf(2, "\nTABLE BINDING - GEN COL: %s\n", name.c_str());
+		if (category == TableColumnType::GENERATED) {
+			dprintf(2, "GEN COL: %s\n", name.c_str());
 		}
 		name_map[name] = column_info;
 	}
@@ -77,8 +78,8 @@ TableCatalogEntry *Binding::GetTableEntry() {
 	return nullptr;
 }
 
-TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, vector<TableColumnType> categories_p, LogicalGet &get,
-                           idx_t index, bool add_row_id)
+TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
+                           vector<TableColumnType> categories_p, LogicalGet &get, idx_t index, bool add_row_id)
     : Binding(alias, move(types_p), move(names_p), move(categories_p), index), get(get) {
 	if (add_row_id) {
 		if (name_map.find("rowid") == name_map.end()) {
@@ -135,7 +136,8 @@ string TableBinding::ColumnNotFoundError(const string &column_name) const {
 }
 
 MacroBinding::MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name_p)
-    : Binding(MacroBinding::MACRO_NAME, move(types_p), move(names_p), vector<TableColumnType>(), -1), macro_name(move(macro_name_p)) {
+    : Binding(MacroBinding::MACRO_NAME, move(types_p), move(names_p), vector<TableColumnType>(), -1),
+      macro_name(move(macro_name_p)) {
 }
 
 BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {

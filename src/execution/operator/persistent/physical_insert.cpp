@@ -56,6 +56,10 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 	if (!column_index_map.empty()) {
 		// columns specified by the user, use column_index_map
 		for (idx_t i = 0; i < table->columns.size(); i++) {
+			auto &col = table->columns[i];
+			if (col.Generated()) {
+				continue;
+			}
 			if (column_index_map[i] == DConstants::INVALID_INDEX) {
 				// insert default value
 				istate.default_executor.ExecuteExpression(i, istate.insert_chunk.data[i]);
